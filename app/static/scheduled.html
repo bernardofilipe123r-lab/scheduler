@@ -478,10 +478,13 @@
         }
         
         async function retryPublish(scheduleId, reelId) {
+            console.log('🔄 Retry Publish Started', { scheduleId, reelId });
+            
             const button = event.target;
             const originalText = button.innerHTML;
             
             if (button.classList.contains('loading')) {
+                console.warn('⚠️ Already processing, ignoring click');
                 return; // Already processing
             }
             
@@ -491,15 +494,37 @@
             
             try {
                 // Get the schedule details first
+                console.log('📥 Fetching schedule details...');
                 const schedulesResponse = await fetch('/reels/scheduled');
-                if (!schedulesResponse.ok) throw new Error('Failed to load schedule details');
+                
+                console.log('📊 Schedules Response:', {
+                    ok: schedulesResponse.ok,
+                    status: schedulesResponse.status,
+                    statusText: schedulesResponse.statusText
+                });
+                
+                if (!schedulesResponse.ok) {
+                    throw new Error(`Failed to load schedule details (${schedulesResponse.status})`);
+                }
                 
                 const schedulesData = await schedulesResponse.json();
+                console.log('📋 Schedules Data:', schedulesData);
+                
                 const schedule = schedulesData.schedules.find(s => s.schedule_id === scheduleId);
+                console.log('🔍 Found Schedule:', schedule);
                 
                 if (!schedule) {
-                    throw new Error('Schedule not found');
+                    throw new Error(`Schedule not found (ID: ${scheduleId})`);
                 }
+                
+                // Prepare publish request
+                const publishPayload = {
+                    reel_id: reelId,
+                    platforms: schedule.platforms || ['instagram', 'facebook'],
+                    caption: schedule.caption
+                };
+                
+                console.log('📤 Publishing with payload:', publishPayload);
                 
                 // Publish immediately using the publish endpoint
                 const publishResponse = await fetch('/reels/publish', {
@@ -507,52 +532,97 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        reel_id: reelId,
-                        platforms: schedule.platforms || ['instagram', 'facebook'],
-                        caption: schedule.caption
-                    })
+                    body: JSON.stringify(publishPayload)
                 });
                 
-                if (!publishResponse.ok) {
-                    const error = await publishResponse.json();
-                    throw new Error(error.detail || 'Failed to publish');
+                console.log('📊 Publish Response:', {
+                    ok: publishResponse.ok,
+                    status: publishResponse.status,
+                    statusText: publishResponse.statusText
+                });
+                
+                const responseText = await publishResponse.text();
+                console.log('📄 Response Text:', responseText);
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                    console.log('✅ Parsed Result:', result);
+                } catch (parseError) {
+                    console.error('❌ JSON Parse Error:', parseError);
+                    throw new Error(`Failed to parse response: ${responseText.substring(0, 100)}`);
                 }
                 
-                const result = await publishResponse.json();
+                if (!publishResponse.ok) {
+                    console.error('❌ Publish failed:', result);
+                    throw new Error(result.detail || result.message || 'Failed to publish');
+                }
                 
                 // Check if any platform succeeded
+                console.log('🔍 Checking platform results...');
                 let success = false;
                 let message = 'Published: ';
                 const successPlatforms = [];
                 const failedPlatforms = [];
                 
+                // Handle different response formats
+                if (!result || typeof result !== 'object') {
+                    console.error('❌ Invalid result format:', result);
+                    throw new Error('Invalid response from server');
+                }
+                
+                console.log('📊 Result keys:', Object.keys(result));
+                
                 for (const [platform, platformResult] of Object.entries(result)) {
-                    if (platformResult.success) {
+                    console.log(`🔍 Platform ${platform}:`, platformResult);
+                    
+                    if (platformResult && platformResult.success) {
                         success = true;
                         successPlatforms.push(platform);
+                        console.log(`✅ ${platform} succeeded`);
                     } else {
-                        failedPlatforms.push(`${platform}: ${platformResult.error}`);
+                        const errorMsg = platformResult?.error || 'Unknown error';
+                        failedPlatforms.push(`${platform}: ${errorMsg}`);
+                        console.log(`❌ ${platform} failed: ${errorMsg}`);
                     }
                 }
+                
+                console.log('📈 Final Results:', {
+                    success,
+                    successPlatforms,
+                    failedPlatforms
+                });
                 
                 if (success) {
                     message += successPlatforms.join(', ') + ' ✅';
                     if (failedPlatforms.length > 0) {
                         message += '\n\nFailed: ' + failedPlatforms.join(', ');
                     }
+                    console.log('✅ Success! Message:', message);
                     alert(message);
                     
                     // Delete the failed schedule since we published successfully
+                    console.log('🗑️ Deleting schedule:', scheduleId);
                     await fetch(`/reels/scheduled/${scheduleId}`, { method: 'DELETE' });
                     
                     // Refresh the list
+                    console.log('🔄 Refreshing list...');
                     await loadSchedules();
                 } else {
-                    throw new Error('All platforms failed:\n' + failedPlatforms.join('\n'));
+                    console.error('❌ All platforms failed!');
+                    const errorMessage = 'All platforms failed:\n' + failedPlatforms.join('\n');
+                    console.error(errorMessage);
+                    throw new Error(errorMessage);
                 }
                 
             } catch (error) {
+                console.error('💥 Error in retryPublish:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                });
+                
                 alert(`Failed to publish: ${error.message}`);
                 button.classList.remove('loading');
                 button.innerHTML = originalText;
