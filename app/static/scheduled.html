@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scheduled Posts - Instagram Reels</title>
+    <title>Post History - Instagram Reels</title>
     <style>
         * {
             margin: 0;
@@ -266,8 +266,8 @@
         
         <div class="header-actions">
             <div>
-                <h1>📅 Scheduled Posts</h1>
-                <p class="subtitle">View and manage your scheduled Instagram & Facebook reels</p>
+                <h1>📅 Post History</h1>
+                <p class="subtitle">View all scheduled, published, and failed Instagram & Facebook reels</p>
             </div>
             <button class="refresh-btn" onclick="loadSchedules()">🔄 Refresh</button>
         </div>
@@ -275,11 +275,11 @@
         <div class="stats" id="stats">
             <div class="stat-card">
                 <div class="stat-number" id="totalCount">-</div>
-                <div class="stat-label">Total Scheduled</div>
+                <div class="stat-label">Total Posts</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number" id="pendingCount">-</div>
-                <div class="stat-label">Pending</div>
+                <div class="stat-label">Scheduled</div>
             </div>
             <div class="stat-card success">
                 <div class="stat-number" id="publishedCount">-</div>
@@ -383,15 +383,25 @@
                     listContainer.innerHTML = `
                         <div class="empty-state">
                             <div class="empty-icon">📭</div>
-                            <div class="empty-text">No scheduled posts yet</div>
+                            <div class="empty-text">No posts yet</div>
                             <p>Schedule your first reel from the <a href="/">generator page</a></p>
                         </div>
                     `;
                     return;
                 }
                 
-                // Sort by scheduled time (newest first)
-                schedules.sort((a, b) => new Date(b.scheduled_time) - new Date(a.scheduled_time));
+                // Group by status
+                const pending = schedules.filter(s => s.status === 'scheduled');
+                const published = schedules.filter(s => s.status === 'published');
+                const failed = schedules.fiortedSlter(s => s.status === 'failed');
+                
+                // Sort each group by time (newest first for published/failed, upcoming first for scheduled)
+                pending.sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time));
+                published.sort((a, b) => new Date(b.published_at || b.scheduled_time) - new Date(a.published_at || a.scheduled_time));
+                failed.sort((a, b) => new Date(b.scheduled_time) - new Date(a.scheduled_time));
+                
+                // Combine: pending first, then published, then failed
+                const sortedSchedules = [...pending, ...published, ...failed];
                 
                 listContainer.innerHTML = schedules.map(schedule => {
                     const platforms = schedule.platforms || [];
