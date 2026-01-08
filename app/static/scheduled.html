@@ -312,6 +312,58 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background: #c82333;
+        }
+        
+        .btn-retry {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-retry:hover {
+            background: #0056b3;
+        }
+        
+        .btn-retry.loading {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -400,7 +452,7 @@
         }
         
         async function deleteSchedule(scheduleId) {
-            if (!confirm('Are you sure you want to delete this scheduled post?')) {
+            if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
                 return;
             }
             
@@ -418,10 +470,93 @@
                 await loadSchedules();
                 
                 // Show success message
-                alert('Scheduled post deleted successfully!');
+                alert('Post deleted successfully!');
                 
             } catch (error) {
                 alert(`Failed to delete: ${error.message}`);
+            }
+        }
+        
+        async function retryPublish(scheduleId, reelId) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            
+            if (button.classList.contains('loading')) {
+                return; // Already processing
+            }
+            
+            button.classList.add('loading');
+            button.innerHTML = '⏳ Publishing...';
+            button.disabled = true;
+            
+            try {
+                // Get the schedule details first
+                const schedulesResponse = await fetch('/reels/scheduled');
+                if (!schedulesResponse.ok) throw new Error('Failed to load schedule details');
+                
+                const schedulesData = await schedulesResponse.json();
+                const schedule = schedulesData.schedules.find(s => s.schedule_id === scheduleId);
+                
+                if (!schedule) {
+                    throw new Error('Schedule not found');
+                }
+                
+                // Publish immediately using the publish endpoint
+                const publishResponse = await fetch('/reels/publish', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        reel_id: reelId,
+                        platforms: schedule.platforms || ['instagram', 'facebook'],
+                        caption: schedule.caption
+                    })
+                });
+                
+                if (!publishResponse.ok) {
+                    const error = await publishResponse.json();
+                    throw new Error(error.detail || 'Failed to publish');
+                }
+                
+                const result = await publishResponse.json();
+                
+                // Check if any platform succeeded
+                let success = false;
+                let message = 'Published: ';
+                const successPlatforms = [];
+                const failedPlatforms = [];
+                
+                for (const [platform, platformResult] of Object.entries(result)) {
+                    if (platformResult.success) {
+                        success = true;
+                        successPlatforms.push(platform);
+                    } else {
+                        failedPlatforms.push(`${platform}: ${platformResult.error}`);
+                    }
+                }
+                
+                if (success) {
+                    message += successPlatforms.join(', ') + ' ✅';
+                    if (failedPlatforms.length > 0) {
+                        message += '\n\nFailed: ' + failedPlatforms.join(', ');
+                    }
+                    alert(message);
+                    
+                    // Delete the failed schedule since we published successfully
+                    await fetch(`/reels/scheduled/${scheduleId}`, { method: 'DELETE' });
+                    
+                    // Refresh the list
+                    await loadSchedules();
+                } else {
+                    throw new Error('All platforms failed:\n' + failedPlatforms.join('\n'));
+                }
+                
+            } catch (error) {
+                alert(`Failed to publish: ${error.message}`);
+                button.classList.remove('loading');
+                button.innerHTML = originalText;
+                button.disabled = false;
             }
         }
         
@@ -526,11 +661,17 @@
                                 </div>
                             ` : ''}
                             
-                            ${statusClass === 'scheduled' ? `
-                                <button class="delete-btn" onclick="deleteSchedule('${schedule.schedule_id}')">
-                                    🗑️ Delete Schedule
+                            <div class="action-buttons">
+                                ${statusClass === 'failed' ? `
+                                    <button class="btn btn-retry" onclick="retryPublish('${schedule.schedule_id}', '${schedule.reel_id}')">
+                                        🔄 Post Now
+                                    </button>
+                                ` : ''}
+                                
+                                <button class="btn btn-delete" onclick="deleteSchedule('${schedule.schedule_id}')">
+                                    🗑️ Delete
                                 </button>
-                            ` : ''}
+                            </div>
                         </div>
                     `;
                 }).join('');
