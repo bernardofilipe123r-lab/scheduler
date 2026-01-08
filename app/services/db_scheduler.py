@@ -257,8 +257,14 @@ class DatabaseSchedulerService:
             # Use default credentials
             publisher = SocialPublisher()
         
-        # Get public URL
-        public_url_base = os.getenv("PUBLIC_URL_BASE", "http://localhost:8000")
+        # Get public URL - auto-detect Railway or use configured value
+        # Railway sets RAILWAY_PUBLIC_DOMAIN automatically
+        railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        if railway_domain:
+            public_url_base = f"https://{railway_domain}"
+        else:
+            public_url_base = os.getenv("PUBLIC_URL_BASE", "http://localhost:8000")
+        
         video_url = f"{public_url_base}/output/videos/{video_path.name}"
         thumbnail_url = f"{public_url_base}/output/thumbnails/{thumbnail_path.name}"
         

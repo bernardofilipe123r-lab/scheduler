@@ -571,9 +571,13 @@
                     throw new Error('Invalid response from server');
                 }
                 
-                console.log('📊 Result keys:', Object.keys(result));
+                console.log('📊 Full result:', result);
                 
-                for (const [platform, platformResult] of Object.entries(result)) {
+                // Extract platform results from result.results object
+                const platformResults = result.results || result;
+                console.log('📊 Platform results:', platformResults);
+                
+                for (const [platform, platformResult] of Object.entries(platformResults)) {
                     console.log(`🔍 Platform ${platform}:`, platformResult);
                     
                     if (platformResult && platformResult.success) {
