@@ -24,16 +24,17 @@ class SocialPublisher:
         if brand_config:
             self.ig_business_account_id = brand_config.instagram_business_account_id
             self.fb_page_id = brand_config.facebook_page_id
+            self._system_user_token = brand_config.meta_access_token
             self.ig_access_token = brand_config.meta_access_token
-            self.fb_access_token = brand_config.meta_access_token
         else:
             # Fallback to default environment variables
+            self._system_user_token = os.getenv("META_ACCESS_TOKEN")
             self.ig_access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN")
             self.ig_business_account_id = os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID")
-            self.fb_access_token = os.getenv("FACEBOOK_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN")
             self.fb_page_id = os.getenv("FACEBOOK_PAGE_ID")
         
         self.api_version = "v19.0"
+        self._page_access_token_cache = {}  # Cache for page access tokens
         
         # Debug output to show credential status
         if self.ig_access_token and self.ig_business_account_id:
@@ -43,6 +44,93 @@ class SocialPublisher:
                 print("⚠️  Warning: Meta access token not found")
             if not self.ig_business_account_id:
                 print("⚠️  Warning: INSTAGRAM_BUSINESS_ACCOUNT_ID not found")
+    
+    def _get_page_access_token(self, page_id: str) -> Optional[str]:
+        """
+        Get a Page Access Token from the System User Token.
+        Facebook Reels API requires a Page Access Token, not a User/System User token.
+        
+        Args:
+            page_id: The Facebook Page ID
+            
+        Returns:
+            Page Access Token or None if failed
+        """
+        # Check cache first
+        if page_id in self._page_access_token_cache:
+            return self._page_access_token_cache[page_id]
+        
+        if not self._system_user_token:
+            print("⚠️  No system user token available")
+            return None
+        
+        try:
+            # Get page access token from the system user token
+            # This endpoint returns all pages the token has access to with their page tokens
+            url = f"https://graph.facebook.com/{self.api_version}/{page_id}"
+            params = {
+                "fields": "access_token",
+                "access_token": self._system_user_token
+            }
+            
+            print(f"🔑 Getting Page Access Token for page {page_id}...")
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if "error" in data:
+                error_msg = data["error"].get("message", "Unknown error")
+                print(f"   ❌ Failed to get page token: {error_msg}")
+                # If this fails, try the /me/accounts approach
+                return self._get_page_token_via_accounts(page_id)
+            
+            page_token = data.get("access_token")
+            if page_token:
+                print(f"   ✅ Got Page Access Token")
+                self._page_access_token_cache[page_id] = page_token
+                return page_token
+            else:
+                print(f"   ⚠️ No access_token in response, trying /me/accounts...")
+                return self._get_page_token_via_accounts(page_id)
+                
+        except Exception as e:
+            print(f"   ❌ Exception getting page token: {e}")
+            return self._get_page_token_via_accounts(page_id)
+    
+    def _get_page_token_via_accounts(self, page_id: str) -> Optional[str]:
+        """
+        Alternative method: Get page token via /me/accounts endpoint.
+        """
+        try:
+            url = f"https://graph.facebook.com/{self.api_version}/me/accounts"
+            params = {
+                "access_token": self._system_user_token
+            }
+            
+            print(f"   🔍 Trying /me/accounts endpoint...")
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if "error" in data:
+                error_msg = data["error"].get("message", "Unknown error")
+                print(f"   ❌ /me/accounts failed: {error_msg}")
+                return None
+            
+            pages = data.get("data", [])
+            for page in pages:
+                if page.get("id") == page_id:
+                    page_token = page.get("access_token")
+                    if page_token:
+                        print(f"   ✅ Found Page Access Token via /me/accounts")
+                        self._page_access_token_cache[page_id] = page_token
+                        return page_token
+            
+            print(f"   ❌ Page {page_id} not found in accessible pages")
+            print(f"   ℹ️  Available pages: {[p.get('id') for p in pages]}")
+            return None
+            
+        except Exception as e:
+            print(f"   ❌ Exception in /me/accounts: {e}")
+            return None
     
     def publish_instagram_reel(
         self,
@@ -231,7 +319,7 @@ class SocialPublisher:
         Returns:
             Dict with publish status and Facebook post ID
         """
-        if not self.fb_access_token or not self.fb_page_id:
+        if not self._system_user_token or not self.fb_page_id:
             return {
                 "success": False,
                 "error": "Facebook credentials not configured",
@@ -239,6 +327,17 @@ class SocialPublisher:
             }
         
         try:
+            # First, get a Page Access Token (required for Facebook Reels API)
+            page_access_token = self._get_page_access_token(self.fb_page_id)
+            
+            if not page_access_token:
+                return {
+                    "success": False,
+                    "error": "Failed to get Page Access Token. Make sure your System User has access to the page.",
+                    "platform": "facebook",
+                    "step": "auth"
+                }
+            
             # Step 1: Initialize upload session
             init_url = f"https://graph.facebook.com/{self.api_version}/{self.fb_page_id}/video_reels"
             
@@ -250,7 +349,7 @@ class SocialPublisher:
                 init_url,
                 json={
                     "upload_phase": "start",
-                    "access_token": self.fb_access_token
+                    "access_token": page_access_token
                 },
                 timeout=30
             )
@@ -288,7 +387,7 @@ class SocialPublisher:
             upload_response = requests.post(
                 upload_url,
                 headers={
-                    "Authorization": f"OAuth {self.fb_access_token}",
+                    "Authorization": f"OAuth {page_access_token}",
                     "file_url": video_url
                 },
                 timeout=120
@@ -332,7 +431,7 @@ class SocialPublisher:
                     f"https://graph.facebook.com/{self.api_version}/{video_id}",
                     params={
                         "fields": "status",
-                        "access_token": self.fb_access_token
+                        "access_token": page_access_token
                     },
                     timeout=10
                 )
@@ -373,7 +472,7 @@ class SocialPublisher:
             publish_response = requests.post(
                 init_url,
                 params={
-                    "access_token": self.fb_access_token,
+                    "access_token": page_access_token,
                     "video_id": video_id,
                     "upload_phase": "finish",
                     "video_state": "PUBLISHED",
