@@ -226,15 +226,23 @@ class ImageGenerator:
         title_content_padding = 90
         
         # Healthycollege: reorder content lines (shuffle all except last)
+        # BUT only if content doesn't have numbered lists (1., 2., etc.)
         if self.brand_name == "healthycollege" and len(lines) > 1:
             import random
-            last_line = lines[-1]
-            middle_lines = lines[:-1]
-            # Shuffle middle lines with a fixed seed based on title for consistency
-            random.seed(hash(title))
-            shuffled_middle = middle_lines.copy()
-            random.shuffle(shuffled_middle)
-            lines = shuffled_middle + [last_line]
+            import re
+            
+            # Check if any line starts with a number followed by a dot (e.g., "1.", "2.")
+            has_numbered_list = any(re.match(r'^\d+\.', line.strip()) for line in lines)
+            
+            if not has_numbered_list:
+                # Safe to shuffle - no numbered list detected
+                last_line = lines[-1]
+                middle_lines = lines[:-1]
+                # Shuffle middle lines with a fixed seed based on title for consistency
+                random.seed(hash(title))
+                shuffled_middle = middle_lines.copy()
+                random.shuffle(shuffled_middle)
+                lines = shuffled_middle + [last_line]
         
         # Find optimal title font size (start at 56, reduce until fits in 2 lines)
         title_font_size = 56
