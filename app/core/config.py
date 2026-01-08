@@ -47,8 +47,8 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         thumbnail_text_color=(0, 67, 92),  # #00435c
         content_title_color=(0, 0, 0),  # Black #000000
         content_highlight_color=(200, 234, 246, 255),  # #c8eaf6
-        instagram_business_account_id=os.getenv("GYMCOLLEGE_INSTAGRAM_ID"),
-        facebook_page_id=os.getenv("GYMCOLLEGE_FACEBOOK_PAGE_ID"),
+        instagram_business_account_id="17841468847801005",  # @thegymcollege
+        facebook_page_id="421725951022067",  # Gym College Facebook Page
         meta_access_token=os.getenv("META_ACCESS_TOKEN"),  # Same token for both brands
     ),
     BrandType.FITNESS_PRO: BrandConfig(
@@ -79,8 +79,8 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         thumbnail_text_color=(255, 255, 255),
         content_title_color=(255, 255, 255),
         content_highlight_color=(255, 107, 107, 100),
-        instagram_business_account_id=os.getenv("HEALTHYCOLLEGE_INSTAGRAM_ID"),
-        facebook_page_id=os.getenv("HEALTHYCOLLEGE_FACEBOOK_PAGE_ID"),  # Healthy College has Facebook too
+        instagram_business_account_id="17841479849607158",  # @thehealthycollege
+        facebook_page_id="944977965368075",  # Healthy College Facebook Page
         meta_access_token=os.getenv("META_ACCESS_TOKEN"),  # Same token for both brands
     ),
 }
