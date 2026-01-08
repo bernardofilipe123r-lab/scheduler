@@ -125,12 +125,33 @@ async def startup_event():
                     print(f"   📤 Publishing {reel_id} to {', '.join(platforms)}...")
                     
                     try:
-                        # Find video and thumbnail
-                        video_path = Path(f"output/videos/{reel_id}.mp4")
-                        thumbnail_path = Path(f"output/thumbnails/{reel_id}.jpg")
+                        # Get paths from metadata or use defaults
+                        metadata = schedule.get('metadata', {})
+                        video_path_str = metadata.get('video_path')
+                        thumbnail_path_str = metadata.get('thumbnail_path')
                         
-                        if not video_path.exists() or not thumbnail_path.exists():
-                            raise FileNotFoundError(f"Video or thumbnail not found for {reel_id}")
+                        # If paths stored in metadata, use those
+                        if video_path_str:
+                            video_path = Path(video_path_str)
+                        else:
+                            # Try .mp4 in output/videos
+                            video_path = Path(f"output/videos/{reel_id}.mp4")
+                        
+                        if thumbnail_path_str:
+                            thumbnail_path = Path(thumbnail_path_str)
+                        else:
+                            # Try both .png and .jpg
+                            thumbnail_path = Path(f"output/thumbnails/{reel_id}.png")
+                            if not thumbnail_path.exists():
+                                thumbnail_path = Path(f"output/thumbnails/{reel_id}.jpg")
+                        
+                        print(f"      🎬 Video: {video_path}")
+                        print(f"      🖼️  Thumbnail: {thumbnail_path}")
+                        
+                        if not video_path.exists():
+                            raise FileNotFoundError(f"Video not found: {video_path}")
+                        if not thumbnail_path.exists():
+                            raise FileNotFoundError(f"Thumbnail not found: {thumbnail_path}")
                         
                         # Publish now
                         result = scheduler_service.publish_now(
