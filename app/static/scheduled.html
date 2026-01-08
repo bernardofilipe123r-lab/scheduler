@@ -461,7 +461,7 @@
                 // Group by status
                 const pending = schedules.filter(s => s.status === 'scheduled');
                 const published = schedules.filter(s => s.status === 'published');
-                const failed = schedules.fiortedSlter(s => s.status === 'failed');
+                const failed = schedules.filter(s => s.status === 'failed');
                 
                 // Sort each group by time (newest first for published/failed, upcoming first for scheduled)
                 pending.sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time));
