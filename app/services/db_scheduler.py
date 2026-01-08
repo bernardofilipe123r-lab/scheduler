@@ -47,33 +47,62 @@ class DatabaseSchedulerService:
         """
         import uuid
         
-        with get_db_session() as db:
-            # Generate schedule ID
-            schedule_id = str(uuid.uuid4())[:8]
-            
-            # Prepare metadata
-            metadata = {
-                "platforms": platforms,
-                "video_path": str(video_path) if video_path else None,
-                "thumbnail_path": str(thumbnail_path) if thumbnail_path else None
-            }
-            
-            # Create scheduled reel
-            scheduled_reel = ScheduledReel(
-                schedule_id=schedule_id,
-                user_id=user_id,
-                user_name=user_name or user_id,
-                reel_id=reel_id,
-                caption=caption,
-                scheduled_time=scheduled_time,
-                status="scheduled",
-                extra_data=metadata  # Store in extra_data column
-            )
-            
-            db.add(scheduled_reel)
-            db.commit()
-            
-            return scheduled_reel.to_dict()
+        print("\n🔵 DatabaseSchedulerService.schedule_reel() called")
+        print(f"   User ID: {user_id}")
+        print(f"   Reel ID: {reel_id}")
+        print(f"   Scheduled time: {scheduled_time}")
+        print(f"   Platforms: {platforms}")
+        
+        try:
+            with get_db_session() as db:
+                print("   ✅ Database session created")
+                
+                # Generate schedule ID
+                schedule_id = str(uuid.uuid4())[:8]
+                print(f"   ✅ Generated schedule_id: {schedule_id}")
+                
+                # Prepare metadata
+                metadata = {
+                    "platforms": platforms,
+                    "video_path": str(video_path) if video_path else None,
+                    "thumbnail_path": str(thumbnail_path) if thumbnail_path else None
+                }
+                print(f"   ✅ Metadata prepared: {metadata}")
+                
+                # Create scheduled reel
+                print("   🔄 Creating ScheduledReel object...")
+                scheduled_reel = ScheduledReel(
+                    schedule_id=schedule_id,
+                    user_id=user_id,
+                    user_name=user_name or user_id,
+                    reel_id=reel_id,
+                    caption=caption,
+                    scheduled_time=scheduled_time,
+                    status="scheduled",
+                    extra_data=metadata  # Store in extra_data column
+                )
+                print("   ✅ ScheduledReel object created")
+                
+                print("   🔄 Adding to database session...")
+                db.add(scheduled_reel)
+                print("   ✅ Added to session")
+                
+                print("   🔄 Committing to database...")
+                db.commit()
+                print("   ✅ COMMITTED TO DATABASE!")
+                
+                result = scheduled_reel.to_dict()
+                print(f"   ✅ Converted to dict: {result}")
+                
+                return result
+                
+        except Exception as e:
+            print(f"\n❌ ERROR in DatabaseSchedulerService.schedule_reel()")
+            print(f"   Exception type: {type(e).__name__}")
+            print(f"   Details: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def get_pending_publications(self) -> list[Dict[str, Any]]:
         """

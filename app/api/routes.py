@@ -369,52 +369,97 @@ async def schedule_reel(request: ScheduleRequest):
     Note: This stores the scheduling information. Actual publication to Instagram
     requires Meta API credentials to be configured.
     """
+    print("\n" + "="*80)
+    print("🗓️  SCHEDULING REQUEST RECEIVED")
+    print("="*80)
+    print(f"📋 Reel ID: {request.reel_id}")
+    print(f"📅 Date: {request.schedule_date}")
+    print(f"⏰ Time: {request.schedule_time}")
+    print(f"💬 Caption: {request.caption[:50]}..." if len(request.caption) > 50 else f"💬 Caption: {request.caption}")
+    
     try:
         # Parse the date and time
         from datetime import datetime
         
+        print("\n🔄 Parsing scheduled datetime...")
         scheduled_datetime = datetime.strptime(
             f"{request.schedule_date} {request.schedule_time}",
             "%Y-%m-%d %H:%M"
         )
+        print(f"✅ Parsed datetime: {scheduled_datetime.isoformat()}")
         
         # Get base directory
         base_dir = Path(__file__).resolve().parent.parent.parent
         video_path = base_dir / "output" / "videos" / f"{request.reel_id}.mp4"
+        thumbnail_path = base_dir / "output" / "thumbnails" / f"{request.reel_id}.png"
+        
+        print(f"\n🎬 Video path: {video_path}")
+        print(f"🖼️  Thumbnail path: {thumbnail_path}")
         
         # Check if video exists
         if not video_path.exists():
+            print(f"❌ ERROR: Video file not found!")
+            print(f"   Expected location: {video_path}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Video not found for reel ID: {request.reel_id}"
             )
         
+        print(f"✅ Video file exists ({video_path.stat().st_size / 1024 / 1024:.2f} MB)")
+        
+        if thumbnail_path.exists():
+            print(f"✅ Thumbnail exists ({thumbnail_path.stat().st_size / 1024:.2f} KB)")
+        else:
+            print(f"⚠️  Warning: Thumbnail not found (will work without it)")
+        
         # Schedule the reel
+        print("\n💾 Saving to database...")
         result = scheduler_service.schedule_reel(
+            user_id="web_user",  # Default user for web interface
             reel_id=request.reel_id,
             scheduled_time=scheduled_datetime,
             video_path=video_path,
+            thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
             caption=request.caption,
-            metadata={
-                "schedule_date": request.schedule_date,
-                "schedule_time": request.schedule_time
-            }
+            platforms=["instagram"],
+            user_name="Web Interface User"
         )
+        
+        print(f"✅ Successfully saved to database!")
+        print(f"📝 Schedule ID: {result.get('schedule_id')}")
+        print(f"📊 Status: {result.get('status')}")
+        print("\n" + "="*80)
+        print("✨ SCHEDULING COMPLETE!")
+        print("="*80 + "\n")
         
         return {
             "status": "scheduled",
             "reel_id": request.reel_id,
+            "schedule_id": result.get('schedule_id'),
             "scheduled_for": scheduled_datetime.isoformat(),
             "message": f"Reel scheduled for {request.schedule_date} at {request.schedule_time}",
             "note": "Configure META_ACCESS_TOKEN and META_INSTAGRAM_ACCOUNT_ID in .env to enable automatic publishing"
         }
         
     except ValueError as e:
+        print(f"\n❌ ERROR: Invalid date/time format")
+        print(f"   Details: {str(e)}")
+        print("="*80 + "\n")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid date/time format: {str(e)}"
         )
+    except HTTPException:
+        print("="*80 + "\n")
+        raise
     except Exception as e:
+        print(f"\n❌ ERROR: Failed to schedule reel")
+        print(f"   Exception type: {type(e).__name__}")
+        print(f"   Details: {str(e)}")
+        import traceback
+        print(f"\n📚 Full traceback:")
+        traceback.print_exc()
+        print("="*80 + "\n")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to schedule reel: {str(e)}"

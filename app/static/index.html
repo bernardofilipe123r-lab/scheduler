@@ -907,6 +907,13 @@ Chicken — Let it rest after cooking" required></textarea>
                 requestData.schedule_time = scheduleTime;
             }
             
+            // LOG REQUEST DATA
+            console.log('\n🚀 ========== PUBLISH/SCHEDULE REQUEST ==========');
+            console.log('📋 Request Data:', JSON.stringify(requestData, null, 2));
+            console.log('🎯 Endpoint: /reels/publish');
+            console.log('⏰ Is Scheduled:', !!(scheduleDate && scheduleTime));
+            console.log('===============================================\n');
+            
             try {
                 closePublishModal();
                 
@@ -925,6 +932,7 @@ Chicken — Let it rest after cooking" required></textarea>
                     );
                 }
                 
+                console.log('📤 Sending request...');
                 const response = await fetch('/reels/publish', {
                     method: 'POST',
                     headers: {
@@ -933,14 +941,18 @@ Chicken — Let it rest after cooking" required></textarea>
                     body: JSON.stringify(requestData)
                 });
                 
+                console.log('📨 Response status:', response.status, response.statusText);
+                
                 hideLoading();
                 
                 if (!response.ok) {
                     const error = await response.json();
+                    console.error('❌ Error response:', error);
                     throw new Error(error.detail || 'Failed to publish reel');
                 }
                 
                 const result = await response.json();
+                console.log('✅ Success response:', result);
                 
                 if (result.status === 'scheduled') {
                     const datetime = new Date(`${scheduleDate}T${scheduleTime}`);
