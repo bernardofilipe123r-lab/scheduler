@@ -161,9 +161,34 @@ async def startup_event():
                             platforms=platforms
                         )
                         
-                        # Mark as published
-                        scheduler_service.mark_as_published(schedule_id)
-                        print(f"   ✅ Successfully published {reel_id}")
+                        print(f"      📊 Publish result: {result}")
+                        
+                        # Check if publishing actually succeeded
+                        failed_platforms = []
+                        success_platforms = []
+                        
+                        for platform, platform_result in result.items():
+                            if platform_result.get('success'):
+                                success_platforms.append(platform)
+                                print(f"      ✅ {platform}: {platform_result.get('post_id', 'Published')}")
+                            else:
+                                failed_platforms.append(platform)
+                                error = platform_result.get('error', 'Unknown error')
+                                print(f"      ❌ {platform}: {error}")
+                        
+                        # Only mark as published if at least one platform succeeded
+                        if success_platforms:
+                            scheduler_service.mark_as_published(schedule_id)
+                            print(f"   ✅ Successfully published {reel_id} to {', '.join(success_platforms)}")
+                            
+                            if failed_platforms:
+                                print(f"   ⚠️  Failed on {', '.join(failed_platforms)}")
+                        else:
+                            # All platforms failed
+                            error_details = ', '.join([f"{p}: {result[p].get('error', 'Unknown')}" for p in failed_platforms])
+                            error_msg = f"All platforms failed - {error_details}"
+                            scheduler_service.mark_as_failed(schedule_id, error_msg)
+                            print(f"   ❌ Failed to publish {reel_id}: {error_msg}")
                         
                     except Exception as e:
                         # Mark as failed
