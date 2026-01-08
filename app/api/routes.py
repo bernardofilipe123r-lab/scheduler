@@ -202,26 +202,7 @@ async def create_reel(request: ReelCreateRequest) -> ReelCreateResponse:
         )
 
 
-@router.get(
-    "/scheduled",
-    summary="Get scheduled reels",
-    description="Retrieve all scheduled reels or filter by status"
-)
-async def get_scheduled_reels(status: str = None):
-    """
-    Get scheduled reels.
-    
-    Args:
-        status: Optional status filter ('scheduled', 'published', 'failed')
-    """
-    try:
-        schedules = scheduler_service.get_scheduled_reels(status=status)
-        return {"schedules": schedules, "count": len(schedules)}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve scheduled reels: {str(e)}"
-        )
+# Removed duplicate endpoint - see line ~547 for the correct /scheduled endpoint
 
 
 @router.get(
