@@ -6,6 +6,7 @@ from typing import List, Tuple
 from PIL import Image, ImageDraw
 from app.services.ai_background_generator import AIBackgroundGenerator
 from app.core.config import BrandConfig, get_brand_config, BrandType
+from app.core.brand_colors import get_brand_colors, get_brand_display_name
 from app.core.constants import (
     REEL_WIDTH,
     REEL_HEIGHT,
@@ -66,46 +67,13 @@ class ImageGenerator:
         self.ai_prompt = ai_prompt
         self._ai_background = None  # Cache AI background for dark mode reuse
         
+        # Load brand-specific colors from centralized configuration
+        self.brand_colors = get_brand_colors(brand_name, variant)
+        
         # Pre-generate AI background for dark mode (one image for both thumbnail and content)
         if variant == "dark":
             ai_generator = AIBackgroundGenerator()
             self._ai_background = ai_generator.generate_background(self.brand_name, self.ai_prompt)
-            # Dark mode: White text for title, brand-specific highlight colors
-            if brand_name == "gymcollege":
-                self.brand_config.content_title_color = (255, 255, 255)
-                self.brand_config.content_highlight_color = (0, 74, 173, 255)  # #004aad
-            elif brand_name == "healthycollege":
-                self.brand_config.content_title_color = (255, 255, 255)
-                self.brand_config.content_highlight_color = (0, 104, 55, 255)  # #006837
-            elif brand_name == "vitalitycollege":
-                self.brand_config.content_title_color = (255, 255, 255)
-                self.brand_config.content_highlight_color = (192, 86, 159, 255)  # #c0569f
-            elif brand_name == "longevitycollege":
-                self.brand_config.content_title_color = (255, 255, 255)
-                self.brand_config.content_highlight_color = (190, 127, 9, 255)  # #be7f09
-        
-        # Brand-specific color overrides for light mode
-        elif variant == "light":
-            if brand_name == "gymcollege":
-                # Gymcollege: Dark blue #00435c for thumbnail title, black text + blue bg for content
-                self.brand_config.thumbnail_text_color = (0, 67, 92)  # #00435c
-                self.brand_config.content_title_color = (0, 0, 0)  # Black
-                self.brand_config.content_highlight_color = (200, 234, 246, 255)  # #c8eaf6
-            elif brand_name == "healthycollege":
-                # Healthycollege: Green thumbnail, white text + green bg for content
-                self.brand_config.thumbnail_text_color = (0, 100, 0)  # #006400
-                self.brand_config.content_title_color = (255, 255, 255)  # White
-                self.brand_config.content_highlight_color = (0, 104, 55, 255)  # #006837
-            elif brand_name == "vitalitycollege":
-                # Vitalitycollege: Rose thumbnail, white text + rose bg for content
-                self.brand_config.thumbnail_text_color = (192, 86, 159)  # #c0569f
-                self.brand_config.content_title_color = (255, 255, 255)  # White
-                self.brand_config.content_highlight_color = (192, 86, 159, 255)  # #c0569f
-            elif brand_name == "longevitycollege":
-                # Longevitycollege: Amber thumbnail, white text + amber bg for content
-                self.brand_config.thumbnail_text_color = (190, 127, 9)  # #be7f09
-                self.brand_config.content_title_color = (255, 255, 255)  # White
-                self.brand_config.content_highlight_color = (190, 127, 9, 255)  # #be7f09
     
     def generate_thumbnail(
         self,
@@ -161,8 +129,8 @@ class ImageGenerator:
         
         title_y = (self.height - title_height) // 2
         
-        # Draw title lines (white text for dark mode, brand color for light mode)
-        text_color = (255, 255, 255) if self.variant == "dark" else self.brand_config.thumbnail_text_color
+        # Draw title lines using brand_colors configuration
+        text_color = self.brand_colors.thumbnail_text_color
         
         for line in title_lines:
             line_width, line_height = get_text_dimensions(line, title_font)
@@ -170,39 +138,14 @@ class ImageGenerator:
             draw.text((x, title_y), line, font=title_font, fill=text_color)
             title_y += line_height + LINE_SPACING
         
-        # Dark mode: Add brand logo/text 254px below title
+        # Dark mode: Add brand name in white text 254px below title
         if self.variant == "dark":
             brand_y = title_y + 254
-            
-            # Try to load brand logo, fallback to text
-            if self.brand_name == "gymcollege":
-                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "dark mode" / "template_thumb.png"
-            elif self.brand_name in ["vitalitycollege", "healthycollege", "longevitycollege"]:
-                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "darkmode" / "template_thumb.png"
-            else:
-                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "darkmode" / "template_thumb.png"
-            
-            if logo_path.exists():
-                logo = Image.open(logo_path)
-                # Resize logo to 50% of original size
-                new_size = (logo.width // 2, logo.height // 2)
-                logo = logo.resize(new_size, Image.Resampling.LANCZOS)
-                # Center the logo
-                logo_x = (self.width - logo.width) // 2
-                image.paste(logo, (logo_x, brand_y), logo if logo.mode == 'RGBA' else None)
-            else:
-                # Fallback: draw brand text
-                brand_mapping = {
-                    "gymcollege": "THE GYM COLLEGE",
-                    "healthycollege": "HEALTHY COLLEGE", 
-                    "vitalitycollege": "VITALITY COLLEGE",
-                    "longevitycollege": "LONGEVITY COLLEGE"
-                }
-                brand_text = brand_mapping.get(self.brand_name, "THE GYM COLLEGE")
-                brand_font = get_brand_font(BRAND_FONT_SIZE)
-                brand_width, _ = get_text_dimensions(brand_text, brand_font)
-                brand_x = (self.width - brand_width) // 2
-                draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
+            brand_text = get_brand_display_name(self.brand_name)
+            brand_font = get_brand_font(BRAND_FONT_SIZE)
+            brand_width, _ = get_text_dimensions(brand_text, brand_font)
+            brand_x = (self.width - brand_width) // 2
+            draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
         
         # Save thumbnail
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,21 +262,9 @@ class ImageGenerator:
         current_y = title_start_y
         
         # Dark mode: use brand-specific colors for title background
-        if self.variant == "dark":
-            if self.brand_name == "gymcollege":
-                title_bg_color = (0, 74, 173, 255)  # #004aad
-            else:  # healthycollege
-                title_bg_color = (0, 100, 0, 255)  # #006400
-        else:
-            title_bg_color = self.brand_config.content_highlight_color
-        
-        # Title styling constants
-        BAR_HEIGHT = 90
-        BAR_GAP = 0
-        H_PADDING = 28
-        VERTICAL_CORRECTION = -2  # Optical adjustment for text positioning
-        
-        title_text_color = (255, 255, 255) if self.variant == "dark" else self.brand_config.content_title_color
+        # Use brand_colors configuration for title styling
+        title_bg_color = self.brand_colors.content_title_bg_color
+        title_text_color = self.brand_colors.content_title_text_color
         
         # Calculate metrics for all lines
         metrics = []

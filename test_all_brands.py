@@ -38,17 +38,23 @@ BRANDS = [
 
 def main():
     """Generate test reels for all brands."""
-    # Create examples directory
-    examples_dir = Path("assets/examples")
-    examples_dir.mkdir(parents=True, exist_ok=True)
+    # Create base examples directory
+    base_examples_dir = Path("assets/examples")
+    base_examples_dir.mkdir(parents=True, exist_ok=True)
     
     print("🎬 Starting brand reel generation test...")
-    print(f"📁 Output directory: {examples_dir.absolute()}\n")
+    print(f"📁 Output directory: {base_examples_dir.absolute()}\n")
     
     for brand_name, brand_type, display_name in BRANDS:
         print(f"\n{'='*60}")
         print(f"🎨 Generating reels for: {display_name}")
         print(f"{'='*60}\n")
+        
+        # Create brand-specific directories
+        light_dir = base_examples_dir / brand_name / "lightmode"
+        dark_dir = base_examples_dir / brand_name / "darkmode"
+        light_dir.mkdir(parents=True, exist_ok=True)
+        dark_dir.mkdir(parents=True, exist_ok=True)
         
         # Light mode
         print(f"  📝 Light Mode...")
@@ -56,17 +62,17 @@ def main():
             light_gen = ImageGenerator(brand_type, variant="light", brand_name=brand_name)
             
             # Generate thumbnail
-            thumb_path = examples_dir / f"{brand_name}_light_thumbnail.png"
+            thumb_path = light_dir / "thumbnail.png"
             light_gen.generate_thumbnail(TITLE, thumb_path)
             print(f"    ✅ Thumbnail: {thumb_path}")
             
             # Generate content image
-            content_path = examples_dir / f"{brand_name}_light_content.png"
+            content_path = light_dir / "content.png"
             light_gen.generate_reel_image(TITLE, CONTENT_LINES, content_path)
             print(f"    ✅ Content: {content_path}")
             
             # Generate video
-            video_path = examples_dir / f"{brand_name}_light_video.mp4"
+            video_path = light_dir / "video.mp4"
             video_gen = VideoGenerator()
             video_gen.generate_reel_video(
                 reel_image_path=content_path,
@@ -89,17 +95,17 @@ def main():
             )
             
             # Generate thumbnail
-            thumb_path = examples_dir / f"{brand_name}_dark_thumbnail.png"
+            thumb_path = dark_dir / "thumbnail.png"
             dark_gen.generate_thumbnail(TITLE, thumb_path)
             print(f"    ✅ Thumbnail: {thumb_path}")
             
             # Generate content image
-            content_path = examples_dir / f"{brand_name}_dark_content.png"
+            content_path = dark_dir / "content.png"
             dark_gen.generate_reel_image(TITLE, CONTENT_LINES, content_path)
             print(f"    ✅ Content: {content_path}")
             
             # Generate video
-            video_path = examples_dir / f"{brand_name}_dark_video.mp4"
+            video_path = dark_dir / "video.mp4"
             video_gen = VideoGenerator()
             video_gen.generate_reel_video(
                 reel_image_path=content_path,
@@ -113,7 +119,7 @@ def main():
     
     print(f"\n{'='*60}")
     print("✨ All brand tests completed!")
-    print(f"📂 Check {examples_dir.absolute()} for results")
+    print(f"📂 Check {base_examples_dir.absolute()} for results")
     print(f"{'='*60}\n")
 
 if __name__ == "__main__":
