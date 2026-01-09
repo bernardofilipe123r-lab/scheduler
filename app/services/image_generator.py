@@ -154,7 +154,12 @@ class ImageGenerator:
             brand_y = title_y + 254
             
             # Try to load brand logo, fallback to text
-            if self.brand_name == \"gymcollege\":\n                logo_path = Path(__file__).resolve().parent.parent.parent / \"assets\" / \"templates\" / self.brand_name / \"dark mode\" / \"template_thumb.png\"\n            elif self.brand_name == \"vitalitycollege\":\n                logo_path = Path(__file__).resolve().parent.parent.parent / \"assets\" / \"templates\" / self.brand_name / \"darkmode\" / \"template_thumb.png\"\n            else:  # healthycollege\n                logo_path = Path(__file__).resolve().parent.parent.parent / \"assets\" / \"templates\" / self.brand_name / \"darkmode\" / \"template_thumb.png\"
+            if self.brand_name == "gymcollege":
+                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "dark mode" / "template_thumb.png"
+            elif self.brand_name == "vitalitycollege":
+                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "darkmode" / "template_thumb.png"
+            else:  # healthycollege
+                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "darkmode" / "template_thumb.png"
             
             if logo_path.exists():
                 logo = Image.open(logo_path)
