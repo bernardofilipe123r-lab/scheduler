@@ -587,6 +587,8 @@ async def get_scheduled_posts(user_id: Optional[str] = None):
                 "scheduled_time": schedule.get("scheduled_time"),
                 "status": schedule.get("status"),
                 "platforms": schedule.get("metadata", {}).get("platforms", []),
+                "brand": schedule.get("metadata", {}).get("brand", ""),
+                "variant": schedule.get("metadata", {}).get("variant", "light"),
                 "caption": schedule.get("caption"),
                 "created_at": schedule.get("created_at"),
                 "published_at": schedule.get("published_at"),

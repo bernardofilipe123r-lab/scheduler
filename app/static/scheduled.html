@@ -1038,6 +1038,25 @@
             item.className = `post-item ${post.status}`;
             item.onclick = () => showPostDetail(post);
             
+            // Brand label
+            const brand = post.brand || post.metadata?.brand || '';
+            if (brand) {
+                const brandLabel = document.createElement('div');
+                brandLabel.className = 'post-brand';
+                brandLabel.textContent = brand === 'gymcollege' ? 'GC' : 'HC';
+                brandLabel.title = brand === 'gymcollege' ? 'The Gym College' : 'The Healthy College';
+                brandLabel.style.cssText = `
+                    background: ${brand === 'gymcollege' ? '#00435c' : '#8B4513'};
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    margin-bottom: 2px;
+                `;
+                item.appendChild(brandLabel);
+            }
+            
             // Platform icons
             const platforms = document.createElement('div');
             platforms.className = 'post-platforms';
