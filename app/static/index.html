@@ -745,7 +745,7 @@ Chicken — Let it rest after cooking" required></textarea>
                 <label>Platforms</label>
                 <div class="platform-checkboxes">
                     <label><input type="checkbox" id="platformInstagram" checked> Instagram</label>
-                    <label><input type="checkbox" id="platformFacebook"> Facebook</label>
+                    <label><input type="checkbox" id="platformFacebook" checked> Facebook</label>
                 </div>
             </div>
             
@@ -1092,7 +1092,7 @@ Chicken — Let it rest after cooking" required></textarea>
                         body: JSON.stringify({
                             reel_id: currentReels[brand],
                             caption: captions[brand],
-                            platforms: ['instagram'],
+                            platforms: ['instagram', 'facebook'],
                             schedule_date: slot.date,
                             schedule_time: slot.time,
                             brand: brand,
