@@ -68,10 +68,10 @@ def main():
             # Generate video
             video_path = examples_dir / f"{brand_name}_light_video.mp4"
             video_gen = VideoGenerator()
-            video_gen.create_video(
-                image_path=content_path,
+            video_gen.generate_reel_video(
+                reel_image_path=content_path,
                 output_path=video_path,
-                music_id="default_01"
+                music_id=None  # Will randomly pick music_1 or music_2
             )
             print(f"    ✅ Video: {video_path}")
             
@@ -101,10 +101,10 @@ def main():
             # Generate video
             video_path = examples_dir / f"{brand_name}_dark_video.mp4"
             video_gen = VideoGenerator()
-            video_gen.create_video(
-                image_path=content_path,
+            video_gen.generate_reel_video(
+                reel_image_path=content_path,
                 output_path=video_path,
-                music_id="default_01"
+                music_id=None  # Will randomly pick music_1 or music_2
             )
             print(f"    ✅ Video: {video_path}")
             
