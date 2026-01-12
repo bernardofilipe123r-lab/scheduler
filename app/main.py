@@ -104,24 +104,32 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     """Run startup tasks."""
-    print("🚀 Starting Instagram Reels Automation API...")
-    print("📝 Documentation available at: /docs")
-    print("🔍 Health check available at: /reels/health")
+    import sys
+    print("🚀 Starting Instagram Reels Automation API...", flush=True)
+    print(f"📍 Python: {sys.version}", flush=True)
+    print(f"📍 PORT: {os.getenv('PORT', 'not set')}", flush=True)
+    print("📝 Documentation available at: /docs", flush=True)
+    print("🔍 Health check available at: /health", flush=True)
     
     # Initialize database
-    print("💾 Initializing database...")
-    init_db()
+    print("💾 Initializing database...", flush=True)
+    try:
+        init_db()
+        print("✅ Database initialized", flush=True)
+    except Exception as e:
+        print(f"❌ Database init failed: {e}", flush=True)
+        # Continue anyway - don't block startup
     
     # Reset any stuck "publishing" posts from previous crashes
-    print("🔄 Checking for stuck publishing posts...")
+    print("🔄 Checking for stuck publishing posts...", flush=True)
     try:
         from app.services.db_scheduler import DatabaseSchedulerService
         scheduler_service = DatabaseSchedulerService()
         reset_count = scheduler_service.reset_stuck_publishing(max_age_minutes=10)
         if reset_count > 0:
-            print(f"⚠️ Reset {reset_count} stuck post(s) from previous run")
+            print(f"⚠️ Reset {reset_count} stuck post(s) from previous run", flush=True)
     except Exception as e:
-        print(f"⚠️ Could not check stuck posts: {e}")
+        print(f"⚠️ Could not check stuck posts: {e}", flush=True)
     
     # Initialize auto-publishing scheduler
     print("⏰ Starting auto-publishing scheduler...")
@@ -233,7 +241,8 @@ async def startup_event():
     scheduler.add_job(check_and_publish, 'interval', seconds=60, id='auto_publish')
     scheduler.start()
     
-    print("✅ Auto-publishing scheduler started (checks every 60 seconds)")
+    print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
+    print("🎉 Startup complete! App is ready.", flush=True)
     
     # Store scheduler for shutdown
     app.state.scheduler = scheduler
