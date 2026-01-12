@@ -13,6 +13,10 @@ from app.core.constants import (
     TOP_MARGIN,
     BOTTOM_MARGIN,
     SIDE_MARGIN,
+    H_PADDING,
+    BAR_HEIGHT,
+    BAR_GAP,
+    VERTICAL_CORRECTION,
     LINE_SPACING,
     SECTION_SPACING,
     TITLE_FONT_SIZE,
@@ -375,22 +379,14 @@ class ImageGenerator:
             # Add one empty line spacing after each bullet point
             current_y += int(content_font_size * line_spacing_multiplier)
         
-        # Dark mode: Add brand logo at bottom (10px from edge)
+        # Dark mode: Add brand name in white text at bottom (12px from edge, 15px font size)
         if self.variant == "dark":
-            if self.brand_name == "gymcollege":
-                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "dark mode" / "template_thumb.png"
-            else:  # healthycollege
-                logo_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "darkmode" / "template_thumb.png"
-            
-            if logo_path.exists():
-                logo = Image.open(logo_path)
-                # Resize logo to 50% of original size
-                new_size = (logo.width // 2, logo.height // 2)
-                logo = logo.resize(new_size, Image.Resampling.LANCZOS)
-                # Position 10px from bottom, centered horizontally
-                logo_x = (self.width - logo.width) // 2
-                logo_y = self.height - logo.height - 10
-                image.paste(logo, (logo_x, logo_y), logo if logo.mode == 'RGBA' else None)
+            brand_text = get_brand_display_name(self.brand_name)
+            brand_font = load_font(FONT_BOLD, 15)  # 15px font size
+            brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
+            brand_x = (self.width - brand_width) // 2
+            brand_y = self.height - brand_height - 12  # 12px from bottom
+            draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
         
         # Save the image
         output_path.parent.mkdir(parents=True, exist_ok=True)

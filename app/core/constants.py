@@ -45,6 +45,10 @@ BRAND_FONT_SIZE = 40
 TOP_MARGIN = 120
 BOTTOM_MARGIN = 120
 SIDE_MARGIN = 80
+H_PADDING = 40  # Horizontal padding for title background bars
+BAR_HEIGHT = 100  # Height of title background bars
+BAR_GAP = 0  # Gap between title background bars
+VERTICAL_CORRECTION = -3  # Vertical text positioning correction
 LINE_SPACING = 20
 SECTION_SPACING = 60
 

@@ -56,11 +56,11 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
         ),
         dark_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White (fixed for all dark modes)
+            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
             
             # Content
             content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#004aad"),  # Dark blue
+            content_title_bg_color=hex_to_rgba("#00435c"),  # Dark blue
         ),
     ),
     
@@ -70,19 +70,19 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
     "healthycollege": BrandColorConfig(
         light_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#006400"),  # Green
+            thumbnail_text_color=hex_to_rgb("#004f00"),  # Green
             
             # Content
             content_title_text_color=hex_to_rgb("#000000"),  # Black
-            content_title_bg_color=hex_to_rgba("#006837"),  # Green
+            content_title_bg_color=hex_to_rgba("#e9f3ed"),  # Light green
         ),
         dark_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White (fixed for all dark modes)
+            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
             
             # Content
             content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#006400"),  # Dark green
+            content_title_bg_color=hex_to_rgba("#004f00"),  # Dark green
         ),
     ),
     
@@ -92,19 +92,19 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
     "vitalitycollege": BrandColorConfig(
         light_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#c0569f"),  # Rose
+            thumbnail_text_color=hex_to_rgb("#028f7a"),  # Teal
             
             # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#c0569f"),  # Rose
+            content_title_text_color=hex_to_rgb("#000000"),  # Black
+            content_title_bg_color=hex_to_rgba("#028f7a"),  # Teal
         ),
         dark_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White (fixed for all dark modes)
+            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
             
             # Content
             content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#c0569f"),  # Rose
+            content_title_bg_color=hex_to_rgba("#028f7a"),  # Teal
         ),
     ),
     
@@ -114,19 +114,19 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
     "longevitycollege": BrandColorConfig(
         light_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#be7f09"),  # Amber
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#000000"),  # Black
-            content_title_bg_color=hex_to_rgba("#edba85"),  # Light amber
-        ),
-        dark_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White (fixed for all dark modes)
+            thumbnail_text_color=hex_to_rgb("#00c9ff"),  # Cyan
             
             # Content
             content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#be7f09"),  # Amber
+            content_title_bg_color=hex_to_rgba("#00c9ff"),  # Cyan
+        ),
+        dark_mode=BrandModeColors(
+            # Thumbnail
+            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
+            
+            # Content
+            content_title_text_color=hex_to_rgb("#ffffff"),  # White
+            content_title_bg_color=hex_to_rgba("#00c9ff"),  # Cyan
         ),
     ),
 }
