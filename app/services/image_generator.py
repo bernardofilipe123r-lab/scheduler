@@ -207,7 +207,7 @@ class ImageGenerator:
         
         # Brand-specific font sizes
         content_font_size = 38 if self.brand_name == "healthycollege" else 39  # 1px smaller for healthycollege
-        line_spacing_multiplier = 1.25  # Reduced from 1.4 for tighter spacing
+        line_spacing_multiplier = 1.35  # Reduced from 1.4 for tighter spacing
         title_content_padding = 90
         
         import random
@@ -326,7 +326,9 @@ class ImageGenerator:
         
         # Find max text width for stepped effect
         max_text_width = max(w for _, w, _, _ in metrics)
-        max_bar_width = max_text_width + H_PADDING * 2
+        # Reduce padding for tighter title background bars (especially in dark mode)
+        title_padding = 20 if self.variant == "dark" else H_PADDING  # Much tighter for dark mode
+        max_bar_width = max_text_width + title_padding * 2
         center_x = self.width // 2
         
         # Draw each title line with stepped background bars
