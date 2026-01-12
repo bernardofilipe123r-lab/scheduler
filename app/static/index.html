@@ -317,6 +317,12 @@
             100% { transform: rotate(360deg); }
         }
         
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(139, 92, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+        }
+        
         .loading-text { color: #333; font-weight: 600; margin-bottom: 5px; }
         .loading-subtext { color: #666; font-size: 14px; }
         
@@ -655,7 +661,11 @@ Chicken — Let it rest after cooking" required></textarea>
                     <div class="help-text">Enter one line per item. Use "—" or "-" to separate keyword from description.</div>
                 </div>
                 
-                <button type="submit" id="submitBtn">🎬 Generate Reels</button>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button type="submit" id="submitBtn">🎬 Generate Reels</button>
+                    <button type="button" id="autoGenerateBtn" onclick="autoGenerateContent()" style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);">🤖 Auto-Generate Viral Post</button>
+                </div>
+                <div class="help-text" style="margin-top: 8px;">💡 <strong>Auto-Generate</strong> uses AI to create a complete viral post (title, content & image prompt) from scratch!</div>
             </form>
             
             <div id="status" class="status"></div>
@@ -949,6 +959,67 @@ Chicken — Let it rest after cooking" required></textarea>
             }
             
             previewDiv.innerHTML = chips;
+        }
+        
+        // Auto-generate viral content using AI
+        async function autoGenerateContent() {
+            const autoBtn = document.getElementById('autoGenerateBtn');
+            autoBtn.disabled = true;
+            autoBtn.textContent = '🤖 Generating...';
+            
+            showLoading('AI Content Generation', 'Creating viral post from scratch using DeepSeek AI...');
+            
+            try {
+                const response = await fetch('/reels/auto-generate-content', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to generate content');
+                }
+                
+                const content = await response.json();
+                
+                // Fill in the form with generated content
+                document.getElementById('title').value = content.title;
+                document.getElementById('content').value = content.content_lines.join('\n');
+                
+                // If image prompt exists, fill it in and switch to dark mode
+                if (content.image_prompt) {
+                    document.getElementById('aiPrompt').value = content.image_prompt;
+                    // Switch to dark mode since we have an AI prompt
+                    const darkRadio = document.querySelector('input[name="variant"][value="dark"]');
+                    if (darkRadio) {
+                        darkRadio.checked = true;
+                        currentVariant = 'dark';
+                        document.getElementById('aiPromptGroup').style.display = 'block';
+                    }
+                }
+                
+                hideLoading();
+                
+                // Show success toast with content info
+                const topicInfo = content.topic_category ? ` (${content.topic_category})` : '';
+                const formatInfo = content.format_style ? ` - ${content.format_style} style` : '';
+                showToast('🎉 Content Generated!', `"${content.title}"${topicInfo}${formatInfo}`, 'success', 8000);
+                
+                // Highlight the filled fields
+                document.getElementById('title').style.animation = 'pulse 0.5s ease-in-out';
+                document.getElementById('content').style.animation = 'pulse 0.5s ease-in-out';
+                
+                showStatus('✅ AI generated viral content! Review and click "Generate Reels" to create.', 'success');
+                
+            } catch (error) {
+                hideLoading();
+                showToast('Generation Failed', error.message, 'error');
+                showStatus('❌ Error: ' + error.message, 'error');
+            } finally {
+                autoBtn.disabled = false;
+                autoBtn.textContent = '🤖 Auto-Generate Viral Post';
+            }
         }
         
         // Copy full caption to clipboard

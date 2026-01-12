@@ -14,6 +14,7 @@ from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
 from app.services.caption_builder import CaptionBuilder
 from app.services.caption_generator import CaptionGenerator
+from app.services.content_generator import ContentGenerator, ContentRating
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.social_publisher import SocialPublisher
 from app.database.db import ReelDatabase
@@ -38,6 +39,25 @@ class CaptionRequest(BaseModel):
     brands: Optional[List[str]] = None  # If None, generate for all brands
 
 
+# Request model for auto content generation
+class AutoContentRequest(BaseModel):
+    topic_hint: Optional[str] = None  # Optional topic to focus on
+
+
+# Request model for rating content performance
+class ContentRatingRequest(BaseModel):
+    content_id: str
+    title: str
+    content_lines: List[str]
+    views: int
+    likes: int = 0
+    shares: int = 0
+    saves: int = 0
+    comments: int = 0
+    format_style: str = ""
+    topic_category: str = ""
+
+
 class DownloadRequest(BaseModel):
     reel_id: str
     brand: str = "gymcollege"
@@ -49,6 +69,8 @@ router = APIRouter(prefix="/reels", tags=["reels"])
 # Initialize services (will be reused across requests)
 scheduler_service = DatabaseSchedulerService()
 caption_generator = CaptionGenerator()
+content_generator = ContentGenerator()
+content_rating = ContentRating()
 db = ReelDatabase()
 
 
@@ -89,6 +111,97 @@ async def generate_captions(request: CaptionRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate captions: {str(e)}"
         )
+
+
+@router.post(
+    "/auto-generate-content",
+    summary="Auto-generate viral content using AI",
+    description="Generate complete viral post (title, content, image prompt) from scratch using DeepSeek AI"
+)
+async def auto_generate_content(request: AutoContentRequest = None):
+    """
+    Generate a complete viral post from scratch using AI.
+    
+    Returns title, content_lines (8 points), and image prompt for dark mode.
+    """
+    try:
+        topic_hint = request.topic_hint if request else None
+        content = content_generator.generate_viral_content(topic_hint)
+        
+        if not content.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate content"
+            )
+        
+        return content
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate content: {str(e)}"
+        )
+
+
+@router.get(
+    "/content-topics",
+    summary="Get available content topics",
+    description="Get list of available topic categories for content generation"
+)
+async def get_content_topics():
+    """Get available topic categories for auto content generation."""
+    return {
+        "topics": content_generator.get_available_topics(),
+        "formats": content_generator.get_format_styles()
+    }
+
+
+@router.post(
+    "/rate-content",
+    summary="Rate content performance",
+    description="Submit performance metrics for generated content to improve AI"
+)
+async def rate_content(request: ContentRatingRequest):
+    """
+    Submit performance metrics for generated content.
+    
+    This helps improve future content generation by learning what works.
+    """
+    try:
+        rating = content_rating.add_rating(
+            content_id=request.content_id,
+            title=request.title,
+            content_lines=request.content_lines,
+            views=request.views,
+            likes=request.likes,
+            shares=request.shares,
+            saves=request.saves,
+            comments=request.comments,
+            format_style=request.format_style,
+            topic_category=request.topic_category
+        )
+        return {"success": True, "rating": rating}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save rating: {str(e)}"
+        )
+
+
+@router.get(
+    "/content-analytics",
+    summary="Get content performance analytics",
+    description="Get analytics on which topics and formats perform best"
+)
+async def get_content_analytics():
+    """Get analytics on content performance."""
+    return {
+        "top_performing": content_rating.get_top_performing(10),
+        "best_topics": content_rating.get_best_topics(),
+        "best_formats": content_rating.get_best_formats()
+    }
 
 
 def get_brand_config_from_name(brand_name: str) -> Optional[BrandConfig]:
