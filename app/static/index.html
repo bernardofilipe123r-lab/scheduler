@@ -633,25 +633,17 @@
                     <div class="help-text">Each brand has its own independent schedule</div>
                 </div>
                 
-                <div class="form-group" id="captionGymcollegeGroup" style="display: none;">
-                    <label for="captionGymcollege">Caption - Gym College</label>
-                    <textarea id="captionGymcollege" name="captionGymcollege" rows="3" placeholder="Enter caption for Gym College..."></textarea>
+                <div class="form-group">
+                    <label for="ctaType">Call-to-Action</label>
+                    <select id="ctaType" name="ctaType" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; font-family: inherit;">
+                        <option value="sleep_lean">💬 Comment LEAN - Sleep Lean product</option>
+                        <option value="follow_tips">👉 Follow for more healthy tips</option>
+                        <option value="workout_plan">💬 Comment PLAN - Workout & nutrition plan</option>
+                    </select>
+                    <div class="help-text">Select the call-to-action for the caption</div>
                 </div>
                 
-                <div class="form-group" id="captionHealthycollegeGroup" style="display: none;">
-                    <label for="captionHealthycollege">Caption - Healthy College</label>
-                    <textarea id="captionHealthycollege" name="captionHealthycollege" rows="3" placeholder="Enter caption for Healthy College..."></textarea>
-                </div>
-                
-                <div class="form-group" id="captionVitalitycollegeGroup" style="display: none;">
-                    <label for="captionVitalitycollege">Caption - Vitality College</label>
-                    <textarea id="captionVitalitycollege" name="captionVitalitycollege" rows="3" placeholder="Enter caption for Vitality College..."></textarea>
-                </div>
-                
-                <div class="form-group" id="captionLongevitycollegeGroup" style="display: none;">
-                    <label for="captionLongevitycollege">Caption - Longevity College</label>
-                    <textarea id="captionLongevitycollege" name="captionLongevitycollege" rows="3" placeholder="Enter caption for Longevity College..."></textarea>
-                </div>
+                <!-- Caption areas moved to after generation, showing AI-generated first paragraph -->
                 
                 <div class="form-group">
                     <label for="content">Content Lines</label>
@@ -696,6 +688,14 @@ Chicken — Let it rest after cooking" required></textarea>
                             <p>Reel Video</p>
                         </div>
                     </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <span>📝 Caption First Paragraph (AI Generated)</span>
+                            <button type="button" onclick="copyCaption('gymcollege')" style="padding: 4px 10px; font-size: 12px; background: #6b7280;">📋 Copy Full</button>
+                        </label>
+                        <textarea id="captionGymcollege" rows="4" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical;" placeholder="Caption will appear here after generation..."></textarea>
+                        <input type="hidden" id="fullCaptionGymcollege">
+                    </div>
                     <div class="download-section" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                         <button onclick="downloadReel('gymcollege')">Download</button>
                         <button onclick="openScheduleModal('gymcollege')" style="background: #10b981;">Schedule</button>
@@ -716,6 +716,14 @@ Chicken — Let it rest after cooking" required></textarea>
                             </video>
                             <p>Reel Video</p>
                         </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <span>📝 Caption First Paragraph (AI Generated)</span>
+                            <button type="button" onclick="copyCaption('healthycollege')" style="padding: 4px 10px; font-size: 12px; background: #6b7280;">📋 Copy Full</button>
+                        </label>
+                        <textarea id="captionHealthycollege" rows="4" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical;" placeholder="Caption will appear here after generation..."></textarea>
+                        <input type="hidden" id="fullCaptionHealthycollege">
                     </div>
                     <div class="download-section" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                         <button onclick="downloadReel('healthycollege')">Download</button>
@@ -738,6 +746,14 @@ Chicken — Let it rest after cooking" required></textarea>
                             <p>Reel Video</p>
                         </div>
                     </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <span>📝 Caption First Paragraph (AI Generated)</span>
+                            <button type="button" onclick="copyCaption('vitalitycollege')" style="padding: 4px 10px; font-size: 12px; background: #6b7280;">📋 Copy Full</button>
+                        </label>
+                        <textarea id="captionVitalitycollege" rows="4" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical;" placeholder="Caption will appear here after generation..."></textarea>
+                        <input type="hidden" id="fullCaptionVitalitycollege">
+                    </div>
                     <div class="download-section" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                         <button onclick="downloadReel('vitalitycollege')">Download</button>
                         <button onclick="openScheduleModal('vitalitycollege')" style="background: #10b981;">Schedule</button>
@@ -758,6 +774,14 @@ Chicken — Let it rest after cooking" required></textarea>
                             </video>
                             <p>Reel Video</p>
                         </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <span>📝 Caption First Paragraph (AI Generated)</span>
+                            <button type="button" onclick="copyCaption('longevitycollege')" style="padding: 4px 10px; font-size: 12px; background: #6b7280;">📋 Copy Full</button>
+                        </label>
+                        <textarea id="captionLongevitycollege" rows="4" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical;" placeholder="Caption will appear here after generation..."></textarea>
+                        <input type="hidden" id="fullCaptionLongevitycollege">
                     </div>
                     <div class="download-section" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                         <button onclick="downloadReel('longevitycollege')">Download</button>
@@ -939,6 +963,33 @@ Chicken — Let it rest after cooking" required></textarea>
             }
             
             previewDiv.innerHTML = chips;
+        }
+        
+        // Copy full caption to clipboard
+        function copyCaption(brand) {
+            const brandKey = brand.charAt(0).toUpperCase() + brand.slice(1);
+            const fullCaptionEl = document.getElementById('fullCaption' + brandKey);
+            const captionEl = document.getElementById('caption' + brandKey);
+            
+            const textToCopy = fullCaptionEl && fullCaptionEl.value ? fullCaptionEl.value : (captionEl ? captionEl.value : '');
+            
+            if (!textToCopy) {
+                showToast('No Caption', 'Generate a reel first to get a caption', 'warning');
+                return;
+            }
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showToast('Copied!', 'Full caption copied to clipboard', 'success');
+            }).catch(err => {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = textToCopy;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast('Copied!', 'Full caption copied to clipboard', 'success');
+            });
         }
         
         // Download reel
@@ -1225,6 +1276,7 @@ Chicken — Let it rest after cooking" required></textarea>
             const content = document.getElementById('content').value.trim();
             currentVariant = document.querySelector('input[name="variant"]:checked').value;
             const aiPrompt = currentVariant === 'dark' ? document.getElementById('aiPrompt').value.trim() : null;
+            const ctaType = document.getElementById('ctaType').value;
             
             const brandCheckboxes = document.querySelectorAll('input[name="brand"]:checked');
             const brands = Array.from(brandCheckboxes).map(cb => cb.value);
@@ -1256,9 +1308,34 @@ Chicken — Let it rest after cooking" required></textarea>
             currentReels = {};
             
             const variantText = currentVariant === 'dark' ? 'AI backgrounds' : 'light mode';
-            showLoading('Generating Reels', `Creating ${brands.length} reel(s) with ${variantText}...`);
+            showLoading('Generating Captions', `Creating AI captions with ${ctaType.replace('_', ' ')} CTA...`);
             
             try {
+                // First, generate AI captions for all brands
+                const captionResponse = await fetch('/reels/generate-captions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: title,
+                        content_lines: lines,
+                        cta_type: ctaType
+                    })
+                });
+                
+                let generatedCaptions = {};
+                let firstParagraphs = {};
+                
+                if (captionResponse.ok) {
+                    const captionResult = await captionResponse.json();
+                    generatedCaptions = captionResult.captions;
+                    firstParagraphs = captionResult.first_paragraphs;
+                    showToast('Captions Ready!', 'AI captions generated', 'success', 2000);
+                } else {
+                    console.warn('Caption generation failed, using fallback');
+                }
+                
+                showLoading('Generating Reels', `Creating ${brands.length} reel(s) with ${variantText}...`);
+                
                 for (let i = 0; i < brands.length; i++) {
                     const brand = brands[i];
                     const brandName = getBrandName(brand);
@@ -1273,7 +1350,8 @@ Chicken — Let it rest after cooking" required></textarea>
                             content_lines: lines,
                             brand: brand,
                             variant: currentVariant,
-                            ai_prompt: aiPrompt
+                            ai_prompt: aiPrompt,
+                            cta_type: ctaType
                         })
                     });
                     
@@ -1292,6 +1370,18 @@ Chicken — Let it rest after cooking" required></textarea>
                     const videoSource = document.getElementById('videoSource' + brand);
                     videoSource.src = result.video_path + '?t=' + timestamp;
                     videoElement.load();
+                    
+                    // Display captions
+                    const brandKey = brand.charAt(0).toUpperCase() + brand.slice(1);
+                    const captionTextarea = document.getElementById('caption' + brandKey);
+                    const fullCaptionInput = document.getElementById('fullCaption' + brandKey);
+                    
+                    if (captionTextarea && firstParagraphs[brand]) {
+                        captionTextarea.value = firstParagraphs[brand];
+                    }
+                    if (fullCaptionInput && generatedCaptions[brand]) {
+                        fullCaptionInput.value = generatedCaptions[brand];
+                    }
                     
                     document.getElementById(brand + 'Preview').style.display = 'block';
                     

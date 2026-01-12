@@ -13,6 +13,7 @@ from app.api.schemas import ReelCreateRequest, ReelCreateResponse, ErrorResponse
 from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
 from app.services.caption_builder import CaptionBuilder
+from app.services.caption_generator import CaptionGenerator
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.social_publisher import SocialPublisher
 from app.database.db import ReelDatabase
@@ -26,6 +27,15 @@ class SimpleReelRequest(BaseModel):
     brand: str = "gymcollege"
     variant: str = "light"
     ai_prompt: Optional[str] = None  # Optional custom AI prompt for dark mode
+    cta_type: Optional[str] = "sleep_lean"  # CTA option for caption
+
+
+# Request model for caption generation
+class CaptionRequest(BaseModel):
+    title: str
+    content_lines: List[str]
+    cta_type: str = "sleep_lean"
+    brands: Optional[List[str]] = None  # If None, generate for all brands
 
 
 class DownloadRequest(BaseModel):
@@ -38,7 +48,47 @@ router = APIRouter(prefix="/reels", tags=["reels"])
 
 # Initialize services (will be reused across requests)
 scheduler_service = DatabaseSchedulerService()
+caption_generator = CaptionGenerator()
 db = ReelDatabase()
+
+
+@router.post(
+    "/generate-captions",
+    summary="Generate AI captions for all brands",
+    description="Generate AI-powered captions for Instagram posts using DeepSeek API"
+)
+async def generate_captions(request: CaptionRequest):
+    """
+    Generate AI captions for all brands based on title and content.
+    
+    The first paragraph is AI-generated, rest is fixed template with brand-specific handles.
+    """
+    try:
+        # Generate captions for all brands
+        captions = caption_generator.generate_all_brand_captions(
+            title=request.title,
+            content_lines=request.content_lines,
+            cta_type=request.cta_type
+        )
+        
+        # Extract just the first paragraph for each brand
+        first_paragraphs = {}
+        for brand, caption in captions.items():
+            # First paragraph is everything before the first double newline
+            first_para = caption.split("\n\n")[0] if "\n\n" in caption else caption[:200]
+            first_paragraphs[brand] = first_para
+        
+        return {
+            "captions": captions,
+            "first_paragraphs": first_paragraphs,
+            "cta_type": request.cta_type
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate captions: {str(e)}"
+        )
 
 
 def get_brand_config_from_name(brand_name: str) -> Optional[BrandConfig]:
