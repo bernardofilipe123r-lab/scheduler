@@ -107,6 +107,7 @@ Create ONE completely original, scroll-stopping post about: {topic}
 
 ### CONTENT RULES:
 - EXACTLY 8 points (no more, no less)
+- DO NOT include numbers (1., 2., etc.) - numbers are added automatically by our system
 - Each point must be: concrete, specific, believable but slightly surprising
 - Mix: 60% validating (things they suspect), 40% shocking (new revelation)
 - Point 8 MUST be a CTA ending with "follow this page"
@@ -124,36 +125,36 @@ Create ONE completely original, scroll-stopping post about: {topic}
 
 EXAMPLE 1 - SHORT FRAGMENT STYLE:
 Title: PHARMACIES DON'T WANT YOU TO KNOW THIS
-1. Ibuprofen — Causes gut pain without addiction
-2. Benadryl — Brain fog; Shrinks brain's receptors
-3. Aspirin — Stomach ulcers
-4. Tylenol — Misfires; Feeds your liver toxins
-5. Advil — Gut bloating
-6. Aleve — Damages your Vagus Nerve
-7. Diphenhydramine — Confusion, fatigue, anxiety
-8. If you want to improve your health, follow this page.
+Ibuprofen — Causes gut pain without addiction
+Benadryl — Brain fog; Shrinks brain's receptors
+Aspirin — Stomach ulcers
+Tylenol — Misfires; Feeds your liver toxins
+Advil — Gut bloating
+Aleve — Damages your Vagus Nerve
+Diphenhydramine — Confusion, fatigue, anxiety
+If you want to improve your health, follow this page.
 
 EXAMPLE 2 - FULL SENTENCE STYLE:
 Title: EARLY HEART WARNING SIGNS MOST PEOPLE OVERLOOK
-1. Shortness of breath during mild activity can signal early heart strain.
-2. Unusual fatigue that feels excessive for your activity level is a common warning.
-3. Chest discomfort or pressure during emotional stress may reflect heart overload.
-4. Dizziness when standing up quickly can indicate reduced circulation.
-5. Swelling in the feet or ankles may result from fluid buildup.
-6. Frequent indigestion that doesn't improve can be heart-related.
-7. Irregular heartbeat or fluttering sensations should not be ignored.
-8. Pay attention early — Follow this page for more.
+Shortness of breath during mild activity can signal early heart strain.
+Unusual fatigue that feels excessive for your activity level is a common warning.
+Chest discomfort or pressure during emotional stress may reflect heart overload.
+Dizziness when standing up quickly can indicate reduced circulation.
+Swelling in the feet or ankles may result from fluid buildup.
+Frequent indigestion that doesn't improve can be heart-related.
+Irregular heartbeat or fluttering sensations should not be ignored.
+Pay attention early — Follow this page for more.
 
 EXAMPLE 3 - CAUSE-EFFECT STYLE:
 Title: EAT THIS FOR 7 DAYS AND FEEL THE DIFFERENCE
-1. Half an avocado each morning — Supports hormones and skin hydration.
-2. Soaked flaxseeds daily — Improves digestion and bowel regularity.
-3. Warm lemon water on waking — Reduces bloating and supports the liver.
-4. A serving of blueberries — Boosts memory and brain focus.
-5. Ginger tea in the evening — Calms digestion and supports sleep.
-6. Plain yogurt daily — Supports gut balance.
-7. Handful of nuts mid-afternoon — Steady energy levels.
-8. Simple food changes matter — Follow this page.
+Half an avocado each morning — Supports hormones and skin hydration.
+Soaked flaxseeds daily — Improves digestion and bowel regularity.
+Warm lemon water on waking — Reduces bloating and supports the liver.
+A serving of blueberries — Boosts memory and brain focus.
+Ginger tea in the evening — Calms digestion and supports sleep.
+Plain yogurt daily — Supports gut balance.
+Handful of nuts mid-afternoon — Steady energy levels.
+Simple food changes matter — Follow this page.
 
 ## IMAGE PROMPT REQUIREMENTS
 

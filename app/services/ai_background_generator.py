@@ -118,7 +118,7 @@ class AIBackgroundGenerator:
                 progress_callback(f"Waiting for generation (ID: {request_id})...", 50)
             
             # Poll for results
-            max_attempts = 60  # 60 attempts x 2 seconds = 2 minutes max
+            max_attempts = 90  # 90 attempts x 2 seconds = 3 minutes max
             attempt = 0
             
             while attempt < max_attempts:
@@ -190,7 +190,11 @@ class AIBackgroundGenerator:
                 else:
                     raise RuntimeError(f"Unknown status: {status}")
             
-            raise RuntimeError(f"Generation timed out after {max_attempts} attempts")
+            raise RuntimeError(f"Generation timed out after {max_attempts} attempts (~{max_attempts * 2}s). The deAPI server may be overloaded. Try again or use a shorter prompt.")
             
+        except requests.exceptions.Timeout as e:
+            raise RuntimeError(f"Network timeout connecting to deAPI: {str(e)}. Check your internet connection.")
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Network error with deAPI: {str(e)}")
         except Exception as e:
             raise RuntimeError(f"Failed to generate AI background: {str(e)}")

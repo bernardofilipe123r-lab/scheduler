@@ -207,18 +207,65 @@ class ImageGenerator:
         
         # Brand-specific font sizes
         content_font_size = 38 if self.brand_name == "healthycollege" else 39  # 1px smaller for healthycollege
-        line_spacing_multiplier = 1.4
+        line_spacing_multiplier = 1.25  # Reduced from 1.4 for tighter spacing
         title_content_padding = 90
         
-        # Healthycollege: reorder content lines (shuffle all except last)
-        if self.brand_name == "healthycollege" and len(lines) > 1:
-            import random
-            import re
-            
+        import random
+        import re
+        
+        # Helper function to detect if line is a CTA (call-to-action)
+        def is_cta_line(line):
+            """Detect if a line is a CTA/closing line (not enumerable content)."""
+            cta_patterns = [
+                r'follow.*page', r'save.*post', r'share.*friend',
+                r'comment.*below', r'link.*bio', r'check.*out',
+                r'subscribe', r'tap.*link', r'click.*link',
+                r'tag.*friend', r'drop.*comment', r'let.*know',
+                r'starts.*with', r'begins.*with', r'remember.*this',
+                r'don\'t.*forget', r'keep.*mind', r'your.*health',
+                r'your.*body', r'take.*action', r'make.*change'
+            ]
+            line_lower = line.lower()
+            return any(re.search(pattern, line_lower) for pattern in cta_patterns)
+        
+        # Helper function to detect if content is enumeration-style
+        def is_enumeration_content(content_lines):
+            """Detect if content lines represent an enumeration (list of similar items)."""
+            if len(content_lines) < 3:
+                return False
+            # Check if most lines have similar structure (dash separator or similar format)
+            dash_count = sum(1 for line in content_lines if '—' in line or ' - ' in line or ': ' in line)
+            return dash_count >= len(content_lines) * 0.5  # At least 50% have separators
+        
+        # Step 1: Add numbering if this is enumeration-style content
+        if len(lines) > 1 and is_enumeration_content(lines):
             last_line = lines[-1]
             middle_lines = lines[:-1]
             
-            # Check if original content has numbered lists
+            # Remove any existing numbers and add fresh sequential numbers
+            numbered_middle = []
+            for i, line in enumerate(middle_lines, 1):
+                # Remove any existing number prefix (e.g., "1. ", "2. ")
+                line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
+                # Add new sequential number
+                numbered_middle.append(f"{i}. {line_without_number}")
+            
+            # Last line: only number it if it's NOT a CTA
+            last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
+            if is_cta_line(last_line):
+                # CTA line - no number
+                lines = numbered_middle + [last_line_without_number]
+            else:
+                # Regular content line - add number
+                numbered_last = f"{len(numbered_middle) + 1}. {last_line_without_number}"
+                lines = numbered_middle + [numbered_last]
+        
+        # Step 2: Healthycollege - shuffle content (reorder for variety)
+        if self.brand_name == "healthycollege" and len(lines) > 1:
+            last_line = lines[-1]
+            middle_lines = lines[:-1]
+            
+            # Check if content is numbered
             has_numbers = any(re.match(r'^\d+\.\s', line.strip()) for line in lines)
             
             # Shuffle middle lines (truly random, not seeded)
@@ -226,21 +273,20 @@ class ImageGenerator:
             random.shuffle(shuffled_middle)
             
             if has_numbers:
-                # If original had numbers, renumber after shuffling
+                # Renumber after shuffling
                 renumbered_middle = []
                 for i, line in enumerate(shuffled_middle, 1):
-                    # Remove any existing number prefix (e.g., "1. ", "2. ")
                     line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
-                    # Add new sequential number
                     renumbered_middle.append(f"{i}. {line_without_number}")
                 
-                # Renumber the last line
-                last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
-                renumbered_last = f"{len(renumbered_middle) + 1}. {last_line_without_number}"
-                
-                lines = renumbered_middle + [renumbered_last]
+                # Last line: renumber only if it has a number (not a CTA)
+                if re.match(r'^\d+\.\s', last_line.strip()):
+                    last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
+                    renumbered_last = f"{len(renumbered_middle) + 1}. {last_line_without_number}"
+                    lines = renumbered_middle + [renumbered_last]
+                else:
+                    lines = renumbered_middle + [last_line]
             else:
-                # If original had no numbers, just shuffle without adding numbers
                 lines = shuffled_middle + [last_line]
         
         # Find optimal title font size (start at 56, reduce until fits in 2 lines)
@@ -376,8 +422,8 @@ class ImageGenerator:
                     line_height = bbox[3] - bbox[1]
                     current_y += int(line_height * line_spacing_multiplier)
             
-            # Add one empty line spacing after each bullet point
-            current_y += int(content_font_size * line_spacing_multiplier)
+            # Add spacing between bullet points (reduced for tighter layout)
+            current_y += int(content_font_size * 0.6)  # Reduced from full line_spacing_multiplier
         
         # Dark mode: Add brand name in white text at bottom (12px from edge, 15px font size)
         if self.variant == "dark":
