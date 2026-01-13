@@ -24,7 +24,7 @@ def get_brand_type(brand_name: str) -> BrandType:
     """Convert brand name to BrandType enum."""
     brand_map = {
         "gymcollege": BrandType.THE_GYM_COLLEGE,
-        "healthycollege": BrandType.HEALTHY_COLLEGE,
+        "healthycollege": BrandType.WELLNESS_LIFE,  # healthycollege maps to WELLNESS_LIFE
         "vitalitycollege": BrandType.VITALITY_COLLEGE,
         "longevitycollege": BrandType.LONGEVITY_COLLEGE,
     }
