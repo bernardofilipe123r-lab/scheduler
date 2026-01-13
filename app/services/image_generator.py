@@ -102,8 +102,8 @@ class ImageGenerator:
             # Dark mode: use cached AI background with overlay
             image = self._ai_background.copy()
             
-            # Apply 50% dark overlay for thumbnail (5% darker for better white text visibility)
-            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.50)))
+            # Apply 55% dark overlay for thumbnail (darker for better white text visibility)
+            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.55)))
             image = image.convert('RGBA')
             image = Image.alpha_composite(image, overlay)
             image = image.convert('RGB')
