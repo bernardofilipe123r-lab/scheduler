@@ -1057,13 +1057,13 @@
                     'longevitycollege': 'Longevity College'
                 };
                 brandLabel.title = brandTitles[brand] || 'Unknown Brand';
-                brandLabel.style.cssText = `
                 const brandColors = {
                     'gymcollege': '#00435c',
                     'healthycollege': '#006400',
                     'vitalitycollege': '#c0569f',
                     'longevitycollege': '#be7f09'
                 };
+                brandLabel.style.cssText = `
                     background: ${brandColors[brand] || '#666'};
                     color: white;
                     padding: 2px 6px;

@@ -626,11 +626,13 @@
             const brandOutputs = currentJob.brand_outputs || {};
             const totalBrands = (currentJob.brands || []).length;
             const completedBrands = Object.values(brandOutputs).filter(o => o.status === 'completed').length;
-            document.getElementById('jobProgress').innerHTML = `🎨 ${completedBrands}/${totalBrands} brands`;
+            const scheduledBrands = Object.values(brandOutputs).filter(o => o.status === 'scheduled').length;
+            document.getElementById('jobProgress').innerHTML = `🎨 ${completedBrands + scheduledBrands}/${totalBrands} brands`;
             
             // Show/hide schedule section based on completion status
-            const hasCompletedBrands = completedBrands > 0;
-            document.getElementById('scheduleSection').style.display = hasCompletedBrands ? 'block' : 'none';
+            // Only show if there are completed (but not scheduled) brands
+            const hasSchedulableBrands = completedBrands > 0;
+            document.getElementById('scheduleSection').style.display = hasSchedulableBrands ? 'block' : 'none';
             
             // Render brand sections
             renderBrandSections();
@@ -645,6 +647,7 @@
                 const output = brandOutputs[brand] || {};
                 const config = brandConfig[brand] || { name: brand, color: '#666' };
                 const isCompleted = output.status === 'completed';
+                const isScheduled = output.status === 'scheduled';
                 const isFailed = output.status === 'failed';
                 
                 // Build media content
@@ -684,26 +687,49 @@
                     `;
                 }
                 
-                // Build actions
-                const actions = isCompleted ? `
-                    <div class="brand-actions">
-                        <button class="btn btn-secondary" onclick="downloadBrand('${brand}', '${output.reel_id}')">
-                            ⬇️ Download
-                        </button>
-                        <button class="btn btn-success" onclick="scheduleBrand('${brand}')">
-                            📅 Schedule
-                        </button>
-                        <button class="btn btn-secondary" onclick="regenerateBrand('${brand}')">
-                            🔄 Regenerate
-                        </button>
-                    </div>
-                ` : isFailed ? `
-                    <div class="brand-actions">
-                        <button class="btn btn-primary" onclick="regenerateBrand('${brand}')">
-                            🔄 Retry Generation
-                        </button>
-                    </div>
-                ` : '';
+                // Build actions based on status
+                let actions = '';
+                if (isScheduled) {
+                    // Scheduled: only allow download and copy
+                    actions = `
+                        <div class="brand-actions">
+                            <button class="btn btn-secondary" onclick="downloadBrand('${brand}', '${output.reel_id}')">
+                                ⬇️ Download
+                            </button>
+                            <button class="btn btn-secondary" onclick="copyCaption('${brand}')" title="Copy caption">
+                                📋 Copy Caption
+                            </button>
+                            <button class="btn btn-secondary" onclick="copyTitle()" title="Copy title">
+                                📝 Copy Title
+                            </button>
+                        </div>
+                        <div class="scheduled-info" style="margin-top: 12px; padding: 10px; background: #f3e8ff; border-radius: 8px; font-size: 13px; color: #7c3aed;">
+                            ✓ Scheduled for publishing${output.scheduled_time ? ` at ${new Date(output.scheduled_time).toLocaleString()}` : ''}
+                        </div>
+                    `;
+                } else if (isCompleted) {
+                    actions = `
+                        <div class="brand-actions">
+                            <button class="btn btn-secondary" onclick="downloadBrand('${brand}', '${output.reel_id}')">
+                                ⬇️ Download
+                            </button>
+                            <button class="btn btn-success" onclick="scheduleBrand('${brand}')">
+                                📅 Schedule
+                            </button>
+                            <button class="btn btn-secondary" onclick="regenerateBrand('${brand}')">
+                                🔄 Regenerate
+                            </button>
+                        </div>
+                    `;
+                } else if (isFailed) {
+                    actions = `
+                        <div class="brand-actions">
+                            <button class="btn btn-primary" onclick="regenerateBrand('${brand}')">
+                                🔄 Retry Generation
+                            </button>
+                        </div>
+                    `;
+                }
                 
                 return `
                     <div class="brand-section">
@@ -714,7 +740,8 @@
                             </div>
                             <div class="brand-status">
                                 <span class="status-badge status-${output.status || 'pending'}">
-                                    ${output.status === 'completed' ? '✓ Completed' : 
+                                    ${output.status === 'scheduled' ? '📅 Scheduled' :
+                                      output.status === 'completed' ? '✓ Completed' : 
                                       output.status === 'failed' ? '✕ Failed' : 
                                       output.status === 'generating' ? '◉ Generating' : '○ Pending'}
                                 </span>
@@ -802,6 +829,25 @@
             showToast('Download started!', 'success');
         }
         
+        // Copy caption for a brand
+        function copyCaption(brand) {
+            const caption = `Generated from job ${currentJob.job_id}`;
+            navigator.clipboard.writeText(caption).then(() => {
+                showToast('Caption copied to clipboard!', 'success');
+            }).catch(() => {
+                showToast('Failed to copy caption', 'error');
+            });
+        }
+        
+        // Copy title
+        function copyTitle() {
+            navigator.clipboard.writeText(currentJob.title || '').then(() => {
+                showToast('Title copied to clipboard!', 'success');
+            }).catch(() => {
+                showToast('Failed to copy title', 'error');
+            });
+        }
+        
         // Schedule a single brand
         async function scheduleBrand(brand) {
             try {
@@ -826,8 +872,27 @@
                 });
                 
                 if (response.ok) {
+                    const result = await response.json();
+                    
+                    // Update brand status to "scheduled" via API
+                    await fetch(`/jobs/${jobId}/brand/${brand}/status`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            status: 'scheduled',
+                            scheduled_time: result.scheduled_for
+                        })
+                    });
+                    
+                    // Update local state
+                    currentJob.brand_outputs[brand].status = 'scheduled';
+                    currentJob.brand_outputs[brand].scheduled_time = result.scheduled_for;
+                    
+                    // Re-render
+                    renderBrandSections();
+                    loadNextSlots();
+                    
                     showToast(`${brandConfig[brand]?.name || brand} scheduled!`, 'success');
-                    loadNextSlots(); // Refresh slots
                 } else {
                     throw new Error('Failed to schedule');
                 }
@@ -872,11 +937,30 @@
                     });
                     
                     if (response.ok) {
+                        const result = await response.json();
+                        
+                        // Update brand status to "scheduled"
+                        await fetch(`/jobs/${jobId}/brand/${brand}/status`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                status: 'scheduled',
+                                scheduled_time: result.scheduled_for
+                            })
+                        });
+                        
+                        // Update local state
+                        currentJob.brand_outputs[brand].status = 'scheduled';
+                        currentJob.brand_outputs[brand].scheduled_time = result.scheduled_for;
+                        
                         successCount++;
                     }
                 }
                 
-                loadNextSlots(); // Refresh slots after scheduling
+                // Re-render and refresh slots
+                renderBrandSections();
+                loadNextSlots();
+                
                 showToast(`${successCount}/${completedBrands.length} brands scheduled successfully!`, 'success');
                 
             } catch (error) {

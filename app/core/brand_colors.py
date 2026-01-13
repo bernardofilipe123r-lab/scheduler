@@ -114,7 +114,7 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
     "longevitycollege": BrandColorConfig(
         light_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#00c9ff"),  # Cyan
+            thumbnail_text_color=hex_to_rgb("#019dc8"),  # Cyan
             
             # Content
             content_title_text_color=hex_to_rgb("#000000"),  # Black
@@ -126,7 +126,7 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
             
             # Content
             content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#00c9ff"),  # Cyan
+            content_title_bg_color=hex_to_rgba("#019dc8"),  # Cyan
         ),
     ),
 }

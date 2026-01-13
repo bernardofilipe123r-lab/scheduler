@@ -570,3 +570,69 @@ async def get_next_slots(job_id: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get slots: {str(e)}"
         )
+
+
+class BrandStatusUpdate(BaseModel):
+    """Request to update a brand's status."""
+    status: str  # "scheduled", "completed", "failed", etc.
+    scheduled_time: Optional[str] = None
+
+
+@router.post(
+    "/{job_id}/brand/{brand}/status",
+    summary="Update a brand's status (e.g., mark as scheduled)"
+)
+async def update_brand_status(job_id: str, brand: str, request: BrandStatusUpdate):
+    """
+    Update a brand's status within a job.
+    Used to mark brands as 'scheduled' after scheduling, preventing re-scheduling.
+    """
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            
+            job = manager.get_job(job_id)
+            if not job:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Job not found: {job_id}"
+                )
+            
+            # Check brand exists
+            if brand not in job.brands:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Brand '{brand}' not in job"
+                )
+            
+            # Update the brand output status
+            brand_outputs = job.brand_outputs or {}
+            if brand not in brand_outputs:
+                brand_outputs[brand] = {}
+            
+            brand_outputs[brand]["status"] = request.status
+            if request.scheduled_time:
+                brand_outputs[brand]["scheduled_time"] = request.scheduled_time
+            
+            # Save updated brand outputs
+            manager.update_brand_output(
+                job_id=job_id,
+                brand=brand,
+                output_data=brand_outputs[brand]
+            )
+            
+            return {
+                "success": True,
+                "job_id": job_id,
+                "brand": brand,
+                "status": request.status,
+                "message": f"Brand {brand} status updated to {request.status}"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update brand status: {str(e)}"
+        )
