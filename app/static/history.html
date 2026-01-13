@@ -1420,7 +1420,7 @@
                         <span id="lastRefreshText">Just now</span>
                     </div>
                     <label class="auto-refresh-toggle">
-                        <input type="checkbox" id="autoRefreshToggle" checked onchange="toggleAutoRefresh()">
+                        <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()">
                         Auto-refresh
                     </label>
                     <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()">
@@ -1517,6 +1517,7 @@
         }
         
         async function silentRefresh() {
+            console.log('[History] Silent refresh triggered');
             try {
                 const response = await fetch('/jobs/');
                 const data = await response.json();
@@ -1524,14 +1525,17 @@
                 
                 // Only update if there are changes
                 if (JSON.stringify(newJobs) !== JSON.stringify(allJobs)) {
+                    console.log('[History] Jobs changed, updating UI');
                     allJobs = newJobs;
                     filterJobs();
+                } else {
+                    console.log('[History] No changes detected');
                 }
                 
                 lastRefreshTime = Date.now();
                 updateLastRefreshText();
             } catch (error) {
-                console.error('Silent refresh failed:', error);
+                console.error('[History] Silent refresh failed:', error);
             }
         }
         
@@ -1596,28 +1600,36 @@
         
         // Load jobs on page load
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('[History] Page loaded, initializing...');
             loadJobs();
-            startAutoRefresh();
+            // Don't auto-start refresh - user can enable it manually
+            const dot = document.getElementById('autoRefreshDot');
+            if (dot) dot.classList.add('paused');
         });
         
-        async function loadJobs() {
+        async function loadJobs(showLoading = true) {
+            console.log('[History] loadJobs called, showLoading:', showLoading);
             const grid = document.getElementById('jobsGrid');
             
-            // Show loading state
-            grid.innerHTML = `
-                <div class="loading-state">
-                    <div class="loading-spinner-large"></div>
-                    <p>Loading your generation history...</p>
-                </div>
-            `;
+            // Only show loading state on initial load or manual refresh
+            if (showLoading && allJobs.length === 0) {
+                grid.innerHTML = `
+                    <div class="loading-state">
+                        <div class="loading-spinner-large"></div>
+                        <p>Loading your generation history...</p>
+                    </div>
+                `;
+            }
             
             try {
+                console.log('[History] Fetching /jobs/...');
                 const response = await fetch('/jobs/');
                 const data = await response.json();
+                console.log('[History] Received', (data.jobs || []).length, 'jobs');
                 allJobs = data.jobs || [];
                 filterJobs();
             } catch (error) {
-                console.error('Failed to load jobs:', error);
+                console.error('[History] Failed to load jobs:', error);
                 grid.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">
