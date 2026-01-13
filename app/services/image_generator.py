@@ -197,16 +197,115 @@ class ImageGenerator:
         
         draw = ImageDraw.Draw(image)
         
+        # Fixed layout values
+        title_start_y = 280  
+        content_side_margin = 109
+        max_content_width = self.width - (content_side_margin * 2)  # 1080 - 218 = 862px
+        
+        # Brand-specific font sizes
+        content_font_size = 38 if self.brand_name == "healthycollege" else 39  # 1px smaller for healthycollege
+        line_spacing_multiplier = 1.35  # Reduced from 1.4 for tighter spacing
+        title_content_padding = 90
+        
+        import random
+        import re
+        
+        # Helper function to detect if line is a CTA (call-to-action)
+        def is_cta_line(line):
+            """Detect if a line is a CTA/closing line (not enumerable content)."""
+            cta_patterns = [
+                r'follow.*page', r'save.*post', r'share.*friend',
+                r'comment.*below', r'link.*bio', r'check.*out',
+                r'subscribe', r'tap.*link', r'click.*link',
+                r'tag.*friend', r'drop.*comment', r'let.*know',
+                r'starts.*with', r'begins.*with', r'remember.*this',
+                r'don\'t.*forget', r'keep.*mind', r'your.*health',
+                r'your.*body', r'take.*action', r'make.*change'
+            ]
+            line_lower = line.lower()
+            return any(re.search(pattern, line_lower) for pattern in cta_patterns)
+        
+        # Helper function to detect if content is enumeration-style
+        def is_enumeration_content(content_lines):
+            """Detect if content lines represent an enumeration (list of similar items)."""
+            if len(content_lines) < 3:
+                return False
+            # Check if most lines have similar structure (dash separator or similar format)
+            dash_count = sum(1 for line in content_lines if '—' in line or ' - ' in line or ': ' in line)
+            return dash_count >= len(content_lines) * 0.5  # At least 50% have separators
+        
+        # Step 1: Add numbering if this is enumeration-style content
+        if len(lines) > 1 and is_enumeration_content(lines):
+            last_line = lines[-1]
+            middle_lines = lines[:-1]
+            
+            # Remove any existing numbers and add fresh sequential numbers
+            numbered_middle = []
+            for i, line in enumerate(middle_lines, 1):
+                # Remove any existing number prefix (e.g., "1. ", "2. ")
+                line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
+                # Add new sequential number
+                numbered_middle.append(f"{i}. {line_without_number}")
+            
+            # Last line: only number it if it's NOT a CTA
+            last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
+            if is_cta_line(last_line):
+                # CTA line - no number
+                lines = numbered_middle + [last_line_without_number]
+            else:
+                # Regular content line - add number
+                numbered_last = f"{len(numbered_middle) + 1}. {last_line_without_number}"
+                lines = numbered_middle + [numbered_last]
+        
+        # Step 2: Healthycollege - shuffle content (reorder for variety)
+        if self.brand_name == "healthycollege" and len(lines) > 1:
+            last_line = lines[-1]
+            middle_lines = lines[:-1]
+            
+            # Check if content is numbered
+            has_numbers = any(re.match(r'^\d+\.\s', line.strip()) for line in lines)
+            
+            # Shuffle middle lines (truly random, not seeded)
+            shuffled_middle = middle_lines.copy()
+            random.shuffle(shuffled_middle)
+            
+            if has_numbers:
+                # Renumber after shuffling
+                renumbered_middle = []
+                for i, line in enumerate(shuffled_middle, 1):
+                    line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
+                    renumbered_middle.append(f"{i}. {line_without_number}")
+                
+                # Last line: renumber only if it has a number (not a CTA)
+                if re.match(r'^\d+\.\s', last_line.strip()):
+                    last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
+                    renumbered_last = f"{len(renumbered_middle) + 1}. {last_line_without_number}"
+                    lines = renumbered_middle + [renumbered_last]
+                else:
+                    lines = renumbered_middle + [last_line]
+            else:
+                lines = shuffled_middle + [last_line]
+        
         # Convert title to uppercase
         title_upper = title.upper()
         
         # Check for manual line breaks (\n) in title
         if '\n' in title_upper:
-            # Use manual line breaks
+            # User specified manual line breaks - validate each line fits at 56px
+            title_font_size = 56  # Fixed font size for manual breaks
+            title_font = load_font(FONT_BOLD, title_font_size)
             title_wrapped = [line.strip() for line in title_upper.split('\n') if line.strip()]
+            
+            # Validate each line fits at 56px
+            for i, line in enumerate(title_wrapped, 1):
+                bbox = title_font.getbbox(line)
+                line_width = bbox[2] - bbox[0]
+                if line_width > max_content_width:
+                    raise ValueError(f"Title line {i} doesn't fit: '{line}' is {line_width}px wide (max: {max_content_width}px). Please make this line shorter.")
+            
             print(f"📝 Using manual line breaks: {len(title_wrapped)} lines")
         else:
-            # Find optimal title font size (start at 56, reduce until fits in 2 lines)
+            # No manual breaks - use auto-wrap logic
             title_font_size = 56
             title_font = None
             title_wrapped = []
@@ -219,11 +318,6 @@ class ImageGenerator:
                     break
                 title_font_size -= 1
             print(f"📝 Using auto-wrap: {len(title_wrapped)} lines")
-        
-        # Load title font (use 56px if manual breaks, otherwise the calculated size)
-        if '\n' in title.upper():
-            title_font_size = 56
-            title_font = load_font(FONT_BOLD, title_font_size)
         
         # Load other fonts
         content_font = load_font(FONT_REGULAR, content_font_size)
