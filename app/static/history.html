@@ -533,6 +533,27 @@
             transform: scale(1.05);
         }
         
+        .btn-delete {
+            padding: 6px 10px;
+            background: transparent;
+            color: var(--gray-400);
+            border: 1px solid var(--gray-300);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 13px;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .btn-delete:hover {
+            background: var(--error-light);
+            color: var(--error-dark);
+            border-color: var(--error);
+            transform: scale(1.05);
+        }
+        
         .brand-badge {
             font-size: 11px;
             padding: 5px 10px;
@@ -1763,7 +1784,7 @@
                 );
                 const firstVideoPath = firstCompletedBrand ? (brandOutputs[firstCompletedBrand] || {}).video_path : null;
                 
-                // Quick actions - only download and delete, no useless preview
+                // Quick actions on hover - only download and retry
                 const quickActions = `
                     <div class="job-quick-actions">
                         ${firstVideoPath ? `
@@ -1776,9 +1797,6 @@
                                 🔄 Retry
                             </button>
                         ` : ''}
-                        <button class="quick-action-btn delete" onclick="event.stopPropagation(); deleteJob('${job.job_id}')" title="Delete this job">
-                            🗑️ Delete
-                        </button>
                     </div>
                 `;
                 
@@ -1823,13 +1841,16 @@
                         ${brandBadges}
                     </div>
                     <div class="job-status">
-                        <div style="display: flex; align-items: center; gap: 10px; justify-content: flex-end;">
+                        <div style="display: flex; align-items: center; gap: 8px; justify-content: flex-end;">
                             <span class="status-badge status-${realStatusClass}">${realStatusLabel}</span>
                             ${canCancel ? `
                                 <button class="btn-cancel" onclick="event.stopPropagation(); cancelJob('${job.job_id}')" title="Cancel this job">
                                     ✕
                                 </button>
                             ` : ''}
+                            <button class="btn-delete" onclick="event.stopPropagation(); deleteJob('${job.job_id}')" title="Delete this job">
+                                🗑️
+                            </button>
                         </div>
                         ${showProgress ? `
                             <div class="progress-bar">
