@@ -23,27 +23,43 @@ def test_manual_breaks():
     print("🧪 Testing Manual Line Break Validation")
     print("=" * 50)
     
-    # Test cases
+    # Test cases with different font sizes
     test_cases = [
         {
-            "name": "✅ VALID - Balanced Lines",
+            "name": "✅ VALID - Balanced Lines (56px default)",
             "title": "FOODS THAT DESTROY\nYOUR SLEEP QUALITY",
+            "font_size": 56,
             "should_work": True
         },
         {
-            "name": "✅ VALID - Auto-wrap (no \\n)",
+            "name": "✅ VALID - Auto-wrap (no \\n, 56px)",
             "title": "FOODS THAT DESTROY YOUR SLEEP QUALITY",
+            "font_size": 56,
             "should_work": True
         },
         {
-            "name": "❌ INVALID - First line too long",
+            "name": "❌ INVALID - First line too long (56px)",
             "title": "FOODS THAT DESTROY YOUR SLEEP\nQUALITY",
+            "font_size": 56,
             "should_work": False
         },
         {
-            "name": "❌ INVALID - Second line too long",
-            "title": "FOODS THAT\nDESTROY YOUR SLEEP QUALITY COMPLETELY",
-            "should_work": False
+            "name": "✅ VALID - Same line works at smaller font (48px)",
+            "title": "FOODS THAT DESTROY YOUR SLEEP\nQUALITY",
+            "font_size": 48,
+            "should_work": True
+        },
+        {
+            "name": "✅ VALID - Custom larger font (64px)",
+            "title": "SHORT TITLE\nWORKS GREAT",
+            "font_size": 64,
+            "should_work": True
+        },
+        {
+            "name": "✅ VALID - Custom smaller font (40px)",
+            "title": "EVEN LONGER TITLE LINES CAN FIT\nWHEN YOU USE SMALLER FONTS",
+            "font_size": 40,
+            "should_work": True
         }
     ]
     
@@ -54,6 +70,7 @@ def test_manual_breaks():
     for i, case in enumerate(test_cases, 1):
         print(f"\n🧪 Test {i}: {case['name']}")
         print(f"📝 Title: {case['title'].replace(chr(10), ' | ')}")
+        print(f"🔤 Font Size: {case['font_size']}px")
         
         try:
             # Create image generator
@@ -63,7 +80,7 @@ def test_manual_breaks():
                 brand_name=brand_name
             )
             
-            # Try to generate the reel image
+            # Try to generate the reel image with specified font size
             output_path = output_dir / f"test_validation_{i}.png"
             result_path = generator.generate_reel_image(
                 title=case['title'],
@@ -73,7 +90,8 @@ def test_manual_breaks():
                     "Spicy dinners — Raises body temperature",
                     "Better sleep starts with food choices — Follow this page."
                 ],
-                output_path=output_path
+                output_path=output_path,
+                title_font_size=case['font_size']
             )
             
             if case['should_work']:
@@ -91,10 +109,11 @@ def test_manual_breaks():
     
     print(f"\n{'='*50}")
     print("🎯 Summary:")
-    print("- Manual breaks with \\n: Fixed 56px, validates each line")
-    print("- No \\n: Auto-wrap with font scaling (existing logic)")  
-    print("- Error if manual line is too long at 56px")
-    print("✅ Validation testing complete!")
+    print("- Manual breaks with \\n: Uses specified font size (default 56px)")
+    print("- No \\n: Auto-wrap with font scaling from specified size down to 20px")  
+    print("- Error if manual line is too long at chosen font size")
+    print("- Customize font size to fit longer lines or create different styles")
+    print("✅ Font size customization testing complete!")
 
 if __name__ == "__main__":
     try:

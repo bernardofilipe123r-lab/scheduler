@@ -6,6 +6,77 @@ from PIL import ImageFont, ImageDraw
 import re
 
 
+def draw_text_with_letter_spacing(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    color: Tuple[int, int, int],
+    letter_spacing: float = 0
+) -> int:
+    """
+    Draw text with custom letter spacing.
+    
+    Args:
+        draw: ImageDraw object
+        x: Starting x position
+        y: Starting y position
+        text: Text to draw
+        font: Font to use
+        color: RGB color tuple
+        letter_spacing: Additional spacing between characters (can be negative)
+        
+    Returns:
+        Final x position after drawing all characters
+    """
+    if letter_spacing == 0:
+        # No letter spacing, use normal draw
+        draw.text((x, y), text, font=font, fill=color)
+        bbox = font.getbbox(text)
+        return x + (bbox[2] - bbox[0])
+    
+    current_x = x
+    for char in text:
+        draw.text((current_x, y), char, font=font, fill=color)
+        bbox = font.getbbox(char)
+        char_width = bbox[2] - bbox[0]
+        current_x += char_width + letter_spacing
+    
+    return current_x
+
+
+def get_text_width_with_letter_spacing(
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    letter_spacing: float = 0
+) -> int:
+    """
+    Calculate text width with custom letter spacing.
+    
+    Args:
+        text: Text to measure
+        font: Font to use
+        letter_spacing: Additional spacing between characters (can be negative)
+        
+    Returns:
+        Total width in pixels
+    """
+    if letter_spacing == 0:
+        bbox = font.getbbox(text)
+        return bbox[2] - bbox[0]
+    
+    total_width = 0
+    for i, char in enumerate(text):
+        bbox = font.getbbox(char)
+        char_width = bbox[2] - bbox[0]
+        total_width += char_width
+        if i < len(text) - 1:  # Don't add spacing after last character
+            total_width += letter_spacing
+    
+    return int(total_width)
+
+
 def parse_bold_text(text: str) -> List[Tuple[str, bool]]:
     """
     Parse text to identify bold segments marked with **text**.

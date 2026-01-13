@@ -14,6 +14,8 @@ from app.core.constants import (
     BOTTOM_MARGIN,
     SIDE_MARGIN,
     H_PADDING,
+    TITLE_SIDE_PADDING,
+    CONTENT_SIDE_PADDING,
     BAR_HEIGHT,
     BAR_GAP,
     VERTICAL_CORRECTION,
@@ -25,6 +27,8 @@ from app.core.constants import (
     BRAND_FONT_SIZE,
     FONT_BOLD,
     FONT_REGULAR,
+    FONT_CONTENT,
+    CONTENT_LETTER_SPACING,
 )
 from app.utils.fonts import (
     get_title_font,
@@ -47,6 +51,8 @@ from app.utils.text_formatting import (
     draw_mixed_text,
     parse_bold_text,
     wrap_text_with_bold,
+    draw_text_with_letter_spacing,
+    get_text_width_with_letter_spacing,
 )
 
 
@@ -161,7 +167,8 @@ class ImageGenerator:
         self,
         title: str,
         lines: List[str],
-        output_path: Path
+        output_path: Path,
+        title_font_size: int = 56
     ) -> Path:
         """
         Generate a reel image.
@@ -199,12 +206,14 @@ class ImageGenerator:
         
         # Fixed layout values
         title_start_y = 280  
-        content_side_margin = 109
-        max_content_width = self.width - (content_side_margin * 2)  # 1080 - 218 = 862px
+        title_side_margin = TITLE_SIDE_PADDING  # 90px for title
+        content_side_margin = CONTENT_SIDE_PADDING  # 108px for content
+        max_title_width = self.width - (title_side_margin * 2)  # 1080 - 180 = 900px for title
+        max_content_width = self.width - (content_side_margin * 2)  # 1080 - 216 = 864px for content
         
-        # Brand-specific font sizes
-        content_font_size = 38 if self.brand_name == "healthycollege" else 39  # 1px smaller for healthycollege
-        line_spacing_multiplier = 1.35  # Reduced from 1.4 for tighter spacing
+        # Content font settings - Browallia New Bold at 49px
+        content_font_size = CONTENT_FONT_SIZE  # 49px
+        line_spacing_multiplier = 1.0  # Default line spacing for Browallia New
         title_content_padding = 90
         
         import random
@@ -234,95 +243,77 @@ class ImageGenerator:
             dash_count = sum(1 for line in content_lines if '—' in line or ' - ' in line or ': ' in line)
             return dash_count >= len(content_lines) * 0.5  # At least 50% have separators
         
-        # Step 1: Add numbering if this is enumeration-style content
-        if len(lines) > 1 and is_enumeration_content(lines):
-            last_line = lines[-1]
-            middle_lines = lines[:-1]
-            
-            # Remove any existing numbers and add fresh sequential numbers
-            numbered_middle = []
-            for i, line in enumerate(middle_lines, 1):
+        # Step 1: Add numbering to ALL lines (including CTA - CTA MUST have a number)
+        if len(lines) > 1:
+            # Remove any existing numbers and add fresh sequential numbers to ALL lines
+            numbered_lines = []
+            for i, line in enumerate(lines, 1):
                 # Remove any existing number prefix (e.g., "1. ", "2. ")
                 line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
-                # Add new sequential number
-                numbered_middle.append(f"{i}. {line_without_number}")
-            
-            # Last line: only number it if it's NOT a CTA
-            last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
-            if is_cta_line(last_line):
-                # CTA line - no number
-                lines = numbered_middle + [last_line_without_number]
-            else:
-                # Regular content line - add number
-                numbered_last = f"{len(numbered_middle) + 1}. {last_line_without_number}"
-                lines = numbered_middle + [numbered_last]
+                # Add new sequential number to EVERY line (including CTA)
+                numbered_lines.append(f"{i}. {line_without_number}")
+            lines = numbered_lines
         
-        # Step 2: Healthycollege - shuffle content (reorder for variety)
+        # Step 2: Healthycollege - shuffle content (reorder for variety), keep last line in place
         if self.brand_name == "healthycollege" and len(lines) > 1:
             last_line = lines[-1]
             middle_lines = lines[:-1]
-            
-            # Check if content is numbered
-            has_numbers = any(re.match(r'^\d+\.\s', line.strip()) for line in lines)
             
             # Shuffle middle lines (truly random, not seeded)
             shuffled_middle = middle_lines.copy()
             random.shuffle(shuffled_middle)
             
-            if has_numbers:
-                # Renumber after shuffling
-                renumbered_middle = []
-                for i, line in enumerate(shuffled_middle, 1):
-                    line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
-                    renumbered_middle.append(f"{i}. {line_without_number}")
-                
-                # Last line: renumber only if it has a number (not a CTA)
-                if re.match(r'^\d+\.\s', last_line.strip()):
-                    last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
-                    renumbered_last = f"{len(renumbered_middle) + 1}. {last_line_without_number}"
-                    lines = renumbered_middle + [renumbered_last]
-                else:
-                    lines = renumbered_middle + [last_line]
-            else:
-                lines = shuffled_middle + [last_line]
+            # Renumber after shuffling (all lines have numbers now)
+            renumbered_middle = []
+            for i, line in enumerate(shuffled_middle, 1):
+                line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
+                renumbered_middle.append(f"{i}. {line_without_number}")
+            
+            # Last line always gets renumbered too
+            last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
+            renumbered_last = f"{len(renumbered_middle) + 1}. {last_line_without_number}"
+            lines = renumbered_middle + [renumbered_last]
         
         # Convert title to uppercase
         title_upper = title.upper()
         
         # Check for manual line breaks (\n) in title
         if '\n' in title_upper:
-            # User specified manual line breaks - validate each line fits at 56px
-            title_font_size = 56  # Fixed font size for manual breaks
+            # User specified manual line breaks - use specified font size (default 56px)
             title_font = load_font(FONT_BOLD, title_font_size)
             title_wrapped = [line.strip() for line in title_upper.split('\n') if line.strip()]
             
-            # Validate each line fits at 56px
+            # Validate each line fits at specified font size (using title max width)
             for i, line in enumerate(title_wrapped, 1):
                 bbox = title_font.getbbox(line)
                 line_width = bbox[2] - bbox[0]
-                if line_width > max_content_width:
-                    raise ValueError(f"Title line {i} doesn't fit: '{line}' is {line_width}px wide (max: {max_content_width}px). Please make this line shorter.")
+                if line_width > max_title_width:
+                    raise ValueError(
+                        f"Title line {i} doesn't fit: '{line}' is {line_width}px wide "
+                        f"(max: {max_title_width}px at {title_font_size}px font). "
+                        f"Try shorter text, different line break position, or smaller font size."
+                    )
             
-            print(f"📝 Using manual line breaks: {len(title_wrapped)} lines")
+            print(f"📝 Using manual line breaks: {len(title_wrapped)} lines at {title_font_size}px")
         else:
-            # No manual breaks - use auto-wrap logic
-            title_font_size = 56
+            # No manual breaks - use auto-wrap logic with scaling from specified size down to 20px
+            current_title_font_size = title_font_size
             title_font = None
             title_wrapped = []
             
-            while title_font_size >= 20:
-                title_font = load_font(FONT_BOLD, title_font_size)
-                title_wrapped = wrap_text(title_upper, title_font, max_content_width)
+            while current_title_font_size >= 20:
+                title_font = load_font(FONT_BOLD, current_title_font_size)
+                title_wrapped = wrap_text(title_upper, title_font, max_title_width)
                 
                 if len(title_wrapped) <= 2:
                     break
-                title_font_size -= 1
-            print(f"📝 Using auto-wrap: {len(title_wrapped)} lines")
+                current_title_font_size -= 1
+            print(f"📝 Using auto-wrap: {len(title_wrapped)} lines at {current_title_font_size}px")
         
-        # Load other fonts
-        content_font = load_font(FONT_REGULAR, content_font_size)
-        content_bold_font = load_font(FONT_BOLD, content_font_size)
-        cta_font = load_font(FONT_BOLD, content_font_size)
+        # Load content fonts - Browallia New Bold for content text
+        content_font = load_font(FONT_CONTENT, content_font_size)  # Browallia New Bold 49px
+        content_bold_font = load_font(FONT_CONTENT, content_font_size)  # Same font (already bold)
+        cta_font = load_font(FONT_CONTENT, content_font_size)  # Same font for CTA
         brand_font = get_brand_font(BRAND_FONT_SIZE)
         
         # Start rendering at title position
@@ -393,25 +384,26 @@ class ImageGenerator:
         # Draw numbered content lines with **bold** markdown support
         text_color = (255, 255, 255) if self.variant == "dark" else (0, 0, 0)  # White for dark mode, black for light
         
+        # Calculate letter spacing (0.78x of default = 22% tighter)
+        # For 49px Browallia New, typical character width is ~20px, so -22% = ~-4px letter spacing
+        content_letter_spacing = int(content_font_size * CONTENT_LETTER_SPACING)  # -22% of font size
+        
         for i, line in enumerate(lines):
             # Parse the entire line for **bold** markdown
             line_segments = parse_bold_text(line)
             
-            # Calculate total width to see if it fits on one line
+            # Calculate total width with letter spacing to see if it fits on one line
             line_width = 0
             for segment_text, is_bold in line_segments:
                 font = content_bold_font if is_bold else content_font
-                bbox_seg = font.getbbox(segment_text)
-                line_width += bbox_seg[2] - bbox_seg[0]
+                line_width += get_text_width_with_letter_spacing(segment_text, font, content_letter_spacing)
             
             if line_width <= max_content_width:
-                # Fits on one line - draw with mixed fonts
+                # Fits on one line - draw with mixed fonts and letter spacing
                 x_pos = content_side_margin
                 for segment_text, is_bold in line_segments:
                     font = content_bold_font if is_bold else content_font
-                    draw.text((x_pos, current_y), segment_text, font=font, fill=text_color)
-                    bbox_seg = font.getbbox(segment_text)
-                    x_pos += bbox_seg[2] - bbox_seg[0]
+                    x_pos = draw_text_with_letter_spacing(draw, x_pos, current_y, segment_text, font, text_color, content_letter_spacing)
                 
                 # Get line height from first segment
                 first_font = content_bold_font if line_segments[0][1] else content_font
@@ -427,14 +419,12 @@ class ImageGenerator:
                     max_content_width
                 )
                 
-                # Draw each wrapped line with mixed fonts
+                # Draw each wrapped line with mixed fonts and letter spacing
                 for wrapped_line_segments in wrapped_lines:
                     x_pos = content_side_margin
                     for segment_text, is_bold in wrapped_line_segments:
                         font = content_bold_font if is_bold else content_font
-                        draw.text((x_pos, current_y), segment_text, font=font, fill=text_color)
-                        bbox_seg = font.getbbox(segment_text)
-                        x_pos += bbox_seg[2] - bbox_seg[0]
+                        x_pos = draw_text_with_letter_spacing(draw, x_pos, current_y, segment_text, font, text_color, content_letter_spacing)
                     
                     # Move to next line
                     bbox = content_font.getbbox("A")

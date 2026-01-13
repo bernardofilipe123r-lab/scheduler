@@ -33,11 +33,14 @@ DEFAULT_HASHTAGS = [
 FONT_BOLD = "Poppins-Bold.ttf"
 FONT_REGULAR = "Poppins-Regular.ttf"
 FONT_SEMIBOLD = "Poppins-SemiBold.ttf"
+# Note: Change FONT_CONTENT to "BrowalliaNew-Bold.ttf" once the font file is available
+# For now, falling back to Poppins-Bold until Browallia New Bold is properly installed
+FONT_CONTENT = "Poppins-Bold.ttf"  # TODO: Replace with "BrowalliaNew-Bold.ttf"
 FONT_FALLBACK = None  # Will use PIL default if custom fonts not available
 
 # Default font sizes (will be adjusted dynamically if content overflows)
 TITLE_FONT_SIZE = 80
-CONTENT_FONT_SIZE = 50
+CONTENT_FONT_SIZE = 49  # Browallia New Bold needs larger size
 CTA_FONT_SIZE = 45
 BRAND_FONT_SIZE = 40
 
@@ -46,11 +49,14 @@ TOP_MARGIN = 120
 BOTTOM_MARGIN = 120
 SIDE_MARGIN = 80
 H_PADDING = 20  # Horizontal padding for title background bars
+TITLE_SIDE_PADDING = 90  # Horizontal padding for title area (left and right)
+CONTENT_SIDE_PADDING = 108  # Horizontal padding for content area (left and right)
 BAR_HEIGHT = 100  # Height of title background bars
 BAR_GAP = 0  # Gap between title background bars
 VERTICAL_CORRECTION = -3  # Vertical text positioning correction
 LINE_SPACING = 20
 SECTION_SPACING = 60
+CONTENT_LETTER_SPACING = -0.22  # Letter spacing multiplier (0.78x = 22% tighter than default)
 
 # Music
 DEFAULT_MUSIC_ID = "default_01"
