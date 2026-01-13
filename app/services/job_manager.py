@@ -263,6 +263,9 @@ class JobManager:
             }
             
         except Exception as e:
+            import traceback
+            error_msg = f"{str(e)}\n{traceback.format_exc()}"
+            print(f"❌ Generation failed for {brand}: {error_msg}")
             self.update_brand_output(job_id, brand, {
                 "status": "failed",
                 "error": str(e)
@@ -324,18 +327,26 @@ class JobManager:
             
             # Check if all succeeded
             all_success = all(r.get("success", False) for r in results.values())
+            any_success = any(r.get("success", False) for r in results.values())
             
             if all_success:
                 self.update_job_status(job_id, "completed", "All brands generated!", 100)
-            else:
+            elif any_success:
+                # Some succeeded, some failed - partial completion
                 failed_brands = [b for b, r in results.items() if not r.get("success")]
                 self.update_job_status(
                     job_id, "completed",
                     f"Completed with errors: {', '.join(failed_brands)}",
                     100
                 )
+            else:
+                # All brands failed - mark as failed
+                failed_brands = [b for b, r in results.items() if not r.get("success")]
+                errors = [r.get("error", "Unknown error") for r in results.values() if r.get("error")]
+                error_msg = errors[0] if errors else "All brands failed to generate"
+                self.update_job_status(job_id, "failed", error_message=error_msg)
             
-            return {"success": True, "results": results}
+            return {"success": any_success, "results": results}
             
         except Exception as e:
             self.update_job_status(job_id, "failed", error_message=str(e))
