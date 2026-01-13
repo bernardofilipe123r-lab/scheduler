@@ -652,9 +652,10 @@
                 
                 // Build media content - show for completed OR scheduled brands
                 let mediaContent = '';
-                if ((isCompleted || isScheduled) && output.thumbnail_path && output.video_path) {
-                    const thumbnailUrl = output.thumbnail_path.startsWith('/') ? output.thumbnail_path : `/output/thumbnails/${output.reel_id}_thumbnail.png`;
-                    const videoUrl = output.video_path.startsWith('/') ? output.video_path : `/output/videos/${output.reel_id}_video.mp4`;
+                if ((isCompleted || isScheduled) && output.reel_id) {
+                    // Always construct URLs from reel_id for consistency
+                    const thumbnailUrl = `/output/thumbnails/${output.reel_id}_thumbnail.png`;
+                    const videoUrl = `/output/videos/${output.reel_id}_video.mp4`;
                     
                     mediaContent = `
                         <div class="media-grid">
@@ -884,12 +885,8 @@
                         })
                     });
                     
-                    // Update local state
-                    currentJob.brand_outputs[brand].status = 'scheduled';
-                    currentJob.brand_outputs[brand].scheduled_time = result.scheduled_for;
-                    
-                    // Re-render
-                    renderBrandSections();
+                    // Fetch fresh data from server for proper reactivity
+                    await loadJob();
                     loadNextSlots();
                     
                     showToast(`${brandConfig[brand]?.name || brand} scheduled!`, 'success');
@@ -949,16 +946,12 @@
                             })
                         });
                         
-                        // Update local state
-                        currentJob.brand_outputs[brand].status = 'scheduled';
-                        currentJob.brand_outputs[brand].scheduled_time = result.scheduled_for;
-                        
                         successCount++;
                     }
                 }
                 
-                // Re-render and refresh slots
-                renderBrandSections();
+                // Fetch fresh data from server for proper reactivity
+                await loadJob();
                 loadNextSlots();
                 
                 showToast(`${successCount}/${completedBrands.length} brands scheduled successfully!`, 'success');

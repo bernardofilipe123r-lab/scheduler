@@ -317,13 +317,13 @@ class JobManager:
             print(f"   ✓ Video saved: {video_path}", flush=True)
             sys.stdout.flush()
             
-            # Update brand output
+            # Update brand output - use web-friendly paths with leading slash
             self.update_brand_output(job_id, brand, {
                 "status": "completed",
                 "reel_id": reel_id,
-                "thumbnail_path": str(thumbnail_path),
-                "reel_path": str(reel_path),
-                "video_path": str(video_path),
+                "thumbnail_path": f"/output/thumbnails/{reel_id}_thumbnail.png",
+                "reel_path": f"/output/reels/{reel_id}_reel.png",
+                "video_path": f"/output/videos/{reel_id}_video.mp4",
                 "regenerated_at": datetime.utcnow().isoformat()
             })
             
