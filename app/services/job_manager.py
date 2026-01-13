@@ -9,7 +9,6 @@ from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.models import GenerationJob
-from app.database.db import get_db
 from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
 from app.core.config import BrandType, get_brand_config
