@@ -274,7 +274,7 @@ class JobManager:
             # Generate video
             print(f"\n🎬 Step 3/3: Generating video...")
             video_gen = VideoGenerator()
-            video_gen.create_video(reel_path, video_path)
+            video_gen.generate_reel_video(reel_path, video_path)
             print(f"   ✓ Video saved: {video_path}")
             
             # Update brand output
