@@ -44,9 +44,36 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 def process_job_async(job_id: str):
     """Background task to process a job."""
-    with get_db_session() as db:
-        manager = JobManager(db)
-        manager.process_job(job_id)
+    import traceback
+    print(f"\n{'='*60}")
+    print(f"🚀 STARTING BACKGROUND JOB PROCESSING: {job_id}")
+    print(f"{'='*60}")
+    
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            result = manager.process_job(job_id)
+            print(f"\n{'='*60}")
+            print(f"✅ JOB PROCESSING COMPLETED: {job_id}")
+            print(f"   Result: {result}")
+            print(f"{'='*60}\n")
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        print(f"\n{'='*60}")
+        print(f"❌ CRITICAL ERROR IN BACKGROUND JOB: {job_id}")
+        print(f"{'='*60}")
+        print(f"Error: {error_msg}")
+        print(f"\nFull Traceback:")
+        traceback.print_exc()
+        print(f"{'='*60}\n")
+        
+        # Try to update job status to failed
+        try:
+            with get_db_session() as db:
+                manager = JobManager(db)
+                manager.update_job_status(job_id, "failed", error_message=error_msg)
+        except Exception as update_error:
+            print(f"❌ Failed to update job status: {update_error}")
 
 
 @router.post(

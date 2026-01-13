@@ -336,19 +336,35 @@ class JobManager:
         This is the main entry point for job execution.
         Checks for cancellation between each brand.
         """
+        print(f"\n🎬 process_job called for: {job_id}")
+        
         job = self.get_job(job_id)
         if not job:
-            return {"success": False, "error": "Job not found"}
+            error_msg = f"Job not found: {job_id}"
+            print(f"❌ {error_msg}")
+            return {"success": False, "error": error_msg}
+        
+        print(f"   Job found - brands: {job.brands}, variant: {job.variant}")
         
         # Check if already cancelled before starting
         if job.status == "cancelled":
+            print(f"❌ Job was cancelled")
             return {"success": False, "error": "Job was cancelled"}
+        
+        # Validate brands list
+        if not job.brands or len(job.brands) == 0:
+            error_msg = "No brands specified for job"
+            print(f"❌ {error_msg}")
+            self.update_job_status(job_id, "failed", error_message=error_msg)
+            return {"success": False, "error": error_msg}
         
         self.update_job_status(job_id, "generating", "Starting generation...", 0)
         
         results = {}
         total_brands = len(job.brands)
         ai_background_saved = False
+        
+        print(f"   Processing {total_brands} brands...")
         
         try:
             for i, brand in enumerate(job.brands):
@@ -383,9 +399,20 @@ class JobManager:
             if job.status == "cancelled":
                 return {"success": False, "error": "Job was cancelled", "results": results}
             
+            print(f"\n   Processing complete. Results: {results}")
+            
+            # Handle empty results (should not happen but just in case)
+            if not results:
+                error_msg = "No brands were processed - results are empty"
+                print(f"❌ {error_msg}")
+                self.update_job_status(job_id, "failed", error_message=error_msg)
+                return {"success": False, "error": error_msg}
+            
             # Check if all succeeded
             all_success = all(r.get("success", False) for r in results.values())
             any_success = any(r.get("success", False) for r in results.values())
+            
+            print(f"   all_success={all_success}, any_success={any_success}")
             
             if all_success:
                 self.update_job_status(job_id, "completed", "All brands generated!", 100)
