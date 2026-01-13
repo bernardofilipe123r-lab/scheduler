@@ -97,6 +97,22 @@ async def scheduled_page():
     return FileResponse(scheduled_file)
 
 
+@app.get("/history.html", tags=["root"])
+async def history_page():
+    """Serve the job history page."""
+    static_dir = Path(__file__).parent / "static"
+    history_file = static_dir / "history.html"
+    return FileResponse(history_file)
+
+
+@app.get("/history", tags=["root"])
+async def history_page_alt():
+    """Serve the job history page (alternate URL)."""
+    static_dir = Path(__file__).parent / "static"
+    history_file = static_dir / "history.html"
+    return FileResponse(history_file)
+
+
 @app.get("/health", tags=["health"])
 async def health_check():
     """Simple health check endpoint for Railway."""
