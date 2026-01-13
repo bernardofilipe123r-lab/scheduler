@@ -182,9 +182,16 @@ class JobManager:
         Regenerate images/video for a single brand.
         Uses existing AI background if available (no new API call for dark mode).
         """
+        print(f"\n{'='*60}")
+        print(f"🎨 Starting generation for brand: {brand}")
+        print(f"   Job ID: {job_id}")
+        print(f"{'='*60}")
+        
         job = self.get_job(job_id)
         if not job:
-            return {"success": False, "error": "Job not found"}
+            error_msg = f"Job not found: {job_id}"
+            print(f"❌ ERROR: {error_msg}")
+            return {"success": False, "error": error_msg}
         
         # Use provided values or fall back to job's stored values
         use_title = title if title is not None else job.title
@@ -206,17 +213,32 @@ class JobManager:
             reel_path = output_dir / "reels" / f"{reel_id}_reel.png"
             video_path = output_dir / "videos" / f"{reel_id}_video.mp4"
             
+            print(f"📁 Output paths:")
+            print(f"   Thumbnail: {thumbnail_path}")
+            print(f"   Reel: {reel_path}")
+            print(f"   Video: {video_path}")
+            
             # Create image generator
+            print(f"🔧 Getting brand type for: {brand}")
             brand_type = get_brand_type(brand)
+            print(f"   Brand type: {brand_type}")
             
             # For dark mode, try to reuse existing AI background
             ai_background_image = None
             if job.variant == "dark" and job.ai_background_path:
+                print(f"🌙 Dark mode - attempting to reuse AI background: {job.ai_background_path}")
                 from PIL import Image
                 try:
                     ai_background_image = Image.open(job.ai_background_path)
-                except Exception:
-                    pass  # Will generate new background if needed
+                    print(f"   ✓ Loaded existing AI background")
+                except Exception as e:
+                    print(f"   ⚠️ Could not load existing background: {e}")
+                    print(f"   Will generate new background")
+            
+            print(f"🎨 Initializing ImageGenerator...")
+            print(f"   Variant: {job.variant}")
+            print(f"   Brand: {brand}")
+            print(f"   AI Prompt: {job.ai_prompt[:100] if job.ai_prompt else 'None'}...")
             
             generator = ImageGenerator(
                 brand_type=brand_type,
@@ -224,25 +246,36 @@ class JobManager:
                 brand_name=brand,
                 ai_prompt=job.ai_prompt
             )
+            print(f"   ✓ ImageGenerator initialized successfully")
             
             # If we have a cached background, inject it
             if ai_background_image and job.variant == "dark":
+                print(f"🌙 Injecting cached AI background")
                 generator._ai_background = ai_background_image
             
             # Generate thumbnail
+            print(f"\n🖼️  Step 1/3: Generating thumbnail...")
             generator.generate_thumbnail(use_title, thumbnail_path)
+            print(f"   ✓ Thumbnail saved: {thumbnail_path}")
             
             # Generate reel image
+            print(f"\n🎨 Step 2/3: Generating reel image...")
+            print(f"   Title: {use_title[:50]}...")
+            print(f"   Lines: {len(use_lines)} content lines")
+            print(f"   CTA: {job.cta_type}")
             generator.generate_reel_image(
                 title=use_title,
                 lines=use_lines,
                 output_path=reel_path,
                 cta_type=job.cta_type
             )
+            print(f"   ✓ Reel image saved: {reel_path}")
             
             # Generate video
+            print(f"\n🎬 Step 3/3: Generating video...")
             video_gen = VideoGenerator()
             video_gen.create_video(reel_path, video_path)
+            print(f"   ✓ Video saved: {video_path}")
             
             # Update brand output
             self.update_brand_output(job_id, brand, {
@@ -254,6 +287,10 @@ class JobManager:
                 "regenerated_at": datetime.utcnow().isoformat()
             })
             
+            print(f"\n{'='*60}")
+            print(f"✅ SUCCESS: {brand.upper()} generation completed!")
+            print(f"{'='*60}\n")
+            
             return {
                 "success": True,
                 "brand": brand,
@@ -264,13 +301,34 @@ class JobManager:
             
         except Exception as e:
             import traceback
-            error_msg = f"{str(e)}\n{traceback.format_exc()}"
-            print(f"❌ Generation failed for {brand}: {error_msg}")
+            import sys
+            
+            # Get detailed error information
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            error_details = {
+                "type": exc_type.__name__ if exc_type else "Unknown",
+                "message": str(e),
+                "traceback": traceback.format_exc()
+            }
+            
+            print(f"\n{'='*60}")
+            print(f"❌ GENERATION FAILED FOR {brand.upper()}")
+            print(f"{'='*60}")
+            print(f"Error Type: {error_details['type']}")
+            print(f"Error Message: {error_details['message']}")
+            print(f"\nFull Traceback:")
+            print(error_details['traceback'])
+            print(f"{'='*60}\n")
+            
+            # Store detailed error in database
+            error_msg = f"{error_details['type']}: {error_details['message']}"
             self.update_brand_output(job_id, brand, {
                 "status": "failed",
-                "error": str(e)
+                "error": error_msg,
+                "error_traceback": error_details['traceback']
             })
-            return {"success": False, "error": str(e)}
+            
+            return {"success": False, "error": error_msg}
     
     def process_job(self, job_id: str) -> Dict[str, Any]:
         """
