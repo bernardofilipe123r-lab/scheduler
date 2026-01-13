@@ -2,53 +2,43 @@
 Image generation service for creating thumbnails and reel images.
 """
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional
 from PIL import Image, ImageDraw
 from app.services.ai_background_generator import AIBackgroundGenerator
-from app.core.config import BrandConfig, get_brand_config, BrandType
+from app.core.config import get_brand_config, BrandType
 from app.core.brand_colors import get_brand_colors, get_brand_display_name
 from app.core.constants import (
     REEL_WIDTH,
     REEL_HEIGHT,
-    TOP_MARGIN,
-    BOTTOM_MARGIN,
     SIDE_MARGIN,
     H_PADDING,
     TITLE_SIDE_PADDING,
     CONTENT_SIDE_PADDING,
+    TITLE_CONTENT_SPACING,
+    BOTTOM_MARGIN,
     BAR_HEIGHT,
     BAR_GAP,
     VERTICAL_CORRECTION,
     LINE_SPACING,
-    SECTION_SPACING,
     TITLE_FONT_SIZE,
     CONTENT_FONT_SIZE,
-    CTA_FONT_SIZE,
     BRAND_FONT_SIZE,
     FONT_BOLD,
-    FONT_REGULAR,
-    FONT_CONTENT,
+    FONT_CONTENT_REGULAR,
+    FONT_CONTENT_MEDIUM,
+    USE_BOLD_CONTENT,
     CONTENT_LINE_SPACING,
 )
 from app.utils.fonts import (
     get_title_font,
-    get_content_font,
-    get_cta_font,
     get_brand_font,
     load_font,
-    calculate_dynamic_font_size,
 )
 from app.utils.text_layout import (
     wrap_text,
-    draw_text_centered,
-    draw_multiline_text_centered,
-    draw_text_with_background,
-    calculate_total_content_height,
     get_text_dimensions,
 )
 from app.utils.text_formatting import (
-    extract_keyword_from_line,
-    draw_mixed_text,
     parse_bold_text,
     wrap_text_with_bold,
 )
@@ -166,7 +156,8 @@ class ImageGenerator:
         title: str,
         lines: List[str],
         output_path: Path,
-        title_font_size: int = 56
+        title_font_size: int = 56,
+        cta_type: Optional[str] = None
     ) -> Path:
         """
         Generate a reel image.
@@ -181,10 +172,18 @@ class ImageGenerator:
             title: The title text
             lines: List of content lines (supports **text** for bold, can include anything)
             output_path: Path to save the reel image
+            cta_type: Optional CTA type to add as final line ('follow_tips', 'sleep_lean', 'workout_plan')
             
         Returns:
             Path to the generated reel image
         """
+        # Add CTA line if cta_type is provided
+        if cta_type:
+            from app.core.cta import get_cta_line
+            cta_line = get_cta_line(cta_type)
+            lines = lines.copy()  # Don't modify the original list
+            lines.append(cta_line)
+        
         # Load or generate content background based on variant
         if self.variant == "light":
             # Light mode: use template images
@@ -194,8 +193,8 @@ class ImageGenerator:
             # Dark mode: use cached AI background with overlay
             image = self._ai_background.copy()
             
-            # Apply 75% dark overlay for content (10% darker than before)
-            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.75)))
+            # Apply 80% dark overlay for content
+            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.85)))
             image = image.convert('RGBA')
             image = Image.alpha_composite(image, overlay)
             image = image.convert('RGB')
@@ -209,37 +208,13 @@ class ImageGenerator:
         max_title_width = self.width - (title_side_margin * 2)  # 1080 - 180 = 900px for title
         max_content_width = self.width - (content_side_margin * 2)  # 1080 - 216 = 864px for content
         
-        # Content font settings - Browallia New Bold at 49px
-        content_font_size = CONTENT_FONT_SIZE  # 49px
-        line_spacing_multiplier = CONTENT_LINE_SPACING  # 0.78x line spacing
-        title_content_padding = 90
+        # Content font settings from constants
+        content_font_size = CONTENT_FONT_SIZE
+        line_spacing_multiplier = CONTENT_LINE_SPACING
+        title_content_padding = TITLE_CONTENT_SPACING
         
         import random
         import re
-        
-        # Helper function to detect if line is a CTA (call-to-action)
-        def is_cta_line(line):
-            """Detect if a line is a CTA/closing line (not enumerable content)."""
-            cta_patterns = [
-                r'follow.*page', r'save.*post', r'share.*friend',
-                r'comment.*below', r'link.*bio', r'check.*out',
-                r'subscribe', r'tap.*link', r'click.*link',
-                r'tag.*friend', r'drop.*comment', r'let.*know',
-                r'starts.*with', r'begins.*with', r'remember.*this',
-                r'don\'t.*forget', r'keep.*mind', r'your.*health',
-                r'your.*body', r'take.*action', r'make.*change'
-            ]
-            line_lower = line.lower()
-            return any(re.search(pattern, line_lower) for pattern in cta_patterns)
-        
-        # Helper function to detect if content is enumeration-style
-        def is_enumeration_content(content_lines):
-            """Detect if content lines represent an enumeration (list of similar items)."""
-            if len(content_lines) < 3:
-                return False
-            # Check if most lines have similar structure (dash separator or similar format)
-            dash_count = sum(1 for line in content_lines if '—' in line or ' - ' in line or ': ' in line)
-            return dash_count >= len(content_lines) * 0.5  # At least 50% have separators
         
         # Step 1: Add numbering to ALL lines (including CTA - CTA MUST have a number)
         if len(lines) > 1:
@@ -308,11 +283,68 @@ class ImageGenerator:
                 current_title_font_size -= 1
             print(f"📝 Using auto-wrap: {len(title_wrapped)} lines at {current_title_font_size}px")
         
-        # Load content fonts - Browallia New Bold for content text
-        content_font = load_font(FONT_CONTENT, content_font_size)  # Browallia New Bold 49px
-        content_bold_font = load_font(FONT_CONTENT, content_font_size)  # Same font (already bold)
-        cta_font = load_font(FONT_CONTENT, content_font_size)  # Same font for CTA
-        brand_font = get_brand_font(BRAND_FONT_SIZE)
+        # Calculate title height to determine content start position
+        title_height = len(title_wrapped) * (BAR_HEIGHT + BAR_GAP)
+        if len(title_wrapped) > 0:
+            title_height -= BAR_GAP  # Remove last gap
+        
+        # Function to calculate actual content height with given font size
+        def calculate_actual_content_height(font_size, lines_list, max_width, side_margin):
+            """Calculate the exact height content will take with given font size."""
+            test_font_file = FONT_CONTENT_MEDIUM if USE_BOLD_CONTENT else FONT_CONTENT_REGULAR
+            test_font = load_font(test_font_file, font_size)
+            test_bold_font = load_font(test_font_file, font_size)
+            
+            total_height = 0
+            test_bbox = test_font.getbbox("A")
+            base_line_height = test_bbox[3] - test_bbox[1]
+            
+            for line in lines_list:
+                # Parse line for bold segments
+                line_segments = parse_bold_text(line)
+                
+                # Calculate line width
+                line_width = 0
+                for segment_text, is_bold in line_segments:
+                    font = test_bold_font if is_bold else test_font
+                    bbox_seg = font.getbbox(segment_text)
+                    line_width += bbox_seg[2] - bbox_seg[0]
+                
+                if line_width <= max_width:
+                    # Single line
+                    total_height += int(base_line_height * line_spacing_multiplier)
+                else:
+                    # Multiple lines - need to wrap
+                    wrapped = wrap_text_with_bold(line_segments, test_font, test_bold_font, max_width)
+                    total_height += len(wrapped) * int(base_line_height * line_spacing_multiplier)
+                
+                # Add bullet spacing
+                total_height += int(font_size * 0.6)
+            
+            return total_height
+        
+        # Check if we need to reduce font size - loop until content fits
+        content_start_y = title_start_y + title_height + title_content_padding
+        min_font_size = 20
+        max_bottom_y = self.height - BOTTOM_MARGIN
+        
+        # Calculate with initial font size
+        content_height = calculate_actual_content_height(content_font_size, lines, max_content_width, content_side_margin)
+        content_bottom_y = content_start_y + content_height
+        
+        # Reduce font size if needed
+        while content_bottom_y > max_bottom_y and content_font_size > min_font_size:
+            content_font_size -= 1
+            content_height = calculate_actual_content_height(content_font_size, lines, max_content_width, content_side_margin)
+            content_bottom_y = content_start_y + content_height
+        
+        if content_font_size < CONTENT_FONT_SIZE:
+            print(f"📐 Reduced content font to {content_font_size}px to maintain {BOTTOM_MARGIN}px bottom margin (content ends at y={int(content_bottom_y)})")
+        
+        # Load content fonts based on USE_BOLD_CONTENT setting
+        content_font_file = FONT_CONTENT_MEDIUM if USE_BOLD_CONTENT else FONT_CONTENT_REGULAR
+        content_font = load_font(content_font_file, content_font_size)
+        content_bold_font = load_font(content_font_file, content_font_size)  # Same font for consistency
         
         # Start rendering at title position
         current_y = title_start_y

@@ -7,10 +7,7 @@ from typing import Optional
 from PIL import ImageFont
 from app.core.constants import (
     FONT_BOLD,
-    FONT_REGULAR,
     TITLE_FONT_SIZE,
-    CONTENT_FONT_SIZE,
-    CTA_FONT_SIZE,
     BRAND_FONT_SIZE,
 )
 
@@ -83,16 +80,6 @@ def load_font(font_filename: Optional[str], size: int) -> ImageFont.FreeTypeFont
 
 def get_title_font(size: int = TITLE_FONT_SIZE) -> ImageFont.FreeTypeFont:
     """Get the font for titles."""
-    return load_font(FONT_BOLD, size)
-
-
-def get_content_font(size: int = CONTENT_FONT_SIZE) -> ImageFont.FreeTypeFont:
-    """Get the font for content text."""
-    return load_font(FONT_REGULAR, size)
-
-
-def get_cta_font(size: int = CTA_FONT_SIZE) -> ImageFont.FreeTypeFont:
-    """Get the font for CTA text."""
     return load_font(FONT_BOLD, size)
 
 

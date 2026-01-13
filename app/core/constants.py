@@ -31,30 +31,30 @@ DEFAULT_HASHTAGS = [
 
 # Fonts (relative to assets/fonts/)
 FONT_BOLD = "Poppins-Bold.ttf"
-FONT_REGULAR = "Poppins-Regular.ttf"
-FONT_SEMIBOLD = "Poppins-SemiBold.ttf"
-FONT_CONTENT = "BrowalliaNew-Bold.ttf"  # Browallia New Bold for content text
+FONT_CONTENT_REGULAR = "Inter/static/Inter_24pt-Regular.ttf"  # Inter Regular 400
+FONT_CONTENT_MEDIUM = "Inter/static/Inter_24pt-Medium.ttf"  # Inter Medium 500
 FONT_FALLBACK = None  # Will use PIL default if custom fonts not available
+
+# Text styling
+USE_BOLD_CONTENT = True  # Toggle between Regular (False) and Medium (True)
 
 # Default font sizes (will be adjusted dynamically if content overflows)
 TITLE_FONT_SIZE = 80
-CONTENT_FONT_SIZE = 49  # Browallia New Bold needs larger size
-CTA_FONT_SIZE = 45
+CONTENT_FONT_SIZE = 44
 BRAND_FONT_SIZE = 40
 
 # Spacing and margins
-TOP_MARGIN = 120
-BOTTOM_MARGIN = 120
 SIDE_MARGIN = 80
 H_PADDING = 20  # Horizontal padding for title background bars
 TITLE_SIDE_PADDING = 90  # Horizontal padding for title area (left and right)
 CONTENT_SIDE_PADDING = 108  # Horizontal padding for content area (left and right)
+TITLE_CONTENT_SPACING = 70  # Fixed spacing between title and content
+BOTTOM_MARGIN = 280  # Minimum distance from bottom edge
 BAR_HEIGHT = 100  # Height of title background bars
 BAR_GAP = 0  # Gap between title background bars
 VERTICAL_CORRECTION = -3  # Vertical text positioning correction
 LINE_SPACING = 20
-SECTION_SPACING = 60
-CONTENT_LINE_SPACING = 0.78  # Line spacing multiplier (78% of default)
+CONTENT_LINE_SPACING = 1.5
 
 # Music
 DEFAULT_MUSIC_ID = "default_01"

@@ -4,7 +4,6 @@ Pydantic schemas for API request and response models.
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
-from app.core.cta import CTAType
 from app.core.config import BrandType
 from app.core.constants import MAX_TITLE_LENGTH, MAX_LINE_LENGTH, MAX_CONTENT_LINES
 
@@ -26,9 +25,9 @@ class ReelCreateRequest(BaseModel):
         description="List of content lines to display in the reel"
     )
     
-    cta_type: CTAType = Field(
-        ...,
-        description="Call-to-action type (must be from predefined enum)"
+    cta_type: str = Field(
+        default="follow_tips",
+        description="Call-to-action type: 'follow_tips', 'sleep_lean', or 'workout_plan'"
     )
     
     brand: BrandType = Field(

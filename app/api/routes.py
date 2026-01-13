@@ -287,7 +287,8 @@ async def create_reel(request: ReelCreateRequest) -> ReelCreateResponse:
             image_generator.generate_reel_image(
                 title=request.title,
                 lines=request.lines,
-                output_path=reel_image_path
+                output_path=reel_image_path,
+                cta_type=request.cta_type
             )
         except Exception as e:
             raise HTTPException(
@@ -470,7 +471,8 @@ async def generate_reel(request: SimpleReelRequest):
         image_generator.generate_reel_image(
             title=request.title,
             lines=request.content_lines,
-            output_path=reel_image_path
+            output_path=reel_image_path,
+            cta_type=request.cta_type
         )
         
         # Generate video with random duration and music

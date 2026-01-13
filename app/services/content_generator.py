@@ -61,28 +61,60 @@ class ContentGenerator:
             content_data["cta_added"] = None
         return content_data
     
+    def _add_to_history(self, content_data: Dict) -> None:
+        """Add generated content to history to avoid repetition."""
+        history_entry = {
+            "title": content_data.get("title", ""),
+            "topic": content_data.get("topic_category", ""),
+            "format": content_data.get("format_style", ""),
+            "generated_at": datetime.now().isoformat()
+        }
+        ContentGenerator._content_history.append(history_entry)
+        
+        # Keep history size manageable
+        if len(ContentGenerator._content_history) > ContentGenerator._max_history_size:
+            ContentGenerator._content_history = ContentGenerator._content_history[-ContentGenerator._max_history_size:]
+    
+    def _get_history_context(self) -> str:
+        """
+        Generate a context string from recent history to help AI avoid repetition.
+        Returns recent titles and topics to include in the prompt.
+        """
+        if not ContentGenerator._content_history:
+            return ""
+        
+        # Get last 10 entries for context
+        recent = ContentGenerator._content_history[-10:]
+        
+        titles = [entry["title"] for entry in recent if entry.get("title")]
+        topics = list(set(entry["topic"] for entry in recent if entry.get("topic")))
+        
+        context_parts = []
+        if titles:
+            context_parts.append(f"Recently generated titles (DO NOT repeat or create similar): {', '.join(titles)}")
+        if topics:
+            context_parts.append(f"Recently covered topics (try different angles): {', '.join(topics)}")
+        
+        return "\n".join(context_parts)
+    
+    def get_generation_history(self) -> List[Dict]:
+        """Return the content generation history."""
+        return ContentGenerator._content_history.copy()
+    
+    def clear_history(self) -> None:
+        """Clear the generation history."""
+        ContentGenerator._content_history = []
+    
     # Fixed CTA options with probability distribution
-    # 60% - No explicit CTA (standard format ends naturally)
-    # 30% - Follow page CTA
-    # 10% - Part 2 teaser CTA
+    # 80% - No explicit CTA (standard format ends naturally)
+    # 20% - Part 2 teaser CTA (engagement hook)
     CTA_OPTIONS = {
         "none": {
-            "weight": 60,
+            "weight": 80,
             "options": []  # No CTA appended
         },
-        "follow_page": {
-            "weight": 30,
-            "options": [
-                "If you want to improve your health, follow this page.",
-                "For more wellness tips, follow this page.",
-                "Want to learn more? Follow this page.",
-                "Follow this page for daily health insights.",
-                "Your health matters — Follow this page.",
-                "Stay informed — Follow this page."
-            ]
-        },
         "part2_teaser": {
-            "weight": 10,
+            "weight": 20,
             "options": [
                 "We have more for you — Follow for Part 2!",
                 "Part 2 coming soon — Follow this page!",
@@ -92,6 +124,11 @@ class ContentGenerator:
             ]
         }
     }
+    
+    # Content history to avoid repetition (stores recent titles/topics)
+    # This is a class-level cache that persists during the app session
+    _content_history: List[Dict] = []
+    _max_history_size: int = 50  # Remember last 50 generations
     
     # Topic categories for rotation
     TOPIC_CATEGORIES = [
@@ -191,6 +228,20 @@ Create ONE completely original, scroll-stopping post about: {topic}
 ✅ Each point is dense with value
 ✅ Information feels insider/exclusive
 ✅ NO CTA included (system adds it automatically)
+"""
+        
+        # Add history context to avoid repetition
+        history_context = self._get_history_context()
+        if history_context:
+            prompt += f"""
+
+## IMPORTANT - AVOID REPETITION:
+{history_context}
+
+Create something FRESH and DIFFERENT from the above!
+"""
+        
+        prompt += """
 
 ## VIRAL CONTENT EXAMPLES (1M+ VIEWS):
 
@@ -316,12 +367,14 @@ Generate the content now. Output ONLY the JSON, nothing else."""
                         print("⚠️ Missing required fields in response")
                         return self._fallback_content()
                     
-                    # Append CTA based on probability distribution
-                    self._append_cta_to_content(content_data)
+                    # NOTE: CTA is NOT added here - it's added at generation time based on user selection
                     
                     # Add metadata
                     content_data["generated_at"] = datetime.now().isoformat()
                     content_data["success"] = True
+                    
+                    # Track in history to avoid repetition
+                    self._add_to_history(content_data)
                     
                     return content_data
                     
@@ -383,14 +436,16 @@ Generate the content now. Output ONLY the JSON, nothing else."""
         
         fallback = random.choice(fallback_posts)
         
-        # Append CTA based on probability distribution
-        self._append_cta_to_content(fallback)
+        # NOTE: CTA is NOT added here - it's added at generation time based on user selection
         
         fallback["generated_at"] = datetime.now().isoformat()
         fallback["success"] = True
         fallback["is_fallback"] = True
         fallback["format_style"] = "SHORT_FRAGMENT"
         fallback["topic_category"] = "Body signals and health indicators"
+        
+        # Track in history to avoid repetition
+        self._add_to_history(fallback)
         
         return fallback
     
