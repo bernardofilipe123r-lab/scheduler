@@ -33,9 +33,7 @@ DEFAULT_HASHTAGS = [
 FONT_BOLD = "Poppins-Bold.ttf"
 FONT_REGULAR = "Poppins-Regular.ttf"
 FONT_SEMIBOLD = "Poppins-SemiBold.ttf"
-# Note: Change FONT_CONTENT to "BrowalliaNew-Bold.ttf" once the font file is available
-# For now, falling back to Poppins-Bold until Browallia New Bold is properly installed
-FONT_CONTENT = "Poppins-Bold.ttf"  # TODO: Replace with "BrowalliaNew-Bold.ttf"
+FONT_CONTENT = "BrowalliaNew-Bold.ttf"  # Browallia New Bold for content text
 FONT_FALLBACK = None  # Will use PIL default if custom fonts not available
 
 # Default font sizes (will be adjusted dynamically if content overflows)
