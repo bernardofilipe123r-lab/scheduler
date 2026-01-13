@@ -138,25 +138,95 @@
         }
         
         .job-card-failed {
-            border-left: 4px solid #c62828;
-            background: #fff8f8;
+            border-left: 4px solid #dc2626;
+            background: linear-gradient(90deg, #fef2f2 0%, white 100%);
+        }
+        
+        .job-card-errors {
+            border-left: 4px solid #f59e0b;
+            background: linear-gradient(90deg, #fffbeb 0%, white 100%);
         }
         
         .job-error {
             margin-top: 8px;
+            padding: 8px 12px;
+            background: #fef2f2;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        
+        .job-current-step {
+            margin-top: 8px;
             padding: 6px 10px;
-            background: #ffebee;
+            background: #eff6ff;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #1e40af;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .step-indicator {
+            width: 8px;
+            height: 8px;
+            background: #3b82f6;
+            border-radius: 50%;
+            animation: stepPulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes stepPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.6; }
+        }
+        
+        .progress-text {
+            text-align: right;
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+        
+        .progress-fill.animating {
+            background: linear-gradient(90deg, #00435c, #0284c7, #00435c);
+            background-size: 200% 100%;
+            animation: progressShimmer 2s linear infinite;
+        }
+        
+        @keyframes progressShimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .meta-variant {
+            padding: 2px 8px;
             border-radius: 4px;
+            font-weight: 500;
+        }
+        
+        .meta-variant.dark {
+            background: #1f2937;
+            color: #f9fafb;
+        }
+        
+        .meta-variant.light {
+            background: #fef3c7;
+            color: #92400e;
         }
         
         .job-id {
-            font-family: monospace;
-            font-size: 13px;
-            color: #666;
-            background: #f0f0f0;
-            padding: 8px 12px;
-            border-radius: 6px;
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            color: #4b5563;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            padding: 10px 12px;
+            border-radius: 8px;
             text-align: center;
+            font-weight: 500;
+            border: 1px solid #e5e7eb;
         }
         
         .job-info {
@@ -171,6 +241,33 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            max-width: 100%;
+            position: relative;
+        }
+        
+        .job-title[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            left: 0;
+            top: 100%;
+            background: #1f2937;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 400;
+            white-space: pre-wrap;
+            max-width: 300px;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            margin-top: 4px;
+        }
+        
+        .title-multiline-indicator {
+            color: #9ca3af;
+            font-size: 11px;
+            font-weight: 400;
+            margin-left: 4px;
         }
         
         .job-meta {
@@ -210,44 +307,103 @@
         
         .brand-badge {
             font-size: 11px;
-            padding: 4px 8px;
+            padding: 4px 10px;
             border-radius: 4px;
             font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            position: relative;
         }
         
         .brand-gymcollege { background: #e3f2fd; color: #1565c0; }
-        .brand-healthycollege { background: #e8f5e9; color: #2e7d32; }
-        .brand-vitalitycollege { background: #fff3e0; color: #e65100; }
-        .brand-longevitycollege { background: #f3e5f5; color: #7b1fa2; }
+        .brand-healthycollege { background: #d1fae5; color: #065f46; }
+        .brand-vitalitycollege { background: #fce7f3; color: #be185d; }
+        .brand-longevitycollege { background: #f3e8ff; color: #7c3aed; }
+        
+        /* Brand output status indicators */
+        .brand-badge .brand-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-left: 2px;
+        }
+        
+        .brand-badge .brand-status-dot.pending { background: #9ca3af; }
+        .brand-badge .brand-status-dot.generating { background: #3b82f6; animation: dotPulse 1s infinite; }
+        .brand-badge .brand-status-dot.completed { background: #10b981; }
+        .brand-badge .brand-status-dot.failed { background: #ef4444; }
+        
+        @keyframes dotPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.7; }
+        }
         
         .job-status {
             text-align: right;
         }
         
         .status-badge {
-            display: inline-block;
-            padding: 6px 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
             border-radius: 20px;
             font-size: 12px;
-            font-weight: 500;
+            font-weight: 600;
+            text-transform: capitalize;
         }
         
-        .status-pending { background: #fff3e0; color: #e65100; }
-        .status-generating { background: #e3f2fd; color: #1565c0; }
-        .status-completed { background: #e8f5e9; color: #2e7d32; }
-        .status-failed { background: #ffebee; color: #c62828; }
-        .status-cancelled { background: #f5f5f5; color: #757575; }
+        .status-pending { 
+            background: #f3f4f6; 
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+        }
+        .status-generating { 
+            background: #dbeafe; 
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+        .status-completed { 
+            background: #d1fae5; 
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+        .status-completed-errors {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+        }
+        .status-failed { 
+            background: #fee2e2; 
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        .status-cancelled { 
+            background: #f3f4f6; 
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+        }
+        
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
         
         .progress-bar {
-            height: 4px;
-            background: #e0e0e0;
-            border-radius: 2px;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
             margin-top: 8px;
             overflow: hidden;
+            position: relative;
         }
         
         .progress-fill {
             height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease-out;
             background: linear-gradient(90deg, #00435c, #006d8f);
             transition: width 0.3s;
         }
@@ -939,57 +1095,93 @@
             grid.innerHTML = jobs.map(job => {
                 const canCancel = job.status === 'pending' || job.status === 'generating';
                 const showProgress = job.status === 'generating' || job.status === 'pending';
-                const progress = job.status === 'pending' ? 0 : (job.progress_percent || 0);
-                const statusLabels = {
-                    'pending': '⏳ Pending',
-                    'generating': '🔄 Generating',
-                    'completed': '✅ Completed',
-                    'failed': '❌ Failed',
-                    'cancelled': '🚫 Cancelled'
-                };
-                const statusLabel = statusLabels[job.status] || job.status;
                 
-                // Truncate title if has newlines, show first line only
+                // Calculate actual progress based on brand outputs
+                const brandOutputs = job.brand_outputs || {};
+                const totalBrands = (job.brands || []).length;
+                const completedBrands = Object.values(brandOutputs).filter(o => o.status === 'completed').length;
+                const failedBrands = Object.values(brandOutputs).filter(o => o.status === 'failed').length;
+                
+                // Determine real progress: completed brands / total brands
+                let actualProgress = totalBrands > 0 ? Math.round((completedBrands / totalBrands) * 100) : 0;
+                if (job.status === 'pending') actualProgress = 0;
+                if (job.status === 'completed') actualProgress = 100;
+                
+                // Determine if completed with errors
+                const hasErrors = job.status === 'completed' && failedBrands > 0;
+                const statusClass = hasErrors ? 'completed-errors' : job.status;
+                
+                // Status labels with icons
+                const statusLabels = {
+                    'pending': '<span style="font-size: 14px;">○</span> Pending',
+                    'generating': '<span style="font-size: 14px;">◉</span> In Progress',
+                    'completed': '<span style="font-size: 14px;">✓</span> Completed',
+                    'completed-errors': '<span style="font-size: 14px;">⚠</span> Completed with Errors',
+                    'failed': '<span style="font-size: 14px;">✕</span> Failed',
+                    'cancelled': '<span style="font-size: 14px;">◌</span> Cancelled'
+                };
+                const statusLabel = statusLabels[hasErrors ? 'completed-errors' : job.status] || job.status;
+                
+                // Title handling with full title for tooltip
+                const fullTitle = (job.title || 'Untitled').replace(/\n/g, ' • ');
                 const titleDisplay = (job.title || 'Untitled').split('\n')[0];
                 const hasMoreLines = (job.title || '').includes('\n');
+                const titleTruncated = titleDisplay.length > 40;
+                const displayTitle = titleTruncated ? titleDisplay.substring(0, 40) + '...' : titleDisplay;
+                
+                // Build brand badges with status dots
+                const brandBadges = (job.brands || []).map(b => {
+                    const output = brandOutputs[b] || {};
+                    const brandStatus = output.status || 'pending';
+                    return `
+                        <span class="brand-badge brand-${b}" title="${b}: ${brandStatus}">
+                            ${b.replace('college', '')}
+                            <span class="brand-status-dot ${brandStatus}"></span>
+                        </span>
+                    `;
+                }).join('');
                 
                 return `
-                <div class="job-card ${job.status === 'failed' ? 'job-card-failed' : ''}" onclick="openJobDetail('${job.job_id}')">
+                <div class="job-card ${job.status === 'failed' ? 'job-card-failed' : ''} ${hasErrors ? 'job-card-errors' : ''}" onclick="openJobDetail('${job.job_id}')">
                     <div class="job-id">${job.job_id}</div>
                     <div class="job-info">
-                        <div class="job-title">
-                            ${escapeHtml(titleDisplay)}${hasMoreLines ? '<span style="color: #888; font-size: 12px;"> ↵</span>' : ''}
+                        <div class="job-title" ${(hasMoreLines || titleTruncated) ? `title="${escapeHtml(fullTitle)}"` : ''}>
+                            ${escapeHtml(displayTitle)}${hasMoreLines ? '<span class="title-multiline-indicator">+${(job.title.split("\\n").length - 1)} lines</span>' : ''}
                         </div>
                         <div class="job-meta">
-                            <span>📁 ${job.variant}</span>
-                            <span>🎨 ${(job.content_lines || []).length} lines</span>
-                            ${job.current_step && job.status === 'generating' ? `<span>⏳ ${job.current_step}</span>` : ''}
+                            <span class="meta-variant ${job.variant}">${job.variant === 'dark' ? '🌙' : '☀️'} ${job.variant}</span>
+                            <span>📝 ${(job.content_lines || []).length} lines</span>
+                            <span>🎨 ${completedBrands}/${totalBrands} brands</span>
                         </div>
-                        ${job.status === 'failed' && job.error_message ? `
+                        ${job.status === 'generating' && job.current_step ? `
+                            <div class="job-current-step">
+                                <span class="step-indicator"></span>
+                                ${escapeHtml(job.current_step)}
+                            </div>
+                        ` : ''}
+                        ${(job.status === 'failed' || hasErrors) && job.error_message ? `
                             <div class="job-error">
-                                <span style="color: #c62828; font-size: 12px;">⚠️ ${escapeHtml(job.error_message.substring(0, 100))}${job.error_message.length > 100 ? '...' : ''}</span>
+                                <span>⚠️ ${escapeHtml(job.error_message.substring(0, 80))}${job.error_message.length > 80 ? '...' : ''}</span>
                             </div>
                         ` : ''}
                     </div>
                     <div class="job-brands">
-                        ${(job.brands || []).map(b => `
-                            <span class="brand-badge brand-${b}">${b}</span>
-                        `).join('')}
+                        ${brandBadges}
                     </div>
                     <div class="job-status">
                         <div style="display: flex; align-items: center; gap: 10px; justify-content: flex-end;">
-                            <span class="status-badge status-${job.status}">${statusLabel}</span>
+                            <span class="status-badge status-${statusClass}">${statusLabel}</span>
                             ${canCancel ? `
-                                <button class="btn-cancel" onclick="event.stopPropagation(); cancelJob('${job.job_id}')">
-                                    ✕ Cancel
+                                <button class="btn-cancel" onclick="event.stopPropagation(); cancelJob('${job.job_id}')" title="Cancel this job">
+                                    ✕
                                 </button>
                             ` : ''}
                         </div>
                         ${showProgress ? `
                             <div class="progress-bar">
-                                <div class="progress-fill" style="width: ${progress}%"></div>
+                                <div class="progress-fill ${job.status === 'generating' ? 'animating' : ''}" style="width: ${actualProgress}%"></div>
                             </div>
-                            <div style="text-align: right; font-size: 11px; color: #666; margin-top: 4px;">${progress}%</div>
+                            <div class="progress-text">${actualProgress}% complete</div>
                         ` : ''}
                         <div class="job-time">${formatTime(job.created_at)}</div>
                     </div>
