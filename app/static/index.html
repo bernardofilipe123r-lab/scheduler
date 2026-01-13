@@ -566,6 +566,261 @@
         }
         
         .slot-rules strong { display: block; margin-bottom: 4px; }
+        
+        /* Side Notification Panel */
+        .notification-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 320px;
+            max-height: calc(100vh - 120px);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            z-index: 1500;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .notification-panel.visible {
+            display: flex;
+            animation: panelSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes panelSlideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .notification-panel-header {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #00435c 0%, #006d8f 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .notification-panel-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .notification-panel-header .count-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        
+        .notification-panel-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .notification-panel-close:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .notification-panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        
+        .notification-item {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .notification-item:hover {
+            background: #f1f5f9;
+            border-color: #00435c;
+            transform: translateX(-2px);
+        }
+        
+        .notification-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .notification-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        
+        .notification-item-id {
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: #00435c;
+            background: #e0f2fe;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        
+        .notification-item-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .notification-item-status.pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .notification-item-status.generating {
+            background: #dbeafe;
+            color: #1e40af;
+            animation: pulse-status 2s infinite;
+        }
+        
+        @keyframes pulse-status {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .notification-item-title {
+            font-size: 13px;
+            color: #374151;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 6px;
+        }
+        
+        .notification-item-progress {
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .notification-item-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00435c, #006d8f);
+            transition: width 0.3s;
+        }
+        
+        .notification-item-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 6px;
+        }
+        
+        .notification-panel-footer {
+            padding: 12px 16px;
+            border-top: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+        
+        .notification-panel-footer a {
+            display: block;
+            text-align: center;
+            color: #00435c;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        
+        .notification-panel-footer a:hover {
+            background: #e5e7eb;
+        }
+        
+        .notification-empty {
+            text-align: center;
+            padding: 30px 20px;
+            color: #6b7280;
+        }
+        
+        .notification-empty-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        
+        /* Notification Bell Button */
+        .notification-bell {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #00435c 0%, #006d8f 100%);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,67,92,0.3);
+            z-index: 1400;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .notification-bell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(0,67,92,0.4);
+        }
+        
+        .notification-bell.has-jobs {
+            animation: bellPulse 2s infinite;
+        }
+        
+        @keyframes bellPulse {
+            0%, 100% { box-shadow: 0 4px 12px rgba(0,67,92,0.3); }
+            50% { box-shadow: 0 4px 20px rgba(0,67,92,0.5), 0 0 0 8px rgba(0,67,92,0.1); }
+        }
+        
+        .notification-bell-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ef4444;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+        }
+        
+        .notification-bell.panel-open {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -581,6 +836,26 @@
             </ul>
         </div>
     </nav>
+    
+    <!-- Notification Bell Button -->
+    <button class="notification-bell" id="notificationBell" onclick="toggleNotificationPanel()">
+        🔔
+        <span class="notification-bell-badge" id="notificationBadge" style="display: none;">0</span>
+    </button>
+    
+    <!-- Side Notification Panel -->
+    <div class="notification-panel" id="notificationPanel">
+        <div class="notification-panel-header">
+            <h3>🔄 Jobs in Progress <span class="count-badge" id="jobCountBadge">0</span></h3>
+            <button class="notification-panel-close" onclick="toggleNotificationPanel()">×</button>
+        </div>
+        <div class="notification-panel-body" id="notificationPanelBody">
+            <!-- Jobs loaded dynamically -->
+        </div>
+        <div class="notification-panel-footer">
+            <a href="/history.html">View Full History →</a>
+        </div>
+    </div>
     
     <div class="content-wrapper">
         <div class="toast-container" id="toastContainer"></div>
@@ -867,6 +1142,146 @@ Chicken — Let it rest after cooking" required></textarea>
         let currentScheduleBrand = null;
         let scheduleMode = 'auto';
         let nextSlots = {};
+        let activeJobs = [];
+        let notificationPanelOpen = false;
+        
+        // ============================================
+        // NOTIFICATION PANEL SYSTEM
+        // ============================================
+        
+        function toggleNotificationPanel() {
+            const panel = document.getElementById('notificationPanel');
+            const bell = document.getElementById('notificationBell');
+            notificationPanelOpen = !notificationPanelOpen;
+            
+            if (notificationPanelOpen) {
+                panel.classList.add('visible');
+                bell.classList.add('panel-open');
+                loadActiveJobs();
+            } else {
+                panel.classList.remove('visible');
+                bell.classList.remove('panel-open');
+            }
+        }
+        
+        async function loadActiveJobs() {
+            try {
+                const response = await fetch('/jobs/');
+                const data = await response.json();
+                const jobs = data.jobs || [];
+                
+                // Filter for pending/generating jobs
+                activeJobs = jobs.filter(j => j.status === 'pending' || j.status === 'generating');
+                updateNotificationPanel();
+                updateNotificationBadge();
+                
+            } catch (error) {
+                console.error('Failed to load jobs:', error);
+            }
+        }
+        
+        function updateNotificationPanel() {
+            const body = document.getElementById('notificationPanelBody');
+            const countBadge = document.getElementById('jobCountBadge');
+            
+            countBadge.textContent = activeJobs.length;
+            
+            if (activeJobs.length === 0) {
+                body.innerHTML = `
+                    <div class="notification-empty">
+                        <div class="notification-empty-icon">✨</div>
+                        <p>No jobs in progress</p>
+                        <p style="font-size: 12px; margin-top: 5px;">Create a new reel to get started</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            body.innerHTML = activeJobs.map(job => {
+                const statusClass = job.status === 'pending' ? 'pending' : 'generating';
+                const statusText = job.status === 'pending' ? '⏳ Queued' : '🔄 Generating';
+                const progress = job.status === 'pending' ? 0 : (job.progress_percent || 0);
+                const titleDisplay = (job.title || 'Untitled').split('\\n')[0].substring(0, 30);
+                
+                return `
+                    <div class="notification-item" onclick="goToJobDetail('${job.job_id}')">
+                        <div class="notification-item-header">
+                            <span class="notification-item-id">${job.job_id}</span>
+                            <span class="notification-item-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="notification-item-title" title="${escapeHtml(job.title || 'Untitled')}">
+                            ${escapeHtml(titleDisplay)}${(job.title || '').length > 30 ? '...' : ''}
+                        </div>
+                        <div class="notification-item-progress">
+                            <div class="notification-item-progress-fill" style="width: ${progress}%"></div>
+                        </div>
+                        <div class="notification-item-meta">
+                            <span>${job.current_step || 'Waiting...'}</span>
+                            <span>${progress}%</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function updateNotificationBadge() {
+            const badge = document.getElementById('notificationBadge');
+            const bell = document.getElementById('notificationBell');
+            
+            if (activeJobs.length > 0) {
+                badge.textContent = activeJobs.length;
+                badge.style.display = 'flex';
+                bell.classList.add('has-jobs');
+            } else {
+                badge.style.display = 'none';
+                bell.classList.remove('has-jobs');
+            }
+        }
+        
+        function goToJobDetail(jobId) {
+            window.location.href = `/history.html?job=${jobId}`;
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Add new job to notification panel
+        function addJobToNotifications(jobId, title) {
+            activeJobs.unshift({
+                job_id: jobId,
+                title: title,
+                status: 'pending',
+                progress_percent: 0,
+                current_step: 'Queued for processing'
+            });
+            updateNotificationPanel();
+            updateNotificationBadge();
+            
+            // Auto-open panel when new job is added
+            if (!notificationPanelOpen) {
+                toggleNotificationPanel();
+            }
+        }
+        
+        // Auto-refresh active jobs every 3 seconds
+        setInterval(() => {
+            if (activeJobs.length > 0 || notificationPanelOpen) {
+                loadActiveJobs();
+            }
+        }, 3000);
+        
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadActiveJobs();
+        });
+        
+        // ============================================
+        // END NOTIFICATION PANEL SYSTEM
+        // ============================================
         
         // Show/hide AI prompt based on variant
         const variantRadios = document.querySelectorAll('input[name="variant"]');
@@ -881,10 +1296,13 @@ Chicken — Let it rest after cooking" required></textarea>
         
         
         // Toast system
-        function showToast(title, message, type = 'info', duration = 5000) {
+        function showToast(title, message, type = 'info', duration = 5000, onClick = null) {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
+            if (onClick) {
+                toast.style.cursor = 'pointer';
+            }
             
             const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
             
@@ -894,8 +1312,12 @@ Chicken — Let it rest after cooking" required></textarea>
                     <div class="toast-title">${title}</div>
                     <div class="toast-message">${message}</div>
                 </div>
-                <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+                <button class="toast-close" onclick="event.stopPropagation(); this.parentElement.remove()">×</button>
             `;
+            
+            if (onClick) {
+                toast.addEventListener('click', onClick);
+            }
             
             container.appendChild(toast);
             
@@ -1383,16 +1805,9 @@ Chicken — Let it rest after cooking" required></textarea>
                 
                 const result = await response.json();
                 const jobId = result.job_id;
+                const jobTitle = title;
                 
                 hideLoading();
-                
-                // Show success message with link to history
-                showToast(
-                    '🚀 Job Created!', 
-                    `Job ${jobId} queued for processing. View progress in History.`, 
-                    'success', 
-                    8000
-                );
                 
                 // Clear the form for new input
                 document.getElementById('title').value = '';
@@ -1408,17 +1823,8 @@ Chicken — Let it rest after cooking" required></textarea>
                 document.getElementById('scheduleAllSection').style.display = 'none';
                 currentReels = {};
                 
-                // Show a prompt to go to history or stay
-                const goToHistory = confirm(
-                    `Job ${jobId} created!\n\n` +
-                    `The generation is processing in the background.\n\n` +
-                    `Click OK to view progress in History,\n` +
-                    `or Cancel to create another reel.`
-                );
-                
-                if (goToHistory) {
-                    window.location.href = '/history';
-                }
+                // Add job to notification panel and open it
+                addJobToNotifications(jobId, jobTitle);
                 
                 showStatus(`✅ Job ${jobId} created and processing!`, 'success');
                 
