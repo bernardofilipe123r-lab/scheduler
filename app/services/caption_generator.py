@@ -198,31 +198,13 @@ Just write the paragraph text, nothing else."""
         """
         captions = {}
         
-        for brand_name, handle in self.BRAND_HANDLES.items():
-            # Generate unique first paragraph for each brand
-            first_paragraph = self.generate_first_paragraph(title, content_lines)
-            
-            # Build fixed sections with brand-specific handle
-            follow_section = f"""👉🏼 Follow {handle} for daily, research-informed content on whole-body health, natural approaches to healing, digestive health support, and long-term wellness strategies centered on nutrition and prevention."""
-            
-            save_section = """🩵 This post is designed to be saved and revisited. Share it with friends and family who are actively working on improving their health, energy levels, metabolic balance, and long-term vitality through natural methods."""
-            
-            cta_section = self.CTA_OPTIONS.get(cta_type, self.CTA_OPTIONS["sleep_lean"])
-            
-            disclaimer = """🌱 Content provided for educational purposes. Always seek guidance from a qualified healthcare provider before adjusting your diet."""
-            
-            caption = f"""{first_paragraph}
-
-{follow_section}
-
-{save_section}
-
-{cta_section}
-
-{disclaimer}
-
-{self.HASHTAGS}"""
-            
-            captions[brand_name] = caption
+        for brand_name in self.BRAND_HANDLES.keys():
+            # Use the generate_caption method for each brand
+            captions[brand_name] = self.generate_caption(
+                brand_name=brand_name,
+                title=title,
+                content_lines=content_lines,
+                cta_type=cta_type
+            )
         
         return captions

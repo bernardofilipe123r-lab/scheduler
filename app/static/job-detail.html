@@ -650,9 +650,9 @@
                 const isScheduled = output.status === 'scheduled';
                 const isFailed = output.status === 'failed';
                 
-                // Build media content
+                // Build media content - show for completed OR scheduled brands
                 let mediaContent = '';
-                if (isCompleted && output.thumbnail_path && output.video_path) {
+                if ((isCompleted || isScheduled) && output.thumbnail_path && output.video_path) {
                     const thumbnailUrl = output.thumbnail_path.startsWith('/') ? output.thumbnail_path : `/output/thumbnails/${output.reel_id}_thumbnail.png`;
                     const videoUrl = output.video_path.startsWith('/') ? output.video_path : `/output/videos/${output.reel_id}_video.mp4`;
                     

@@ -48,7 +48,7 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
     "gymcollege": BrandColorConfig(
         light_mode=BrandModeColors(
             # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#00435c"),  # Blue
+            thumbnail_text_color=hex_to_rgb("#000000"),  # Black
             
             # Content
             content_title_text_color=hex_to_rgb("#000000"),  # Black
