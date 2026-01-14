@@ -70,23 +70,28 @@ PUBLIC_URL_BASE=https://your-tunnel-url.loca.lt
 
 ```
 reels-automation/
-├── app/
-│   ├── api/              # FastAPI routes
+├── app/                  # Python backend (FastAPI)
+│   ├── api/              # API routes
+│   ├── core/             # Configuration
+│   ├── database/         # Database layer
 │   ├── services/         # Business logic
 │   │   ├── image_generator.py
 │   │   ├── video_generator.py
 │   │   ├── ai_background_generator.py
 │   │   ├── social_publisher.py
 │   │   └── scheduler.py
-│   ├── utils/            # Helpers
-│   └── static/           # Web UI
+│   └── utils/            # Helpers
+├── src/                  # React frontend
+│   ├── app/              # App shell (providers, routes, layout)
+│   ├── features/         # Feature modules (jobs, scheduling, brands)
+│   ├── pages/            # Page components
+│   └── shared/           # Shared components, types, API
+├── dist/                 # Built frontend (production)
 ├── output/               # Generated content
 │   ├── videos/
 │   ├── thumbnails/
-│   └── ai_backgrounds/
-├── start_services.sh     # Service startup
-├── stop_services.sh      # Service shutdown
-└── SERVICES_GUIDE.md     # Detailed guide
+│   └── reels/
+└── assets/               # Fonts, logos, templates
 ```
 
 ## 🎯 Brand Specifications

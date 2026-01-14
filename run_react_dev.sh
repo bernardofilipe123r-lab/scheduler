@@ -2,7 +2,7 @@
 # Run React frontend in development mode with hot reload
 # The Vite dev server proxies API calls to the FastAPI backend
 
-cd "$(dirname "$0")/frontend"
+cd "$(dirname "$0")"
 
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then

@@ -50,7 +50,7 @@ reels_history.db
 htmlcov/
 test_*.png
 
-# Frontend (React)
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
+# Frontend (React) - at project root
+node_modules/
+dist/
+.vite/

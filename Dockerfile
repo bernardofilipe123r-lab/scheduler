@@ -38,21 +38,29 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy frontend package files first for npm cache
-COPY frontend/package*.json frontend/
+COPY package*.json ./
 
 # Install frontend dependencies
-RUN cd frontend && npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
-# Copy frontend source and build
-COPY frontend/ frontend/
-RUN cd frontend && npm run build
+# Copy frontend source and config files for build
+COPY src/ src/
+COPY index.html .
+COPY vite.config.ts .
+COPY tsconfig.json .
+COPY tsconfig.node.json .
+COPY tailwind.config.js .
+COPY postcss.config.js .
+
+# Build React frontend
+RUN npm run build
 
 # Copy application code (Python backend)
 COPY app/ app/
 COPY assets/ assets/
 COPY *.py ./
 COPY *.sh ./
-COPY *.json ./
+COPY railway.json ./
 
 # Create output directories
 RUN mkdir -p output/videos output/thumbnails output/reels output/schedules
