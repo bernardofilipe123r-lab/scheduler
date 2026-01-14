@@ -1,30 +1,45 @@
-# Railway Volume Setup Guide
+# Railway Persistent Storage Solutions
 
 ## Problem
 When you redeploy on Railway, the container's file system is wiped (ephemeral storage), but the PostgreSQL database keeps the file paths. This causes "Thumbnail not found" and "Video not found" errors after deployment.
 
-## Solution: Persistent Volume
+## Solution Options
 
-Railway Volumes provide persistent storage that survives across deployments.
+### Option 1: Railway Volume (Recommended - If Available)
 
-### Setup Steps (Railway UI Only - No Code Changes Needed)
+**Check if volumes are available on your plan:**
 
-1. **Go to your Railway dashboard** → Select `scheduler` service
+1. In Railway Dashboard, click on your `scheduler` service
+2. Look in the left sidebar or top tabs for "Volumes" or "Storage"
+3. If not visible, try the Railway CLI:
 
-2. **Click Settings** tab (left sidebar)
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
 
-3. **Scroll down to "Volumes"** section
+# Login
+railway login
 
-4. **Click "+ New Volume"** button
+# Link to your project
+railway link
 
-5. **Fill in the form**:
-   - **Mount Path**: `/app/output` (this is where your videos/thumbnails are stored)
-   - Leave other settings as default
-   - Click **"Add"**
+# Add volume
+railway volume create output-storage /app/output
+```
 
-6. **Wait for automatic redeploy** - Railway will restart your service with the volume attached
+### Option 2: Use Railway's Built-in Volume Mount (Current Setup)
 
-**Note**: Railway volumes are configured ONLY through the UI, not in railway.json or code.
+Your code already checks for `/app/output` - Railway may automatically provide this as a volume if you request it via support or if it's enabled by default.
+
+**Test if it's working:**
+- Deploy and generate a reel
+- Check Railway logs for: `📁 Static files directory: /app/output`
+- Redeploy (without code changes)
+- Try accessing the old reel - if it works, volume is persistent!
+
+### Option 3: Cloud Storage (Most Reliable for Production)
+
+Use AWS S3, Cloudflare R2, or similar for permanent file storage.
 
 ### How it Works
 
