@@ -17,6 +17,8 @@ export function useJobs() {
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
     refetchInterval: 10000,
+    refetchOnMount: 'always', // Always refetch when component mounts
+    staleTime: 0, // Data is always considered stale
   })
 }
 

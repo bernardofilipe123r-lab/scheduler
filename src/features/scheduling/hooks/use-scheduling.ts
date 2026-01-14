@@ -26,7 +26,8 @@ export function useScheduleReel() {
   return useMutation({
     mutationFn: schedulingApi.schedule,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: schedulingKeys.scheduled() })
+      // Invalidate all scheduling and jobs queries
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
     },
   })
@@ -38,7 +39,8 @@ export function useAutoScheduleReel() {
   return useMutation({
     mutationFn: schedulingApi.autoSchedule,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: schedulingKeys.scheduled() })
+      // Invalidate all scheduling and jobs queries
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
     },
   })
@@ -49,6 +51,8 @@ export function useScheduledPosts() {
     queryKey: schedulingKeys.scheduled(),
     queryFn: schedulingApi.getScheduled,
     refetchInterval: 30000,
+    refetchOnMount: 'always', // Always refetch when navigating to Scheduled page
+    staleTime: 0, // Data is always considered stale
   })
 }
 
