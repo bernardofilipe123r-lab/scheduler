@@ -1,45 +1,47 @@
-# Railway Persistent Storage Solutions
+# Railway Volume Setup Guide
 
 ## Problem
 When you redeploy on Railway, the container's file system is wiped (ephemeral storage), but the PostgreSQL database keeps the file paths. This causes "Thumbnail not found" and "Video not found" errors after deployment.
 
-## Solution Options
+## Solution: Create a Volume in Railway
 
-### Option 1: Railway Volume (Recommended - If Available)
+### Step-by-Step Instructions
 
-**Check if volumes are available on your plan:**
+1. **Open Railway Dashboard** → Navigate to your `scheduler` service
 
-1. In Railway Dashboard, click on your `scheduler` service
-2. Look in the left sidebar or top tabs for "Volumes" or "Storage"
-3. If not visible, try the Railway CLI:
+2. **Create the Volume**:
+   - In the Railway dashboard, find the option to create a new volume
+   - **Mount Path**: `/app/output`
+   - Click **Create** or **Add Volume**
 
-```bash
-# Install Railway CLI
-npm i -g @railway/cli
+3. **Redeploy** - Railway will automatically redeploy your service with the volume attached
 
-# Login
-railway login
+4. **Verify** - After deployment completes:
+   - Generate a new reel
+   - Check that thumbnails and videos load
+   - Redeploy again (no code changes)
+   - The files should still be there!
 
-# Link to your project
-railway link
+### How It Works
 
-# Add volume
-railway volume create output-storage /app/output
-```
+- The volume is a persistent disk that survives deployments
+- Everything in `/app/output` (videos, thumbnails, reels, database) persists
+- Your code already uses `/app/output` when it detects the path exists
+- Database and files stay in sync across deployments
 
-### Option 2: Use Railway's Built-in Volume Mount (Current Setup)
+### Important Notes
 
-Your code already checks for `/app/output` - Railway may automatically provide this as a volume if you request it via support or if it's enabled by default.
+- **Old files are gone** - Files from before the volume was created cannot be recovered
+- **New files persist** - All files generated after volume creation will survive redeployments
+- **Volume is separate** - Even if you delete the service, the volume remains (delete separately if needed)
 
-**Test if it's working:**
-- Deploy and generate a reel
-- Check Railway logs for: `📁 Static files directory: /app/output`
-- Redeploy (without code changes)
-- Try accessing the old reel - if it works, volume is persistent!
+### Troubleshooting
 
-### Option 3: Cloud Storage (Most Reliable for Production)
-
-Use AWS S3, Cloudflare R2, or similar for permanent file storage.
+If files still disappear after creating the volume:
+1. Check Railway deployment logs for: `📁 Static files directory: /app/output`
+2. Verify the volume mount path is exactly `/app/output`
+3. Ensure the volume is attached to the correct service
+4. Try generating a brand new reel after the volume is attached
 
 ### How it Works
 
