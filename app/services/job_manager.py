@@ -317,6 +317,18 @@ class JobManager:
             print(f"   ✓ Video saved: {video_path}", flush=True)
             sys.stdout.flush()
             
+            # Generate caption
+            print(f"\n✍️  Step 4/4: Generating caption...", flush=True)
+            from app.services.caption_generator import CaptionGenerator
+            caption_gen = CaptionGenerator()
+            caption = caption_gen.generate_caption(
+                brand_name=brand,
+                title=use_title,
+                content_lines=use_lines,
+                cta_type=job.cta_type or "follow_tips"
+            )
+            print(f"   ✓ Caption generated ({len(caption)} chars)", flush=True)
+            
             # Update brand output - use web-friendly paths with leading slash
             self.update_brand_output(job_id, brand, {
                 "status": "completed",
@@ -324,6 +336,7 @@ class JobManager:
                 "thumbnail_path": f"/output/thumbnails/{reel_id}_thumbnail.png",
                 "reel_path": f"/output/reels/{reel_id}_reel.png",
                 "video_path": f"/output/videos/{reel_id}_video.mp4",
+                "caption": caption,
                 "regenerated_at": datetime.utcnow().isoformat()
             })
             

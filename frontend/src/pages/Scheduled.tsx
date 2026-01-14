@@ -456,7 +456,11 @@ function Scheduled() {
             <div className="flex gap-3 pt-4 border-t border-gray-100">
               <button
                 onClick={() => {
-                  navigate(`/jobs/${selectedPost.job_id}`)
+                  // Extract job_id from reel_id (format: GEN-123456_brand or just GEN-123456)
+                  const jobId = selectedPost.job_id?.includes('_') 
+                    ? selectedPost.job_id.split('_')[0]
+                    : selectedPost.job_id
+                  navigate(`/jobs/${jobId}`)
                   setSelectedPost(null)
                 }}
                 className="btn btn-secondary flex-1"

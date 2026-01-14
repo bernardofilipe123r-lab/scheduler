@@ -58,6 +58,11 @@ function JobDetail() {
   // Check if job is generating
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
   
+  // Check if all completed brands are scheduled
+  const allScheduled = job ? Object.entries(job.brand_outputs || {})
+    .filter(([_, output]) => output.status === 'completed' || output.status === 'scheduled')
+    .every(([_, output]) => output.status === 'scheduled') : false
+  
   // Handle delete
   const handleDelete = async () => {
     try {
@@ -282,8 +287,9 @@ function JobDetail() {
         <div className="flex items-center gap-2">
           <button
             onClick={openEditTitleModal}
-            disabled={isGenerating}
+            disabled={isGenerating || allScheduled}
             className="btn btn-secondary"
+            title={allScheduled ? "Cannot edit - brands are scheduled" : ""}
           >
             <Edit2 className="w-4 h-4" />
             Edit Title
@@ -292,8 +298,9 @@ function JobDetail() {
           {!isGenerating && (
             <button
               onClick={handleRegenerateAll}
-              disabled={regenerateJob.isPending}
+              disabled={regenerateJob.isPending || allScheduled}
               className="btn btn-secondary"
+              title={allScheduled ? "Cannot regenerate - brands are scheduled" : ""}
             >
               {regenerateJob.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -330,15 +337,18 @@ function JobDetail() {
             </div>
             <button
               onClick={handleScheduleAll}
-              disabled={schedulingAll || isGenerating}
+              disabled={schedulingAll || isGenerating || allScheduled}
               className="btn btn-primary"
+              title={allScheduled ? "All brands already scheduled" : ""}
             >
               {schedulingAll ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : allScheduled ? (
+                <Check className="w-4 h-4" />
               ) : (
                 <Calendar className="w-4 h-4" />
               )}
-              Schedule All
+              {allScheduled ? 'All Scheduled' : 'Schedule All'}
             </button>
           </div>
         </div>
