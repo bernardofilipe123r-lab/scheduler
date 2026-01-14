@@ -543,12 +543,13 @@
         <div class="modal">
             <h3>✏️ Edit Title</h3>
             <p style="color: var(--gray-600); margin-bottom: 16px; font-size: 13px;">
-                Use line breaks to control how the title wraps on the reel.
+                Update the job title for display purposes. This won't regenerate the reels.<br>
+                To regenerate with a new title, use the "🔄 Regenerate" button after saving.
             </p>
             <textarea id="editTitleInput" rows="4" placeholder="Enter title..."></textarea>
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeEditTitleModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveTitle()">Save & Regenerate</button>
+                <button class="btn btn-primary" onclick="saveTitle()">Save</button>
             </div>
         </div>
     </div>
@@ -1048,19 +1049,20 @@
             }
             
             try {
-                // Update title
-                const response = await fetch(`/jobs/${jobId}/update`, {
+                // Update title only (no regeneration)
+                const response = await fetch(`/jobs/${jobId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: newTitle })
                 });
                 
                 if (response.ok) {
-                    closeEditTitleModal();
-                    showToast('Title updated! Regenerating...', 'success');
+                    // Update local state and UI
+                    currentJob.title = newTitle;
+                    document.getElementById('jobTitle').textContent = newTitle;
                     
-                    // Regenerate all brands with new title
-                    await regenerateAll();
+                    closeEditTitleModal();
+                    showToast('Title updated successfully!', 'success');
                 } else {
                     throw new Error('Failed to update');
                 }
