@@ -7,18 +7,24 @@ When you redeploy on Railway, the container's file system is wiped (ephemeral st
 
 Railway Volumes provide persistent storage that survives across deployments.
 
-### Setup Steps
+### Setup Steps (Railway UI Only - No Code Changes Needed)
 
-1. **Go to your Railway service** (scheduler)
+1. **Go to your Railway dashboard** → Select `scheduler` service
 
-2. **Navigate to Settings → Volumes**
+2. **Click Settings** tab (left sidebar)
 
-3. **Click "New Volume"**
-   - **Volume Name**: `output-storage`
-   - **Mount Path**: `/app/output`
-   - Click "Add"
+3. **Scroll down to "Volumes"** section
 
-4. **Deploy** - The volume will be attached on the next deployment
+4. **Click "+ New Volume"** button
+
+5. **Fill in the form**:
+   - **Mount Path**: `/app/output` (this is where your videos/thumbnails are stored)
+   - Leave other settings as default
+   - Click **"Add"**
+
+6. **Wait for automatic redeploy** - Railway will restart your service with the volume attached
+
+**Note**: Railway volumes are configured ONLY through the UI, not in railway.json or code.
 
 ### How it Works
 
