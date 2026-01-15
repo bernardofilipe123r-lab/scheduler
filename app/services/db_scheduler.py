@@ -145,8 +145,8 @@ class DatabaseSchedulerService:
                 if status != "scheduled":
                     for p in posts[:5]:  # Show first 5
                         print(f"         - {p.schedule_id}: {p.reel_id} @ {p.scheduled_time}")
-                        if status == "failed" and p.extra_data:
-                            error = p.extra_data.get('error', 'Unknown')
+                        if status == "failed":
+                            error = p.publish_error or "No error recorded"
                             print(f"           Error: {error}")
             
             # Get scheduled posts that are DUE

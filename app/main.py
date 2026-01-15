@@ -182,24 +182,36 @@ async def startup_event():
                         metadata = schedule.get('metadata', {})
                         video_path_str = metadata.get('video_path')
                         thumbnail_path_str = metadata.get('thumbnail_path')
+                        brand = metadata.get('brand', '')
+                        
+                        print(f"      📦 Metadata: video={video_path_str}, thumbnail={thumbnail_path_str}, brand={brand}")
                         
                         # If paths stored in metadata, use those
                         if video_path_str:
                             video_path = Path(video_path_str)
+                            # Handle relative paths (e.g., /output/videos/xxx.mp4)
+                            if not video_path.is_absolute():
+                                video_path = Path("/app") / video_path.as_posix().lstrip('/')
                         else:
-                            # Try .mp4 in output/videos
-                            video_path = Path(f"output/videos/{reel_id}.mp4")
+                            # Try with _video suffix first (new naming), then without
+                            video_path = Path(f"/app/output/videos/{reel_id}_video.mp4")
+                            if not video_path.exists():
+                                video_path = Path(f"/app/output/videos/{reel_id}.mp4")
                         
                         if thumbnail_path_str:
                             thumbnail_path = Path(thumbnail_path_str)
+                            if not thumbnail_path.is_absolute():
+                                thumbnail_path = Path("/app") / thumbnail_path.as_posix().lstrip('/')
                         else:
-                            # Try both .png and .jpg
-                            thumbnail_path = Path(f"output/thumbnails/{reel_id}.png")
+                            # Try with _thumbnail suffix first, then without
+                            thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}_thumbnail.png")
                             if not thumbnail_path.exists():
-                                thumbnail_path = Path(f"output/thumbnails/{reel_id}.jpg")
+                                thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.png")
+                            if not thumbnail_path.exists():
+                                thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.jpg")
                         
-                        print(f"      🎬 Video: {video_path}")
-                        print(f"      🖼️  Thumbnail: {thumbnail_path}")
+                        print(f"      🎬 Video: {video_path} (exists: {video_path.exists()})")
+                        print(f"      🖼️  Thumbnail: {thumbnail_path} (exists: {thumbnail_path.exists()})")
                         
                         if not video_path.exists():
                             raise FileNotFoundError(f"Video not found: {video_path}")
