@@ -26,6 +26,7 @@ interface AutoScheduleRequest {
   user_id?: string
   video_path?: string
   thumbnail_path?: string
+  scheduled_time?: string  // Optional custom schedule time (ISO string)
 }
 
 interface ScheduledResponse {

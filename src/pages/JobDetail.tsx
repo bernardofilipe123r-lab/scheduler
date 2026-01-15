@@ -12,7 +12,8 @@ import {
   Loader2,
   AlertCircle,
   Check,
-  Clock
+  Clock,
+  CalendarClock
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -48,10 +49,14 @@ export function JobDetailPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [editTitleModalOpen, setEditTitleModalOpen] = useState(false)
   const [editedTitle, setEditedTitle] = useState('')
+  const [customScheduleModalOpen, setCustomScheduleModalOpen] = useState(false)
+  const [customScheduleDate, setCustomScheduleDate] = useState('')
+  const [customScheduleTime, setCustomScheduleTime] = useState('')
   
   // Loading states
   const [schedulingBrand, setSchedulingBrand] = useState<BrandName | null>(null)
   const [schedulingAll, setSchedulingAll] = useState(false)
+  const [schedulingCustom, setSchedulingCustom] = useState(false)
   
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
   
@@ -206,6 +211,88 @@ export function JobDetailPage() {
     }
   }
   
+  const openCustomScheduleModal = () => {
+    // Set default to tomorrow at 10:00
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    setCustomScheduleDate(tomorrow.toISOString().split('T')[0])
+    setCustomScheduleTime('10:00')
+    setCustomScheduleModalOpen(true)
+  }
+  
+  const handleCustomScheduleAll = async () => {
+    if (!job || !customScheduleDate || !customScheduleTime) {
+      toast.error('Please select a date and time')
+      return
+    }
+    
+    const completedBrands = Object.entries(job.brand_outputs || {})
+      .filter(([_, output]) => output.status === 'completed')
+      .map(([brand]) => brand as BrandName)
+    
+    if (completedBrands.length === 0) {
+      toast.error('No completed brands to schedule')
+      return
+    }
+    
+    setSchedulingCustom(true)
+    let scheduled = 0
+    let failed = 0
+    
+    // Parse base datetime
+    const baseDateTime = new Date(`${customScheduleDate}T${customScheduleTime}`)
+    
+    for (let i = 0; i < completedBrands.length; i++) {
+      const brand = completedBrands[i]
+      const output = job.brand_outputs[brand]
+      if (output?.reel_id) {
+        try {
+          const caption = output.caption || `${job.title}\n\nGenerated content for ${brand}`
+          
+          // Stagger brands by 1 hour each
+          const scheduledTime = new Date(baseDateTime)
+          scheduledTime.setHours(scheduledTime.getHours() + i)
+          
+          await autoSchedule.mutateAsync({
+            brand,
+            reel_id: output.reel_id,
+            variant: job.variant,
+            caption: caption,
+            video_path: output.video_path,
+            thumbnail_path: output.thumbnail_path,
+            scheduled_time: scheduledTime.toISOString(),
+          })
+          await updateBrandStatus.mutateAsync({
+            id,
+            brand,
+            status: 'scheduled',
+          })
+          scheduled++
+        } catch (error) {
+          console.error(`Failed to schedule ${brand}:`, error)
+          failed++
+        }
+      }
+    }
+    
+    setSchedulingCustom(false)
+    setCustomScheduleModalOpen(false)
+    
+    if (scheduled > 0) {
+      const message = failed > 0 
+        ? `✅ ${scheduled} brand${scheduled !== 1 ? 's' : ''} scheduled for ${customScheduleDate}! ${failed} failed.`
+        : `🎉 All ${scheduled} brand${scheduled !== 1 ? 's' : ''} scheduled for ${customScheduleDate}!`
+      
+      toast.success(message, { duration: 4000 })
+      
+      setTimeout(() => {
+        navigate('/scheduled')
+      }, 1500)
+    } else if (failed > 0) {
+      toast.error('Failed to schedule brands')
+    }
+  }
+  
   const handleDownload = (_brand: BrandName, output: BrandOutput) => {
     if (output.video_path) {
       const link = document.createElement('a')
@@ -315,21 +402,35 @@ export function JobDetailPage() {
                 </span>
               </div>
             </div>
-            <button
-              onClick={handleScheduleAll}
-              disabled={schedulingAll || isGenerating || allScheduled}
-              className="btn btn-primary"
-              title={allScheduled ? "All brands already scheduled" : ""}
-            >
-              {schedulingAll ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : allScheduled ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Calendar className="w-4 h-4" />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleScheduleAll}
+                disabled={schedulingAll || schedulingCustom || isGenerating || allScheduled}
+                className="btn btn-primary"
+                title={allScheduled ? "All brands already scheduled" : "Schedule to next available slots"}
+              >
+                {schedulingAll ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : allScheduled ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Calendar className="w-4 h-4" />
+                )}
+                {allScheduled ? 'All Scheduled' : 'Schedule All'}
+              </button>
+              
+              {!allScheduled && (
+                <button
+                  onClick={openCustomScheduleModal}
+                  disabled={schedulingAll || schedulingCustom || isGenerating}
+                  className="btn btn-secondary"
+                  title="Pick a custom date and time"
+                >
+                  <CalendarClock className="w-4 h-4" />
+                  Custom
+                </button>
               )}
-              {allScheduled ? 'All Scheduled' : 'Schedule All'}
-            </button>
+            </div>
           </div>
         </div>
       )}
@@ -599,6 +700,91 @@ export function JobDetailPage() {
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 'Save & Regenerate'
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      
+      {/* Custom Schedule Modal */}
+      <Modal
+        isOpen={customScheduleModalOpen}
+        onClose={() => setCustomScheduleModalOpen(false)}
+        title="Custom Schedule"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Choose a date and time to schedule all {completedCount} brand{completedCount !== 1 ? 's' : ''}.
+            Brands will be staggered by 1 hour each.
+          </p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date
+              </label>
+              <input
+                type="date"
+                value={customScheduleDate}
+                onChange={(e) => setCustomScheduleDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Start Time
+              </label>
+              <input
+                type="time"
+                value={customScheduleTime}
+                onChange={(e) => setCustomScheduleTime(e.target.value)}
+                className="input"
+              />
+            </div>
+          </div>
+          
+          {customScheduleDate && customScheduleTime && completedCount > 0 && (
+            <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
+              <p className="font-medium mb-1">Schedule Preview:</p>
+              <ul className="space-y-1">
+                {Object.entries(job?.brand_outputs || {})
+                  .filter(([_, output]) => output.status === 'completed')
+                  .map(([brand], index) => {
+                    const baseTime = new Date(`${customScheduleDate}T${customScheduleTime}`)
+                    baseTime.setHours(baseTime.getHours() + index)
+                    return (
+                      <li key={brand} className="flex items-center gap-2">
+                        <span className="capitalize">{brand.replace('college', ' College')}</span>
+                        <span className="text-gray-400">→</span>
+                        <span>{format(baseTime, 'MMM d, h:mm a')}</span>
+                      </li>
+                    )
+                  })}
+              </ul>
+            </div>
+          )}
+          
+          <div className="flex gap-3">
+            <button
+              onClick={() => setCustomScheduleModalOpen(false)}
+              className="btn btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCustomScheduleAll}
+              disabled={schedulingCustom || !customScheduleDate || !customScheduleTime}
+              className="btn btn-primary flex-1"
+            >
+              {schedulingCustom ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <CalendarClock className="w-4 h-4" />
+                  Schedule All
+                </>
               )}
             </button>
           </div>

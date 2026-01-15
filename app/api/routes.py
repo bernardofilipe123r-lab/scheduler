@@ -648,6 +648,7 @@ class AutoScheduleRequest(BaseModel):
     user_id: str = "default"
     video_path: Optional[str] = None
     thumbnail_path: Optional[str] = None
+    scheduled_time: Optional[str] = None  # Optional custom ISO datetime string
 
 
 @router.post(
@@ -657,9 +658,12 @@ class AutoScheduleRequest(BaseModel):
 )
 async def schedule_auto(request: AutoScheduleRequest):
     """
-    Auto-schedule a reel to the next available slot using magic scheduling.
+    Auto-schedule a reel for future publication.
     
-    MAGIC SCHEDULING RULES:
+    If scheduled_time is provided, uses that exact time.
+    Otherwise, uses magic scheduling to find next available slot.
+    
+    MAGIC SCHEDULING RULES (when no custom time):
     - Each brand has 6 daily slots (every 4 hours), alternating Light → Dark
     - Brands are staggered by 1 hour:
       - Gym College: 12AM(L), 4AM(D), 8AM(L), 12PM(D), 4PM(L), 8PM(D)
@@ -674,15 +678,26 @@ async def schedule_auto(request: AutoScheduleRequest):
     print(f"📋 Reel ID: {request.reel_id}")
     print(f"🏷️  Brand: {request.brand}")
     print(f"🎨 Variant: {request.variant}")
+    if request.scheduled_time:
+        print(f"📅 Custom time: {request.scheduled_time}")
     
     try:
-        # Get next available slot
-        next_slot = scheduler_service.get_next_available_slot(
-            brand=request.brand,
-            variant=request.variant
-        )
-        
-        print(f"📅 Next available slot: {next_slot.isoformat()}")
+        # Determine scheduled time
+        if request.scheduled_time:
+            # Use custom time provided by user
+            from datetime import datetime
+            next_slot = datetime.fromisoformat(request.scheduled_time.replace('Z', '+00:00'))
+            # Remove timezone info if present to match scheduler expectations
+            if next_slot.tzinfo is not None:
+                next_slot = next_slot.replace(tzinfo=None)
+            print(f"📅 Using custom time: {next_slot.isoformat()}")
+        else:
+            # Get next available slot using magic scheduling
+            next_slot = scheduler_service.get_next_available_slot(
+                brand=request.brand,
+                variant=request.variant
+            )
+            print(f"📅 Next available slot: {next_slot.isoformat()}")
         
         # Get file paths
         base_dir = Path(__file__).resolve().parent.parent.parent
