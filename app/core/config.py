@@ -97,9 +97,9 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         thumbnail_text_color=(192, 86, 159),  # #c0569f
         content_title_color=(255, 255, 255),  # White text
         content_highlight_color=(192, 86, 159, 255),  # #c0569f
-        instagram_business_account_id=os.getenv("VITALITYCOLLEGE_INSTAGRAM_ID"),
+        instagram_business_account_id=os.getenv("VITALITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("VITALITYCOLLEGE_FACEBOOK_PAGE_ID"),
-        meta_access_token=os.getenv("VITALITYCOLLEGE_META_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
+        meta_access_token=os.getenv("VITALITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
     ),
     BrandType.LONGEVITY_COLLEGE: BrandConfig(
         name="LONGEVITY_COLLEGE",
@@ -113,9 +113,9 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         thumbnail_text_color=(190, 127, 9),  # #be7f09
         content_title_color=(255, 255, 255),  # White text
         content_highlight_color=(190, 127, 9, 255),  # #be7f09
-        instagram_business_account_id=os.getenv("LONGEVITYCOLLEGE_INSTAGRAM_ID"),
+        instagram_business_account_id=os.getenv("LONGEVITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("LONGEVITYCOLLEGE_FACEBOOK_PAGE_ID"),
-        meta_access_token=os.getenv("LONGEVITYCOLLEGE_META_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
+        meta_access_token=os.getenv("LONGEVITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
     ),
 }
 
