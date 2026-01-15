@@ -121,19 +121,51 @@ class DatabaseSchedulerService:
         """
         with get_db_session() as db:
             now = datetime.now(timezone.utc)
+            now_naive = datetime.now()  # Local time, no timezone
+            
+            print(f"\n🔍 get_pending_publications() check at:")
+            print(f"   UTC now: {now}")
+            print(f"   Local now (naive): {now_naive}")
+            
+            # First, let's see ALL scheduled posts for debugging
+            all_scheduled = db.query(ScheduledReel).filter(
+                ScheduledReel.status == "scheduled"
+            ).all()
+            
+            print(f"   📋 Total scheduled posts: {len(all_scheduled)}")
+            for sched in all_scheduled:
+                scheduled_time = sched.scheduled_time
+                # Check if scheduled time is timezone aware
+                is_aware = scheduled_time.tzinfo is not None and scheduled_time.tzinfo.utcoffset(scheduled_time) is not None
+                
+                print(f"      - {sched.schedule_id}: scheduled_time={scheduled_time} (aware={is_aware})")
+                print(f"        Reel ID: {sched.reel_id}")
+                
+                # Compare with both UTC and naive times
+                if is_aware:
+                    is_due_utc = scheduled_time <= now
+                    print(f"        Due (vs UTC): {is_due_utc}")
+                else:
+                    is_due_naive = scheduled_time <= now_naive
+                    is_due_utc = scheduled_time <= now.replace(tzinfo=None)
+                    print(f"        Due (vs local naive): {is_due_naive}")
+                    print(f"        Due (vs UTC naive): {is_due_utc}")
             
             # Use FOR UPDATE to lock rows and prevent race conditions
-            # This ensures only one scheduler instance can pick up each post
+            # Compare with NAIVE local time since stored times may not have TZ
             pending = db.query(ScheduledReel).filter(
                 and_(
                     ScheduledReel.status == "scheduled",
-                    ScheduledReel.scheduled_time <= now
+                    ScheduledReel.scheduled_time <= now_naive  # Use local naive time
                 )
             ).with_for_update(skip_locked=True).all()
+            
+            print(f"   ✅ Found {len(pending)} pending post(s) to publish")
             
             # IMMEDIATELY mark all as "publishing" to prevent duplicate picks
             result = []
             for reel in pending:
+                print(f"      → Marking {reel.schedule_id} as 'publishing'")
                 reel.status = "publishing"
                 result.append(reel.to_dict())
             

@@ -157,6 +157,9 @@ async def startup_event():
     def check_and_publish():
         """Check for due posts and publish them."""
         try:
+            from datetime import datetime
+            print(f"\n⏰ Auto-publish check running at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (local time)")
+            
             # Get service instance
             scheduler_service = DatabaseSchedulerService()
             
@@ -164,7 +167,7 @@ async def startup_event():
             pending = scheduler_service.get_pending_publications()
             
             if pending:
-                print(f"\n📅 Found {len(pending)} post(s) ready to publish at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"\n📅 Found {len(pending)} post(s) ready to publish")
                 
                 for schedule in pending:
                     schedule_id = schedule['schedule_id']
