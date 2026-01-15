@@ -350,7 +350,8 @@ class DatabaseSchedulerService:
         caption: str = "CHANGE ME",
         platforms: list[str] = ["instagram"],
         user_id: Optional[str] = None,
-        brand_config: Optional['BrandConfig'] = None
+        brand_config: Optional['BrandConfig'] = None,
+        brand_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Publish a reel immediately using user's credentials or brand credentials.
@@ -362,18 +363,52 @@ class DatabaseSchedulerService:
             platforms: List of platforms
             user_id: User ID to use credentials from
             brand_config: Brand configuration with specific credentials
+            brand_name: Brand name string (e.g., 'gymcollege', 'healthycollege')
             
         Returns:
             Publishing results
         """
         from app.services.social_publisher import SocialPublisher
+        from app.core.config import BrandType, BRAND_CONFIGS
         
-        # Priority: brand_config > user_id > default
+        # Priority: brand_config > brand_name > user_id > default
         publisher = None
         
         if brand_config:
             # Use brand-specific credentials
+            print(f"🏷️ Using provided brand_config: {brand_config.name}")
             publisher = SocialPublisher(brand_config=brand_config)
+        elif brand_name:
+            # Look up brand config by name
+            brand_name_normalized = brand_name.lower().replace(' ', '_').replace('-', '_')
+            print(f"🏷️ Looking up brand config for: {brand_name} (normalized: {brand_name_normalized})")
+            
+            # Map common names to BrandType
+            brand_mapping = {
+                'gymcollege': BrandType.THE_GYM_COLLEGE,
+                'gym_college': BrandType.THE_GYM_COLLEGE,
+                'the_gym_college': BrandType.THE_GYM_COLLEGE,
+                'thegymcollege': BrandType.THE_GYM_COLLEGE,
+                'healthycollege': BrandType.HEALTHY_COLLEGE,
+                'healthy_college': BrandType.HEALTHY_COLLEGE,
+                'thehealthycollege': BrandType.HEALTHY_COLLEGE,
+                'vitalitycollege': BrandType.VITALITY_COLLEGE,
+                'vitality_college': BrandType.VITALITY_COLLEGE,
+                'thevitalitycollege': BrandType.VITALITY_COLLEGE,
+                'longevitycollege': BrandType.LONGEVITY_COLLEGE,
+                'longevity_college': BrandType.LONGEVITY_COLLEGE,
+                'thelongevitycollege': BrandType.LONGEVITY_COLLEGE,
+            }
+            
+            brand_type = brand_mapping.get(brand_name_normalized)
+            if brand_type and brand_type in BRAND_CONFIGS:
+                resolved_config = BRAND_CONFIGS[brand_type]
+                print(f"   ✅ Found brand config: {resolved_config.name}")
+                print(f"   📸 Instagram Account ID: {resolved_config.instagram_business_account_id}")
+                print(f"   📘 Facebook Page ID: {resolved_config.facebook_page_id}")
+                publisher = SocialPublisher(brand_config=resolved_config)
+            else:
+                print(f"   ⚠️ Brand '{brand_name}' not found in config, using defaults")
         elif user_id:
             # Get user credentials if user_id provided
             with get_db_session() as db:
@@ -666,8 +701,10 @@ class DatabaseSchedulerService:
                 schedule_variant = metadata.get("variant", "light")
                 
                 brand_match = (
-                    (brand.lower() == "gymcollege" and schedule_brand in ["gymcollege", "the_gym_college", ""]) or
-                    (brand.lower() == "healthycollege" and schedule_brand in ["healthycollege", "wellness_life"])
+                    (brand.lower() == "gymcollege" and schedule_brand in ["gymcollege", "the_gym_college", "thegymcollege", ""]) or
+                    (brand.lower() == "healthycollege" and schedule_brand in ["healthycollege", "healthy_college", "thehealthycollege"]) or
+                    (brand.lower() == "vitalitycollege" and schedule_brand in ["vitalitycollege", "vitality_college", "thevitalitycollege"]) or
+                    (brand.lower() == "longevitycollege" and schedule_brand in ["longevitycollege", "longevity_college", "thelongevitycollege"])
                 )
                 
                 if brand_match and schedule_variant == variant:

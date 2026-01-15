@@ -216,17 +216,25 @@ def get_brand_config_from_name(brand_name: str) -> Optional[BrandConfig]:
     """
     brand_mapping = {
         "gymcollege": BrandType.THE_GYM_COLLEGE,
-        "healthycollege": BrandType.WELLNESS_LIFE,
+        "healthycollege": BrandType.HEALTHY_COLLEGE,
         "vitalitycollege": BrandType.VITALITY_COLLEGE,
         "longevitycollege": BrandType.LONGEVITY_COLLEGE,
         "the_gym_college": BrandType.THE_GYM_COLLEGE,
-        "wellness_life": BrandType.WELLNESS_LIFE,
+        "healthy_college": BrandType.HEALTHY_COLLEGE,
         "vitality_college": BrandType.VITALITY_COLLEGE,
         "longevity_college": BrandType.LONGEVITY_COLLEGE,
+        "thegymcollege": BrandType.THE_GYM_COLLEGE,
+        "thehealthycollege": BrandType.HEALTHY_COLLEGE,
+        "thevitalitycollege": BrandType.VITALITY_COLLEGE,
+        "thelongevitycollege": BrandType.LONGEVITY_COLLEGE,
     }
     brand_type = brand_mapping.get(brand_name.lower())
     if brand_type:
-        return BRAND_CONFIGS.get(brand_type)
+        config = BRAND_CONFIGS.get(brand_type)
+        if config:
+            print(f"🏷️ Brand config found for '{brand_name}': {config.name}, IG: {config.instagram_business_account_id}, FB: {config.facebook_page_id}")
+        return config
+    print(f"⚠️ No brand config found for '{brand_name}'")
     return None
 
 
@@ -438,13 +446,17 @@ async def generate_reel(request: SimpleReelRequest):
         brand_mapping = {
             "the_gym_college": BrandType.THE_GYM_COLLEGE,
             "gymcollege": BrandType.THE_GYM_COLLEGE,
-            "healthycollege": BrandType.WELLNESS_LIFE,
+            "thegymcollege": BrandType.THE_GYM_COLLEGE,
+            "healthycollege": BrandType.HEALTHY_COLLEGE,
+            "healthy_college": BrandType.HEALTHY_COLLEGE,
+            "thehealthycollege": BrandType.HEALTHY_COLLEGE,
             "vitalitycollege": BrandType.VITALITY_COLLEGE,
-            "longevitycollege": BrandType.LONGEVITY_COLLEGE,
-            "fitness_pro": BrandType.FITNESS_PRO,
-            "wellness_life": BrandType.WELLNESS_LIFE,
             "vitality_college": BrandType.VITALITY_COLLEGE,
+            "thevitalitycollege": BrandType.VITALITY_COLLEGE,
+            "longevitycollege": BrandType.LONGEVITY_COLLEGE,
             "longevity_college": BrandType.LONGEVITY_COLLEGE,
+            "thelongevitycollege": BrandType.LONGEVITY_COLLEGE,
+            "fitness_pro": BrandType.FITNESS_PRO,
         }
         brand = brand_mapping.get(request.brand.lower(), BrandType.THE_GYM_COLLEGE)
         

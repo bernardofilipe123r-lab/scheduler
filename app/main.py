@@ -218,12 +218,14 @@ async def startup_event():
                         if not thumbnail_path.exists():
                             raise FileNotFoundError(f"Thumbnail not found: {thumbnail_path}")
                         
-                        # Publish now
+                        # Publish now - CRITICAL: pass brand name for correct credentials!
+                        print(f"      🏷️ Publishing with brand: {brand}")
                         result = scheduler_service.publish_now(
                             video_path=video_path,
                             thumbnail_path=thumbnail_path,
                             caption=caption,
-                            platforms=platforms
+                            platforms=platforms,
+                            brand_name=brand  # Pass brand name to use correct credentials
                         )
                         
                         print(f"      📊 Publish result: {result}")
