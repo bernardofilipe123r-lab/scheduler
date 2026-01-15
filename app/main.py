@@ -243,11 +243,24 @@ async def startup_event():
                         
                         print(f"      📊 Publish result: {result}")
                         
+                        # Check for credential errors first
+                        if result.get('credential_error'):
+                            error_msg = f"Credential error for brand {result.get('brand', brand)}: Missing Instagram/Facebook IDs"
+                            scheduler_service.mark_as_failed(schedule_id, error_msg)
+                            print(f"   ❌ {error_msg}")
+                            continue
+                        
                         # Check if publishing actually succeeded
                         failed_platforms = []
                         success_platforms = []
                         
                         for platform, platform_result in result.items():
+                            # Skip non-platform keys
+                            if platform in ('credential_error', 'brand'):
+                                continue
+                            # Skip if not a dict (safety check)
+                            if not isinstance(platform_result, dict):
+                                continue
                             if platform_result.get('success'):
                                 success_platforms.append(platform)
                                 print(f"      ✅ {platform}: {platform_result.get('post_id', 'Published')}")

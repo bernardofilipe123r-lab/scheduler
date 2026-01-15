@@ -54,3 +54,5 @@ test_*.png
 node_modules/
 dist/
 .vite/
+
+ed25519_key
