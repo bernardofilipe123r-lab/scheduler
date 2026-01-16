@@ -22,14 +22,15 @@ class AIBackgroundGenerator:
         self.api_key = api_key
         self.base_url = "https://api.deapi.ai/api/v1/client"
     
-    def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None) -> Image.Image:
+    def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None) -> Image.Image:
         """
         Generate an AI background image based on brand.
         
         Args:
-            brand_name: Brand name ("gymcollege" or "healthycollege")
+            brand_name: Brand name ("gymcollege", "healthycollege", "vitalitycollege", "longevitycollege")
             user_prompt: Custom prompt from user (optional)
             progress_callback: Callback function for progress updates (optional)
+            content_context: Title or content lines to derive visual elements from (optional)
             
         Returns:
             PIL Image object with AI-generated background
@@ -39,27 +40,49 @@ class AIBackgroundGenerator:
         if progress_callback:
             progress_callback("Preparing AI prompt...", 10)
         
-        # If user provides custom prompt, adapt it with brand color tones
-        if user_prompt:
-            color_adaptations = {
-                "gymcollege": " Overall color palette MUST be dominated by dark navy blue tones specifically #00435c (dark navy blue), absolutely NO green tones, use only deep midnight blues, dark navy blues, and steel blue hues with moody dark atmospheric lighting.",
-                "healthycollege": " Overall color palette dominated by dark green tones specifically #004f00, deep forest greens, and rich emerald green hues with moody atmospheric lighting.",
-                "vitalitycollege": " Overall color palette MUST be dominated by vivid turquoise tones specifically #028f7a, bright teals, cyan, and aqua hues with vibrant atmospheric lighting. ",
-                "longevitycollege": " Overall color palette MUST be dominated by light blue and cyan tones specifically #00c9ff (light blue), sky blues, bright cyan tones, and luminous blue hues with clear atmospheric lighting. "
+        # Brand color palettes - ONLY the color changes, everything else stays identical
+        color_palettes = {
+            "gymcollege": {
+                "name": "Dark Blue",
+                "primary": "#00435c",
+                "description": "dark navy blue, midnight blue, deep steel blue, and ocean blue tones"
+            },
+            "healthycollege": {
+                "name": "Dark Green", 
+                "primary": "#004f00",
+                "description": "dark forest green, deep emerald green, rich hunter green, and moss green tones"
+            },
+            "vitalitycollege": {
+                "name": "Vivid Turquoise",
+                "primary": "#028f7a", 
+                "description": "vivid turquoise, bright teal, vibrant cyan, and aquamarine tones"
+            },
+            "longevitycollege": {
+                "name": "Vivid Azure",
+                "primary": "#00c9ff",
+                "description": "vivid azure, bright sky blue, luminous cyan, and electric blue tones"
             }
-            prompt = user_prompt + color_adaptations.get(brand_name, color_adaptations["gymcollege"])
+        }
+        
+        palette = color_palettes.get(brand_name, color_palettes["gymcollege"])
+        
+        # BASE STYLE - IDENTICAL FOR ALL BRANDS (only color and content change)
+        base_style = """Highly stylized, hyper-detailed still-life composition. Dense, full-frame layout with absolutely NO empty or negative space. Objects must interlock, overlap, and fill the frame completely edge-to-edge. Semi-flat or slightly top-down perspective with controlled depth. Balanced but abundant composition - never sparse, never chaotic. NO centered subject, NO isolated focal object, NO plain or gradient backgrounds. Studio-crafted, digitally enhanced look - NOT candid, NOT natural photography. Polished surfaces, crisp edges, enhanced textures throughout. Ultra-sharp focus across the entire frame. Soft, even studio lighting with minimal harsh shadows. Subtle atmospheric depth with light bloom, fine particles, reflections, and surface detail. Every single pixel must contain intentional visual information."""
+        
+        # Build content-derived subject matter
+        if content_context:
+            subject_matter = f"Visual elements directly derived from this content: '{content_context}'. All objects, forms, structures, and motifs must clearly relate to this theme."
         else:
-            # Default prompts - FULL FRAME UTILIZATION, NO CENTERED SUBJECTS, NO DARK BACKGROUNDS
-            prompts = {
-                "gymcollege": "Create a highly stylized, hyper-detailed still-life image with a dense, full-frame composition. The image should follow a consistent visual vibe: – Maximal coverage with no empty or negative space – Carefully arranged objects that visually interlock and overlap – A semi-flat or slightly top-down perspective with controlled depth – Balanced but abundant composition, not chaotic The scene should feel studio-crafted and digitally enhanced rather than candid, with polished surfaces, crisp edges, and enhanced textures. Use a harmonized, high-saturation color palette dominated by one primary hue family, with secondary accents for contrast. Colors should be vivid, clean, and unified across the entire frame. Lighting should be soft and even, with gentle highlights, minimal harsh shadows, and subtle atmospheric depth (such as light bloom, fine particles, reflections, or surface detail). The specific objects, materials, and forms shown in the image must be entirely determined by the concept or title provided separately, but they should always be arranged to fully occupy the frame and conform to this same visual language.",
-                
-                "healthycollege": "An ultra-detailed, edge-to-edge composition completely filling the vertical 9:16 frame with NO empty space or dark backgrounds. The scene shows an extreme close-up macro view of vibrant superfood textures, fresh produce cross-sections, and digestive cellular structures arranged in diagonal, asymmetric layers from corner to corner. NO centered subject - elements flow dynamically across the entire frame creating natural depth and movement. Foreground features sharp, tactile organic textures with dark green (#004f00) and deep forest green tones, middle ground shows glowing nutrient molecules and antioxidant particles, background has layered vitamin structures creating depth. Rich, saturated color palette dominated by dark green #004f00 with vivid warm red, orange, and yellow produce accents for contrast. Professional studio lighting with soft global illumination ensuring every corner is visible and detailed. Scientific, natural mood showing the body's wellness processes. NO centered compositions, NO dark empty backgrounds - every pixel utilized with intentional visual information.",
-                
-                "vitalitycollege": "An ultra-detailed, edge-to-edge composition completely filling the vertical 9:16 frame with NO empty space or dark backgrounds. The scene shows an extreme close-up macro view of cellular rejuvenation structures, energy spirals, and vitality streams arranged in diagonal, asymmetric layers from corner to corner. NO centered subject - elements flow dynamically across the entire frame creating natural depth and movement. Foreground features sharp, tactile organic structures with vivid turquoise (#028f7a), bright teal, and cyan tones, middle ground shows glowing energy particles and dynamic vitality elements, background has layered cellular patterns creating depth. Rich, saturated color palette dominated by vivid turquoise #028f7a with warm golden and coral energy accents for contrast. Professional studio lighting with soft global illumination ensuring every corner is visible and detailed. Dynamic, invigorating mood showing vitality and life force. Absolutely NO pink or rose tones, NO centered compositions, NO dark empty backgrounds - every pixel utilized with intentional visual information.",
-                
-                "longevitycollege": "An ultra-detailed, edge-to-edge composition completely filling the vertical 9:16 frame with NO empty space or dark backgrounds. The scene shows an extreme close-up macro view of mitochondria, DNA helixes, and telomere structures arranged in diagonal, asymmetric layers from corner to corner. NO centered subject - elements flow dynamically across the entire frame creating natural depth and movement. Foreground features sharp, tactile cellular details with light blue (#00c9ff), sky blue, and bright cyan tones, middle ground shows glowing ATP molecules and cellular energy particles, background has layered molecular structures creating depth. Rich, saturated color palette dominated by light blue #00c9ff with subtle silver and white accents for clarity. Professional studio lighting with soft global illumination ensuring every corner is visible and detailed. Scientific, calm mood showing longevity and cellular optimization. Absolutely NO warm tones, NO centered compositions, NO dark empty backgrounds - every pixel utilized with intentional visual information."
-            }
-            prompt = prompts.get(brand_name, prompts["gymcollege"])
+            # Fallback generic health/wellness subjects if no content provided
+            subject_matter = "Visual elements depicting health, wellness, fitness, and vitality concepts. Objects representing nutrition, exercise, cellular biology, and healthy lifestyle."
+        
+        # Build the final prompt
+        if user_prompt:
+            # User provided custom prompt - adapt with brand colors
+            prompt = f"{user_prompt} {base_style} COLOR PALETTE (MANDATORY): The entire image must be dominated by {palette['description']}. Primary color: {palette['primary']} ({palette['name']}). Use only subtle secondary accents. No cross-brand color leakage."
+        else:
+            # Standard prompt with content-derived subjects and brand colors
+            prompt = f"{subject_matter} {base_style} COLOR PALETTE (MANDATORY): The entire image must be dominated by {palette['description']}. Primary color: {palette['primary']} ({palette['name']}). Use only subtle secondary accents for contrast. No other color families allowed."
         
         # Add unique identifier to ensure different images each time
         unique_id = str(uuid.uuid4())[:8]

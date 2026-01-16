@@ -47,15 +47,16 @@ from app.utils.text_formatting import (
 class ImageGenerator:
     """Service for generating reel images and thumbnails."""
     
-    def __init__(self, brand_type: BrandType, variant: str = "light", brand_name: str = "gymcollege", ai_prompt: str = None):
+    def __init__(self, brand_type: BrandType, variant: str = "light", brand_name: str = "gymcollege", ai_prompt: str = None, content_context: str = None):
         """
         Initialize the image generator.
         
         Args:
             brand_type: The brand type to use for styling
             variant: Variant type ("light" or "dark")
-            brand_name: Brand name ("gymcollege", "healthycollege", or "vitalitycollege")
+            brand_name: Brand name ("gymcollege", "healthycollege", "vitalitycollege", or "longevitycollege")
             ai_prompt: Custom AI prompt for dark mode backgrounds (optional)
+            content_context: Title/content for AI background generation (optional)
         """
         import sys
         print(f"🎨 ImageGenerator.__init__() called", flush=True)
@@ -68,6 +69,7 @@ class ImageGenerator:
         self.variant = variant
         self.brand_name = brand_name
         self.ai_prompt = ai_prompt
+        self.content_context = content_context
         self._ai_background = None  # Cache AI background for dark mode reuse
         
         print(f"   Loading brand colors...", flush=True)
@@ -75,16 +77,54 @@ class ImageGenerator:
         self.brand_colors = get_brand_colors(brand_name, variant)
         print(f"   ✓ Brand colors loaded: {type(self.brand_colors).__name__}", flush=True)
         
-        # Pre-generate AI background for dark mode (one image for both thumbnail and content)
-        if variant == "dark":
-            print(f"   🌙 Dark mode - generating AI background...", flush=True)
-            sys.stdout.flush()
-            ai_generator = AIBackgroundGenerator()
-            self._ai_background = ai_generator.generate_background(self.brand_name, self.ai_prompt)
-            print(f"   ✓ AI background generated", flush=True)
+        # Note: AI background generation is now deferred until content is available
+        # This happens in _get_or_generate_ai_background()
         
         print(f"   ✓ ImageGenerator initialized successfully", flush=True)
         sys.stdout.flush()
+    
+    def _get_or_generate_ai_background(self, title: str = None, lines: list = None) -> Image.Image:
+        """
+        Get cached AI background or generate one with content context.
+        
+        Args:
+            title: Title text for content-derived visuals
+            lines: Content lines for content-derived visuals
+            
+        Returns:
+            PIL Image with AI-generated background
+        """
+        if self._ai_background is not None:
+            return self._ai_background
+        
+        if self.variant != "dark":
+            return None
+        
+        import sys
+        print(f"   🌙 Dark mode - generating AI background with content context...", flush=True)
+        sys.stdout.flush()
+        
+        # Build content context from title and lines
+        content_context = self.content_context
+        if not content_context:
+            parts = []
+            if title:
+                parts.append(title)
+            if lines:
+                parts.extend(lines[:3])  # Use first 3 content lines
+            content_context = " | ".join(parts) if parts else None
+        
+        print(f"   📝 Content context: {content_context[:100] if content_context else 'None'}...", flush=True)
+        
+        ai_generator = AIBackgroundGenerator()
+        self._ai_background = ai_generator.generate_background(
+            self.brand_name, 
+            self.ai_prompt,
+            content_context=content_context
+        )
+        print(f"   ✓ AI background generated", flush=True)
+        
+        return self._ai_background
     
     def generate_thumbnail(
         self,
@@ -121,9 +161,10 @@ class ImageGenerator:
             image = Image.open(template_path)
             print(f"      ✓ Template loaded", flush=True)
         else:
-            # Dark mode: use cached AI background with overlay
+            # Dark mode: use AI background with content context
             print(f"      🌙 Using AI background for dark mode", flush=True)
-            image = self._ai_background.copy()
+            ai_bg = self._get_or_generate_ai_background(title=title)
+            image = ai_bg.copy()
             
             # Apply 55% dark overlay for thumbnail (darker for better white text visibility)
             overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.55)))
@@ -207,8 +248,9 @@ class ImageGenerator:
             template_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "light mode" / "content_template.png"
             image = Image.open(template_path)
         else:
-            # Dark mode: use cached AI background with overlay
-            image = self._ai_background.copy()
+            # Dark mode: use AI background with content context
+            ai_bg = self._get_or_generate_ai_background(title=title, lines=lines)
+            image = ai_bg.copy()
             
             # Apply 80% dark overlay for content
             overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.85)))
