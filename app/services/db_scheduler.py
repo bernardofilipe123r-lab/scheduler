@@ -349,6 +349,7 @@ class DatabaseSchedulerService:
     def retry_failed(self, schedule_id: str) -> bool:
         """
         Reset a failed or partial post to 'scheduled' status for retry.
+        For partial failures, only retry the failed platforms.
         
         Args:
             schedule_id: ID of the failed/partial schedule
@@ -366,6 +367,38 @@ class DatabaseSchedulerService:
             
             if scheduled_reel.status not in ["failed", "publishing", "partial"]:
                 return False
+            
+            # For partial failures, determine which platforms to retry
+            metadata = scheduled_reel.extra_data or {}
+            publish_results = metadata.get('publish_results', {})
+            
+            if scheduled_reel.status == "partial" and publish_results:
+                # Only retry platforms that failed
+                failed_platforms = []
+                succeeded_platforms = []
+                
+                for platform, result in publish_results.items():
+                    if isinstance(result, dict):
+                        if result.get('success'):
+                            succeeded_platforms.append(platform)
+                        else:
+                            failed_platforms.append(platform)
+                
+                if failed_platforms:
+                    # Store which platforms to retry (only the failed ones)
+                    metadata['retry_platforms'] = failed_platforms
+                    # Keep track of which platforms already succeeded (don't retry these)
+                    metadata['succeeded_platforms'] = succeeded_platforms
+                    scheduled_reel.extra_data = metadata
+                    print(f"🔄 Partial retry: Will retry {failed_platforms}, skip {succeeded_platforms}")
+                else:
+                    # All platforms succeeded? This shouldn't happen for partial status
+                    print(f"⚠️ Partial status but no failed platforms found")
+            else:
+                # Full retry - clear any previous retry info
+                metadata.pop('retry_platforms', None)
+                metadata.pop('succeeded_platforms', None)
+                scheduled_reel.extra_data = metadata
             
             # Reset to scheduled
             scheduled_reel.status = "scheduled"

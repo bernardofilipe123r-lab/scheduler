@@ -193,11 +193,17 @@ async def startup_event():
                     schedule_id = schedule['schedule_id']
                     reel_id = schedule['reel_id']
                     caption = schedule.get('caption', 'CHANGE ME')
-                    platforms = schedule.get('metadata', {}).get('platforms', ['instagram'])
+                    metadata = schedule.get('metadata', {})
                     
-                    print(f"   📤 Publishing {reel_id} to {', '.join(platforms)}...")
+                    # Check for retry_platforms (partial retry) or use original platforms
+                    retry_platforms = metadata.get('retry_platforms')
+                    succeeded_platforms = metadata.get('succeeded_platforms', [])
                     
-                    try:
+                    if retry_platforms:
+                        platforms = retry_platforms
+                        print(f"   🔄 PARTIAL RETRY: Only retrying {platforms} (skipping already successful: {succeeded_platforms})")
+                    else:
+                        platforms = metadata.get('platforms', ['instagram'])
                         # Get paths from metadata or use defaults
                         metadata = schedule.get('metadata', {})
                         video_path_str = metadata.get('video_path')
@@ -280,6 +286,15 @@ async def startup_event():
                         if success_platforms:
                             # Collect detailed publish results for storage
                             publish_results = {}
+                            
+                            # Include previously succeeded platforms from partial retry
+                            prev_publish_results = metadata.get('publish_results', {})
+                            for platform in succeeded_platforms:
+                                if platform in prev_publish_results:
+                                    publish_results[platform] = prev_publish_results[platform]
+                                    print(f"      ✅ {platform}: (previously succeeded)")
+                            
+                            # Add newly succeeded platforms
                             for platform in success_platforms:
                                 platform_data = result[platform]
                                 publish_results[platform] = {
@@ -296,6 +311,12 @@ async def startup_event():
                                         "success": False,
                                         "error": result[platform].get('error', 'Unknown error')
                                     }
+                            
+                            # Clear retry tracking since we're updating results
+                            if 'retry_platforms' in metadata:
+                                del metadata['retry_platforms']
+                            if 'succeeded_platforms' in metadata:
+                                del metadata['succeeded_platforms']
                             
                             scheduler_service.mark_as_published(schedule_id, publish_results=publish_results)
                             print(f"   ✅ Successfully published {reel_id} to {', '.join(success_platforms)}")
