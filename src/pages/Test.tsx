@@ -128,7 +128,7 @@ export function TestPage() {
     testBrand.mutate({ brand, variant })
   }
 
-  const brands: BrandName[] = ['gymcollege', 'healthycollege', 'vitalitycollege', 'longevitycollege']
+  const brands: BrandName[] = ['healthycollege', 'vitalitycollege', 'longevitycollege']
   const variants: ('light' | 'dark')[] = ['light', 'dark']
 
   return (
