@@ -411,6 +411,76 @@ class DatabaseSchedulerService:
             print(f"🔄 Reset post {schedule_id} for retry")
             return True
     
+    def reschedule(self, schedule_id: str, new_time: datetime) -> bool:
+        """
+        Reschedule a post to a new date/time.
+        
+        Args:
+            schedule_id: ID of the scheduled post
+            new_time: New datetime to schedule for
+            
+        Returns:
+            True if rescheduled successfully, False if not found
+        """
+        with get_db_session() as db:
+            scheduled_reel = db.query(ScheduledReel).filter(
+                ScheduledReel.schedule_id == schedule_id
+            ).first()
+            
+            if not scheduled_reel:
+                return False
+            
+            # Only allow rescheduling if not already published
+            if scheduled_reel.status == "published":
+                print(f"⚠️ Cannot reschedule published post {schedule_id}")
+                return False
+            
+            # Update the scheduled time
+            scheduled_reel.scheduled_time = new_time
+            # Reset to scheduled status if it was failed
+            if scheduled_reel.status in ["failed", "partial"]:
+                scheduled_reel.status = "scheduled"
+                scheduled_reel.publish_error = None
+            
+            db.commit()
+            print(f"📅 Rescheduled post {schedule_id} to {new_time.isoformat()}")
+            return True
+    
+    def publish_scheduled_now(self, schedule_id: str) -> bool:
+        """
+        Set a scheduled post to publish immediately.
+        Updates scheduled_time to now so the auto-publisher picks it up.
+        
+        Args:
+            schedule_id: ID of the scheduled post
+            
+        Returns:
+            True if updated successfully, False if not found
+        """
+        with get_db_session() as db:
+            scheduled_reel = db.query(ScheduledReel).filter(
+                ScheduledReel.schedule_id == schedule_id
+            ).first()
+            
+            if not scheduled_reel:
+                return False
+            
+            # Only allow if not already published
+            if scheduled_reel.status == "published":
+                print(f"⚠️ Post {schedule_id} already published")
+                return False
+            
+            # Set scheduled time to now (will be picked up on next check)
+            scheduled_reel.scheduled_time = datetime.now(timezone.utc)
+            # Reset to scheduled status if it was failed
+            if scheduled_reel.status in ["failed", "partial"]:
+                scheduled_reel.status = "scheduled"
+                scheduled_reel.publish_error = None
+            
+            db.commit()
+            print(f"🚀 Post {schedule_id} queued for immediate publishing")
+            return True
+    
     def publish_now(
         self,
         video_path: Path,

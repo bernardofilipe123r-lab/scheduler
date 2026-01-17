@@ -979,6 +979,84 @@ async def retry_failed_post(schedule_id: str):
         )
 
 
+class RescheduleRequest(BaseModel):
+    scheduled_time: str  # ISO datetime string
+
+
+@router.patch("/scheduled/{schedule_id}/reschedule")
+async def reschedule_post(schedule_id: str, request: RescheduleRequest):
+    """
+    Reschedule a scheduled post to a new date/time.
+    
+    Args:
+        schedule_id: ID of the scheduled post
+        request: New scheduled time as ISO datetime string
+    """
+    try:
+        from datetime import datetime
+        
+        # Parse the new scheduled time
+        new_time = datetime.fromisoformat(request.scheduled_time.replace('Z', '+00:00'))
+        
+        success = scheduler_service.reschedule(schedule_id, new_time)
+        
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Scheduled post {schedule_id} not found"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Post rescheduled to {new_time.isoformat()}",
+            "scheduled_time": new_time.isoformat()
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid datetime format: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reschedule post: {str(e)}"
+        )
+
+
+@router.post("/scheduled/{schedule_id}/publish-now")
+async def publish_scheduled_now(schedule_id: str):
+    """
+    Immediately publish a scheduled post (bypass the scheduled time).
+    
+    This sets the scheduled_time to now so it gets picked up immediately
+    by the auto-publisher on its next check.
+    """
+    try:
+        from datetime import datetime, timezone
+        
+        success = scheduler_service.publish_scheduled_now(schedule_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Scheduled post {schedule_id} not found"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Post {schedule_id} queued for immediate publishing"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to publish post: {str(e)}"
+        )
+
+
 class PublishRequest(BaseModel):
     reel_id: str
     caption: str = "CHANGE ME"

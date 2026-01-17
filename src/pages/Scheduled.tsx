@@ -11,7 +11,9 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  Send
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
@@ -30,7 +32,7 @@ import {
   subWeeks,
   parseISO
 } from 'date-fns'
-import { useScheduledPosts, useDeleteScheduled, useRetryFailed } from '@/features/scheduling'
+import { useScheduledPosts, useDeleteScheduled, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, ALL_BRANDS } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
 import type { ScheduledPost } from '@/shared/types'
@@ -40,12 +42,17 @@ export function ScheduledPage() {
   const { data: posts = [], isLoading } = useScheduledPosts()
   const deleteScheduled = useDeleteScheduled()
   const retryFailed = useRetryFailed()
+  const reschedule = useReschedule()
+  const publishNow = usePublishNow()
   
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
   
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false)
+  const [rescheduleDate, setRescheduleDate] = useState('')
+  const [rescheduleTime, setRescheduleTime] = useState('')
   
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate)
@@ -114,6 +121,41 @@ export function ScheduledPage() {
       setSelectedPost(null)
     } catch {
       toast.error('Failed to retry')
+    }
+  }
+  
+  const handlePublishNow = async (post: ScheduledPost) => {
+    try {
+      await publishNow.mutateAsync(post.id)
+      toast.success('Post queued for immediate publishing')
+      setSelectedPost(null)
+    } catch {
+      toast.error('Failed to queue for publishing')
+    }
+  }
+  
+  const openRescheduleModal = (post: ScheduledPost) => {
+    // Pre-fill with current scheduled time
+    const currentTime = parseISO(post.scheduled_time)
+    setRescheduleDate(format(currentTime, 'yyyy-MM-dd'))
+    setRescheduleTime(format(currentTime, 'HH:mm'))
+    setShowRescheduleModal(true)
+  }
+  
+  const handleReschedule = async () => {
+    if (!selectedPost || !rescheduleDate || !rescheduleTime) return
+    
+    try {
+      const newDateTime = new Date(`${rescheduleDate}T${rescheduleTime}`)
+      await reschedule.mutateAsync({
+        id: selectedPost.id,
+        scheduledTime: newDateTime.toISOString()
+      })
+      toast.success(`Post rescheduled to ${format(newDateTime, 'MMM d, yyyy h:mm a')}`)
+      setShowRescheduleModal(false)
+      setSelectedPost(null)
+    } catch {
+      toast.error('Failed to reschedule')
     }
   }
   
@@ -497,7 +539,55 @@ export function ScheduledPage() {
               </div>
             )}
             
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
+            {/* Action buttons for scheduled/failed posts */}
+            {selectedPost.status !== 'published' && (
+              <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-100">
+                {/* Reschedule button - only for scheduled or failed posts */}
+                {(selectedPost.status === 'scheduled' || selectedPost.status === 'failed' || selectedPost.status === 'partial') && (
+                  <button
+                    onClick={() => openRescheduleModal(selectedPost)}
+                    className="btn btn-secondary flex-1"
+                  >
+                    <Clock className="w-4 h-4" />
+                    Reschedule
+                  </button>
+                )}
+                
+                {/* Publish Now button - only for scheduled posts */}
+                {selectedPost.status === 'scheduled' && (
+                  <button
+                    onClick={() => handlePublishNow(selectedPost)}
+                    disabled={publishNow.isPending}
+                    className="btn btn-primary flex-1"
+                  >
+                    {publishNow.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    Publish Now
+                  </button>
+                )}
+                
+                {/* Retry button - for failed/partial/publishing */}
+                {(selectedPost.status === 'failed' || selectedPost.status === 'partial' || selectedPost.status === 'publishing') && (
+                  <button
+                    onClick={() => handleRetry(selectedPost)}
+                    disabled={retryFailed.isPending}
+                    className="btn btn-primary flex-1"
+                  >
+                    {retryFailed.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    Retry
+                  </button>
+                )}
+              </div>
+            )}
+            
+            <div className="flex gap-3 pt-2">
               <button
                 onClick={() => {
                   const jobId = selectedPost.job_id?.includes('_') 
@@ -511,21 +601,6 @@ export function ScheduledPage() {
                 <ExternalLink className="w-4 h-4" />
                 View Job
               </button>
-              
-              {(selectedPost.status === 'failed' || selectedPost.status === 'partial' || selectedPost.status === 'publishing') && (
-                <button
-                  onClick={() => handleRetry(selectedPost)}
-                  disabled={retryFailed.isPending}
-                  className="btn btn-primary"
-                >
-                  {retryFailed.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  Retry
-                </button>
-              )}
               
               <button
                 onClick={() => handleDelete(selectedPost)}
@@ -542,6 +617,61 @@ export function ScheduledPage() {
             </div>
           </div>
         )}
+      </Modal>
+      
+      {/* Reschedule Modal */}
+      <Modal
+        isOpen={showRescheduleModal}
+        onClose={() => setShowRescheduleModal(false)}
+        title="Reschedule Post"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date
+            </label>
+            <input
+              type="date"
+              value={rescheduleDate}
+              onChange={(e) => setRescheduleDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Time
+            </label>
+            <input
+              type="time"
+              value={rescheduleTime}
+              onChange={(e) => setRescheduleTime(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={() => setShowRescheduleModal(false)}
+              className="btn btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleReschedule}
+              disabled={reschedule.isPending || !rescheduleDate || !rescheduleTime}
+              className="btn btn-primary flex-1"
+            >
+              {reschedule.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Clock className="w-4 h-4" />
+              )}
+              Reschedule
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

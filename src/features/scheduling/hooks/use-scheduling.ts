@@ -78,6 +78,29 @@ export function useRetryFailed() {
   })
 }
 
+export function useReschedule() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: ({ id, scheduledTime }: { id: string; scheduledTime: string }) =>
+      schedulingApi.reschedule(id, scheduledTime),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
+    },
+  })
+}
+
+export function usePublishNow() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: schedulingApi.publishNow,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
+    },
+  })
+}
+
 export function useNextSlots() {
   return useQuery({
     queryKey: schedulingKeys.nextSlots(),

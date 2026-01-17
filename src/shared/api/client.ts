@@ -59,3 +59,14 @@ export async function del<T>(endpoint: string): Promise<T> {
   })
   return handleResponse<T>(response)
 }
+
+export async function patch<T>(endpoint: string, data?: unknown): Promise<T> {
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: data ? JSON.stringify(data) : undefined,
+  })
+  return handleResponse<T>(response)
+}

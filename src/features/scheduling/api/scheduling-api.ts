@@ -1,4 +1,4 @@
-import { get, post, del } from '@/shared/api'
+import { get, post, del, patch } from '@/shared/api'
 import type { BrandName, ScheduledPost, NextSlot } from '@/shared/types'
 
 interface GenerateViralRequest {
@@ -98,6 +98,12 @@ export const schedulingApi = {
   
   retryFailed: (id: string) =>
     post<{ success: boolean }>(`/reels/scheduled/${id}/retry`),
+  
+  reschedule: (id: string, scheduledTime: string) =>
+    patch<{ success: boolean; scheduled_time: string }>(`/reels/scheduled/${id}/reschedule`, { scheduled_time: scheduledTime }),
+  
+  publishNow: (id: string) =>
+    post<{ success: boolean }>(`/reels/scheduled/${id}/publish-now`),
   
   getNextSlots: () =>
     get<Record<BrandName, NextSlot>>('/reels/next-slots'),
