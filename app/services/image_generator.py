@@ -207,7 +207,7 @@ class ImageGenerator:
             brand_font = load_font(FONT_BOLD, 15)  # 15px font size
             brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
             brand_x = (self.width - brand_width) // 2
-            brand_y = title_y + 10  # 10px below the title
+            brand_y = title_y + 254  # 10px below the title
             draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
         
         # Save thumbnail
