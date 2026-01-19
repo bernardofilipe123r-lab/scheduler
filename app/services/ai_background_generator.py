@@ -87,20 +87,13 @@ class AIBackgroundGenerator:
                 # Check for rate limit
                 if response.status_code == 429:
                     if attempt < MAX_RETRIES:
-                        # Get retry-after header if available
-                        retry_after = response.headers.get('Retry-After')
-                        if retry_after:
-                            try:
-                                wait_time = int(retry_after)
-                            except ValueError:
-                                wait_time = retry_delay
-                        else:
-                            wait_time = retry_delay
+                        # Use exponential backoff, ignore Retry-After header (often unreliable)
+                        wait_time = retry_delay
                         
                         print(f"⚠️  Rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/{MAX_RETRIES}...")
                         time.sleep(wait_time)
                         
-                        # Exponential backoff for next attempt
+                        # Exponential backoff for next attempt (5s -> 10s -> 20s -> 40s -> 60s max)
                         retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
                         continue
                     else:
