@@ -1,6 +1,7 @@
 """
 AI background generation service using deAPI.
 Uses a global FIFO queue to ensure only one DEAPI request runs at a time.
+Includes retry logic with exponential backoff for 429 rate limit errors.
 """
 import os
 import uuid
@@ -17,6 +18,11 @@ from app.core.constants import REEL_WIDTH, REEL_HEIGHT
 _deapi_lock = threading.Lock()
 _deapi_queue_position = 0
 _deapi_current_position = 0
+
+# Retry configuration for 429 errors
+MAX_RETRIES = 5
+INITIAL_RETRY_DELAY = 5  # seconds
+MAX_RETRY_DELAY = 60  # seconds
 
 
 class AIBackgroundGenerator:
@@ -53,6 +59,68 @@ class AIBackgroundGenerator:
         with _deapi_lock:
             _deapi_current_position += 1
     
+    def _request_with_retry(self, method: str, url: str, headers: dict, **kwargs) -> requests.Response:
+        """
+        Make an HTTP request with retry logic for 429 errors.
+        
+        Args:
+            method: HTTP method ('get' or 'post')
+            url: Request URL
+            headers: Request headers
+            **kwargs: Additional arguments for requests
+            
+        Returns:
+            Response object
+            
+        Raises:
+            RuntimeError: If all retries exhausted
+        """
+        retry_delay = INITIAL_RETRY_DELAY
+        
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                if method.lower() == 'get':
+                    response = requests.get(url, headers=headers, **kwargs)
+                else:
+                    response = requests.post(url, headers=headers, **kwargs)
+                
+                # Check for rate limit
+                if response.status_code == 429:
+                    if attempt < MAX_RETRIES:
+                        # Get retry-after header if available
+                        retry_after = response.headers.get('Retry-After')
+                        if retry_after:
+                            try:
+                                wait_time = int(retry_after)
+                            except ValueError:
+                                wait_time = retry_delay
+                        else:
+                            wait_time = retry_delay
+                        
+                        print(f"⚠️  Rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/{MAX_RETRIES}...")
+                        time.sleep(wait_time)
+                        
+                        # Exponential backoff for next attempt
+                        retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                        continue
+                    else:
+                        raise RuntimeError(f"Rate limited after {MAX_RETRIES} retries. DEAPI is overloaded. Try again later.")
+                
+                # For other errors, raise immediately
+                response.raise_for_status()
+                return response
+                
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 429:
+                    if attempt < MAX_RETRIES:
+                        print(f"⚠️  Rate limited (429). Waiting {retry_delay}s before retry {attempt + 1}/{MAX_RETRIES}...")
+                        time.sleep(retry_delay)
+                        retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                        continue
+                raise
+        
+        raise RuntimeError(f"Request failed after {MAX_RETRIES} retries")
+
     def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None) -> Image.Image:
         """
         Generate an AI background image based on brand.
@@ -179,7 +247,9 @@ class AIBackgroundGenerator:
             print(f"   Seed: {payload['seed']}")
             print(f"🌐 Sending POST request to {self.base_url}/txt2img...")
             
-            response = requests.post(
+            # Use retry wrapper for initial request
+            response = self._request_with_retry(
+                'post',
                 f"{self.base_url}/txt2img",
                 headers=headers,
                 json=payload,
@@ -187,7 +257,6 @@ class AIBackgroundGenerator:
             )
             
             print(f"📡 Response status code: {response.status_code}")
-            response.raise_for_status()
             result = response.json()
             
             # Extract request_id from response (can be at root or nested in 'data')
@@ -212,12 +281,13 @@ class AIBackgroundGenerator:
                 time.sleep(2)  # Wait 2 seconds between polls
                 attempt += 1
                 
-                status_response = requests.get(
+                # Use retry wrapper for status polling (also subject to 429)
+                status_response = self._request_with_retry(
+                    'get',
                     f"{self.base_url}/request-status/{request_id}",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     timeout=30
                 )
-                status_response.raise_for_status()
                 status_result = status_response.json()
                 
                 # Extract data from response (deAPI nests everything in 'data')
