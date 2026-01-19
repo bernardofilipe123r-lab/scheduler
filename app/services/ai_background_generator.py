@@ -122,11 +122,13 @@ class AIBackgroundGenerator:
                     
                     if rate_limit_type == 'daily' or daily_remaining == '0':
                         hours_until_reset = int(retry_after) / 3600 if retry_after.isdigit() else 12
-                        raise RuntimeError(
+                        error_msg = (
                             f"DEAPI daily limit reached (200 requests/day on free tier). "
                             f"Resets in ~{hours_until_reset:.1f} hours. "
                             f"To remove daily caps, make any payment on deapi.ai to upgrade to Premium."
                         )
+                        print(f"❌ DAILY LIMIT HIT: {error_msg}", flush=True)
+                        raise RuntimeError(error_msg)
                     
                     if attempt < MAX_RETRIES:
                         # Use exponential backoff, ignore Retry-After header (often unreliable)

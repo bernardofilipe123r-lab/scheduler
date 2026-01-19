@@ -348,6 +348,39 @@ export function JobDetailPage() {
             <p className="text-gray-500 text-sm mt-2">
               Created {format(new Date(job.created_at), 'MMMM d, yyyy h:mm a')}
             </p>
+            
+            {/* Content Lines - always show for reference */}
+            {job.content_lines && job.content_lines.length > 0 && (
+              <div className="mt-3 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                <p className="font-medium text-gray-700 mb-1">Content:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {job.content_lines.map((line, idx) => (
+                    <li key={idx}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {/* AI Prompt - show if dark mode */}
+            {job.variant === 'dark' && job.ai_prompt && (
+              <div className="mt-2 text-sm text-gray-600 bg-purple-50 rounded-lg p-3">
+                <p className="font-medium text-purple-700 mb-1">AI Background Prompt:</p>
+                <p className="text-purple-600 italic">{job.ai_prompt}</p>
+              </div>
+            )}
+            
+            {/* Job-level error message */}
+            {job.error_message && (
+              <div className="mt-3 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-red-700">Error:</p>
+                    <p className="text-red-600">{job.error_message}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         
