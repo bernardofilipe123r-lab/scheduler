@@ -1,6 +1,9 @@
 """
 AI-powered viral content generator using DeepSeek API.
 Generates complete viral posts (title, content, and image prompts) from scratch.
+
+Uses viral_ideas.py database of 59 proven viral posts as pattern templates.
+AI learns patterns and creates variations/remixes, never exact copies.
 """
 import os
 import json
@@ -8,6 +11,15 @@ import random
 import requests
 from typing import Dict, List, Optional
 from datetime import datetime
+
+# Import viral ideas database
+from app.core.viral_ideas import (
+    get_random_ideas,
+    get_ideas_by_tag,
+    get_all_tags,
+    get_idea_count,
+    VIRAL_IDEAS
+)
 
 
 class ContentGenerator:
@@ -177,7 +189,12 @@ class ContentGenerator:
     ]
     
     def _build_master_prompt(self, topic_hint: Optional[str] = None) -> str:
-        """Build the comprehensive master prompt for content generation."""
+        """
+        Build the comprehensive master prompt for content generation.
+        
+        Uses viral_ideas.py database of 59 proven viral posts as pattern templates.
+        AI learns patterns and creates variations/remixes, never exact copies.
+        """
         
         # Select random topic if not specified
         if topic_hint:
@@ -188,102 +205,70 @@ class ContentGenerator:
         # Select random format style
         format_style = random.choice(self.FORMAT_STYLES)
         
+        # Get 5-7 random viral examples from our database
+        example_count = random.randint(5, 7)
+        viral_examples = get_random_ideas(example_count)
+        
+        # Build examples section from viral ideas database
+        examples_text = self._format_viral_examples(viral_examples)
+        
         prompt = f"""You are an elite viral social media content creator specializing in health, fitness, wellness, body science, psychology, and motivational topics. Your content consistently achieves 1M+ views on Instagram and TikTok.
 
 ## YOUR MISSION
-Create ONE completely original, scroll-stopping post about: {topic}
+Create ONE scroll-stopping post inspired by proven viral patterns.
+Topic focus: {topic}
+
+## HOW TO USE THE EXAMPLES BELOW
+You have access to {get_idea_count()} proven viral posts that achieved 1M+ views. Below are {example_count} random examples.
+
+🎯 YOUR APPROACH (CRITICAL - READ CAREFULLY):
+1. **LEARN THE PATTERN** - Study the title structure, content format, emotional hooks, and what makes each example engaging
+2. **CREATE VARIATIONS** - You can take a viral title like "JUST EAT THIS FOR 1 WEEK" and create "EAT THIS FOR 3 DAYS" or "TRY THIS FOR 5 DAYS"
+3. **REMIX CONTENT** - Rearrange, modify, or combine elements from different examples
+4. **ADD ORIGINALITY** - Sometimes create completely new content based on the patterns you learned
+5. **NEVER COPY EXACTLY** - The output must be different from any example, but can be inspired by them
+
+📊 VARIATION SPECTRUM:
+- 40% of the time: Create close variations (same structure, different specifics)
+- 40% of the time: Remix/combine multiple examples into something new  
+- 20% of the time: Fully creative using learned patterns
 
 ## FORMAT STYLE TO USE: {format_style['name']}
 - Description: {format_style['description']}
-- Example point: "{format_style['example']}"
+- Example format: "{format_style['example']}"
 - Point length: {format_style['point_length']}
 
-## STRICT REQUIREMENTS
+## PROVEN VIRAL EXAMPLES (STUDY THESE PATTERNS):
 
-### TITLE RULES:
-- ALL CAPS
-- 3-8 words maximum
-- Must create curiosity, urgency, or shock
-- Use patterns like:
-  * "[NUMBER] THINGS YOUR BODY..." 
-  * "[TOPIC] SECRETS DOCTORS DON'T SHARE"
-  * "STOP DOING THIS IF YOU..."
-  * "YOUR [BODY PART] IS TELLING YOU..."
-  * "WHY [COMMON THING] IS DESTROYING..."
-  * "[FOOD/HABIT] THAT WORKS LIKE [MEDICINE]"
+{examples_text}
+
+## STRICT RULES
+
+### TITLE PATTERNS TO LEARN FROM:
+- "[NUMBER] SIGNS YOUR BODY..." → Can become "X WARNINGS YOUR BODY..."
+- "JUST EAT THIS FOR 1 WEEK" → Can become "EAT THIS FOR 3 DAYS" or "TRY THIS FOR 5 DAYS"
+- "DOCTORS DON'T WANT YOU TO KNOW" → Can become "PHARMACIES HIDE THIS" or "EXPERTS WON'T TELL YOU"
+- "THESE [PEOPLE] AGE FASTER" → Can vary the demographic or outcome
+- ALL CAPS, 3-8 words, creates curiosity/urgency/shock
 
 ### CONTENT RULES:
-- EXACTLY 7 points (no more, no less)
+- 5-10 points (match the examples' density)
 - DO NOT include numbers (1., 2., etc.) - numbers are added automatically by our system
 - Each point must be: concrete, specific, believable but slightly surprising
 - Mix: 60% validating (things they suspect), 40% shocking (new revelation)
-- DO NOT include any CTA (Call-To-Action) - it will be added automatically by the system
-- DO NOT include anything like "follow this page" or "save this post"
+- DO NOT include any CTA (Call-To-Action) - it will be added automatically
+- NO "follow this page" or "save this post"
 - NO medical disclaimers within points
 - NO generic advice - be SPECIFIC
 
-### QUALITY CHECKLIST:
-✅ Title creates immediate curiosity
-✅ Points alternate between familiar and surprising
-✅ Each point is dense with value
-✅ Information feels insider/exclusive
-✅ NO CTA included (system adds it automatically)
-"""
-        
-        # Add history context to avoid repetition
-        history_context = self._get_history_context()
-        if history_context:
-            prompt += f"""
-
-## IMPORTANT - AVOID REPETITION:
-{history_context}
-
-Create something FRESH and DIFFERENT from the above!
-"""
-        
-        prompt += """
-
-## VIRAL CONTENT EXAMPLES (1M+ VIEWS):
-
-EXAMPLE 1 - SHORT FRAGMENT STYLE:
-Title: PHARMACIES DON'T WANT YOU TO KNOW THIS
-Ibuprofen — Causes gut pain without addiction
-Benadryl — Brain fog; Shrinks brain's receptors
-Aspirin — Stomach ulcers
-Tylenol — Misfires; Feeds your liver toxins
-Advil — Gut bloating
-Aleve — Damages your Vagus Nerve
-Diphenhydramine — Confusion, fatigue, anxiety
-
-EXAMPLE 2 - FULL SENTENCE STYLE:
-Title: EARLY HEART WARNING SIGNS MOST PEOPLE OVERLOOK
-Shortness of breath during mild activity can signal early heart strain.
-Unusual fatigue that feels excessive for your activity level is a common warning.
-Chest discomfort or pressure during emotional stress may reflect heart overload.
-Dizziness when standing up quickly can indicate reduced circulation.
-Swelling in the feet or ankles may result from fluid buildup.
-Frequent indigestion that doesn't improve can be heart-related.
-Irregular heartbeat or fluttering sensations should not be ignored.
-
-EXAMPLE 3 - CAUSE-EFFECT STYLE:
-Title: EAT THIS FOR 7 DAYS AND FEEL THE DIFFERENCE
-Half an avocado each morning — Supports hormones and skin hydration.
-Soaked flaxseeds daily — Improves digestion and bowel regularity.
-Warm lemon water on waking — Reduces bloating and supports the liver.
-A serving of blueberries — Boosts memory and brain focus.
-Ginger tea in the evening — Calms digestion and supports sleep.
-Plain yogurt daily — Supports gut balance.
-Handful of nuts mid-afternoon — Steady energy levels.
-
 ## IMAGE PROMPT REQUIREMENTS
 
-After creating the content, generate a cinematic image prompt with:
+Generate a cinematic image prompt with:
 - Full-frame composition with minimal empty space
 - Dominant focal subject related to the topic
 - Blue/teal color palette with controlled warm accents
 - Studio-quality cinematic lighting
 - Scientific/premium wellness aesthetic
-- Element placement: top center, middle, bottom center
 - MUST end with: "No text, no letters, no numbers, no symbols, no logos."
 
 ## YOUR OUTPUT FORMAT (EXACTLY):
@@ -304,11 +289,48 @@ After creating the content, generate a cinematic image prompt with:
     "format_style": "{format_style['name']}",
     "topic_category": "{topic}"
 }}
-```
+```"""
+        
+        # Add history context to avoid repetition
+        history_context = self._get_history_context()
+        if history_context:
+            prompt += f"""
+
+## IMPORTANT - AVOID RECENT CONTENT:
+{history_context}
+
+Create something DIFFERENT from the above recently generated content!
+"""
+        
+        prompt += """
 
 Generate the content now. Output ONLY the JSON, nothing else."""
 
         return prompt
+    
+    def _format_viral_examples(self, examples: List[Dict]) -> str:
+        """Format viral examples for the prompt."""
+        formatted = []
+        for i, example in enumerate(examples, 1):
+            title = example.get("title", "")
+            lines = example.get("content_lines", [])
+            format_style = example.get("format_style", "")
+            tags = ", ".join(example.get("tags", []))
+            
+            # Limit to first 7 lines to keep prompt manageable
+            display_lines = lines[:7]
+            content = "\n".join(f"• {line}" for line in display_lines)
+            if len(lines) > 7:
+                content += f"\n• ... ({len(lines) - 7} more points)"
+            
+            formatted.append(f"""### EXAMPLE {i} [{format_style}]
+**Title:** {title}
+**Tags:** {tags}
+**Content:**
+{content}
+""")
+        
+        return "\n".join(formatted)
     
     def generate_viral_content(self, topic_hint: Optional[str] = None) -> Dict:
         """
