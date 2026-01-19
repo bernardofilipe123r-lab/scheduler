@@ -22,6 +22,8 @@ export interface BrandOutput {
   caption?: string
   scheduled_time?: string
   error?: string
+  progress_message?: string
+  progress_percent?: number
 }
 
 // Job entity

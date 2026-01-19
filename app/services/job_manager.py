@@ -244,8 +244,12 @@ class JobManager:
         if title is not None or content_lines is not None:
             self.update_job_inputs(job_id, title=title, content_lines=content_lines)
         
-        # Update brand status
-        self.update_brand_output(job_id, brand, {"status": "generating"})
+        # Update brand status with initial progress
+        self.update_brand_output(job_id, brand, {
+            "status": "generating",
+            "progress_message": "Starting generation...",
+            "progress_percent": 0
+        })
         
         try:
             # Get output paths
@@ -305,19 +309,41 @@ class JobManager:
             if ai_background_image and job.variant == "dark":
                 print(f"🌙 Injecting cached AI background", flush=True)
                 generator._ai_background = ai_background_image
+            elif job.variant == "dark":
+                # Update progress for AI background generation (can take 30-60s)
+                self.update_brand_output(job_id, brand, {
+                    "status": "generating",
+                    "progress_message": "Generating AI background (this may take ~30s)...",
+                    "progress_percent": 5
+                })
             
             # Generate thumbnail
-            print(f"\n🖼️  Step 1/3: Generating thumbnail...", flush=True)
+            print(f"\n🖼️  Step 1/4: Generating thumbnail...", flush=True)
             sys.stdout.flush()
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Generating thumbnail..." if job.variant == "light" else "Generating thumbnail with AI background...",
+                "progress_percent": 10
+            })
             generator.generate_thumbnail(use_title, thumbnail_path)
             print(f"   ✓ Thumbnail saved: {thumbnail_path}", flush=True)
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Thumbnail complete",
+                "progress_percent": 25
+            })
             
             # Generate reel image
-            print(f"\n🎨 Step 2/3: Generating reel image...", flush=True)
+            print(f"\n🎨 Step 2/4: Generating reel image...", flush=True)
             print(f"   Title: {use_title[:50]}...", flush=True)
             print(f"   Lines: {len(use_lines)} content lines", flush=True)
             print(f"   CTA: {job.cta_type}", flush=True)
             sys.stdout.flush()
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Generating reel image...",
+                "progress_percent": 30
+            })
             generator.generate_reel_image(
                 title=use_title,
                 lines=use_lines,
@@ -325,17 +351,37 @@ class JobManager:
                 cta_type=job.cta_type
             )
             print(f"   ✓ Reel image saved: {reel_path}", flush=True)
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Reel image complete",
+                "progress_percent": 50
+            })
             
             # Generate video
-            print(f"\n🎬 Step 3/3: Generating video...", flush=True)
+            print(f"\n🎬 Step 3/4: Generating video...", flush=True)
             sys.stdout.flush()
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Generating video...",
+                "progress_percent": 55
+            })
             video_gen = VideoGenerator()
             video_gen.generate_reel_video(reel_path, video_path)
             print(f"   ✓ Video saved: {video_path}", flush=True)
             sys.stdout.flush()
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Video complete",
+                "progress_percent": 75
+            })
             
             # Generate caption
             print(f"\n✍️  Step 4/4: Generating caption...", flush=True)
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Generating caption...",
+                "progress_percent": 80
+            })
             from app.services.caption_generator import CaptionGenerator
             caption_gen = CaptionGenerator()
             caption = caption_gen.generate_caption(
@@ -345,6 +391,11 @@ class JobManager:
                 cta_type=job.cta_type or "follow_tips"
             )
             print(f"   ✓ Caption generated ({len(caption)} chars)", flush=True)
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": "Finalizing...",
+                "progress_percent": 95
+            })
             
             # Update brand output - use web-friendly paths with leading slash
             self.update_brand_output(job_id, brand, {

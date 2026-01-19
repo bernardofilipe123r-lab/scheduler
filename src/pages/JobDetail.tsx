@@ -471,7 +471,23 @@ export function JobDetailPage() {
                 {isBrandGenerating ? (
                   <div className="flex flex-col items-center justify-center py-12">
                     <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
-                    <p className="text-gray-500">Generating {getBrandLabel(brand)}...</p>
+                    <p className="text-gray-700 font-medium mb-2">
+                      {output.progress_message || `Generating ${getBrandLabel(brand)}...`}
+                    </p>
+                    {typeof output.progress_percent === 'number' && (
+                      <div className="w-full max-w-xs">
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                          <span>Progress</span>
+                          <span>{output.progress_percent}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-orange-500 transition-all duration-500 ease-out"
+                            style={{ width: `${output.progress_percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : isFailed ? (
                   <div className="text-center py-8">
