@@ -204,10 +204,10 @@ class ImageGenerator:
         # Dark mode: Add brand name in white text below the title (like light mode template)
         if self.variant == "dark":
             brand_text = get_brand_display_name(self.brand_name)
-            brand_font = load_font(FONT_BOLD, 20)  # 20px font size
+            brand_font = load_font(FONT_BOLD, 28)  # 28px font size - larger and more visible
             brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
             brand_x = (self.width - brand_width) // 2
-            brand_y = title_y + 254  # 10px below the title
+            brand_y = title_y + 20  # 20px spacing below the title
             draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
         
         # Save thumbnail
