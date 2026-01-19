@@ -115,6 +115,19 @@ class AIBackgroundGenerator:
                     print(f"   ❌ 429 Response body: {response.text[:500]}", flush=True)
                     print(f"   ❌ 429 Response headers: {dict(response.headers)}", flush=True)
                     
+                    # Check if it's a daily limit (not recoverable by retry)
+                    rate_limit_type = response.headers.get('X-RateLimit-Type', '')
+                    daily_remaining = response.headers.get('X-RateLimit-Daily-Remaining', '')
+                    retry_after = response.headers.get('Retry-After', '')
+                    
+                    if rate_limit_type == 'daily' or daily_remaining == '0':
+                        hours_until_reset = int(retry_after) / 3600 if retry_after.isdigit() else 12
+                        raise RuntimeError(
+                            f"DEAPI daily limit reached (200 requests/day on free tier). "
+                            f"Resets in ~{hours_until_reset:.1f} hours. "
+                            f"To remove daily caps, make any payment on deapi.ai to upgrade to Premium."
+                        )
+                    
                     if attempt < MAX_RETRIES:
                         # Use exponential backoff, ignore Retry-After header (often unreliable)
                         wait_time = retry_delay
