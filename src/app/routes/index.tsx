@@ -4,7 +4,6 @@ import { GeneratorPage } from '@/pages/Generator'
 import { HistoryPage } from '@/pages/History'
 import { JobDetailPage } from '@/pages/JobDetail'
 import { ScheduledPage } from '@/pages/Scheduled'
-import { TestPage } from '@/pages/Test'
 
 export function AppRoutes() {
   return (
@@ -14,7 +13,6 @@ export function AppRoutes() {
         <Route path="history" element={<HistoryPage />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />
         <Route path="scheduled" element={<ScheduledPage />} />
-        <Route path="test" element={<TestPage />} />
       </Route>
     </Routes>
   )

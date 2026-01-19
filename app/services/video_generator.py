@@ -52,7 +52,7 @@ class VideoGenerator:
         
         # Random music if not specified
         if music_id is None:
-            music_id = random.choice(["music_1", "music_2"])
+            music_id = random.choice(["music_1", "music_2", "music_3"])
             print(f"🎵 Randomly selected music: {music_id}")
         
         # Get music file path

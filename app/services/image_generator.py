@@ -201,6 +201,15 @@ class ImageGenerator:
             draw.text((x, title_y), line, font=title_font, fill=text_color)
             title_y += line_height + LINE_SPACING
         
+        # Dark mode: Add brand name in white text at bottom (like light mode template)
+        if self.variant == "dark":
+            brand_text = get_brand_display_name(self.brand_name)
+            brand_font = load_font(FONT_BOLD, 15)  # 15px font size
+            brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
+            brand_x = (self.width - brand_width) // 2
+            brand_y = self.height - brand_height - 12  # 12px from bottom
+            draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
+        
         # Save thumbnail
         output_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(output_path)
@@ -272,25 +281,15 @@ class ImageGenerator:
         line_spacing_multiplier = CONTENT_LINE_SPACING
         title_content_padding = TITLE_CONTENT_SPACING
         
-        import random
         import re
         
         # ============================================================
-        # BRAND VARIATION SYSTEM
-        # Each brand gets unique content order and subtle font variations
+        # NUMBERING SYSTEM
+        # Ensures all content lines have proper sequential numbering
+        # Content differentiation is handled by ContentDifferentiator service
         # ============================================================
         
-        # Brand-specific font size adjustments (subtle ±1-2px differences)
-        brand_font_adjustments = {
-            "gymcollege": 0,         # Base size
-            "healthycollege": -1,    # Slightly smaller
-            "vitalitycollege": +1,   # Slightly larger
-            "longevitycollege": -2,  # Even smaller
-        }
-        font_adjustment = brand_font_adjustments.get(self.brand_name, 0)
-        content_font_size = content_font_size + font_adjustment
-        
-        # Step 1: Add numbering to ALL lines (including CTA - CTA MUST have a number)
+        # Add numbering to ALL lines (including CTA - CTA MUST have a number)
         if len(lines) > 1:
             # Remove any existing numbers and add fresh sequential numbers to ALL lines
             numbered_lines = []
@@ -301,34 +300,8 @@ class ImageGenerator:
                 numbered_lines.append(f"{i}. {line_without_number}")
             lines = numbered_lines
         
-        # Step 2: ALL brands shuffle content for variety (CTA stays at the end)
-        # Each brand uses a different random seed based on brand name for deterministic but unique shuffle
-        if len(lines) > 2:  # Only shuffle if we have more than 2 lines (content + CTA)
-            last_line = lines[-1]  # CTA always stays at the end
-            content_lines_to_shuffle = lines[:-1]  # All lines except CTA
-            
-            # Use brand name hash as seed for deterministic shuffle per brand
-            # This ensures same brand always gets same order, but different brands get different orders
-            brand_seed = sum(ord(c) for c in self.brand_name)
-            rng = random.Random(brand_seed)
-            
-            # Shuffle content lines (CTA excluded)
-            shuffled_content = content_lines_to_shuffle.copy()
-            rng.shuffle(shuffled_content)
-            
-            # Renumber after shuffling (all lines have numbers)
-            renumbered_content = []
-            for i, line in enumerate(shuffled_content, 1):
-                line_without_number = re.sub(r'^\d+\.\s*', '', line.strip())
-                renumbered_content.append(f"{i}. {line_without_number}")
-            
-            # CTA gets the last number
-            last_line_without_number = re.sub(r'^\d+\.\s*', '', last_line.strip())
-            renumbered_last = f"{len(renumbered_content) + 1}. {last_line_without_number}"
-            lines = renumbered_content + [renumbered_last]
-        
         # ============================================================
-        # END BRAND VARIATION SYSTEM
+        # END NUMBERING SYSTEM
         # ============================================================
         
         # Convert title to uppercase

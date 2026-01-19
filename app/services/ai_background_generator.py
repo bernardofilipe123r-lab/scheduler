@@ -1,14 +1,22 @@
 """
 AI background generation service using deAPI.
+Uses a global FIFO queue to ensure only one DEAPI request runs at a time.
 """
 import os
 import uuid
 import time
+import threading
 from pathlib import Path
 from io import BytesIO
 import requests
 from PIL import Image
 from app.core.constants import REEL_WIDTH, REEL_HEIGHT
+
+
+# Global lock to ensure only one DEAPI request at a time (FIFO queue)
+_deapi_lock = threading.Lock()
+_deapi_queue_position = 0
+_deapi_current_position = 0
 
 
 class AIBackgroundGenerator:
@@ -21,6 +29,29 @@ class AIBackgroundGenerator:
             raise ValueError("DEAPI_API_KEY not found in environment variables")
         self.api_key = api_key
         self.base_url = "https://api.deapi.ai/api/v1/client"
+    
+    def _acquire_queue_position(self):
+        """Get a position in the FIFO queue and wait for our turn."""
+        global _deapi_queue_position, _deapi_current_position
+        
+        with _deapi_lock:
+            my_position = _deapi_queue_position
+            _deapi_queue_position += 1
+        
+        # Wait for our turn
+        while True:
+            with _deapi_lock:
+                if _deapi_current_position == my_position:
+                    break
+            time.sleep(0.5)  # Poll every 500ms
+        
+        return my_position
+    
+    def _release_queue_position(self):
+        """Release our position and let the next request proceed."""
+        global _deapi_current_position
+        with _deapi_lock:
+            _deapi_current_position += 1
     
     def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None) -> Image.Image:
         """
@@ -102,9 +133,16 @@ class AIBackgroundGenerator:
         print(f"{'='*80}\n")
         
         if progress_callback:
-            progress_callback(f"Calling deAPI (FLUX.1-schnell) for {brand_name}...", 30)
+            progress_callback(f"Waiting in queue for deAPI...", 25)
+        
+        # FIFO Queue: Wait for our turn to call DEAPI
+        queue_pos = self._acquire_queue_position()
+        print(f"🔒 Acquired DEAPI queue position: {queue_pos}")
         
         try:
+            if progress_callback:
+                progress_callback(f"Calling deAPI (FLUX.1-schnell) for {brand_name}...", 30)
+            
             # Generate image using deAPI with FLUX.1-schnell (cheapest model)
             api_start = time.time()
             
@@ -225,6 +263,9 @@ class AIBackgroundGenerator:
                     print(f"✅ Successfully generated {REEL_WIDTH}x{REEL_HEIGHT} background for {brand_name}")
                     print(f"⏱️  Total time: {total_duration:.1f}s (API: {api_duration:.1f}s, Download: {download_duration:.1f}s)")
                     
+                    # Release queue position before returning
+                    self._release_queue_position()
+                    print(f"🔓 Released DEAPI queue position: {queue_pos}")
                     return image
                 
                 elif status == "failed":
@@ -242,8 +283,14 @@ class AIBackgroundGenerator:
             raise RuntimeError(f"Generation timed out after {max_attempts} attempts (~{max_attempts * 2}s). The deAPI server may be overloaded. Try again or use a shorter prompt.")
             
         except requests.exceptions.Timeout as e:
+            self._release_queue_position()
+            print(f"🔓 Released DEAPI queue position: {queue_pos} (timeout error)")
             raise RuntimeError(f"Network timeout connecting to deAPI: {str(e)}. Check your internet connection.")
         except requests.exceptions.RequestException as e:
+            self._release_queue_position()
+            print(f"🔓 Released DEAPI queue position: {queue_pos} (request error)")
             raise RuntimeError(f"Network error with deAPI: {str(e)}")
         except Exception as e:
+            self._release_queue_position()
+            print(f"🔓 Released DEAPI queue position: {queue_pos} (general error)")
             raise RuntimeError(f"Failed to generate AI background: {str(e)}")

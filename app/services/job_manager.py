@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models import GenerationJob
 from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
+from app.services.content_differentiator import ContentDifferentiator
 from app.core.config import BrandType, get_brand_config
 
 
@@ -222,6 +223,22 @@ class JobManager:
         # Use provided values or fall back to job's stored values
         use_title = title if title is not None else job.title
         use_lines = content_lines if content_lines is not None else job.content_lines
+        
+        # Differentiate content for this brand (creates unique variation)
+        # Only differentiate if we have multiple brands and enough content
+        if job.brands and len(job.brands) > 1 and use_lines and len(use_lines) >= 3:
+            print(f"\n🔄 Differentiating content for {brand}...", flush=True)
+            try:
+                differentiator = ContentDifferentiator()
+                use_lines = differentiator.differentiate_content(
+                    brand=brand,
+                    title=use_title,
+                    content_lines=use_lines,
+                    all_brands=job.brands
+                )
+                print(f"   ✓ Content differentiated: {len(use_lines)} lines", flush=True)
+            except Exception as e:
+                print(f"   ⚠️ Differentiation failed, using original: {e}", flush=True)
         
         # Update job if inputs changed
         if title is not None or content_lines is not None:

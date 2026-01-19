@@ -77,7 +77,7 @@ def main():
             video_gen.generate_reel_video(
                 reel_image_path=content_path,
                 output_path=video_path,
-                music_id=None  # Will randomly pick music_1 or music_2
+                music_id=None  # Will randomly pick music_1, music_2, or music_3
             )
             print(f"    ✅ Video: {video_path}")
             
@@ -112,7 +112,7 @@ def main():
             video_gen.generate_reel_video(
                 reel_image_path=content_path,
                 output_path=video_path,
-                music_id=None  # Will randomly pick music_1 or music_2
+                music_id=None  # Will randomly pick music_1, music_2, or music_3
             )
             print(f"    ✅ Video: {video_path}")
             
