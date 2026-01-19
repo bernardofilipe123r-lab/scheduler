@@ -9,6 +9,7 @@ import time
 import threading
 from pathlib import Path
 from io import BytesIO
+from datetime import datetime
 import requests
 from PIL import Image
 from app.core.constants import REEL_WIDTH, REEL_HEIGHT
@@ -18,11 +19,14 @@ from app.core.constants import REEL_WIDTH, REEL_HEIGHT
 _deapi_lock = threading.Lock()
 _deapi_queue_position = 0
 _deapi_current_position = 0
+_deapi_request_count = 0  # Track total requests for debugging
+_deapi_last_request_time = None  # Track timing
 
 # Retry configuration for 429 errors
 MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 5  # seconds
 MAX_RETRY_DELAY = 60  # seconds
+MIN_REQUEST_INTERVAL = 0.5  # Minimum seconds between requests
 
 
 class AIBackgroundGenerator:
@@ -75,17 +79,42 @@ class AIBackgroundGenerator:
         Raises:
             RuntimeError: If all retries exhausted
         """
+        global _deapi_request_count, _deapi_last_request_time
+        
         retry_delay = INITIAL_RETRY_DELAY
         
         for attempt in range(MAX_RETRIES + 1):
             try:
+                # Rate limiting: ensure minimum interval between requests
+                with _deapi_lock:
+                    now = time.time()
+                    if _deapi_last_request_time is not None:
+                        elapsed = now - _deapi_last_request_time
+                        if elapsed < MIN_REQUEST_INTERVAL:
+                            sleep_time = MIN_REQUEST_INTERVAL - elapsed
+                            time.sleep(sleep_time)
+                    
+                    _deapi_request_count += 1
+                    _deapi_last_request_time = time.time()
+                    request_num = _deapi_request_count
+                
+                # Log request details
+                endpoint = url.split("/")[-1] if "/" in url else url
+                print(f"🌐 DEAPI Request #{request_num}: {method.upper()} .../{endpoint}", flush=True)
+                
                 if method.lower() == 'get':
                     response = requests.get(url, headers=headers, **kwargs)
                 else:
                     response = requests.post(url, headers=headers, **kwargs)
                 
+                print(f"   Response: {response.status_code}", flush=True)
+                
                 # Check for rate limit
                 if response.status_code == 429:
+                    # Log the full response for debugging
+                    print(f"   ❌ 429 Response body: {response.text[:500]}", flush=True)
+                    print(f"   ❌ 429 Response headers: {dict(response.headers)}", flush=True)
+                    
                     if attempt < MAX_RETRIES:
                         # Use exponential backoff, ignore Retry-After header (often unreliable)
                         wait_time = retry_delay
