@@ -712,10 +712,11 @@ class DatabaseSchedulerService:
         Each brand posts 6 times daily (every 4 hours), alternating Light → Dark.
         Brands are staggered by 1 hour:
         
-        Gym College:      12AM(L), 4AM(D), 8AM(L), 12PM(D), 4PM(L), 8PM(D)
-        Healthy College:  1AM(L), 5AM(D), 9AM(L), 1PM(D), 5PM(L), 9PM(D)
-        Vitality College: 2AM(L), 6AM(D), 10AM(L), 2PM(D), 6PM(L), 10PM(D)
+        Holistic College:  12AM(L), 4AM(D), 8AM(L), 12PM(D), 4PM(L), 8PM(D)
+        Healthy College:   1AM(L), 5AM(D), 9AM(L), 1PM(D), 5PM(L), 9PM(D)
+        Vitality College:  2AM(L), 6AM(D), 10AM(L), 2PM(D), 6PM(L), 10PM(D)
         Longevity College: 3AM(L), 7AM(D), 11AM(L), 3PM(D), 7PM(L), 11PM(D)
+        Wellbeing College: 4AM(L), 8AM(D), 12PM(L), 4PM(D), 8PM(L), 12AM(D)
         
         Rules:
         1. Start only from January 16, 2026 (everything before is "filled")
@@ -724,7 +725,7 @@ class DatabaseSchedulerService:
         4. Skip slots that are already scheduled
         
         Args:
-            brand: Brand name ("gymcollege", "healthycollege", "vitalitycollege", "longevitycollege")
+            brand: Brand name ("holisticcollege", "healthycollege", "vitalitycollege", "longevitycollege", "wellbeingcollege")
             variant: "light" or "dark"
             reference_date: Optional reference date (defaults to now)
             
@@ -735,14 +736,17 @@ class DatabaseSchedulerService:
         
         # Brand hour offsets (staggered by 1 hour)
         BRAND_OFFSETS = {
-            "gymcollege": 0,
+            "holisticcollege": 0,
             "healthycollege": 1,
             "vitalitycollege": 2,
-            "longevitycollege": 3
+            "longevitycollege": 3,
+            "wellbeingcollege": 4,
+            # Legacy support
+            "gymcollege": 0,
         }
         
         # Base slot pattern (every 4 hours, alternating L/D/L/D/L/D)
-        # For gymcollege at offset 0: 0(L), 4(D), 8(L), 12(D), 16(L), 20(D)
+        # For holisticcollege at offset 0: 0(L), 4(D), 8(L), 12(D), 16(L), 20(D)
         BASE_SLOTS = [
             (0, "light"),   # 12 AM - Light
             (4, "dark"),    # 4 AM - Dark
