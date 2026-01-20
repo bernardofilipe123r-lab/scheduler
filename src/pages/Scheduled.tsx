@@ -53,6 +53,7 @@ export function ScheduledPage() {
   const [showRescheduleModal, setShowRescheduleModal] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleTime, setRescheduleTime] = useState('')
+  const [statsFilter, setStatsFilter] = useState<'future' | 'all'>('future')
   
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate)
@@ -160,15 +161,20 @@ export function ScheduledPage() {
   }
   
   const stats = useMemo(() => {
+    const now = new Date()
+    const filteredPosts = statsFilter === 'future'
+      ? posts.filter(post => parseISO(post.scheduled_time) > now)
+      : posts
+    
     const byBrand: Record<string, number> = {}
-    posts.forEach(post => {
+    filteredPosts.forEach(post => {
       byBrand[post.brand] = (byBrand[post.brand] || 0) + 1
     })
     return {
-      total: posts.length,
+      total: filteredPosts.length,
       byBrand,
     }
-  }, [posts])
+  }, [posts, statsFilter])
   
   if (isLoading) {
     return <FullPageLoader text="Loading scheduled posts..." />
@@ -212,7 +218,34 @@ export function ScheduledPage() {
       </div>
       
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-gray-700">Statistics</span>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+          <button
+            onClick={() => setStatsFilter('future')}
+            className={clsx(
+              'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+              statsFilter === 'future'
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            Upcoming
+          </button>
+          <button
+            onClick={() => setStatsFilter('all')}
+            className={clsx(
+              'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+              statsFilter === 'all'
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            All Time
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-6 gap-4">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
           <p className="text-sm text-gray-500">Total</p>
