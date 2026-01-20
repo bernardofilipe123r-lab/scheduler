@@ -58,7 +58,7 @@ def create_video_from_image(
             "-t", str(duration),  # Limit audio duration
             "-i", str(music_path),  # Input audio
             "-filter_complex",
-            f"[1:a]volume=-12dB,afade=t=out:st={duration - MUSIC_FADE_DURATION}:d={MUSIC_FADE_DURATION}[audio]",
+            f"[1:a]volume=-14dB,afade=t=out:st={duration - MUSIC_FADE_DURATION}:d={MUSIC_FADE_DURATION}[audio]",
             "-map", "0:v",  # Map video from first input
             "-map", "[audio]",  # Map processed audio
         ])
