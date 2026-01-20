@@ -3,7 +3,7 @@
  */
 
 // Brand types
-export type BrandName = 'healthycollege' | 'vitalitycollege' | 'longevitycollege'
+export type BrandName = 'healthycollege' | 'vitalitycollege' | 'longevitycollege' | 'holisticcollege' | 'wellbeingcollege'
 
 // Status types
 export type JobStatus = 'pending' | 'generating' | 'completed' | 'failed' | 'cancelled'

@@ -13,6 +13,8 @@ class BrandType(str, Enum):
     HEALTHY_COLLEGE = "HEALTHY_COLLEGE"
     VITALITY_COLLEGE = "VITALITY_COLLEGE"
     LONGEVITY_COLLEGE = "LONGEVITY_COLLEGE"
+    HOLISTIC_COLLEGE = "HOLISTIC_COLLEGE"
+    WELLBEING_COLLEGE = "WELLBEING_COLLEGE"
 
 
 @dataclass
@@ -99,6 +101,38 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         instagram_business_account_id=os.getenv("LONGEVITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("LONGEVITYCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("LONGEVITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
+    ),
+    BrandType.HOLISTIC_COLLEGE: BrandConfig(
+        name="HOLISTIC_COLLEGE",
+        display_name="Holistic College",
+        primary_color=(255, 245, 240),  # Light coral background
+        secondary_color=(240, 131, 110),  # Coral #f0836e
+        text_color=(240, 131, 110),  # Coral text
+        highlight_color=(240, 131, 110, 255),  # Coral highlight #f0836e
+        logo_filename="holistic_college_logo.png",
+        thumbnail_bg_color=(255, 245, 240),
+        thumbnail_text_color=(241, 155, 138),  # #f19b8a for light mode
+        content_title_color=(255, 255, 255),  # White text
+        content_highlight_color=(240, 131, 110, 255),  # #f0836e
+        instagram_business_account_id=os.getenv("HOLISTICCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
+        facebook_page_id=os.getenv("HOLISTICCOLLEGE_FACEBOOK_PAGE_ID"),
+        meta_access_token=os.getenv("HOLISTICCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
+    ),
+    BrandType.WELLBEING_COLLEGE: BrandConfig(
+        name="WELLBEING_COLLEGE",
+        display_name="Wellbeing College",
+        primary_color=(255, 250, 235),  # Light yellow background
+        secondary_color=(235, 190, 77),  # Yellow #ebbe4d
+        text_color=(235, 190, 77),  # Yellow text
+        highlight_color=(235, 190, 77, 255),  # Yellow highlight #ebbe4d
+        logo_filename="wellbeing_college_logo.png",
+        thumbnail_bg_color=(255, 250, 235),
+        thumbnail_text_color=(255, 205, 83),  # #ffcd53 for light mode
+        content_title_color=(255, 255, 255),  # White text
+        content_highlight_color=(235, 190, 77, 255),  # #ebbe4d
+        instagram_business_account_id=os.getenv("WELLBEINGCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
+        facebook_page_id=os.getenv("WELLBEINGCOLLEGE_FACEBOOK_PAGE_ID"),
+        meta_access_token=os.getenv("WELLBEINGCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
     ),
 }
 

@@ -28,8 +28,10 @@ def get_brand_type(brand_name: str) -> BrandType:
         "healthycollege": BrandType.HEALTHY_COLLEGE,
         "vitalitycollege": BrandType.VITALITY_COLLEGE,
         "longevitycollege": BrandType.LONGEVITY_COLLEGE,
+        "holisticcollege": BrandType.HOLISTIC_COLLEGE,
+        "wellbeingcollege": BrandType.WELLBEING_COLLEGE,
     }
-    return brand_map.get(brand_name, BrandType.THE_GYM_COLLEGE)
+    return brand_map.get(brand_name, BrandType.HEALTHY_COLLEGE)
 
 
 class JobManager:

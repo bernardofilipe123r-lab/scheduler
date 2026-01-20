@@ -30,9 +30,23 @@ export const BRAND_CONFIG: Record<BrandName, BrandConfig> = {
     bgClass: 'bg-[#6a1b9a]',
     textClass: 'text-white',
   },
+  holisticcollege: {
+    id: 'holisticcollege',
+    label: 'Holistic College',
+    color: '#f0836e',
+    bgClass: 'bg-[#f0836e]',
+    textClass: 'text-white',
+  },
+  wellbeingcollege: {
+    id: 'wellbeingcollege',
+    label: 'Wellbeing College',
+    color: '#ebbe4d',
+    bgClass: 'bg-[#ebbe4d]',
+    textClass: 'text-white',
+  },
 }
 
-export const ALL_BRANDS: BrandName[] = ['healthycollege', 'vitalitycollege', 'longevitycollege']
+export const ALL_BRANDS: BrandName[] = ['healthycollege', 'vitalitycollege', 'longevitycollege', 'holisticcollege', 'wellbeingcollege']
 
 export function getBrandLabel(brand: BrandName): string {
   return BRAND_CONFIG[brand]?.label || brand

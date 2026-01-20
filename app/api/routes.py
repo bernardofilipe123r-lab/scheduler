@@ -219,14 +219,20 @@ def get_brand_config_from_name(brand_name: str) -> Optional[BrandConfig]:
         "healthycollege": BrandType.HEALTHY_COLLEGE,
         "vitalitycollege": BrandType.VITALITY_COLLEGE,
         "longevitycollege": BrandType.LONGEVITY_COLLEGE,
+        "holisticcollege": BrandType.HOLISTIC_COLLEGE,
+        "wellbeingcollege": BrandType.WELLBEING_COLLEGE,
         "the_gym_college": BrandType.THE_GYM_COLLEGE,
         "healthy_college": BrandType.HEALTHY_COLLEGE,
         "vitality_college": BrandType.VITALITY_COLLEGE,
         "longevity_college": BrandType.LONGEVITY_COLLEGE,
+        "holistic_college": BrandType.HOLISTIC_COLLEGE,
+        "wellbeing_college": BrandType.WELLBEING_COLLEGE,
         "thegymcollege": BrandType.THE_GYM_COLLEGE,
         "thehealthycollege": BrandType.HEALTHY_COLLEGE,
         "thevitalitycollege": BrandType.VITALITY_COLLEGE,
         "thelongevitycollege": BrandType.LONGEVITY_COLLEGE,
+        "theholisticcollege": BrandType.HOLISTIC_COLLEGE,
+        "thewellbeingcollege": BrandType.WELLBEING_COLLEGE,
     }
     brand_type = brand_mapping.get(brand_name.lower())
     if brand_type:
@@ -456,9 +462,14 @@ async def generate_reel(request: SimpleReelRequest):
             "longevitycollege": BrandType.LONGEVITY_COLLEGE,
             "longevity_college": BrandType.LONGEVITY_COLLEGE,
             "thelongevitycollege": BrandType.LONGEVITY_COLLEGE,
-            "fitness_pro": BrandType.FITNESS_PRO,
+            "holisticcollege": BrandType.HOLISTIC_COLLEGE,
+            "holistic_college": BrandType.HOLISTIC_COLLEGE,
+            "theholisticcollege": BrandType.HOLISTIC_COLLEGE,
+            "wellbeingcollege": BrandType.WELLBEING_COLLEGE,
+            "wellbeing_college": BrandType.WELLBEING_COLLEGE,
+            "thewellbeingcollege": BrandType.WELLBEING_COLLEGE,
         }
-        brand = brand_mapping.get(request.brand.lower(), BrandType.THE_GYM_COLLEGE)
+        brand = brand_mapping.get(request.brand.lower(), BrandType.HEALTHY_COLLEGE)
         
         # Update progress
         db.update_progress(reel_id, "initializing", 5, "Starting generation...")

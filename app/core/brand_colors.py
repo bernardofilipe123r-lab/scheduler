@@ -129,6 +129,50 @@ BRAND_COLORS: Dict[str, BrandColorConfig] = {
             content_title_bg_color=hex_to_rgba("#019dc8"),  # Cyan
         ),
     ),
+    
+    # ------------------------------------------------------------------------
+    # HOLISTIC COLLEGE
+    # ------------------------------------------------------------------------
+    "holisticcollege": BrandColorConfig(
+        light_mode=BrandModeColors(
+            # Thumbnail
+            thumbnail_text_color=hex_to_rgb("#f19b8a"),  # Coral/salmon
+            
+            # Content
+            content_title_text_color=hex_to_rgb("#000000"),  # Black
+            content_title_bg_color=hex_to_rgba("#f9e0db"),  # Light coral
+        ),
+        dark_mode=BrandModeColors(
+            # Thumbnail
+            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
+            
+            # Content
+            content_title_text_color=hex_to_rgb("#ffffff"),  # White
+            content_title_bg_color=hex_to_rgba("#f0836e"),  # Coral
+        ),
+    ),
+    
+    # ------------------------------------------------------------------------
+    # WELLBEING COLLEGE
+    # ------------------------------------------------------------------------
+    "wellbeingcollege": BrandColorConfig(
+        light_mode=BrandModeColors(
+            # Thumbnail
+            thumbnail_text_color=hex_to_rgb("#ffcd53"),  # Yellow/gold
+            
+            # Content
+            content_title_text_color=hex_to_rgb("#000000"),  # Black
+            content_title_bg_color=hex_to_rgba("#fff4d6"),  # Light yellow
+        ),
+        dark_mode=BrandModeColors(
+            # Thumbnail
+            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
+            
+            # Content
+            content_title_text_color=hex_to_rgb("#ffffff"),  # White
+            content_title_bg_color=hex_to_rgba("#ebbe4d"),  # Yellow
+        ),
+    ),
 }
 
 
@@ -141,6 +185,8 @@ BRAND_DISPLAY_NAMES: Dict[str, str] = {
     "healthycollege": "THE HEALTHY COLLEGE",
     "vitalitycollege": "THE VITALITY COLLEGE",
     "longevitycollege": "THE LONGEVITY COLLEGE",
+    "holisticcollege": "THE HOLISTIC COLLEGE",
+    "wellbeingcollege": "THE WELLBEING COLLEGE",
 }
 
 

@@ -17,6 +17,8 @@ A **brand** is a distinct social media identity with its own:
 | Healthy College | `healthycollege` | ✅ Active |
 | Vitality College | `vitalitycollege` | ✅ Active |
 | Longevity College | `longevitycollege` | ✅ Active |
+| Holistic College | `holisticcollege` | ✅ Active |
+| Wellbeing College | `wellbeingcollege` | ✅ Active |
 
 ### Removed Brands
 - ~~Gym College~~ (removed January 2026)
@@ -268,4 +270,4 @@ railway logs
 
 *Last updated: January 2026*
 *Removed: Gym College*
-*Active brands: Healthy College, Vitality College, Longevity College*
+*Active brands: Healthy College, Vitality College, Longevity College, Holistic College, Wellbeing College*

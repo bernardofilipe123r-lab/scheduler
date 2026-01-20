@@ -536,6 +536,12 @@ class DatabaseSchedulerService:
                 'longevitycollege': BrandType.LONGEVITY_COLLEGE,
                 'longevity_college': BrandType.LONGEVITY_COLLEGE,
                 'thelongevitycollege': BrandType.LONGEVITY_COLLEGE,
+                'holisticcollege': BrandType.HOLISTIC_COLLEGE,
+                'holistic_college': BrandType.HOLISTIC_COLLEGE,
+                'theholisticcollege': BrandType.HOLISTIC_COLLEGE,
+                'wellbeingcollege': BrandType.WELLBEING_COLLEGE,
+                'wellbeing_college': BrandType.WELLBEING_COLLEGE,
+                'thewellbeingcollege': BrandType.WELLBEING_COLLEGE,
             }
             
             brand_type = brand_mapping.get(brand_name_normalized)
