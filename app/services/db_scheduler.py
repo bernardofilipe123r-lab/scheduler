@@ -760,8 +760,8 @@ class DatabaseSchedulerService:
         brand_lower = brand.lower()
         offset = BRAND_OFFSETS.get(brand_lower, 0)
         
-        # Build slots for this brand (apply offset)
-        brand_slots = [(hour + offset, v) for hour, v in BASE_SLOTS]
+        # Build slots for this brand (apply offset, wrap around 24h)
+        brand_slots = [((hour + offset) % 24, v) for hour, v in BASE_SLOTS]
         
         # Filter to only slots matching requested variant
         matching_slots = [hour for hour, v in brand_slots if v == variant]
