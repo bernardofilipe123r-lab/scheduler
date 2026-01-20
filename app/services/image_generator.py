@@ -181,9 +181,14 @@ class ImageGenerator:
         # Load title font
         title_font = get_title_font(TITLE_FONT_SIZE)
         
-        # Wrap title if needed
+        # Check for manual line breaks (\n) in title
         max_title_width = self.width - (SIDE_MARGIN * 2)
-        title_lines = wrap_text(title_upper, title_font, max_title_width)
+        if '\n' in title_upper:
+            # User specified manual line breaks - respect them
+            title_lines = [line.strip() for line in title_upper.split('\n') if line.strip()]
+        else:
+            # No manual breaks - use auto-wrap
+            title_lines = wrap_text(title_upper, title_font, max_title_width)
         
         # Calculate vertical center position for title
         title_height = sum(
