@@ -546,6 +546,10 @@ class JobManager:
                 print(f"   🎨 Calling regenerate_brand({job_id}, {brand})...", flush=True)
                 if brand_content:
                     print(f"   📝 Using pre-generated variation ({len(brand_content)} lines)", flush=True)
+                    print(f"      First line: {brand_content[0][:60]}...", flush=True)
+                else:
+                    print(f"   ⚠️ No pre-generated content found for {brand.lower()}", flush=True)
+                    print(f"      Available keys: {list(brand_content_map.keys())}", flush=True)
                 sys.stdout.flush()
                 
                 result = self.regenerate_brand(

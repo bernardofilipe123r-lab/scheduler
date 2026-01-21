@@ -245,16 +245,20 @@ Keep language simple, grammatically perfect, and easy to understand."""
         if not isinstance(variations, dict):
             raise ValueError("Response is not a dictionary")
         
-        # Normalize brand keys to lowercase
+        # Normalize brand keys - handle various formats DeepSeek might return
+        # e.g., "Healthy College", "healthy_college", "healthycollege", "HealthyCollege"
         normalized = {}
-        for brand, lines in variations.items():
-            brand_lower = brand.lower()
+        for brand_key, lines in variations.items():
+            # Normalize: remove spaces, underscores, hyphens and lowercase
+            brand_normalized = brand_key.lower().replace(" ", "").replace("_", "").replace("-", "")
             if isinstance(lines, list) and len(lines) >= 2:
-                normalized[brand_lower] = lines
+                normalized[brand_normalized] = lines
+                print(f"   ✓ {brand_key} -> {brand_normalized}: {len(lines)} lines")
             else:
-                print(f"⚠️ Invalid variation for {brand}, skipping")
+                print(f"⚠️ Invalid variation for {brand_key}, skipping")
         
         print(f"✅ Generated {len(normalized)} unique variations")
+        print(f"   Brands in response: {list(normalized.keys())}")
         return normalized
     
     # Keep legacy method for backward compatibility
