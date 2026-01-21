@@ -1,24 +1,33 @@
 """
 Content differentiation service using DeepSeek API.
 Creates unique content variations for each brand while maintaining the core message.
+
+STRATEGY:
+- Longevity College gets the ORIGINAL content (baseline)
+- Other brands get variations from ONE DeepSeek call (ensures diversity)
+- ALL items (except CTA) must be in DIFFERENT positions across brands
+- Different wording/synonyms for each brand variation
 """
 import os
 import json
 import requests
-from typing import List, Optional
+from typing import List, Dict, Optional
 
 
 class ContentDifferentiator:
     """
     Service for creating brand-specific content variations.
     
-    For each brand, this service:
-    - Changes 1-2 words (synonyms, rephrasing)
-    - Reorders content lines
-    - Removes 1-2 topics
-    - Adds 1-2 completely new related topics
-    - NEVER touches the last CTA line
+    For each brand variation, this service ensures:
+    - Complete reordering of ALL content items (no item in same position as original)
+    - Different wording/synonyms for each point
+    - Removal of 1-2 topics and addition of 1-2 new related topics
+    - CTA line always stays at the end (never modified)
+    
+    Longevity College always gets the original content as baseline.
     """
+    
+    BASELINE_BRAND = "longevitycollege"  # This brand gets original content
     
     def __init__(self):
         """Initialize the content differentiator with DeepSeek API."""
@@ -30,6 +39,225 @@ class ContentDifferentiator:
         else:
             print("✅ Content Differentiator initialized with DeepSeek API")
     
+    def differentiate_all_brands(
+        self,
+        title: str,
+        content_lines: List[str],
+        brands: List[str]
+    ) -> Dict[str, List[str]]:
+        """
+        Create unique content variations for ALL brands in one call.
+        
+        Args:
+            title: The post title
+            content_lines: Original content lines (including CTA at end)
+            brands: List of all brands to generate for
+            
+        Returns:
+            Dict mapping brand -> content_lines
+        """
+        result = {}
+        
+        # Separate CTA from content (last line is always CTA - never touch it)
+        main_content = content_lines[:-1]
+        cta_line = content_lines[-1]
+        
+        # Brands that need variations (exclude baseline brand)
+        variation_brands = [b for b in brands if b.lower() != self.BASELINE_BRAND]
+        
+        # Baseline brand gets original content
+        if self.BASELINE_BRAND in [b.lower() for b in brands]:
+            result[self.BASELINE_BRAND] = content_lines.copy()
+            print(f"✅ {self.BASELINE_BRAND}: Using original content (baseline)")
+        
+        # If no API key or not enough brands/content, return originals for all
+        if not self.api_key or len(variation_brands) == 0 or len(main_content) < 3:
+            for brand in brands:
+                if brand.lower() not in result:
+                    result[brand.lower()] = content_lines.copy()
+            return result
+        
+        # Generate all variations in ONE API call
+        try:
+            variations = self._generate_all_variations(
+                title=title,
+                main_content=main_content,
+                brands=variation_brands
+            )
+            
+            # Add CTA to each variation and store
+            for brand, lines in variations.items():
+                brand_lower = brand.lower()
+                if brand_lower != self.BASELINE_BRAND:
+                    lines.append(cta_line)
+                    result[brand_lower] = lines
+                    print(f"✅ {brand_lower}: Generated unique variation ({len(lines)} lines)")
+            
+            # Fallback for any missing brands
+            for brand in brands:
+                brand_lower = brand.lower()
+                if brand_lower not in result:
+                    result[brand_lower] = content_lines.copy()
+                    print(f"⚠️ {brand_lower}: Using original (fallback)")
+                    
+        except Exception as e:
+            print(f"❌ Failed to generate variations: {e}")
+            # Fallback to original for all
+            for brand in brands:
+                result[brand.lower()] = content_lines.copy()
+        
+        return result
+    
+    def _generate_all_variations(
+        self,
+        title: str,
+        main_content: List[str],
+        brands: List[str]
+    ) -> Dict[str, List[str]]:
+        """
+        Generate variations for all brands in ONE API call.
+        This ensures DeepSeek can see all variations and make them truly different.
+        """
+        num_brands = len(brands)
+        num_items = len(main_content)
+        
+        # Brand personality hints
+        brand_hints = {
+            "healthycollege": "natural health, whole foods, healthy habits, wellness lifestyle",
+            "vitalitycollege": "energy, vitality, metabolism, active performance, vigor",
+            "longevitycollege": "longevity, anti-aging, cellular health, prevention, lifespan",
+            "holisticcollege": "holistic wellness, mind-body balance, natural healing, integrative health",
+            "wellbeingcollege": "overall wellbeing, mental health, life quality, balanced living"
+        }
+        
+        # Format original content
+        content_text = "\n".join([f"{i+1}. {line}" for i, line in enumerate(main_content)])
+        
+        # Build brand list with hints
+        brands_info = "\n".join([
+            f"- {brand}: {brand_hints.get(brand.lower(), 'health and wellness')}"
+            for brand in brands
+        ])
+        
+        prompt = f"""You are creating {num_brands} UNIQUE variations of health content for different brands.
+
+TITLE: {title}
+
+ORIGINAL CONTENT ({num_items} items):
+{content_text}
+
+BRANDS TO CREATE VARIATIONS FOR:
+{brands_info}
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL RULES - READ CAREFULLY:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. COMPLETE POSITION SHUFFLE (MANDATORY):
+   - If original has items A,B,C,D,E,F,G,H,I,J at positions 1-10
+   - Each brand must have items in COMPLETELY DIFFERENT positions
+   - Example: Brand1 might start with item G, Brand2 with item C, Brand3 with item I
+   - NO two brands should have the same item in the same position
+
+2. REWORDING (MANDATORY):
+   - Each point must be reworded differently per brand
+   - Use different sentence structures:
+     * Active: "Static stretching reduces power by 30%"
+     * Passive: "Muscle power is reduced 30% by static stretching"
+     * Different opening: "Up to 30% power loss occurs with static stretching"
+   - Use different synonyms: reduce/lower/decrease/diminish/cut
+   - Keep grammar 100% correct and English easy to understand
+
+3. ITEM CHANGES:
+   - Remove 1-2 items from the original list
+   - Add 1-2 NEW related items that weren't in the original
+   - Final count should be similar (within ±2 of original)
+
+4. NO NUMBERING in output (numbers will be added later)
+
+5. NO CTA LINE - that's handled separately
+
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT (JSON only, no explanation):
+═══════════════════════════════════════════════════════════════════════════════
+
+{{
+  "brand1": ["item1", e "item2", "item3", ...],
+  "brand2": ["item1", "item2", "item3", ...],
+  ...
+}}
+
+Use exact brand names as keys: {', '.join(brands)}
+
+OUTPUT ONLY THE JSON OBJECT:"""
+
+        print(f"\n🔄 Generating {num_brands} unique variations in one call...")
+        
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": """You are an expert content variation generator. You create multiple unique versions of health/wellness content.
+
+Your output is ALWAYS valid JSON with brand names as keys and arrays of strings as values.
+Each variation must be meaningfully different in:
+- Word order within sentences
+- Synonyms used
+- Item order in the list
+- Sentence structure (active/passive/inverted)
+
+Keep language simple, grammatically perfect, and easy to understand."""
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.9,  # High temperature for maximum variation
+                "max_tokens": 4000
+            },
+            timeout=60
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extract and parse response
+        ai_content = result["choices"][0]["message"]["content"].strip()
+        
+        # Clean up JSON if wrapped in markdown
+        if ai_content.startswith("```"):
+            ai_content = ai_content.split("```")[1]
+            if ai_content.startswith("json"):
+                ai_content = ai_content[4:]
+            ai_content = ai_content.strip()
+        
+        variations = json.loads(ai_content)
+        
+        # Validate structure
+        if not isinstance(variations, dict):
+            raise ValueError("Response is not a dictionary")
+        
+        # Normalize brand keys to lowercase
+        normalized = {}
+        for brand, lines in variations.items():
+            brand_lower = brand.lower()
+            if isinstance(lines, list) and len(lines) >= 2:
+                normalized[brand_lower] = lines
+            else:
+                print(f"⚠️ Invalid variation for {brand}, skipping")
+        
+        print(f"✅ Generated {len(normalized)} unique variations")
+        return normalized
+    
+    # Keep legacy method for backward compatibility
     def differentiate_content(
         self,
         brand: str,
@@ -38,167 +266,13 @@ class ContentDifferentiator:
         all_brands: List[str]
     ) -> List[str]:
         """
-        Create a unique content variation for a specific brand.
-        
-        Args:
-            brand: The brand to generate content for (e.g., "healthycollege")
-            title: The post title
-            content_lines: Original content lines
-            all_brands: List of all brands being generated (for context)
-            
-        Returns:
-            Modified content lines unique to this brand
+        Legacy method - now redirects to differentiate_all_brands.
+        Kept for backward compatibility.
         """
-        # If no API key, return original content
-        if not self.api_key:
-            print(f"⚠️ No DEEPSEEK_API_KEY - returning original content for {brand}")
-            return content_lines
-        
-        # If only one brand or less than 3 content lines, skip differentiation
-        if len(all_brands) <= 1 or len(content_lines) < 3:
-            return content_lines
-        
-        # Separate CTA from content (last line is always CTA - never touch it)
-        main_content = content_lines[:-1]
-        cta_line = content_lines[-1]
-        
-        # Get brand position for variation instructions
-        brand_position = all_brands.index(brand) if brand in all_brands else 0
-        
-        # Build the differentiation prompt
-        prompt = self._build_differentiation_prompt(
-            brand=brand,
+        # Use the new unified approach
+        all_variations = self.differentiate_all_brands(
             title=title,
-            main_content=main_content,
-            brand_position=brand_position,
-            total_brands=len(all_brands)
+            content_lines=content_lines,
+            brands=all_brands
         )
-        
-        try:
-            print(f"\n🔄 Differentiating content for {brand}...")
-            
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": """You are a content variation expert. Your job is to create unique variations of health/wellness content for different brands.
-
-RULES:
-1. Keep the same overall message and topic
-2. Change 1-2 words in each point (use synonyms, rephrase slightly)
-3. Reorder the points differently
-4. Remove 1-2 existing points
-5. Add 1-2 NEW related points that weren't in the original
-6. Keep the total number of points similar (within ±1)
-7. Output ONLY a JSON array of strings, no explanation
-8. Each point should be concise (under 100 characters)
-9. Use markdown **bold** for key terms
-10. Points should NOT have numbering (no "1.", "2.", etc.)"""
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    "temperature": 0.8,  # Higher temperature for more variation
-                    "max_tokens": 1000
-                },
-                timeout=30
-            )
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            # Extract the content from the response
-            ai_content = result["choices"][0]["message"]["content"].strip()
-            
-            # Parse the JSON array
-            # Remove markdown code blocks if present
-            if ai_content.startswith("```"):
-                ai_content = ai_content.split("```")[1]
-                if ai_content.startswith("json"):
-                    ai_content = ai_content[4:]
-                ai_content = ai_content.strip()
-            
-            differentiated_lines = json.loads(ai_content)
-            
-            # Validate the output
-            if not isinstance(differentiated_lines, list):
-                print(f"⚠️ Invalid response format for {brand}, using original content")
-                return content_lines
-            
-            if len(differentiated_lines) < 2:
-                print(f"⚠️ Too few lines returned for {brand}, using original content")
-                return content_lines
-            
-            # Add CTA back at the end (never modified)
-            differentiated_lines.append(cta_line)
-            
-            print(f"✅ Content differentiated for {brand}: {len(differentiated_lines)} lines")
-            return differentiated_lines
-            
-        except json.JSONDecodeError as e:
-            print(f"❌ Failed to parse AI response for {brand}: {e}")
-            return content_lines
-        except requests.exceptions.RequestException as e:
-            print(f"❌ API error differentiating content for {brand}: {e}")
-            return content_lines
-        except Exception as e:
-            print(f"❌ Unexpected error differentiating content for {brand}: {e}")
-            return content_lines
-    
-    def _build_differentiation_prompt(
-        self,
-        brand: str,
-        title: str,
-        main_content: List[str],
-        brand_position: int,
-        total_brands: int
-    ) -> str:
-        """Build the prompt for content differentiation."""
-        
-        # Brand-specific personality/focus hints
-        brand_hints = {
-            "healthycollege": "Focus on natural remedies, whole foods, and holistic approaches",
-            "vitalitycollege": "Emphasize energy, vitality, metabolism, and active lifestyle",
-            "longevitycollege": "Highlight longevity, anti-aging, cellular health, and prevention",
-            "gymcollege": "Focus on fitness, exercise, muscle, and physical training"
-        }
-        
-        hint = brand_hints.get(brand, "Focus on health and wellness")
-        
-        # Variation strength based on position (later brands = more different)
-        variation_level = "moderate" if brand_position == 0 else "significant" if brand_position == 1 else "substantial"
-        
-        # Format content for prompt
-        content_text = "\n".join([f"- {line}" for line in main_content])
-        
-        return f"""Create a {variation_level} variation of this health content for the brand "{brand}".
-
-TITLE: {title}
-
-ORIGINAL CONTENT:
-{content_text}
-
-BRAND FOCUS: {hint}
-
-REQUIREMENTS:
-- This is brand {brand_position + 1} of {total_brands}, so make it noticeably different from the original
-- Change at least 1-2 words per point (synonyms, rephrasing)
-- Reorder the points
-- Remove 1-2 existing points
-- Add 1-2 NEW related points
-- Keep points concise
-- Use **bold** for key terms
-- NO numbering (no "1.", "2.")
-- Output ONLY a JSON array of strings
-
-OUTPUT FORMAT:
-["point 1 text", "point 2 text", "point 3 text", ...]"""
+        return all_variations.get(brand.lower(), content_lines)

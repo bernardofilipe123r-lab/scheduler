@@ -226,10 +226,12 @@ class JobManager:
         use_title = title if title is not None else job.title
         use_lines = content_lines if content_lines is not None else job.content_lines
         
-        # Differentiate content for this brand (creates unique variation)
-        # Only differentiate if we have multiple brands and enough content
-        if job.brands and len(job.brands) > 1 and use_lines and len(use_lines) >= 3:
-            print(f"\n🔄 Differentiating content for {brand}...", flush=True)
+        # Only run differentiation if:
+        # 1. No pre-generated content was passed
+        # 2. We're regenerating a single brand (not part of batch process)
+        # When called from process_job, content_lines is already pre-differentiated
+        if content_lines is None and job.brands and len(job.brands) > 1 and use_lines and len(use_lines) >= 3:
+            print(f"\n🔄 Differentiating content for {brand} (single brand regen)...", flush=True)
             try:
                 differentiator = ContentDifferentiator()
                 use_lines = differentiator.differentiate_content(
@@ -499,6 +501,23 @@ class JobManager:
         print(f"   Processing {total_brands} brands: {job.brands}", flush=True)
         sys.stdout.flush()
         
+        # Pre-generate ALL content variations in ONE DeepSeek call
+        # This ensures each brand gets truly unique content
+        brand_content_map = {}
+        if job.content_lines and len(job.content_lines) >= 3 and len(job.brands) > 1:
+            print(f"\n🔄 Generating content variations for all {total_brands} brands...", flush=True)
+            try:
+                differentiator = ContentDifferentiator()
+                brand_content_map = differentiator.differentiate_all_brands(
+                    title=job.title,
+                    content_lines=job.content_lines,
+                    brands=job.brands
+                )
+                print(f"   ✓ Generated variations for {len(brand_content_map)} brands", flush=True)
+            except Exception as e:
+                print(f"   ⚠️ Content differentiation failed: {e}", flush=True)
+                print(f"   Using original content for all brands", flush=True)
+        
         try:
             for i, brand in enumerate(job.brands):
                 print(f"\n{'='*40}", flush=True)
@@ -520,10 +539,19 @@ class JobManager:
                     progress
                 )
                 
+                # Get pre-generated content for this brand (if available)
+                brand_content = brand_content_map.get(brand.lower())
+                
                 print(f"   🎨 Calling regenerate_brand({job_id}, {brand})...", flush=True)
+                if brand_content:
+                    print(f"   📝 Using pre-generated variation ({len(brand_content)} lines)", flush=True)
                 sys.stdout.flush()
                 
-                result = self.regenerate_brand(job_id, brand)
+                result = self.regenerate_brand(
+                    job_id, 
+                    brand, 
+                    content_lines=brand_content  # Pass pre-generated content
+                )
                 results[brand] = result
                 
                 print(f"   📋 Result for {brand}: {result.get('success', False)}", flush=True)
