@@ -409,6 +409,7 @@ class JobManager:
                 "reel_path": f"/output/reels/{reel_id}_reel.png",
                 "video_path": f"/output/videos/{reel_id}_video.mp4",
                 "caption": caption,
+                "content_lines": use_lines,  # Store differentiated content for this brand
                 "regenerated_at": datetime.utcnow().isoformat()
             })
             

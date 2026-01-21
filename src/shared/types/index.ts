@@ -20,6 +20,7 @@ export interface BrandOutput {
   thumbnail_path?: string
   video_path?: string
   caption?: string
+  content_lines?: string[]  // Differentiated content for this brand
   scheduled_time?: string
   error?: string
   progress_message?: string

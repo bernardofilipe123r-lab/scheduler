@@ -537,47 +537,78 @@ export function JobDetailPage() {
                   </div>
                 ) : (isCompleted || isScheduled) ? (
                   <div className="space-y-4">
-                    {/* Media Preview */}
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Thumbnail */}
-                      {output.thumbnail_path ? (
-                        <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
-                          <img
-                            src={output.thumbnail_path}
-                            alt={`${brand} thumbnail`}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div className="aspect-[9/16] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 p-4">
-                          <AlertCircle className="w-12 h-12 mb-2" />
-                          <p className="text-sm text-center">No thumbnail</p>
-                        </div>
-                      )}
+                    {/* Main content area - Media + Content Lines side by side */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Left side: Media Preview */}
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Thumbnail */}
+                        {output.thumbnail_path ? (
+                          <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
+                            <img
+                              src={output.thumbnail_path}
+                              alt={`${brand} thumbnail`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-[9/16] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 p-4">
+                            <AlertCircle className="w-12 h-12 mb-2" />
+                            <p className="text-sm text-center">No thumbnail</p>
+                          </div>
+                        )}
+                        
+                        {/* Video */}
+                        {output.video_path ? (
+                          <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden">
+                            <video
+                              key={output.video_path}
+                              src={output.video_path}
+                              className="w-full h-full"
+                              style={{ objectFit: 'contain' }}
+                              controls
+                              playsInline
+                              preload="auto"
+                              controlsList="nodownload"
+                            >
+                              <source src={output.video_path} type="video/mp4" />
+                              Your browser does not support the video tag.
+                            </video>
+                          </div>
+                        ) : (
+                          <div className="aspect-[9/16] bg-gray-900 rounded-lg flex flex-col items-center justify-center text-gray-400 p-4">
+                            <Play className="w-12 h-12 mb-2" />
+                            <p className="text-sm text-center">No video</p>
+                          </div>
+                        )}
+                      </div>
                       
-                      {/* Video */}
-                      {output.video_path ? (
-                        <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden">
-                          <video
-                            key={output.video_path}
-                            src={output.video_path}
-                            className="w-full h-full"
-                            style={{ objectFit: 'contain' }}
-                            controls
-                            playsInline
-                            preload="auto"
-                            controlsList="nodownload"
+                      {/* Right side: Content Lines for this brand */}
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-700">Content (this brand)</span>
+                          <button
+                            onClick={() => copyToClipboard(
+                              (output.content_lines || job.content_lines || []).join('\n'), 
+                              'Content'
+                            )}
+                            className="p-1.5 rounded hover:bg-gray-200"
+                            title="Copy content"
                           >
-                            <source src={output.video_path} type="video/mp4" />
-                            Your browser does not support the video tag.
-                          </video>
+                            <Copy className="w-4 h-4 text-gray-500" />
+                          </button>
                         </div>
-                      ) : (
-                        <div className="aspect-[9/16] bg-gray-900 rounded-lg flex flex-col items-center justify-center text-gray-400 p-4">
-                          <Play className="w-12 h-12 mb-2" />
-                          <p className="text-sm text-center">No video</p>
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                          {(output.content_lines || job.content_lines || []).map((line, idx) => (
+                            <div 
+                              key={idx} 
+                              className="text-sm text-gray-700 py-1.5 px-2 bg-white rounded border-l-2 border-gray-300"
+                            >
+                              <span className="font-medium text-gray-500 mr-2">{idx + 1}.</span>
+                              {line}
+                            </div>
+                          ))}
                         </div>
-                      )}
+                      </div>
                     </div>
                     
                     {/* Caption */}
