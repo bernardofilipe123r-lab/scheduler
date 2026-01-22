@@ -13,7 +13,9 @@ import {
   AlertTriangle,
   AlertCircle,
   Clock,
-  Send
+  Send,
+  Filter,
+  X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
@@ -30,12 +32,49 @@ import {
   subMonths,
   addWeeks,
   subWeeks,
-  parseISO
+  parseISO,
+  isSameDay
 } from 'date-fns'
 import { useScheduledPosts, useDeleteScheduled, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, ALL_BRANDS } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
-import type { ScheduledPost } from '@/shared/types'
+import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
+
+// Time slot configuration per brand
+// Each brand has 6 slots per day: 3 light and 3 dark
+// Pattern: Every 4 hours, alternating L/D/L/D/L/D
+// Each brand is offset by 1 hour from the previous one
+const BRAND_OFFSETS: Record<BrandName, number> = {
+  holisticcollege: 0,
+  healthycollege: 1,
+  vitalitycollege: 2,
+  longevitycollege: 3,
+  wellbeingcollege: 4,
+}
+
+const BASE_SLOTS: Array<{ hour: number; variant: Variant }> = [
+  { hour: 0, variant: 'light' },   // 12 AM
+  { hour: 4, variant: 'dark' },    // 4 AM  
+  { hour: 8, variant: 'light' },   // 8 AM
+  { hour: 12, variant: 'dark' },   // 12 PM
+  { hour: 16, variant: 'light' },  // 4 PM
+  { hour: 20, variant: 'dark' },   // 8 PM
+]
+
+function getBrandSlots(brand: BrandName): Array<{ hour: number; variant: Variant }> {
+  const offset = BRAND_OFFSETS[brand] || 0
+  return BASE_SLOTS.map(slot => ({
+    hour: (slot.hour + offset) % 24,
+    variant: slot.variant
+  }))
+}
+
+function formatHour(hour: number): string {
+  if (hour === 0) return '12:00 AM'
+  if (hour === 12) return '12:00 PM'
+  if (hour < 12) return `${hour}:00 AM`
+  return `${hour - 12}:00 PM`
+}
 
 export function ScheduledPage() {
   const navigate = useNavigate()
@@ -54,6 +93,8 @@ export function ScheduledPage() {
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleTime, setRescheduleTime] = useState('')
   const [statsFilter, setStatsFilter] = useState<'future' | 'all'>('future')
+  const [brandFilter, setBrandFilter] = useState<BrandName | null>(null)
+  const [selectedDayForMissing, setSelectedDayForMissing] = useState<Date | null>(null)
   
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate)
@@ -83,6 +124,55 @@ export function ScheduledPage() {
     
     return grouped
   }, [posts])
+  
+  // Analyze slots for a specific brand on a specific day
+  const analyzeSlots = useMemo(() => {
+    if (!brandFilter) return null
+    
+    const brandSlots = getBrandSlots(brandFilter)
+    const lightSlots = brandSlots.filter(s => s.variant === 'light').map(s => s.hour)
+    const darkSlots = brandSlots.filter(s => s.variant === 'dark').map(s => s.hour)
+    
+    return (day: Date) => {
+      const dateKey = format(day, 'yyyy-MM-dd')
+      const dayPosts = postsByDate[dateKey] || []
+      
+      // Filter to just this brand's posts
+      const brandPosts = dayPosts.filter(p => p.brand === brandFilter)
+      
+      // Extract scheduled hours by variant
+      const scheduledLight: number[] = []
+      const scheduledDark: number[] = []
+      
+      brandPosts.forEach(post => {
+        const hour = parseISO(post.scheduled_time).getHours()
+        const variant = post.metadata?.variant || 'light'
+        if (variant === 'light') {
+          scheduledLight.push(hour)
+        } else {
+          scheduledDark.push(hour)
+        }
+      })
+      
+      // Find missing slots
+      const missingLight = lightSlots.filter(h => !scheduledLight.includes(h))
+      const missingDark = darkSlots.filter(h => !scheduledDark.includes(h))
+      
+      const totalExpected = 6 // 3 light + 3 dark
+      const totalScheduled = brandPosts.length
+      const allFilled = missingLight.length === 0 && missingDark.length === 0
+      
+      return {
+        allFilled,
+        totalExpected,
+        totalScheduled,
+        missingLight,
+        missingDark,
+        lightSlots,
+        darkSlots
+      }
+    }
+  }, [brandFilter, postsByDate])
   
   const getPostsForDay = (date: Date) => {
     const dateKey = format(date, 'yyyy-MM-dd')
@@ -286,6 +376,63 @@ export function ScheduledPage() {
           </button>
         </div>
         
+        {/* Brand Filter for Slot Analysis */}
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Slot Tracker:</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {ALL_BRANDS.map(brand => (
+                <button
+                  key={brand}
+                  onClick={() => setBrandFilter(brandFilter === brand ? null : brand)}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                    brandFilter === brand
+                      ? 'ring-2 ring-offset-1'
+                      : 'opacity-60 hover:opacity-100'
+                  )}
+                  style={{ 
+                    backgroundColor: `${getBrandColor(brand)}20`,
+                    color: getBrandColor(brand),
+                    ...(brandFilter === brand && { ringColor: getBrandColor(brand) })
+                  }}
+                >
+                  {getBrandLabel(brand).split(' ')[0]}
+                </button>
+              ))}
+              {brandFilter && (
+                <button
+                  onClick={() => setBrandFilter(null)}
+                  className="p-1 rounded-full hover:bg-gray-200 text-gray-500"
+                  title="Clear filter"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          {brandFilter && (
+            <div className="mt-2 flex items-center gap-4 text-xs text-gray-600">
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded bg-green-100 border border-green-400"></span>
+                6/6 slots filled
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded bg-amber-100 border border-amber-400"></span>
+                Partial (some missing)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded bg-white border border-gray-300"></span>
+                No posts scheduled
+              </span>
+              <span className="text-gray-400">• Click any day to see slot details</span>
+            </div>
+          )}
+        </div>
+        
         {/* Month View */}
         {viewMode === 'month' && (
           <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
@@ -299,23 +446,56 @@ export function ScheduledPage() {
               const dayPosts = getPostsForDay(day)
               const isCurrentMonth = isSameMonth(day, currentDate)
               const isCurrentDay = isToday(day)
+              const slotAnalysis = analyzeSlots ? analyzeSlots(day) : null
+              const hasSlotData = slotAnalysis && slotAnalysis.totalScheduled > 0
               
               return (
                 <div
                   key={day.toISOString()}
-                  onClick={() => dayPosts.length > 0 && setSelectedDay(day)}
+                  onClick={() => {
+                    if (brandFilter && slotAnalysis) {
+                      setSelectedDayForMissing(day)
+                    } else if (dayPosts.length > 0) {
+                      setSelectedDay(day)
+                    }
+                  }}
                   className={clsx(
-                    'bg-white p-2 min-h-[100px] cursor-pointer transition-colors',
+                    'p-2 min-h-[100px] cursor-pointer transition-colors relative',
                     !isCurrentMonth && 'bg-gray-50',
-                    dayPosts.length > 0 && 'hover:bg-gray-50'
+                    // Brand filter slot coloring
+                    brandFilter && slotAnalysis?.allFilled && 'bg-green-50 hover:bg-green-100',
+                    brandFilter && slotAnalysis && !slotAnalysis.allFilled && hasSlotData && 'bg-amber-50 hover:bg-amber-100',
+                    brandFilter && slotAnalysis && !slotAnalysis.allFilled && !hasSlotData && 'bg-white hover:bg-gray-50',
+                    // Default when no filter
+                    !brandFilter && 'bg-white',
+                    !brandFilter && dayPosts.length > 0 && 'hover:bg-gray-50'
                   )}
+                  style={brandFilter && slotAnalysis?.allFilled ? { 
+                    borderLeft: `3px solid ${getBrandColor(brandFilter)}` 
+                  } : undefined}
                 >
-                  <div className={clsx(
-                    'text-sm font-medium mb-1',
-                    isCurrentDay && 'w-6 h-6 rounded-full bg-primary-500 text-white flex items-center justify-center',
-                    !isCurrentMonth && 'text-gray-400'
-                  )}>
-                    {format(day, 'd')}
+                  <div className="flex items-center justify-between mb-1">
+                    <div className={clsx(
+                      'text-sm font-medium',
+                      isCurrentDay && 'w-6 h-6 rounded-full bg-primary-500 text-white flex items-center justify-center',
+                      !isCurrentMonth && 'text-gray-400'
+                    )}>
+                      {format(day, 'd')}
+                    </div>
+                    {/* Slot count indicator when brand filter is active */}
+                    {brandFilter && slotAnalysis && hasSlotData && (
+                      <span 
+                        className={clsx(
+                          'text-xs font-medium px-1.5 py-0.5 rounded',
+                          slotAnalysis.allFilled 
+                            ? 'bg-green-200 text-green-800' 
+                            : 'bg-amber-200 text-amber-800'
+                        )}
+                      >
+                        {slotAnalysis.totalScheduled}/6
+                      </span>
+                    )}
+                  </div>
                   </div>
                   
                   <div className="space-y-1">
@@ -447,6 +627,159 @@ export function ScheduledPage() {
             ))}
           </div>
         )}
+      </Modal>
+      
+      {/* Missing Slots Modal - shows when brand filter is active and day is clicked */}
+      <Modal
+        isOpen={!!selectedDayForMissing && !!brandFilter}
+        onClose={() => setSelectedDayForMissing(null)}
+        title={selectedDayForMissing ? `${getBrandLabel(brandFilter!)} - ${format(selectedDayForMissing, 'EEEE, MMMM d, yyyy')}` : ''}
+        size="md"
+      >
+        {selectedDayForMissing && brandFilter && analyzeSlots && (() => {
+          const analysis = analyzeSlots(selectedDayForMissing)
+          const dayPosts = getPostsForDay(selectedDayForMissing).filter(p => p.brand === brandFilter)
+          
+          return (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className={clsx(
+                'p-4 rounded-lg',
+                analysis.allFilled ? 'bg-green-50' : 'bg-amber-50'
+              )}>
+                <div className="flex items-center justify-between">
+                  <span className={clsx(
+                    'font-medium',
+                    analysis.allFilled ? 'text-green-800' : 'text-amber-800'
+                  )}>
+                    {analysis.allFilled ? '✓ All slots filled!' : `${analysis.totalScheduled}/6 slots scheduled`}
+                  </span>
+                  <span 
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: getBrandColor(brandFilter) }}
+                  ></span>
+                </div>
+              </div>
+              
+              {/* Light Mode Slots */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-400"></span>
+                  Light Mode Slots (3 per day)
+                </h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {analysis.lightSlots.map(hour => {
+                    const isMissing = analysis.missingLight.includes(hour)
+                    const post = dayPosts.find(p => {
+                      const postHour = parseISO(p.scheduled_time).getHours()
+                      const postVariant = p.metadata?.variant || 'light'
+                      return postHour === hour && postVariant === 'light'
+                    })
+                    
+                    return (
+                      <div 
+                        key={`light-${hour}`}
+                        className={clsx(
+                          'p-2 rounded text-center text-sm',
+                          isMissing 
+                            ? 'bg-red-50 border border-red-200 text-red-700' 
+                            : 'bg-green-50 border border-green-200 text-green-700'
+                        )}
+                      >
+                        <div className="font-medium">{formatHour(hour)}</div>
+                        <div className="text-xs mt-0.5">
+                          {isMissing ? '❌ Missing' : '✓ Scheduled'}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              
+              {/* Dark Mode Slots */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <span className="w-3 h-3 rounded bg-gray-700 border border-gray-900"></span>
+                  Dark Mode Slots (3 per day)
+                </h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {analysis.darkSlots.map(hour => {
+                    const isMissing = analysis.missingDark.includes(hour)
+                    const post = dayPosts.find(p => {
+                      const postHour = parseISO(p.scheduled_time).getHours()
+                      const postVariant = p.metadata?.variant || 'light'
+                      return postHour === hour && postVariant === 'dark'
+                    })
+                    
+                    return (
+                      <div 
+                        key={`dark-${hour}`}
+                        className={clsx(
+                          'p-2 rounded text-center text-sm',
+                          isMissing 
+                            ? 'bg-red-50 border border-red-200 text-red-700' 
+                            : 'bg-green-50 border border-green-200 text-green-700'
+                        )}
+                      >
+                        <div className="font-medium">{formatHour(hour)}</div>
+                        <div className="text-xs mt-0.5">
+                          {isMissing ? '❌ Missing' : '✓ Scheduled'}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              
+              {/* Show scheduled posts for this day/brand */}
+              {dayPosts.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Scheduled Posts</h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {dayPosts.map(post => (
+                      <div
+                        key={post.id}
+                        onClick={() => {
+                          setSelectedPost(post)
+                          setSelectedDayForMissing(null)
+                        }}
+                        className="p-2 rounded border border-gray-200 hover:bg-gray-50 cursor-pointer flex items-center gap-3"
+                      >
+                        <span className="text-sm font-medium text-gray-700">
+                          {format(parseISO(post.scheduled_time), 'h:mm a')}
+                        </span>
+                        <span className={clsx(
+                          'text-xs px-2 py-0.5 rounded',
+                          (post.metadata?.variant || 'light') === 'light' 
+                            ? 'bg-yellow-100 text-yellow-800' 
+                            : 'bg-gray-700 text-white'
+                        )}>
+                          {(post.metadata?.variant || 'light').toUpperCase()}
+                        </span>
+                        <span className="text-xs text-gray-500 truncate flex-1">
+                          {post.title.split('\n')[0]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Action to view all posts */}
+              {dayPosts.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSelectedDayForMissing(null)
+                    setSelectedDay(selectedDayForMissing)
+                  }}
+                  className="btn btn-secondary w-full"
+                >
+                  View All Posts for This Day
+                </button>
+              )}
+            </div>
+          )
+        })()}
       </Modal>
       
       {/* Post Detail Modal */}

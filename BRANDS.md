@@ -12,13 +12,13 @@ A **brand** is a distinct social media identity with its own:
 
 ## Current Active Brands
 
-| Brand | ID | Status |
-|-------|-----|--------|
-| Healthy College | `healthycollege` | ✅ Active |
-| Vitality College | `vitalitycollege` | ✅ Active |
-| Longevity College | `longevitycollege` | ✅ Active |
-| Holistic College | `holisticcollege` | ✅ Active |
-| Wellbeing College | `wellbeingcollege` | ✅ Active |
+| Brand | ID | Instagram Handle | Status |
+|-------|-----|------------------|--------|
+| Healthy College | `healthycollege` | @thehealthycollege | ✅ Active |
+| Vitality College | `vitalitycollege` | @thevitalitycollege | ✅ Active |
+| Longevity College | `longevitycollege` | @thelongevitycollege | ✅ Active |
+| Holistic College | `holisticcollege` | @theholisticcollege | ✅ Active |
+| Wellbeing College | `wellbeingcollege` | @thewellbeingcollege | ✅ Active |
 
 ### Removed Brands
 - ~~Gym College~~ (removed January 2026)
