@@ -67,6 +67,7 @@ export interface ScheduledPost {
   metadata?: {
     platforms?: string[]
     brand?: string
+    variant?: string
     post_ids?: Record<string, string>
     publish_results?: Record<string, {
       success: boolean

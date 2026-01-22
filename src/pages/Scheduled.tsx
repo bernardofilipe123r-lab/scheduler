@@ -32,8 +32,7 @@ import {
   subMonths,
   addWeeks,
   subWeeks,
-  parseISO,
-  isSameDay
+  parseISO
 } from 'date-fns'
 import { useScheduledPosts, useDeleteScheduled, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, ALL_BRANDS } from '@/features/brands'
@@ -496,7 +495,6 @@ export function ScheduledPage() {
                       </span>
                     )}
                   </div>
-                  </div>
                   
                   <div className="space-y-1">
                     {dayPosts.slice(0, 3).map(post => (
@@ -670,11 +668,6 @@ export function ScheduledPage() {
                 <div className="grid grid-cols-3 gap-2">
                   {analysis.lightSlots.map(hour => {
                     const isMissing = analysis.missingLight.includes(hour)
-                    const post = dayPosts.find(p => {
-                      const postHour = parseISO(p.scheduled_time).getHours()
-                      const postVariant = p.metadata?.variant || 'light'
-                      return postHour === hour && postVariant === 'light'
-                    })
                     
                     return (
                       <div 
@@ -705,11 +698,6 @@ export function ScheduledPage() {
                 <div className="grid grid-cols-3 gap-2">
                   {analysis.darkSlots.map(hour => {
                     const isMissing = analysis.missingDark.includes(hour)
-                    const post = dayPosts.find(p => {
-                      const postHour = parseISO(p.scheduled_time).getHours()
-                      const postVariant = p.metadata?.variant || 'light'
-                      return postHour === hour && postVariant === 'dark'
-                    })
                     
                     return (
                       <div 
