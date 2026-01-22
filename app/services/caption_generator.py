@@ -15,6 +15,8 @@ class CaptionGenerator:
         "healthycollege": "@thehealthycollege",
         "vitalitycollege": "@thevitalitycollege",
         "longevitycollege": "@thelongevitycollege",
+        "holisticcollege": "@theholisticcollege",
+        "wellbeingcollege": "@thewellbeingcollege",
     }
     
     # CTA options
