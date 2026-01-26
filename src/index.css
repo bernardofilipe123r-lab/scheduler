@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent layout shift from scrollbar appearing/disappearing */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 /* CSS Variables - Matching Original Design */
 :root {
   /* Brand colors */
