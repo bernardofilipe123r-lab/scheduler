@@ -365,10 +365,46 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
   const [hasChanges, setHasChanges] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   
   // Logo state
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  
+  // Fetch saved theme on mount
+  useEffect(() => {
+    const fetchSavedTheme = async () => {
+      try {
+        const response = await fetch(`/api/brands/${brand.id}/theme`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.has_overrides && data.theme) {
+            // Use saved values
+            if (data.theme.brand_color) setBrandColor(data.theme.brand_color)
+            if (data.theme.light_title_color) setLightTitleColor(data.theme.light_title_color)
+            if (data.theme.light_bg_color) setLightBgColor(data.theme.light_bg_color)
+            if (data.theme.dark_title_color) setDarkTitleColor(data.theme.dark_title_color)
+            if (data.theme.dark_bg_color) setDarkBgColor(data.theme.dark_bg_color)
+            
+            // Load logo if exists
+            if (data.theme.logo) {
+              const logoUrl = `/brand-logos/${data.theme.logo}?t=${Date.now()}`
+              const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
+              if (logoCheck.ok) {
+                setLogoPreview(logoUrl)
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch saved theme:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchSavedTheme()
+  }, [brand.id])
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -447,6 +483,16 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          <span className="ml-2 text-gray-500">Loading theme...</span>
+        </div>
+      )}
+      
+      {!isLoading && (
+        <>
       {/* Preview header with logo */}
       <div 
         className="rounded-xl p-6 text-center relative"
@@ -581,12 +627,18 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                     onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
                     className="w-8 h-8 rounded cursor-pointer border border-gray-300"
                   />
-                  <input
-                    type="text"
-                    value={lightTitleColor.toUpperCase()}
-                    onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
-                    className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded font-mono"
-                  />
+                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 rounded">
+                    <div 
+                      className="w-3 h-3 rounded-sm border border-gray-300 shrink-0" 
+                      style={{ backgroundColor: lightTitleColor }}
+                    />
+                    <input
+                      type="text"
+                      value={lightTitleColor.toUpperCase()}
+                      onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
+                      className="flex-1 text-xs font-mono bg-transparent text-gray-800 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
@@ -598,12 +650,18 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                     onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
                     className="w-8 h-8 rounded cursor-pointer border border-gray-300"
                   />
-                  <input
-                    type="text"
-                    value={lightBgColor.toUpperCase()}
-                    onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
-                    className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded font-mono"
-                  />
+                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 rounded">
+                    <div 
+                      className="w-3 h-3 rounded-sm border border-gray-300 shrink-0" 
+                      style={{ backgroundColor: lightBgColor }}
+                    />
+                    <input
+                      type="text"
+                      value={lightBgColor.toUpperCase()}
+                      onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
+                      className="flex-1 text-xs font-mono bg-transparent text-gray-800 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -618,7 +676,7 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
             
             {/* Dark mode preview */}
             <div 
-              className="w-full h-16 rounded-lg mb-3 flex items-center justify-center"
+              className="w-full h-16 rounded-lg mb-3 flex items-center justify-center border border-gray-600"
               style={{ backgroundColor: darkBgColor }}
             >
               <span style={{ color: darkTitleColor }} className="font-bold text-sm">
@@ -636,12 +694,18 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                     onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
                     className="w-8 h-8 rounded cursor-pointer border border-gray-600"
                   />
-                  <input
-                    type="text"
-                    value={darkTitleColor.toUpperCase()}
-                    onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
-                    className="flex-1 px-2 py-1 text-xs border border-gray-600 rounded font-mono bg-gray-800 text-white"
-                  />
+                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded">
+                    <div 
+                      className="w-3 h-3 rounded-sm border border-gray-500 shrink-0" 
+                      style={{ backgroundColor: darkTitleColor }}
+                    />
+                    <input
+                      type="text"
+                      value={darkTitleColor.toUpperCase()}
+                      onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
+                      className="flex-1 text-xs font-mono bg-transparent text-gray-100 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
@@ -653,12 +717,18 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                     onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
                     className="w-8 h-8 rounded cursor-pointer border border-gray-600"
                   />
-                  <input
-                    type="text"
-                    value={darkBgColor.toUpperCase()}
-                    onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
-                    className="flex-1 px-2 py-1 text-xs border border-gray-600 rounded font-mono bg-gray-800 text-white"
-                  />
+                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded">
+                    <div 
+                      className="w-3 h-3 rounded-sm border border-gray-500 shrink-0" 
+                      style={{ backgroundColor: darkBgColor }}
+                    />
+                    <input
+                      type="text"
+                      value={darkBgColor.toUpperCase()}
+                      onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
+                      className="flex-1 text-xs font-mono bg-transparent text-gray-100 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -712,6 +782,8 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
           </button>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }
