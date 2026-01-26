@@ -29,9 +29,15 @@ interface BrandInfo {
   logo: string
 }
 
-// Posting slot times
-const LIGHT_SLOTS = ['12:00 AM', '8:00 AM', '4:00 PM']
-const DARK_SLOTS = ['4:00 AM', '12:00 PM', '8:00 PM']
+// Posting slot times - each brand has different default offsets
+const BRAND_SLOT_DEFAULTS: Record<string, { light: string[], dark: string[] }> = {
+  healthycollege: { light: ['12:00 AM', '8:00 AM', '4:00 PM'], dark: ['4:00 AM', '12:00 PM', '8:00 PM'] },
+  longevitycollege: { light: ['1:00 AM', '9:00 AM', '5:00 PM'], dark: ['5:00 AM', '1:00 PM', '9:00 PM'] },
+  holisticcollege: { light: ['2:00 AM', '10:00 AM', '6:00 PM'], dark: ['6:00 AM', '2:00 PM', '10:00 PM'] },
+  vitalitycollege: { light: ['3:00 AM', '11:00 AM', '7:00 PM'], dark: ['7:00 AM', '3:00 PM', '11:00 PM'] },
+  wellbeingcollege: { light: ['12:00 AM', '8:00 AM', '4:00 PM'], dark: ['4:00 AM', '12:00 PM', '8:00 PM'] },
+}
+
 const TIME_OPTIONS = [
   '12:00 AM', '1:00 AM', '2:00 AM', '3:00 AM', '4:00 AM', '5:00 AM',
   '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
@@ -42,14 +48,31 @@ const TIME_OPTIONS = [
 interface SettingsModalProps {
   brand: BrandInfo
   connections: BrandConnectionStatus | undefined
+  allBrands: BrandInfo[]
   onClose: () => void
 }
 
-function BrandSettingsModal({ brand, connections, onClose }: SettingsModalProps) {
+function BrandSettingsModal({ brand, connections, allBrands, onClose }: SettingsModalProps) {
   const navigate = useNavigate()
-  const [lightSlots, setLightSlots] = useState(LIGHT_SLOTS)
-  const [darkSlots, setDarkSlots] = useState(DARK_SLOTS)
+  const defaults = BRAND_SLOT_DEFAULTS[brand.id] || BRAND_SLOT_DEFAULTS.healthycollege
+  const [lightSlots, setLightSlots] = useState(defaults.light)
+  const [darkSlots, setDarkSlots] = useState(defaults.dark)
   const [hasChanges, setHasChanges] = useState(false)
+
+  // Check if a slot conflicts with another brand
+  const getSlotConflict = (mode: 'light' | 'dark', time: string): string | null => {
+    for (const otherBrand of allBrands) {
+      if (otherBrand.id === brand.id) continue
+      const otherDefaults = BRAND_SLOT_DEFAULTS[otherBrand.id]
+      if (!otherDefaults) continue
+      
+      const otherSlots = mode === 'light' ? otherDefaults.light : otherDefaults.dark
+      if (otherSlots.includes(time)) {
+        return otherBrand.name
+      }
+    }
+    return null
+  }
 
   const updateSlot = (mode: 'light' | 'dark', index: number, value: string) => {
     if (mode === 'light') {
@@ -169,19 +192,30 @@ function BrandSettingsModal({ brand, connections, onClose }: SettingsModalProps)
             <Sun className="w-4 h-4 text-yellow-500" />
             <span className="text-sm font-medium text-gray-700">Light Mode Slots</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {lightSlots.map((slot, index) => (
-              <select
-                key={`light-${index}`}
-                value={slot}
-                onChange={(e) => updateSlot('light', index, e.target.value)}
-                className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                {TIME_OPTIONS.map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
-            ))}
+          <div className="space-y-2">
+            {lightSlots.map((slot, index) => {
+              const conflict = getSlotConflict('light', slot)
+              return (
+                <div key={`light-${index}`}>
+                  <select
+                    value={slot}
+                    onChange={(e) => updateSlot('light', index, e.target.value)}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                      conflict ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
+                    }`}
+                  >
+                    {TIME_OPTIONS.map(time => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
+                  {conflict && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      ⚠️ Same slot as {conflict}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -191,37 +225,48 @@ function BrandSettingsModal({ brand, connections, onClose }: SettingsModalProps)
             <Moon className="w-4 h-4 text-gray-600" />
             <span className="text-sm font-medium text-gray-700">Dark Mode Slots</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {darkSlots.map((slot, index) => (
-              <select
-                key={`dark-${index}`}
-                value={slot}
-                onChange={(e) => updateSlot('dark', index, e.target.value)}
-                className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                {TIME_OPTIONS.map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
-            ))}
+          <div className="space-y-2">
+            {darkSlots.map((slot, index) => {
+              const conflict = getSlotConflict('dark', slot)
+              return (
+                <div key={`dark-${index}`}>
+                  <select
+                    value={slot}
+                    onChange={(e) => updateSlot('dark', index, e.target.value)}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                      conflict ? 'border-amber-400' : 'border-gray-600'
+                    }`}
+                  >
+                    {TIME_OPTIONS.map(time => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
+                  {conflict && (
+                    <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
+                      ⚠️ Same slot as {conflict}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        <p className="text-xs text-gray-500 mt-3">+ brand offset applied automatically</p>
+        <p className="text-xs text-gray-500 mt-3">Stagger times across brands to avoid posting at the same time</p>
       </div>
 
       {/* Actions */}
       <div className="flex gap-3">
         <button
           onClick={onClose}
-          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium min-w-[100px]"
+          className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium min-w-[120px]"
         >
           Close
         </button>
         {hasChanges && (
           <button
             onClick={handleSave}
-            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[100px]"
+            className="flex-1 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[140px]"
           >
             <Save className="w-4 h-4" />
             Save Changes
@@ -229,7 +274,7 @@ function BrandSettingsModal({ brand, connections, onClose }: SettingsModalProps)
         )}
         <button
           onClick={() => { onClose(); navigate('/scheduled'); }}
-          className="flex-1 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium min-w-[120px] whitespace-nowrap"
+          className="flex-1 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium min-w-[140px] whitespace-nowrap"
         >
           View Schedule
         </button>
@@ -878,6 +923,7 @@ export function BrandsPage() {
           <BrandSettingsModal 
             brand={selectedBrandForSettings} 
             connections={getConnectionStatus(selectedBrandForSettings.id)}
+            allBrands={brands}
             onClose={() => setSelectedBrandForSettings(null)} 
           />
         )}
