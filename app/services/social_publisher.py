@@ -3,10 +3,77 @@ Social media publisher for Instagram and Facebook Reels.
 """
 import os
 import time
+import re
 import requests
 from typing import Optional, Dict, Any
 from pathlib import Path
 from app.core.config import BrandConfig
+
+
+def create_facebook_caption(full_caption: str, max_length: int = 400) -> str:
+    """
+    Create a short, punchy Facebook caption from the full Instagram caption.
+    
+    Facebook works better with shorter captions. This function:
+    1. Extracts the opening hook/intro paragraph
+    2. Adds a simple CTA
+    3. Keeps it under max_length characters
+    
+    Args:
+        full_caption: The full Instagram caption
+        max_length: Maximum characters for FB caption (default 400)
+        
+    Returns:
+        A condensed Facebook-optimized caption
+    """
+    if not full_caption or len(full_caption) <= max_length:
+        return full_caption
+    
+    # Split by double newlines to get paragraphs
+    paragraphs = full_caption.split('\n\n')
+    
+    # Get the first paragraph (usually the hook/intro)
+    first_para = paragraphs[0].strip() if paragraphs else ""
+    
+    # If first paragraph is empty or too short, try to get more content
+    if len(first_para) < 50 and len(paragraphs) > 1:
+        first_para = paragraphs[0].strip() + "\n\n" + paragraphs[1].strip()
+    
+    # Remove any emoji-starting lines from the first para (those are usually CTAs)
+    lines = first_para.split('\n')
+    clean_lines = []
+    for line in lines:
+        # Skip lines that start with emojis (CTA lines)
+        if line and not re.match(r'^[\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]', line.strip()):
+            clean_lines.append(line)
+    
+    intro_text = '\n'.join(clean_lines).strip()
+    
+    # Simple FB CTA
+    fb_cta = "\n\n💡 Follow for daily health insights!"
+    
+    # Calculate available space for intro
+    available_space = max_length - len(fb_cta)
+    
+    # Truncate intro if needed, but at a sentence boundary
+    if len(intro_text) > available_space:
+        # Try to cut at a sentence boundary
+        truncated = intro_text[:available_space]
+        
+        # Find last sentence ending
+        last_period = truncated.rfind('.')
+        last_question = truncated.rfind('?')
+        last_exclaim = truncated.rfind('!')
+        
+        cut_point = max(last_period, last_question, last_exclaim)
+        
+        if cut_point > available_space * 0.5:  # Only use sentence boundary if it's at least half the text
+            intro_text = truncated[:cut_point + 1]
+        else:
+            # Cut at word boundary
+            intro_text = truncated[:truncated.rfind(' ')] + "..."
+    
+    return intro_text + fb_cta
 
 
 class SocialPublisher:
@@ -401,14 +468,22 @@ class SocialPublisher:
         Publish a Reel to Facebook Page using the Reels Publishing API.
         This uses the proper 3-step process: Initialize -> Upload -> Publish.
         
+        Note: Facebook gets a custom short caption (max 400 chars) optimized for the platform.
+        Instagram uses the full caption with all details.
+        
         Args:
             video_url: Public URL to the video file
-            caption: Caption text
+            caption: Full caption text (will be shortened for FB)
             thumbnail_url: Optional thumbnail URL
             
         Returns:
             Dict with publish status and Facebook post ID
         """
+        # Create a Facebook-optimized short caption
+        fb_caption = create_facebook_caption(caption, max_length=400)
+        if len(caption) != len(fb_caption):
+            print(f"   📝 Facebook caption created: {len(caption)} → {len(fb_caption)} chars")
+        
         if not self._system_user_token or not self.fb_page_id:
             return {
                 "success": False,
@@ -601,7 +676,7 @@ class SocialPublisher:
                     "video_id": video_id,
                     "upload_phase": "finish",
                     "video_state": "PUBLISHED",
-                    "description": caption
+                    "description": fb_caption
                 },
                 timeout=30
             )
