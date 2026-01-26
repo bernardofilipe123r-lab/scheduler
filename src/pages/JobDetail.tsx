@@ -29,6 +29,7 @@ import {
 import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
 import { StatusBadge, FullPageLoader, Modal } from '@/shared/components'
+import { createFacebookCaption } from '@/shared/lib/captionUtils'
 import type { BrandName, BrandOutput } from '@/shared/types'
 
 export function JobDetailPage() {
@@ -613,19 +614,49 @@ export function JobDetailPage() {
                     
                     {/* Caption */}
                     {output.caption && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700">Caption</span>
-                          <button
-                            onClick={() => copyToClipboard(output.caption!, 'Caption')}
-                            className="p-1.5 rounded hover:bg-gray-200"
-                          >
-                            <Copy className="w-4 h-4 text-gray-500" />
-                          </button>
+                      <div className="space-y-4">
+                        {/* Instagram Caption */}
+                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">📸</span>
+                              <span className="text-sm font-medium text-purple-700">Instagram Caption</span>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(output.caption!, 'Instagram Caption')}
+                              className="p-1.5 rounded hover:bg-purple-100"
+                            >
+                              <Copy className="w-4 h-4 text-purple-500" />
+                            </button>
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto">
+                            <p className="text-sm text-gray-600 whitespace-pre-line">
+                              {output.caption}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm text-gray-600 whitespace-pre-line line-clamp-4">
-                          {output.caption}
-                        </p>
+                        
+                        {/* Facebook Caption */}
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">📘</span>
+                              <span className="text-sm font-medium text-blue-700">Facebook Caption</span>
+                              <span className="text-xs text-blue-400">(shorter)</span>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(createFacebookCaption(output.caption!), 'Facebook Caption')}
+                              className="p-1.5 rounded hover:bg-blue-100"
+                            >
+                              <Copy className="w-4 h-4 text-blue-500" />
+                            </button>
+                          </div>
+                          <div className="max-h-[200px] overflow-y-auto">
+                            <p className="text-sm text-gray-600 whitespace-pre-line">
+                              {createFacebookCaption(output.caption!)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                     
