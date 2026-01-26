@@ -34,8 +34,8 @@ class BrandConfig:
     instagram_business_account_id: Optional[str] = None  # Brand-specific Instagram ID
     facebook_page_id: Optional[str] = None  # Brand-specific Facebook Page ID
     meta_access_token: Optional[str] = None  # Brand-specific access token
-    youtube_channel_id: Optional[str] = None  # Brand-specific YouTube channel ID
-    youtube_refresh_token: Optional[str] = None  # YouTube OAuth refresh token
+    # Note: YouTube credentials are stored in the database (youtube_channels table)
+    # They are obtained via OAuth flow (/api/youtube/connect) and never stored in env vars
 
 
 # Brand configuration mapping
@@ -55,8 +55,6 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         instagram_business_account_id="17841468847801005",  # @thegymcollege
         facebook_page_id="421725951022067",  # Gym College Facebook Page
         meta_access_token=os.getenv("META_ACCESS_TOKEN"),  # Same token for both brands
-        youtube_channel_id=os.getenv("GYMCOLLEGE_YOUTUBE_CHANNEL_ID"),
-        youtube_refresh_token=os.getenv("GYMCOLLEGE_YOUTUBE_REFRESH_TOKEN"),
     ),
     BrandType.HEALTHY_COLLEGE: BrandConfig(
         name="HEALTHY_COLLEGE",
@@ -73,8 +71,6 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         instagram_business_account_id="17841479849607158",  # @thehealthycollege
         facebook_page_id="944977965368075",  # Healthy College Facebook Page
         meta_access_token=os.getenv("META_ACCESS_TOKEN"),  # Same token for both brands
-        youtube_channel_id=os.getenv("HEALTHYCOLLEGE_YOUTUBE_CHANNEL_ID"),
-        youtube_refresh_token=os.getenv("HEALTHYCOLLEGE_YOUTUBE_REFRESH_TOKEN"),
     ),
     BrandType.VITALITY_COLLEGE: BrandConfig(
         name="VITALITY_COLLEGE",
@@ -91,8 +87,6 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         instagram_business_account_id=os.getenv("VITALITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("VITALITYCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("VITALITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-        youtube_channel_id=os.getenv("VITALITYCOLLEGE_YOUTUBE_CHANNEL_ID"),
-        youtube_refresh_token=os.getenv("VITALITYCOLLEGE_YOUTUBE_REFRESH_TOKEN"),
     ),
     BrandType.LONGEVITY_COLLEGE: BrandConfig(
         name="LONGEVITY_COLLEGE",
@@ -109,8 +103,6 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         instagram_business_account_id=os.getenv("LONGEVITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("LONGEVITYCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("LONGEVITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-        youtube_channel_id=os.getenv("LONGEVITYCOLLEGE_YOUTUBE_CHANNEL_ID"),
-        youtube_refresh_token=os.getenv("LONGEVITYCOLLEGE_YOUTUBE_REFRESH_TOKEN"),
     ),
     BrandType.HOLISTIC_COLLEGE: BrandConfig(
         name="HOLISTIC_COLLEGE",
@@ -127,8 +119,6 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         instagram_business_account_id=os.getenv("HOLISTICCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("HOLISTICCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("HOLISTICCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-        youtube_channel_id=os.getenv("HOLISTICCOLLEGE_YOUTUBE_CHANNEL_ID"),
-        youtube_refresh_token=os.getenv("HOLISTICCOLLEGE_YOUTUBE_REFRESH_TOKEN"),
     ),
     BrandType.WELLBEING_COLLEGE: BrandConfig(
         name="WELLBEING_COLLEGE",
@@ -145,8 +135,6 @@ BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
         instagram_business_account_id=os.getenv("WELLBEINGCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("WELLBEINGCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("WELLBEINGCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-        youtube_channel_id=os.getenv("WELLBEINGCOLLEGE_YOUTUBE_CHANNEL_ID"),
-        youtube_refresh_token=os.getenv("WELLBEINGCOLLEGE_YOUTUBE_REFRESH_TOKEN"),
     ),
 }
 

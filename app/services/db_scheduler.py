@@ -675,6 +675,13 @@ class DatabaseSchedulerService:
         """
         Publish a video to YouTube as a Short.
         
+        Architecture:
+        1. Load refresh_token from database
+        2. Publisher uses refresh_token to get fresh access_token
+        3. Upload video using access_token
+        4. Discard access_token (it's short-lived anyway)
+        5. Update channel status in DB
+        
         Args:
             video_path: Path to the video file
             thumbnail_path: Path to the thumbnail
@@ -684,34 +691,62 @@ class DatabaseSchedulerService:
         Returns:
             Publishing result dict
         """
-        from app.api.youtube_routes import get_youtube_credentials_for_brand
+        from app.api.youtube_routes import get_youtube_credentials_for_brand, update_youtube_channel_status
         from app.services.youtube_publisher import YouTubePublisher
+        from datetime import datetime
         
         if not brand_name:
             return {"success": False, "error": "Brand name required for YouTube publishing"}
         
-        # Get credentials for this brand
-        credentials = get_youtube_credentials_for_brand(brand_name)
-        
-        if not credentials:
-            return {"success": False, "error": f"YouTube not configured for {brand_name}"}
-        
-        # Create publisher with credentials
-        yt_publisher = YouTubePublisher(credentials=credentials)
-        
-        # Extract title from caption (first line or first sentence)
-        lines = caption.split('\n')
-        title = lines[0][:100] if lines else "Health & Wellness Tips"
-        
-        # Upload as a Short
-        result = yt_publisher.upload_youtube_short(
-            video_path=str(video_path),
-            title=title,
-            description=caption,
-            thumbnail_path=str(thumbnail_path) if thumbnail_path.exists() else None
-        )
-        
-        return result
+        # Get credentials for this brand from database
+        with get_db_session() as db:
+            credentials = get_youtube_credentials_for_brand(brand_name, db)
+            
+            if not credentials:
+                return {"success": False, "error": f"YouTube not configured for {brand_name}. Click 'Connect YouTube' in the app."}
+            
+            # Create publisher with credentials
+            # The publisher will use the refresh_token to get a fresh access_token
+            yt_publisher = YouTubePublisher(credentials=credentials)
+            
+            # Extract title from caption (first line or first sentence)
+            lines = caption.split('\n')
+            title = lines[0][:100] if lines else "Health & Wellness Tips"
+            
+            # Upload as a Short
+            result = yt_publisher.upload_youtube_short(
+                video_path=str(video_path),
+                title=title,
+                description=caption,
+                thumbnail_path=str(thumbnail_path) if thumbnail_path.exists() else None
+            )
+            
+            # Update channel status in database
+            if result.get("success"):
+                update_youtube_channel_status(
+                    brand=brand_name,
+                    db=db,
+                    last_upload_at=datetime.utcnow()
+                )
+            else:
+                error_msg = result.get("error", "Unknown error")
+                # Check if this is a token revocation error
+                if "401" in str(error_msg) or "403" in str(error_msg) or "invalid_grant" in str(error_msg):
+                    update_youtube_channel_status(
+                        brand=brand_name,
+                        db=db,
+                        status="revoked",
+                        last_error="Access revoked. Please reconnect YouTube."
+                    )
+                else:
+                    update_youtube_channel_status(
+                        brand=brand_name,
+                        db=db,
+                        status="error",
+                        last_error=error_msg
+                    )
+            
+            return result
 
     def get_or_create_user(
         self,

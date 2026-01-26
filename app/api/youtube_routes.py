@@ -1,46 +1,45 @@
 """
 YouTube OAuth and API routes for the reels automation service.
+
+Architecture (Buffer-style):
+1. User clicks "Connect YouTube" → redirects to Google OAuth
+2. User authorizes once → we get refresh_token
+3. refresh_token stored in DB (never expires unless revoked)
+4. For each upload: refresh_token → fresh access_token → upload → discard token
+5. User never touches tokens again
+
+The user does ONE thing: click "Connect" and authorize.
+Everything else is handled automatically by the backend.
 """
 import os
-import json
+import logging
+from datetime import datetime
 from typing import Optional
-from pathlib import Path
-from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse
+from sqlalchemy.orm import Session
+
+from app.database.db import get_db
+from app.models import YouTubeChannel
 from app.services.youtube_publisher import YouTubePublisher, YouTubeCredentials
 
+
+logger = logging.getLogger(__name__)
 
 # Create router for YouTube endpoints
 router = APIRouter(prefix="/youtube", tags=["youtube"])
 
-# Initialize YouTube publisher
+# Initialize YouTube publisher (handles OAuth and API calls)
 youtube_publisher = YouTubePublisher()
 
-# File to store YouTube credentials per brand
-YOUTUBE_CREDENTIALS_FILE = Path("youtube_credentials.json")
-
-
-class YouTubeConnectRequest(BaseModel):
-    """Request to initiate YouTube OAuth for a brand."""
-    brand: str
-
-
-def _load_youtube_credentials() -> dict:
-    """Load stored YouTube credentials from file."""
-    if YOUTUBE_CREDENTIALS_FILE.exists():
-        try:
-            with open(YOUTUBE_CREDENTIALS_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-
-def _save_youtube_credentials(credentials: dict):
-    """Save YouTube credentials to file."""
-    with open(YOUTUBE_CREDENTIALS_FILE, "w") as f:
-        json.dump(credentials, f, indent=2)
+# List of valid brands
+VALID_BRANDS = [
+    "healthycollege",
+    "vitalitycollege", 
+    "longevitycollege",
+    "holisticcollege",
+    "wellbeingcollege"
+]
 
 
 @router.get("/connect")
@@ -48,22 +47,34 @@ async def youtube_connect(brand: str = Query(..., description="Brand to connect 
     """
     Start the YouTube OAuth flow for a specific brand.
     
-    This redirects the user to Google's consent screen where they can:
-    1. Log in with their Google account
-    2. Select the YouTube channel (if multiple)
-    3. Grant upload permissions
+    This is the ONLY user interaction required for YouTube.
+    After this, uploads happen automatically forever.
     
-    After authorization, they'll be redirected to /youtube/callback
+    Flow:
+    1. User clicks "Connect YouTube" for a brand
+    2. Redirects to Google consent screen
+    3. User picks channel and clicks "Allow"
+    4. Callback stores refresh_token in DB
+    5. Done - user never does this again
     """
+    brand = brand.lower()
+    
+    if brand not in VALID_BRANDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid brand. Must be one of: {', '.join(VALID_BRANDS)}"
+        )
+    
     if not youtube_publisher.client_id:
         raise HTTPException(
             status_code=500,
             detail="YouTube OAuth not configured. Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET."
         )
     
-    # Use brand as state parameter for CSRF and to track which brand
+    # Use brand as state parameter for CSRF protection and brand tracking
     auth_url = youtube_publisher.get_authorization_url(state=brand)
     
+    logger.info(f"Starting YouTube OAuth flow for brand: {brand}")
     return RedirectResponse(url=auth_url)
 
 
@@ -71,15 +82,19 @@ async def youtube_connect(brand: str = Query(..., description="Brand to connect 
 async def youtube_callback(
     code: Optional[str] = None,
     state: Optional[str] = None,
-    error: Optional[str] = None
+    error: Optional[str] = None,
+    db: Session = Depends(get_db)
 ):
     """
     Handle the OAuth callback from Google.
     
-    This receives the authorization code and exchanges it for tokens.
-    The tokens are then stored for the brand specified in the state parameter.
+    This is called ONCE after the user authorizes.
+    We exchange the code for tokens and store the refresh_token in DB.
+    
+    The refresh_token can be used for years without user interaction.
     """
     if error:
+        logger.error(f"YouTube OAuth error: {error}")
         return HTMLResponse(f"""
         <html>
         <head><title>YouTube Connection Failed</title></head>
@@ -103,12 +118,14 @@ async def youtube_callback(
         </html>
         """)
     
-    brand = state or "unknown"
+    brand = (state or "unknown").lower()
     
-    # Exchange code for tokens
+    # Exchange authorization code for tokens
+    # This gives us both access_token (short-lived) and refresh_token (long-lived)
     success, result = youtube_publisher.exchange_code_for_tokens(code)
     
     if not success:
+        logger.error(f"Token exchange failed for {brand}: {result}")
         return HTMLResponse(f"""
         <html>
         <head><title>YouTube Connection Failed</title></head>
@@ -120,20 +137,52 @@ async def youtube_callback(
         </html>
         """)
     
-    # Store the credentials for this brand
-    credentials = _load_youtube_credentials()
-    credentials[brand] = {
-        "channel_id": result["channel_id"],
-        "channel_name": result["channel_name"],
-        "refresh_token": result["refresh_token"]
-    }
-    _save_youtube_credentials(credentials)
+    # Store the refresh_token in the database
+    # This is the ONLY token we need to store long-term
+    try:
+        # Check if brand already has a channel connected
+        existing = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand).first()
+        
+        if existing:
+            # Update existing record
+            existing.channel_id = result["channel_id"]
+            existing.channel_name = result["channel_name"]
+            existing.refresh_token = result["refresh_token"]
+            existing.status = "connected"
+            existing.last_error = None
+            existing.updated_at = datetime.utcnow()
+            logger.info(f"Updated YouTube connection for {brand}: {result['channel_name']}")
+        else:
+            # Create new record
+            youtube_channel = YouTubeChannel(
+                brand=brand,
+                channel_id=result["channel_id"],
+                channel_name=result["channel_name"],
+                refresh_token=result["refresh_token"],
+                status="connected",
+                connected_at=datetime.utcnow()
+            )
+            db.add(youtube_channel)
+            logger.info(f"Created YouTube connection for {brand}: {result['channel_name']}")
+        
+        db.commit()
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to save YouTube credentials to DB: {e}")
+        return HTMLResponse(f"""
+        <html>
+        <head><title>YouTube Connection Failed</title></head>
+        <body style="font-family: system-ui; padding: 40px; text-align: center;">
+            <h1 style="color: #ef4444;">❌ Database Error</h1>
+            <p>Failed to save credentials: {str(e)}</p>
+            <p><a href="/">Return to app</a></p>
+        </body>
+        </html>
+        """)
     
-    # Also set as environment variable for this session (optional)
-    brand_upper = brand.upper()
-    os.environ[f"{brand_upper}_YOUTUBE_CHANNEL_ID"] = result["channel_id"]
-    os.environ[f"{brand_upper}_YOUTUBE_REFRESH_TOKEN"] = result["refresh_token"]
-    
+    # Success page
+    brand_display = brand.replace("college", " College").title()
     return HTMLResponse(f"""
     <html>
     <head>
@@ -197,31 +246,33 @@ async def youtube_callback(
                 background: #cc0000;
             }}
             .note {{
-                font-size: 12px;
-                color: #888;
+                font-size: 13px;
+                color: #22c55e;
                 margin-top: 20px;
+                background: #f0fdf4;
+                padding: 12px;
+                border-radius: 8px;
             }}
         </style>
     </head>
     <body>
         <div class="card">
             <h1>✅ YouTube Connected!</h1>
-            <p class="brand">{brand}</p>
+            <p class="brand">{brand_display}</p>
             
             <div class="channel">
                 <p class="channel-name">📺 {result['channel_name']}</p>
                 <p class="channel-id">{result['channel_id']}</p>
             </div>
             
-            <p>This channel is now linked to <strong>{brand}</strong>.</p>
+            <p>This channel is now linked to <strong>{brand_display}</strong>.</p>
             <p>You can now schedule YouTube Shorts for this brand!</p>
             
             <a href="/" class="btn">Return to App</a>
             
             <p class="note">
-                To make this permanent, add these to your .env file:<br>
-                <code>{brand_upper}_YOUTUBE_CHANNEL_ID={result['channel_id']}</code><br>
-                <code>{brand_upper}_YOUTUBE_REFRESH_TOKEN={result['refresh_token'][:20]}...</code>
+                🔒 Credentials saved securely to database.<br>
+                You won't need to connect again unless access is revoked.
             </p>
         </div>
     </body>
@@ -230,42 +281,35 @@ async def youtube_callback(
 
 
 @router.get("/status")
-async def youtube_status():
+async def youtube_status(db: Session = Depends(get_db)):
     """
     Get the connection status for all brands' YouTube channels.
     
     Returns which brands have YouTube connected and quota information.
     """
-    credentials = _load_youtube_credentials()
-    
-    # Also check environment variables
-    brands = ["gymcollege", "healthycollege", "vitalitycollege", "longevitycollege", "holisticcollege", "wellbeingcollege"]
+    # Get all connected channels from database
+    channels = db.query(YouTubeChannel).all()
+    channel_map = {ch.brand: ch for ch in channels}
     
     status = {}
-    for brand in brands:
-        brand_upper = brand.upper()
-        
-        # Check file credentials first, then env vars
-        if brand in credentials:
+    for brand in VALID_BRANDS:
+        if brand in channel_map:
+            ch = channel_map[brand]
             status[brand] = {
-                "connected": True,
-                "channel_id": credentials[brand]["channel_id"],
-                "channel_name": credentials[brand]["channel_name"],
-                "source": "file"
-            }
-        elif os.getenv(f"{brand_upper}_YOUTUBE_CHANNEL_ID"):
-            status[brand] = {
-                "connected": True,
-                "channel_id": os.getenv(f"{brand_upper}_YOUTUBE_CHANNEL_ID"),
-                "channel_name": f"{brand.replace('college', ' College').title()}",
-                "source": "env"
+                "connected": ch.status == "connected",
+                "channel_id": ch.channel_id,
+                "channel_name": ch.channel_name,
+                "status": ch.status,
+                "last_upload_at": ch.last_upload_at.isoformat() if ch.last_upload_at else None,
+                "last_error": ch.last_error,
+                "connected_at": ch.connected_at.isoformat() if ch.connected_at else None
             }
         else:
             status[brand] = {
                 "connected": False,
                 "channel_id": None,
                 "channel_name": None,
-                "source": None
+                "status": "not_connected"
             }
     
     # Get quota status
@@ -282,64 +326,96 @@ async def youtube_status():
 async def youtube_quota():
     """
     Get current YouTube API quota usage and status.
+    
+    YouTube API has a daily quota of 10,000 units.
+    Video uploads cost ~1,600 units each.
+    Resets at midnight Pacific Time.
     """
     return youtube_publisher.get_quota_status()
 
 
 @router.post("/disconnect/{brand}")
-async def youtube_disconnect(brand: str):
+async def youtube_disconnect(brand: str, db: Session = Depends(get_db)):
     """
     Disconnect a YouTube channel from a brand.
     
-    This removes the stored credentials (but doesn't revoke the OAuth token).
-    """
-    credentials = _load_youtube_credentials()
+    This removes the stored credentials from the database.
+    The user would need to re-authorize to reconnect.
     
-    if brand in credentials:
-        del credentials[brand]
-        _save_youtube_credentials(credentials)
-        
-        # Also clear env vars for this session
-        brand_upper = brand.upper()
-        if f"{brand_upper}_YOUTUBE_CHANNEL_ID" in os.environ:
-            del os.environ[f"{brand_upper}_YOUTUBE_CHANNEL_ID"]
-        if f"{brand_upper}_YOUTUBE_REFRESH_TOKEN" in os.environ:
-            del os.environ[f"{brand_upper}_YOUTUBE_REFRESH_TOKEN"]
-        
+    Note: This doesn't revoke the OAuth token on Google's side.
+    To fully revoke, user should go to Google Account → Security → Third-party apps.
+    """
+    brand = brand.lower()
+    
+    channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand).first()
+    
+    if channel:
+        db.delete(channel)
+        db.commit()
+        logger.info(f"Disconnected YouTube channel for {brand}")
         return {"success": True, "message": f"YouTube disconnected for {brand}"}
     
     return {"success": False, "message": f"No YouTube connection found for {brand}"}
 
 
-def get_youtube_credentials_for_brand(brand: str) -> Optional[YouTubeCredentials]:
+def get_youtube_credentials_for_brand(brand: str, db: Session) -> Optional[YouTubeCredentials]:
     """
-    Get YouTube credentials for a brand, checking both file and env vars.
+    Get YouTube credentials for a brand from the database.
+    
+    This is the function used by the scheduler/publisher to get
+    the refresh_token needed for uploads.
     
     Args:
         brand: Brand name (e.g., "healthycollege")
+        db: Database session
         
     Returns:
-        YouTubeCredentials if found, None otherwise
+        YouTubeCredentials if found and connected, None otherwise
     """
-    # Check file credentials first
-    credentials = _load_youtube_credentials()
-    if brand in credentials:
-        return YouTubeCredentials(
-            channel_id=credentials[brand]["channel_id"],
-            channel_name=credentials[brand]["channel_name"],
-            refresh_token=credentials[brand]["refresh_token"]
-        )
+    channel = db.query(YouTubeChannel).filter(
+        YouTubeChannel.brand == brand.lower(),
+        YouTubeChannel.status == "connected"
+    ).first()
     
-    # Fall back to environment variables
-    brand_upper = brand.upper()
-    channel_id = os.getenv(f"{brand_upper}_YOUTUBE_CHANNEL_ID")
-    refresh_token = os.getenv(f"{brand_upper}_YOUTUBE_REFRESH_TOKEN")
-    
-    if channel_id and refresh_token:
+    if channel:
         return YouTubeCredentials(
-            channel_id=channel_id,
-            channel_name=f"{brand.replace('college', ' College').title()}",
-            refresh_token=refresh_token
+            channel_id=channel.channel_id,
+            channel_name=channel.channel_name or brand,
+            refresh_token=channel.refresh_token
         )
     
     return None
+
+
+def update_youtube_channel_status(
+    brand: str, 
+    db: Session,
+    status: str = None,
+    last_error: str = None,
+    last_upload_at: datetime = None
+):
+    """
+    Update the status of a YouTube channel after an upload attempt.
+    
+    Called by the scheduler after each upload to track success/failure.
+    
+    Args:
+        brand: Brand name
+        db: Database session
+        status: New status ("connected", "error", "revoked")
+        last_error: Error message if upload failed
+        last_upload_at: Timestamp of successful upload
+    """
+    channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand.lower()).first()
+    
+    if channel:
+        if status:
+            channel.status = status
+        if last_error is not None:
+            channel.last_error = last_error
+        if last_upload_at:
+            channel.last_upload_at = last_upload_at
+            channel.last_error = None  # Clear error on success
+        
+        channel.updated_at = datetime.utcnow()
+        db.commit()
