@@ -654,8 +654,65 @@ class DatabaseSchedulerService:
                 thumbnail_url=thumbnail_url
             )
         
+        if "youtube" in platforms:
+            print("📺 Publishing to YouTube...")
+            results["youtube"] = self._publish_to_youtube(
+                video_path=video_path,
+                thumbnail_path=thumbnail_path,
+                caption=caption,
+                brand_name=brand_name
+            )
+        
         return results
     
+    def _publish_to_youtube(
+        self,
+        video_path: Path,
+        thumbnail_path: Path,
+        caption: str,
+        brand_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Publish a video to YouTube as a Short.
+        
+        Args:
+            video_path: Path to the video file
+            thumbnail_path: Path to the thumbnail
+            caption: Caption/description for the video
+            brand_name: Brand name for loading credentials
+            
+        Returns:
+            Publishing result dict
+        """
+        from app.api.youtube_routes import get_youtube_credentials_for_brand
+        from app.services.youtube_publisher import YouTubePublisher
+        
+        if not brand_name:
+            return {"success": False, "error": "Brand name required for YouTube publishing"}
+        
+        # Get credentials for this brand
+        credentials = get_youtube_credentials_for_brand(brand_name)
+        
+        if not credentials:
+            return {"success": False, "error": f"YouTube not configured for {brand_name}"}
+        
+        # Create publisher with credentials
+        yt_publisher = YouTubePublisher(credentials=credentials)
+        
+        # Extract title from caption (first line or first sentence)
+        lines = caption.split('\n')
+        title = lines[0][:100] if lines else "Health & Wellness Tips"
+        
+        # Upload as a Short
+        result = yt_publisher.upload_youtube_short(
+            video_path=str(video_path),
+            title=title,
+            description=caption,
+            thumbnail_path=str(thumbnail_path) if thumbnail_path.exists() else None
+        )
+        
+        return result
+
     def get_or_create_user(
         self,
         user_id: str,
