@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
-from app.database.db import get_db
+from app.db_connection import get_db, get_db_session
 from app.models import YouTubeChannel
 from app.services.youtube_publisher import YouTubePublisher, YouTubeCredentials
 

@@ -245,7 +245,7 @@ class MultiAccountPublisher:
         Returns:
             Publishing result dict
         """
-        from app.database.db import get_db_session
+        from app.db_connection import get_db_session
         from app.api.youtube_routes import get_youtube_credentials_for_brand, update_youtube_channel_status
         from app.services.youtube_publisher import YouTubePublisher
         from datetime import datetime
