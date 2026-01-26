@@ -694,7 +694,10 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                     onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
                     className="w-8 h-8 rounded cursor-pointer border border-gray-600"
                   />
-                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded">
+                  <div 
+                    className="flex-1 flex items-center gap-1 px-2 py-1 border border-gray-600 rounded"
+                    style={{ backgroundColor: '#374151' }}
+                  >
                     <div 
                       className="w-3 h-3 rounded-sm border border-gray-500 shrink-0" 
                       style={{ backgroundColor: darkTitleColor }}
@@ -703,7 +706,8 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                       type="text"
                       value={darkTitleColor.toUpperCase()}
                       onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
-                      className="flex-1 text-xs font-mono bg-transparent text-gray-100 outline-none"
+                      className="flex-1 text-xs font-mono bg-transparent outline-none"
+                      style={{ color: '#f3f4f6' }}
                     />
                   </div>
                 </div>
@@ -717,7 +721,10 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                     onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
                     className="w-8 h-8 rounded cursor-pointer border border-gray-600"
                   />
-                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded">
+                  <div 
+                    className="flex-1 flex items-center gap-1 px-2 py-1 border border-gray-600 rounded"
+                    style={{ backgroundColor: '#374151' }}
+                  >
                     <div 
                       className="w-3 h-3 rounded-sm border border-gray-500 shrink-0" 
                       style={{ backgroundColor: darkBgColor }}
@@ -726,7 +733,8 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                       type="text"
                       value={darkBgColor.toUpperCase()}
                       onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
-                      className="flex-1 text-xs font-mono bg-transparent text-gray-100 outline-none"
+                      className="flex-1 text-xs font-mono bg-transparent outline-none"
+                      style={{ color: '#f3f4f6' }}
                     />
                   </div>
                 </div>

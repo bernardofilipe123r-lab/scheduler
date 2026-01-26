@@ -290,7 +290,10 @@ async def update_brand_theme(
     # Load current overrides
     overrides = load_theme_overrides()
     
-    # Update brand colors
+    # Get existing brand overrides (to preserve logo if not re-uploading)
+    existing_brand_overrides = overrides.get(brand_id, {})
+    
+    # Update brand colors (preserve existing logo)
     overrides[brand_id] = {
         "brand_color": brand_color,
         "light_title_color": light_title_color,
@@ -298,6 +301,10 @@ async def update_brand_theme(
         "dark_title_color": dark_title_color,
         "dark_bg_color": dark_bg_color
     }
+    
+    # Preserve existing logo if not uploading a new one
+    if existing_brand_overrides.get("logo") and (not logo or not logo.filename):
+        overrides[brand_id]["logo"] = existing_brand_overrides["logo"]
     
     # Handle logo upload
     logo_filename = None
