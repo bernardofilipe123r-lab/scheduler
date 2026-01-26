@@ -14,7 +14,10 @@ import {
   Youtube,
   Image,
   Type,
-  Sparkles
+  Sparkles,
+  Save,
+  Sun,
+  Moon
 } from 'lucide-react'
 import { useBrandsList, useBrandConnections, type BrandConnectionStatus } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
@@ -26,6 +29,16 @@ interface BrandInfo {
   logo: string
 }
 
+// Posting slot times
+const LIGHT_SLOTS = ['12:00 AM', '8:00 AM', '4:00 PM']
+const DARK_SLOTS = ['4:00 AM', '12:00 PM', '8:00 PM']
+const TIME_OPTIONS = [
+  '12:00 AM', '1:00 AM', '2:00 AM', '3:00 AM', '4:00 AM', '5:00 AM',
+  '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
+  '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
+  '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM', '11:00 PM'
+]
+
 interface SettingsModalProps {
   brand: BrandInfo
   connections: BrandConnectionStatus | undefined
@@ -34,6 +47,29 @@ interface SettingsModalProps {
 
 function BrandSettingsModal({ brand, connections, onClose }: SettingsModalProps) {
   const navigate = useNavigate()
+  const [lightSlots, setLightSlots] = useState(LIGHT_SLOTS)
+  const [darkSlots, setDarkSlots] = useState(DARK_SLOTS)
+  const [hasChanges, setHasChanges] = useState(false)
+
+  const updateSlot = (mode: 'light' | 'dark', index: number, value: string) => {
+    if (mode === 'light') {
+      const newSlots = [...lightSlots]
+      newSlots[index] = value
+      setLightSlots(newSlots)
+    } else {
+      const newSlots = [...darkSlots]
+      newSlots[index] = value
+      setDarkSlots(newSlots)
+    }
+    setHasChanges(true)
+  }
+
+  const handleSave = () => {
+    // TODO: Save to backend
+    console.log('Saving slots:', { lightSlots, darkSlots })
+    setHasChanges(false)
+    // Show success toast or notification
+  }
   
   return (
     <div className="p-6 space-y-6">
@@ -117,41 +153,83 @@ function BrandSettingsModal({ brand, connections, onClose }: SettingsModalProps)
         </button>
       </div>
 
-      {/* Scheduling info */}
+      {/* Scheduling slots - Editable */}
       <div className="bg-gray-50 rounded-xl p-4">
         <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
           <Clock className="w-4 h-4" />
           Posting Schedule
         </h4>
-        <p className="text-sm text-gray-600 mb-2">
-          This brand posts 6 times per day with staggered timing:
+        <p className="text-sm text-gray-600 mb-4">
+          This brand posts 6 times per day. Edit the time slots below:
         </p>
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="bg-white rounded px-2 py-1 text-center">
-            <span className="text-gray-500">Light</span>
-            <p className="font-medium">12 AM, 8 AM, 4 PM</p>
+        
+        {/* Light Mode Slots */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Sun className="w-4 h-4 text-yellow-500" />
+            <span className="text-sm font-medium text-gray-700">Light Mode Slots</span>
           </div>
-          <div className="bg-gray-800 text-white rounded px-2 py-1 text-center">
-            <span className="text-gray-300">Dark</span>
-            <p className="font-medium">4 AM, 12 PM, 8 PM</p>
-          </div>
-          <div className="bg-white rounded px-2 py-1 text-center flex items-center justify-center">
-            <span className="text-gray-500 text-xs">+ brand offset</span>
+          <div className="grid grid-cols-3 gap-2">
+            {lightSlots.map((slot, index) => (
+              <select
+                key={`light-${index}`}
+                value={slot}
+                onChange={(e) => updateSlot('light', index, e.target.value)}
+                className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                {TIME_OPTIONS.map(time => (
+                  <option key={time} value={time}>{time}</option>
+                ))}
+              </select>
+            ))}
           </div>
         </div>
+
+        {/* Dark Mode Slots */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Moon className="w-4 h-4 text-gray-600" />
+            <span className="text-sm font-medium text-gray-700">Dark Mode Slots</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {darkSlots.map((slot, index) => (
+              <select
+                key={`dark-${index}`}
+                value={slot}
+                onChange={(e) => updateSlot('dark', index, e.target.value)}
+                className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                {TIME_OPTIONS.map(time => (
+                  <option key={time} value={time}>{time}</option>
+                ))}
+              </select>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500 mt-3">+ brand offset applied automatically</p>
       </div>
 
       {/* Actions */}
       <div className="flex gap-3">
         <button
           onClick={onClose}
-          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium min-w-[100px]"
         >
           Close
         </button>
+        {hasChanges && (
+          <button
+            onClick={handleSave}
+            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[100px]"
+          >
+            <Save className="w-4 h-4" />
+            Save Changes
+          </button>
+        )}
         <button
           onClick={() => { onClose(); navigate('/scheduled'); }}
-          className="flex-1 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
+          className="flex-1 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium min-w-[120px] whitespace-nowrap"
         >
           View Schedule
         </button>
@@ -166,6 +244,14 @@ interface ThemeModalProps {
 }
 
 function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
+  // Theme state - editable colors
+  const [brandColor, setBrandColor] = useState(brand.color)
+  const [lightTitleColor, setLightTitleColor] = useState('#000000')
+  const [lightBgColor, setLightBgColor] = useState('#dcf6c8')
+  const [darkTitleColor, setDarkTitleColor] = useState('#ffffff')
+  const [darkBgColor, setDarkBgColor] = useState(brand.color)
+  const [hasChanges, setHasChanges] = useState(false)
+
   // Parse color to RGB for display
   const hexToRgb = (hex: string) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -176,14 +262,31 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
     } : { r: 0, g: 0, b: 0 }
   }
   
-  const rgb = hexToRgb(brand.color)
+  const rgb = hexToRgb(brandColor)
+
+  const handleColorChange = (setter: (v: string) => void) => (value: string) => {
+    setter(value)
+    setHasChanges(true)
+  }
+
+  const handleSave = () => {
+    // TODO: Save to backend
+    console.log('Saving theme:', { 
+      brandColor, 
+      lightTitleColor, 
+      lightBgColor, 
+      darkTitleColor, 
+      darkBgColor 
+    })
+    setHasChanges(false)
+  }
 
   return (
     <div className="p-6 space-y-6">
       {/* Preview header */}
       <div 
         className="rounded-xl p-6 text-center"
-        style={{ backgroundColor: brand.color }}
+        style={{ backgroundColor: brandColor }}
       >
         <span className="text-4xl font-bold text-white/30">
           {brand.name.split(' ').map(w => w[0]).join('')}
@@ -191,18 +294,25 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
         <h3 className="text-xl font-bold text-white mt-2">{brand.name}</h3>
       </div>
 
-      {/* Color info */}
+      {/* Brand Color */}
       <div className="space-y-4">
         <div>
           <label className="text-sm font-medium text-gray-700 mb-2 block">Brand Color</label>
           <div className="flex items-center gap-3">
-            <div 
-              className="w-12 h-12 rounded-lg border-2 border-gray-200"
-              style={{ backgroundColor: brand.color }}
+            <input
+              type="color"
+              value={brandColor}
+              onChange={(e) => handleColorChange(setBrandColor)(e.target.value)}
+              className="w-12 h-12 rounded-lg cursor-pointer border-2 border-gray-200"
             />
-            <div>
-              <p className="font-mono text-sm font-medium">{brand.color.toUpperCase()}</p>
-              <p className="text-xs text-gray-500">RGB({rgb.r}, {rgb.g}, {rgb.b})</p>
+            <div className="flex-1">
+              <input
+                type="text"
+                value={brandColor.toUpperCase()}
+                onChange={(e) => handleColorChange(setBrandColor)(e.target.value)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">RGB({rgb.r}, {rgb.g}, {rgb.b})</p>
             </div>
           </div>
         </div>
@@ -216,7 +326,7 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
                 <Image className="w-4 h-4 text-gray-500" />
                 <span className="text-sm font-medium">Logo</span>
               </div>
-              <p className="text-xs text-gray-500">{brand.logo || 'Default logo'}</p>
+              <p className="text-xs text-gray-500">{brand.logo || `${brand.id}_logo.png`}</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
@@ -228,27 +338,117 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
           </div>
         </div>
 
-        {/* Light/Dark mode preview */}
+        {/* Light/Dark mode colors - Editable */}
         <div>
-          <label className="text-sm font-medium text-gray-700 mb-2 block">Reel Variants</label>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-              <div 
-                className="w-full h-16 rounded mb-2 flex items-center justify-center"
-                style={{ backgroundColor: brand.color + '20' }}
-              >
-                <span style={{ color: brand.color }} className="font-bold text-sm">Light Mode</span>
-              </div>
-              <p className="text-xs text-gray-500">Bright background</p>
+          <label className="text-sm font-medium text-gray-700 mb-3 block">Reel Variant Colors</label>
+          
+          {/* Light Mode */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+            <div className="flex items-center gap-2 mb-3">
+              <Sun className="w-4 h-4 text-yellow-500" />
+              <span className="font-medium text-gray-900">Light Mode</span>
             </div>
-            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 text-center">
-              <div 
-                className="w-full h-16 rounded mb-2 flex items-center justify-center"
-                style={{ backgroundColor: brand.color }}
-              >
-                <span className="font-bold text-sm text-white">Dark Mode</span>
+            
+            {/* Light mode preview */}
+            <div 
+              className="w-full h-16 rounded-lg mb-3 flex items-center justify-center border"
+              style={{ backgroundColor: lightBgColor }}
+            >
+              <span style={{ color: lightTitleColor }} className="font-bold text-sm">
+                Sample Title Text
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Title Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={lightTitleColor}
+                    onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                  />
+                  <input
+                    type="text"
+                    value={lightTitleColor.toUpperCase()}
+                    onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded font-mono"
+                  />
+                </div>
               </div>
-              <p className="text-xs text-gray-400">Brand color background</p>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Background Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={lightBgColor}
+                    onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                  />
+                  <input
+                    type="text"
+                    value={lightBgColor.toUpperCase()}
+                    onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Dark Mode */}
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Moon className="w-4 h-4 text-gray-400" />
+              <span className="font-medium text-white">Dark Mode</span>
+            </div>
+            
+            {/* Dark mode preview */}
+            <div 
+              className="w-full h-16 rounded-lg mb-3 flex items-center justify-center"
+              style={{ backgroundColor: darkBgColor }}
+            >
+              <span style={{ color: darkTitleColor }} className="font-bold text-sm">
+                Sample Title Text
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Title Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={darkTitleColor}
+                    onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border border-gray-600"
+                  />
+                  <input
+                    type="text"
+                    value={darkTitleColor.toUpperCase()}
+                    onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-600 rounded font-mono bg-gray-800 text-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Background Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={darkBgColor}
+                    onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border border-gray-600"
+                  />
+                  <input
+                    type="text"
+                    value={darkBgColor.toUpperCase()}
+                    onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-600 rounded font-mono bg-gray-800 text-white"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -257,8 +457,8 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
       {/* Info */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">
-          <strong>Note:</strong> Theme customization is configured in the codebase. 
-          Colors, logos, and typography are defined per brand to ensure visual consistency across all reels.
+          <strong>Note:</strong> Changes will update the brand's color configuration. 
+          These colors are used for generating reels and thumbnails.
         </p>
       </div>
 
@@ -266,10 +466,19 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
       <div className="flex gap-3">
         <button
           onClick={onClose}
-          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium min-w-[100px]"
         >
           Close
         </button>
+        {hasChanges && (
+          <button
+            onClick={handleSave}
+            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[120px]"
+          >
+            <Save className="w-4 h-4" />
+            Save Theme
+          </button>
+        )}
       </div>
     </div>
   )

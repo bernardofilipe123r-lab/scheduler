@@ -269,7 +269,7 @@ async def youtube_callback(
                 font-family: system-ui, -apple-system, sans-serif;
                 padding: 40px;
                 text-align: center;
-                background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+                background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #bbf7d0 100%);
                 min-height: 100vh;
                 margin: 0;
                 display: flex;
@@ -278,63 +278,99 @@ async def youtube_callback(
             }}
             .card {{
                 background: white;
-                border-radius: 16px;
-                padding: 40px;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-                max-width: 500px;
+                border-radius: 20px;
+                padding: 48px;
+                box-shadow: 0 25px 50px rgba(34, 197, 94, 0.15), 0 0 0 1px rgba(34, 197, 94, 0.1);
+                max-width: 480px;
+            }}
+            .success-icon {{
+                width: 80px;
+                height: 80px;
+                background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 20px;
+                font-size: 40px;
+                box-shadow: 0 8px 24px rgba(34, 197, 94, 0.3);
             }}
             h1 {{
-                color: #22c55e;
-                margin-bottom: 10px;
+                color: #15803d;
+                margin-bottom: 8px;
+                font-size: 28px;
+                font-weight: 700;
             }}
             .brand {{
-                color: #666;
+                color: #16a34a;
                 font-size: 14px;
                 text-transform: uppercase;
-                letter-spacing: 1px;
+                letter-spacing: 2px;
+                font-weight: 600;
             }}
             .channel {{
-                background: #f3f4f6;
-                padding: 15px;
-                border-radius: 8px;
-                margin: 20px 0;
+                background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+                padding: 20px;
+                border-radius: 12px;
+                margin: 24px 0;
+                border: 1px solid #bbf7d0;
             }}
             .channel-name {{
-                font-size: 18px;
+                font-size: 20px;
                 font-weight: 600;
-                color: #111;
+                color: #15803d;
+                margin-bottom: 4px;
             }}
             .channel-id {{
                 font-size: 12px;
-                color: #666;
+                color: #16a34a;
                 font-family: monospace;
+                background: white;
+                padding: 4px 10px;
+                border-radius: 6px;
+                display: inline-block;
+            }}
+            .message {{
+                color: #374151;
+                line-height: 1.6;
+                margin: 16px 0;
             }}
             .btn {{
-                background: #ff0000;
+                background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
                 color: white;
-                padding: 12px 24px;
-                border-radius: 8px;
+                padding: 14px 32px;
+                border-radius: 12px;
                 text-decoration: none;
                 display: inline-block;
-                margin-top: 20px;
-                font-weight: 500;
+                margin-top: 24px;
+                font-weight: 600;
+                font-size: 16px;
+                box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+                transition: all 0.2s ease;
             }}
             .btn:hover {{
-                background: #cc0000;
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5);
             }}
             .note {{
                 font-size: 13px;
-                color: #22c55e;
-                margin-top: 20px;
+                color: #16a34a;
+                margin-top: 24px;
                 background: #f0fdf4;
-                padding: 12px;
-                border-radius: 8px;
+                padding: 16px;
+                border-radius: 12px;
+                border: 1px solid #bbf7d0;
+                line-height: 1.5;
+            }}
+            .note strong {{
+                color: #15803d;
             }}
         </style>
     </head>
     <body>
         <div class="card">
-            <h1>✅ YouTube Connected!</h1>
+            <div class="success-icon">✓</div>
+            <h1>YouTube Connected!</h1>
             <p class="brand">{brand_display}</p>
             
             <div class="channel">
@@ -342,14 +378,16 @@ async def youtube_callback(
                 <p class="channel-id">{result['channel_id']}</p>
             </div>
             
-            <p>This channel is now linked to <strong>{brand_display}</strong>.</p>
-            <p>You can now schedule YouTube Shorts for this brand!</p>
+            <p class="message">
+                This channel is now linked to <strong>{brand_display}</strong>.<br>
+                You can now schedule YouTube Shorts for this brand!
+            </p>
             
             <a href="/" class="btn">Return to App</a>
             
             <p class="note">
-                🔒 Credentials saved securely to database.<br>
-                You won't need to connect again unless access is revoked.
+                <strong>🔒 Secure Connection</strong><br>
+                Credentials saved securely. You won't need to connect again unless access is revoked.
             </p>
         </div>
     </body>
