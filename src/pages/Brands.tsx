@@ -707,7 +707,6 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                       value={darkTitleColor.toUpperCase()}
                       onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
                       className="flex-1 text-xs font-mono bg-transparent outline-none"
-                      style={{ color: '#f3f4f6' }}
                     />
                   </div>
                 </div>
@@ -734,7 +733,6 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
                       value={darkBgColor.toUpperCase()}
                       onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
                       className="flex-1 text-xs font-mono bg-transparent outline-none"
-                      style={{ color: '#f3f4f6' }}
                     />
                   </div>
                 </div>

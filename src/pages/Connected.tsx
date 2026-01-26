@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Instagram, 
   Facebook, 
@@ -52,10 +52,11 @@ function getPlatformBgColor(platform: Platform): string {
 
 interface ConnectionCardProps {
   brand: BrandConnectionStatus
+  brandLogo?: string
   onRefresh: () => void
 }
 
-function ConnectionCard({ brand, onRefresh }: ConnectionCardProps) {
+function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardProps) {
   const [disconnectingYouTube, setDisconnectingYouTube] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
   const disconnectYouTube = useDisconnectYouTube()
@@ -214,12 +215,20 @@ function ConnectionCard({ brand, onRefresh }: ConnectionCardProps) {
       >
         <div className="flex items-center gap-3">
           <div 
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"
             style={{ backgroundColor: brand.color }}
           >
-            <span className="text-white font-bold text-lg">
-              {brand.display_name.charAt(0)}
-            </span>
+            {brandLogo ? (
+              <img 
+                src={brandLogo} 
+                alt={brand.display_name}
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <span className="text-white font-bold text-lg">
+                {brand.display_name.charAt(0)}
+              </span>
+            )}
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">{brand.display_name}</h3>
@@ -242,6 +251,42 @@ function ConnectionCard({ brand, onRefresh }: ConnectionCardProps) {
 
 export function ConnectedPage() {
   const { data, isLoading, refetch } = useBrandConnections()
+  
+  // Store logos loaded from backend (keyed by brand id)
+  const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
+  
+  // Fetch saved logos for all brands on mount
+  useEffect(() => {
+    const fetchBrandLogos = async () => {
+      if (!data?.brands) return
+      
+      const logos: Record<string, string> = {}
+      
+      for (const brand of data.brands) {
+        try {
+          const response = await fetch(`/api/brands/${brand.brand}/theme`)
+          if (response.ok) {
+            const themeData = await response.json()
+            if (themeData.theme?.logo) {
+              const logoUrl = `/brand-logos/${themeData.theme.logo}`
+              const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
+              if (logoCheck.ok) {
+                logos[brand.brand] = logoUrl
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch logo for ${brand.brand}:`, error)
+        }
+      }
+      
+      setBrandLogos(logos)
+    }
+    
+    if (data?.brands?.length) {
+      fetchBrandLogos()
+    }
+  }, [data?.brands])
 
   if (isLoading) {
     return <FullPageLoader text="Loading connections..." />
@@ -356,7 +401,8 @@ export function ConnectedPage() {
         {data.brands.map(brand => (
           <ConnectionCard 
             key={brand.brand} 
-            brand={brand} 
+            brand={brand}
+            brandLogo={brandLogos[brand.brand]}
             onRefresh={() => refetch()} 
           />
         ))}
