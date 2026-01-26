@@ -669,6 +669,7 @@ class AutoScheduleRequest(BaseModel):
     brand: str
     variant: str
     caption: str = "CHANGE ME"
+    yt_title: Optional[str] = None  # YouTube-optimized title
     user_id: str = "default"
     video_path: Optional[str] = None
     thumbnail_path: Optional[str] = None
@@ -743,6 +744,12 @@ async def schedule_auto(request: AutoScheduleRequest):
         print(f"🎬 Video path: {video_path}")
         print(f"🖼️  Thumbnail path: {thumbnail_path}")
         
+        # Determine platforms - include YouTube if yt_title is provided
+        platforms = ["instagram", "facebook"]
+        if request.yt_title:
+            platforms.append("youtube")
+            print(f"📺 YouTube title: {request.yt_title}")
+        
         # Schedule the reel
         result = scheduler_service.schedule_reel(
             user_id=request.user_id,
@@ -751,7 +758,8 @@ async def schedule_auto(request: AutoScheduleRequest):
             video_path=video_path if video_path.exists() else None,
             thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
             caption=request.caption,
-            platforms=["instagram", "facebook"],
+            yt_title=request.yt_title,  # Pass YouTube title
+            platforms=platforms,
             user_name=request.user_id,
             brand=request.brand,
             variant=request.variant

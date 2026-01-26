@@ -24,6 +24,7 @@ class DatabaseSchedulerService:
         reel_id: str,
         scheduled_time: datetime,
         caption: str = "CHANGE ME",
+        yt_title: Optional[str] = None,
         platforms: list[str] = ["instagram"],
         video_path: Optional[Path] = None,
         thumbnail_path: Optional[Path] = None,
@@ -39,7 +40,8 @@ class DatabaseSchedulerService:
             reel_id: Unique identifier for the reel
             scheduled_time: When to publish (datetime object)
             caption: Caption for the post
-            platforms: List of platforms ("instagram", "facebook")
+            yt_title: YouTube-optimized title (for YouTube Shorts)
+            platforms: List of platforms ("instagram", "facebook", "youtube")
             video_path: Path to video file
             thumbnail_path: Path to thumbnail
             user_name: Display name for the user
@@ -57,6 +59,8 @@ class DatabaseSchedulerService:
         print(f"   Scheduled time: {scheduled_time}")
         print(f"   Platforms: {platforms}")
         print(f"   Brand: {brand}, Variant: {variant}")
+        if yt_title:
+            print(f"   📺 YouTube title: {yt_title}")
         
         try:
             with get_db_session() as db:
@@ -72,7 +76,8 @@ class DatabaseSchedulerService:
                     "video_path": str(video_path) if video_path else None,
                     "thumbnail_path": str(thumbnail_path) if thumbnail_path else None,
                     "brand": brand,
-                    "variant": variant or "light"
+                    "variant": variant or "light",
+                    "yt_title": yt_title  # Store YouTube title in metadata
                 }
                 print(f"   ✅ Metadata prepared: {metadata}")
                 
@@ -656,11 +661,14 @@ class DatabaseSchedulerService:
         
         if "youtube" in platforms:
             print("📺 Publishing to YouTube...")
+            # Get yt_title from metadata if available
+            yt_title = metadata.get("yt_title") if metadata else None
             results["youtube"] = self._publish_to_youtube(
                 video_path=video_path,
                 thumbnail_path=thumbnail_path,
                 caption=caption,
-                brand_name=brand_name
+                brand_name=brand_name,
+                yt_title=yt_title
             )
         
         return results
@@ -670,7 +678,8 @@ class DatabaseSchedulerService:
         video_path: Path,
         thumbnail_path: Path,
         caption: str,
-        brand_name: Optional[str] = None
+        brand_name: Optional[str] = None,
+        yt_title: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Publish a video to YouTube as a Short.
@@ -687,6 +696,7 @@ class DatabaseSchedulerService:
             thumbnail_path: Path to the thumbnail
             caption: Caption/description for the video
             brand_name: Brand name for loading credentials
+            yt_title: YouTube-optimized title (searchable, clickable)
             
         Returns:
             Publishing result dict
@@ -709,9 +719,15 @@ class DatabaseSchedulerService:
             # The publisher will use the refresh_token to get a fresh access_token
             yt_publisher = YouTubePublisher(credentials=credentials)
             
-            # Extract title from caption (first line or first sentence)
-            lines = caption.split('\n')
-            title = lines[0][:100] if lines else "Health & Wellness Tips"
+            # Use provided yt_title or extract from caption as fallback
+            if yt_title:
+                title = yt_title[:100]  # Ensure max 100 chars
+                print(f"   📺 Using stored YouTube title: {title}")
+            else:
+                # Fallback: extract from caption (first line or first sentence)
+                lines = caption.split('\n')
+                title = lines[0][:100] if lines else "Health & Wellness Tips"
+                print(f"   📺 Using fallback title from caption: {title}")
             
             # Upload as a Short
             result = yt_publisher.upload_youtube_short(

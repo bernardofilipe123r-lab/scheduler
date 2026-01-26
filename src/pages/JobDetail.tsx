@@ -133,6 +133,7 @@ export function JobDetailPage() {
         reel_id: output.reel_id,
         variant: job.variant,
         caption: caption,
+        yt_title: output.yt_title,  // Pass YouTube title for YT Shorts
         video_path: output.video_path,
         thumbnail_path: output.thumbnail_path,
       })
@@ -179,6 +180,7 @@ export function JobDetailPage() {
             reel_id: output.reel_id,
             variant: job.variant,
             caption: caption,
+            yt_title: output.yt_title,  // Pass YouTube title for YT Shorts
             video_path: output.video_path,
             thumbnail_path: output.thumbnail_path,
           })
@@ -259,6 +261,7 @@ export function JobDetailPage() {
             reel_id: output.reel_id,
             variant: job.variant,
             caption: caption,
+            yt_title: output.yt_title,  // Pass YouTube title for YT Shorts
             video_path: output.video_path,
             thumbnail_path: output.thumbnail_path,
             scheduled_time: scheduledTime.toISOString(),
@@ -655,6 +658,50 @@ export function JobDetailPage() {
                             <p className="text-sm text-gray-600 whitespace-pre-line">
                               {createFacebookCaption(output.caption!)}
                             </p>
+                          </div>
+                        </div>
+                        
+                        {/* YouTube Title & Description */}
+                        <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-4 border border-red-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">📺</span>
+                              <span className="text-sm font-medium text-red-700">YouTube Shorts</span>
+                            </div>
+                          </div>
+                          
+                          {/* YouTube Title */}
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-red-600">Title</span>
+                              <button
+                                onClick={() => copyToClipboard(output.yt_title || job.title, 'YouTube Title')}
+                                className="p-1 rounded hover:bg-red-100"
+                              >
+                                <Copy className="w-3.5 h-3.5 text-red-500" />
+                              </button>
+                            </div>
+                            <p className="text-sm font-medium text-gray-800 bg-white/50 rounded px-2 py-1.5">
+                              {output.yt_title || job.title}
+                            </p>
+                          </div>
+                          
+                          {/* YouTube Description (same as Facebook) */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-red-600">Description</span>
+                              <button
+                                onClick={() => copyToClipboard(createFacebookCaption(output.caption!), 'YouTube Description')}
+                                className="p-1 rounded hover:bg-red-100"
+                              >
+                                <Copy className="w-3.5 h-3.5 text-red-500" />
+                              </button>
+                            </div>
+                            <div className="max-h-[120px] overflow-y-auto bg-white/50 rounded px-2 py-1.5">
+                              <p className="text-sm text-gray-600 whitespace-pre-line">
+                                {createFacebookCaption(output.caption!)}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>

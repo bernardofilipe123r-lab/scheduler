@@ -210,3 +210,110 @@ Just write the paragraph text, nothing else."""
             )
         
         return captions
+    
+    def generate_youtube_title(self, title: str, content_lines: List[str]) -> str:
+        """
+        Generate an attractive, searchable YouTube Shorts title.
+        
+        YouTube titles should:
+        - Be max 100 characters (YouTube truncates at ~70 visible)
+        - Be searchable (include relevant keywords)
+        - Be clickable (create curiosity)
+        - NOT be in ALL CAPS (only the reel overlay is)
+        
+        Args:
+            title: The original reel title (often ALL CAPS)
+            content_lines: Content points for context
+            
+        Returns:
+            YouTube-optimized title string
+        """
+        if not self.api_key:
+            return self._fallback_youtube_title(title)
+        
+        # Build context from content lines
+        content_summary = "\n".join([f"- {line}" for line in content_lines[:3]])
+        
+        prompt = f"""You are creating a YouTube Shorts title for a health/wellness video.
+
+Original reel title: {title}
+
+Key points covered:
+{content_summary}
+
+Create a YouTube title that:
+1. Is between 40-70 characters (short but descriptive)
+2. Uses Title Case (not ALL CAPS)
+3. Includes 1-2 searchable health keywords naturally
+4. Creates curiosity or urgency
+5. Could include a number if appropriate (e.g., "5 Signs...", "This 1 Food...")
+6. Avoids clickbait but is engaging
+
+GOOD EXAMPLES:
+- "5 Signs Your Hormones Are Out of Balance"
+- "This Bedtime Habit Is Secretly Ruining Your Sleep"
+- "Foods That Actually Speed Up Fat Loss"
+- "Why You're Always Tired (It's Not Sleep)"
+
+BAD EXAMPLES (avoid):
+- "EAT THIS IF YOU ARE HORMONE IMBALANCED" (all caps)
+- "Amazing Health Tips You Need to Know!!" (vague, excessive punctuation)
+- "Watch This Before It's Too Late" (pure clickbait)
+
+Respond with ONLY the title, nothing else."""
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [
+                        {"role": "system", "content": "You are a YouTube SEO expert. Write engaging, searchable titles."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.8,
+                    "max_tokens": 100
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                yt_title = result["choices"][0]["message"]["content"].strip()
+                # Clean up any quotes that might wrap the response
+                yt_title = yt_title.strip('"\'')
+                # Ensure max 100 characters
+                if len(yt_title) > 100:
+                    yt_title = yt_title[:97] + "..."
+                return yt_title
+            else:
+                print(f"⚠️ DeepSeek API error: {response.status_code} - {response.text}")
+                return self._fallback_youtube_title(title)
+                
+        except Exception as e:
+            print(f"⚠️ YouTube title generation error: {e}")
+            return self._fallback_youtube_title(title)
+    
+    def _fallback_youtube_title(self, title: str) -> str:
+        """Generate a fallback YouTube title from the reel title."""
+        # Convert ALL CAPS to Title Case
+        words = title.lower().split()
+        # Capitalize first letter of each word, except small words
+        small_words = {'a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'by', 'is', 'if', 'of'}
+        result = []
+        for i, word in enumerate(words):
+            if i == 0 or word not in small_words:
+                result.append(word.capitalize())
+            else:
+                result.append(word)
+        title_case = ' '.join(result)
+        
+        # Truncate if needed
+        if len(title_case) > 100:
+            title_case = title_case[:97] + "..."
+        
+        return title_case

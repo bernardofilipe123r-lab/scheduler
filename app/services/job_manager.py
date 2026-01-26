@@ -395,6 +395,15 @@ class JobManager:
                 cta_type=job.cta_type or "follow_tips"
             )
             print(f"   ✓ Caption generated ({len(caption)} chars)", flush=True)
+            
+            # Generate YouTube title (searchable, clickable)
+            print(f"   📺 Generating YouTube title...", flush=True)
+            yt_title = caption_gen.generate_youtube_title(
+                title=use_title,
+                content_lines=use_lines
+            )
+            print(f"   ✓ YouTube title: {yt_title}", flush=True)
+            
             self.update_brand_output(job_id, brand, {
                 "status": "generating",
                 "progress_message": "Finalizing...",
@@ -409,6 +418,7 @@ class JobManager:
                 "reel_path": f"/output/reels/{reel_id}_reel.png",
                 "video_path": f"/output/videos/{reel_id}_video.mp4",
                 "caption": caption,
+                "yt_title": yt_title,  # YouTube-optimized title
                 "content_lines": use_lines,  # Store differentiated content for this brand
                 "regenerated_at": datetime.utcnow().isoformat()
             })

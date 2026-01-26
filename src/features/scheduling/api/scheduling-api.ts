@@ -23,6 +23,7 @@ interface AutoScheduleRequest {
   reel_id: string
   variant: string
   caption?: string
+  yt_title?: string  // YouTube-optimized title for Shorts
   user_id?: string
   video_path?: string
   thumbnail_path?: string
