@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Layers,
@@ -17,7 +17,8 @@ import {
   Sparkles,
   Save,
   Sun,
-  Moon
+  Moon,
+  ArrowRight
 } from 'lucide-react'
 import { useBrandsList, useBrandConnections, type BrandConnectionStatus } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
@@ -29,21 +30,37 @@ interface BrandInfo {
   logo: string
 }
 
-// Posting slot times - each brand has different default offsets
-const BRAND_SLOT_DEFAULTS: Record<string, { light: string[], dark: string[] }> = {
-  healthycollege: { light: ['12:00 AM', '8:00 AM', '4:00 PM'], dark: ['4:00 AM', '12:00 PM', '8:00 PM'] },
-  longevitycollege: { light: ['1:00 AM', '9:00 AM', '5:00 PM'], dark: ['5:00 AM', '1:00 PM', '9:00 PM'] },
-  holisticcollege: { light: ['2:00 AM', '10:00 AM', '6:00 PM'], dark: ['6:00 AM', '2:00 PM', '10:00 PM'] },
-  vitalitycollege: { light: ['3:00 AM', '11:00 AM', '7:00 PM'], dark: ['7:00 AM', '3:00 PM', '11:00 PM'] },
-  wellbeingcollege: { light: ['12:00 AM', '8:00 AM', '4:00 PM'], dark: ['4:00 AM', '12:00 PM', '8:00 PM'] },
+// Brand scheduling configuration - OFFSET based system
+// Each brand has an offset (0-23 hours) from the base schedule
+// Posts alternate: LIGHT, DARK, LIGHT, DARK, etc. every (24/postsPerDay) hours
+const BRAND_SCHEDULES: Record<string, { offset: number; postsPerDay: number }> = {
+  healthycollege: { offset: 0, postsPerDay: 6 },    // Starts at 12:00 AM
+  longevitycollege: { offset: 1, postsPerDay: 6 },  // Starts at 1:00 AM
+  wellbeingcollege: { offset: 2, postsPerDay: 6 },  // Starts at 2:00 AM
+  vitalitycollege: { offset: 3, postsPerDay: 6 },   // Starts at 3:00 AM
+  holisticcollege: { offset: 4, postsPerDay: 6 },   // Starts at 4:00 AM
 }
 
-const TIME_OPTIONS = [
-  '12:00 AM', '1:00 AM', '2:00 AM', '3:00 AM', '4:00 AM', '5:00 AM',
-  '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
-  '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
-  '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM', '11:00 PM'
-]
+// Generate schedule times from offset and posts per day
+function generateSchedule(offset: number, postsPerDay: number): Array<{ hour: number; variant: 'light' | 'dark' }> {
+  const interval = Math.floor(24 / postsPerDay)
+  const slots: Array<{ hour: number; variant: 'light' | 'dark' }> = []
+  
+  for (let i = 0; i < postsPerDay; i++) {
+    const hour = (offset + i * interval) % 24
+    const variant = i % 2 === 0 ? 'light' : 'dark'
+    slots.push({ hour, variant })
+  }
+  
+  return slots
+}
+
+function formatHour(hour: number): string {
+  if (hour === 0) return '12:00 AM'
+  if (hour === 12) return '12:00 PM'
+  if (hour < 12) return `${hour}:00 AM`
+  return `${hour - 12}:00 PM`
+}
 
 interface SettingsModalProps {
   brand: BrandInfo
@@ -54,44 +71,32 @@ interface SettingsModalProps {
 
 function BrandSettingsModal({ brand, connections, allBrands, onClose }: SettingsModalProps) {
   const navigate = useNavigate()
-  const defaults = BRAND_SLOT_DEFAULTS[brand.id] || BRAND_SLOT_DEFAULTS.healthycollege
-  const [lightSlots, setLightSlots] = useState(defaults.light)
-  const [darkSlots, setDarkSlots] = useState(defaults.dark)
+  const schedule = BRAND_SCHEDULES[brand.id] || { offset: 0, postsPerDay: 6 }
+  const [offset, setOffset] = useState(schedule.offset)
+  const [postsPerDay, setPostsPerDay] = useState(schedule.postsPerDay)
   const [hasChanges, setHasChanges] = useState(false)
 
-  // Check if a slot conflicts with another brand
-  const getSlotConflict = (mode: 'light' | 'dark', time: string): string | null => {
+  // Generate preview of schedule
+  const previewSlots = generateSchedule(offset, postsPerDay)
+
+  // Check if offset conflicts with another brand
+  const getOffsetConflict = (checkOffset: number): string | null => {
     for (const otherBrand of allBrands) {
       if (otherBrand.id === brand.id) continue
-      const otherDefaults = BRAND_SLOT_DEFAULTS[otherBrand.id]
-      if (!otherDefaults) continue
-      
-      const otherSlots = mode === 'light' ? otherDefaults.light : otherDefaults.dark
-      if (otherSlots.includes(time)) {
+      const otherSchedule = BRAND_SCHEDULES[otherBrand.id]
+      if (otherSchedule && otherSchedule.offset === checkOffset) {
         return otherBrand.name
       }
     }
     return null
   }
 
-  const updateSlot = (mode: 'light' | 'dark', index: number, value: string) => {
-    if (mode === 'light') {
-      const newSlots = [...lightSlots]
-      newSlots[index] = value
-      setLightSlots(newSlots)
-    } else {
-      const newSlots = [...darkSlots]
-      newSlots[index] = value
-      setDarkSlots(newSlots)
-    }
-    setHasChanges(true)
-  }
+  const offsetConflict = getOffsetConflict(offset)
 
   const handleSave = () => {
     // TODO: Save to backend
-    console.log('Saving slots:', { lightSlots, darkSlots })
+    console.log('Saving schedule:', { offset, postsPerDay })
     setHasChanges(false)
-    // Show success toast or notification
   }
   
   return (
@@ -176,83 +181,84 @@ function BrandSettingsModal({ brand, connections, allBrands, onClose }: Settings
         </button>
       </div>
 
-      {/* Scheduling slots - Editable */}
+      {/* Schedule Configuration */}
       <div className="bg-gray-50 rounded-xl p-4">
         <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
           <Clock className="w-4 h-4" />
           Posting Schedule
         </h4>
-        <p className="text-sm text-gray-600 mb-4">
-          This brand posts 6 times per day. Edit the time slots below:
-        </p>
         
-        {/* Light Mode Slots */}
+        {/* Explanation */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="text-sm text-blue-800">
+            <strong>How it works:</strong> Posts are spaced evenly throughout the day, alternating between Light and Dark variants.
+            The <strong>offset</strong> determines when the first post of the day goes out.
+          </p>
+        </div>
+
+        {/* Offset selector */}
         <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Sun className="w-4 h-4 text-yellow-500" />
-            <span className="text-sm font-medium text-gray-700">Light Mode Slots</span>
-          </div>
-          <div className="space-y-2">
-            {lightSlots.map((slot, index) => {
-              const conflict = getSlotConflict('light', slot)
-              return (
-                <div key={`light-${index}`}>
-                  <select
-                    value={slot}
-                    onChange={(e) => updateSlot('light', index, e.target.value)}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      conflict ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
-                    }`}
-                  >
-                    {TIME_OPTIONS.map(time => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                  {conflict && (
-                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                      ⚠️ Same slot as {conflict}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Time Offset (First post of the day)
+          </label>
+          <select
+            value={offset}
+            onChange={(e) => { setOffset(Number(e.target.value)); setHasChanges(true); }}
+            className={`w-full px-3 py-2.5 text-sm border rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+              offsetConflict ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
+            }`}
+          >
+            {Array.from({ length: 24 }, (_, i) => (
+              <option key={i} value={i}>{formatHour(i)} (Offset +{i}h)</option>
+            ))}
+          </select>
+          {offsetConflict && (
+            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+              ⚠️ Same offset as {offsetConflict} - posts will go out at the same time (different content)
+            </p>
+          )}
         </div>
 
-        {/* Dark Mode Slots */}
+        {/* Posts per day */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Posts Per Day
+          </label>
+          <select
+            value={postsPerDay}
+            onChange={(e) => { setPostsPerDay(Number(e.target.value)); setHasChanges(true); }}
+            className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value={2}>2 posts/day (every 12h)</option>
+            <option value={3}>3 posts/day (every 8h)</option>
+            <option value={4}>4 posts/day (every 6h)</option>
+            <option value={6}>6 posts/day (every 4h)</option>
+            <option value={8}>8 posts/day (every 3h)</option>
+            <option value={12}>12 posts/day (every 2h)</option>
+          </select>
+        </div>
+
+        {/* Schedule Preview */}
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Moon className="w-4 h-4 text-gray-600" />
-            <span className="text-sm font-medium text-gray-700">Dark Mode Slots</span>
-          </div>
-          <div className="space-y-2">
-            {darkSlots.map((slot, index) => {
-              const conflict = getSlotConflict('dark', slot)
-              return (
-                <div key={`dark-${index}`}>
-                  <select
-                    value={slot}
-                    onChange={(e) => updateSlot('dark', index, e.target.value)}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      conflict ? 'border-amber-400' : 'border-gray-600'
-                    }`}
-                  >
-                    {TIME_OPTIONS.map(time => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                  {conflict && (
-                    <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
-                      ⚠️ Same slot as {conflict}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Schedule Preview
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {previewSlots.map((slot, i) => (
+              <div
+                key={i}
+                className={`px-3 py-2 rounded-lg text-center text-sm font-medium ${
+                  slot.variant === 'light' 
+                    ? 'bg-white border border-gray-200 text-gray-800' 
+                    : 'bg-gray-800 text-white'
+                }`}
+              >
+                <span className="text-xs opacity-60 block">{slot.variant.toUpperCase()}</span>
+                {formatHour(slot.hour)}
+              </div>
+            ))}
           </div>
         </div>
-
-        <p className="text-xs text-gray-500 mt-3">Stagger times across brands to avoid posting at the same time</p>
       </div>
 
       {/* Actions */}
@@ -749,11 +755,20 @@ export function BrandsPage() {
   const [selectedBrandForSettings, setSelectedBrandForSettings] = useState<BrandInfo | null>(null)
   const [selectedBrandForTheme, setSelectedBrandForTheme] = useState<BrandInfo | null>(null)
 
+  // Sort brands by offset
+  const sortedBrands = useMemo(() => {
+    const brands = brandsData?.brands || []
+    return [...brands].sort((a, b) => {
+      const offsetA = BRAND_SCHEDULES[a.id]?.offset ?? 99
+      const offsetB = BRAND_SCHEDULES[b.id]?.offset ?? 99
+      return offsetA - offsetB
+    })
+  }, [brandsData?.brands])
+
   if (brandsLoading || connectionsLoading) {
     return <FullPageLoader text="Loading brands..." />
   }
 
-  const brands = brandsData?.brands || []
   const connections = connectionsData?.brands || []
 
   // Get connection count for a brand
@@ -768,6 +783,11 @@ export function BrandsPage() {
   // Get connection status for a brand
   const getConnectionStatus = (brandId: string) => {
     return connections.find(b => b.brand === brandId)
+  }
+
+  // Get schedule info for a brand
+  const getBrandSchedule = (brandId: string) => {
+    return BRAND_SCHEDULES[brandId] || { offset: 0, postsPerDay: 6 }
   }
 
   return (
@@ -793,81 +813,119 @@ export function BrandsPage() {
         </button>
       </div>
 
-      {/* Brand cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {brands.map(brand => (
-          <div
-            key={brand.id}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-          >
-            {/* Brand header with color */}
-            <div 
-              className="h-24 relative"
-              style={{ backgroundColor: brand.color }}
+      {/* Schedule explanation */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <h3 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+          <Clock className="w-4 h-4" />
+          How Scheduling Works
+        </h3>
+        <p className="text-sm text-blue-800">
+          Each brand has a <strong>time offset</strong> that determines when its first post goes out each day. 
+          Posts alternate between Light and Dark variants throughout the day.
+          Brands are ordered below by their offset to show the posting sequence.
+        </p>
+      </div>
+
+      {/* Brand list - Vertical layout sorted by offset */}
+      <div className="space-y-4">
+        {sortedBrands.map((brand, index) => {
+          const schedule = getBrandSchedule(brand.id)
+          const previewSlots = generateSchedule(schedule.offset, schedule.postsPerDay)
+          
+          return (
+            <div
+              key={brand.id}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
             >
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-4xl font-bold text-white/30">
-                  {brand.name.split(' ').map(w => w[0]).join('')}
-                </span>
-              </div>
-            </div>
-
-            {/* Brand info */}
-            <div className="p-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-lg">{brand.name}</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">{brand.id}</p>
-                </div>
+              <div className="flex items-stretch">
+                {/* Offset indicator */}
                 <div 
-                  className="w-8 h-8 rounded-lg"
+                  className="w-20 flex flex-col items-center justify-center text-white shrink-0"
                   style={{ backgroundColor: brand.color }}
-                />
-              </div>
+                >
+                  <span className="text-xs opacity-80">OFFSET</span>
+                  <span className="text-2xl font-bold">+{schedule.offset}h</span>
+                  <span className="text-xs opacity-80">#{index + 1}</span>
+                </div>
 
-              {/* Stats */}
-              <div className="mt-4 flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1.5 text-gray-600">
-                  <div className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center">
-                    <Check className="w-3 h-3" />
+                {/* Brand info */}
+                <div className="flex-1 p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: brand.color }}
+                      >
+                        <span className="text-lg font-bold text-white">
+                          {brand.name.split(' ').map(w => w[0]).join('')}
+                        </span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{brand.name}</h3>
+                        <p className="text-sm text-gray-500">{brand.id}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Connection count */}
+                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                      <Check className="w-4 h-4 text-green-500" />
+                      <span>{getConnectionCount(brand.id)}/3</span>
+                    </div>
                   </div>
-                  <span>{getConnectionCount(brand.id)}/3 connected</span>
+
+                  {/* Schedule preview */}
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500 mr-1">Schedule:</span>
+                    {previewSlots.slice(0, 6).map((slot, i) => (
+                      <span
+                        key={i}
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          slot.variant === 'light' 
+                            ? 'bg-gray-100 text-gray-700' 
+                            : 'bg-gray-800 text-white'
+                        }`}
+                      >
+                        {formatHour(slot.hour)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 p-4 border-l border-gray-100">
+                  <button
+                    onClick={() => setSelectedBrandForSettings(brand)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={() => setSelectedBrandForTheme(brand)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    <Palette className="w-4 h-4" />
+                    Theme
+                  </button>
                 </div>
               </div>
-
-              {/* Actions */}
-              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedBrandForSettings(brand)}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
-                <button
-                  onClick={() => setSelectedBrandForTheme(brand)}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <Palette className="w-4 h-4" />
-                  Theme
-                </button>
-              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {/* Add new brand card */}
         <button
           onClick={() => setShowCreateModal(true)}
-          className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 hover:border-primary-400 hover:bg-primary-50/50 transition-colors min-h-[280px]"
+          className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-6 flex items-center justify-center gap-3 hover:border-primary-400 hover:bg-primary-50/50 transition-colors"
         >
-          <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-            <Plus className="w-6 h-6 text-gray-500" />
+          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+            <Plus className="w-5 h-5 text-gray-500" />
           </div>
-          <span className="font-medium text-gray-600">Create New Brand</span>
-          <span className="text-sm text-gray-400 text-center">
-            Set up a new brand with custom colors and social accounts
-          </span>
+          <div className="text-left">
+            <span className="font-medium text-gray-600 block">Create New Brand</span>
+            <span className="text-sm text-gray-400">Set up a new brand with custom colors and schedule</span>
+          </div>
+          <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
         </button>
       </div>
 
@@ -923,7 +981,7 @@ export function BrandsPage() {
           <BrandSettingsModal 
             brand={selectedBrandForSettings} 
             connections={getConnectionStatus(selectedBrandForSettings.id)}
-            allBrands={brands}
+            allBrands={sortedBrands}
             onClose={() => setSelectedBrandForSettings(null)} 
           />
         )}
