@@ -146,8 +146,11 @@ class YouTubePublisher:
     API_BASE = "https://www.googleapis.com/youtube/v3"
     UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
     
-    # Required OAuth scope for uploading
-    OAUTH_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+    # Required OAuth scopes: upload + readonly (to get channel info)
+    OAUTH_SCOPES = [
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.readonly"
+    ]
     
     def __init__(self, credentials: Optional[YouTubeCredentials] = None):
         """
@@ -182,7 +185,7 @@ class YouTubePublisher:
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
             "response_type": "code",
-            "scope": self.OAUTH_SCOPE,
+            "scope": " ".join(self.OAUTH_SCOPES),  # Space-separated scopes
             "access_type": "offline",  # Required to get refresh token
             "prompt": "consent select_account",  # Force channel selection
             "state": state
