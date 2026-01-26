@@ -81,9 +81,12 @@ output_dir.mkdir(parents=True, exist_ok=True)
 print(f"📁 Static files directory: {output_dir.absolute()}")
 app.mount("/output", StaticFiles(directory=str(output_dir)), name="output")
 
-# Mount brand logos directory for theme customization
-logos_dir = Path("assets/logos")
+# Mount brand logos directory for theme customization - use persistent volume
+brand_data_dir = output_dir / "brand-data"
+brand_data_dir.mkdir(parents=True, exist_ok=True)
+logos_dir = brand_data_dir / "logos"
 logos_dir.mkdir(parents=True, exist_ok=True)
+print(f"🎨 Brand logos directory: {logos_dir.absolute()}")
 app.mount("/brand-logos", StaticFiles(directory=str(logos_dir)), name="brand-logos")
 
 

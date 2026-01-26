@@ -232,9 +232,18 @@ async def create_brand(request: CreateBrandRequest):
 # BRAND THEME UPDATE ENDPOINTS
 # ============================================================================
 
-# Path for storing brand theme overrides (JSON file)
-THEME_OVERRIDES_PATH = Path(__file__).parent.parent.parent / "assets" / "theme_overrides.json"
-LOGOS_PATH = Path(__file__).parent.parent.parent / "assets" / "logos"
+# Use persistent volume path for Railway deployments
+# /app/output exists as a Railway volume and survives deployments
+PERSISTENT_DIR = Path("/app/output") if Path("/app/output").exists() else Path("output")
+BRAND_DATA_DIR = PERSISTENT_DIR / "brand-data"
+
+# Ensure brand data directory exists
+BRAND_DATA_DIR.mkdir(parents=True, exist_ok=True)
+(BRAND_DATA_DIR / "logos").mkdir(parents=True, exist_ok=True)
+
+# Path for storing brand theme overrides (JSON file) - now in persistent volume
+THEME_OVERRIDES_PATH = BRAND_DATA_DIR / "theme_overrides.json"
+LOGOS_PATH = BRAND_DATA_DIR / "logos"
 
 
 def load_theme_overrides() -> dict:

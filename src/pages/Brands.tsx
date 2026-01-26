@@ -13,7 +13,6 @@ import {
   Facebook,
   Youtube,
   Image,
-  Type,
   Sparkles,
   Save,
   Sun,
@@ -425,18 +424,6 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
     setHasChanges(true)
   }
 
-  // Parse color to RGB for display
-  const hexToRgb = (hex: string) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : { r: 0, g: 0, b: 0 }
-  }
-  
-  const rgb = hexToRgb(brandColor)
-
   const handleColorChange = (setter: (v: string) => void) => (value: string) => {
     setter(value)
     setHasChanges(true)
@@ -482,7 +469,7 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-4">
       {/* Loading state */}
       {isLoading && (
         <div className="flex items-center justify-center py-8">
@@ -493,266 +480,182 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
       
       {!isLoading && (
         <>
-      {/* Preview header with logo */}
-      <div 
-        className="rounded-xl p-6 text-center relative"
-        style={{ backgroundColor: brandColor }}
-      >
-        {logoPreview ? (
-          <div className="relative inline-block">
-            <img 
-              src={logoPreview} 
-              alt={brand.name} 
-              className="w-20 h-20 object-contain mx-auto"
-            />
-            <button
-              onClick={removeLogo}
-              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <label className="cursor-pointer group">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleLogoUpload}
-              className="hidden"
-            />
-            <div className="w-20 h-20 mx-auto rounded-xl bg-white/20 flex flex-col items-center justify-center group-hover:bg-white/30 transition-colors border-2 border-dashed border-white/40">
-              <span className="text-2xl font-bold text-white/60">
-                {brand.name.split(' ').map(w => w[0]).join('')}
-              </span>
-              <div className="flex items-center gap-1 mt-1">
-                <Upload className="w-3 h-3 text-white/50" />
-                <span className="text-[10px] text-white/50">Upload</span>
+      {/* Main content - horizontal layout */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* Left column - Logo and Brand Color */}
+        <div className="space-y-4">
+          {/* Logo upload */}
+          <div 
+            className="rounded-xl p-4 text-center"
+            style={{ backgroundColor: brandColor }}
+          >
+            {logoPreview ? (
+              <div className="relative inline-block">
+                <img 
+                  src={logoPreview} 
+                  alt={brand.name} 
+                  className="w-16 h-16 object-contain mx-auto"
+                />
+                <button
+                  onClick={removeLogo}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
               </div>
-            </div>
-          </label>
-        )}
-        <h3 className="text-xl font-bold text-white mt-3">{brand.name}</h3>
-      </div>
+            ) : (
+              <label className="cursor-pointer group">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                <div className="w-16 h-16 mx-auto rounded-lg bg-white/20 flex flex-col items-center justify-center group-hover:bg-white/30 transition-colors border-2 border-dashed border-white/40">
+                  <Upload className="w-5 h-5 text-white/60" />
+                  <span className="text-[10px] text-white/60 mt-1">Upload</span>
+                </div>
+              </label>
+            )}
+            <p className="text-white text-sm font-medium mt-2">{brand.name}</p>
+          </div>
 
-      {/* Brand Color */}
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium text-gray-700 mb-2 block">Brand Color</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={brandColor}
-              onChange={(e) => handleColorChange(setBrandColor)(e.target.value)}
-              className="w-12 h-12 rounded-lg cursor-pointer border-2 border-gray-200"
-            />
-            <div className="flex-1">
+          {/* Brand Color */}
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">Brand Color</label>
+            <div className="flex items-center gap-2">
               <input
-                type="text"
-                value={brandColor.toUpperCase()}
+                type="color"
+                value={brandColor}
                 onChange={(e) => handleColorChange(setBrandColor)(e.target.value)}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-mono text-sm"
+                className="w-10 h-10 rounded cursor-pointer border border-gray-200"
               />
-              <p className="text-xs text-gray-500 mt-1">RGB({rgb.r}, {rgb.g}, {rgb.b})</p>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={brandColor.toUpperCase()}
+                  onChange={(e) => handleColorChange(setBrandColor)(e.target.value)}
+                  className="w-full px-2 py-1 border border-gray-300 rounded font-mono text-xs"
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Theme elements */}
-        <div>
-          <label className="text-sm font-medium text-gray-700 mb-2 block">Theme Elements</label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors border-2 border-dashed border-transparent hover:border-gray-300">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="hidden"
-              />
-              <div className="flex items-center gap-2 mb-2">
-                <Image className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium">Logo</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {logoPreview ? (
-                  <>
-                    <img src={logoPreview} alt="Logo" className="w-6 h-6 object-contain" />
-                    <span className="text-xs text-green-600 font-medium">Uploaded</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4 text-gray-400" />
-                    <span className="text-xs text-gray-500">Click to upload</span>
-                  </>
-                )}
-              </div>
-            </label>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Type className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium">Typography</span>
-              </div>
-              <p className="text-xs text-gray-500">Inter font family</p>
-            </div>
+        {/* Middle column - Light Mode */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Sun className="w-4 h-4 text-yellow-500" />
+            <span className="font-medium text-gray-900 text-sm">Light Mode</span>
           </div>
-        </div>
-
-        {/* Light/Dark mode colors - Editable */}
-        <div>
-          <label className="text-sm font-medium text-gray-700 mb-3 block">Reel Variant Colors</label>
           
-          {/* Light Mode */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
-            <div className="flex items-center gap-2 mb-3">
-              <Sun className="w-4 h-4 text-yellow-500" />
-              <span className="font-medium text-gray-900">Light Mode</span>
-            </div>
-            
-            {/* Light mode preview */}
-            <div 
-              className="w-full h-16 rounded-lg mb-3 flex items-center justify-center border"
-              style={{ backgroundColor: lightBgColor }}
-            >
-              <span style={{ color: lightTitleColor }} className="font-bold text-sm">
-                Sample Title Text
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Title Color</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={lightTitleColor}
-                    onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                  />
-                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 rounded">
-                    <div 
-                      className="w-3 h-3 rounded-sm border border-gray-300 shrink-0" 
-                      style={{ backgroundColor: lightTitleColor }}
-                    />
-                    <input
-                      type="text"
-                      value={lightTitleColor.toUpperCase()}
-                      onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
-                      className="flex-1 text-xs font-mono bg-transparent text-gray-800 outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Background Color</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={lightBgColor}
-                    onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                  />
-                  <div className="flex-1 flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 rounded">
-                    <div 
-                      className="w-3 h-3 rounded-sm border border-gray-300 shrink-0" 
-                      style={{ backgroundColor: lightBgColor }}
-                    />
-                    <input
-                      type="text"
-                      value={lightBgColor.toUpperCase()}
-                      onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
-                      className="flex-1 text-xs font-mono bg-transparent text-gray-800 outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div 
+            className="w-full h-12 rounded-lg mb-3 flex items-center justify-center border"
+            style={{ backgroundColor: lightBgColor }}
+          >
+            <span style={{ color: lightTitleColor }} className="font-bold text-xs">
+              Sample Title
+            </span>
           </div>
 
-          {/* Dark Mode */}
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Moon className="w-4 h-4 text-gray-400" />
-              <span className="font-medium text-white">Dark Mode</span>
-            </div>
-            
-            {/* Dark mode preview */}
-            <div 
-              className="w-full h-16 rounded-lg mb-3 flex items-center justify-center border border-gray-600"
-              style={{ backgroundColor: darkBgColor }}
-            >
-              <span style={{ color: darkTitleColor }} className="font-bold text-sm">
-                Sample Title Text
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Title Color</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={darkTitleColor}
-                    onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border border-gray-600"
-                  />
-                  <div 
-                    className="flex-1 flex items-center gap-1 px-2 py-1 border border-gray-600 rounded"
-                    style={{ backgroundColor: '#374151' }}
-                  >
-                    <div 
-                      className="w-3 h-3 rounded-sm border border-gray-500 shrink-0" 
-                      style={{ backgroundColor: darkTitleColor }}
-                    />
-                    <input
-                      type="text"
-                      value={darkTitleColor.toUpperCase()}
-                      onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
-                      className="flex-1 text-xs font-mono bg-transparent outline-none"
-                    />
-                  </div>
-                </div>
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">Title Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={lightTitleColor}
+                  onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border border-gray-300"
+                />
+                <input
+                  type="text"
+                  value={lightTitleColor.toUpperCase()}
+                  onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
+                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-300 rounded bg-white text-gray-800"
+                />
               </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Background Color</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={darkBgColor}
-                    onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border border-gray-600"
-                  />
-                  <div 
-                    className="flex-1 flex items-center gap-1 px-2 py-1 border border-gray-600 rounded"
-                    style={{ backgroundColor: '#374151' }}
-                  >
-                    <div 
-                      className="w-3 h-3 rounded-sm border border-gray-500 shrink-0" 
-                      style={{ backgroundColor: darkBgColor }}
-                    />
-                    <input
-                      type="text"
-                      value={darkBgColor.toUpperCase()}
-                      onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
-                      className="flex-1 text-xs font-mono bg-transparent outline-none"
-                    />
-                  </div>
-                </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">Background</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={lightBgColor}
+                  onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border border-gray-300"
+                />
+                <input
+                  type="text"
+                  value={lightBgColor.toUpperCase()}
+                  onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
+                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-300 rounded bg-white text-gray-800"
+                />
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-sm text-blue-800">
-          <strong>Note:</strong> Changes will update the brand's color configuration. 
-          These colors are used for generating reels and thumbnails.
-        </p>
+        {/* Right column - Dark Mode */}
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Moon className="w-4 h-4 text-gray-400" />
+            <span className="font-medium text-white text-sm">Dark Mode</span>
+          </div>
+          
+          <div 
+            className="w-full h-12 rounded-lg mb-3 flex items-center justify-center border border-gray-600"
+            style={{ backgroundColor: darkBgColor }}
+          >
+            <span style={{ color: darkTitleColor }} className="font-bold text-xs">
+              Sample Title
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Title Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={darkTitleColor}
+                  onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border border-gray-600"
+                />
+                <input
+                  type="text"
+                  value={darkTitleColor.toUpperCase()}
+                  onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
+                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-600 rounded"
+                  style={{ backgroundColor: '#374151', color: '#f3f4f6' }}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Background</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={darkBgColor}
+                  onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border border-gray-600"
+                />
+                <input
+                  type="text"
+                  value={darkBgColor.toUpperCase()}
+                  onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
+                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-600 rounded"
+                  style={{ backgroundColor: '#374151', color: '#f3f4f6' }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Error message */}
       {saveError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
           <p className="text-sm text-red-800">
             <strong>Error:</strong> {saveError}
           </p>
@@ -760,33 +663,31 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
       )}
 
       {/* Actions */}
-      <div className="flex gap-3">
+      <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
         <button
           onClick={onClose}
           disabled={isSaving}
-          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium min-w-[100px] disabled:opacity-50"
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
         >
-          Close
+          Cancel
         </button>
-        {hasChanges && (
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[120px] disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Save Theme
-              </>
-            )}
-          </button>
-        )}
+        <button
+          onClick={handleSave}
+          disabled={isSaving || !hasChanges}
+          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              Save Theme
+            </>
+          )}
+        </button>
       </div>
       </>
       )}
@@ -1314,6 +1215,7 @@ export function BrandsPage() {
         isOpen={!!selectedBrandForTheme} 
         onClose={() => setSelectedBrandForTheme(null)}
         title={`${selectedBrandForTheme?.name} Theme`}
+        size="xl"
       >
         {selectedBrandForTheme && (
           <BrandThemeModal 
