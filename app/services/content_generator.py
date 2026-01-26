@@ -228,10 +228,10 @@ You have access to {get_idea_count()} proven viral posts that achieved 1M+ views
 4. **ADD ORIGINALITY** - Sometimes create completely new content based on the patterns you learned
 5. **NEVER COPY EXACTLY** - The output must be different from any example, but can be inspired by them
 
-📊 VARIATION SPECTRUM:
-- 40% of the time: Create close variations (same structure, different specifics)
-- 40% of the time: Remix/combine multiple examples into something new  
-- 20% of the time: Fully creative using learned patterns
+📊 VARIATION SPECTRUM (CRITICAL - FOLLOW THIS DISTRIBUTION):
+- 25% of the time: Create close variations (same structure, different specifics)
+- 35% of the time: Remix/combine multiple examples into something new  
+- 40% of the time: Fully creative using learned patterns (NO direct inspiration from examples)
 
 ## FORMAT STYLE TO USE: {format_style['name']}
 - Description: {format_style['description']}
@@ -245,14 +245,16 @@ You have access to {get_idea_count()} proven viral posts that achieved 1M+ views
 ## STRICT RULES
 
 ### TITLE PATTERNS TO LEARN FROM:
-- "[NUMBER] SIGNS YOUR BODY..." → Can become "X WARNINGS YOUR BODY..."
-- "JUST EAT THIS FOR 1 WEEK" → Can become "EAT THIS FOR 3 DAYS" or "TRY THIS FOR 5 DAYS"
+- "[NUMBER] SIGNS YOUR BODY..." → VARY the number! Use 4, 5, 6, 8, 9, 10 - NOT always 7!
+- "JUST EAT THIS FOR 1 WEEK" → VARY the time! Use 3 DAYS, 5 DAYS, 2 WEEKS, 10 DAYS, 1 MONTH
 - "DOCTORS DON'T WANT YOU TO KNOW" → Can become "PHARMACIES HIDE THIS" or "EXPERTS WON'T TELL YOU"
 - "THESE [PEOPLE] AGE FASTER" → Can vary the demographic or outcome
 - ALL CAPS, 3-8 words, creates curiosity/urgency/shock
 
+⚠️ IMPORTANT: AVOID overusing the number 7 in titles! Vary your numbers: 4, 5, 6, 8, 9, 10 are all great options.
+
 ### CONTENT RULES:
-- 5-10 points (match the examples' density)
+- VARY THE POINT COUNT NATURALLY: Use 5, 6, 8, 9, or 10 points. DO NOT always use 7!
 - DO NOT include numbers (1., 2., etc.) - numbers are added automatically by our system
 - Each point must be: concrete, specific, believable but slightly surprising
 - Mix: 60% validating (things they suspect), 40% shocking (new revelation)
@@ -277,13 +279,10 @@ Generate a cinematic image prompt with:
 {{
     "title": "YOUR VIRAL TITLE IN ALL CAPS",
     "content_lines": [
-        "Point 1 text",
-        "Point 2 text",
-        "Point 3 text",
-        "Point 4 text",
-        "Point 5 text",
-        "Point 6 text",
-        "Point 7 text"
+        "First point",
+        "Second point",
+        "Third point",
+        "... (continue for 5-10 total points, VARY the count each time)"
     ],
     "image_prompt": "Your detailed cinematic image prompt here ending with No text, no letters, no numbers, no symbols, no logos.",
     "format_style": "{format_style['name']}",
@@ -317,11 +316,12 @@ Generate the content now. Output ONLY the JSON, nothing else."""
             format_style = example.get("format_style", "")
             tags = ", ".join(example.get("tags", []))
             
-            # Limit to first 7 lines to keep prompt manageable
-            display_lines = lines[:7]
+            # Show variable number of lines to avoid AI always generating same count
+            max_display = random.randint(5, 9)
+            display_lines = lines[:max_display]
             content = "\n".join(f"• {line}" for line in display_lines)
-            if len(lines) > 7:
-                content += f"\n• ... ({len(lines) - 7} more points)"
+            if len(lines) > max_display:
+                content += f"\n• ... ({len(lines) - max_display} more points)"
             
             formatted.append(f"""### EXAMPLE {i} [{format_style}]
 **Title:** {title}

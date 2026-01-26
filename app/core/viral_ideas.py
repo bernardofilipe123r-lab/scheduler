@@ -98,20 +98,20 @@ VIRAL_IDEAS: List[Dict] = [
     },
     
     # --------------------------------------------------
-    # 5. Just Eat This For 1 Week (Version 2)
+    # 5. Just Eat This For 5 Days (Version 2)
     # --------------------------------------------------
     {
-        "title": "JUST EAT THIS FOR 1 WEEK",
+        "title": "TRY THIS FOR 5 DAYS",
         "content_lines": [
-            "If you eat one orange with a pinch of salt every morning for a week, cellular hydration improves, energy stabilizes, and morning fatigue fades.",
+            "If you eat one orange with a pinch of salt every morning for five days, cellular hydration improves, energy stabilizes, and morning fatigue fades.",
             "If you add one spoon of olive oil daily, inflammation markers may lower, joint stiffness reduces, and heart health is supported.",
-            "If you drink warm water before any food for seven days, digestion activates earlier, bloating reduces, and nutrient absorption improves.",
+            "If you drink warm water before any food for five days, digestion activates earlier, bloating reduces, and nutrient absorption improves.",
             "If you eat one serving of cooked vegetables every day, your gut lining is supported, immunity strengthens, and digestion becomes calmer.",
             "If you add one Brazil nut per day, your selenium intake supports thyroid function and daily energy.",
-            "If you stop eating late at night for one week, your sleep deepens and your body enters repair mode."
+            "If you stop eating late at night for five days, your sleep deepens and your body enters repair mode."
         ],
         "format_style": "FULL_SENTENCE",
-        "tags": ["nutrition", "7 day challenge", "food benefits"]
+        "tags": ["nutrition", "5 day challenge", "food benefits"]
     },
     
     # --------------------------------------------------
@@ -377,19 +377,19 @@ VIRAL_IDEAS: List[Dict] = [
     },
     
     # --------------------------------------------------
-    # 17. Just Eat This For 1 Week (Version 3)
+    # 17. Eat This For 3 Days (Version 3)
     # --------------------------------------------------
     {
-        "title": "JUST EAT THIS FOR 1 WEEK",
+        "title": "EAT THIS FOR 3 DAYS",
         "content_lines": [
-            "If you eat one banana with peanut butter every morning for a week, your energy will rise, your mood will stabilize, and your sugar cravings will reduce naturally.",
+            "If you eat one banana with peanut butter every morning for three days, your energy will rise, your mood will stabilize, and your sugar cravings will reduce naturally.",
             "If you eat one tablespoon of pumpkin seeds daily, your magnesium levels will increase, your sleep will improve, and your anxiety will calm down.",
-            "If you drink warm water with turmeric every morning for seven days, your bloating will reduce, inflammation will decrease, and digestion will feel lighter.",
+            "If you drink warm water with turmeric every morning for three days, your bloating will reduce, inflammation will decrease, and digestion will feel lighter.",
             "If you eat a handful of grapes every afternoon, your blood pressure may drop naturally and circulation may improve due to antioxidants.",
-            "If you drink chamomile tea before bed for one week, cortisol will reduce, your mind will calm, and sleep will deepen."
+            "If you drink chamomile tea before bed for three days, cortisol will reduce, your mind will calm, and sleep will deepen."
         ],
         "format_style": "FULL_SENTENCE",
-        "tags": ["nutrition", "7 day challenge", "food benefits"]
+        "tags": ["nutrition", "3 day challenge", "food benefits"]
     },
     
     # --------------------------------------------------
@@ -502,10 +502,10 @@ VIRAL_IDEAS: List[Dict] = [
     },
     
     # --------------------------------------------------
-    # 23. Just Eat This For 1 Week (Version 4)
+    # 23. Try This For 10 Days (Version 4)
     # --------------------------------------------------
     {
-        "title": "JUST EAT THIS FOR 1 WEEK",
+        "title": "DO THIS FOR 10 DAYS",
         "content_lines": [
             "If you eat one Brazil nut every morning, your thyroid gets a selenium boost, metabolism speeds up, and energy stays higher through the day.",
             "If you drink one glass of beetroot juice daily, blood flow improves, stamina rises, and skin may gain a natural glow.",
@@ -514,7 +514,7 @@ VIRAL_IDEAS: List[Dict] = [
             "If you drink warm fennel tea after dinner, bloating reduces, digestion accelerates, and your waistline may look flatter by morning."
         ],
         "format_style": "FULL_SENTENCE",
-        "tags": ["nutrition", "7 day challenge", "food benefits"]
+        "tags": ["nutrition", "10 day challenge", "food benefits"]
     },
     
     # --------------------------------------------------
@@ -679,10 +679,10 @@ VIRAL_IDEAS: List[Dict] = [
     },
     
     # --------------------------------------------------
-    # 31. Just Eat This For 1 Week (Version 5)
+    # 31. Add This To Your Diet For 2 Weeks (Version 5)
     # --------------------------------------------------
     {
-        "title": "JUST EAT THIS FOR 1 WEEK",
+        "title": "ADD THIS TO YOUR DIET FOR 2 WEEKS",
         "content_lines": [
             "If you eat half an avocado every morning, healthy fats increase, hormones stabilize, and skin hydration improves.",
             "If you eat two tablespoons of soaked flaxseeds daily, digestion improves, inflammation decreases, and bowel movements regulate.",
@@ -691,7 +691,7 @@ VIRAL_IDEAS: List[Dict] = [
             "If you drink one cup of ginger tea every evening, digestion calms and sleep may deepen."
         ],
         "format_style": "FULL_SENTENCE",
-        "tags": ["nutrition", "7 day challenge", "food benefits"]
+        "tags": ["nutrition", "14 day challenge", "food benefits"]
     },
     
     # --------------------------------------------------
@@ -1015,10 +1015,10 @@ VIRAL_IDEAS: List[Dict] = [
     },
     
     # --------------------------------------------------
-    # 46. Just Eat This For 1 Week (Version 6)
+    # 46. Eat This Every Day For 1 Month (Version 6)
     # --------------------------------------------------
     {
-        "title": "JUST EAT THIS FOR 1 WEEK",
+        "title": "EAT THIS EVERY DAY FOR 1 MONTH",
         "content_lines": [
             "One kiwi every morning – Improves digestion, boosts vitamin C, and enhances skin glow.",
             "One tablespoon soaked chia seeds daily – Eases constipation and supports detox.",
@@ -1027,7 +1027,7 @@ VIRAL_IDEAS: List[Dict] = [
             "One apple with cinnamon every morning – Stabilizes blood sugar and boosts metabolism."
         ],
         "format_style": "CAUSE_EFFECT",
-        "tags": ["nutrition", "7 day challenge", "food benefits"]
+        "tags": ["nutrition", "30 day challenge", "food benefits"]
     },
     
     # --------------------------------------------------
