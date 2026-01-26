@@ -20,7 +20,8 @@ import {
   Moon,
   ArrowRight,
   Upload,
-  X
+  X,
+  Loader2
 } from 'lucide-react'
 import { useBrandsList, useBrandConnections, type BrandConnectionStatus } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
@@ -361,6 +362,8 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
   const [darkTitleColor, setDarkTitleColor] = useState(themeDefaults.darkTitleColor)
   const [darkBgColor, setDarkBgColor] = useState(themeDefaults.darkBgColor)
   const [hasChanges, setHasChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   
   // Logo state
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -400,19 +403,44 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
   const handleColorChange = (setter: (v: string) => void) => (value: string) => {
     setter(value)
     setHasChanges(true)
+    setSaveError(null)
   }
 
-  const handleSave = () => {
-    // TODO: Save to backend
-    console.log('Saving theme:', { 
-      brandColor, 
-      lightTitleColor, 
-      lightBgColor, 
-      darkTitleColor, 
-      darkBgColor,
-      logoFile: logoFile?.name
-    })
-    setHasChanges(false)
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveError(null)
+    
+    try {
+      // Create form data
+      const formData = new FormData()
+      formData.append('brand_color', brandColor)
+      formData.append('light_title_color', lightTitleColor)
+      formData.append('light_bg_color', lightBgColor)
+      formData.append('dark_title_color', darkTitleColor)
+      formData.append('dark_bg_color', darkBgColor)
+      
+      if (logoFile) {
+        formData.append('logo', logoFile)
+      }
+      
+      const response = await fetch(`/api/brands/${brand.id}/theme`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to save theme')
+      }
+      
+      // Success - close modal
+      onClose()
+    } catch (error) {
+      console.error('Failed to save theme:', error)
+      setSaveError(error instanceof Error ? error.message : 'Failed to save theme')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -644,21 +672,41 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
         </p>
       </div>
 
+      {/* Error message */}
+      {saveError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-800">
+            <strong>Error:</strong> {saveError}
+          </p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex gap-3">
         <button
           onClick={onClose}
-          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium min-w-[100px]"
+          disabled={isSaving}
+          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium min-w-[100px] disabled:opacity-50"
         >
           Close
         </button>
         {hasChanges && (
           <button
             onClick={handleSave}
-            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[120px]"
+            disabled={isSaving}
+            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[120px] disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Save className="w-4 h-4" />
-            Save Theme
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Theme
+              </>
+            )}
           </button>
         )}
       </div>
