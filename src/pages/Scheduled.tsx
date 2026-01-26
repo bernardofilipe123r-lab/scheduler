@@ -34,7 +34,7 @@ import {
   subWeeks,
   parseISO
 } from 'date-fns'
-import { useScheduledPosts, useDeleteScheduled, useRetryFailed, useReschedule, usePublishNow, YouTubeStatusCard } from '@/features/scheduling'
+import { useScheduledPosts, useDeleteScheduled, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, ALL_BRANDS } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
@@ -349,11 +349,6 @@ export function ScheduledPage() {
             <p className="text-sm text-gray-500">{getBrandLabel(brand).split(' ')[0]}</p>
           </div>
         ))}
-      </div>
-      
-      {/* YouTube Status */}
-      <div className="mt-6">
-        <YouTubeStatusCard />
       </div>
       
       {/* Calendar Navigation */}

@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
-import { Home, History, Calendar, Sparkles } from 'lucide-react'
+import { Home, History, Calendar, Sparkles, Link2, Layers } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export function AppLayout() {
@@ -59,6 +59,34 @@ export function AppLayout() {
               >
                 <Calendar className="w-4 h-4" />
                 Scheduled
+              </NavLink>
+              
+              <NavLink
+                to="/connected"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-600'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`
+                }
+              >
+                <Link2 className="w-4 h-4" />
+                Connected
+              </NavLink>
+              
+              <NavLink
+                to="/brands"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-600'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`
+                }
+              >
+                <Layers className="w-4 h-4" />
+                Brands
               </NavLink>
               
             </nav>
