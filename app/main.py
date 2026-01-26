@@ -81,6 +81,11 @@ output_dir.mkdir(parents=True, exist_ok=True)
 print(f"📁 Static files directory: {output_dir.absolute()}")
 app.mount("/output", StaticFiles(directory=str(output_dir)), name="output")
 
+# Mount brand logos directory for theme customization
+logos_dir = Path("assets/logos")
+logos_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/brand-logos", StaticFiles(directory=str(logos_dir)), name="brand-logos")
+
 
 # Serve React frontend
 if FRONTEND_DIR.exists():

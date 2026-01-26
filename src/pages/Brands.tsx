@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Layers,
@@ -343,9 +343,10 @@ function BrandSettingsModal({ brand, connections, allBrands, onClose }: Settings
 interface ThemeModalProps {
   brand: BrandInfo
   onClose: () => void
+  onSave?: () => void
 }
 
-function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
+function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
   // Get theme defaults from BRAND_THEMES
   const themeDefaults = BRAND_THEMES[brand.id] || {
     brandColor: brand.color,
@@ -433,7 +434,8 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
         throw new Error(error.detail || 'Failed to save theme')
       }
       
-      // Success - close modal
+      // Success - notify parent and close modal
+      onSave?.()
       onClose()
     } catch (error) {
       console.error('Failed to save theme:', error)
@@ -933,6 +935,61 @@ export function BrandsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedBrandForSettings, setSelectedBrandForSettings] = useState<BrandInfo | null>(null)
   const [selectedBrandForTheme, setSelectedBrandForTheme] = useState<BrandInfo | null>(null)
+  
+  // Store logos loaded from backend (keyed by brand id)
+  const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
+  
+  // Fetch saved themes/logos for all brands on mount
+  useEffect(() => {
+    const fetchBrandThemes = async () => {
+      const brands = brandsData?.brands || []
+      const logos: Record<string, string> = {}
+      
+      for (const brand of brands) {
+        try {
+          const response = await fetch(`/api/brands/${brand.id}/theme`)
+          if (response.ok) {
+            const data = await response.json()
+            if (data.theme?.logo) {
+              // Check if logo file actually exists by trying to fetch it
+              const logoUrl = `/brand-logos/${data.theme.logo}`
+              const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
+              if (logoCheck.ok) {
+                logos[brand.id] = logoUrl
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch theme for ${brand.id}:`, error)
+        }
+      }
+      
+      setBrandLogos(logos)
+    }
+    
+    if (brandsData?.brands?.length) {
+      fetchBrandThemes()
+    }
+  }, [brandsData?.brands])
+  
+  // Function to refresh a single brand's logo
+  const refreshBrandLogo = async (brandId: string) => {
+    try {
+      const response = await fetch(`/api/brands/${brandId}/theme`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.theme?.logo) {
+          const logoUrl = `/brand-logos/${data.theme.logo}?t=${Date.now()}` // Cache bust
+          const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
+          if (logoCheck.ok) {
+            setBrandLogos(prev => ({ ...prev, [brandId]: logoUrl }))
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to refresh logo for ${brandId}:`, error)
+    }
+  }
 
   // Sort brands by offset
   const sortedBrands = useMemo(() => {
@@ -1032,12 +1089,20 @@ export function BrandsPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div 
-                        className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden"
                         style={{ backgroundColor: brand.color }}
                       >
-                        <span className="text-lg font-bold text-white">
-                          {brand.name.split(' ').map(w => w[0]).join('')}
-                        </span>
+                        {brandLogos[brand.id] ? (
+                          <img 
+                            src={brandLogos[brand.id]} 
+                            alt={brand.name}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-lg font-bold text-white">
+                            {brand.name.split(' ').map(w => w[0]).join('')}
+                          </span>
+                        )}
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900">{brand.name}</h3>
@@ -1175,7 +1240,8 @@ export function BrandsPage() {
         {selectedBrandForTheme && (
           <BrandThemeModal 
             brand={selectedBrandForTheme} 
-            onClose={() => setSelectedBrandForTheme(null)} 
+            onClose={() => setSelectedBrandForTheme(null)}
+            onSave={() => refreshBrandLogo(selectedBrandForTheme.id)}
           />
         )}
       </Modal>
