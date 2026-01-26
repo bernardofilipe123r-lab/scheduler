@@ -1,5 +1,4 @@
-import { get, post, del } from '@/shared/api'
-import type { BrandName } from '@/shared/types'
+import { get, post } from '@/shared/api'
 
 // YouTube connection status for a single brand
 export interface YouTubeBrandStatus {

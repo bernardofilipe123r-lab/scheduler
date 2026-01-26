@@ -1,7 +1,8 @@
-import { useYouTubeStatus, getYouTubeConnectUrl } from '../hooks'
+import { useYouTubeStatus, useDisconnectYouTube, getYouTubeConnectUrl } from '../hooks'
 import { getBrandLabel, getBrandColor } from '@/features/brands'
 import type { BrandName } from '@/shared/types'
-import { ExternalLink, Youtube, Check, RefreshCw } from 'lucide-react'
+import { ExternalLink, Youtube, Check, RefreshCw, Unlink, AlertTriangle } from 'lucide-react'
+import { useState } from 'react'
 
 interface YouTubeStatusCardProps {
   onRefresh?: () => void
@@ -93,6 +94,7 @@ export function YouTubeStatusCard({ onRefresh }: YouTubeStatusCardProps) {
             brand={brand as BrandName} 
             status={status} 
             oauthConfigured={data.oauth_configured}
+            onStatusChange={() => refetch()}
           />
         ))}
       </div>
@@ -106,17 +108,35 @@ interface BrandYouTubeRowProps {
     connected: boolean
     channel_id: string | null
     channel_name: string | null
+    status?: string
+    last_error?: string | null
   }
   oauthConfigured: boolean
+  onStatusChange: () => void
 }
 
-function BrandYouTubeRow({ brand, status, oauthConfigured }: BrandYouTubeRowProps) {
+function BrandYouTubeRow({ brand, status, oauthConfigured, onStatusChange }: BrandYouTubeRowProps) {
   const brandColor = getBrandColor(brand)
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const disconnectMutation = useDisconnectYouTube()
   
   const handleConnect = () => {
     // Open connect URL in same window (OAuth redirect)
     window.location.href = getYouTubeConnectUrl(brand)
   }
+  
+  const handleDisconnect = async () => {
+    try {
+      await disconnectMutation.mutateAsync(brand)
+      setShowDisconnectConfirm(false)
+      onStatusChange()
+    } catch (error) {
+      console.error('Failed to disconnect:', error)
+    }
+  }
+  
+  const isRevoked = status.status === 'revoked'
+  const hasError = status.status === 'error'
   
   return (
     <div className="px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
@@ -130,27 +150,81 @@ function BrandYouTubeRow({ brand, status, oauthConfigured }: BrandYouTubeRowProp
           {status.connected && status.channel_name && (
             <p className="text-sm text-gray-500">{status.channel_name}</p>
           )}
+          {isRevoked && (
+            <p className="text-xs text-red-600 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              Access revoked - reconnect required
+            </p>
+          )}
+          {hasError && status.last_error && (
+            <p className="text-xs text-orange-600">{status.last_error}</p>
+          )}
         </div>
       </div>
       
       <div className="flex items-center gap-2">
         {status.connected ? (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-sm">
-              <Check className="w-3 h-3" />
-              Connected
-            </span>
-            {status.channel_id && (
-              <a
-                href={`https://youtube.com/channel/${status.channel_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 rounded hover:bg-gray-200 transition-colors"
-              >
-                <ExternalLink className="w-4 h-4 text-gray-500" />
-              </a>
+          <>
+            {showDisconnectConfirm ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Disconnect?</span>
+                <button
+                  onClick={handleDisconnect}
+                  disabled={disconnectMutation.isPending}
+                  className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                >
+                  {disconnectMutation.isPending ? '...' : 'Yes'}
+                </button>
+                <button
+                  onClick={() => setShowDisconnectConfirm(false)}
+                  className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  No
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {isRevoked ? (
+                  <button
+                    onClick={handleConnect}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                  >
+                    Reconnect
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-sm">
+                    <Check className="w-3 h-3" />
+                    Connected
+                  </span>
+                )}
+                {status.channel_id && (
+                  <a
+                    href={`https://youtube.com/channel/${status.channel_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                    title="View channel"
+                  >
+                    <ExternalLink className="w-4 h-4 text-gray-500" />
+                  </a>
+                )}
+                <button
+                  onClick={handleConnect}
+                  className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                  title="Change channel"
+                >
+                  <RefreshCw className="w-4 h-4 text-gray-500" />
+                </button>
+                <button
+                  onClick={() => setShowDisconnectConfirm(true)}
+                  className="p-1.5 rounded hover:bg-red-100 transition-colors"
+                  title="Disconnect"
+                >
+                  <Unlink className="w-4 h-4 text-gray-500 hover:text-red-500" />
+                </button>
+              </div>
             )}
-          </div>
+          </>
         ) : (
           <button
             onClick={handleConnect}

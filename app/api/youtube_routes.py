@@ -137,6 +137,83 @@ async def youtube_callback(
         </html>
         """)
     
+    # Check if this channel is already connected to ANOTHER brand
+    # (Prevent user confusion - same channel can't be used for multiple brands)
+    existing_channel = db.query(YouTubeChannel).filter(
+        YouTubeChannel.channel_id == result["channel_id"],
+        YouTubeChannel.brand != brand
+    ).first()
+    
+    if existing_channel:
+        existing_brand_display = existing_channel.brand.replace("college", " College").title()
+        brand_display = brand.replace("college", " College").title()
+        logger.warning(f"Channel {result['channel_id']} already connected to {existing_channel.brand}, attempted by {brand}")
+        return HTMLResponse(f"""
+        <html>
+        <head>
+            <title>Channel Already Connected</title>
+            <style>
+                body {{
+                    font-family: system-ui, -apple-system, sans-serif;
+                    padding: 40px;
+                    text-align: center;
+                    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                    min-height: 100vh;
+                    margin: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                .card {{
+                    background: white;
+                    border-radius: 16px;
+                    padding: 40px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+                    max-width: 500px;
+                }}
+                h1 {{ color: #f59e0b; margin-bottom: 10px; }}
+                .channel {{
+                    background: #fef3c7;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                }}
+                .btn {{
+                    background: #3b82f6;
+                    color: white;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin-top: 20px;
+                    font-weight: 500;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>⚠️ Channel Already Connected</h1>
+                
+                <div class="channel">
+                    <p><strong>{result['channel_name']}</strong></p>
+                    <p style="font-size: 12px; color: #666;">{result['channel_id']}</p>
+                </div>
+                
+                <p>This YouTube channel is already connected to <strong>{existing_brand_display}</strong>.</p>
+                <p>Each channel can only be linked to one brand.</p>
+                
+                <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                    To use this channel for <strong>{brand_display}</strong> instead:<br>
+                    1. Disconnect it from {existing_brand_display} first<br>
+                    2. Then reconnect it to {brand_display}
+                </p>
+                
+                <a href="/" class="btn">Return to App</a>
+            </div>
+        </body>
+        </html>
+        """)
+    
     # Store the refresh_token in the database
     # This is the ONLY token we need to store long-term
     try:
