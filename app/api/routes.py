@@ -14,7 +14,8 @@ from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
 from app.services.caption_builder import CaptionBuilder
 from app.services.caption_generator import CaptionGenerator
-from app.services.content_generator import ContentGenerator, ContentRating
+# Use V2 content generator with 3-layer architecture
+from app.services.content_generator_v2 import ContentGenerator, ContentRating
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.social_publisher import SocialPublisher
 from app.database.db import ReelDatabase
