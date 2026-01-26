@@ -18,7 +18,9 @@ import {
   Save,
   Sun,
   Moon,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  X
 } from 'lucide-react'
 import { useBrandsList, useBrandConnections, type BrandConnectionStatus } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
@@ -359,6 +361,29 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
   const [darkTitleColor, setDarkTitleColor] = useState(themeDefaults.darkTitleColor)
   const [darkBgColor, setDarkBgColor] = useState(themeDefaults.darkBgColor)
   const [hasChanges, setHasChanges] = useState(false)
+  
+  // Logo state
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setLogoFile(file)
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setLogoPreview(event.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+      setHasChanges(true)
+    }
+  }
+
+  const removeLogo = () => {
+    setLogoPreview(null)
+    setLogoFile(null)
+    setHasChanges(true)
+  }
 
   // Parse color to RGB for display
   const hexToRgb = (hex: string) => {
@@ -384,22 +409,53 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
       lightTitleColor, 
       lightBgColor, 
       darkTitleColor, 
-      darkBgColor 
+      darkBgColor,
+      logoFile: logoFile?.name
     })
     setHasChanges(false)
   }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Preview header */}
+      {/* Preview header with logo */}
       <div 
-        className="rounded-xl p-6 text-center"
+        className="rounded-xl p-6 text-center relative"
         style={{ backgroundColor: brandColor }}
       >
-        <span className="text-4xl font-bold text-white/30">
-          {brand.name.split(' ').map(w => w[0]).join('')}
-        </span>
-        <h3 className="text-xl font-bold text-white mt-2">{brand.name}</h3>
+        {logoPreview ? (
+          <div className="relative inline-block">
+            <img 
+              src={logoPreview} 
+              alt={brand.name} 
+              className="w-20 h-20 object-contain mx-auto"
+            />
+            <button
+              onClick={removeLogo}
+              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <label className="cursor-pointer group">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleLogoUpload}
+              className="hidden"
+            />
+            <div className="w-20 h-20 mx-auto rounded-xl bg-white/20 flex flex-col items-center justify-center group-hover:bg-white/30 transition-colors border-2 border-dashed border-white/40">
+              <span className="text-2xl font-bold text-white/60">
+                {brand.name.split(' ').map(w => w[0]).join('')}
+              </span>
+              <div className="flex items-center gap-1 mt-1">
+                <Upload className="w-3 h-3 text-white/50" />
+                <span className="text-[10px] text-white/50">Upload</span>
+              </div>
+            </div>
+          </label>
+        )}
+        <h3 className="text-xl font-bold text-white mt-3">{brand.name}</h3>
       </div>
 
       {/* Brand Color */}
@@ -429,13 +485,31 @@ function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
         <div>
           <label className="text-sm font-medium text-gray-700 mb-2 block">Theme Elements</label>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50 rounded-lg p-3">
+            <label className="bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors border-2 border-dashed border-transparent hover:border-gray-300">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
               <div className="flex items-center gap-2 mb-2">
                 <Image className="w-4 h-4 text-gray-500" />
                 <span className="text-sm font-medium">Logo</span>
               </div>
-              <p className="text-xs text-gray-500">{brand.logo || `${brand.id}_logo.png`}</p>
-            </div>
+              <div className="flex items-center gap-2">
+                {logoPreview ? (
+                  <>
+                    <img src={logoPreview} alt="Logo" className="w-6 h-6 object-contain" />
+                    <span className="text-xs text-green-600 font-medium">Uploaded</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4 text-gray-400" />
+                    <span className="text-xs text-gray-500">Click to upload</span>
+                  </>
+                )}
+              </div>
+            </label>
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Type className="w-4 h-4 text-gray-500" />
