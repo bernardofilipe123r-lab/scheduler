@@ -1,10 +1,14 @@
 """
 Brand configurations for the reels automation system.
+Colors are imported from brand_colors.py - the single source of truth.
 """
 from enum import Enum
 from typing import Dict, Tuple, Optional
 from dataclasses import dataclass
 import os
+
+# Import colors from brand_colors.py - the single source of truth
+from app.core.brand_colors import BRAND_COLORS, BRAND_DISPLAY_NAMES, hex_to_rgb, hex_to_rgba
 
 
 class BrandType(str, Enum):
@@ -17,20 +21,31 @@ class BrandType(str, Enum):
     WELLBEING_COLLEGE = "WELLBEING_COLLEGE"
 
 
+# Map BrandType enum to brand_colors.py keys
+BRAND_TYPE_TO_KEY = {
+    BrandType.THE_GYM_COLLEGE: "gymcollege",
+    BrandType.HEALTHY_COLLEGE: "healthycollege",
+    BrandType.VITALITY_COLLEGE: "vitalitycollege",
+    BrandType.LONGEVITY_COLLEGE: "longevitycollege",
+    BrandType.HOLISTIC_COLLEGE: "holisticcollege",
+    BrandType.WELLBEING_COLLEGE: "wellbeingcollege",
+}
+
+
 @dataclass
 class BrandConfig:
     """Brand configuration settings."""
     name: str
     display_name: str
-    primary_color: Tuple[int, int, int]  # RGB
-    secondary_color: Tuple[int, int, int]  # RGB
-    text_color: Tuple[int, int, int]  # RGB
-    highlight_color: Tuple[int, int, int, int]  # RGBA with alpha
+    primary_color: Tuple[int, int, int]  # RGB - light mode background (derived from light mode bg)
+    secondary_color: Tuple[int, int, int]  # RGB - brand's main color (dark mode bg)
+    text_color: Tuple[int, int, int]  # RGB - brand text color
+    highlight_color: Tuple[int, int, int, int]  # RGBA - light mode content bg
     logo_filename: str  # Relative to assets/logos/
     thumbnail_bg_color: Tuple[int, int, int]  # RGB for thumbnail background
-    thumbnail_text_color: Tuple[int, int, int]  # RGB for thumbnail text
-    content_title_color: Tuple[int, int, int]  # RGB for content title
-    content_highlight_color: Tuple[int, int, int, int]  # RGBA for content title background
+    thumbnail_text_color: Tuple[int, int, int]  # RGB for thumbnail text (light mode)
+    content_title_color: Tuple[int, int, int]  # RGB for content title text (light mode)
+    content_highlight_color: Tuple[int, int, int, int]  # RGBA for content title background (dark mode)
     instagram_business_account_id: Optional[str] = None  # Brand-specific Instagram ID
     facebook_page_id: Optional[str] = None  # Brand-specific Facebook Page ID
     meta_access_token: Optional[str] = None  # Brand-specific access token
@@ -38,100 +53,82 @@ class BrandConfig:
     # They are obtained via OAuth flow (/api/youtube/connect) and never stored in env vars
 
 
-# Brand configuration mapping
+def _create_brand_config(
+    brand_type: BrandType,
+    instagram_business_account_id: Optional[str] = None,
+    facebook_page_id: Optional[str] = None,
+    meta_access_token: Optional[str] = None,
+) -> BrandConfig:
+    """
+    Create a BrandConfig using colors from brand_colors.py.
+    This ensures colors are always synced with the single source of truth.
+    """
+    brand_key = BRAND_TYPE_TO_KEY[brand_type]
+    colors = BRAND_COLORS[brand_key]
+    display_name = BRAND_DISPLAY_NAMES.get(brand_key, brand_key.replace("college", " College").title())
+    
+    # Extract colors from brand_colors.py
+    light_mode = colors.light_mode
+    dark_mode = colors.dark_mode
+    
+    # secondary_color is the brand's main color (from dark mode bg, without alpha)
+    secondary_color = dark_mode.content_title_bg_color[:3]
+    
+    # primary_color is derived from light mode bg (without alpha)
+    primary_color = light_mode.content_title_bg_color[:3]
+    
+    return BrandConfig(
+        name=brand_type.value,
+        display_name=display_name.replace("THE ", ""),  # Remove "THE " prefix for display
+        primary_color=primary_color,
+        secondary_color=secondary_color,
+        text_color=secondary_color,  # Text color matches brand color
+        highlight_color=light_mode.content_title_bg_color,  # Light mode content bg (RGBA)
+        logo_filename=f"{brand_key.replace('college', '_college')}_logo.png",
+        thumbnail_bg_color=primary_color,  # Same as primary for consistency
+        thumbnail_text_color=light_mode.thumbnail_text_color,  # From brand_colors.py
+        content_title_color=light_mode.content_title_text_color,  # Light mode title text
+        content_highlight_color=dark_mode.content_title_bg_color,  # Dark mode content bg (RGBA)
+        instagram_business_account_id=instagram_business_account_id,
+        facebook_page_id=facebook_page_id,
+        meta_access_token=meta_access_token,
+    )
+
+
+# Brand configuration mapping - colors sourced from brand_colors.py
 BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
-    BrandType.THE_GYM_COLLEGE: BrandConfig(
-        name="THE_GYM_COLLEGE",
-        display_name="GYM COLLEGE",
-        primary_color=(244, 244, 244),  # Light gray background #f4f4f4
-        secondary_color=(0, 67, 92),  # Blue #00435c
-        text_color=(0, 67, 92),  # Blue text #00435c
-        highlight_color=(200, 234, 246, 255),  # Light blue #c8eaf6 for light mode
-        logo_filename="gym_college_logo.png",
-        thumbnail_bg_color=(244, 244, 244),  # #f4f4f4
-        thumbnail_text_color=(0, 67, 92),  # #00435c for light mode
-        content_title_color=(0, 0, 0),  # Black text for light mode
-        content_highlight_color=(0, 74, 173, 255),  # #004aad for dark mode
+    BrandType.THE_GYM_COLLEGE: _create_brand_config(
+        BrandType.THE_GYM_COLLEGE,
         instagram_business_account_id="17841468847801005",  # @thegymcollege
         facebook_page_id="421725951022067",  # Gym College Facebook Page
-        meta_access_token=os.getenv("META_ACCESS_TOKEN"),  # Same token for both brands
+        meta_access_token=os.getenv("META_ACCESS_TOKEN"),
     ),
-    BrandType.HEALTHY_COLLEGE: BrandConfig(
-        name="HEALTHY_COLLEGE",
-        display_name="Healthy College",
-        primary_color=(240, 255, 240),  # Light green background
-        secondary_color=(0, 100, 0),  # Green #006400
-        text_color=(0, 100, 0),  # Green text
-        highlight_color=(0, 104, 55, 255),  # #006837
-        logo_filename="healthy_college_logo.png",
-        thumbnail_bg_color=(240, 255, 240),
-        thumbnail_text_color=(0, 100, 0),  # #006400 for light mode
-        content_title_color=(255, 255, 255),  # White text
-        content_highlight_color=(0, 104, 55, 255),  # #006837
+    BrandType.HEALTHY_COLLEGE: _create_brand_config(
+        BrandType.HEALTHY_COLLEGE,
         instagram_business_account_id="17841479849607158",  # @thehealthycollege
         facebook_page_id="944977965368075",  # Healthy College Facebook Page
-        meta_access_token=os.getenv("META_ACCESS_TOKEN"),  # Same token for both brands
+        meta_access_token=os.getenv("META_ACCESS_TOKEN"),
     ),
-    BrandType.VITALITY_COLLEGE: BrandConfig(
-        name="VITALITY_COLLEGE",
-        display_name="Vitality College",
-        primary_color=(248, 240, 245),  # Light rose background #f8f0f5
-        secondary_color=(192, 86, 159),  # Rose primary #c0569f
-        text_color=(192, 86, 159),  # Rose text #c0569f
-        highlight_color=(192, 86, 159, 255),  # Rose highlight #c0569f
-        logo_filename="vitality_college_logo.png",
-        thumbnail_bg_color=(248, 240, 245),  # #f8f0f5
-        thumbnail_text_color=(192, 86, 159),  # #c0569f
-        content_title_color=(255, 255, 255),  # White text
-        content_highlight_color=(192, 86, 159, 255),  # #c0569f
+    BrandType.VITALITY_COLLEGE: _create_brand_config(
+        BrandType.VITALITY_COLLEGE,
         instagram_business_account_id=os.getenv("VITALITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("VITALITYCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("VITALITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
     ),
-    BrandType.LONGEVITY_COLLEGE: BrandConfig(
-        name="LONGEVITY_COLLEGE",
-        display_name="Longevity College",
-        primary_color=(255, 250, 240),  # Light amber background #fffaf0
-        secondary_color=(190, 127, 9),  # Amber primary #be7f09
-        text_color=(190, 127, 9),  # Amber text #be7f09
-        highlight_color=(190, 127, 9, 255),  # Amber highlight #be7f09
-        logo_filename="longevity_college_logo.png",
-        thumbnail_bg_color=(255, 250, 240),  # #fffaf0
-        thumbnail_text_color=(190, 127, 9),  # #be7f09
-        content_title_color=(255, 255, 255),  # White text
-        content_highlight_color=(190, 127, 9, 255),  # #be7f09
+    BrandType.LONGEVITY_COLLEGE: _create_brand_config(
+        BrandType.LONGEVITY_COLLEGE,
         instagram_business_account_id=os.getenv("LONGEVITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("LONGEVITYCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("LONGEVITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
     ),
-    BrandType.HOLISTIC_COLLEGE: BrandConfig(
-        name="HOLISTIC_COLLEGE",
-        display_name="Holistic College",
-        primary_color=(255, 245, 240),  # Light coral background
-        secondary_color=(240, 131, 110),  # Coral #f0836e
-        text_color=(240, 131, 110),  # Coral text
-        highlight_color=(240, 131, 110, 255),  # Coral highlight #f0836e
-        logo_filename="holistic_college_logo.png",
-        thumbnail_bg_color=(255, 245, 240),
-        thumbnail_text_color=(241, 155, 138),  # #f19b8a for light mode
-        content_title_color=(255, 255, 255),  # White text
-        content_highlight_color=(240, 131, 110, 255),  # #f0836e
+    BrandType.HOLISTIC_COLLEGE: _create_brand_config(
+        BrandType.HOLISTIC_COLLEGE,
         instagram_business_account_id=os.getenv("HOLISTICCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("HOLISTICCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("HOLISTICCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
     ),
-    BrandType.WELLBEING_COLLEGE: BrandConfig(
-        name="WELLBEING_COLLEGE",
-        display_name="Wellbeing College",
-        primary_color=(255, 250, 235),  # Light yellow background
-        secondary_color=(235, 190, 77),  # Yellow #ebbe4d
-        text_color=(235, 190, 77),  # Yellow text
-        highlight_color=(235, 190, 77, 255),  # Yellow highlight #ebbe4d
-        logo_filename="wellbeing_college_logo.png",
-        thumbnail_bg_color=(255, 250, 235),
-        thumbnail_text_color=(255, 205, 83),  # #ffcd53 for light mode
-        content_title_color=(255, 255, 255),  # White text
-        content_highlight_color=(235, 190, 77, 255),  # #ebbe4d
+    BrandType.WELLBEING_COLLEGE: _create_brand_config(
+        BrandType.WELLBEING_COLLEGE,
         instagram_business_account_id=os.getenv("WELLBEINGCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         facebook_page_id=os.getenv("WELLBEINGCOLLEGE_FACEBOOK_PAGE_ID"),
         meta_access_token=os.getenv("WELLBEINGCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
