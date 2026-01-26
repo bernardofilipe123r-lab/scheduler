@@ -41,6 +41,54 @@ const BRAND_SCHEDULES: Record<string, { offset: number; postsPerDay: number }> =
   holisticcollege: { offset: 4, postsPerDay: 6 },   // Starts at 4:00 AM
 }
 
+// Brand theme colors - matches Python brand_colors.py
+// Each brand has a primary color, and light/dark mode title and background colors
+interface BrandTheme {
+  brandColor: string
+  lightTitleColor: string
+  lightBgColor: string
+  darkTitleColor: string
+  darkBgColor: string
+}
+
+const BRAND_THEMES: Record<string, BrandTheme> = {
+  healthycollege: {
+    brandColor: '#004f00',      // Dark green
+    lightTitleColor: '#000000',
+    lightBgColor: '#dcf6c8',    // Light green
+    darkTitleColor: '#ffffff',
+    darkBgColor: '#004f00',     // Dark green
+  },
+  longevitycollege: {
+    brandColor: '#019dc8',      // Cyan
+    lightTitleColor: '#000000',
+    lightBgColor: '#c8eaf6',    // Light cyan
+    darkTitleColor: '#ffffff',
+    darkBgColor: '#019dc8',     // Cyan
+  },
+  wellbeingcollege: {
+    brandColor: '#ebbe4d',      // Yellow/gold
+    lightTitleColor: '#000000',
+    lightBgColor: '#fff4d6',    // Light yellow
+    darkTitleColor: '#ffffff',
+    darkBgColor: '#ebbe4d',     // Yellow
+  },
+  vitalitycollege: {
+    brandColor: '#028f7a',      // Teal
+    lightTitleColor: '#ffffff',
+    lightBgColor: '#028f7a',    // Teal
+    darkTitleColor: '#ffffff',
+    darkBgColor: '#028f7a',     // Teal
+  },
+  holisticcollege: {
+    brandColor: '#f0836e',      // Coral
+    lightTitleColor: '#000000',
+    lightBgColor: '#f9e0db',    // Light coral
+    darkTitleColor: '#ffffff',
+    darkBgColor: '#f0836e',     // Coral
+  },
+}
+
 // Generate schedule times from offset and posts per day
 function generateSchedule(offset: number, postsPerDay: number): Array<{ hour: number; variant: 'light' | 'dark' }> {
   const interval = Math.floor(24 / postsPerDay)
@@ -295,12 +343,21 @@ interface ThemeModalProps {
 }
 
 function BrandThemeModal({ brand, onClose }: ThemeModalProps) {
-  // Theme state - editable colors
-  const [brandColor, setBrandColor] = useState(brand.color)
-  const [lightTitleColor, setLightTitleColor] = useState('#000000')
-  const [lightBgColor, setLightBgColor] = useState('#dcf6c8')
-  const [darkTitleColor, setDarkTitleColor] = useState('#ffffff')
-  const [darkBgColor, setDarkBgColor] = useState(brand.color)
+  // Get theme defaults from BRAND_THEMES
+  const themeDefaults = BRAND_THEMES[brand.id] || {
+    brandColor: brand.color,
+    lightTitleColor: '#000000',
+    lightBgColor: '#dcf6c8',
+    darkTitleColor: '#ffffff',
+    darkBgColor: brand.color
+  }
+
+  // Theme state - editable colors (initialized from brand-specific defaults)
+  const [brandColor, setBrandColor] = useState(themeDefaults.brandColor)
+  const [lightTitleColor, setLightTitleColor] = useState(themeDefaults.lightTitleColor)
+  const [lightBgColor, setLightBgColor] = useState(themeDefaults.lightBgColor)
+  const [darkTitleColor, setDarkTitleColor] = useState(themeDefaults.darkTitleColor)
+  const [darkBgColor, setDarkBgColor] = useState(themeDefaults.darkBgColor)
   const [hasChanges, setHasChanges] = useState(false)
 
   // Parse color to RGB for display
