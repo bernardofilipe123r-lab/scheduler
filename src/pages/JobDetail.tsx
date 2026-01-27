@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Check,
   Clock,
-  CalendarClock
+  CalendarClock,
+  Youtube
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -546,47 +547,72 @@ export function JobDetailPage() {
                   <div className="space-y-4">
                     {/* Main content area - Media + Content Lines side by side */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {/* Left side: Media Preview */}
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Thumbnail */}
-                        {output.thumbnail_path ? (
-                          <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
-                            <img
-                              src={output.thumbnail_path}
-                              alt={`${brand} thumbnail`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="aspect-[9/16] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 p-4">
-                            <AlertCircle className="w-12 h-12 mb-2" />
-                            <p className="text-sm text-center">No thumbnail</p>
-                          </div>
-                        )}
+                      {/* Left side: Media Preview - 3 columns: IG/FB Thumbnail, YT Thumbnail, Video */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {/* IG/FB Thumbnail */}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1 text-center">IG/FB</p>
+                          {output.thumbnail_path ? (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
+                              <img
+                                src={output.thumbnail_path}
+                                alt={`${brand} thumbnail`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 p-2">
+                              <AlertCircle className="w-8 h-8 mb-1" />
+                              <p className="text-xs text-center">No thumbnail</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* YouTube Thumbnail */}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1 text-center">YouTube</p>
+                          {output.yt_thumbnail_path ? (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
+                              <img
+                                src={output.yt_thumbnail_path}
+                                alt={`${brand} YouTube thumbnail`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 p-2">
+                              <Youtube className="w-8 h-8 mb-1" />
+                              <p className="text-xs text-center">No YT thumb</p>
+                            </div>
+                          )}
+                        </div>
                         
                         {/* Video */}
-                        {output.video_path ? (
-                          <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden">
-                            <video
-                              key={output.video_path}
-                              src={output.video_path}
-                              className="w-full h-full"
-                              style={{ objectFit: 'contain' }}
-                              controls
-                              playsInline
-                              preload="auto"
-                              controlsList="nodownload"
-                            >
-                              <source src={output.video_path} type="video/mp4" />
-                              Your browser does not support the video tag.
-                            </video>
-                          </div>
-                        ) : (
-                          <div className="aspect-[9/16] bg-gray-900 rounded-lg flex flex-col items-center justify-center text-gray-400 p-4">
-                            <Play className="w-12 h-12 mb-2" />
-                            <p className="text-sm text-center">No video</p>
-                          </div>
-                        )}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1 text-center">Video</p>
+                          {output.video_path ? (
+                            <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden">
+                              <video
+                                key={output.video_path}
+                                src={output.video_path}
+                                className="w-full h-full"
+                                style={{ objectFit: 'contain' }}
+                                controls
+                                playsInline
+                                preload="auto"
+                                controlsList="nodownload"
+                              >
+                                <source src={output.video_path} type="video/mp4" />
+                                Your browser does not support the video tag.
+                              </video>
+                            </div>
+                          ) : (
+                            <div className="aspect-[9/16] bg-gray-900 rounded-lg flex flex-col items-center justify-center text-gray-400 p-2">
+                              <Play className="w-8 h-8 mb-1" />
+                              <p className="text-xs text-center">No video</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       
                       {/* Right side: Content Lines for this brand */}
