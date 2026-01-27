@@ -406,7 +406,7 @@ class JobManager:
             
             # Generate YouTube thumbnail (clean AI image, no text)
             print(f"   📺 Generating YouTube thumbnail...", flush=True)
-            yt_thumbnail_path = base_dir / "output" / "thumbnails" / f"{reel_id}_yt_thumbnail.png"
+            yt_thumbnail_path = output_dir / "thumbnails" / f"{reel_id}_yt_thumbnail.png"
             generator.generate_youtube_thumbnail(
                 title=use_title,
                 lines=use_lines,
