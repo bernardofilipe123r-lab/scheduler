@@ -16,7 +16,10 @@ import {
   Move,
   Image as ImageIcon,
   Settings2,
-  Upload
+  Upload,
+  Plus,
+  Edit3,
+  Copy
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -137,27 +140,37 @@ function LogoWithLines({
   onDragEnd: (newY: number) => void
 }) {
   const [image] = useImage(logoUrl || '', 'anonymous')
-  const lineWidth = 300
-  const logoWidth = image ? Math.min(image.width, 80) : 60
+  
+  // Layout: 100px from left edge, 113px middle gap for logo, 100px from right edge
+  const edgePadding = 100 // px from each edge
+  const logoGap = 113 // px for logo in the middle
+  
+  // Calculate line positions
+  const leftLineStart = edgePadding
+  const leftLineEnd = (CANVAS_WIDTH / 2) - (logoGap / 2)
+  const rightLineStart = (CANVAS_WIDTH / 2) + (logoGap / 2)
+  const rightLineEnd = CANVAS_WIDTH - edgePadding
+  
+  const logoWidth = image ? Math.min(image.width, logoGap - 20) : logoGap - 20
   const logoHeight = image ? (logoWidth / image.width) * image.height : 40
   
   return (
     <Group
-      x={CANVAS_WIDTH / 2}
+      x={0}
       y={y}
       draggable
       onDragEnd={(e) => onDragEnd(e.target.y())}
     >
       {/* Left line */}
       <Line
-        points={[-lineWidth / 2 - logoWidth / 2 - 20, logoHeight / 2, -logoWidth / 2 - 10, logoHeight / 2]}
+        points={[leftLineStart, logoHeight / 2, leftLineEnd, logoHeight / 2]}
         stroke="white"
         strokeWidth={2}
       />
       
       {/* Right line */}
       <Line
-        points={[logoWidth / 2 + 10, logoHeight / 2, lineWidth / 2 + logoWidth / 2 + 20, logoHeight / 2]}
+        points={[rightLineStart, logoHeight / 2, rightLineEnd, logoHeight / 2]}
         stroke="white"
         strokeWidth={2}
       />
@@ -168,7 +181,7 @@ function LogoWithLines({
           image={image}
           width={logoWidth}
           height={logoHeight}
-          x={-logoWidth / 2}
+          x={(CANVAS_WIDTH - logoWidth) / 2}
           y={0}
         />
       ) : (
@@ -178,7 +191,7 @@ function LogoWithLines({
           fontFamily="Inter, sans-serif"
           fontStyle="bold"
           fill="white"
-          x={-30}
+          x={CANVAS_WIDTH / 2 - 30}
           y={logoHeight / 2 - 14}
         />
       )}
@@ -186,7 +199,7 @@ function LogoWithLines({
   )
 }
 
-// Title component with highlight support
+// Title component with highlight support and auto-wrapping
 function TitleLayer({
   config,
   highlightColor,
@@ -211,12 +224,34 @@ function TitleLayer({
     }
   }, [isSelected, transformerRef])
   
-  // Split text into lines
-  const lines = config.text.split('\n')
-  const highlightedLines = config.highlightedText.split('\n').filter(l => l.trim())
+  // Get the text content
+  const textContent = config.text
+  const highlightPhrase = config.highlightedText.trim().toUpperCase()
+  const textWidth = CANVAS_WIDTH - config.x * 2
   
-  // Calculate positions
-  const lineHeight = config.fontSize * 1.2
+  // Calculate wrapped lines for highlight detection
+  const words = textContent.split(' ')
+  const lines: string[] = []
+  let currentLine = ''
+  
+  // Simple word wrapping estimation (Konva will do actual wrapping)
+  const avgCharWidth = config.fontSize * 0.5 // Approximate for Anton
+  const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
+  
+  words.forEach(word => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word
+    if (testLine.length > maxCharsPerLine && currentLine) {
+      lines.push(currentLine)
+      currentLine = word
+    } else {
+      currentLine = testLine
+    }
+  })
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+  
+  const lineHeight = config.fontSize * 1.3
   
   return (
     <Group
@@ -229,9 +264,8 @@ function TitleLayer({
       onTap={onSelect}
     >
       {lines.map((line, i) => {
-        const isHighlighted = highlightedLines.some(hl => 
-          line.toUpperCase().includes(hl.toUpperCase())
-        )
+        const isHighlighted = line.toUpperCase().includes(highlightPhrase) || 
+          highlightPhrase.includes(line.toUpperCase().trim())
         const y = i * lineHeight
         
         return (
@@ -241,7 +275,7 @@ function TitleLayer({
               <Rect
                 x={-10}
                 y={0}
-                width={CANVAS_WIDTH - config.x * 2 + 20}
+                width={textWidth + 20}
                 height={lineHeight}
                 fill={highlightColor}
               />
@@ -252,7 +286,7 @@ function TitleLayer({
               fontSize={config.fontSize}
               fontFamily="Anton, sans-serif"
               fill={isHighlighted ? 'black' : 'white'}
-              width={CANVAS_WIDTH - config.x * 2}
+              width={textWidth}
               align="center"
             />
           </Group>
@@ -279,9 +313,13 @@ function ReadCaption({ y }: { y: number }) {
   )
 }
 
+// Mode type for workflow
+type EditorMode = 'create' | 'edit'
+
 // Main Posts Page Component
 export function PostsPage() {
   // State
+  const [editorMode, setEditorMode] = useState<EditorMode>('create')
   const [selectedBrands, setSelectedBrands] = useState<string[]>(['healthycollege'])
   const [activeBrand, setActiveBrand] = useState('healthycollege')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -293,9 +331,9 @@ export function PostsPage() {
       initial[brand] = {
         backgroundImage: null,
         title: {
-          text: 'STUDY REVEALS VITAMIN C\nSUPPLEMENTATION CAN REDUCE\nSTRESS & CORTISOL BY 40%',
+          text: 'STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%',
           highlightedText: 'STRESS & CORTISOL BY 40%',
-          fontSize: 52,
+          fontSize: 58,
           x: 40,
           y: CANVAS_HEIGHT - READ_CAPTION_BOTTOM - TITLE_ABOVE_READ_CAPTION - 200
         },
@@ -434,7 +472,41 @@ export function PostsPage() {
             Create stunning image posts with AI-powered design
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Mode Selector */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setEditorMode('create')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                editorMode === 'create'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              Create
+            </button>
+            <button
+              onClick={() => setEditorMode('edit')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                editorMode === 'edit'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit Brand
+            </button>
+            <button
+              onClick={() => {
+                toast('Copy from brand feature coming soon!', { icon: '📋' })
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-all"
+            >
+              <Copy className="w-4 h-4" />
+              Copy
+            </button>
+          </div>
           <button
             onClick={exportImage}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
@@ -595,14 +667,14 @@ export function PostsPage() {
                 />
               </Layer>
             </Stage>
-            
-            {/* Drag hint */}
-            <div className="absolute bottom-2 left-2 right-2 text-center">
-              <span className="text-xs text-white/50 bg-black/30 px-2 py-1 rounded">
-                <Move className="w-3 h-3 inline mr-1" />
-                Drag elements to reposition
-              </span>
-            </div>
+          </div>
+          
+          {/* Drag hint - outside canvas */}
+          <div className="text-center mt-2">
+            <span className="text-xs text-gray-500">
+              <Move className="w-3 h-3 inline mr-1" />
+              Drag elements to reposition
+            </span>
           </div>
         </div>
         
