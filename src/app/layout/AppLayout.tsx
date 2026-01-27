@@ -53,7 +53,7 @@ export function AppLayout() {
               </NavLink>
               
               <NavLink
-                to="/carousels"
+                to="/posts"
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                     isActive
@@ -63,7 +63,7 @@ export function AppLayout() {
                 }
               >
                 <LayoutGrid className="w-4 h-4" />
-                Carousels
+                Posts
               </NavLink>
               
               <NavLink
