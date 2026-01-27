@@ -1,8 +1,27 @@
-import { Outlet, NavLink } from 'react-router-dom'
-import { Home, History, Calendar, Sparkles, Link2, Layers } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { Film, History, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export function AppLayout() {
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsRef = useRef<HTMLDivElement>(null)
+  const location = useLocation()
+  
+  // Check if current route is a settings page
+  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands'
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setSettingsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+  
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -29,8 +48,22 @@ export function AppLayout() {
                   }`
                 }
               >
-                <Home className="w-4 h-4" />
-                Generator
+                <Film className="w-4 h-4" />
+                Videos
+              </NavLink>
+              
+              <NavLink
+                to="/carousels"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-600'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`
+                }
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Carousels
               </NavLink>
               
               <NavLink
@@ -61,33 +94,53 @@ export function AppLayout() {
                 Scheduled
               </NavLink>
               
-              <NavLink
-                to="/connected"
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive
+              {/* Settings Dropdown */}
+              <div className="relative" ref={settingsRef}>
+                <button
+                  onClick={() => setSettingsOpen(!settingsOpen)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${
+                    isSettingsRoute || settingsOpen
                       ? 'bg-primary-50 text-primary-600'
                       : 'text-gray-600 hover:bg-gray-100'
-                  }`
-                }
-              >
-                <Link2 className="w-4 h-4" />
-                Connected
-              </NavLink>
-              
-              <NavLink
-                to="/brands"
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-600'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`
-                }
-              >
-                <Layers className="w-4 h-4" />
-                Brands
-              </NavLink>
+                  }`}
+                >
+                  <Settings className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-90' : ''}`} />
+                </button>
+                
+                {/* Dropdown Menu */}
+                {settingsOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                    <NavLink
+                      to="/connected"
+                      onClick={() => setSettingsOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-600'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <Link2 className="w-4 h-4" />
+                      Connected Pages
+                    </NavLink>
+                    <NavLink
+                      to="/brands"
+                      onClick={() => setSettingsOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-600'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <Layers className="w-4 h-4" />
+                      Brand Settings
+                    </NavLink>
+                  </div>
+                )}
+              </div>
               
             </nav>
             

@@ -6,6 +6,7 @@ import { JobDetailPage } from '@/pages/JobDetail'
 import { ScheduledPage } from '@/pages/Scheduled'
 import { ConnectedPage } from '@/pages/Connected'
 import { BrandsPage } from '@/pages/Brands'
+import { CarouselsPage } from '@/pages/Carousels'
 
 export function AppRoutes() {
   return (
@@ -17,6 +18,7 @@ export function AppRoutes() {
         <Route path="scheduled" element={<ScheduledPage />} />
         <Route path="connected" element={<ConnectedPage />} />
         <Route path="brands" element={<BrandsPage />} />
+        <Route path="carousels" element={<CarouselsPage />} />
       </Route>
     </Routes>
   )
