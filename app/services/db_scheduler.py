@@ -28,6 +28,7 @@ class DatabaseSchedulerService:
         platforms: list[str] = ["instagram"],
         video_path: Optional[Path] = None,
         thumbnail_path: Optional[Path] = None,
+        yt_thumbnail_path: Optional[Path] = None,  # Clean AI image for YouTube
         user_name: Optional[str] = None,
         brand: Optional[str] = None,
         variant: Optional[str] = None
@@ -44,6 +45,7 @@ class DatabaseSchedulerService:
             platforms: List of platforms ("instagram", "facebook", "youtube")
             video_path: Path to video file
             thumbnail_path: Path to thumbnail
+            yt_thumbnail_path: Clean AI image for YouTube (no text)
             user_name: Display name for the user
             brand: Brand name ("gymcollege" or "healthycollege")
             variant: Variant type ("light" or "dark")
@@ -75,6 +77,7 @@ class DatabaseSchedulerService:
                     "platforms": platforms,
                     "video_path": str(video_path) if video_path else None,
                     "thumbnail_path": str(thumbnail_path) if thumbnail_path else None,
+                    "yt_thumbnail_path": str(yt_thumbnail_path) if yt_thumbnail_path else None,  # Clean AI image for YouTube
                     "brand": brand,
                     "variant": variant or "light",
                     "yt_title": yt_title  # Store YouTube title in metadata
@@ -663,9 +666,18 @@ class DatabaseSchedulerService:
             print("📺 Publishing to YouTube...")
             # Get yt_title from metadata if available
             yt_title = metadata.get("yt_title") if metadata else None
+            # Get yt_thumbnail_path from metadata - clean AI image without text
+            yt_thumbnail_path = metadata.get("yt_thumbnail_path") if metadata else None
+            if yt_thumbnail_path:
+                yt_thumbnail_path = Path(yt_thumbnail_path)
+                if not yt_thumbnail_path.exists():
+                    print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}")
+                    yt_thumbnail_path = thumbnail_path
+            else:
+                yt_thumbnail_path = thumbnail_path
             results["youtube"] = self._publish_to_youtube(
                 video_path=video_path,
-                thumbnail_path=thumbnail_path,
+                thumbnail_path=yt_thumbnail_path,  # Use YT-specific thumbnail (clean AI image)
                 caption=caption,
                 brand_name=brand_name,
                 yt_title=yt_title

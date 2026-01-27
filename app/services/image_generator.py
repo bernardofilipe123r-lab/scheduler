@@ -126,6 +126,68 @@ class ImageGenerator:
         
         return self._ai_background
     
+    def generate_youtube_thumbnail(
+        self,
+        title: str,
+        lines: list,
+        output_path: Path
+    ) -> Path:
+        """
+        Generate a clean YouTube thumbnail with ONLY the AI-generated image.
+        No text, no overlay - just the pure visual for maximum impact on YouTube.
+        
+        For both light AND dark mode, we generate an AI background specifically
+        for YouTube since YouTube thumbnails work best with striking visuals.
+        
+        Args:
+            title: Title text for content context
+            lines: Content lines for context
+            output_path: Path to save the thumbnail
+            
+        Returns:
+            Path to the generated YouTube thumbnail
+        """
+        import sys
+        print(f"   📺 generate_youtube_thumbnail() called", flush=True)
+        print(f"      output_path: {output_path}", flush=True)
+        sys.stdout.flush()
+        
+        # For YouTube, ALWAYS generate an AI background regardless of variant
+        # This ensures striking visuals for YouTube thumbnails
+        content_context = self.content_context
+        if not content_context:
+            parts = []
+            if title:
+                parts.append(title)
+            if lines:
+                parts.extend(lines[:3])
+            content_context = " | ".join(parts) if parts else None
+        
+        # Check if we already have an AI background cached
+        if self._ai_background is not None:
+            print(f"      Using cached AI background", flush=True)
+            image = self._ai_background.copy()
+        else:
+            # Generate new AI background for YouTube
+            print(f"      🎨 Generating AI background for YouTube thumbnail...", flush=True)
+            ai_generator = AIBackgroundGenerator()
+            image = ai_generator.generate_background(
+                self.brand_name, 
+                self.ai_prompt,
+                content_context=content_context
+            )
+            # Cache it for potential reuse
+            self._ai_background = image.copy()
+            print(f"      ✓ AI background generated for YouTube", flush=True)
+        
+        # Save the CLEAN image - no text, no overlay
+        # YouTube thumbnails work best with pure striking visuals
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        image.save(output_path, quality=95)
+        print(f"      ✓ YouTube thumbnail saved (clean AI image, no text)", flush=True)
+        
+        return output_path
+
     def generate_thumbnail(
         self,
         title: str,

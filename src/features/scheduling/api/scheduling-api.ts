@@ -24,6 +24,7 @@ interface AutoScheduleRequest {
   variant: string
   caption?: string
   yt_title?: string  // YouTube-optimized title for Shorts
+  yt_thumbnail_path?: string  // Clean AI image thumbnail for YouTube (no text)
   user_id?: string
   video_path?: string
   thumbnail_path?: string

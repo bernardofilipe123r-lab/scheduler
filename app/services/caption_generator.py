@@ -245,17 +245,22 @@ Create a YouTube title that:
 1. Is between 40-70 characters (short but descriptive)
 2. Uses Title Case (not ALL CAPS)
 3. Includes 1-2 searchable health keywords naturally
-4. Creates curiosity or urgency
-5. Could include a number if appropriate (e.g., "5 Signs...", "This 1 Food...")
-6. Avoids clickbait but is engaging
+4. Creates curiosity or urgency WITHOUT using numbers
+5. NEVER use numbers like "3 Signs...", "5 Foods...", "This 1 Habit..."
+6. Focus on intrigue and emotional hooks instead
+7. Avoids clickbait but is engaging
 
-GOOD EXAMPLES:
-- "5 Signs Your Hormones Are Out of Balance"
+GOOD EXAMPLES (no numbers, curiosity-driven):
 - "This Bedtime Habit Is Secretly Ruining Your Sleep"
-- "Foods That Actually Speed Up Fat Loss"
 - "Why You're Always Tired (It's Not Sleep)"
+- "The Hidden Reason You Can't Lose Weight"
+- "Stop Doing This Every Morning For More Energy"
+- "Your Hormones Are Begging You To Eat This"
+- "This Common Food Is Destroying Your Gut"
 
-BAD EXAMPLES (avoid):
+BAD EXAMPLES (avoid these):
+- "3 Signs Your Hormones Are Off" (has numbers)
+- "5 Foods That Speed Up Fat Loss" (has numbers)
 - "EAT THIS IF YOU ARE HORMONE IMBALANCED" (all caps)
 - "Amazing Health Tips You Need to Know!!" (vague, excessive punctuation)
 - "Watch This Before It's Too Late" (pure clickbait)

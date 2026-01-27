@@ -673,6 +673,7 @@ class AutoScheduleRequest(BaseModel):
     user_id: str = "default"
     video_path: Optional[str] = None
     thumbnail_path: Optional[str] = None
+    yt_thumbnail_path: Optional[str] = None  # Clean AI image for YouTube (no text)
     scheduled_time: Optional[str] = None  # Optional custom ISO datetime string
 
 
@@ -741,8 +742,20 @@ async def schedule_auto(request: AutoScheduleRequest):
         else:
             thumbnail_path = base_dir / "output" / "thumbnails" / f"{request.reel_id}_thumbnail.png"
         
+        # Handle YouTube thumbnail path (clean AI image, no text)
+        yt_thumbnail_path = None
+        if request.yt_thumbnail_path:
+            yt_thumbnail_path = Path(request.yt_thumbnail_path)
+            if not yt_thumbnail_path.is_absolute():
+                yt_thumbnail_path = base_dir / request.yt_thumbnail_path.lstrip('/')
+            if not yt_thumbnail_path.exists():
+                yt_thumbnail_path = None
+                print(f"⚠️  YT thumbnail not found: {request.yt_thumbnail_path}")
+        
         print(f"🎬 Video path: {video_path}")
         print(f"🖼️  Thumbnail path: {thumbnail_path}")
+        if yt_thumbnail_path:
+            print(f"📺 YT thumbnail path: {yt_thumbnail_path}")
         
         # Determine platforms - include YouTube if yt_title is provided
         platforms = ["instagram", "facebook"]
@@ -757,6 +770,7 @@ async def schedule_auto(request: AutoScheduleRequest):
             scheduled_time=next_slot,
             video_path=video_path if video_path.exists() else None,
             thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
+            yt_thumbnail_path=yt_thumbnail_path,  # Clean AI image for YouTube
             caption=request.caption,
             yt_title=request.yt_title,  # Pass YouTube title
             platforms=platforms,

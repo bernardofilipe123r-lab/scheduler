@@ -134,6 +134,7 @@ export function JobDetailPage() {
         variant: job.variant,
         caption: caption,
         yt_title: output.yt_title,  // Pass YouTube title for YT Shorts
+        yt_thumbnail_path: output.yt_thumbnail_path,  // Clean AI image for YouTube
         video_path: output.video_path,
         thumbnail_path: output.thumbnail_path,
       })
@@ -181,6 +182,7 @@ export function JobDetailPage() {
             variant: job.variant,
             caption: caption,
             yt_title: output.yt_title,  // Pass YouTube title for YT Shorts
+            yt_thumbnail_path: output.yt_thumbnail_path,  // Clean AI image for YouTube
             video_path: output.video_path,
             thumbnail_path: output.thumbnail_path,
           })
@@ -262,6 +264,7 @@ export function JobDetailPage() {
             variant: job.variant,
             caption: caption,
             yt_title: output.yt_title,  // Pass YouTube title for YT Shorts
+            yt_thumbnail_path: output.yt_thumbnail_path,  // Clean AI image for YouTube
             video_path: output.video_path,
             thumbnail_path: output.thumbnail_path,
             scheduled_time: scheduledTime.toISOString(),

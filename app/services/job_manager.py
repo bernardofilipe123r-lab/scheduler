@@ -396,13 +396,23 @@ class JobManager:
             )
             print(f"   ✓ Caption generated ({len(caption)} chars)", flush=True)
             
-            # Generate YouTube title (searchable, clickable)
+            # Generate YouTube title (searchable, clickable, no numbers)
             print(f"   📺 Generating YouTube title...", flush=True)
             yt_title = caption_gen.generate_youtube_title(
                 title=use_title,
                 content_lines=use_lines
             )
             print(f"   ✓ YouTube title: {yt_title}", flush=True)
+            
+            # Generate YouTube thumbnail (clean AI image, no text)
+            print(f"   📺 Generating YouTube thumbnail...", flush=True)
+            yt_thumbnail_path = base_dir / "output" / "thumbnails" / f"{reel_id}_yt_thumbnail.png"
+            generator.generate_youtube_thumbnail(
+                title=use_title,
+                lines=use_lines,
+                output_path=yt_thumbnail_path
+            )
+            print(f"   ✓ YouTube thumbnail saved: {yt_thumbnail_path}", flush=True)
             
             self.update_brand_output(job_id, brand, {
                 "status": "generating",
@@ -415,10 +425,11 @@ class JobManager:
                 "status": "completed",
                 "reel_id": reel_id,
                 "thumbnail_path": f"/output/thumbnails/{reel_id}_thumbnail.png",
+                "yt_thumbnail_path": f"/output/thumbnails/{reel_id}_yt_thumbnail.png",  # Clean AI image for YouTube
                 "reel_path": f"/output/reels/{reel_id}_reel.png",
                 "video_path": f"/output/videos/{reel_id}_video.mp4",
                 "caption": caption,
-                "yt_title": yt_title,  # YouTube-optimized title
+                "yt_title": yt_title,  # YouTube-optimized title (no numbers)
                 "content_lines": use_lines,  # Store differentiated content for this brand
                 "regenerated_at": datetime.utcnow().isoformat()
             })

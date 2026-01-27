@@ -18,9 +18,10 @@ export interface BrandOutput {
   status: BrandStatus
   reel_id?: string
   thumbnail_path?: string
+  yt_thumbnail_path?: string  // Clean AI image for YouTube (no text)
   video_path?: string
   caption?: string
-  yt_title?: string  // YouTube-optimized title (searchable, clickable)
+  yt_title?: string  // YouTube-optimized title (searchable, clickable, no numbers)
   content_lines?: string[]  // Differentiated content for this brand
   scheduled_time?: string
   error?: string
