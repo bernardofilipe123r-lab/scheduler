@@ -15,11 +15,13 @@ import {
   Image as ImageIcon,
   Settings2,
   Upload,
-  Plus,
-  Edit3,
-  Copy
+  Square,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 
 // Constants matching the design requirements
 const CANVAS_WIDTH = 1080
@@ -78,6 +80,15 @@ interface LayoutConfig {
   titlePaddingX: number // horizontal padding for title
 }
 
+// Highlight rectangle configuration
+interface HighlightConfig {
+  enabled: boolean
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 // Title configuration
 interface TitleConfig {
   text: string
@@ -91,6 +102,7 @@ interface PostState {
   title: TitleConfig
   logoImage: string | null
   layout: LayoutConfig
+  highlight: HighlightConfig
 }
 
 // Background Image Component (non-interactive)
@@ -196,12 +208,14 @@ function LogoWithLines({
 // Title component with highlight support and auto-wrapping (non-draggable)
 function TitleLayer({
   config,
+  highlightConfig,
   highlightColor,
   x,
   y,
   paddingX
 }: {
   config: TitleConfig
+  highlightConfig: HighlightConfig
   highlightColor: string
   x: number
   y: number
@@ -238,14 +252,27 @@ function TitleLayer({
   
   return (
     <Group x={x} y={y}>
+      {/* Custom highlight rectangle if enabled */}
+      {highlightConfig.enabled && (
+        <Rect
+          x={highlightConfig.x - x}
+          y={highlightConfig.y - y}
+          width={highlightConfig.width}
+          height={highlightConfig.height}
+          fill={highlightColor}
+        />
+      )}
+      
       {lines.map((line, i) => {
-        const isHighlighted = line.toUpperCase().includes(highlightPhrase) || 
+        const isHighlighted = !highlightConfig.enabled && (
+          line.toUpperCase().includes(highlightPhrase) || 
           highlightPhrase.includes(line.toUpperCase().trim())
+        )
         const lineY = i * lineHeight
         
         return (
           <Group key={i} y={lineY}>
-            {/* Background for highlighted text */}
+            {/* Background for highlighted text (auto mode) */}
             {isHighlighted && (
               <Rect
                 x={-10}
@@ -312,26 +339,35 @@ function ReadCaption({ y }: { y: number }) {
   )
 }
 
-// Mode type for workflow
-type EditorMode = 'create' | 'edit'
-
 // Main Posts Page Component
 export function PostsPage() {
-  // State
-  const [editorMode, setEditorMode] = useState<EditorMode>('create')
-  const [selectedBrands, setSelectedBrands] = useState<string[]>(['healthycollege'])
-  const [activeBrand, setActiveBrand] = useState('healthycollege')
-  const [isGenerating, setIsGenerating] = useState(false)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   
-  // Post states for each brand
+  // Step state: 'generate' | 'finetune'
+  const [step, setStep] = useState<'generate' | 'finetune'>('generate')
+  
+  // Brand selection
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(Object.keys(BRAND_CONFIGS))
+  const [activeBrand, setActiveBrand] = useState('healthycollege')
+  
+  // Generation state
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isCreatingJob, setIsCreatingJob] = useState(false)
+  
+  // Generated content
+  const [generatedTitle, setGeneratedTitle] = useState('')
+  const [aiPrompt, setAiPrompt] = useState('')
+  
+  // Post states for each brand (populated after generation)
   const [postStates, setPostStates] = useState<Record<string, PostState>>(() => {
     const initial: Record<string, PostState> = {}
     Object.keys(BRAND_CONFIGS).forEach(brand => {
       initial[brand] = {
         backgroundImage: null,
         title: {
-          text: 'STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%',
-          highlightedText: 'STRESS & CORTISOL BY 40%',
+          text: '',
+          highlightedText: '',
           fontSize: 58
         },
         logoImage: null,
@@ -340,6 +376,13 @@ export function PostsPage() {
           titleGap: DEFAULT_TITLE_GAP,
           logoGap: DEFAULT_LOGO_GAP,
           titlePaddingX: 40
+        },
+        highlight: {
+          enabled: false,
+          x: 40,
+          y: CANVAS_HEIGHT - 350,
+          width: CANVAS_WIDTH - 80,
+          height: 80
         }
       }
     })
@@ -356,13 +399,13 @@ export function PostsPage() {
   // Calculate positions based on layout config
   const layout = currentPost.layout
   const titleHeight = calculateTitleHeight(
-    currentPost.title.text, 
+    currentPost.title.text || 'PLACEHOLDER TEXT', 
     currentPost.title.fontSize, 
     layout.titlePaddingX
   )
-  const readCaptionY = CANVAS_HEIGHT - layout.readCaptionBottom - 24 // 24 is approximate text height
+  const readCaptionY = CANVAS_HEIGHT - layout.readCaptionBottom - 24
   const titleY = readCaptionY - layout.titleGap - titleHeight
-  const logoY = titleY - layout.logoGap - 40 // 40 is approximate logo height
+  const logoY = titleY - layout.logoGap - 40
   
   // Update post state helper
   const updatePostState = useCallback((brand: string, updates: Partial<PostState>) => {
@@ -394,11 +437,22 @@ export function PostsPage() {
     }))
   }, [activeBrand])
   
-  // Handle brand toggle
+  // Update highlight
+  const updateHighlight = useCallback((updates: Partial<HighlightConfig>) => {
+    setPostStates(prev => ({
+      ...prev,
+      [activeBrand]: {
+        ...prev[activeBrand],
+        highlight: { ...prev[activeBrand].highlight, ...updates }
+      }
+    }))
+  }, [activeBrand])
+  
+  // Toggle brand selection
   const toggleBrand = (brand: string) => {
     setSelectedBrands(prev => {
       if (prev.includes(brand)) {
-        if (prev.length === 1) return prev // Keep at least one
+        if (prev.length === 1) return prev
         const newBrands = prev.filter(b => b !== brand)
         if (activeBrand === brand) {
           setActiveBrand(newBrands[0])
@@ -409,46 +463,121 @@ export function PostsPage() {
     })
   }
   
-  // Generate AI background
-  const generateBackground = async () => {
+  // Generate viral post content (Step 1)
+  const handleGenerateViralPost = async () => {
     setIsGenerating(true)
-    toast.loading('Generating AI background...', { id: 'generate-bg' })
+    toast.loading('Generating viral post...', { id: 'generate-post' })
     
     try {
-      // TODO: Call actual DEAPI endpoint with prompt like:
-      // `Futuristic vitamin capsule filled with glowing particles, 
-      //  ${brandConfig.colorName} color scheme, floating water droplets, 
-      //  bokeh effect, dark moody background, cinematic lighting, 8k quality, no text`
+      const response = await fetch('/reels/auto-generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to generate content')
+      }
       
-      // For demo, use a gradient placeholder
-      toast.success('Background generated!', { id: 'generate-bg' })
+      const data = await response.json()
       
-      // Update all selected brands with their color-matched backgrounds
-      // In production, generate unique backgrounds for each brand
+      // Set generated content
+      setGeneratedTitle(data.title)
+      if (data.image_prompt) {
+        setAiPrompt(data.image_prompt)
+      }
+      
+      // Update all selected brands with generated content
+      setPostStates(prev => {
+        const updated = { ...prev }
+        selectedBrands.forEach(brand => {
+          updated[brand] = {
+            ...updated[brand],
+            title: {
+              ...updated[brand].title,
+              text: data.title,
+              highlightedText: data.title.split(' ').slice(-3).join(' ') // Last 3 words as highlight
+            }
+          }
+        })
+        return updated
+      })
+      
+      toast.success(`🎉 Generated: "${data.title}"`, { id: 'generate-post', duration: 5000 })
+      setStep('finetune')
       
     } catch (error) {
-      toast.error('Failed to generate background', { id: 'generate-bg' })
+      console.error('Generate error:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to generate', { id: 'generate-post' })
     } finally {
       setIsGenerating(false)
     }
   }
   
-  // Export canvas as image
-  const exportImage = () => {
-    if (!stageRef.current) return
+  // Create post job (Step 2)
+  const handleCreatePostJob = async () => {
+    if (!generatedTitle.trim()) {
+      toast.error('Generate content first')
+      return
+    }
     
-    const uri = stageRef.current.toDataURL({ pixelRatio: 1 })
-    const link = document.createElement('a')
-    link.download = `${activeBrand}_post.png`
-    link.href = uri
-    link.click()
-    toast.success('Image downloaded!')
+    if (selectedBrands.length === 0) {
+      toast.error('Select at least one brand')
+      return
+    }
+    
+    setIsCreatingJob(true)
+    toast.loading('Creating post job...', { id: 'create-job' })
+    
+    try {
+      // Create job via API (similar to reels)
+      const response = await fetch('/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'post',
+          title: generatedTitle,
+          brands: selectedBrands,
+          ai_prompt: aiPrompt,
+          post_config: {
+            layout: currentPost.layout,
+            highlight: currentPost.highlight,
+            fontSize: currentPost.title.fontSize,
+            highlightedText: currentPost.title.highlightedText
+          }
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to create job')
+      }
+      
+      const job = await response.json()
+      
+      // Invalidate jobs cache
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      
+      toast.success(`✅ Post job created! ID: ${job.id?.slice(0, 8)}...`, { id: 'create-job' })
+      
+      // Reset and go back to generate step
+      setStep('generate')
+      setGeneratedTitle('')
+      setAiPrompt('')
+      
+      // Navigate to jobs page
+      navigate('/jobs')
+      
+    } catch (error) {
+      console.error('Create job error:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to create job', { id: 'create-job' })
+    } finally {
+      setIsCreatingJob(false)
+    }
   }
   
-  // Handle background image upload
+  // Handle background upload
   const handleBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -472,6 +601,168 @@ export function PostsPage() {
     reader.readAsDataURL(file)
   }
   
+  // Export single image
+  const exportImage = () => {
+    if (!stageRef.current) return
+    
+    const uri = stageRef.current.toDataURL({
+      pixelRatio: 1 / PREVIEW_SCALE,
+      mimeType: 'image/png'
+    })
+    
+    const link = document.createElement('a')
+    link.download = `post-${activeBrand}-${Date.now()}.png`
+    link.href = uri
+    link.click()
+    
+    toast.success('Image exported!')
+  }
+  
+  // Generate AI background
+  const generateBackground = async () => {
+    setIsGenerating(true)
+    toast.loading('Generating AI background...', { id: 'generate-bg' })
+    
+    try {
+      // TODO: Call DEAPI endpoint
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Placeholder - would use real AI image
+      toast.success('Background generated!', { id: 'generate-bg' })
+    } catch (error) {
+      toast.error('Failed to generate background', { id: 'generate-bg' })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+  
+  // STEP 1: Generate Viral Post
+  if (step === 'generate') {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <FileImage className="w-7 h-7 text-primary-500" />
+            Post Generator
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Create viral image posts for Instagram
+          </p>
+        </div>
+        
+        {/* Brand Selection */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-4">Select Brands</h2>
+          <div className="flex flex-wrap gap-3">
+            {Object.keys(BRAND_CONFIGS).map(brand => (
+              <button
+                key={brand}
+                onClick={() => toggleBrand(brand)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all ${
+                  selectedBrands.includes(brand)
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div 
+                  className="w-4 h-4 rounded-full"
+                  style={{ backgroundColor: BRAND_CONFIGS[brand].color }}
+                />
+                <span className={`text-sm font-medium ${selectedBrands.includes(brand) ? 'text-primary-700' : 'text-gray-600'}`}>
+                  {BRAND_CONFIGS[brand].name}
+                </span>
+                {selectedBrands.includes(brand) && (
+                  <Check className="w-4 h-4 text-primary-500" />
+                )}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-gray-500 mt-3">{selectedBrands.length} brand(s) selected</p>
+        </div>
+        
+        {/* Generate Button */}
+        <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Generate Viral Post</h2>
+              <p className="text-primary-100 mt-1">
+                AI will generate a catchy title and background image prompt
+              </p>
+            </div>
+            <button
+              onClick={handleGenerateViralPost}
+              disabled={isGenerating || selectedBrands.length === 0}
+              className="flex items-center gap-2 px-6 py-3 bg-white text-primary-600 rounded-lg font-semibold hover:bg-primary-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isGenerating ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Wand2 className="w-5 h-5" />
+              )}
+              Generate
+            </button>
+          </div>
+        </div>
+        
+        {/* Or manual entry */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="font-semibold text-gray-900 mb-4">Or Enter Manually</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">Post Title</label>
+              <textarea
+                value={generatedTitle}
+                onChange={(e) => setGeneratedTitle(e.target.value)}
+                rows={2}
+                placeholder="Enter your post title..."
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">AI Image Prompt</label>
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={3}
+                placeholder="Describe the background image..."
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (generatedTitle.trim()) {
+                  // Update all brands with manual content
+                  setPostStates(prev => {
+                    const updated = { ...prev }
+                    selectedBrands.forEach(brand => {
+                      updated[brand] = {
+                        ...updated[brand],
+                        title: {
+                          ...updated[brand].title,
+                          text: generatedTitle,
+                          highlightedText: generatedTitle.split(' ').slice(-3).join(' ')
+                        }
+                      }
+                    })
+                    return updated
+                  })
+                  setStep('finetune')
+                } else {
+                  toast.error('Enter a title first')
+                }
+              }}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+            >
+              Continue to Fine-tune →
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // STEP 2: Fine-tune and Preview
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -479,121 +770,65 @@ export function PostsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <FileImage className="w-7 h-7 text-primary-500" />
-            Post Editor
+            Fine-tune Post
           </h1>
           <p className="text-gray-500 mt-1">
-            Create stunning image posts with AI-powered design
+            Adjust layout and styling, then generate for all brands
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Mode Selector */}
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setEditorMode('create')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                editorMode === 'create'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              Create
-            </button>
-            <button
-              onClick={() => setEditorMode('edit')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                editorMode === 'edit'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Edit3 className="w-4 h-4" />
-              Edit Brand
-            </button>
-            <button
-              onClick={() => {
-                toast('Copy from brand feature coming soon!', { icon: '📋' })
-              }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-all"
-            >
-              <Copy className="w-4 h-4" />
-              Copy
-            </button>
-          </div>
+          <button
+            onClick={() => setStep('generate')}
+            className="px-4 py-2 text-gray-600 hover:text-gray-900"
+          >
+            ← Back
+          </button>
           <button
             onClick={exportImage}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
           >
             <Download className="w-4 h-4" />
-            Export
+            Export Preview
           </button>
           <button
-            onClick={generateBackground}
-            disabled={isGenerating}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50"
+            onClick={handleCreatePostJob}
+            disabled={isCreatingJob}
+            className="flex items-center gap-2 px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50"
           >
-            {isGenerating ? (
+            {isCreatingJob ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Wand2 className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" />
             )}
-            Generate Background
+            Generate Posts
           </button>
         </div>
       </div>
       
-      {/* Brand Selector */}
+      {/* Brand tabs */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="font-medium text-gray-700">Select Brands</span>
-          <span className="text-sm text-gray-500">{selectedBrands.length} selected</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {Object.keys(BRAND_CONFIGS).map(brand => (
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {selectedBrands.map(brand => (
             <button
               key={brand}
-              onClick={() => toggleBrand(brand)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
-                selectedBrands.includes(brand)
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 hover:border-gray-300'
+              onClick={() => setActiveBrand(brand)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all ${
+                activeBrand === brand
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               <div 
-                className="w-4 h-4 rounded-full"
+                className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: BRAND_CONFIGS[brand].color }}
               />
-              <span className={`text-sm ${selectedBrands.includes(brand) ? 'text-primary-700' : 'text-gray-600'}`}>
-                {BRAND_CONFIGS[brand].name}
-              </span>
-              {selectedBrands.includes(brand) && (
-                <Check className="w-4 h-4 text-primary-500" />
-              )}
+              {BRAND_CONFIGS[brand].name}
             </button>
           ))}
         </div>
-        
-        {/* Brand tabs for editing */}
-        {selectedBrands.length > 1 && (
-          <div className="flex gap-1 mt-4 pt-4 border-t border-gray-100">
-            {selectedBrands.map(brand => (
-              <button
-                key={brand}
-                onClick={() => setActiveBrand(brand)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  activeBrand === brand
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {BRAND_CONFIGS[brand].name}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
       
-      {/* Main Editor Area */}
+      {/* Main Editor */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Canvas Preview */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
@@ -629,9 +864,7 @@ export function PostsPage() {
               <Layer>
                 {/* Background */}
                 {currentPost.backgroundImage ? (
-                  <BackgroundImageLayer
-                    imageUrl={currentPost.backgroundImage}
-                  />
+                  <BackgroundImageLayer imageUrl={currentPost.backgroundImage} />
                 ) : (
                   <Rect
                     x={0}
@@ -654,6 +887,7 @@ export function PostsPage() {
                 {/* Title */}
                 <TitleLayer
                   config={currentPost.title}
+                  highlightConfig={currentPost.highlight}
                   highlightColor={brandConfig.color}
                   x={layout.titlePaddingX}
                   y={titleY}
@@ -668,7 +902,7 @@ export function PostsPage() {
         </div>
         
         {/* Right Sidebar - Controls */}
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
           {/* Background Controls */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -677,7 +911,6 @@ export function PostsPage() {
             </h3>
             
             <div className="space-y-3">
-              {/* Upload Button */}
               <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-400 hover:bg-primary-50/50 transition-all">
                 <Upload className="w-5 h-5 text-gray-400" />
                 <span className="text-sm text-gray-600">Upload Image</span>
@@ -689,7 +922,6 @@ export function PostsPage() {
                 />
               </label>
               
-              {/* Generate with AI */}
               <button
                 onClick={generateBackground}
                 disabled={isGenerating}
@@ -703,9 +935,11 @@ export function PostsPage() {
                 Generate with AI
               </button>
               
-              <p className="text-xs text-gray-500">
-                AI will generate a {brandConfig.colorName} themed background for {brandConfig.name}
-              </p>
+              {aiPrompt && (
+                <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                  <strong>Prompt:</strong> {aiPrompt}
+                </div>
+              )}
             </div>
           </div>
           
@@ -725,7 +959,7 @@ export function PostsPage() {
               ) : (
                 <>
                   <Upload className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-600">Upload Logo (e.g., LCO)</span>
+                  <span className="text-sm text-gray-600">Upload Logo</span>
                 </>
               )}
               <input
@@ -735,9 +969,6 @@ export function PostsPage() {
                 className="hidden"
               />
             </label>
-            <p className="text-xs text-gray-500 mt-2">
-              Upload the abbreviated logo that appears between the lines
-            </p>
           </div>
           
           {/* Title Controls */}
@@ -748,7 +979,6 @@ export function PostsPage() {
             </h3>
             
             <div className="space-y-3">
-              {/* Title Text */}
               <div>
                 <label className="text-sm text-gray-600 mb-1 block">Title Text</label>
                 <textarea
@@ -756,26 +986,21 @@ export function PostsPage() {
                   onChange={(e) => updateTitle({ text: e.target.value })}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Enter title..."
                 />
               </div>
               
-              {/* Highlighted Text */}
               <div>
                 <label className="text-sm text-gray-600 mb-1 block">
                   Highlighted Text
-                  <span className="text-xs text-gray-400 ml-1">(colored background)</span>
                 </label>
                 <input
                   type="text"
                   value={currentPost.title.highlightedText}
                   onChange={(e) => updateTitle({ highlightedText: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Text to highlight..."
                 />
               </div>
               
-              {/* Font Size */}
               <div>
                 <label className="text-sm text-gray-600 mb-1 block">
                   Font Size: {currentPost.title.fontSize}px
@@ -792,6 +1017,83 @@ export function PostsPage() {
             </div>
           </div>
           
+          {/* Highlight Rectangle Controls */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Square className="w-5 h-5 text-primary-500" />
+                Highlight Rectangle
+              </h3>
+              <button
+                onClick={() => updateHighlight({ enabled: !currentPost.highlight.enabled })}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-sm ${
+                  currentPost.highlight.enabled 
+                    ? 'bg-primary-100 text-primary-700' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {currentPost.highlight.enabled ? (
+                  <ToggleRight className="w-4 h-4" />
+                ) : (
+                  <ToggleLeft className="w-4 h-4" />
+                )}
+                {currentPost.highlight.enabled ? 'On' : 'Off'}
+              </button>
+            </div>
+            
+            {currentPost.highlight.enabled && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">X Position</label>
+                    <input
+                      type="number"
+                      value={currentPost.highlight.x}
+                      onChange={(e) => updateHighlight({ x: parseInt(e.target.value) || 0 })}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Y Position</label>
+                    <input
+                      type="number"
+                      value={currentPost.highlight.y}
+                      onChange={(e) => updateHighlight({ y: parseInt(e.target.value) || 0 })}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Width</label>
+                    <input
+                      type="number"
+                      value={currentPost.highlight.width}
+                      onChange={(e) => updateHighlight({ width: parseInt(e.target.value) || 100 })}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Height</label>
+                    <input
+                      type="number"
+                      value={currentPost.highlight.height}
+                      onChange={(e) => updateHighlight({ height: parseInt(e.target.value) || 50 })}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Manually position the highlight rectangle over the text you want highlighted
+                </p>
+              </div>
+            )}
+            
+            {!currentPost.highlight.enabled && (
+              <p className="text-xs text-gray-500">
+                When off, auto-highlights text matching "Highlighted Text" above
+              </p>
+            )}
+          </div>
+          
           {/* Layout Controls */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -799,10 +1101,9 @@ export function PostsPage() {
               Layout Spacing
             </h3>
             
-            <div className="space-y-4">
-              {/* Read Caption Bottom */}
+            <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">
+                <label className="text-xs text-gray-500 mb-1 block">
                   Read Caption from Bottom: {layout.readCaptionBottom}px
                 </label>
                 <input
@@ -815,10 +1116,9 @@ export function PostsPage() {
                 />
               </div>
               
-              {/* Title Gap */}
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">
-                  Gap: Title to Read Caption: {layout.titleGap}px
+                <label className="text-xs text-gray-500 mb-1 block">
+                  Title to Read Caption Gap: {layout.titleGap}px
                 </label>
                 <input
                   type="range"
@@ -830,10 +1130,9 @@ export function PostsPage() {
                 />
               </div>
               
-              {/* Logo Gap */}
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">
-                  Gap: Logo to Title: {layout.logoGap}px
+                <label className="text-xs text-gray-500 mb-1 block">
+                  Logo to Title Gap: {layout.logoGap}px
                 </label>
                 <input
                   type="range"
@@ -845,9 +1144,8 @@ export function PostsPage() {
                 />
               </div>
               
-              {/* Title Horizontal Padding */}
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">
+                <label className="text-xs text-gray-500 mb-1 block">
                   Title Padding X: {layout.titlePaddingX}px
                 </label>
                 <input
@@ -860,7 +1158,6 @@ export function PostsPage() {
                 />
               </div>
               
-              {/* Reset to Defaults */}
               <button
                 onClick={() => {
                   updateLayout({
@@ -870,38 +1167,13 @@ export function PostsPage() {
                     titlePaddingX: 40
                   })
                 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm text-gray-600"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
               >
                 Reset to Defaults
               </button>
             </div>
           </div>
-          
-          {/* Export */}
-          {/* Export */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <button
-              onClick={exportImage}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm"
-            >
-              <Download className="w-4 h-4" />
-              Download Image
-            </button>
-          </div>
         </div>
-      </div>
-      
-      {/* Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">💡 How to use the Post Editor</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>1. <strong>Select brands</strong> - Choose which brands to generate posts for</li>
-          <li>2. <strong>Upload or generate background</strong> - Use AI to create brand-colored backgrounds</li>
-          <li>3. <strong>Upload logo</strong> - Add your brand logo (appears between the lines)</li>
-          <li>4. <strong>Edit title</strong> - Modify the title text and choose which part to highlight</li>
-          <li>5. <strong>Adjust spacing</strong> - Use the Layout Spacing controls to fine-tune positioning</li>
-          <li>6. <strong>Export</strong> - Download the final image for each brand</li>
-        </ul>
       </div>
     </div>
   )
