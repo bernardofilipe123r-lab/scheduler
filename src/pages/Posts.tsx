@@ -350,6 +350,7 @@ export function PostsPage() {
   // Brand selection
   const [selectedBrands, setSelectedBrands] = useState<string[]>(Object.keys(BRAND_CONFIGS))
   const [activeBrand, setActiveBrand] = useState('healthycollege')
+  const [previewBrand, setPreviewBrand] = useState('healthycollege') // For step 1 preview
   
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false)
@@ -359,7 +360,29 @@ export function PostsPage() {
   const [generatedTitle, setGeneratedTitle] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
   
-  // Post states for each brand (populated after generation)
+  // GENERAL settings that apply to ALL brands (Step 1)
+  const [generalSettings, setGeneralSettings] = useState({
+    fontSize: 58,
+    layout: {
+      readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
+      titleGap: DEFAULT_TITLE_GAP,
+      logoGap: DEFAULT_LOGO_GAP,
+      titlePaddingX: 40
+    },
+    highlight: {
+      enabled: false,
+      x: 40,
+      y: CANVAS_HEIGHT - 350,
+      width: CANVAS_WIDTH - 80,
+      height: 80
+    }
+  })
+  
+  // Preview title for Step 1 (before generation)
+  const [previewTitle, setPreviewTitle] = useState('STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%')
+  const [previewHighlightedText, setPreviewHighlightedText] = useState('STRESS & CORTISOL BY 40%')
+  
+  // Post states for each brand (populated after generation, for Step 2)
   const [postStates, setPostStates] = useState<Record<string, PostState>>(() => {
     const initial: Record<string, PostState> = {}
     Object.keys(BRAND_CONFIGS).forEach(brand => {
@@ -426,7 +449,7 @@ export function PostsPage() {
     }))
   }, [activeBrand])
   
-  // Update layout
+  // Update layout (for Step 2 per-brand)
   const updateLayout = useCallback((updates: Partial<LayoutConfig>) => {
     setPostStates(prev => ({
       ...prev,
@@ -437,7 +460,7 @@ export function PostsPage() {
     }))
   }, [activeBrand])
   
-  // Update highlight
+  // Update highlight (for Step 2 per-brand)
   const updateHighlight = useCallback((updates: Partial<HighlightConfig>) => {
     setPostStates(prev => ({
       ...prev,
@@ -448,6 +471,21 @@ export function PostsPage() {
     }))
   }, [activeBrand])
   
+  // Update general settings (Step 1 - applies to ALL brands)
+  const updateGeneralLayout = useCallback((updates: Partial<LayoutConfig>) => {
+    setGeneralSettings(prev => ({
+      ...prev,
+      layout: { ...prev.layout, ...updates }
+    }))
+  }, [])
+  
+  const updateGeneralHighlight = useCallback((updates: Partial<HighlightConfig>) => {
+    setGeneralSettings(prev => ({
+      ...prev,
+      highlight: { ...prev.highlight, ...updates }
+    }))
+  }, [])
+  
   // Toggle brand selection
   const toggleBrand = (brand: string) => {
     setSelectedBrands(prev => {
@@ -456,6 +494,9 @@ export function PostsPage() {
         const newBrands = prev.filter(b => b !== brand)
         if (activeBrand === brand) {
           setActiveBrand(newBrands[0])
+        }
+        if (previewBrand === brand) {
+          setPreviewBrand(newBrands[0])
         }
         return newBrands
       }
@@ -484,21 +525,28 @@ export function PostsPage() {
       
       // Set generated content
       setGeneratedTitle(data.title)
+      setPreviewTitle(data.title)
       if (data.image_prompt) {
         setAiPrompt(data.image_prompt)
       }
       
-      // Update all selected brands with generated content
+      // Extract highlighted text (last 3 words)
+      const highlightedText = data.title.split(' ').slice(-3).join(' ')
+      setPreviewHighlightedText(highlightedText)
+      
+      // Update all selected brands with generated content AND general settings
       setPostStates(prev => {
         const updated = { ...prev }
         selectedBrands.forEach(brand => {
           updated[brand] = {
             ...updated[brand],
             title: {
-              ...updated[brand].title,
               text: data.title,
-              highlightedText: data.title.split(' ').slice(-3).join(' ') // Last 3 words as highlight
-            }
+              highlightedText: highlightedText,
+              fontSize: generalSettings.fontSize
+            },
+            layout: { ...generalSettings.layout },
+            highlight: { ...generalSettings.highlight }
           }
         })
         return updated
@@ -638,8 +686,10 @@ export function PostsPage() {
   
   // STEP 1: Generate Viral Post
   if (step === 'generate') {
+    const previewConfig = BRAND_CONFIGS[previewBrand]
+    
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -651,111 +701,315 @@ export function PostsPage() {
           </p>
         </div>
         
-        {/* Brand Selection */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-semibold text-gray-900 mb-4">Select Brands</h2>
-          <div className="flex flex-wrap gap-3">
-            {Object.keys(BRAND_CONFIGS).map(brand => (
-              <button
-                key={brand}
-                onClick={() => toggleBrand(brand)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all ${
-                  selectedBrands.includes(brand)
-                    ? 'border-primary-500 bg-primary-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
+        <div className="flex gap-6">
+          {/* Left: Canvas Preview */}
+          <div className="flex-shrink-0">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium text-gray-700">Preview</h3>
+                <select
+                  value={previewBrand}
+                  onChange={(e) => setPreviewBrand(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-lg px-2 py-1"
+                >
+                  {selectedBrands.map(brand => (
+                    <option key={brand} value={brand}>{BRAND_CONFIGS[brand].name}</option>
+                  ))}
+                </select>
+              </div>
+              <Stage
+                width={CANVAS_WIDTH * PREVIEW_SCALE}
+                height={CANVAS_HEIGHT * PREVIEW_SCALE}
+                style={{ 
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}
+                scaleX={PREVIEW_SCALE}
+                scaleY={PREVIEW_SCALE}
               >
-                <div 
-                  className="w-4 h-4 rounded-full"
-                  style={{ backgroundColor: BRAND_CONFIGS[brand].color }}
+                <Layer>
+                  {/* Placeholder background */}
+                  <Rect x={0} y={0} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="#1a1a2e" />
+                  
+                  {/* Gradient overlay */}
+                  <GradientOverlay />
+                  
+                  {/* Highlight rectangle (if enabled) */}
+                  {generalSettings.highlight.enabled && (
+                    <Rect
+                      x={generalSettings.highlight.x}
+                      y={generalSettings.highlight.y}
+                      width={generalSettings.highlight.width}
+                      height={generalSettings.highlight.height}
+                      fill={previewConfig.color}
+                      cornerRadius={4}
+                    />
+                  )}
+                  
+                  {/* Logo placeholder */}
+                  <LogoWithLines 
+                    logoUrl={null}
+                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - generalSettings.layout.titleGap - generalSettings.layout.logoGap - 60}
+                  />
+                  
+                  {/* Title preview */}
+                  <TitleLayer
+                    config={{
+                      text: previewTitle,
+                      highlightedText: previewHighlightedText,
+                      fontSize: generalSettings.fontSize
+                    }}
+                    highlightConfig={generalSettings.highlight}
+                    highlightColor={previewConfig.color}
+                    x={generalSettings.layout.titlePaddingX}
+                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - generalSettings.layout.titleGap - calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX) - generalSettings.layout.logoGap - 60}
+                    paddingX={generalSettings.layout.titlePaddingX}
+                  />
+                  
+                  {/* Read caption */}
+                  <ReadCaption y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24} />
+                </Layer>
+              </Stage>
+            </div>
+          </div>
+          
+          {/* Right: Controls */}
+          <div className="flex-1 space-y-4">
+            {/* Brand Selection */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-3">Select Brands</h2>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(BRAND_CONFIGS).map(brand => (
+                  <button
+                    key={brand}
+                    onClick={() => toggleBrand(brand)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all ${
+                      selectedBrands.includes(brand)
+                        ? 'border-primary-500 bg-primary-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div 
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: BRAND_CONFIGS[brand].color }}
+                    />
+                    <span className={`text-sm font-medium ${selectedBrands.includes(brand) ? 'text-primary-700' : 'text-gray-600'}`}>
+                      {BRAND_CONFIGS[brand].name}
+                    </span>
+                    {selectedBrands.includes(brand) && (
+                      <Check className="w-3 h-3 text-primary-500" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">{selectedBrands.length} brand(s) selected</p>
+            </div>
+            
+            {/* Generate Button */}
+            <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl p-5 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold">Generate Viral Post</h2>
+                  <p className="text-primary-100 text-sm">AI will generate title & prompt</p>
+                </div>
+                <button
+                  onClick={handleGenerateViralPost}
+                  disabled={isGenerating || selectedBrands.length === 0}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white text-primary-600 rounded-lg font-semibold hover:bg-primary-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                  Generate
+                </button>
+              </div>
+            </div>
+            
+            {/* General Settings */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Settings2 className="w-4 h-4" />
+                General Settings
+                <span className="text-xs font-normal text-gray-500">(applies to all brands)</span>
+              </h2>
+              
+              {/* Font Size */}
+              <div className="mb-4">
+                <label className="text-sm text-gray-600 mb-1 block">Font Size: {generalSettings.fontSize}px</label>
+                <input
+                  type="range"
+                  min={40}
+                  max={80}
+                  value={generalSettings.fontSize}
+                  onChange={(e) => setGeneralSettings(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
+                  className="w-full accent-primary-500"
                 />
-                <span className={`text-sm font-medium ${selectedBrands.includes(brand) ? 'text-primary-700' : 'text-gray-600'}`}>
-                  {BRAND_CONFIGS[brand].name}
-                </span>
-                {selectedBrands.includes(brand) && (
-                  <Check className="w-4 h-4 text-primary-500" />
+              </div>
+              
+              {/* Layout Spacing */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-xs text-gray-500">Read Caption Bottom: {generalSettings.layout.readCaptionBottom}px</label>
+                  <input
+                    type="range" min={20} max={80}
+                    value={generalSettings.layout.readCaptionBottom}
+                    onChange={(e) => updateGeneralLayout({ readCaptionBottom: Number(e.target.value) })}
+                    className="w-full accent-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Title Gap: {generalSettings.layout.titleGap}px</label>
+                  <input
+                    type="range" min={10} max={60}
+                    value={generalSettings.layout.titleGap}
+                    onChange={(e) => updateGeneralLayout({ titleGap: Number(e.target.value) })}
+                    className="w-full accent-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Logo Gap: {generalSettings.layout.logoGap}px</label>
+                  <input
+                    type="range" min={20} max={60}
+                    value={generalSettings.layout.logoGap}
+                    onChange={(e) => updateGeneralLayout({ logoGap: Number(e.target.value) })}
+                    className="w-full accent-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Title Padding X: {generalSettings.layout.titlePaddingX}px</label>
+                  <input
+                    type="range" min={20} max={80}
+                    value={generalSettings.layout.titlePaddingX}
+                    onChange={(e) => updateGeneralLayout({ titlePaddingX: Number(e.target.value) })}
+                    className="w-full accent-primary-500"
+                  />
+                </div>
+              </div>
+              
+              {/* Highlight Rectangle */}
+              <div className="border-t border-gray-100 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-700">Highlight Rectangle</span>
+                  <button
+                    onClick={() => updateGeneralHighlight({ enabled: !generalSettings.highlight.enabled })}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      generalSettings.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                      generalSettings.highlight.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                    }`} />
+                  </button>
+                </div>
+                
+                {generalSettings.highlight.enabled && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500">X: {generalSettings.highlight.x}</label>
+                      <input
+                        type="range" min={0} max={CANVAS_WIDTH - 100}
+                        value={generalSettings.highlight.x}
+                        onChange={(e) => updateGeneralHighlight({ x: Number(e.target.value) })}
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Y: {generalSettings.highlight.y}</label>
+                      <input
+                        type="range" min={0} max={CANVAS_HEIGHT - 100}
+                        value={generalSettings.highlight.y}
+                        onChange={(e) => updateGeneralHighlight({ y: Number(e.target.value) })}
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Width: {generalSettings.highlight.width}</label>
+                      <input
+                        type="range" min={100} max={CANVAS_WIDTH}
+                        value={generalSettings.highlight.width}
+                        onChange={(e) => updateGeneralHighlight({ width: Number(e.target.value) })}
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Height: {generalSettings.highlight.height}</label>
+                      <input
+                        type="range" min={40} max={200}
+                        value={generalSettings.highlight.height}
+                        onChange={(e) => updateGeneralHighlight({ height: Number(e.target.value) })}
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
+                  </div>
                 )}
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-gray-500 mt-3">{selectedBrands.length} brand(s) selected</p>
-        </div>
-        
-        {/* Generate Button */}
-        <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Generate Viral Post</h2>
-              <p className="text-primary-100 mt-1">
-                AI will generate a catchy title and background image prompt
-              </p>
+              </div>
             </div>
-            <button
-              onClick={handleGenerateViralPost}
-              disabled={isGenerating || selectedBrands.length === 0}
-              className="flex items-center gap-2 px-6 py-3 bg-white text-primary-600 rounded-lg font-semibold hover:bg-primary-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {isGenerating ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Wand2 className="w-5 h-5" />
-              )}
-              Generate
-            </button>
-          </div>
-        </div>
-        
-        {/* Or manual entry */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-semibold text-gray-900 mb-4">Or Enter Manually</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Post Title</label>
-              <textarea
-                value={generatedTitle}
-                onChange={(e) => setGeneratedTitle(e.target.value)}
-                rows={2}
-                placeholder="Enter your post title..."
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+            
+            {/* Manual Entry */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-3">Or Enter Manually</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">Preview Title</label>
+                  <textarea
+                    value={previewTitle}
+                    onChange={(e) => setPreviewTitle(e.target.value)}
+                    rows={2}
+                    placeholder="Enter preview title..."
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">Highlighted Text</label>
+                  <input
+                    type="text"
+                    value={previewHighlightedText}
+                    onChange={(e) => setPreviewHighlightedText(e.target.value)}
+                    placeholder="Text to highlight..."
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">AI Image Prompt</label>
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    rows={2}
+                    placeholder="Describe the background image..."
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    if (previewTitle.trim()) {
+                      // Apply general settings to all selected brands
+                      setPostStates(prev => {
+                        const updated = { ...prev }
+                        selectedBrands.forEach(brand => {
+                          updated[brand] = {
+                            ...updated[brand],
+                            title: {
+                              text: previewTitle,
+                              highlightedText: previewHighlightedText,
+                              fontSize: generalSettings.fontSize
+                            },
+                            layout: { ...generalSettings.layout },
+                            highlight: { ...generalSettings.highlight }
+                          }
+                        })
+                        return updated
+                      })
+                      setGeneratedTitle(previewTitle)
+                      setStep('finetune')
+                    } else {
+                      toast.error('Enter a title first')
+                    }
+                  }}
+                  className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+                >
+                  Continue to Fine-tune →
+                </button>
+              </div>
             </div>
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">AI Image Prompt</label>
-              <textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                rows={3}
-                placeholder="Describe the background image..."
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-            <button
-              onClick={() => {
-                if (generatedTitle.trim()) {
-                  // Update all brands with manual content
-                  setPostStates(prev => {
-                    const updated = { ...prev }
-                    selectedBrands.forEach(brand => {
-                      updated[brand] = {
-                        ...updated[brand],
-                        title: {
-                          ...updated[brand].title,
-                          text: generatedTitle,
-                          highlightedText: generatedTitle.split(' ').slice(-3).join(' ')
-                        }
-                      }
-                    })
-                    return updated
-                  })
-                  setStep('finetune')
-                } else {
-                  toast.error('Enter a title first')
-                }
-              }}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-            >
-              Continue to Fine-tune →
-            </button>
           </div>
         </div>
       </div>
