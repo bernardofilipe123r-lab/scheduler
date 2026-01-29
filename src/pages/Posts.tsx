@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { Stage, Layer, Image as KonvaImage, Rect, Text, Line, Group, Transformer } from 'react-konva'
+import { useState, useRef, useCallback } from 'react'
+import { Stage, Layer, Image as KonvaImage, Rect, Text, Line, Group } from 'react-konva'
 import useImage from 'use-image'
 import Konva from 'konva'
 import { 
@@ -8,12 +8,10 @@ import {
   Type,
   Palette,
   Download,
-  RefreshCw,
-  Eye,
   Loader2,
   Check,
   Wand2,
-  Move,
+  Eye,
   Image as ImageIcon,
   Settings2,
   Upload,
@@ -28,9 +26,10 @@ const CANVAS_WIDTH = 1080
 const CANVAS_HEIGHT = 1350
 const PREVIEW_SCALE = 0.4 // Scale for preview display
 
-// Layout constants from requirements
-const READ_CAPTION_BOTTOM = 45 // px from bottom
-const TITLE_ABOVE_READ_CAPTION = 30 // px above read caption
+// Layout constants from requirements (fixed spacing)
+const DEFAULT_READ_CAPTION_BOTTOM = 45 // px from bottom
+const DEFAULT_TITLE_GAP = 30 // px gap between title bottom and read caption
+const DEFAULT_LOGO_GAP = 36 // px gap between logo and title top
 
 // Brand configurations with colors for AI image prompts
 const BRAND_CONFIGS: Record<string, { 
@@ -71,13 +70,19 @@ const BRAND_CONFIGS: Record<string, {
   },
 }
 
+// Layout configuration
+interface LayoutConfig {
+  readCaptionBottom: number // px from bottom
+  titleGap: number // px between title and read caption
+  logoGap: number // px between logo and title
+  titlePaddingX: number // horizontal padding for title
+}
+
 // Title configuration
 interface TitleConfig {
   text: string
   highlightedText: string
   fontSize: number
-  x: number
-  y: number
 }
 
 // Post state
@@ -85,16 +90,14 @@ interface PostState {
   backgroundImage: string | null
   title: TitleConfig
   logoImage: string | null
-  selectedElement: string | null
+  layout: LayoutConfig
 }
 
-// Background Image Component with drag support
+// Background Image Component (non-interactive)
 function BackgroundImageLayer({ 
-  imageUrl, 
-  onSelect
+  imageUrl
 }: { 
   imageUrl: string
-  onSelect: () => void
 }) {
   const [image] = useImage(imageUrl, 'anonymous')
   
@@ -107,8 +110,6 @@ function BackgroundImageLayer({
       fillPatternImage={image}
       fillPatternScaleX={CANVAS_WIDTH / image.width}
       fillPatternScaleY={CANVAS_HEIGHT / image.height}
-      onClick={onSelect}
-      onTap={onSelect}
     />
   )
 }
@@ -129,38 +130,31 @@ function GradientOverlay() {
   )
 }
 
-// Logo with lines component
+// Logo with lines component (non-draggable, position calculated)
 function LogoWithLines({ 
   logoUrl, 
-  y, 
-  onDragEnd
+  y
 }: { 
   logoUrl: string | null
   y: number
-  onDragEnd: (newY: number) => void
 }) {
   const [image] = useImage(logoUrl || '', 'anonymous')
   
   // Layout: 100px from left edge, 113px middle gap for logo, 100px from right edge
   const edgePadding = 100 // px from each edge
-  const logoGap = 113 // px for logo in the middle
+  const logoGapWidth = 113 // px for logo in the middle
   
   // Calculate line positions
   const leftLineStart = edgePadding
-  const leftLineEnd = (CANVAS_WIDTH / 2) - (logoGap / 2)
-  const rightLineStart = (CANVAS_WIDTH / 2) + (logoGap / 2)
+  const leftLineEnd = (CANVAS_WIDTH / 2) - (logoGapWidth / 2)
+  const rightLineStart = (CANVAS_WIDTH / 2) + (logoGapWidth / 2)
   const rightLineEnd = CANVAS_WIDTH - edgePadding
   
-  const logoWidth = image ? Math.min(image.width, logoGap - 20) : logoGap - 20
+  const logoWidth = image ? Math.min(image.width, logoGapWidth - 20) : logoGapWidth - 20
   const logoHeight = image ? (logoWidth / image.width) * image.height : 40
   
   return (
-    <Group
-      x={0}
-      y={y}
-      draggable
-      onDragEnd={(e) => onDragEnd(e.target.y())}
-    >
+    <Group x={0} y={y}>
       {/* Left line */}
       <Line
         points={[leftLineStart, logoHeight / 2, leftLineEnd, logoHeight / 2]}
@@ -199,35 +193,24 @@ function LogoWithLines({
   )
 }
 
-// Title component with highlight support and auto-wrapping
+// Title component with highlight support and auto-wrapping (non-draggable)
 function TitleLayer({
   config,
   highlightColor,
-  onDragEnd,
-  onSelect,
-  isSelected,
-  transformerRef
+  x,
+  y,
+  paddingX
 }: {
   config: TitleConfig
   highlightColor: string
-  onDragEnd: (x: number, y: number) => void
-  onSelect: () => void
-  isSelected: boolean
-  transformerRef: React.RefObject<Konva.Transformer>
+  x: number
+  y: number
+  paddingX: number
 }) {
-  const groupRef = useRef<Konva.Group>(null)
-  
-  useEffect(() => {
-    if (isSelected && transformerRef.current && groupRef.current) {
-      transformerRef.current.nodes([groupRef.current])
-      transformerRef.current.getLayer()?.batchDraw()
-    }
-  }, [isSelected, transformerRef])
-  
   // Get the text content
   const textContent = config.text
   const highlightPhrase = config.highlightedText.trim().toUpperCase()
-  const textWidth = CANVAS_WIDTH - config.x * 2
+  const textWidth = CANVAS_WIDTH - paddingX * 2
   
   // Calculate wrapped lines for highlight detection
   const words = textContent.split(' ')
@@ -235,7 +218,7 @@ function TitleLayer({
   let currentLine = ''
   
   // Simple word wrapping estimation (Konva will do actual wrapping)
-  const avgCharWidth = config.fontSize * 0.5 // Approximate for Anton
+  const avgCharWidth = config.fontSize * 0.55 // Approximate for Anton
   const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
   
   words.forEach(word => {
@@ -254,22 +237,14 @@ function TitleLayer({
   const lineHeight = config.fontSize * 1.3
   
   return (
-    <Group
-      ref={groupRef}
-      x={config.x}
-      y={config.y}
-      draggable
-      onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
-      onClick={onSelect}
-      onTap={onSelect}
-    >
+    <Group x={x} y={y}>
       {lines.map((line, i) => {
         const isHighlighted = line.toUpperCase().includes(highlightPhrase) || 
           highlightPhrase.includes(line.toUpperCase().trim())
-        const y = i * lineHeight
+        const lineY = i * lineHeight
         
         return (
-          <Group key={i} y={y}>
+          <Group key={i} y={lineY}>
             {/* Background for highlighted text */}
             {isHighlighted && (
               <Rect
@@ -284,7 +259,8 @@ function TitleLayer({
             <Text
               text={line}
               fontSize={config.fontSize}
-              fontFamily="Anton, sans-serif"
+              fontFamily="Anton"
+              fontStyle="normal"
               fill={isHighlighted ? 'black' : 'white'}
               width={textWidth}
               align="center"
@@ -294,6 +270,29 @@ function TitleLayer({
       })}
     </Group>
   )
+}
+
+// Helper to calculate title height based on text and font size
+function calculateTitleHeight(text: string, fontSize: number, paddingX: number): number {
+  const textWidth = CANVAS_WIDTH - paddingX * 2
+  const avgCharWidth = fontSize * 0.55
+  const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
+  
+  const words = text.split(' ')
+  let lines = 1
+  let currentLine = ''
+  
+  words.forEach(word => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word
+    if (testLine.length > maxCharsPerLine && currentLine) {
+      lines++
+      currentLine = word
+    } else {
+      currentLine = testLine
+    }
+  })
+  
+  return lines * fontSize * 1.3
 }
 
 // Read Caption component
@@ -333,27 +332,37 @@ export function PostsPage() {
         title: {
           text: 'STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%',
           highlightedText: 'STRESS & CORTISOL BY 40%',
-          fontSize: 58,
-          x: 40,
-          y: CANVAS_HEIGHT - READ_CAPTION_BOTTOM - TITLE_ABOVE_READ_CAPTION - 200
+          fontSize: 58
         },
         logoImage: null,
-        selectedElement: null
+        layout: {
+          readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
+          titleGap: DEFAULT_TITLE_GAP,
+          logoGap: DEFAULT_LOGO_GAP,
+          titlePaddingX: 40
+        }
       }
     })
     return initial
   })
   
-  // Logo positions
-  const [logoY, setLogoY] = useState(CANVAS_HEIGHT - READ_CAPTION_BOTTOM - TITLE_ABOVE_READ_CAPTION - 250)
-  
   // Refs
   const stageRef = useRef<Konva.Stage>(null)
-  const transformerRef = useRef<Konva.Transformer>(null)
   
   // Get current post state
   const currentPost = postStates[activeBrand]
   const brandConfig = BRAND_CONFIGS[activeBrand]
+  
+  // Calculate positions based on layout config
+  const layout = currentPost.layout
+  const titleHeight = calculateTitleHeight(
+    currentPost.title.text, 
+    currentPost.title.fontSize, 
+    layout.titlePaddingX
+  )
+  const readCaptionY = CANVAS_HEIGHT - layout.readCaptionBottom - 24 // 24 is approximate text height
+  const titleY = readCaptionY - layout.titleGap - titleHeight
+  const logoY = titleY - layout.logoGap - 40 // 40 is approximate logo height
   
   // Update post state helper
   const updatePostState = useCallback((brand: string, updates: Partial<PostState>) => {
@@ -370,6 +379,17 @@ export function PostsPage() {
       [activeBrand]: {
         ...prev[activeBrand],
         title: { ...prev[activeBrand].title, ...updates }
+      }
+    }))
+  }, [activeBrand])
+  
+  // Update layout
+  const updateLayout = useCallback((updates: Partial<LayoutConfig>) => {
+    setPostStates(prev => ({
+      ...prev,
+      [activeBrand]: {
+        ...prev[activeBrand],
+        layout: { ...prev[activeBrand].layout, ...updates }
       }
     }))
   }, [activeBrand])
@@ -450,13 +470,6 @@ export function PostsPage() {
       updatePostState(activeBrand, { logoImage: event.target?.result as string })
     }
     reader.readAsDataURL(file)
-  }
-  
-  // Deselect when clicking on stage background
-  const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (e.target === e.target.getStage()) {
-      updatePostState(activeBrand, { selectedElement: null })
-    }
   }
   
   return (
@@ -612,14 +625,12 @@ export function PostsPage() {
               height={CANVAS_HEIGHT * PREVIEW_SCALE}
               scaleX={PREVIEW_SCALE}
               scaleY={PREVIEW_SCALE}
-              onClick={handleStageClick}
             >
               <Layer>
                 {/* Background */}
                 {currentPost.backgroundImage ? (
                   <BackgroundImageLayer
                     imageUrl={currentPost.backgroundImage}
-                    onSelect={() => updatePostState(activeBrand, { selectedElement: 'background' })}
                   />
                 ) : (
                   <Rect
@@ -638,43 +649,21 @@ export function PostsPage() {
                 <LogoWithLines
                   logoUrl={currentPost.logoImage}
                   y={logoY}
-                  onDragEnd={setLogoY}
                 />
                 
                 {/* Title */}
                 <TitleLayer
                   config={currentPost.title}
                   highlightColor={brandConfig.color}
-                  onDragEnd={(x, y) => updateTitle({ x, y })}
-                  onSelect={() => updatePostState(activeBrand, { selectedElement: 'title' })}
-                  isSelected={currentPost.selectedElement === 'title'}
-                  transformerRef={transformerRef}
+                  x={layout.titlePaddingX}
+                  y={titleY}
+                  paddingX={layout.titlePaddingX}
                 />
                 
                 {/* Read Caption */}
-                <ReadCaption y={CANVAS_HEIGHT - READ_CAPTION_BOTTOM - 24} />
-                
-                {/* Transformer for selected elements */}
-                <Transformer
-                  ref={transformerRef}
-                  boundBoxFunc={(oldBox, newBox) => {
-                    // Limit resize
-                    if (newBox.width < 50 || newBox.height < 50) {
-                      return oldBox
-                    }
-                    return newBox
-                  }}
-                />
+                <ReadCaption y={readCaptionY} />
               </Layer>
             </Stage>
-          </div>
-          
-          {/* Drag hint - outside canvas */}
-          <div className="text-center mt-2">
-            <span className="text-xs text-gray-500">
-              <Move className="w-3 h-3 inline mr-1" />
-              Drag elements to reposition
-            </span>
           </div>
         </div>
         
@@ -803,37 +792,101 @@ export function PostsPage() {
             </div>
           </div>
           
-          {/* Quick Actions */}
+          {/* Layout Controls */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Settings2 className="w-5 h-5 text-primary-500" />
-              Quick Actions
+              Layout Spacing
             </h3>
             
-            <div className="space-y-2">
+            <div className="space-y-4">
+              {/* Read Caption Bottom */}
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">
+                  Read Caption from Bottom: {layout.readCaptionBottom}px
+                </label>
+                <input
+                  type="range"
+                  min="20"
+                  max="100"
+                  value={layout.readCaptionBottom}
+                  onChange={(e) => updateLayout({ readCaptionBottom: parseInt(e.target.value) })}
+                  className="w-full"
+                />
+              </div>
+              
+              {/* Title Gap */}
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">
+                  Gap: Title to Read Caption: {layout.titleGap}px
+                </label>
+                <input
+                  type="range"
+                  min="10"
+                  max="80"
+                  value={layout.titleGap}
+                  onChange={(e) => updateLayout({ titleGap: parseInt(e.target.value) })}
+                  className="w-full"
+                />
+              </div>
+              
+              {/* Logo Gap */}
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">
+                  Gap: Logo to Title: {layout.logoGap}px
+                </label>
+                <input
+                  type="range"
+                  min="15"
+                  max="80"
+                  value={layout.logoGap}
+                  onChange={(e) => updateLayout({ logoGap: parseInt(e.target.value) })}
+                  className="w-full"
+                />
+              </div>
+              
+              {/* Title Horizontal Padding */}
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">
+                  Title Padding X: {layout.titlePaddingX}px
+                </label>
+                <input
+                  type="range"
+                  min="20"
+                  max="100"
+                  value={layout.titlePaddingX}
+                  onChange={(e) => updateLayout({ titlePaddingX: parseInt(e.target.value) })}
+                  className="w-full"
+                />
+              </div>
+              
+              {/* Reset to Defaults */}
               <button
                 onClick={() => {
-                  // Reset to default positions
-                  updateTitle({
-                    x: 40,
-                    y: CANVAS_HEIGHT - READ_CAPTION_BOTTOM - TITLE_ABOVE_READ_CAPTION - 200
+                  updateLayout({
+                    readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
+                    titleGap: DEFAULT_TITLE_GAP,
+                    logoGap: DEFAULT_LOGO_GAP,
+                    titlePaddingX: 40
                   })
-                  setLogoY(CANVAS_HEIGHT - READ_CAPTION_BOTTOM - TITLE_ABOVE_READ_CAPTION - 250)
                 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm text-gray-600"
               >
-                <RefreshCw className="w-4 h-4" />
-                Reset Positions
-              </button>
-              
-              <button
-                onClick={exportImage}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm"
-              >
-                <Download className="w-4 h-4" />
-                Download Image
+                Reset to Defaults
               </button>
             </div>
+          </div>
+          
+          {/* Export */}
+          {/* Export */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <button
+              onClick={exportImage}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm"
+            >
+              <Download className="w-4 h-4" />
+              Download Image
+            </button>
           </div>
         </div>
       </div>
@@ -846,7 +899,7 @@ export function PostsPage() {
           <li>2. <strong>Upload or generate background</strong> - Use AI to create brand-colored backgrounds</li>
           <li>3. <strong>Upload logo</strong> - Add your brand logo (appears between the lines)</li>
           <li>4. <strong>Edit title</strong> - Modify the title text and choose which part to highlight</li>
-          <li>5. <strong>Drag to reposition</strong> - Move elements directly on the canvas</li>
+          <li>5. <strong>Adjust spacing</strong> - Use the Layout Spacing controls to fine-tune positioning</li>
           <li>6. <strong>Export</strong> - Download the final image for each brand</li>
         </ul>
       </div>
