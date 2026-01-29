@@ -82,7 +82,8 @@ interface LayoutConfig {
 
 // Highlight rectangle configuration
 interface HighlightConfig {
-  enabled: boolean
+  showHighlight: boolean // Whether to show any highlight at all
+  enabled: boolean // If true, use manual positioning; if false, auto-highlight
   centerXLock: boolean // Lock X to center of canvas
   x: number
   y: number
@@ -146,38 +147,50 @@ function GradientOverlay() {
 // Logo with lines component (non-draggable, position calculated)
 function LogoWithLines({ 
   logoUrl, 
-  y
+  y,
+  barWidth,
+  titleWidth
 }: { 
   logoUrl: string | null
   y: number
+  barWidth: number // 0 = auto (match title width), otherwise fixed width for each bar
+  titleWidth: number // Width of the title text for auto mode
 }) {
   const [image] = useImage(logoUrl || '', 'anonymous')
   
-  // Layout: 100px from left edge, 113px middle gap for logo, 100px from right edge
-  const edgePadding = 100 // px from each edge
+  // Layout: logo in center with 113px gap, bars on sides
   const logoGapWidth = 113 // px for logo in the middle
-  
-  // Calculate line positions
-  const leftLineStart = edgePadding
-  const leftLineEnd = (CANVAS_WIDTH / 2) - (logoGapWidth / 2)
-  const rightLineStart = (CANVAS_WIDTH / 2) + (logoGapWidth / 2)
-  const rightLineEnd = CANVAS_WIDTH - edgePadding
   
   const logoWidth = image ? Math.min(image.width, logoGapWidth - 20) : logoGapWidth - 20
   const logoHeight = image ? (logoWidth / image.width) * image.height : 40
+  
+  // Calculate bar positions based on barWidth setting
+  // Auto mode: bars extend to match title width on each side
+  // Manual mode: fixed width bars, growing outward from logo gap
+  const effectiveBarWidth = barWidth === 0 
+    ? (titleWidth / 2) - (logoGapWidth / 2) // Auto: match half of title width minus logo gap
+    : barWidth
+  
+  // Left bar: ends at logo gap, starts further left based on bar width
+  const leftLineEnd = (CANVAS_WIDTH / 2) - (logoGapWidth / 2)
+  const leftLineStart = leftLineEnd - effectiveBarWidth
+  
+  // Right bar: starts at logo gap, extends right based on bar width
+  const rightLineStart = (CANVAS_WIDTH / 2) + (logoGapWidth / 2)
+  const rightLineEnd = rightLineStart + effectiveBarWidth
   
   return (
     <Group x={0} y={y}>
       {/* Left line */}
       <Line
-        points={[leftLineStart, logoHeight / 2, leftLineEnd, logoHeight / 2]}
+        points={[Math.max(0, leftLineStart), logoHeight / 2, leftLineEnd, logoHeight / 2]}
         stroke="white"
         strokeWidth={2}
       />
       
       {/* Right line */}
       <Line
-        points={[rightLineStart, logoHeight / 2, rightLineEnd, logoHeight / 2]}
+        points={[rightLineStart, logoHeight / 2, Math.min(CANVAS_WIDTH, rightLineEnd), logoHeight / 2]}
         stroke="white"
         strokeWidth={2}
       />
@@ -255,8 +268,8 @@ function TitleLayer({
   
   return (
     <Group x={x} y={y}>
-      {/* Manual highlight rectangle if enabled */}
-      {highlightConfig.enabled && (
+      {/* Manual highlight rectangle if enabled AND showHighlight is true */}
+      {highlightConfig.showHighlight && highlightConfig.enabled && (
         <Rect
           x={highlightConfig.centerXLock 
             ? (CANVAS_WIDTH / 2) - (highlightConfig.width / 2) - x
@@ -269,24 +282,31 @@ function TitleLayer({
       )}
       
       {lines.map((line, i) => {
-        const isHighlighted = !highlightConfig.enabled && (
+        // Check if this line should be highlighted (auto mode)
+        const matchesHighlightPhrase = highlightPhrase && (
           line.toUpperCase().includes(highlightPhrase) || 
           highlightPhrase.includes(line.toUpperCase().trim())
         )
+        // Only show auto-highlight if: showHighlight=true, enabled=false, and matches phrase
+        const showAutoHighlight = highlightConfig.showHighlight && !highlightConfig.enabled && matchesHighlightPhrase
+        // Text is dark if: manual mode with highlight shown, OR auto-highlight showing
+        const textIsDark = (highlightConfig.showHighlight && highlightConfig.enabled && matchesHighlightPhrase) || showAutoHighlight
+        
         const lineY = i * lineHeight
         
         // Calculate actual text width for this line (centered text)
         const lineTextWidth = line.length * avgCharWidth
-        const rectWidth = Math.min(lineTextWidth, textWidth) + paddingXRect * 2
+        // Auto rectangle: 80% width, 4px up
+        const rectWidth = (Math.min(lineTextWidth, textWidth) + paddingXRect * 2) * 0.8
         const rectX = (textWidth - rectWidth) / 2 // Center the rectangle
         
         return (
           <Group key={i} y={lineY}>
             {/* Background for highlighted text (auto mode) */}
-            {isHighlighted && (
+            {showAutoHighlight && (
               <Rect
                 x={rectX}
-                y={-paddingYRect}
+                y={-paddingYRect - 4}
                 width={rectWidth}
                 height={config.fontSize + paddingYRect * 2}
                 fill={highlightColor}
@@ -298,7 +318,7 @@ function TitleLayer({
               fontSize={config.fontSize}
               fontFamily="Anton"
               fontStyle="normal"
-              fill={isHighlighted ? 'black' : 'white'}
+              fill={textIsDark ? 'black' : 'white'}
               width={textWidth}
               align="center"
             />
@@ -372,14 +392,16 @@ export function PostsPage() {
   
   // GENERAL settings that apply to ALL brands (Step 1)
   const [generalSettings, setGeneralSettings] = useState({
-    fontSize: 58,
+    fontSize: 70,
+    barWidth: 0, // 0 = auto (match title width), otherwise fixed width
     layout: {
       readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
       titleGap: DEFAULT_TITLE_GAP,
       logoGap: DEFAULT_LOGO_GAP,
-      titlePaddingX: 40
+      titlePaddingX: 90
     },
     highlight: {
+      showHighlight: true,
       enabled: false,
       centerXLock: true,
       x: 40,
@@ -402,16 +424,17 @@ export function PostsPage() {
         title: {
           text: '',
           highlightedText: '',
-          fontSize: 58
+          fontSize: 70
         },
         logoImage: null,
         layout: {
           readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
           titleGap: DEFAULT_TITLE_GAP,
           logoGap: DEFAULT_LOGO_GAP,
-          titlePaddingX: 40
+          titlePaddingX: 90
         },
         highlight: {
+          showHighlight: true,
           enabled: false,
           centerXLock: true,
           x: 40,
@@ -750,7 +773,9 @@ export function PostsPage() {
                   {/* Logo placeholder */}
                   <LogoWithLines 
                     logoUrl={null}
-                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - generalSettings.layout.titleGap - generalSettings.layout.logoGap - 60}
+                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - generalSettings.layout.titleGap - generalSettings.layout.logoGap - 40}
+                    barWidth={generalSettings.barWidth}
+                    titleWidth={CANVAS_WIDTH - generalSettings.layout.titlePaddingX * 2}
                   />
                   
                   {/* Title preview */}
@@ -763,7 +788,7 @@ export function PostsPage() {
                     highlightConfig={generalSettings.highlight}
                     highlightColor={previewConfig.color}
                     x={generalSettings.layout.titlePaddingX}
-                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - generalSettings.layout.titleGap - calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX) - generalSettings.layout.logoGap - 60}
+                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24 - generalSettings.layout.titleGap - calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX)}
                     paddingX={generalSettings.layout.titlePaddingX}
                   />
                   
@@ -877,7 +902,7 @@ export function PostsPage() {
                 <div>
                   <label className="text-xs text-gray-500">Title Padding X: {generalSettings.layout.titlePaddingX}px</label>
                   <input
-                    type="range" min={20} max={80}
+                    type="range" min={60} max={120}
                     value={generalSettings.layout.titlePaddingX}
                     onChange={(e) => updateGeneralLayout({ titlePaddingX: Number(e.target.value) })}
                     className="w-full accent-primary-500"
@@ -885,86 +910,119 @@ export function PostsPage() {
                 </div>
               </div>
               
-              {/* Highlight Rectangle */}
+              {/* Bar Width */}
+              <div className="border-t border-gray-100 pt-4 mb-4">
+                <label className="text-xs text-gray-500 mb-1 block">
+                  Bar Width: {generalSettings.barWidth === 0 ? 'Auto (match title)' : `${generalSettings.barWidth}px`}
+                </label>
+                <input
+                  type="range" min={0} max={400}
+                  value={generalSettings.barWidth}
+                  onChange={(e) => setGeneralSettings(prev => ({ ...prev, barWidth: Number(e.target.value) }))}
+                  className="w-full accent-primary-500"
+                />
+              </div>
+              
+              {/* Highlight Controls */}
               <div className="border-t border-gray-100 pt-4">
+                {/* Show Highlight Toggle */}
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-700">Manual Rectangle</span>
+                  <span className="text-sm font-medium text-gray-700">Show Highlight</span>
                   <button
-                    onClick={() => updateGeneralHighlight({ enabled: !generalSettings.highlight.enabled })}
+                    onClick={() => updateGeneralHighlight({ showHighlight: !generalSettings.highlight.showHighlight })}
                     className={`relative w-10 h-5 rounded-full transition-colors ${
-                      generalSettings.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
+                      generalSettings.highlight.showHighlight ? 'bg-primary-500' : 'bg-gray-300'
                     }`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      generalSettings.highlight.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                      generalSettings.highlight.showHighlight ? 'translate-x-5' : 'translate-x-0.5'
                     }`} />
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 mb-3">
-                  {generalSettings.highlight.enabled 
-                    ? 'Position rectangle manually' 
-                    : 'Auto-highlight based on "Highlighted Text"'}
-                </p>
                 
-                {generalSettings.highlight.enabled && (
-                  <div className="space-y-3">
-                    {/* Center X Lock */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">Center X Lock</span>
+                {generalSettings.highlight.showHighlight && (
+                  <>
+                    {/* Manual vs Auto toggle */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs text-gray-600">Manual Rectangle</span>
                       <button
-                        onClick={() => updateGeneralHighlight({ centerXLock: !generalSettings.highlight.centerXLock })}
+                        onClick={() => updateGeneralHighlight({ enabled: !generalSettings.highlight.enabled })}
                         className={`relative w-8 h-4 rounded-full transition-colors ${
-                          generalSettings.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
+                          generalSettings.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
                         }`}
                       >
                         <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
-                          generalSettings.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
+                          generalSettings.highlight.enabled ? 'translate-x-4' : 'translate-x-0.5'
                         }`} />
                       </button>
                     </div>
+                    <p className="text-xs text-gray-400 mb-3">
+                      {generalSettings.highlight.enabled 
+                        ? 'Position rectangle manually' 
+                        : 'Auto-highlight based on "Highlighted Text"'}
+                    </p>
                     
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className={generalSettings.highlight.centerXLock ? 'opacity-40' : ''}>
-                        <label className="text-xs text-gray-500">
-                          X: {generalSettings.highlight.centerXLock ? 'Centered' : generalSettings.highlight.x}
-                        </label>
-                        <input
-                          type="range" min={0} max={CANVAS_WIDTH - 100}
-                          value={generalSettings.highlight.x}
-                          onChange={(e) => updateGeneralHighlight({ x: Number(e.target.value) })}
-                          disabled={generalSettings.highlight.centerXLock}
-                          className="w-full accent-primary-500 disabled:opacity-50"
-                        />
+                    {generalSettings.highlight.enabled && (
+                      <div className="space-y-3">
+                        {/* Center X Lock */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">Center X Lock</span>
+                          <button
+                            onClick={() => updateGeneralHighlight({ centerXLock: !generalSettings.highlight.centerXLock })}
+                            className={`relative w-8 h-4 rounded-full transition-colors ${
+                              generalSettings.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                              generalSettings.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
+                            }`} />
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className={generalSettings.highlight.centerXLock ? 'opacity-40' : ''}>
+                            <label className="text-xs text-gray-500">
+                              X: {generalSettings.highlight.centerXLock ? 'Centered' : generalSettings.highlight.x}
+                            </label>
+                            <input
+                              type="range" min={0} max={CANVAS_WIDTH - 100}
+                              value={generalSettings.highlight.x}
+                              onChange={(e) => updateGeneralHighlight({ x: Number(e.target.value) })}
+                              disabled={generalSettings.highlight.centerXLock}
+                              className="w-full accent-primary-500 disabled:opacity-50"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Y: {generalSettings.highlight.y}</label>
+                            <input
+                              type="range" min={0} max={CANVAS_HEIGHT - 100}
+                              value={generalSettings.highlight.y}
+                              onChange={(e) => updateGeneralHighlight({ y: Number(e.target.value) })}
+                              className="w-full accent-primary-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Width: {generalSettings.highlight.width}</label>
+                            <input
+                              type="range" min={100} max={CANVAS_WIDTH}
+                              value={generalSettings.highlight.width}
+                              onChange={(e) => updateGeneralHighlight({ width: Number(e.target.value) })}
+                              className="w-full accent-primary-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Height: {generalSettings.highlight.height}</label>
+                            <input
+                              type="range" min={40} max={200}
+                              value={generalSettings.highlight.height}
+                              onChange={(e) => updateGeneralHighlight({ height: Number(e.target.value) })}
+                              className="w-full accent-primary-500"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-xs text-gray-500">Y: {generalSettings.highlight.y}</label>
-                        <input
-                          type="range" min={0} max={CANVAS_HEIGHT - 100}
-                          value={generalSettings.highlight.y}
-                          onChange={(e) => updateGeneralHighlight({ y: Number(e.target.value) })}
-                          className="w-full accent-primary-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500">Width: {generalSettings.highlight.width}</label>
-                        <input
-                          type="range" min={100} max={CANVAS_WIDTH}
-                          value={generalSettings.highlight.width}
-                          onChange={(e) => updateGeneralHighlight({ width: Number(e.target.value) })}
-                          className="w-full accent-primary-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500">Height: {generalSettings.highlight.height}</label>
-                        <input
-                          type="range" min={40} max={200}
-                          value={generalSettings.highlight.height}
-                          onChange={(e) => updateGeneralHighlight({ height: Number(e.target.value) })}
-                          className="w-full accent-primary-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1161,6 +1219,8 @@ export function PostsPage() {
                 <LogoWithLines
                   logoUrl={currentPost.logoImage}
                   y={logoY}
+                  barWidth={0}
+                  titleWidth={CANVAS_WIDTH - layout.titlePaddingX * 2}
                 />
                 
                 {/* Title */}
@@ -1301,92 +1361,114 @@ export function PostsPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                 <Square className="w-5 h-5 text-primary-500" />
-                Manual Rectangle
+                Highlight
               </h3>
               <button
-                onClick={() => updateHighlight({ enabled: !currentPost.highlight.enabled })}
+                onClick={() => updateHighlight({ showHighlight: !currentPost.highlight.showHighlight })}
                 className={`flex items-center gap-1 px-2 py-1 rounded text-sm ${
-                  currentPost.highlight.enabled 
+                  currentPost.highlight.showHighlight 
                     ? 'bg-primary-100 text-primary-700' 
                     : 'bg-gray-100 text-gray-600'
                 }`}
               >
-                {currentPost.highlight.enabled ? (
+                {currentPost.highlight.showHighlight ? (
                   <ToggleRight className="w-4 h-4" />
                 ) : (
                   <ToggleLeft className="w-4 h-4" />
                 )}
-                {currentPost.highlight.enabled ? 'On' : 'Off'}
+                {currentPost.highlight.showHighlight ? 'On' : 'Off'}
               </button>
             </div>
             
-            {currentPost.highlight.enabled && (
-              <div className="space-y-3">
-                {/* Center X Lock */}
-                <div className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded">
-                  <span className="text-xs text-gray-600">Center X Lock</span>
+            {currentPost.highlight.showHighlight && (
+              <>
+                {/* Manual vs Auto */}
+                <div className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded mb-3">
+                  <span className="text-xs text-gray-600">Manual Rectangle</span>
                   <button
-                    onClick={() => updateHighlight({ centerXLock: !currentPost.highlight.centerXLock })}
+                    onClick={() => updateHighlight({ enabled: !currentPost.highlight.enabled })}
                     className={`relative w-8 h-4 rounded-full transition-colors ${
-                      currentPost.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
+                      currentPost.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
                     }`}
                   >
                     <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
-                      currentPost.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
+                      currentPost.highlight.enabled ? 'translate-x-4' : 'translate-x-0.5'
                     }`} />
                   </button>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className={currentPost.highlight.centerXLock ? 'opacity-40' : ''}>
-                    <label className="text-xs text-gray-500 mb-1 block">
-                      X Position {currentPost.highlight.centerXLock && '(Centered)'}
-                    </label>
-                    <input
-                      type="number"
-                      value={currentPost.highlight.x}
-                      onChange={(e) => updateHighlight({ x: parseInt(e.target.value) || 0 })}
-                      disabled={currentPost.highlight.centerXLock}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm disabled:bg-gray-100"
-                    />
+                {currentPost.highlight.enabled && (
+                  <div className="space-y-3">
+                    {/* Center X Lock */}
+                    <div className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded">
+                      <span className="text-xs text-gray-600">Center X Lock</span>
+                      <button
+                        onClick={() => updateHighlight({ centerXLock: !currentPost.highlight.centerXLock })}
+                        className={`relative w-8 h-4 rounded-full transition-colors ${
+                          currentPost.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                          currentPost.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
+                        }`} />
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className={currentPost.highlight.centerXLock ? 'opacity-40' : ''}>
+                        <label className="text-xs text-gray-500 mb-1 block">
+                          X Position {currentPost.highlight.centerXLock && '(Centered)'}
+                        </label>
+                        <input
+                          type="number"
+                          value={currentPost.highlight.x}
+                          onChange={(e) => updateHighlight({ x: parseInt(e.target.value) || 0 })}
+                          disabled={currentPost.highlight.centerXLock}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm disabled:bg-gray-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Y Position</label>
+                        <input
+                          type="number"
+                          value={currentPost.highlight.y}
+                          onChange={(e) => updateHighlight({ y: parseInt(e.target.value) || 0 })}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Width</label>
+                        <input
+                          type="number"
+                          value={currentPost.highlight.width}
+                          onChange={(e) => updateHighlight({ width: parseInt(e.target.value) || 100 })}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Height</label>
+                        <input
+                          type="number"
+                          value={currentPost.highlight.height}
+                          onChange={(e) => updateHighlight({ height: parseInt(e.target.value) || 50 })}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Y Position</label>
-                    <input
-                      type="number"
-                      value={currentPost.highlight.y}
-                      onChange={(e) => updateHighlight({ y: parseInt(e.target.value) || 0 })}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Width</label>
-                    <input
-                      type="number"
-                      value={currentPost.highlight.width}
-                      onChange={(e) => updateHighlight({ width: parseInt(e.target.value) || 100 })}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Height</label>
-                    <input
-                      type="number"
-                      value={currentPost.highlight.height}
-                      onChange={(e) => updateHighlight({ height: parseInt(e.target.value) || 50 })}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-gray-400">
-                  Position rectangle manually over the text
-                </p>
-              </div>
+                )}
+                
+                {!currentPost.highlight.enabled && (
+                  <p className="text-xs text-gray-500">
+                    Auto-highlights matching text (80% width, 4px up)
+                  </p>
+                )}
+              </>
             )}
             
-            {!currentPost.highlight.enabled && (
+            {!currentPost.highlight.showHighlight && (
               <p className="text-xs text-gray-500">
-                Auto-highlights text matching "Highlighted Text" above with proper sizing (8px X, 6px Y padding)
+                No highlight rectangle will be shown
               </p>
             )}
           </div>
