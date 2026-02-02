@@ -916,7 +916,7 @@ export function PostsPage() {
                 <input
                   type="range"
                   min={40}
-                  max={80}
+                  max={90}
                   value={generalSettings.fontSize}
                   onChange={(e) => setGeneralSettings(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
                   className="w-full accent-primary-500"
@@ -1431,7 +1431,7 @@ export function PostsPage() {
                 <input
                   type="range"
                   min="30"
-                  max="80"
+                  max="90"
                   value={currentPost.title.fontSize}
                   onChange={(e) => updateTitle({ fontSize: parseInt(e.target.value) })}
                   className="w-full"
