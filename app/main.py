@@ -228,10 +228,10 @@ async def startup_event():
                         if retry_platforms:
                             platforms = retry_platforms
                             print(f"   🔄 PARTIAL RETRY: Only retrying {platforms} (skipping already successful: {succeeded_platforms})")
+                        else:
+                            platforms = metadata.get('platforms', ['instagram'])
                         
-                        platforms = metadata.get('platforms', ['instagram'])
                         # Get paths from metadata or use defaults
-                        metadata = schedule.get('metadata', {})
                         video_path_str = metadata.get('video_path')
                         thumbnail_path_str = metadata.get('thumbnail_path')
                         brand = metadata.get('brand', '')
@@ -277,7 +277,8 @@ async def startup_event():
                             thumbnail_path=thumbnail_path,
                             caption=caption,
                             platforms=platforms,
-                            brand_name=brand  # Pass brand name to use correct credentials
+                            brand_name=brand,  # Pass brand name to use correct credentials
+                            metadata=metadata  # Pass metadata for YouTube title and thumbnail
                         )
                         
                         print(f"      📊 Publish result: {result}")

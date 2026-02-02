@@ -497,7 +497,8 @@ class DatabaseSchedulerService:
         platforms: list[str] = ["instagram"],
         user_id: Optional[str] = None,
         brand_config: Optional['BrandConfig'] = None,
-        brand_name: Optional[str] = None
+        brand_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Publish a reel immediately using user's credentials or brand credentials.
@@ -508,6 +509,7 @@ class DatabaseSchedulerService:
             caption: Caption for the post
             platforms: List of platforms
             user_id: User ID to use credentials from
+            metadata: Optional metadata dict containing yt_title, yt_thumbnail_path, etc.
             brand_config: Brand configuration with specific credentials
             brand_name: Brand name string (e.g., 'gymcollege', 'healthycollege')
             
@@ -663,18 +665,32 @@ class DatabaseSchedulerService:
             )
         
         if "youtube" in platforms:
-            print("📺 Publishing to YouTube...")
+            print("📺 Publishing to YouTube...", flush=True)
+            print(f"   📺 [YT DEBUG] metadata received: {metadata}", flush=True)
+            print(f"   📺 [YT DEBUG] brand_name: {brand_name}", flush=True)
             # Get yt_title from metadata if available
             yt_title = metadata.get("yt_title") if metadata else None
+            print(f"   📺 [YT DEBUG] yt_title from metadata: {yt_title}", flush=True)
             # Get yt_thumbnail_path from metadata - clean AI image without text
             yt_thumbnail_path = metadata.get("yt_thumbnail_path") if metadata else None
+            print(f"   📺 [YT DEBUG] yt_thumbnail_path from metadata: {yt_thumbnail_path}", flush=True)
             if yt_thumbnail_path:
                 yt_thumbnail_path = Path(yt_thumbnail_path)
                 if not yt_thumbnail_path.exists():
-                    print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}")
+                    print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}", flush=True)
                     yt_thumbnail_path = thumbnail_path
+                else:
+                    print(f"   📺 [YT DEBUG] YT thumbnail exists: {yt_thumbnail_path}", flush=True)
             else:
+                print(f"   📺 [YT DEBUG] No YT thumbnail in metadata, using regular: {thumbnail_path}", flush=True)
                 yt_thumbnail_path = thumbnail_path
+            
+            print(f"   📺 [YT DEBUG] Calling _publish_to_youtube with:", flush=True)
+            print(f"      video_path={video_path}", flush=True)
+            print(f"      thumbnail_path={yt_thumbnail_path}", flush=True)
+            print(f"      brand_name={brand_name}", flush=True)
+            print(f"      yt_title={yt_title}", flush=True)
+            
             results["youtube"] = self._publish_to_youtube(
                 video_path=video_path,
                 thumbnail_path=yt_thumbnail_path,  # Use YT-specific thumbnail (clean AI image)
@@ -682,6 +698,7 @@ class DatabaseSchedulerService:
                 brand_name=brand_name,
                 yt_title=yt_title
             )
+            print(f"   📺 [YT DEBUG] _publish_to_youtube result: {results['youtube']}", flush=True)
         
         return results
     
@@ -717,37 +734,58 @@ class DatabaseSchedulerService:
         from app.services.youtube_publisher import YouTubePublisher
         from datetime import datetime
         
+        print(f"\n📺 [YT PUBLISH] _publish_to_youtube() called", flush=True)
+        print(f"   📺 [YT PUBLISH] video_path: {video_path} (exists: {video_path.exists() if hasattr(video_path, 'exists') else 'N/A'})", flush=True)
+        print(f"   📺 [YT PUBLISH] thumbnail_path: {thumbnail_path}", flush=True)
+        print(f"   📺 [YT PUBLISH] brand_name: {brand_name}", flush=True)
+        print(f"   📺 [YT PUBLISH] yt_title: {yt_title}", flush=True)
+        
         if not brand_name:
+            print(f"   ❌ [YT PUBLISH] No brand_name provided!", flush=True)
             return {"success": False, "error": "Brand name required for YouTube publishing"}
         
         # Get credentials for this brand from database
+        print(f"   📺 [YT PUBLISH] Getting credentials from database for brand: {brand_name}", flush=True)
         with get_db_session() as db:
             credentials = get_youtube_credentials_for_brand(brand_name, db)
             
             if not credentials:
+                print(f"   ❌ [YT PUBLISH] No credentials found for {brand_name}!", flush=True)
                 return {"success": False, "error": f"YouTube not configured for {brand_name}. Click 'Connect YouTube' in the app."}
+            
+            print(f"   ✅ [YT PUBLISH] Credentials found: channel_id={credentials.channel_id}, channel_name={credentials.channel_name}", flush=True)
+            print(f"   📺 [YT PUBLISH] refresh_token present: {bool(credentials.refresh_token)}", flush=True)
             
             # Create publisher with credentials
             # The publisher will use the refresh_token to get a fresh access_token
+            print(f"   📺 [YT PUBLISH] Creating YouTubePublisher with credentials...", flush=True)
             yt_publisher = YouTubePublisher(credentials=credentials)
             
             # Use provided yt_title or extract from caption as fallback
             if yt_title:
                 title = yt_title[:100]  # Ensure max 100 chars
-                print(f"   📺 Using stored YouTube title: {title}")
+                print(f"   📺 [YT PUBLISH] Using stored YouTube title: {title}", flush=True)
             else:
                 # Fallback: extract from caption (first line or first sentence)
                 lines = caption.split('\n')
                 title = lines[0][:100] if lines else "Health & Wellness Tips"
-                print(f"   📺 Using fallback title from caption: {title}")
+                print(f"   📺 [YT PUBLISH] Using fallback title from caption: {title}", flush=True)
             
             # Upload as a Short
+            thumbnail_exists = thumbnail_path.exists() if hasattr(thumbnail_path, 'exists') else False
+            print(f"   📺 [YT PUBLISH] Calling upload_youtube_short()...", flush=True)
+            print(f"      video_path={video_path}", flush=True)
+            print(f"      title={title}", flush=True)
+            print(f"      thumbnail_path={thumbnail_path} (exists: {thumbnail_exists})", flush=True)
+            
             result = yt_publisher.upload_youtube_short(
                 video_path=str(video_path),
                 title=title,
                 description=caption,
-                thumbnail_path=str(thumbnail_path) if thumbnail_path.exists() else None
+                thumbnail_path=str(thumbnail_path) if thumbnail_exists else None
             )
+            
+            print(f"   📺 [YT PUBLISH] upload_youtube_short result: {result}", flush=True)
             
             # Update channel status in database
             if result.get("success"):

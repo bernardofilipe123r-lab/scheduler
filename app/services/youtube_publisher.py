@@ -299,27 +299,37 @@ class YouTubePublisher:
     
     def _ensure_valid_token(self) -> Optional[str]:
         """Ensure we have a valid access token, refreshing if needed."""
+        print(f"   📺 [YT TOKEN] _ensure_valid_token() called", flush=True)
+        
         if not self.credentials:
-            print("❌ No credentials provided")
+            print("   ❌ [YT TOKEN] No credentials provided", flush=True)
             return None
+        
+        print(f"   📺 [YT TOKEN] credentials.channel_id: {self.credentials.channel_id}", flush=True)
+        print(f"   📺 [YT TOKEN] credentials.access_token present: {bool(self.credentials.access_token)}", flush=True)
+        print(f"   📺 [YT TOKEN] credentials.token_expiry: {self.credentials.token_expiry}", flush=True)
+        print(f"   📺 [YT TOKEN] credentials.refresh_token present: {bool(self.credentials.refresh_token)}", flush=True)
         
         # Check if token is still valid
         if self.credentials.access_token and self.credentials.token_expiry:
             if datetime.now(timezone.utc) < self.credentials.token_expiry - timedelta(minutes=5):
+                print(f"   ✅ [YT TOKEN] Existing token still valid", flush=True)
                 return self.credentials.access_token
         
         # Need to refresh
-        print("🔄 Refreshing YouTube access token...")
+        print(f"   🔄 [YT TOKEN] Need to refresh token...", flush=True)
+        print(f"   🔄 [YT TOKEN] Using refresh_token (length: {len(self.credentials.refresh_token) if self.credentials.refresh_token else 0})", flush=True)
+        
         success, result = self.refresh_access_token(self.credentials.refresh_token)
         
         if not success:
-            print(f"❌ Token refresh failed: {result.get('error')}")
+            print(f"   ❌ [YT TOKEN] Token refresh failed: {result.get('error')}", flush=True)
             return None
         
         self.credentials.access_token = result["access_token"]
         self.credentials.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=result["expires_in"])
         
-        print("✅ Token refreshed successfully")
+        print(f"   ✅ [YT TOKEN] Token refreshed successfully, expires in {result['expires_in']}s", flush=True)
         return self.credentials.access_token
     
     def upload_youtube_short(
@@ -345,19 +355,31 @@ class YouTubePublisher:
         Returns:
             Dict with success status and video ID or error
         """
+        print(f"\n📺 [YT UPLOAD] upload_youtube_short() called", flush=True)
+        print(f"   📺 [YT UPLOAD] video_path: {video_path}", flush=True)
+        print(f"   📺 [YT UPLOAD] title: {title}", flush=True)
+        print(f"   📺 [YT UPLOAD] thumbnail_path: {thumbnail_path}", flush=True)
+        print(f"   📺 [YT UPLOAD] publish_at: {publish_at}", flush=True)
+        
         # Check quota
+        print(f"   📺 [YT UPLOAD] Checking quota...", flush=True)
         if not self.quota_monitor.can_upload():
             status = self.quota_monitor.get_status()
+            print(f"   ❌ [YT UPLOAD] Quota exceeded: {status.used}/{status.limit}", flush=True)
             return {
                 "success": False,
                 "error": f"Daily quota exceeded ({status.used}/{status.limit}). Resets at {status.reset_time}",
                 "quota_exceeded": True
             }
+        print(f"   ✅ [YT UPLOAD] Quota OK", flush=True)
         
         # Ensure we have a valid token
+        print(f"   📺 [YT UPLOAD] Getting valid access token...", flush=True)
         access_token = self._ensure_valid_token()
         if not access_token:
+            print(f"   ❌ [YT UPLOAD] Failed to get valid access token!", flush=True)
             return {"success": False, "error": "Failed to get valid access token"}
+        print(f"   ✅ [YT UPLOAD] Got access token (length: {len(access_token)})", flush=True)
         
         # Ensure description has #Shorts for YouTube to recognize it
         if "#shorts" not in description.lower():
@@ -376,6 +398,7 @@ class YouTubePublisher:
                 "selfDeclaredMadeForKids": False
             }
         }
+        print(f"   📺 [YT UPLOAD] Video metadata prepared: privacyStatus={video_metadata['status']['privacyStatus']}", flush=True)
         
         # Add scheduled publish time if provided
         if publish_at:
@@ -387,7 +410,8 @@ class YouTubePublisher:
         
         try:
             # Step 1: Initiate resumable upload
-            print(f"   📤 Uploading YouTube Short: {title[:50]}...")
+            print(f"   📤 [YT UPLOAD] Step 1: Initiating resumable upload...", flush=True)
+            print(f"   📤 [YT UPLOAD] Upload URL: {self.UPLOAD_URL}", flush=True)
             
             init_response = requests.post(
                 f"{self.UPLOAD_URL}?uploadType=resumable&part=snippet,status",
@@ -399,19 +423,28 @@ class YouTubePublisher:
                 json=video_metadata
             )
             
+            print(f"   📤 [YT UPLOAD] Init response status: {init_response.status_code}", flush=True)
+            
             if init_response.status_code != 200:
+                print(f"   ❌ [YT UPLOAD] Init failed: {init_response.text}", flush=True)
                 return {"success": False, "error": f"Upload init failed: {init_response.text}"}
             
             upload_url = init_response.headers.get("Location")
             if not upload_url:
+                print(f"   ❌ [YT UPLOAD] No upload URL in response headers", flush=True)
                 return {"success": False, "error": "No upload URL in response"}
             
+            print(f"   ✅ [YT UPLOAD] Got upload URL", flush=True)
+            
             # Step 2: Upload video file
+            print(f"   📤 [YT UPLOAD] Step 2: Uploading video file...", flush=True)
             video_file = Path(video_path)
             if not video_file.exists():
+                print(f"   ❌ [YT UPLOAD] Video file not found: {video_path}", flush=True)
                 return {"success": False, "error": f"Video file not found: {video_path}"}
             
             file_size = video_file.stat().st_size
+            print(f"   📤 [YT UPLOAD] Video file size: {file_size} bytes ({file_size / 1024 / 1024:.2f} MB)", flush=True)
             
             with open(video_file, "rb") as f:
                 upload_response = requests.put(
@@ -424,7 +457,10 @@ class YouTubePublisher:
                     data=f
                 )
             
+            print(f"   📤 [YT UPLOAD] Upload response status: {upload_response.status_code}", flush=True)
+            
             if upload_response.status_code not in [200, 201]:
+                print(f"   ❌ [YT UPLOAD] Upload failed: {upload_response.text}", flush=True)
                 return {"success": False, "error": f"Video upload failed: {upload_response.text}"}
             
             video_data = upload_response.json()
@@ -433,11 +469,15 @@ class YouTubePublisher:
             # Record quota usage
             self.quota_monitor.use_quota("videos.insert")
             
-            print(f"   ✅ YouTube Short uploaded: {video_id}")
+            print(f"   ✅ [YT UPLOAD] YouTube Short uploaded successfully! video_id={video_id}", flush=True)
+            print(f"   🔗 [YT UPLOAD] URL: https://youtube.com/shorts/{video_id}", flush=True)
             
             # Step 3: Upload custom thumbnail if provided
             if thumbnail_path and Path(thumbnail_path).exists():
+                print(f"   📤 [YT UPLOAD] Step 3: Setting custom thumbnail...", flush=True)
                 self._set_thumbnail(video_id, thumbnail_path, access_token)
+            else:
+                print(f"   ℹ️ [YT UPLOAD] No custom thumbnail to upload", flush=True)
             
             return {
                 "success": True,
@@ -448,7 +488,9 @@ class YouTubePublisher:
             }
             
         except Exception as e:
-            print(f"   ❌ YouTube upload error: {e}")
+            print(f"   ❌ [YT UPLOAD] Exception during upload: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": str(e)}
     
     def _set_thumbnail(self, video_id: str, thumbnail_path: str, access_token: str) -> bool:
