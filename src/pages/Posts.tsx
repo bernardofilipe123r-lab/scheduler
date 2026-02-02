@@ -272,7 +272,8 @@ function TitleLayer({
   let currentLine = ''
   
   // Simple word wrapping estimation (Konva will do actual wrapping)
-  const avgCharWidth = config.fontSize * 0.55 // Approximate for Anton
+  // Anton is a condensed font, so chars are narrower (0.48 factor vs typical 0.55)
+  const avgCharWidth = config.fontSize * 0.48
   const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
   
   words.forEach(word => {
@@ -358,7 +359,8 @@ function TitleLayer({
 // Helper to calculate title height based on text and font size
 function calculateTitleHeight(text: string, fontSize: number, paddingX: number): number {
   const textWidth = CANVAS_WIDTH - paddingX * 2
-  const avgCharWidth = fontSize * 0.55
+  // Anton is a condensed font, so chars are narrower (0.48 factor vs typical 0.55)
+  const avgCharWidth = fontSize * 0.48
   const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
   
   const words = text.split(' ')
