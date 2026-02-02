@@ -146,10 +146,14 @@ class YouTubePublisher:
     API_BASE = "https://www.googleapis.com/youtube/v3"
     UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
     
-    # Required OAuth scopes: upload + readonly (to get channel info)
+    # Required OAuth scopes: 
+    # - youtube.upload: for uploading videos
+    # - youtube.readonly: for getting channel info
+    # - youtube.force-ssl: for setting thumbnails (requires verified channel)
     OAUTH_SCOPES = [
         "https://www.googleapis.com/auth/youtube.upload",
-        "https://www.googleapis.com/auth/youtube.readonly"
+        "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/youtube.force-ssl"  # Required for thumbnails
     ]
     
     def __init__(self, credentials: Optional[YouTubeCredentials] = None):
@@ -496,13 +500,26 @@ class YouTubePublisher:
     def _set_thumbnail(self, video_id: str, thumbnail_path: str, access_token: str) -> bool:
         """Upload a custom thumbnail for a video."""
         try:
+            # Determine content type from file extension
+            path = Path(thumbnail_path)
+            ext = path.suffix.lower()
+            content_type = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+            }.get(ext, 'image/png')  # Default to PNG
+            
+            print(f"   📤 [YT THUMBNAIL] Uploading thumbnail: {thumbnail_path}", flush=True)
+            print(f"   📤 [YT THUMBNAIL] Content-Type: {content_type}", flush=True)
+            
             with open(thumbnail_path, "rb") as f:
                 response = requests.post(
                     f"{self.API_BASE}/thumbnails/set",
                     params={"videoId": video_id},
                     headers={
                         "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "image/jpeg"
+                        "Content-Type": content_type
                     },
                     data=f
                 )
@@ -510,14 +527,24 @@ class YouTubePublisher:
             self.quota_monitor.use_quota("thumbnails.set")
             
             if response.status_code == 200:
-                print(f"   ✅ Custom thumbnail set")
+                print(f"   ✅ Custom thumbnail set successfully!", flush=True)
                 return True
             else:
-                print(f"   ⚠️ Thumbnail upload failed: {response.text}")
+                error_info = response.text
+                print(f"   ⚠️ Thumbnail upload failed (status {response.status_code}): {error_info}", flush=True)
+                
+                # Check for common issues
+                if response.status_code == 403:
+                    print(f"   ℹ️ [YT THUMBNAIL] 403 Error - Possible causes:", flush=True)
+                    print(f"      1. Channel not verified (requires phone verification + 24hr wait)", flush=True)
+                    print(f"      2. OAuth token missing youtube.force-ssl scope", flush=True)
+                    print(f"      3. Video is processing and not ready for thumbnail", flush=True)
+                    print(f"   ℹ️ [YT THUMBNAIL] To fix: Re-connect YouTube in the app to get new OAuth scope", flush=True)
+                
                 return False
                 
         except Exception as e:
-            print(f"   ⚠️ Thumbnail error: {e}")
+            print(f"   ⚠️ Thumbnail error: {e}", flush=True)
             return False
     
     def get_quota_status(self) -> Dict[str, Any]:
