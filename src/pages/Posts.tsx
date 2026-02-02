@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Stage, Layer, Image as KonvaImage, Rect, Text, Line, Group } from 'react-konva'
 import useImage from 'use-image'
 import Konva from 'konva'
@@ -17,7 +17,9 @@ import {
   Upload,
   Square,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  RotateCcw,
+  Save
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
@@ -32,6 +34,29 @@ const PREVIEW_SCALE = 0.4 // Scale for preview display
 const DEFAULT_READ_CAPTION_BOTTOM = 45 // px from bottom
 const DEFAULT_TITLE_GAP = 30 // px gap between title bottom and read caption
 const DEFAULT_LOGO_GAP = 36 // px gap between logo and title top
+
+// Default general settings (for reset functionality)
+const DEFAULT_GENERAL_SETTINGS = {
+  fontSize: 70,
+  barWidth: 0,
+  layout: {
+    readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
+    titleGap: DEFAULT_TITLE_GAP,
+    logoGap: DEFAULT_LOGO_GAP,
+    titlePaddingX: 45
+  },
+  highlight: {
+    showHighlight: true,
+    enabled: false,
+    centerXLock: true,
+    x: 40,
+    y: CANVAS_HEIGHT - 350,
+    width: CANVAS_WIDTH - 80,
+    height: 80
+  }
+}
+
+const STORAGE_KEY = 'posts-general-settings'
 
 // Brand configurations with colors for AI image prompts
 const BRAND_CONFIGS: Record<string, { 
@@ -390,25 +415,17 @@ export function PostsPage() {
   const [generatedTitle, setGeneratedTitle] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
   
-  // GENERAL settings that apply to ALL brands (Step 1)
-  const [generalSettings, setGeneralSettings] = useState({
-    fontSize: 70,
-    barWidth: 0, // 0 = auto (match title width), otherwise fixed width
-    layout: {
-      readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
-      titleGap: DEFAULT_TITLE_GAP,
-      logoGap: DEFAULT_LOGO_GAP,
-      titlePaddingX: 45
-    },
-    highlight: {
-      showHighlight: true,
-      enabled: false,
-      centerXLock: true,
-      x: 40,
-      y: CANVAS_HEIGHT - 350,
-      width: CANVAS_WIDTH - 80,
-      height: 80
+  // GENERAL settings that apply to ALL brands (Step 1) - load from localStorage
+  const [generalSettings, setGeneralSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (e) {
+      console.error('Failed to load settings from localStorage:', e)
     }
+    return DEFAULT_GENERAL_SETTINGS
   })
   
   // Preview title for Step 1 (before generation)
@@ -520,6 +537,39 @@ export function PostsPage() {
       highlight: { ...prev.highlight, ...updates }
     }))
   }, [])
+  
+  // Save settings to localStorage
+  const saveSettings = useCallback(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(generalSettings))
+      toast.success('Settings saved!')
+    } catch (e) {
+      toast.error('Failed to save settings')
+    }
+  }, [generalSettings])
+  
+  // Reset to default settings
+  const resetToDefault = useCallback(() => {
+    setGeneralSettings(DEFAULT_GENERAL_SETTINGS)
+    localStorage.removeItem(STORAGE_KEY)
+    toast.success('Settings reset to default')
+  }, [])
+  
+  // Calculate auto highlight position based on title
+  const getAutoHighlightPosition = useCallback(() => {
+    const titleHeight = calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX)
+    const readCaptionY = CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24
+    const titleY = readCaptionY - generalSettings.layout.titleGap - titleHeight
+    // Auto highlight is roughly at last line of title
+    const avgCharWidth = generalSettings.fontSize * 0.55
+    const textWidth = CANVAS_WIDTH - generalSettings.layout.titlePaddingX * 2
+    const highlightWidth = Math.min(previewHighlightedText.length * avgCharWidth, textWidth) * 0.8
+    return {
+      y: titleY + titleHeight - generalSettings.fontSize - 4,
+      width: highlightWidth,
+      height: generalSettings.fontSize + 12
+    }
+  }, [previewTitle, previewHighlightedText, generalSettings])
   
   // Toggle brand selection
   const toggleBrand = (brand: string) => {
@@ -902,7 +952,7 @@ export function PostsPage() {
                 <div>
                   <label className="text-xs text-gray-500">Title Padding X: {generalSettings.layout.titlePaddingX}px</label>
                   <input
-                    type="range" min={20} max={120}
+                    type="range" min={0} max={120}
                     value={generalSettings.layout.titlePaddingX}
                     onChange={(e) => updateGeneralLayout({ titlePaddingX: Number(e.target.value) })}
                     className="w-full accent-primary-500"
@@ -930,11 +980,11 @@ export function PostsPage() {
                   <span className="text-sm font-medium text-gray-700">Show Highlight</span>
                   <button
                     onClick={() => updateGeneralHighlight({ showHighlight: !generalSettings.highlight.showHighlight })}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                    className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
                       generalSettings.highlight.showHighlight ? 'bg-primary-500' : 'bg-gray-300'
                     }`}
                   >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
                       generalSettings.highlight.showHighlight ? 'translate-x-5' : 'translate-x-0.5'
                     }`} />
                   </button>
@@ -943,15 +993,28 @@ export function PostsPage() {
                 {generalSettings.highlight.showHighlight && (
                   <>
                     {/* Manual vs Auto toggle */}
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-gray-600">Manual Rectangle</span>
                       <button
-                        onClick={() => updateGeneralHighlight({ enabled: !generalSettings.highlight.enabled })}
-                        className={`relative w-8 h-4 rounded-full transition-colors ${
+                        onClick={() => {
+                          if (!generalSettings.highlight.enabled) {
+                            // When enabling manual, spawn at auto position
+                            const autoPos = getAutoHighlightPosition()
+                            updateGeneralHighlight({ 
+                              enabled: true,
+                              y: autoPos.y,
+                              width: autoPos.width,
+                              height: autoPos.height
+                            })
+                          } else {
+                            updateGeneralHighlight({ enabled: false })
+                          }
+                        }}
+                        className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
                           generalSettings.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
                         }`}
                       >
-                        <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                        <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
                           generalSettings.highlight.enabled ? 'translate-x-4' : 'translate-x-0.5'
                         }`} />
                       </button>
@@ -969,11 +1032,11 @@ export function PostsPage() {
                           <span className="text-xs text-gray-500">Center X Lock</span>
                           <button
                             onClick={() => updateGeneralHighlight({ centerXLock: !generalSettings.highlight.centerXLock })}
-                            className={`relative w-8 h-4 rounded-full transition-colors ${
+                            className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
                               generalSettings.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
                             }`}
                           >
-                            <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                            <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
                               generalSettings.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
                             }`} />
                           </button>
@@ -1024,6 +1087,24 @@ export function PostsPage() {
                     )}
                   </>
                 )}
+              </div>
+              
+              {/* Save / Reset buttons */}
+              <div className="border-t border-gray-100 pt-4 flex gap-2">
+                <button
+                  onClick={saveSettings}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600"
+                >
+                  <Save className="w-4 h-4" />
+                  Save Settings
+                </button>
+                <button
+                  onClick={resetToDefault}
+                  className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset
+                </button>
               </div>
             </div>
             
@@ -1365,18 +1446,13 @@ export function PostsPage() {
               </h3>
               <button
                 onClick={() => updateHighlight({ showHighlight: !currentPost.highlight.showHighlight })}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-sm ${
-                  currentPost.highlight.showHighlight 
-                    ? 'bg-primary-100 text-primary-700' 
-                    : 'bg-gray-100 text-gray-600'
+                className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
+                  currentPost.highlight.showHighlight ? 'bg-primary-500' : 'bg-gray-300'
                 }`}
               >
-                {currentPost.highlight.showHighlight ? (
-                  <ToggleRight className="w-4 h-4" />
-                ) : (
-                  <ToggleLeft className="w-4 h-4" />
-                )}
-                {currentPost.highlight.showHighlight ? 'On' : 'Off'}
+                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
+                  currentPost.highlight.showHighlight ? 'translate-x-5' : 'translate-x-0.5'
+                }`} />
               </button>
             </div>
             
@@ -1387,11 +1463,11 @@ export function PostsPage() {
                   <span className="text-xs text-gray-600">Manual Rectangle</span>
                   <button
                     onClick={() => updateHighlight({ enabled: !currentPost.highlight.enabled })}
-                    className={`relative w-8 h-4 rounded-full transition-colors ${
+                    className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
                       currentPost.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
                     }`}
                   >
-                    <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                    <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
                       currentPost.highlight.enabled ? 'translate-x-4' : 'translate-x-0.5'
                     }`} />
                   </button>
@@ -1404,11 +1480,11 @@ export function PostsPage() {
                       <span className="text-xs text-gray-600">Center X Lock</span>
                       <button
                         onClick={() => updateHighlight({ centerXLock: !currentPost.highlight.centerXLock })}
-                        className={`relative w-8 h-4 rounded-full transition-colors ${
+                        className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
                           currentPost.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
                         }`}
                       >
-                        <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${
+                        <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
                           currentPost.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
                         }`} />
                       </button>
