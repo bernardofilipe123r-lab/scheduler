@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Stage, Layer, Image as KonvaImage, Rect, Text, Line, Group } from 'react-konva'
 import useImage from 'use-image'
 import Konva from 'konva'
@@ -16,8 +16,6 @@ import {
   Settings2,
   Upload,
   Square,
-  ToggleLeft,
-  ToggleRight,
   RotateCcw,
   Save
 } from 'lucide-react'
@@ -57,6 +55,9 @@ const DEFAULT_GENERAL_SETTINGS = {
 }
 
 const STORAGE_KEY = 'posts-general-settings'
+
+// Type for general settings
+type GeneralSettings = typeof DEFAULT_GENERAL_SETTINGS
 
 // Brand configurations with colors for AI image prompts
 const BRAND_CONFIGS: Record<string, { 
@@ -416,11 +417,11 @@ export function PostsPage() {
   const [aiPrompt, setAiPrompt] = useState('')
   
   // GENERAL settings that apply to ALL brands (Step 1) - load from localStorage
-  const [generalSettings, setGeneralSettings] = useState(() => {
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
-        return JSON.parse(saved)
+        return JSON.parse(saved) as GeneralSettings
       }
     } catch (e) {
       console.error('Failed to load settings from localStorage:', e)
