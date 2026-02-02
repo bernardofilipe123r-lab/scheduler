@@ -48,7 +48,8 @@ class JobManager:
         brands: List[str],
         variant: str = "light",
         ai_prompt: Optional[str] = None,
-        cta_type: Optional[str] = None
+        cta_type: Optional[str] = None,
+        platforms: Optional[List[str]] = None
     ) -> GenerationJob:
         """Create a new generation job."""
         job_id = generate_job_id()
@@ -56,6 +57,10 @@ class JobManager:
         # Ensure unique job_id
         while self.db.query(GenerationJob).filter_by(job_id=job_id).first():
             job_id = generate_job_id()
+        
+        # Default to all platforms if not specified
+        if platforms is None:
+            platforms = ["instagram", "facebook", "youtube"]
         
         job = GenerationJob(
             job_id=job_id,
@@ -66,6 +71,7 @@ class JobManager:
             variant=variant,
             ai_prompt=ai_prompt,
             cta_type=cta_type,
+            platforms=platforms,
             status="pending",
             brand_outputs={brand: {"status": "pending"} for brand in brands}
         )

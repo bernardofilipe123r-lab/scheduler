@@ -138,6 +138,7 @@ export function JobDetailPage() {
         yt_thumbnail_path: output.yt_thumbnail_path,  // Clean AI image for YouTube
         video_path: output.video_path,
         thumbnail_path: output.thumbnail_path,
+        platforms: job.platforms,  // Pass platforms from job
       })
       
       await updateBrandStatus.mutateAsync({
@@ -186,6 +187,7 @@ export function JobDetailPage() {
             yt_thumbnail_path: output.yt_thumbnail_path,  // Clean AI image for YouTube
             video_path: output.video_path,
             thumbnail_path: output.thumbnail_path,
+            platforms: job.platforms,  // Pass platforms from job
           })
           await updateBrandStatus.mutateAsync({
             id,
@@ -269,6 +271,7 @@ export function JobDetailPage() {
             video_path: output.video_path,
             thumbnail_path: output.thumbnail_path,
             scheduled_time: scheduledTime.toISOString(),
+            platforms: job.platforms,  // Pass platforms from job
           })
           await updateBrandStatus.mutateAsync({
             id,

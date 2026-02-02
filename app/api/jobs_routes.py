@@ -22,6 +22,7 @@ class JobCreateRequest(BaseModel):
     ai_prompt: Optional[str] = None
     cta_type: Optional[str] = "follow_tips"
     user_id: str = "default"
+    platforms: Optional[List[str]] = None  # ["instagram", "facebook", "youtube"] - defaults to all if None
 
 
 class JobUpdateRequest(BaseModel):
@@ -122,7 +123,8 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
                 brands=request.brands,
                 variant=request.variant,
                 ai_prompt=request.ai_prompt,
-                cta_type=request.cta_type
+                cta_type=request.cta_type,
+                platforms=request.platforms
             )
             
             job_id = job.job_id

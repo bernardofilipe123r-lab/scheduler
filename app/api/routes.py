@@ -675,6 +675,7 @@ class AutoScheduleRequest(BaseModel):
     thumbnail_path: Optional[str] = None
     yt_thumbnail_path: Optional[str] = None  # Clean AI image for YouTube (no text)
     scheduled_time: Optional[str] = None  # Optional custom ISO datetime string
+    platforms: Optional[List[str]] = None  # ["instagram", "facebook", "youtube"] - if None, uses yt_title to determine
 
 
 @router.post(
@@ -757,10 +758,18 @@ async def schedule_auto(request: AutoScheduleRequest):
         if yt_thumbnail_path:
             print(f"📺 YT thumbnail path: {yt_thumbnail_path}")
         
-        # Determine platforms - include YouTube if yt_title is provided
-        platforms = ["instagram", "facebook"]
+        # Determine platforms - use request.platforms if provided, otherwise fall back to legacy logic
+        if request.platforms:
+            platforms = request.platforms
+            print(f"📱 Platforms from request: {platforms}")
+        else:
+            # Legacy behavior: include YouTube if yt_title is provided
+            platforms = ["instagram", "facebook"]
+            if request.yt_title:
+                platforms.append("youtube")
+            print(f"📱 Platforms (auto-detected): {platforms}")
+        
         if request.yt_title:
-            platforms.append("youtube")
             print(f"📺 YouTube title: {request.yt_title}")
         
         # Schedule the reel

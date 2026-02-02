@@ -50,6 +50,7 @@ export interface JobCreateRequest {
   variant: 'light' | 'dark'
   ai_prompt?: string
   cta_type: string
+  platforms?: string[]  // ['instagram', 'facebook', 'youtube']
 }
 
 // API functions

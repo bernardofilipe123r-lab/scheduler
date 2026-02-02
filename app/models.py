@@ -28,6 +28,7 @@ class GenerationJob(Base):
     ai_prompt = Column(Text, nullable=True)  # For dark mode backgrounds
     cta_type = Column(String(50), nullable=True)
     brands = Column(JSON, nullable=False)  # List of brands to generate
+    platforms = Column(JSON, nullable=True)  # List of platforms: ["instagram", "facebook", "youtube"]
     
     # Generated outputs per brand
     # Format: {"gymcollege": {"reel_id": "...", "thumbnail": "...", "video": "...", "status": "completed"}, ...}
@@ -60,6 +61,7 @@ class GenerationJob(Base):
             "ai_prompt": self.ai_prompt,
             "cta_type": self.cta_type,
             "brands": self.brands,
+            "platforms": self.platforms or ["instagram", "facebook", "youtube"],
             "brand_outputs": self.brand_outputs or {},
             "ai_background_path": self.ai_background_path,
             "current_step": self.current_step,

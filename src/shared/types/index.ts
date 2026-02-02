@@ -37,6 +37,7 @@ export interface Job {
   title: string
   content_lines: string[]
   brands: BrandName[]
+  platforms?: string[]  // ['instagram', 'facebook', 'youtube']
   variant: Variant
   ai_prompt?: string
   cta_type: string

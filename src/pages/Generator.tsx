@@ -12,6 +12,14 @@ const CTA_TYPES = [
   { id: 'workout_plan', label: '💬 Comment PLAN - Workout & nutrition plan' },
 ]
 
+const PLATFORMS = [
+  { id: 'instagram', label: '📸 Instagram', icon: '📸' },
+  { id: 'facebook', label: '📘 Facebook', icon: '📘' },
+  { id: 'youtube', label: '📺 YouTube', icon: '📺' },
+] as const
+
+type Platform = typeof PLATFORMS[number]['id']
+
 export function GeneratorPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
@@ -23,6 +31,7 @@ export function GeneratorPage() {
   const [variant, setVariant] = useState<Variant>('light')
   const [aiPrompt, setAiPrompt] = useState('')
   const [ctaType, setCtaType] = useState('follow_tips')
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
   
   // Loading states
   const [isAutoGenerating, setIsAutoGenerating] = useState(false)
@@ -39,6 +48,19 @@ export function GeneratorPage() {
         ? prev.filter(b => b !== brand)
         : [...prev, brand]
     )
+  }
+  
+  // Toggle platform selection
+  const togglePlatform = (platform: Platform) => {
+    setSelectedPlatforms(prev => {
+      // Don't allow deselecting if it's the last one
+      if (prev.includes(platform) && prev.length === 1) {
+        return prev
+      }
+      return prev.includes(platform)
+        ? prev.filter(p => p !== platform)
+        : [...prev, platform]
+    })
   }
   
   // Auto-generate viral content using AI
@@ -106,6 +128,11 @@ export function GeneratorPage() {
       return
     }
     
+    if (selectedPlatforms.length === 0) {
+      toast.error('Select at least one platform')
+      return
+    }
+    
     setIsCreatingJob(true)
     try {
       const job = await createJob.mutateAsync({
@@ -115,6 +142,7 @@ export function GeneratorPage() {
         variant,
         ai_prompt: variant === 'dark' ? aiPrompt : undefined,
         cta_type: ctaType,
+        platforms: selectedPlatforms,
       })
       
       setTitle('')
@@ -257,6 +285,32 @@ export function GeneratorPage() {
             </select>
             <p className="text-xs text-gray-500 mt-2">Select the call-to-action for the caption</p>
           </div>
+        </div>
+        
+        {/* Platforms */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Publish To</label>
+          <div className="flex flex-wrap gap-3">
+            {PLATFORMS.map(platform => (
+              <label 
+                key={platform.id} 
+                className={`flex items-center px-4 py-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                  selectedPlatforms.includes(platform.id)
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={selectedPlatforms.includes(platform.id)}
+                  onChange={() => togglePlatform(platform.id)}
+                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                /> 
+                <span className="ml-2 text-sm font-medium text-gray-900">{platform.label}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">Select at least one platform. YouTube requires a connected channel.</p>
         </div>
         
         {/* Content Lines */}
