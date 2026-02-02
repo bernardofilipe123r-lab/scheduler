@@ -221,15 +221,22 @@ async def startup_event():
                         caption = schedule.get('caption', 'CHANGE ME')
                         metadata = schedule.get('metadata', {})
                         
+                        print(f"\n   📋 [PUBLISH] Processing schedule: {schedule_id}", flush=True)
+                        print(f"   📋 [PUBLISH] Metadata keys: {list(metadata.keys())}", flush=True)
+                        
                         # Check for retry_platforms (partial retry) or use original platforms
                         retry_platforms = metadata.get('retry_platforms')
                         succeeded_platforms = metadata.get('succeeded_platforms', [])
                         
+                        print(f"   📋 [PUBLISH] retry_platforms from metadata: {retry_platforms}", flush=True)
+                        print(f"   📋 [PUBLISH] succeeded_platforms from metadata: {succeeded_platforms}", flush=True)
+                        
                         if retry_platforms:
                             platforms = retry_platforms
-                            print(f"   🔄 PARTIAL RETRY: Only retrying {platforms} (skipping already successful: {succeeded_platforms})")
+                            print(f"   🔄 PARTIAL RETRY: Only retrying {platforms} (skipping already successful: {succeeded_platforms})", flush=True)
                         else:
                             platforms = metadata.get('platforms', ['instagram'])
+                            print(f"   📋 [PUBLISH] Using platforms from metadata: {platforms}", flush=True)
                         
                         # Get paths from metadata or use defaults
                         video_path_str = metadata.get('video_path')

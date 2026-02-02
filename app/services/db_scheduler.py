@@ -365,20 +365,29 @@ class DatabaseSchedulerService:
         Returns:
             True if reset successfully, False if not found or not retriable
         """
+        print(f"\n🔄 [RETRY] retry_failed called for schedule_id: {schedule_id}", flush=True)
+        
         with get_db_session() as db:
             scheduled_reel = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
             ).first()
             
             if not scheduled_reel:
+                print(f"   ❌ [RETRY] Schedule not found: {schedule_id}", flush=True)
                 return False
             
+            print(f"   📋 [RETRY] Current status: {scheduled_reel.status}", flush=True)
+            
             if scheduled_reel.status not in ["failed", "publishing", "partial"]:
+                print(f"   ❌ [RETRY] Status '{scheduled_reel.status}' not retriable", flush=True)
                 return False
             
             # For partial failures, determine which platforms to retry
             metadata = scheduled_reel.extra_data or {}
             publish_results = metadata.get('publish_results', {})
+            
+            print(f"   📊 [RETRY] Current metadata keys: {list(metadata.keys())}", flush=True)
+            print(f"   📊 [RETRY] publish_results: {publish_results}", flush=True)
             
             if scheduled_reel.status == "partial" and publish_results:
                 # Only retry platforms that failed
@@ -392,18 +401,22 @@ class DatabaseSchedulerService:
                         else:
                             failed_platforms.append(platform)
                 
+                print(f"   📊 [RETRY] Failed platforms: {failed_platforms}", flush=True)
+                print(f"   📊 [RETRY] Succeeded platforms: {succeeded_platforms}", flush=True)
+                
                 if failed_platforms:
                     # Store which platforms to retry (only the failed ones)
                     metadata['retry_platforms'] = failed_platforms
                     # Keep track of which platforms already succeeded (don't retry these)
                     metadata['succeeded_platforms'] = succeeded_platforms
                     scheduled_reel.extra_data = metadata
-                    print(f"🔄 Partial retry: Will retry {failed_platforms}, skip {succeeded_platforms}")
+                    print(f"🔄 Partial retry: Will retry {failed_platforms}, skip {succeeded_platforms}", flush=True)
                 else:
                     # All platforms succeeded? This shouldn't happen for partial status
-                    print(f"⚠️ Partial status but no failed platforms found")
+                    print(f"⚠️ Partial status but no failed platforms found", flush=True)
             else:
                 # Full retry - clear any previous retry info
+                print(f"   📊 [RETRY] Full retry - clearing retry_platforms", flush=True)
                 metadata.pop('retry_platforms', None)
                 metadata.pop('succeeded_platforms', None)
                 scheduled_reel.extra_data = metadata
