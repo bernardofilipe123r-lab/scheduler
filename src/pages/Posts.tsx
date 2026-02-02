@@ -398,7 +398,7 @@ export function PostsPage() {
       readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
       titleGap: DEFAULT_TITLE_GAP,
       logoGap: DEFAULT_LOGO_GAP,
-      titlePaddingX: 90
+      titlePaddingX: 45
     },
     highlight: {
       showHighlight: true,
@@ -431,7 +431,7 @@ export function PostsPage() {
           readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
           titleGap: DEFAULT_TITLE_GAP,
           logoGap: DEFAULT_LOGO_GAP,
-          titlePaddingX: 90
+          titlePaddingX: 45
         },
         highlight: {
           showHighlight: true,
@@ -770,14 +770,6 @@ export function PostsPage() {
                   {/* Gradient overlay */}
                   <GradientOverlay />
                   
-                  {/* Logo placeholder */}
-                  <LogoWithLines 
-                    logoUrl={null}
-                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - generalSettings.layout.titleGap - generalSettings.layout.logoGap - 40}
-                    barWidth={generalSettings.barWidth}
-                    titleWidth={CANVAS_WIDTH - generalSettings.layout.titlePaddingX * 2}
-                  />
-                  
                   {/* Title preview */}
                   <TitleLayer
                     config={{
@@ -790,6 +782,14 @@ export function PostsPage() {
                     x={generalSettings.layout.titlePaddingX}
                     y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24 - generalSettings.layout.titleGap - calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX)}
                     paddingX={generalSettings.layout.titlePaddingX}
+                  />
+                  
+                  {/* Logo - above title */}
+                  <LogoWithLines 
+                    logoUrl={null}
+                    y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24 - generalSettings.layout.titleGap - calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX) - generalSettings.layout.logoGap - 40}
+                    barWidth={generalSettings.barWidth}
+                    titleWidth={CANVAS_WIDTH - generalSettings.layout.titlePaddingX * 2}
                   />
                   
                   {/* Read caption */}
@@ -902,7 +902,7 @@ export function PostsPage() {
                 <div>
                   <label className="text-xs text-gray-500">Title Padding X: {generalSettings.layout.titlePaddingX}px</label>
                   <input
-                    type="range" min={60} max={120}
+                    type="range" min={20} max={120}
                     value={generalSettings.layout.titlePaddingX}
                     onChange={(e) => updateGeneralLayout({ titlePaddingX: Number(e.target.value) })}
                     className="w-full accent-primary-500"
