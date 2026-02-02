@@ -2,7 +2,7 @@
 Database connection and session management.
 """
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from contextlib import contextmanager
@@ -36,10 +36,52 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def run_migrations():
+    """Run database migrations to add missing columns."""
+    print("🔄 Running database migrations...", flush=True)
+    
+    migrations = [
+        # Add platforms column to generation_jobs if not exists
+        {
+            "name": "Add platforms column to generation_jobs",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='generation_jobs' AND column_name='platforms'
+            """,
+            "migration_sql": """
+                ALTER TABLE generation_jobs ADD COLUMN platforms JSON;
+            """
+        }
+    ]
+    
+    with engine.connect() as conn:
+        for migration in migrations:
+            try:
+                # Check if migration is needed
+                result = conn.execute(text(migration["check_sql"]))
+                exists = result.fetchone() is not None
+                
+                if not exists:
+                    print(f"   📝 Running: {migration['name']}", flush=True)
+                    conn.execute(text(migration["migration_sql"]))
+                    conn.commit()
+                    print(f"   ✅ {migration['name']} - completed", flush=True)
+                else:
+                    print(f"   ✓ {migration['name']} - already exists", flush=True)
+            except Exception as e:
+                print(f"   ⚠️ {migration['name']} - skipped ({e})", flush=True)
+    
+    print("✅ Database migrations complete", flush=True)
+
+
 def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
     print("✅ Database tables created/verified")
+    
+    # Run migrations to add any missing columns
+    if not DATABASE_URL.startswith("sqlite"):
+        run_migrations()
 
 
 def get_db() -> Session:

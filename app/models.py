@@ -51,6 +51,12 @@ class GenerationJob(Base):
     
     def to_dict(self):
         """Convert to dictionary for API responses."""
+        # Safely get platforms - handle case where column doesn't exist yet in DB
+        try:
+            platforms = self.platforms or ["instagram", "facebook", "youtube"]
+        except Exception:
+            platforms = ["instagram", "facebook", "youtube"]
+        
         return {
             "job_id": self.job_id,
             "user_id": self.user_id,
@@ -61,7 +67,7 @@ class GenerationJob(Base):
             "ai_prompt": self.ai_prompt,
             "cta_type": self.cta_type,
             "brands": self.brands,
-            "platforms": self.platforms or ["instagram", "facebook", "youtube"],
+            "platforms": platforms,
             "brand_outputs": self.brand_outputs or {},
             "ai_background_path": self.ai_background_path,
             "current_step": self.current_step,
