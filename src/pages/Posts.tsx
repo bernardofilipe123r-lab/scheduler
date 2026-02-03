@@ -290,8 +290,86 @@ function TitleLayer({
   }
   
   const lineHeight = config.fontSize * 1.1 // Tighter line height
-  const paddingXRect = 8 // 8px padding on X axis
-  const paddingYRect = 6 // 6px padding on Y axis
+  // Dynamic padding based on font size
+  const paddingXRect = Math.max(6, config.fontSize * 0.1) // 10% of font size, min 6px
+  const paddingYRect = Math.max(4, config.fontSize * 0.08) // 8% of font size, min 4px
+  
+  // Find which lines contain parts of the highlight phrase
+  // and calculate precise highlight info for each line
+  const highlightWords = highlightPhrase.split(' ')
+  const lineHighlightInfo: Array<{
+    shouldHighlight: boolean
+    highlightStartRatio: number // 0-1, where the highlight starts in the line
+    highlightEndRatio: number // 0-1, where the highlight ends in the line
+    isFullLine: boolean // true if entire line is highlighted
+  }> = []
+  
+  // Track which highlight words we've matched
+  let highlightWordIndex = 0
+  
+  lines.forEach((line) => {
+    const lineUpper = line.toUpperCase().trim()
+    const lineWords = lineUpper.split(' ')
+    
+    // Check if this line contains any part of the highlight phrase
+    let matchStartIndex = -1
+    let matchEndIndex = -1
+    let tempHighlightIndex = highlightWordIndex
+    
+    for (let i = 0; i < lineWords.length; i++) {
+      const word = lineWords[i]
+      if (tempHighlightIndex < highlightWords.length && word === highlightWords[tempHighlightIndex]) {
+        if (matchStartIndex === -1) matchStartIndex = i
+        matchEndIndex = i
+        tempHighlightIndex++
+      } else if (matchStartIndex !== -1) {
+        // Reset if we break the sequence
+        break
+      }
+    }
+    
+    // Also check for partial matches (highlight phrase contained in line or vice versa)
+    const lineContainsPhrase = lineUpper.includes(highlightPhrase)
+    const phraseContainsLine = highlightPhrase.includes(lineUpper) && lineUpper.length > 0
+    
+    if (matchStartIndex !== -1 || lineContainsPhrase || phraseContainsLine) {
+      let startRatio = 0
+      let endRatio = 1
+      
+      if (lineContainsPhrase) {
+        // The full highlight phrase is on this line - calculate exact position
+        const phraseStart = lineUpper.indexOf(highlightPhrase)
+        const phraseEnd = phraseStart + highlightPhrase.length
+        startRatio = phraseStart / lineUpper.length
+        endRatio = phraseEnd / lineUpper.length
+      } else if (phraseContainsLine) {
+        // The entire line is part of the highlight phrase
+        startRatio = 0
+        endRatio = 1
+      } else if (matchStartIndex !== -1) {
+        // Partial word match - calculate position
+        const beforeMatch = lineWords.slice(0, matchStartIndex).join(' ')
+        const matchedText = lineWords.slice(matchStartIndex, matchEndIndex + 1).join(' ')
+        startRatio = beforeMatch.length / (lineUpper.length || 1)
+        endRatio = (beforeMatch.length + (beforeMatch ? 1 : 0) + matchedText.length) / (lineUpper.length || 1)
+        highlightWordIndex = tempHighlightIndex
+      }
+      
+      lineHighlightInfo.push({
+        shouldHighlight: true,
+        highlightStartRatio: Math.max(0, startRatio - 0.02), // Small padding
+        highlightEndRatio: Math.min(1, endRatio + 0.02),
+        isFullLine: (endRatio - startRatio) > 0.9
+      })
+    } else {
+      lineHighlightInfo.push({
+        shouldHighlight: false,
+        highlightStartRatio: 0,
+        highlightEndRatio: 0,
+        isFullLine: false
+      })
+    }
+  })
   
   return (
     <Group x={x} y={y}>
@@ -309,23 +387,41 @@ function TitleLayer({
       )}
       
       {lines.map((line, i) => {
-        // Check if this line should be highlighted (auto mode)
-        const matchesHighlightPhrase = highlightPhrase && (
-          line.toUpperCase().includes(highlightPhrase) || 
-          highlightPhrase.includes(line.toUpperCase().trim())
-        )
-        // Only show auto-highlight if: showHighlight=true, enabled=false, and matches phrase
-        const showAutoHighlight = highlightConfig.showHighlight && !highlightConfig.enabled && matchesHighlightPhrase
-        // Text is dark if: manual mode with highlight shown, OR auto-highlight showing
-        const textIsDark = (highlightConfig.showHighlight && highlightConfig.enabled && matchesHighlightPhrase) || showAutoHighlight
+        const highlightInfo = lineHighlightInfo[i]
+        
+        // Only show auto-highlight if: showHighlight=true, enabled=false, and this line should be highlighted
+        const showAutoHighlight = highlightConfig.showHighlight && !highlightConfig.enabled && highlightInfo.shouldHighlight
+        
+        // Text is dark if highlighted (either manual or auto)
+        const textIsDark = showAutoHighlight || (highlightConfig.showHighlight && highlightConfig.enabled && highlightInfo.shouldHighlight)
         
         const lineY = i * lineHeight
         
-        // Calculate actual text width for this line (centered text)
+        // Calculate actual text width for this line
         const lineTextWidth = line.length * avgCharWidth
-        // Auto rectangle: 80% width, 4px up
-        const rectWidth = (Math.min(lineTextWidth, textWidth) + paddingXRect * 2) * 0.8
-        const rectX = (textWidth - rectWidth) / 2 // Center the rectangle
+        const actualLineWidth = Math.min(lineTextWidth, textWidth)
+        
+        // For centered text, calculate where the text actually starts
+        const textStartX = (textWidth - actualLineWidth) / 2
+        
+        // Calculate highlight rectangle position and size based on highlight info
+        let rectX: number
+        let rectWidth: number
+        
+        if (highlightInfo.isFullLine) {
+          // Full line highlight - center the rectangle with some padding
+          rectWidth = actualLineWidth + paddingXRect * 2
+          rectX = (textWidth - rectWidth) / 2
+        } else {
+          // Partial line highlight - position based on where the highlighted text is
+          const highlightStart = textStartX + (actualLineWidth * highlightInfo.highlightStartRatio)
+          const highlightEnd = textStartX + (actualLineWidth * highlightInfo.highlightEndRatio)
+          rectWidth = (highlightEnd - highlightStart) + paddingXRect * 2
+          rectX = highlightStart - paddingXRect
+        }
+        
+        // Dynamic rectangle height based on font size
+        const rectHeight = config.fontSize + paddingYRect * 2
         
         return (
           <Group key={i} y={lineY}>
@@ -333,9 +429,9 @@ function TitleLayer({
             {showAutoHighlight && (
               <Rect
                 x={rectX}
-                y={-paddingYRect - 4}
+                y={-paddingYRect}
                 width={rectWidth}
-                height={config.fontSize + paddingYRect * 2}
+                height={rectHeight}
                 fill={highlightColor}
               />
             )}
