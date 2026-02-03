@@ -377,7 +377,10 @@ function calculateTitleHeight(text: string, fontSize: number, paddingX: number):
     }
   })
   
-  return lines * fontSize * 1.3
+  // Match the actual lineHeight used in TitleLayer (1.1)
+  // Height = (lines - 1) * lineHeight + fontSize for accurate positioning
+  const lineHeight = fontSize * 1.1
+  return (lines - 1) * lineHeight + fontSize
 }
 
 // Read Caption component
