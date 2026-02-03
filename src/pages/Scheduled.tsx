@@ -15,7 +15,8 @@ import {
   Clock,
   Send,
   Filter,
-  X
+  X,
+  Check
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
@@ -931,16 +932,27 @@ export function ScheduledPage() {
             {/* Publish Results - Show when published, partial, or failed */}
             {(selectedPost.status === 'published' || selectedPost.status === 'partial' || selectedPost.status === 'failed') && selectedPost.metadata?.publish_results && (
               <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm font-medium text-gray-700 mb-3">Publish Details</p>
+                <p className="text-sm font-medium text-gray-700 mb-3">
+                  {selectedPost.status === 'partial' ? '⚠️ Publish Status (Partial Failure)' : 'Publish Details'}
+                </p>
                 <div className="space-y-2">
                   {Object.entries(selectedPost.metadata.publish_results as Record<string, {success: boolean; post_id?: string; account_id?: string; brand_used?: string; error?: string}>).map(([platform, result]) => (
                     <div 
                       key={platform}
-                      className={`flex items-center justify-between p-2 rounded ${
-                        result.success ? 'bg-green-50' : 'bg-red-50'
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        result.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
                       }`}
                     >
                       <div className="flex items-center gap-2">
+                        {result.success ? (
+                          <span className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </span>
+                        ) : (
+                          <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                            <AlertTriangle className="w-3 h-3 text-white" />
+                          </span>
+                        )}
                         <span className={`font-medium capitalize ${result.success ? 'text-green-700' : 'text-red-700'}`}>
                           {platform}
                         </span>
@@ -953,13 +965,13 @@ export function ScheduledPage() {
                           </>
                         )}
                       </div>
-                      <div className="text-xs">
+                      <div className="text-xs max-w-[200px]">
                         {result.success ? (
                           <span className="text-green-600">
                             ✓ Posted (ID: {result.post_id?.slice(-8)}...)
                           </span>
                         ) : (
-                          <span className="text-red-600">
+                          <span className="text-red-600 block text-right">
                             ✗ {result.error || 'Failed'}
                           </span>
                         )}
@@ -967,14 +979,29 @@ export function ScheduledPage() {
                     </div>
                   ))}
                 </div>
+                
+                {/* Retry hint for partial failures */}
+                {selectedPost.status === 'partial' && (
+                  <p className="text-xs text-amber-600 mt-3 bg-amber-50 p-2 rounded border border-amber-200">
+                    💡 Click <strong>Retry</strong> below to re-attempt only the failed platform(s). Successfully posted platforms will not be duplicated.
+                  </p>
+                )}
               </div>
             )}
             
-            {/* Show error message for failed posts */}
-            {selectedPost.status === 'failed' && selectedPost.error && !selectedPost.metadata?.publish_results && (
-              <div className="bg-red-50 rounded-lg p-4">
-                <p className="text-sm font-medium text-red-700 mb-2">Error</p>
-                <p className="text-sm text-red-600">{selectedPost.error}</p>
+            {/* Show error message for failed/partial posts without detailed results */}
+            {(selectedPost.status === 'failed' || selectedPost.status === 'partial') && selectedPost.error && !selectedPost.metadata?.publish_results && (
+              <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                <p className="text-sm font-medium text-red-700 mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  {selectedPost.status === 'partial' ? 'Partial Failure Details' : 'Error Details'}
+                </p>
+                <p className="text-sm text-red-600 whitespace-pre-line">{selectedPost.error}</p>
+                {selectedPost.status === 'partial' && (
+                  <p className="text-xs text-amber-600 mt-3 bg-amber-50 p-2 rounded">
+                    💡 Click <strong>Retry</strong> to attempt publishing again for the failed platform(s).
+                  </p>
+                )}
               </div>
             )}
             
