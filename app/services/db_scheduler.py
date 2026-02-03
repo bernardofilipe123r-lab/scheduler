@@ -303,7 +303,8 @@ class DatabaseSchedulerService:
                 elif post_ids:
                     metadata['post_ids'] = post_ids
                 
-                scheduled_reel.extra_data = metadata
+                # CRITICAL: Force SQLAlchemy to detect the change
+                scheduled_reel.extra_data = dict(metadata)
                 db.commit()
     
     def mark_as_failed(self, schedule_id: str, error: str) -> None:
@@ -409,8 +410,10 @@ class DatabaseSchedulerService:
                     metadata['retry_platforms'] = failed_platforms
                     # Keep track of which platforms already succeeded (don't retry these)
                     metadata['succeeded_platforms'] = succeeded_platforms
-                    scheduled_reel.extra_data = metadata
+                    # CRITICAL: Force SQLAlchemy to detect the change by creating a new dict
+                    scheduled_reel.extra_data = dict(metadata)
                     print(f"🔄 Partial retry: Will retry {failed_platforms}, skip {succeeded_platforms}", flush=True)
+                    print(f"   📊 [RETRY] Updated extra_data: {scheduled_reel.extra_data}", flush=True)
                 else:
                     # All platforms succeeded? This shouldn't happen for partial status
                     print(f"⚠️ Partial status but no failed platforms found", flush=True)
@@ -419,7 +422,8 @@ class DatabaseSchedulerService:
                 print(f"   📊 [RETRY] Full retry - clearing retry_platforms", flush=True)
                 metadata.pop('retry_platforms', None)
                 metadata.pop('succeeded_platforms', None)
-                scheduled_reel.extra_data = metadata
+                # CRITICAL: Force SQLAlchemy to detect the change
+                scheduled_reel.extra_data = dict(metadata)
             
             # Reset to scheduled
             scheduled_reel.status = "scheduled"
