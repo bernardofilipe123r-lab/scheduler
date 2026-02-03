@@ -679,39 +679,59 @@ class DatabaseSchedulerService:
         
         if "youtube" in platforms:
             print("📺 Publishing to YouTube...", flush=True)
-            print(f"   📺 [YT DEBUG] metadata received: {metadata}", flush=True)
-            print(f"   📺 [YT DEBUG] brand_name: {brand_name}", flush=True)
-            # Get yt_title from metadata if available
-            yt_title = metadata.get("yt_title") if metadata else None
-            print(f"   📺 [YT DEBUG] yt_title from metadata: {yt_title}", flush=True)
-            # Get yt_thumbnail_path from metadata - clean AI image without text
-            yt_thumbnail_path = metadata.get("yt_thumbnail_path") if metadata else None
-            print(f"   📺 [YT DEBUG] yt_thumbnail_path from metadata: {yt_thumbnail_path}", flush=True)
-            if yt_thumbnail_path:
-                yt_thumbnail_path = Path(yt_thumbnail_path)
-                if not yt_thumbnail_path.exists():
-                    print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}", flush=True)
-                    yt_thumbnail_path = thumbnail_path
-                else:
-                    print(f"   📺 [YT DEBUG] YT thumbnail exists: {yt_thumbnail_path}", flush=True)
+            
+            # Pre-check YouTube quota before attempting upload
+            from app.services.youtube_publisher import YouTubeQuotaMonitor, QUOTA_COSTS
+            quota_monitor = YouTubeQuotaMonitor()
+            quota_status = quota_monitor.get_status()
+            upload_cost = QUOTA_COSTS.get("videos.insert", 1600) + QUOTA_COSTS.get("thumbnails.set", 50)
+            
+            if quota_status.remaining < upload_cost:
+                print(f"   ⚠️ [YT] Quota insufficient: {quota_status.used}/{quota_status.limit} used, need {upload_cost}", flush=True)
+                print(f"   ⚠️ [YT] Skipping YouTube - quota resets at {quota_status.reset_time}", flush=True)
+                results["youtube"] = {
+                    "success": False,
+                    "error": f"Daily quota exceeded ({quota_status.used}/{quota_status.limit}). Resets at {quota_status.reset_time}. YouTube limit is ~6 videos/day across all brands.",
+                    "quota_exceeded": True,
+                    "quota_used": quota_status.used,
+                    "quota_limit": quota_status.limit,
+                    "reset_time": str(quota_status.reset_time)
+                }
             else:
-                print(f"   📺 [YT DEBUG] No YT thumbnail in metadata, using regular: {thumbnail_path}", flush=True)
-                yt_thumbnail_path = thumbnail_path
-            
-            print(f"   📺 [YT DEBUG] Calling _publish_to_youtube with:", flush=True)
-            print(f"      video_path={video_path}", flush=True)
-            print(f"      thumbnail_path={yt_thumbnail_path}", flush=True)
-            print(f"      brand_name={brand_name}", flush=True)
-            print(f"      yt_title={yt_title}", flush=True)
-            
-            results["youtube"] = self._publish_to_youtube(
-                video_path=video_path,
-                thumbnail_path=yt_thumbnail_path,  # Use YT-specific thumbnail (clean AI image)
-                caption=caption,
-                brand_name=brand_name,
-                yt_title=yt_title
-            )
-            print(f"   📺 [YT DEBUG] _publish_to_youtube result: {results['youtube']}", flush=True)
+                print(f"   📺 [YT DEBUG] Quota OK: {quota_status.used}/{quota_status.limit}, need {upload_cost}", flush=True)
+                print(f"   📺 [YT DEBUG] metadata received: {metadata}", flush=True)
+                print(f"   📺 [YT DEBUG] brand_name: {brand_name}", flush=True)
+                # Get yt_title from metadata if available
+                yt_title = metadata.get("yt_title") if metadata else None
+                print(f"   📺 [YT DEBUG] yt_title from metadata: {yt_title}", flush=True)
+                # Get yt_thumbnail_path from metadata - clean AI image without text
+                yt_thumbnail_path = metadata.get("yt_thumbnail_path") if metadata else None
+                print(f"   📺 [YT DEBUG] yt_thumbnail_path from metadata: {yt_thumbnail_path}", flush=True)
+                if yt_thumbnail_path:
+                    yt_thumbnail_path = Path(yt_thumbnail_path)
+                    if not yt_thumbnail_path.exists():
+                        print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}", flush=True)
+                        yt_thumbnail_path = thumbnail_path
+                    else:
+                        print(f"   📺 [YT DEBUG] YT thumbnail exists: {yt_thumbnail_path}", flush=True)
+                else:
+                    print(f"   📺 [YT DEBUG] No YT thumbnail in metadata, using regular: {thumbnail_path}", flush=True)
+                    yt_thumbnail_path = thumbnail_path
+                
+                print(f"   📺 [YT DEBUG] Calling _publish_to_youtube with:", flush=True)
+                print(f"      video_path={video_path}", flush=True)
+                print(f"      thumbnail_path={yt_thumbnail_path}", flush=True)
+                print(f"      brand_name={brand_name}", flush=True)
+                print(f"      yt_title={yt_title}", flush=True)
+                
+                results["youtube"] = self._publish_to_youtube(
+                    video_path=video_path,
+                    thumbnail_path=yt_thumbnail_path,  # Use YT-specific thumbnail (clean AI image)
+                    caption=caption,
+                    brand_name=brand_name,
+                    yt_title=yt_title
+                )
+                print(f"   📺 [YT DEBUG] _publish_to_youtube result: {results['youtube']}", flush=True)
         
         return results
     
