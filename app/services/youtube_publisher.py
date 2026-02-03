@@ -365,17 +365,9 @@ class YouTubePublisher:
         print(f"   📺 [YT UPLOAD] thumbnail_path: {thumbnail_path}", flush=True)
         print(f"   📺 [YT UPLOAD] publish_at: {publish_at}", flush=True)
         
-        # Check quota
-        print(f"   📺 [YT UPLOAD] Checking quota...", flush=True)
-        if not self.quota_monitor.can_upload():
-            status = self.quota_monitor.get_status()
-            print(f"   ❌ [YT UPLOAD] Quota exceeded: {status.used}/{status.limit}", flush=True)
-            return {
-                "success": False,
-                "error": f"Daily quota exceeded ({status.used}/{status.limit}). Resets at {status.reset_time}",
-                "quota_exceeded": True
-            }
-        print(f"   ✅ [YT UPLOAD] Quota OK", flush=True)
+        # NOTE: We don't pre-check quota locally - we trust YouTube's actual API response
+        # Local quota tracking (youtube_quota.json) is unreliable due to Railway redeploys
+        # If quota is exceeded, YouTube returns 403 and we handle it gracefully
         
         # Ensure we have a valid token
         print(f"   📺 [YT UPLOAD] Getting valid access token...", flush=True)
