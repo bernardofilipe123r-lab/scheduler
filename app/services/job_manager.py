@@ -288,18 +288,9 @@ class JobManager:
             print(f"   Brand type: {brand_type}", flush=True)
             sys.stdout.flush()
             
-            # For dark mode, try to reuse existing AI background
-            ai_background_image = None
-            if job.variant == "dark" and job.ai_background_path:
-                print(f"🌙 Dark mode - attempting to reuse AI background: {job.ai_background_path}", flush=True)
-                from PIL import Image
-                try:
-                    ai_background_image = Image.open(job.ai_background_path)
-                    print(f"   ✓ Loaded existing AI background", flush=True)
-                except Exception as e:
-                    print(f"   ⚠️ Could not load existing background: {e}", flush=True)
-                    print(f"   Will generate new background", flush=True)
-            
+            # Each brand gets its own unique AI background (no caching/sharing)
+            # The AIBackgroundGenerator uses a unique seed per generation
+
             print(f"🎨 Initializing ImageGenerator...", flush=True)
             print(f"   Variant: {job.variant}", flush=True)
             print(f"   Brand: {brand}", flush=True)
@@ -315,15 +306,11 @@ class JobManager:
             print(f"   ✓ ImageGenerator initialized successfully", flush=True)
             sys.stdout.flush()
             
-            # If we have a cached background, inject it
-            if ai_background_image and job.variant == "dark":
-                print(f"🌙 Injecting cached AI background", flush=True)
-                generator._ai_background = ai_background_image
-            elif job.variant == "dark":
-                # Update progress for AI background generation (can take 30-60s)
+            # Update progress for AI background generation (can take 30-60s)
+            if job.variant == "dark":
                 self.update_brand_output(job_id, brand, {
                     "status": "generating",
-                    "progress_message": "Generating AI background (this may take ~30s)...",
+                    "progress_message": f"Generating unique AI background for {brand} (this may take ~30s)...",
                     "progress_percent": 5
                 })
             
@@ -524,7 +511,6 @@ class JobManager:
         
         results = {}
         total_brands = len(job.brands)
-        ai_background_saved = False
         
         print(f"   Processing {total_brands} brands: {job.brands}", flush=True)
         sys.stdout.flush()
@@ -590,17 +576,6 @@ class JobManager:
                 if not result.get('success'):
                     print(f"   ❌ Error: {result.get('error', 'Unknown')}", flush=True)
                 sys.stdout.flush()
-                
-                # Save AI background path from first dark mode generation
-                if not ai_background_saved and job.variant == "dark":
-                    brand_output = job.brand_outputs.get(brand, {})
-                    if "ai_background_path" not in (job.__dict__ or {}):
-                        # Store the AI background for reuse
-                        output_dir = Path("output")
-                        ai_bg_path = output_dir / "backgrounds" / f"{job_id}_ai_bg.png"
-                        ai_bg_path.parent.mkdir(parents=True, exist_ok=True)
-                        # The background is stored internally in the generator
-                        ai_background_saved = True
             
             # Final cancellation check
             job = self.get_job(job_id)
