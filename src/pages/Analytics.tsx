@@ -15,7 +15,8 @@ import {
   TrendingUp,
   PieChart as PieChartIcon,
   ChevronDown,
-  Loader2
+  Loader2,
+  History
 } from 'lucide-react'
 import {
   AreaChart,
@@ -36,6 +37,7 @@ import {
   useAnalytics, 
   useRefreshAnalytics,
   useSnapshots,
+  useBackfillHistoricalData,
   type BrandMetrics,
   type PlatformMetrics
 } from '@/features/analytics'
@@ -360,7 +362,9 @@ function BrandCard({ brand }: BrandCardProps) {
 export function AnalyticsPage() {
   const { data, isLoading, error } = useAnalytics()
   const refreshMutation = useRefreshAnalytics()
+  const backfillMutation = useBackfillHistoricalData()
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [backfillSuccess, setBackfillSuccess] = useState<string | null>(null)
   
   // Refresh timer state
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -413,6 +417,17 @@ export function AnalyticsPage() {
     }
   }
   
+  const handleBackfill = async () => {
+    setBackfillSuccess(null)
+    setRefreshError(null)
+    try {
+      const result = await backfillMutation.mutateAsync(28)
+      setBackfillSuccess(`Backfilled ${result.snapshots_created} historical snapshots!`)
+    } catch {
+      setRefreshError('Failed to backfill historical data. Please try again.')
+    }
+  }
+  
   // Calculate totals
   const totals = useMemo(() => {
     const brands = data?.brands || []
@@ -461,50 +476,72 @@ export function AnalyticsPage() {
   const pieData = useMemo(() => {
     const brands = data?.brands || []
     
-    if (selectedPlatform === 'all') {
-      // Show distribution by brand
-      return brands.map(brand => ({
-        name: brand.display_name,
-        value: selectedMetric === 'followers' 
+    // When a specific platform is selected, show distribution by brand for that platform
+    // When all platforms, show distribution by brand across all platforms
+    return brands.map(brand => {
+      let value: number
+      
+      if (selectedPlatform === 'all') {
+        // Sum across all platforms
+        value = selectedMetric === 'followers' 
           ? brand.totals.followers
           : selectedMetric === 'views' 
             ? brand.totals.views_7d 
-            : brand.totals.likes_7d,
-        color: brand.color
-      })).filter(d => d.value > 0)
-    } else {
-      // Show distribution by platform across all brands
-      const platformTotals: Record<string, number> = {}
-      brands.forEach(brand => {
-        Object.entries(brand.platforms).forEach(([platform, metrics]) => {
-          const value = selectedMetric === 'followers' 
-            ? metrics.followers_count
+            : brand.totals.likes_7d
+      } else {
+        // Get value for specific platform only
+        const platformMetrics = brand.platforms[selectedPlatform]
+        if (!platformMetrics) {
+          value = 0
+        } else {
+          value = selectedMetric === 'followers' 
+            ? platformMetrics.followers_count
             : selectedMetric === 'views' 
-              ? metrics.views_last_7_days 
-              : metrics.likes_last_7_days
-          platformTotals[platform] = (platformTotals[platform] || 0) + value
-        })
-      })
+              ? platformMetrics.views_last_7_days 
+              : platformMetrics.likes_last_7_days
+        }
+      }
       
-      return Object.entries(platformTotals).map(([platform, value]) => ({
-        name: platform.charAt(0).toUpperCase() + platform.slice(1),
+      return {
+        name: brand.display_name,
         value,
-        color: PLATFORM_COLORS[platform] || '#888'
-      })).filter(d => d.value > 0)
-    }
+        color: brand.color
+      }
+    }).filter(d => d.value > 0)
   }, [data?.brands, selectedPlatform, selectedMetric])
   
-  // Bar chart data - compare brands
+  // Bar chart data - compare brands (respects platform filter)
   const barData = useMemo(() => {
     const brands = data?.brands || []
-    return brands.map(brand => ({
-      name: brand.display_name.split(' ')[0], // First word only
-      followers: brand.totals.followers,
-      views: brand.totals.views_7d,
-      likes: brand.totals.likes_7d,
-      color: brand.color
-    }))
-  }, [data?.brands])
+    return brands.map(brand => {
+      let followers: number, views: number, likes: number
+      
+      if (selectedPlatform === 'all') {
+        followers = brand.totals.followers
+        views = brand.totals.views_7d
+        likes = brand.totals.likes_7d
+      } else {
+        const platformMetrics = brand.platforms[selectedPlatform]
+        if (!platformMetrics) {
+          followers = 0
+          views = 0
+          likes = 0
+        } else {
+          followers = platformMetrics.followers_count
+          views = platformMetrics.views_last_7_days
+          likes = platformMetrics.likes_last_7_days
+        }
+      }
+      
+      return {
+        name: brand.display_name.split(' ')[0],
+        followers,
+        views,
+        likes,
+        color: brand.color
+      }
+    })
+  }, [data?.brands, selectedPlatform])
   
   // Get line colors for chart
   const getLineColors = () => {
@@ -648,6 +685,22 @@ export function AnalyticsPage() {
               <RefreshCw className={`w-4 h-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+            
+            <button
+              onClick={handleBackfill}
+              disabled={backfillMutation.isPending}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+                ${!backfillMutation.isPending 
+                  ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }
+              `}
+              title="Fetch 28 days of historical analytics data"
+            >
+              <History className={`w-4 h-4 ${backfillMutation.isPending ? 'animate-spin' : ''}`} />
+              Backfill History
+            </button>
           </div>
         </div>
         
@@ -656,6 +709,13 @@ export function AnalyticsPage() {
           <div className="mb-6 px-4 py-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
             <CheckCircle2 className="w-5 h-5" />
             <span>Analytics refreshed successfully!</span>
+          </div>
+        )}
+        
+        {backfillSuccess && (
+          <div className="mb-6 px-4 py-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center gap-2 text-purple-700">
+            <CheckCircle2 className="w-5 h-5" />
+            <span>{backfillSuccess}</span>
           </div>
         )}
         

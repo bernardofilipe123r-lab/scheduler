@@ -7,10 +7,12 @@ import {
   refreshAnalytics,
   fetchRateLimitStatus,
   fetchSnapshots,
+  backfillHistoricalData,
   type AnalyticsResponse,
   type RefreshResponse,
   type RateLimitInfo,
-  type SnapshotsResponse
+  type SnapshotsResponse,
+  type BackfillResponse
 } from '../api'
 
 /**
@@ -77,6 +79,22 @@ export function useRefreshAnalytics() {
     onError: () => {
       // Invalidate rate limit query on error too
       queryClient.invalidateQueries({ queryKey: ['analytics-rate-limit'] })
+    }
+  })
+}
+
+/**
+ * Hook to backfill historical analytics data
+ * Fetches up to 28 days of Instagram insights history
+ */
+export function useBackfillHistoricalData() {
+  const queryClient = useQueryClient()
+  
+  return useMutation<BackfillResponse, Error, number>({
+    mutationFn: (days: number) => backfillHistoricalData(days),
+    onSuccess: () => {
+      // Invalidate snapshots to show new historical data
+      queryClient.invalidateQueries({ queryKey: ['analytics-snapshots'] })
     }
   })
 }

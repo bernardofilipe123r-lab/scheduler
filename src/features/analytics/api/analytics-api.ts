@@ -107,3 +107,18 @@ export async function fetchSnapshots(params?: {
   const query = searchParams.toString()
   return get<SnapshotsResponse>(`/api/analytics/snapshots${query ? `?${query}` : ''}`)
 }
+
+// Response from /api/analytics/backfill
+export interface BackfillResponse {
+  success: boolean
+  snapshots_created: number
+  errors?: string[]
+}
+
+/**
+ * Backfill historical analytics data from Instagram insights
+ * Fetches up to 28 days of historical data
+ */
+export async function backfillHistoricalData(days: number = 28): Promise<BackfillResponse> {
+  return post<BackfillResponse>(`/api/analytics/backfill?days=${days}`)
+}
