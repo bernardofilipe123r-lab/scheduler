@@ -505,16 +505,23 @@ class YouTubePublisher:
             print(f"   📤 [YT THUMBNAIL] Uploading thumbnail: {thumbnail_path}", flush=True)
             print(f"   📤 [YT THUMBNAIL] Content-Type: {content_type}", flush=True)
             
+            # Read the entire file into memory first
             with open(thumbnail_path, "rb") as f:
-                response = requests.post(
-                    f"{self.API_BASE}/thumbnails/set",
-                    params={"videoId": video_id},
-                    headers={
-                        "Authorization": f"Bearer {access_token}",
-                        "Content-Type": content_type
-                    },
-                    data=f
-                )
+                image_data = f.read()
+            
+            print(f"   📤 [YT THUMBNAIL] Image size: {len(image_data)} bytes", flush=True)
+            
+            # YouTube API requires the raw image bytes in the body
+            response = requests.post(
+                f"{self.API_BASE}/thumbnails/set",
+                params={"videoId": video_id},
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": content_type,
+                    "Content-Length": str(len(image_data))
+                },
+                data=image_data
+            )
             
             self.quota_monitor.use_quota("thumbnails.set")
             
