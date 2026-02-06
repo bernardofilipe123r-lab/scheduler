@@ -260,3 +260,64 @@ async def get_brand_analytics(brand: str, db: Session = Depends(get_db)):
         "color": brand_info["color"],
         "platforms": result.get("platforms", {})
     }
+
+
+class SnapshotData(BaseModel):
+    """Single analytics snapshot."""
+    id: int
+    brand: str
+    platform: str
+    snapshot_at: str
+    followers_count: int
+    views_last_7_days: int
+    likes_last_7_days: int
+
+
+class SnapshotsResponse(BaseModel):
+    """Response for historical snapshots."""
+    snapshots: List[SnapshotData]
+    brands: List[str]
+    platforms: List[str]
+
+
+@router.get("/snapshots", response_model=SnapshotsResponse)
+async def get_snapshots(
+    brand: Optional[str] = None,
+    platform: Optional[str] = None,
+    days: int = 30,
+    db: Session = Depends(get_db)
+):
+    """
+    Get historical analytics snapshots for trend analysis.
+    
+    Args:
+        brand: Filter by brand name (optional)
+        platform: Filter by platform - instagram, facebook, youtube (optional)
+        days: Number of days to look back (default 30, max 90)
+    
+    Returns:
+        List of snapshots ordered by time, plus available brands and platforms
+    """
+    if brand and brand not in BRAND_DISPLAY_INFO:
+        raise HTTPException(status_code=404, detail=f"Brand '{brand}' not found")
+    
+    if platform and platform not in ["instagram", "facebook", "youtube"]:
+        raise HTTPException(status_code=400, detail=f"Invalid platform '{platform}'")
+    
+    days = min(max(days, 1), 90)  # Clamp to 1-90 days
+    
+    service = AnalyticsService(db)
+    snapshots = service.get_snapshots(brand=brand, platform=platform, days=days)
+    
+    # Get unique brands and platforms from snapshots
+    brands_set = set()
+    platforms_set = set()
+    for s in snapshots:
+        brands_set.add(s["brand"])
+        platforms_set.add(s["platform"])
+    
+    return SnapshotsResponse(
+        snapshots=[SnapshotData(**s) for s in snapshots],
+        brands=sorted(list(brands_set)),
+        platforms=sorted(list(platforms_set))
+    )

@@ -51,6 +51,24 @@ export interface RefreshResponse {
   analytics?: BrandMetrics[]
 }
 
+// Single analytics snapshot for historical data
+export interface AnalyticsSnapshot {
+  id: number
+  brand: string
+  platform: string
+  snapshot_at: string
+  followers_count: number
+  views_last_7_days: number
+  likes_last_7_days: number
+}
+
+// Response from /api/analytics/snapshots
+export interface SnapshotsResponse {
+  snapshots: AnalyticsSnapshot[]
+  brands: string[]
+  platforms: string[]
+}
+
 /**
  * Fetch all cached analytics data
  */
@@ -71,4 +89,21 @@ export async function refreshAnalytics(): Promise<RefreshResponse> {
  */
 export async function fetchRateLimitStatus(): Promise<RateLimitInfo> {
   return get<RateLimitInfo>('/api/analytics/rate-limit')
+}
+
+/**
+ * Fetch historical snapshots for trend analysis
+ */
+export async function fetchSnapshots(params?: {
+  brand?: string
+  platform?: string
+  days?: number
+}): Promise<SnapshotsResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.brand) searchParams.set('brand', params.brand)
+  if (params?.platform) searchParams.set('platform', params.platform)
+  if (params?.days) searchParams.set('days', params.days.toString())
+  
+  const query = searchParams.toString()
+  return get<SnapshotsResponse>(`/api/analytics/snapshots${query ? `?${query}` : ''}`)
 }

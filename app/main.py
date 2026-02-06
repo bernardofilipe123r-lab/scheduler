@@ -130,6 +130,11 @@ if FRONTEND_DIR.exists():
         """Serve React app for posts route."""
         return FileResponse(FRONTEND_DIR / "index.html")
     
+    @app.get("/analytics", tags=["frontend"])
+    async def serve_analytics():
+        """Serve React app for analytics route."""
+        return FileResponse(FRONTEND_DIR / "index.html")
+    
     @app.get("/test", tags=["frontend"])
     async def serve_test():
         """Serve React app for test route."""

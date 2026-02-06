@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.models import BrandAnalytics, AnalyticsRefreshLog, YouTubeChannel
+from app.models import BrandAnalytics, AnalyticsRefreshLog, YouTubeChannel, AnalyticsSnapshot
 from app.core.config import BRAND_CONFIGS, BrandType
 from app.api.brands_routes import BRAND_NAME_MAP
 
@@ -190,8 +190,8 @@ class AnalyticsService:
         
         Fetches:
         - followers_count: Total followers
-        - views_last_7_days: Sum of plays/views from recent media
-        - likes_last_7_days: From media insights
+        - views_last_7_days: Account-level reach/impressions from insights
+        - likes_last_7_days: From recent media
         """
         # Get basic account info including followers
         account_url = f"{self.META_API_BASE}/{account_id}"
@@ -206,18 +206,54 @@ class AnalyticsService:
         
         followers = account_data.get("followers_count", 0)
         
-        # Get views and likes from recent media items
-        # For reels/videos, we need to get plays from each media item's insights
+        # Get account-level insights for views (impressions/reach)
+        # This is more reliable than summing per-media metrics
         views = 0
+        try:
+            insights_url = f"{self.META_API_BASE}/{account_id}/insights"
+            insights_params = {
+                "metric": "impressions,reach",
+                "period": "day",
+                "access_token": access_token
+            }
+            
+            insights_resp = requests.get(insights_url, params=insights_params)
+            logger.info(f"Instagram account insights response status: {insights_resp.status_code}")
+            
+            if insights_resp.status_code == 200:
+                insights_data = insights_resp.json()
+                
+                # Check for errors in response
+                if "error" in insights_data:
+                    logger.error(f"Instagram insights error: {insights_data['error']}")
+                else:
+                    # Sum impressions from last 7 days (prefer impressions over reach for views)
+                    for metric in insights_data.get("data", []):
+                        if metric.get("name") == "impressions":
+                            values = metric.get("values", [])[-7:]  # Last 7 days
+                            for v in values:
+                                views += v.get("value", 0)
+                            break
+                        elif metric.get("name") == "reach" and views == 0:
+                            # Fallback to reach if impressions not available
+                            values = metric.get("values", [])[-7:]
+                            for v in values:
+                                views += v.get("value", 0)
+            else:
+                logger.error(f"Instagram insights failed: {insights_resp.status_code} - {insights_resp.text}")
+                
+        except Exception as e:
+            logger.error(f"Could not fetch Instagram account insights: {e}")
+        
+        # Get likes from recent media
         likes = 0
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         
         try:
-            # Get recent media with basic fields
             media_url = f"{self.META_API_BASE}/{account_id}/media"
             media_params = {
-                "fields": "id,like_count,timestamp,media_type,media_product_type",
-                "limit": 50,  # Get more posts to cover 7 days
+                "fields": "id,like_count,timestamp,media_type",
+                "limit": 50,
                 "access_token": access_token
             }
             media_response = requests.get(media_url, params=media_params)
@@ -229,61 +265,18 @@ class AnalyticsService:
                     timestamp = post.get("timestamp")
                     if not timestamp:
                         continue
-                        
-                    post_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                     
-                    # Only count posts from the last 7 days
-                    if post_time >= seven_days_ago:
-                        likes += post.get("like_count", 0)
-                        
-                        # Get insights for this media item to get plays/reach
-                        media_id = post.get("id")
-                        media_type = post.get("media_type", "")
-                        media_product_type = post.get("media_product_type", "")
-                        
-                        # For reels and videos, fetch plays from insights
-                        if media_type == "VIDEO" or media_product_type == "REELS":
-                            try:
-                                insights_url = f"{self.META_API_BASE}/{media_id}/insights"
-                                # Use 'plays' for reels, 'video_views' for older videos
-                                insights_params = {
-                                    "metric": "plays,reach",
-                                    "access_token": access_token
-                                }
-                                insights_resp = requests.get(insights_url, params=insights_params)
-                                
-                                if insights_resp.status_code == 200:
-                                    insights_data = insights_resp.json()
-                                    for metric in insights_data.get("data", []):
-                                        if metric.get("name") == "plays":
-                                            views += metric.get("values", [{}])[0].get("value", 0)
-                                            break
-                                        elif metric.get("name") == "reach":
-                                            # Fallback to reach if plays not available
-                                            views += metric.get("values", [{}])[0].get("value", 0)
-                            except Exception as e:
-                                logger.debug(f"Could not fetch insights for media {media_id}: {e}")
-                        else:
-                            # For images/carousels, try to get reach
-                            try:
-                                insights_url = f"{self.META_API_BASE}/{media_id}/insights"
-                                insights_params = {
-                                    "metric": "reach,impressions",
-                                    "access_token": access_token
-                                }
-                                insights_resp = requests.get(insights_url, params=insights_params)
-                                
-                                if insights_resp.status_code == 200:
-                                    insights_data = insights_resp.json()
-                                    for metric in insights_data.get("data", []):
-                                        if metric.get("name") == "reach":
-                                            views += metric.get("values", [{}])[0].get("value", 0)
-                                            break
-                            except Exception as e:
-                                logger.debug(f"Could not fetch insights for media {media_id}: {e}")
+                    try:
+                        post_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                        if post_time >= seven_days_ago:
+                            likes += post.get("like_count", 0)
+                    except Exception:
+                        continue
+            else:
+                logger.error(f"Instagram media fetch failed: {media_response.status_code}")
                                 
         except Exception as e:
-            logger.warning(f"Could not fetch Instagram media: {e}")
+            logger.error(f"Could not fetch Instagram media: {e}")
         
         return {
             "followers_count": followers,
@@ -473,7 +466,9 @@ class AnalyticsService:
             return None
     
     def _update_analytics(self, brand: str, platform: str, data: Dict[str, Any]):
-        """Update or create analytics record."""
+        """Update or create analytics record and save a snapshot."""
+        now = datetime.now(timezone.utc)
+        
         analytics = self.db.query(BrandAnalytics).filter(
             BrandAnalytics.brand == brand,
             BrandAnalytics.platform == platform
@@ -484,7 +479,7 @@ class AnalyticsService:
             analytics.views_last_7_days = data.get("views_last_7_days", 0)
             analytics.likes_last_7_days = data.get("likes_last_7_days", 0)
             analytics.extra_metrics = data.get("extra_metrics")
-            analytics.last_fetched_at = datetime.now(timezone.utc)
+            analytics.last_fetched_at = now
         else:
             analytics = BrandAnalytics(
                 brand=brand,
@@ -493,8 +488,50 @@ class AnalyticsService:
                 views_last_7_days=data.get("views_last_7_days", 0),
                 likes_last_7_days=data.get("likes_last_7_days", 0),
                 extra_metrics=data.get("extra_metrics"),
-                last_fetched_at=datetime.now(timezone.utc)
+                last_fetched_at=now
             )
             self.db.add(analytics)
         
+        # Save a historical snapshot for trend analysis
+        snapshot = AnalyticsSnapshot(
+            brand=brand,
+            platform=platform,
+            snapshot_at=now,
+            followers_count=data.get("followers_count", 0),
+            views_last_7_days=data.get("views_last_7_days", 0),
+            likes_last_7_days=data.get("likes_last_7_days", 0)
+        )
+        self.db.add(snapshot)
+        
         self.db.commit()
+    
+    def get_snapshots(
+        self,
+        brand: Optional[str] = None,
+        platform: Optional[str] = None,
+        days: int = 30
+    ) -> List[Dict[str, Any]]:
+        """
+        Get historical analytics snapshots.
+        
+        Args:
+            brand: Filter by brand name (optional)
+            platform: Filter by platform (optional)
+            days: Number of days to look back (default 30)
+            
+        Returns:
+            List of snapshot dictionaries ordered by time
+        """
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        query = self.db.query(AnalyticsSnapshot).filter(
+            AnalyticsSnapshot.snapshot_at >= since
+        )
+        
+        if brand:
+            query = query.filter(AnalyticsSnapshot.brand == brand)
+        if platform:
+            query = query.filter(AnalyticsSnapshot.platform == platform)
+        
+        snapshots = query.order_by(AnalyticsSnapshot.snapshot_at.asc()).all()
+        return [s.to_dict() for s in snapshots]

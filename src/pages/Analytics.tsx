@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { 
   BarChart3, 
   Users, 
@@ -10,17 +10,53 @@ import {
   Youtube,
   Clock,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Filter,
+  TrendingUp,
+  PieChart as PieChartIcon,
+  ChevronDown
 } from 'lucide-react'
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts'
 import { 
   useAnalytics, 
   useRefreshAnalytics,
+  useSnapshots,
   type BrandMetrics,
   type PlatformMetrics
 } from '@/features/analytics'
 import { FullPageLoader } from '@/shared/components'
 
 type Platform = 'instagram' | 'facebook' | 'youtube'
+type MetricType = 'followers' | 'views' | 'likes'
+
+// Brand colors
+const BRAND_COLORS: Record<string, string> = {
+  healthycollege: '#004f00',
+  vitalitycollege: '#028f7a',
+  longevitycollege: '#019dc8',
+  holisticcollege: '#f0836e',
+  wellbeingcollege: '#ebbe4d',
+}
+
+const PLATFORM_COLORS: Record<string, string> = {
+  instagram: '#E4405F',
+  facebook: '#1877F2',
+  youtube: '#FF0000',
+}
 
 function formatNumber(num: number): string {
   if (num >= 1000000) {
@@ -45,6 +81,11 @@ function formatTimeAgo(dateString: string | null): string {
   return `${Math.floor(seconds / 86400)}d ago`
 }
 
+function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 function PlatformIcon({ platform, className = 'w-5 h-5' }: { platform: Platform; className?: string }) {
   switch (platform) {
     case 'instagram':
@@ -67,25 +108,55 @@ function getPlatformBgColor(platform: Platform): string {
   }
 }
 
-function getPlatformName(platform: string): string {
-  return platform.charAt(0).toUpperCase() + platform.slice(1)
-}
-
 interface MetricCardProps {
   icon: React.ReactNode
   label: string
   value: number
   color?: string
+  trend?: number
 }
 
-function MetricCard({ icon, label, value, color = 'text-gray-600' }: MetricCardProps) {
+function MetricCard({ icon, label, value, color = 'text-gray-600', trend }: MetricCardProps) {
   return (
-    <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-      <div className="flex items-center gap-2 text-gray-500 mb-1">
-        {icon}
-        <span className="text-sm">{label}</span>
+    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-gray-500">
+          {icon}
+          <span className="text-sm font-medium">{label}</span>
+        </div>
+        {trend !== undefined && (
+          <div className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <TrendingUp className={`w-3 h-3 ${trend < 0 ? 'rotate-180' : ''}`} />
+            {Math.abs(trend).toFixed(1)}%
+          </div>
+        )}
       </div>
-      <p className={`text-2xl font-bold ${color}`}>{formatNumber(value)}</p>
+      <p className={`text-3xl font-bold ${color}`}>{formatNumber(value)}</p>
+    </div>
+  )
+}
+
+interface FilterDropdownProps {
+  label: string
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+}
+
+function FilterDropdown({ label, value, options, onChange }: FilterDropdownProps) {
+  return (
+    <div className="relative">
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-2 bottom-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
     </div>
   )
 }
@@ -105,7 +176,7 @@ function PlatformRow({ platform, metrics }: PlatformRowProps) {
       </div>
       
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-900">{getPlatformName(platform)}</p>
+        <p className="font-medium text-gray-900 capitalize">{platform}</p>
         <p className="text-xs text-gray-400">
           Updated {formatTimeAgo(metrics.last_fetched_at)}
         </p>
@@ -139,7 +210,6 @@ function BrandCard({ brand }: BrandCardProps) {
   
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      {/* Brand Header */}
       <div 
         className="px-5 py-4 flex items-center gap-3"
         style={{ borderLeft: `4px solid ${brand.color}` }}
@@ -160,23 +230,22 @@ function BrandCard({ brand }: BrandCardProps) {
           </p>
         </div>
         
-        {/* Totals */}
         {hasPlatforms && (
           <div className="flex gap-6 text-right">
             <div>
-              <p className="text-xs text-gray-500">Total Followers</p>
+              <p className="text-xs text-gray-500">Followers</p>
               <p className="font-bold text-lg" style={{ color: brand.color }}>
                 {formatNumber(brand.totals.followers)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Total Views (7d)</p>
+              <p className="text-xs text-gray-500">Views (7d)</p>
               <p className="font-bold text-lg text-gray-700">
                 {formatNumber(brand.totals.views_7d)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Total Likes (7d)</p>
+              <p className="text-xs text-gray-500">Likes (7d)</p>
               <p className="font-bold text-lg text-pink-500">
                 {formatNumber(brand.totals.likes_7d)}
               </p>
@@ -185,7 +254,6 @@ function BrandCard({ brand }: BrandCardProps) {
         )}
       </div>
       
-      {/* Platform Rows */}
       {hasPlatforms ? (
         <div className="border-t border-gray-100">
           {platforms.map(([platform, metrics]) => (
@@ -196,47 +264,8 @@ function BrandCard({ brand }: BrandCardProps) {
         <div className="px-5 py-8 text-center text-gray-400 border-t border-gray-100">
           <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p>No analytics data yet.</p>
-          <p className="text-sm">Connect platforms in the Brands page to see metrics.</p>
         </div>
       )}
-    </div>
-  )
-}
-
-interface TotalsSummaryProps {
-  brands: BrandMetrics[]
-}
-
-function TotalsSummary({ brands }: TotalsSummaryProps) {
-  const totals = brands.reduce(
-    (acc, brand) => ({
-      followers: acc.followers + brand.totals.followers,
-      views: acc.views + brand.totals.views_7d,
-      likes: acc.likes + brand.totals.likes_7d,
-    }),
-    { followers: 0, views: 0, likes: 0 }
-  )
-  
-  return (
-    <div className="grid grid-cols-3 gap-4 mb-8">
-      <MetricCard
-        icon={<Users className="w-4 h-4" />}
-        label="Total Followers"
-        value={totals.followers}
-        color="text-blue-600"
-      />
-      <MetricCard
-        icon={<Eye className="w-4 h-4" />}
-        label="Total Views (7d)"
-        value={totals.views}
-        color="text-green-600"
-      />
-      <MetricCard
-        icon={<Heart className="w-4 h-4" />}
-        label="Total Likes (7d)"
-        value={totals.likes}
-        color="text-pink-500"
-      />
     </div>
   )
 }
@@ -245,6 +274,19 @@ export function AnalyticsPage() {
   const { data, isLoading, error } = useAnalytics()
   const refreshMutation = useRefreshAnalytics()
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  
+  // Filter state
+  const [selectedBrand, setSelectedBrand] = useState<string>('all')
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
+  const [selectedMetric, setSelectedMetric] = useState<MetricType>('followers')
+  const [timeRange, setTimeRange] = useState<number>(30)
+  
+  // Fetch snapshots for charts
+  const { data: snapshotsData } = useSnapshots({
+    brand: selectedBrand !== 'all' ? selectedBrand : undefined,
+    platform: selectedPlatform !== 'all' ? selectedPlatform : undefined,
+    days: timeRange
+  })
   
   const handleRefresh = async () => {
     setRefreshError(null)
@@ -258,6 +300,143 @@ export function AnalyticsPage() {
       }
     }
   }
+  
+  // Calculate totals
+  const totals = useMemo(() => {
+    const brands = data?.brands || []
+    return brands.reduce(
+      (acc, brand) => ({
+        followers: acc.followers + brand.totals.followers,
+        views: acc.views + brand.totals.views_7d,
+        likes: acc.likes + brand.totals.likes_7d,
+      }),
+      { followers: 0, views: 0, likes: 0 }
+    )
+  }, [data?.brands])
+  
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!snapshotsData?.snapshots.length) return []
+    
+    // Group snapshots by date
+    const byDate: Record<string, Record<string, number | string>> = {}
+    
+    snapshotsData.snapshots.forEach(snapshot => {
+      const date = formatDate(snapshot.snapshot_at)
+      if (!byDate[date]) {
+        byDate[date] = { date }
+      }
+      
+      const key = selectedBrand === 'all' 
+        ? snapshot.brand 
+        : selectedPlatform === 'all' 
+          ? snapshot.platform 
+          : 'value'
+      
+      const value = selectedMetric === 'followers' 
+        ? snapshot.followers_count
+        : selectedMetric === 'views' 
+          ? snapshot.views_last_7_days 
+          : snapshot.likes_last_7_days
+      
+      byDate[date][key] = ((byDate[date][key] as number) || 0) + value
+    })
+    
+    return Object.values(byDate)
+  }, [snapshotsData, selectedBrand, selectedPlatform, selectedMetric])
+  
+  // Prepare pie chart data for distribution
+  const pieData = useMemo(() => {
+    const brands = data?.brands || []
+    
+    if (selectedPlatform === 'all') {
+      // Show distribution by brand
+      return brands.map(brand => ({
+        name: brand.display_name,
+        value: selectedMetric === 'followers' 
+          ? brand.totals.followers
+          : selectedMetric === 'views' 
+            ? brand.totals.views_7d 
+            : brand.totals.likes_7d,
+        color: brand.color
+      })).filter(d => d.value > 0)
+    } else {
+      // Show distribution by platform across all brands
+      const platformTotals: Record<string, number> = {}
+      brands.forEach(brand => {
+        Object.entries(brand.platforms).forEach(([platform, metrics]) => {
+          const value = selectedMetric === 'followers' 
+            ? metrics.followers_count
+            : selectedMetric === 'views' 
+              ? metrics.views_last_7_days 
+              : metrics.likes_last_7_days
+          platformTotals[platform] = (platformTotals[platform] || 0) + value
+        })
+      })
+      
+      return Object.entries(platformTotals).map(([platform, value]) => ({
+        name: platform.charAt(0).toUpperCase() + platform.slice(1),
+        value,
+        color: PLATFORM_COLORS[platform] || '#888'
+      })).filter(d => d.value > 0)
+    }
+  }, [data?.brands, selectedPlatform, selectedMetric])
+  
+  // Bar chart data - compare brands
+  const barData = useMemo(() => {
+    const brands = data?.brands || []
+    return brands.map(brand => ({
+      name: brand.display_name.split(' ')[0], // First word only
+      followers: brand.totals.followers,
+      views: brand.totals.views_7d,
+      likes: brand.totals.likes_7d,
+      color: brand.color
+    }))
+  }, [data?.brands])
+  
+  // Get line colors for chart
+  const getLineColors = () => {
+    if (selectedBrand !== 'all') {
+      // Show platforms
+      return ['instagram', 'facebook', 'youtube'].map(p => PLATFORM_COLORS[p])
+    }
+    // Show brands
+    return Object.values(BRAND_COLORS)
+  }
+  
+  const getLineKeys = () => {
+    if (selectedBrand !== 'all') {
+      return selectedPlatform === 'all' 
+        ? ['instagram', 'facebook', 'youtube']
+        : ['value']
+    }
+    return Object.keys(BRAND_COLORS)
+  }
+  
+  // Filter brands for display
+  const filteredBrands = useMemo(() => {
+    let brands = data?.brands || []
+    
+    if (selectedBrand !== 'all') {
+      brands = brands.filter(b => b.brand === selectedBrand)
+    }
+    
+    if (selectedPlatform !== 'all') {
+      brands = brands.map(b => ({
+        ...b,
+        platforms: Object.fromEntries(
+          Object.entries(b.platforms).filter(([p]) => p === selectedPlatform)
+        ),
+        totals: {
+          followers: b.platforms[selectedPlatform]?.followers_count || 0,
+          views_7d: b.platforms[selectedPlatform]?.views_last_7_days || 0,
+          likes_7d: b.platforms[selectedPlatform]?.likes_last_7_days || 0,
+        }
+      }))
+    }
+    
+    return brands
+  }, [data?.brands, selectedBrand, selectedPlatform])
   
   if (isLoading) {
     return <FullPageLoader text="Loading analytics..." />
@@ -279,11 +458,36 @@ export function AnalyticsPage() {
   const rateLimit = data?.rate_limit
   const lastRefresh = data?.last_refresh
   
+  const brandOptions = [
+    { value: 'all', label: 'All Brands' },
+    ...brands.map(b => ({ value: b.brand, label: b.display_name }))
+  ]
+  
+  const platformOptions = [
+    { value: 'all', label: 'All Platforms' },
+    { value: 'instagram', label: 'Instagram' },
+    { value: 'facebook', label: 'Facebook' },
+    { value: 'youtube', label: 'YouTube' }
+  ]
+  
+  const metricOptions = [
+    { value: 'followers', label: 'Followers' },
+    { value: 'views', label: 'Views (7d)' },
+    { value: 'likes', label: 'Likes (7d)' }
+  ]
+  
+  const timeOptions = [
+    { value: '7', label: 'Last 7 days' },
+    { value: '14', label: 'Last 14 days' },
+    { value: '30', label: 'Last 30 days' },
+    { value: '60', label: 'Last 60 days' }
+  ]
+  
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <BarChart3 className="w-7 h-7" />
@@ -294,20 +498,17 @@ export function AnalyticsPage() {
             </p>
           </div>
           
-          {/* Refresh Button */}
           <div className="flex items-center gap-4">
-            {/* Last Refresh Time */}
             {lastRefresh && (
               <div className="text-sm text-gray-500 flex items-center gap-1">
                 <Clock className="w-4 h-4" />
-                Last updated: {formatTimeAgo(lastRefresh)}
+                Updated: {formatTimeAgo(lastRefresh)}
               </div>
             )}
             
-            {/* Rate Limit Info */}
             {rateLimit && (
               <div className="text-sm text-gray-500 px-3 py-1 bg-gray-100 rounded-full">
-                {rateLimit.remaining}/{rateLimit.max_per_hour} refreshes left
+                {rateLimit.remaining}/{rateLimit.max_per_hour} refreshes
               </div>
             )}
             
@@ -321,10 +522,9 @@ export function AnalyticsPage() {
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }
               `}
-              title={!rateLimit?.can_refresh ? 'Rate limit reached' : 'Refresh analytics'}
             >
               <RefreshCw className={`w-4 h-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-              {refreshMutation.isPending ? 'Refreshing...' : 'Refresh'}
+              Refresh
             </button>
           </div>
         </div>
@@ -344,13 +544,197 @@ export function AnalyticsPage() {
           </div>
         )}
         
-        {/* Totals Summary */}
-        {brands.length > 0 && <TotalsSummary brands={brands} />}
+        {/* Filters */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mb-6">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2 text-gray-600">
+              <Filter className="w-4 h-4" />
+              <span className="font-medium text-sm">Filters:</span>
+            </div>
+            <FilterDropdown
+              label="Brand"
+              value={selectedBrand}
+              options={brandOptions}
+              onChange={setSelectedBrand}
+            />
+            <FilterDropdown
+              label="Platform"
+              value={selectedPlatform}
+              options={platformOptions}
+              onChange={setSelectedPlatform}
+            />
+            <FilterDropdown
+              label="Metric"
+              value={selectedMetric}
+              options={metricOptions}
+              onChange={(v) => setSelectedMetric(v as MetricType)}
+            />
+            <FilterDropdown
+              label="Time Range"
+              value={timeRange.toString()}
+              options={timeOptions}
+              onChange={(v) => setTimeRange(parseInt(v))}
+            />
+          </div>
+        </div>
+        
+        {/* Summary Cards */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <MetricCard
+            icon={<Users className="w-5 h-5" />}
+            label="Total Followers"
+            value={totals.followers}
+            color="text-blue-600"
+          />
+          <MetricCard
+            icon={<Eye className="w-5 h-5" />}
+            label="Total Views (7d)"
+            value={totals.views}
+            color="text-green-600"
+          />
+          <MetricCard
+            icon={<Heart className="w-5 h-5" />}
+            label="Total Likes (7d)"
+            value={totals.likes}
+            color="text-pink-500"
+          />
+        </div>
+        
+        {/* Charts Row */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          {/* Line/Area Chart - Trend over time */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-5 h-5 text-gray-500" />
+              <h3 className="font-semibold text-gray-900">
+                {selectedMetric === 'followers' ? 'Follower' : selectedMetric === 'views' ? 'Views' : 'Likes'} Trend
+              </h3>
+            </div>
+            
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <AreaChart data={chartData}>
+                  <defs>
+                    {getLineKeys().map((key, i) => (
+                      <linearGradient key={key} id={`gradient-${key}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={getLineColors()[i]} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={getLineColors()[i]} stopOpacity={0}/>
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#888" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#888" tickFormatter={formatNumber} />
+                  <Tooltip 
+                    formatter={(value) => formatNumber(Number(value ?? 0))}
+                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  {getLineKeys().map((key, i) => (
+                    <Area
+                      key={key}
+                      type="monotone"
+                      dataKey={key}
+                      stroke={getLineColors()[i]}
+                      fill={`url(#gradient-${key})`}
+                      strokeWidth={2}
+                    />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-gray-400">
+                <div className="text-center">
+                  <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p>No historical data yet</p>
+                  <p className="text-sm">Refresh to start tracking trends</p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Pie Chart - Distribution */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center gap-2 mb-4">
+              <PieChartIcon className="w-5 h-5 text-gray-500" />
+              <h3 className="font-semibold text-gray-900">
+                {selectedMetric === 'followers' ? 'Follower' : selectedMetric === 'views' ? 'Views' : 'Likes'} Distribution
+              </h3>
+            </div>
+            
+            {pieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value) => formatNumber(Number(value ?? 0))}
+                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend 
+                    layout="vertical" 
+                    align="right" 
+                    verticalAlign="middle"
+                    formatter={(value) => <span className="text-sm text-gray-600">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-gray-400">
+                <div className="text-center">
+                  <PieChartIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p>No data to display</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Bar Chart - Compare All Brands */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="w-5 h-5 text-gray-500" />
+            <h3 className="font-semibold text-gray-900">Brand Comparison</h3>
+          </div>
+          
+          {barData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={barData} barGap={8}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#888" />
+                <YAxis tick={{ fontSize: 12 }} stroke="#888" tickFormatter={formatNumber} />
+                <Tooltip 
+                  formatter={(value) => formatNumber(Number(value ?? 0))}
+                  contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                />
+                <Legend />
+                <Bar dataKey="followers" name="Followers" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="views" name="Views (7d)" fill="#10B981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="likes" name="Likes (7d)" fill="#EC4899" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              <p>No brand data available</p>
+            </div>
+          )}
+        </div>
         
         {/* Brand Cards */}
-        {brands.length > 0 ? (
-          <div className="space-y-6">
-            {brands.map((brand) => (
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Detailed Breakdown</h2>
+        {filteredBrands.length > 0 ? (
+          <div className="space-y-4">
+            {filteredBrands.map((brand) => (
               <BrandCard key={brand.brand} brand={brand} />
             ))}
           </div>

@@ -6,9 +6,11 @@ import {
   fetchAnalytics, 
   refreshAnalytics,
   fetchRateLimitStatus,
+  fetchSnapshots,
   type AnalyticsResponse,
   type RefreshResponse,
-  type RateLimitInfo
+  type RateLimitInfo,
+  type SnapshotsResponse
 } from '../api'
 
 /**
@@ -35,6 +37,22 @@ export function useRateLimitStatus() {
 }
 
 /**
+ * Hook to fetch historical snapshots
+ */
+export function useSnapshots(params?: {
+  brand?: string
+  platform?: string
+  days?: number
+}) {
+  return useQuery<SnapshotsResponse>({
+    queryKey: ['analytics-snapshots', params],
+    queryFn: () => fetchSnapshots(params),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
+  })
+}
+
+/**
  * Hook to refresh analytics data
  * Rate limited to 3 refreshes per hour
  */
@@ -52,8 +70,9 @@ export function useRefreshAnalytics() {
           last_refresh: new Date().toISOString()
         })
       }
-      // Invalidate rate limit query to get fresh status
+      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['analytics-rate-limit'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics-snapshots'] })
     },
     onError: () => {
       // Invalidate rate limit query on error too

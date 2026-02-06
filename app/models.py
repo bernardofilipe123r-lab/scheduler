@@ -288,3 +288,37 @@ class AnalyticsRefreshLog(Base):
     user_id = Column(String(100), nullable=True)  # Optional: track who refreshed
     status = Column(String(20), default="success")  # success, failed
     error_message = Column(Text, nullable=True)
+
+
+class AnalyticsSnapshot(Base):
+    """
+    Historical snapshots of analytics data for trend analysis.
+    
+    One snapshot is created per brand/platform per refresh.
+    This allows showing growth over time in graphs.
+    """
+    __tablename__ = "analytics_snapshots"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    brand = Column(String(50), nullable=False, index=True)
+    platform = Column(String(20), nullable=False, index=True)
+    
+    # Snapshot timestamp
+    snapshot_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    
+    # Metrics at this point in time
+    followers_count = Column(Integer, default=0)
+    views_last_7_days = Column(Integer, default=0)
+    likes_last_7_days = Column(Integer, default=0)
+    
+    def to_dict(self):
+        """Convert to dictionary for API responses."""
+        return {
+            "id": self.id,
+            "brand": self.brand,
+            "platform": self.platform,
+            "snapshot_at": self.snapshot_at.isoformat() if self.snapshot_at else None,
+            "followers_count": self.followers_count,
+            "views_last_7_days": self.views_last_7_days,
+            "likes_last_7_days": self.likes_last_7_days,
+        }
