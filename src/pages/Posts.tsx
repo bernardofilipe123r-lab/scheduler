@@ -147,17 +147,28 @@ function GradientOverlay() {
   )
 }
 
+// Brand abbreviations for logo fallback
+const BRAND_ABBREVIATIONS: Record<string, string> = {
+  healthycollege: 'HCO',
+  holisticcollege: 'HLC',
+  longevitycollege: 'LCO',
+  vitalitycollege: 'VCO',
+  wellbeingcollege: 'WCO'
+}
+
 // Logo with lines component (non-draggable, position calculated)
 function LogoWithLines({ 
   logoUrl, 
   y,
   barWidth,
-  titleWidth
+  titleWidth,
+  brandName
 }: { 
   logoUrl: string | null
   y: number
   barWidth: number // 0 = auto (match title width), otherwise fixed width for each bar
   titleWidth: number // Width of the title text for auto mode
+  brandName?: string // Brand name for fallback text
 }) {
   const [image] = useImage(logoUrl || '', 'anonymous')
   
@@ -182,6 +193,9 @@ function LogoWithLines({
   const rightLineStart = (CANVAS_WIDTH / 2) + (logoGapWidth / 2)
   const rightLineEnd = rightLineStart + effectiveBarWidth
   
+  // Get brand abbreviation for fallback
+  const abbreviation = brandName ? (BRAND_ABBREVIATIONS[brandName] || 'LOGO') : 'LOGO'
+  
   return (
     <Group x={0} y={y}>
       {/* Left line */}
@@ -198,7 +212,7 @@ function LogoWithLines({
         strokeWidth={2}
       />
       
-      {/* Logo or placeholder text */}
+      {/* Logo or brand abbreviation fallback */}
       {image ? (
         <KonvaImage
           image={image}
@@ -209,12 +223,12 @@ function LogoWithLines({
         />
       ) : (
         <Text
-          text="LOGO"
+          text={abbreviation}
           fontSize={28}
           fontFamily="Inter, sans-serif"
           fontStyle="bold"
           fill="white"
-          x={CANVAS_WIDTH / 2 - 30}
+          x={CANVAS_WIDTH / 2 - (abbreviation.length * 8)}
           y={logoHeight / 2 - 14}
         />
       )}
@@ -494,10 +508,11 @@ export function PostsPage() {
   // Generate viral post content (Step 1)
   const handleGenerateViralPost = async () => {
     setIsGenerating(true)
-    toast.loading('Generating viral post...', { id: 'generate-post' })
+    toast.loading('Generating viral post title...', { id: 'generate-post' })
     
     try {
-      const response = await fetch('/reels/auto-generate-content', {
+      // Use the new post-specific endpoint that generates statement-based titles
+      const response = await fetch('/reels/generate-post-title', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -518,6 +533,7 @@ export function PostsPage() {
       }
       
       // Update all selected brands with generated content AND general settings
+      // Do NOT modify generalSettings - keep bar width and other settings as-is
       setPostStates(prev => {
         const updated = { ...prev }
         selectedBrands.forEach(brand => {
@@ -533,7 +549,7 @@ export function PostsPage() {
         return updated
       })
       
-      toast.success(`🎉 Generated: "${data.title}"`, { id: 'generate-post', duration: 5000 })
+      toast.success(`🎉 Generated: "${data.title.slice(0, 50)}..."`, { id: 'generate-post', duration: 5000 })
       setStep('finetune')
       
     } catch (error) {
@@ -647,17 +663,44 @@ export function PostsPage() {
   
   // Generate AI background
   const generateBackground = async () => {
+    if (!aiPrompt.trim()) {
+      toast.error('Enter a prompt first')
+      return
+    }
+    
     setIsGenerating(true)
-    toast.loading('Generating AI background...', { id: 'generate-bg' })
+    toast.loading('Generating AI background (this may take ~30s)...', { id: 'generate-bg' })
     
     try {
-      // TODO: Call DEAPI endpoint
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      const response = await fetch('/reels/generate-background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          brand: activeBrand
+        })
+      })
       
-      // Placeholder - would use real AI image
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to generate background')
+      }
+      
+      const data = await response.json()
+      
+      // Update the background image for current brand
+      setPostStates(prev => ({
+        ...prev,
+        [activeBrand]: {
+          ...prev[activeBrand],
+          backgroundImage: data.image_data
+        }
+      }))
+      
       toast.success('Background generated!', { id: 'generate-bg' })
     } catch (error) {
-      toast.error('Failed to generate background', { id: 'generate-bg' })
+      console.error('Generate background error:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to generate background', { id: 'generate-bg' })
     } finally {
       setIsGenerating(false)
     }
@@ -730,6 +773,7 @@ export function PostsPage() {
                     y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24 - generalSettings.layout.titleGap - calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX) - generalSettings.layout.logoGap - 40}
                     barWidth={generalSettings.barWidth}
                     titleWidth={CANVAS_WIDTH - generalSettings.layout.titlePaddingX * 2}
+                    brandName={previewBrand}
                   />
                   
                   {/* Read caption */}
@@ -1063,8 +1107,9 @@ export function PostsPage() {
                 <LogoWithLines
                   logoUrl={currentPost.logoImage}
                   y={logoY}
-                  barWidth={0}
+                  barWidth={generalSettings.barWidth}
                   titleWidth={CANVAS_WIDTH - layout.titlePaddingX * 2}
+                  brandName={activeBrand}
                 />
                 
                 {/* Title */}

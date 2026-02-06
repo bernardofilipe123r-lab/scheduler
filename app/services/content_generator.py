@@ -471,6 +471,136 @@ Generate the content now. Output ONLY the JSON, nothing else."""
         
         return fallback
     
+    def generate_post_title(self, topic_hint: str = None) -> Dict:
+        """
+        Generate a viral post title suitable for Instagram image posts.
+        
+        Post titles are different from reel titles:
+        - Statement-based with facts/studies ("STUDY REVEALS...", "RESEARCH SHOWS...")  
+        - Contains specific percentages, timeframes, or quantifiable claims
+        - Reads like a headline from a health publication
+        - Single powerful statement, not a topic header
+        
+        Returns:
+            Dict with 'title' and 'image_prompt' keys
+        """
+        if not self.api_key:
+            return self._fallback_post_title()
+        
+        # Get history context to avoid repetition
+        history_context = self._get_history_context()
+        
+        prompt = f"""You are a viral health content creator specializing in Instagram image posts.
+
+Generate a SINGLE powerful statement-based title for a viral Instagram POST (not a reel).
+
+### WHAT MAKES A GREAT POST TITLE:
+- Statement of fact with specific data (percentages, timeframes, studies)
+- Reads like a health publication headline
+- Contains actionable or surprising information
+- Makes reader want to share immediately
+
+### EXAMPLE POST TITLES (learn the pattern):
+- "STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%"
+- "RESEARCH SHOWS Taking COLD SHOWERS For 2 WEEKS Can BOOST IMMUNE FUNCTION BY 29%"  
+- "SCIENTISTS CONFIRM Walking 10 MINUTES After MEALS Can LOWER BLOOD SUGAR BY 22%"
+- "NEW STUDY: Eating FERMENTED FOODS Daily Can REDUCE ANXIETY SYMPTOMS BY 35%"
+- "DOCTORS RECOMMEND This 5-MINUTE MORNING ROUTINE To BOOST METABOLISM All Day"
+- "HARVARD STUDY: People Who NAP Have 37% LOWER RISK Of Heart Disease"
+- "SLEEP EXPERTS REVEAL: Sleeping On Your LEFT SIDE IMPROVES DIGESTION By 40%"
+- "SHOCKING STUDY: Just 3 MINUTES Of DEEP BREATHING Can LOWER BLOOD PRESSURE Instantly"
+
+### WHAT TO AVOID:
+- Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
+- Question formats
+- Lists or numbered formats (those are for reels)
+- Vague claims without specifics
+
+{history_context}
+
+{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic."}
+
+### OUTPUT FORMAT (JSON only, no markdown):
+{{
+    "title": "YOUR STATEMENT-BASED TITLE IN ALL CAPS",
+    "image_prompt": "A detailed cinematic image prompt for DALL-E that matches the title theme. Should be visually striking, wellness-focused, and include 'No text, no letters, no numbers, no symbols, no logos.' at the end"
+}}
+
+Generate now:"""
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.9,
+                    "max_tokens": 500
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                content_text = data["choices"][0]["message"]["content"].strip()
+                
+                # Clean up markdown if present
+                if content_text.startswith("```"):
+                    content_text = content_text.split("```")[1]
+                    if content_text.startswith("json"):
+                        content_text = content_text[4:]
+                    content_text = content_text.strip()
+                
+                try:
+                    result = json.loads(content_text)
+                    result["is_fallback"] = False
+                    
+                    # Add to history
+                    self._add_to_history({"title": result.get("title", "")})
+                    
+                    return result
+                except json.JSONDecodeError as e:
+                    print(f"⚠️ JSON parse error in post title generation: {e}")
+                    return self._fallback_post_title()
+            else:
+                print(f"⚠️ DeepSeek API error: {response.status_code}")
+                return self._fallback_post_title()
+                
+        except Exception as e:
+            print(f"⚠️ Post title generation error: {e}")
+            return self._fallback_post_title()
+    
+    def _fallback_post_title(self) -> Dict:
+        """Fallback titles for posts if AI fails."""
+        fallbacks = [
+            {
+                "title": "STUDY REVEALS Vitamin D SUPPLEMENTATION Can REDUCE DEPRESSION SYMPTOMS BY 45%",
+                "image_prompt": "A cinematic wellness visualization of golden sunlight rays filtering through a window onto a person in peaceful meditation pose, with subtle vitamin D molecular structures floating in the light. Warm golden and soft orange tones. Studio-quality cinematic lighting, premium wellness mood. No text, no letters, no numbers, no symbols, no logos."
+            },
+            {
+                "title": "RESEARCH SHOWS Walking 7,000 STEPS Daily Can EXTEND LIFESPAN BY Up To 10 YEARS",
+                "image_prompt": "A serene nature path winding through a lush green forest with morning mist, a silhouette of a person walking peacefully. Soft green and blue tones with golden morning light. Cinematic depth of field, inspirational wellness mood. No text, no letters, no numbers, no symbols, no logos."
+            },
+            {
+                "title": "SCIENTISTS CONFIRM Eating BLUEBERRIES Daily Can IMPROVE MEMORY BY 25%",
+                "image_prompt": "A beautiful close-up of fresh, vibrant blueberries with morning dew, arranged artistically with a subtle brain outline overlay in soft blue light. Deep purple and blue tones. Premium food photography style with cinematic lighting. No text, no letters, no numbers, no symbols, no logos."
+            },
+            {
+                "title": "NEW STUDY: Just 15 MINUTES Of MEDITATION Daily Can REDUCE ANXIETY BY 40%",
+                "image_prompt": "A peaceful person meditating in a minimalist space with soft light filtering through, surrounded by a subtle calming aura. Soft lavender and white tones. Serene, premium wellness aesthetic with studio lighting. No text, no letters, no numbers, no symbols, no logos."
+            }
+        ]
+        
+        fallback = random.choice(fallbacks)
+        fallback["is_fallback"] = True
+        return fallback
+    
     def get_available_topics(self) -> List[str]:
         """Return list of available topic categories."""
         return self.TOPIC_CATEGORIES.copy()

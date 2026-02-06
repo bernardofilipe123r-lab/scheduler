@@ -4,6 +4,8 @@ API routes for the reels automation service.
 import uuid
 import shutil
 import asyncio
+import base64
+from io import BytesIO
 from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel
@@ -18,6 +20,7 @@ from app.services.caption_generator import CaptionGenerator
 from app.services.content_generator_v2 import ContentGenerator, ContentRating
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.social_publisher import SocialPublisher
+from app.services.ai_background_generator import AIBackgroundGenerator
 from app.database.db import ReelDatabase
 from app.core.config import BrandType, BRAND_CONFIGS, BrandConfig
 
@@ -143,6 +146,88 @@ async def auto_generate_content(request: AutoContentRequest = None):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate content: {str(e)}"
+        )
+
+
+@router.post(
+    "/generate-post-title",
+    summary="Generate viral post title using AI",
+    description="Generate a statement-based viral title for Instagram image posts (not reels)"
+)
+async def generate_post_title(request: AutoContentRequest = None):
+    """
+    Generate a viral post title suitable for Instagram image posts.
+    
+    Post titles are different from reel titles:
+    - Statement-based with facts/studies ("STUDY REVEALS...", "RESEARCH SHOWS...")
+    - Contains specific percentages, timeframes, or quantifiable claims
+    - Single powerful statement, not a topic header
+    
+    Returns title and image prompt.
+    """
+    try:
+        topic_hint = request.topic_hint if request else None
+        result = content_generator.generate_post_title(topic_hint)
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate post title"
+            )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate post title: {str(e)}"
+        )
+
+
+class GenerateBackgroundRequest(BaseModel):
+    prompt: str
+    brand: str = "healthycollege"
+
+
+@router.post(
+    "/generate-background",
+    summary="Generate AI background image",
+    description="Generate an AI background image using DALL-E/Flux API"
+)
+async def generate_background(request: GenerateBackgroundRequest):
+    """
+    Generate an AI background image for posts.
+    
+    Returns base64-encoded image data that can be used directly in the canvas.
+    """
+    try:
+        generator = AIBackgroundGenerator()
+        
+        # Generate the image
+        image = generator.generate_background(
+            brand_name=request.brand,
+            user_prompt=request.prompt
+        )
+        
+        # Convert to base64
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        buffer.seek(0)
+        base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        return {
+            "success": True,
+            "image_data": f"data:image/png;base64,{base64_image}",
+            "width": image.width,
+            "height": image.height
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate background: {str(e)}"
         )
 
 
