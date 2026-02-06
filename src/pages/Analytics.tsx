@@ -422,7 +422,10 @@ export function AnalyticsPage() {
     setRefreshError(null)
     try {
       const result = await backfillMutation.mutateAsync(28)
-      setBackfillSuccess(`Backfilled ${result.snapshots_created} historical snapshots!`)
+      const deletedMsg = result.deleted_count ? `Cleared ${result.deleted_count} old entries. ` : ''
+      const createdMsg = `Backfilled ${result.snapshots_created} historical view snapshots.`
+      const noteMsg = result.note ? ` Note: ${result.note}` : ''
+      setBackfillSuccess(`${deletedMsg}${createdMsg}${noteMsg}`)
     } catch {
       setRefreshError('Failed to backfill historical data. Please try again.')
     }

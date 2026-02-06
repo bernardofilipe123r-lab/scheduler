@@ -703,11 +703,17 @@ class AnalyticsService:
         """
         Backfill historical analytics data from Instagram insights.
         
-        Instagram Insights API provides up to 30 days of daily data for most metrics.
-        This creates AnalyticsSnapshot entries for each day in the past.
+        IMPORTANT LIMITATIONS:
+        - Instagram Insights API only provides up to 30 days of historical data
+        - Follower count is CURRENT ONLY - no historical data available from API
+        - We can only backfill views/impressions for the past 28 days
+        - Historical follower data from before we started tracking is NOT recoverable
+        
+        This method fetches ACTUAL impressions data from Instagram.
+        Followers are set to 0 for historical entries (since we can't get real data).
         
         Args:
-            days_back: Number of days to fetch (max 28 for most metrics)
+            days_back: Number of days to fetch (max 28 for Instagram)
             
         Returns:
             Dict with success status and backfilled count
@@ -717,11 +723,10 @@ class AnalyticsService:
         errors = []
         snapshots_created = 0
         
-        # Limit to 28 days (Instagram insights limitation)
+        # Limit to 28 days (Instagram insights API limitation)
         days_back = min(days_back, 28)
         
         now = datetime.now(timezone.utc)
-        since_date = now - timedelta(days=days_back)
         
         # Process each brand
         for brand_name, brand_type in BRAND_NAME_MAP.items():
@@ -729,7 +734,7 @@ class AnalyticsService:
             if not config:
                 continue
             
-            # Instagram historical data
+            # Instagram historical data - ONLY VIEWS, not followers
             if config.instagram_business_account_id and config.meta_access_token:
                 try:
                     daily_data = self._fetch_instagram_historical(
@@ -747,13 +752,15 @@ class AnalyticsService:
                         ).first()
                         
                         if not existing:
+                            # Only store ACTUAL data from API
+                            # Followers set to 0 because we can't get historical follower data
                             snapshot = AnalyticsSnapshot(
                                 brand=brand_name,
                                 platform="instagram",
                                 snapshot_at=day_data["date"],
-                                followers_count=day_data["followers"],
-                                views_last_7_days=day_data["impressions"],
-                                likes_last_7_days=day_data["likes"]
+                                followers_count=0,  # Historical followers NOT available from API
+                                views_last_7_days=day_data["impressions"],  # ACTUAL data from API
+                                likes_last_7_days=day_data["likes"]  # ACTUAL data from API
                             )
                             self.db.add(snapshot)
                             snapshots_created += 1
@@ -762,52 +769,34 @@ class AnalyticsService:
                     logger.error(f"Failed to backfill Instagram for {brand_name}: {e}")
                     errors.append(f"Instagram/{brand_name}: {str(e)}")
             
-            # YouTube historical data (using channel stats - limited historical)
-            youtube_channel = self.db.query(YouTubeChannel).filter(
-                YouTubeChannel.brand == brand_name,
-                YouTubeChannel.status == "connected"
-            ).first()
-            
-            if youtube_channel:
-                try:
-                    yt_data = self._fetch_youtube_analytics(youtube_channel)
-                    
-                    # YouTube API doesn't easily provide historical daily data without Analytics API
-                    # For now, we'll create a single snapshot with current data
-                    # backfilled to yesterday to show some trend
-                    for days_ago in range(1, min(days_back, 7) + 1):
-                        backfill_date = now - timedelta(days=days_ago)
-                        
-                        existing = self.db.query(AnalyticsSnapshot).filter(
-                            AnalyticsSnapshot.brand == brand_name,
-                            AnalyticsSnapshot.platform == "youtube",
-                            func.date(AnalyticsSnapshot.snapshot_at) == backfill_date.date()
-                        ).first()
-                        
-                        if not existing:
-                            # Approximate historical values with slight variance
-                            variance = 1 - (days_ago * 0.01)  # Slight decrease going back
-                            snapshot = AnalyticsSnapshot(
-                                brand=brand_name,
-                                platform="youtube",
-                                snapshot_at=backfill_date,
-                                followers_count=int(yt_data["followers_count"] * variance),
-                                views_last_7_days=int(yt_data["views_last_7_days"] * variance),
-                                likes_last_7_days=int(yt_data["likes_last_7_days"] * variance)
-                            )
-                            self.db.add(snapshot)
-                            snapshots_created += 1
-                            
-                except Exception as e:
-                    logger.error(f"Failed to backfill YouTube for {brand_name}: {e}")
-                    errors.append(f"YouTube/{brand_name}: {str(e)}")
+            # YouTube - skip backfill, no historical data available without Analytics API
+            # YouTube API only provides current stats, not historical
         
         self.db.commit()
         
         return {
             "success": True,
             "snapshots_created": snapshots_created,
-            "errors": errors if errors else None
+            "errors": errors if errors else None,
+            "note": "Historical follower data is NOT available from Instagram API. Only views/impressions for the past 28 days can be backfilled. Follower tracking starts from when you first refresh analytics."
+        }
+    
+    def clear_backfilled_data(self) -> Dict[str, Any]:
+        """
+        Clear all backfilled/approximated historical data.
+        
+        This removes all AnalyticsSnapshot entries that have followers_count = 0
+        or that were created before the analytics feature was added.
+        """
+        from app.models import AnalyticsSnapshot
+        
+        # Delete all snapshots (we'll rebuild from fresh data)
+        deleted = self.db.query(AnalyticsSnapshot).delete()
+        self.db.commit()
+        
+        return {
+            "success": True,
+            "deleted_count": deleted
         }
     
     def _fetch_instagram_historical(
@@ -819,7 +808,8 @@ class AnalyticsService:
         """
         Fetch historical daily Instagram insights.
         
-        Returns a list of daily data with impressions and reach.
+        Returns a list of daily data with ACTUAL impressions and likes from API.
+        NOTE: Follower historical data is NOT available from Instagram API.
         """
         now = datetime.now(timezone.utc)
         since_date = now - timedelta(days=days_back)
@@ -827,20 +817,13 @@ class AnalyticsService:
         since_ts = int(since_date.timestamp())
         until_ts = int(now.timestamp())
         
-        # Get current follower count (we'll approximate historical)
-        account_url = f"{self.META_API_BASE}/{account_id}"
-        params = {
-            "fields": "followers_count",
-            "access_token": access_token
-        }
-        response = requests.get(account_url, params=params)
-        response.raise_for_status()
-        current_followers = response.json().get("followers_count", 0)
-        
         daily_data = []
+        impressions_by_date = {}
+        likes_by_date = {}
         
-        # Fetch impressions time series
         insights_url = f"{self.META_API_BASE}/{account_id}/insights"
+        
+        # Fetch impressions time series (ACTUAL DATA)
         insights_params = {
             "metric": "impressions",
             "metric_type": "time_series",
@@ -851,7 +834,6 @@ class AnalyticsService:
         
         insights_resp = requests.get(insights_url, params=insights_params)
         
-        impressions_by_date = {}
         if insights_resp.status_code == 200:
             insights_data = insights_resp.json()
             for metric in insights_data.get("data", []):
@@ -861,49 +843,64 @@ class AnalyticsService:
                         if end_time:
                             date = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
                             impressions_by_date[date.date()] = value.get("value", 0)
+        else:
+            logger.warning(f"Failed to fetch impressions: {insights_resp.status_code}")
+            # Try reach as fallback
+            reach_params = {
+                "metric": "reach",
+                "metric_type": "time_series",
+                "since": since_ts,
+                "until": until_ts,
+                "access_token": access_token
+            }
+            reach_resp = requests.get(insights_url, params=reach_params)
+            if reach_resp.status_code == 200:
+                reach_data = reach_resp.json()
+                for metric in reach_data.get("data", []):
+                    if metric.get("name") == "reach":
+                        for value in metric.get("values", []):
+                            end_time = value.get("end_time")
+                            if end_time:
+                                date = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                                impressions_by_date[date.date()] = value.get("value", 0)
         
-        # Try to get reach as well
-        reach_params = {
-            "metric": "reach",
-            "metric_type": "time_series",
-            "since": since_ts,
-            "until": until_ts,
-            "access_token": access_token
-        }
+        # Fetch likes from recent media (this is the only way to get historical likes)
+        # Get recent media and their like counts
+        try:
+            media_url = f"{self.META_API_BASE}/{account_id}/media"
+            media_params = {
+                "fields": "id,like_count,timestamp",
+                "limit": 100,  # Get last 100 posts
+                "access_token": access_token
+            }
+            media_resp = requests.get(media_url, params=media_params)
+            if media_resp.status_code == 200:
+                media_data = media_resp.json()
+                for media in media_data.get("data", []):
+                    timestamp = media.get("timestamp")
+                    like_count = media.get("like_count", 0)
+                    if timestamp and like_count:
+                        media_date = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).date()
+                        # Add likes to the date the media was posted
+                        likes_by_date[media_date] = likes_by_date.get(media_date, 0) + like_count
+        except Exception as e:
+            logger.warning(f"Failed to fetch media likes: {e}")
         
-        reach_resp = requests.get(insights_url, params=reach_params)
-        reach_by_date = {}
-        if reach_resp.status_code == 200:
-            reach_data = reach_resp.json()
-            for metric in reach_data.get("data", []):
-                if metric.get("name") == "reach":
-                    for value in metric.get("values", []):
-                        end_time = value.get("end_time")
-                        if end_time:
-                            date = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-                            reach_by_date[date.date()] = value.get("value", 0)
-        
-        # Build daily data list
+        # Build daily data list with ACTUAL data only
         for days_ago in range(days_back, 0, -1):
             date = now - timedelta(days=days_ago)
             date_key = date.date()
             
-            # Use impressions or reach, preferring impressions
-            impressions = impressions_by_date.get(date_key, 0) or reach_by_date.get(date_key, 0)
+            impressions = impressions_by_date.get(date_key, 0)
+            likes = likes_by_date.get(date_key, 0)
             
-            # Approximate follower count going back (assume ~0.5% daily growth)
-            growth_factor = 1 - (days_ago * 0.005)
-            approx_followers = int(current_followers * max(0.7, growth_factor))
-            
-            # Estimate likes as ~0.8% of impressions
-            approx_likes = int(impressions * 0.008)
-            
-            daily_data.append({
-                "date": date,
-                "followers": approx_followers,
-                "impressions": impressions,
-                "likes": approx_likes
-            })
+            # Only add if we have actual data
+            if impressions > 0 or likes > 0:
+                daily_data.append({
+                    "date": date,
+                    "impressions": impressions,
+                    "likes": likes
+                })
         
-        logger.info(f"Instagram historical: fetched {len(daily_data)} days of data")
+        logger.info(f"Instagram historical: fetched {len(daily_data)} days of ACTUAL data")
         return daily_data

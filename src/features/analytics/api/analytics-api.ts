@@ -112,13 +112,16 @@ export async function fetchSnapshots(params?: {
 export interface BackfillResponse {
   success: boolean
   snapshots_created: number
+  deleted_count?: number
   errors?: string[]
+  note?: string
 }
 
 /**
  * Backfill historical analytics data from Instagram insights
- * Fetches up to 28 days of historical data
+ * Fetches up to 28 days of historical VIEWS data (not followers)
+ * NOTE: Instagram API doesn't provide historical follower counts
  */
 export async function backfillHistoricalData(days: number = 28): Promise<BackfillResponse> {
-  return post<BackfillResponse>(`/api/analytics/backfill?days=${days}`)
+  return post<BackfillResponse>(`/api/analytics/backfill?days=${days}&clear_existing=true`)
 }

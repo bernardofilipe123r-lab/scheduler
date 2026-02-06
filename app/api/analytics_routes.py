@@ -327,22 +327,50 @@ class BackfillResponse(BaseModel):
     """Response for historical backfill action."""
     success: bool
     snapshots_created: int
+    deleted_count: Optional[int] = None
     errors: Optional[List[str]] = None
+    note: Optional[str] = None
+
+
+class ClearResponse(BaseModel):
+    """Response for clearing analytics data."""
+    success: bool
+    deleted_count: int
+
+
+@router.delete("/snapshots", response_model=ClearResponse)
+async def clear_snapshots(
+    db: Session = Depends(get_db)
+):
+    """
+    Clear all historical analytics snapshots.
+    
+    Use this to remove bad/approximated data before re-backfilling.
+    """
+    service = AnalyticsService(db)
+    result = service.clear_backfilled_data()
+    
+    return ClearResponse(
+        success=result["success"],
+        deleted_count=result["deleted_count"]
+    )
 
 
 @router.post("/backfill", response_model=BackfillResponse)
 async def backfill_historical_data(
     days: int = 28,
+    clear_existing: bool = True,
     db: Session = Depends(get_db)
 ):
     """
     Backfill historical analytics data from Instagram insights.
     
-    This fetches up to 28 days of historical data from Instagram's 
-    insights API and creates AnalyticsSnapshot entries for trend analysis.
+    IMPORTANT: Instagram API only provides ~28 days of historical data.
+    Historical FOLLOWER counts are NOT available - only views/impressions.
     
     Args:
         days: Number of days to backfill (max 28, Instagram API limit)
+        clear_existing: If True, clears existing snapshots before backfilling
     
     Returns:
         Number of snapshots created and any errors
@@ -350,11 +378,19 @@ async def backfill_historical_data(
     days = min(max(days, 1), 28)  # Clamp to 1-28 days
     
     service = AnalyticsService(db)
+    
+    deleted_count = 0
+    if clear_existing:
+        clear_result = service.clear_backfilled_data()
+        deleted_count = clear_result["deleted_count"]
+    
     result = service.backfill_historical_data(days_back=days)
     
     return BackfillResponse(
         success=result["success"],
         snapshots_created=result["snapshots_created"],
-        errors=result.get("errors")
+        deleted_count=deleted_count,
+        errors=result.get("errors"),
+        note=result.get("note")
     )
 
