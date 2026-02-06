@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { 
   BarChart3, 
   Users, 
@@ -14,7 +14,8 @@ import {
   Filter,
   TrendingUp,
   PieChart as PieChartIcon,
-  ChevronDown
+  ChevronDown,
+  Loader2
 } from 'lucide-react'
 import {
   AreaChart,
@@ -106,6 +107,92 @@ function getPlatformBgColor(platform: Platform): string {
     case 'youtube':
       return 'bg-red-500'
   }
+}
+
+interface RefreshOverlayProps {
+  elapsedSeconds: number
+  platformsStatus: { name: string; done: boolean }[]
+}
+
+function RefreshOverlay({ elapsedSeconds, platformsStatus }: RefreshOverlayProps) {
+  const completedCount = platformsStatus.filter(p => p.done).length
+  const totalCount = platformsStatus.length || 15 // 5 brands x 3 platforms
+  const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+  
+  // Estimate ~15-20 seconds for full refresh
+  const estimatedTotal = 18
+  const estimatedRemaining = Math.max(0, estimatedTotal - elapsedSeconds)
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop with blur */}
+      <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
+      
+      {/* Content */}
+      <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in duration-200">
+        {/* Animated loader */}
+        <div className="flex justify-center mb-6">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-full border-4 border-gray-100" />
+            <div 
+              className="absolute inset-0 w-20 h-20 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-pulse" />
+            </div>
+          </div>
+        </div>
+        
+        <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
+          Refreshing Analytics
+        </h3>
+        
+        <p className="text-gray-500 text-center mb-6">
+          Fetching latest data from all platforms...
+        </p>
+        
+        {/* Progress bar */}
+        <div className="mb-4">
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500 ease-out"
+              style={{ width: `${Math.max(10, progress)}%` }}
+            />
+          </div>
+        </div>
+        
+        {/* Stats */}
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2 text-gray-500">
+            <Clock className="w-4 h-4" />
+            <span>Elapsed: {elapsedSeconds}s</span>
+          </div>
+          <div className="text-gray-500">
+            {estimatedRemaining > 0 ? (
+              <span>~{estimatedRemaining}s remaining</span>
+            ) : (
+              <span>Finishing up...</span>
+            )}
+          </div>
+        </div>
+        
+        {/* Platform status */}
+        <div className="mt-6 grid grid-cols-3 gap-2">
+          {['Instagram', 'Facebook', 'YouTube'].map((platform) => (
+            <div 
+              key={platform}
+              className="flex items-center gap-1.5 text-xs text-gray-500"
+            >
+              <div className={`w-2 h-2 rounded-full ${
+                elapsedSeconds > 5 ? 'bg-green-500' : 'bg-yellow-400 animate-pulse'
+              }`} />
+              <span>{platform}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 interface MetricCardProps {
@@ -274,6 +361,31 @@ export function AnalyticsPage() {
   const { data, isLoading, error } = useAnalytics()
   const refreshMutation = useRefreshAnalytics()
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  
+  // Refresh timer state
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  
+  // Start/stop timer based on refresh state
+  useEffect(() => {
+    if (refreshMutation.isPending) {
+      setElapsedSeconds(0)
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1)
+      }, 1000)
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+    
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+      }
+    }
+  }, [refreshMutation.isPending])
   
   // Filter state
   const [selectedBrand, setSelectedBrand] = useState<string>('all')
@@ -485,7 +597,17 @@ export function AnalyticsPage() {
   
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      {/* Refresh Loading Overlay */}
+      {refreshMutation.isPending && (
+        <RefreshOverlay 
+          elapsedSeconds={elapsedSeconds} 
+          platformsStatus={[]} 
+        />
+      )}
+      
+      <div className={`max-w-7xl mx-auto px-6 py-8 transition-all duration-300 ${
+        refreshMutation.isPending ? 'opacity-50 blur-sm pointer-events-none' : ''
+      }`}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
