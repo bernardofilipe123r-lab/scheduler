@@ -8,6 +8,7 @@ import { ConnectedPage } from '@/pages/Connected'
 import { BrandsPage } from '@/pages/Brands'
 import { PostsPage } from '@/pages/Posts'
 import { AnalyticsPage } from '@/pages/Analytics'
+import { SettingsPage } from '@/pages/Settings'
 
 export function AppRoutes() {
   return (
@@ -21,6 +22,7 @@ export function AppRoutes() {
         <Route path="brands" element={<BrandsPage />} />
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   )

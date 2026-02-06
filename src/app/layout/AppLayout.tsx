@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Film, History, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3 } from 'lucide-react'
+import { Film, History, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export function AppLayout() {
@@ -9,7 +9,7 @@ export function AppLayout() {
   const location = useLocation()
   
   // Check if current route is a settings page
-  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands'
+  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands' || location.pathname === '/settings'
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -151,6 +151,20 @@ export function AppLayout() {
                     >
                       <Layers className="w-4 h-4" />
                       Brand Settings
+                    </NavLink>
+                    <NavLink
+                      to="/settings"
+                      onClick={() => setSettingsOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-600'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <Sliders className="w-4 h-4" />
+                      App Settings
                     </NavLink>
                   </div>
                 )}

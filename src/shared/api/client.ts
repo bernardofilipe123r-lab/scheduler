@@ -70,3 +70,13 @@ export async function patch<T>(endpoint: string, data?: unknown): Promise<T> {
   })
   return handleResponse<T>(response)
 }
+
+// Convenience object for importing as a namespace
+export const apiClient = {
+  get,
+  post,
+  put,
+  delete: del,
+  patch,
+}
+

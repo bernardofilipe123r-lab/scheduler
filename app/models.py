@@ -322,3 +322,136 @@ class AnalyticsSnapshot(Base):
             "views_last_7_days": self.views_last_7_days,
             "likes_last_7_days": self.likes_last_7_days,
         }
+
+
+class Brand(Base):
+    """
+    Central source of truth for all brand configuration.
+    
+    This replaces all hardcoded brand constants throughout the codebase.
+    Brands can be created, updated, and deleted via the API.
+    """
+    __tablename__ = "brands"
+    
+    # Primary key - lowercase brand identifier (e.g., 'healthycollege')
+    id = Column(String(50), primary_key=True)
+    
+    # Display information
+    display_name = Column(String(100), nullable=False)  # e.g., 'THE HEALTHY COLLEGE'
+    short_name = Column(String(10), nullable=False)  # e.g., 'HCO' - for logo fallback
+    
+    # Social media handles
+    instagram_handle = Column(String(100), nullable=True)  # e.g., '@thehealthycollege'
+    facebook_page_name = Column(String(100), nullable=True)
+    youtube_channel_name = Column(String(100), nullable=True)
+    
+    # Scheduling configuration
+    schedule_offset = Column(Integer, default=0)  # Hour offset 0-23 for scheduling
+    posts_per_day = Column(Integer, default=6)
+    
+    # Content generation settings
+    baseline_for_content = Column(Boolean, default=False)  # Is this the baseline brand for content differentiation?
+    
+    # Colors - JSON with full color configuration
+    # Structure: {
+    #   "primary": "#004f00",
+    #   "accent": "#16a34a",
+    #   "text": "#FFFFFF",
+    #   "color_name": "vibrant green",  # For AI prompts
+    #   "light_mode": {"background": "#dffbcb", "text": "#004f00", ...},
+    #   "dark_mode": {"background": "#001f00", "text": "#FFFFFF", ...}
+    # }
+    colors = Column(JSON, nullable=False, default=dict)
+    
+    # API Credentials (stored in DB for easy management)
+    instagram_access_token = Column(Text, nullable=True)
+    instagram_business_account_id = Column(String(100), nullable=True)
+    facebook_page_id = Column(String(100), nullable=True)
+    facebook_access_token = Column(Text, nullable=True)
+    meta_access_token = Column(Text, nullable=True)
+    
+    # Logo path (relative to assets/logos/)
+    logo_path = Column(String(255), nullable=True)
+    
+    # Status
+    active = Column(Boolean, default=True, nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def to_dict(self, include_credentials=False):
+        """Convert to dictionary for API responses."""
+        data = {
+            "id": self.id,
+            "display_name": self.display_name,
+            "short_name": self.short_name,
+            "instagram_handle": self.instagram_handle,
+            "facebook_page_name": self.facebook_page_name,
+            "youtube_channel_name": self.youtube_channel_name,
+            "schedule_offset": self.schedule_offset,
+            "posts_per_day": self.posts_per_day,
+            "baseline_for_content": self.baseline_for_content,
+            "colors": self.colors or {},
+            "logo_path": self.logo_path,
+            "active": self.active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            # Indicate if credentials are configured (without exposing them)
+            "has_instagram": bool(self.instagram_business_account_id and self.instagram_access_token),
+            "has_facebook": bool(self.facebook_page_id and self.facebook_access_token),
+        }
+        
+        if include_credentials:
+            data.update({
+                "instagram_access_token": self.instagram_access_token,
+                "instagram_business_account_id": self.instagram_business_account_id,
+                "facebook_page_id": self.facebook_page_id,
+                "facebook_access_token": self.facebook_access_token,
+                "meta_access_token": self.meta_access_token,
+            })
+        
+        return data
+
+
+class AppSettings(Base):
+    """
+    Application-wide settings that can be updated via the UI.
+    
+    This allows users to configure things like API keys, default values,
+    etc. without needing to modify .env files or code.
+    """
+    __tablename__ = "app_settings"
+    
+    # Setting key (e.g., 'openai_api_key', 'default_posts_per_day')
+    key = Column(String(100), primary_key=True)
+    
+    # Setting value (stored as string, parsed by application)
+    value = Column(Text, nullable=True)
+    
+    # Metadata
+    description = Column(Text, nullable=True)  # Human-readable description
+    category = Column(String(50), nullable=True)  # For grouping in UI (e.g., 'ai', 'scheduling', 'api')
+    value_type = Column(String(20), default="string")  # string, number, boolean, json
+    sensitive = Column(Boolean, default=False)  # If True, value is hidden in logs/responses
+    
+    # Timestamps
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def to_dict(self, include_sensitive=False):
+        """Convert to dictionary for API responses."""
+        value = self.value
+        
+        # Mask sensitive values unless explicitly requested
+        if self.sensitive and not include_sensitive and value:
+            value = "***REDACTED***"
+        
+        return {
+            "key": self.key,
+            "value": value,
+            "description": self.description,
+            "category": self.category,
+            "value_type": self.value_type,
+            "sensitive": self.sensitive,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
