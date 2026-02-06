@@ -12,7 +12,6 @@ import {
   Instagram,
   Facebook,
   Youtube,
-  Image,
   Sparkles,
   Save,
   Sun,
@@ -20,9 +19,11 @@ import {
   ArrowRight,
   Upload,
   X,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react'
 import { useBrandsList, useBrandConnections, type BrandConnectionStatus } from '@/features/brands'
+import { useBrands, useCreateBrand, type CreateBrandInput, type BrandColors } from '@/features/brands/api/use-brands'
 import { FullPageLoader, Modal } from '@/shared/components'
 
 interface BrandInfo {
@@ -697,173 +698,592 @@ function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
 
 interface CreateBrandModalProps {
   onClose: () => void
+  onSuccess?: () => void
 }
 
-function CreateBrandModal({ onClose }: CreateBrandModalProps) {
-  const [step, setStep] = useState(1)
-  const [brandName, setBrandName] = useState('')
-  const [brandColor, setBrandColor] = useState('#6366f1')
-  const [brandId, setBrandId] = useState('')
+// Color presets for quick selection
+const COLOR_PRESETS = [
+  { name: 'Forest Green', primary: '#004f00', accent: '#16a34a', colorName: 'vibrant green' },
+  { name: 'Ocean Blue', primary: '#019dc8', accent: '#0ea5e9', colorName: 'ocean blue' },
+  { name: 'Royal Purple', primary: '#6b21a8', accent: '#a855f7', colorName: 'royal purple' },
+  { name: 'Sunset Orange', primary: '#c2410c', accent: '#f97316', colorName: 'sunset orange' },
+  { name: 'Ruby Red', primary: '#9f1239', accent: '#f43f5e', colorName: 'ruby red' },
+  { name: 'Golden Yellow', primary: '#a16207', accent: '#eab308', colorName: 'golden yellow' },
+  { name: 'Slate Gray', primary: '#334155', accent: '#64748b', colorName: 'modern slate' },
+  { name: 'Teal', primary: '#0d9488', accent: '#14b8a6', colorName: 'refreshing teal' },
+]
 
+// Helper to generate light/dark mode colors from primary
+function generateModeColors(primary: string, accent: string) {
+  // Lighten for light mode background
+  const lightBg = adjustColorBrightness(primary, 180)
+  // Darken for dark mode background
+  const darkBg = adjustColorBrightness(primary, -40)
+  
+  return {
+    light_mode: {
+      background: lightBg,
+      gradient_start: lightBg,
+      gradient_end: adjustColorBrightness(accent, 150),
+      text: '#000000',
+      cta_bg: primary,
+      cta_text: '#ffffff',
+    },
+    dark_mode: {
+      background: darkBg,
+      gradient_start: darkBg,
+      gradient_end: adjustColorBrightness(primary, -20),
+      text: '#ffffff',
+      cta_bg: accent,
+      cta_text: '#ffffff',
+    }
+  }
+}
+
+// Adjust color brightness (positive = lighter, negative = darker)
+function adjustColorBrightness(hex: string, amount: number): string {
+  const num = parseInt(hex.replace('#', ''), 16)
+  const r = Math.min(255, Math.max(0, (num >> 16) + amount))
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount))
+  const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount))
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+}
+
+function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
+  const createBrandMutation = useCreateBrand()
+  const { data: existingBrands } = useBrands()
+  
+  const [step, setStep] = useState(1)
+  const [error, setError] = useState<string | null>(null)
+  
+  // Step 1: Brand Identity
+  const [displayName, setDisplayName] = useState('')
+  const [brandId, setBrandId] = useState('')
+  const [shortName, setShortName] = useState('')
+  
+  // Step 2: Colors
+  const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
+  const [primaryColor, setPrimaryColor] = useState('#6366f1')
+  const [accentColor, setAccentColor] = useState('#818cf8')
+  const [colorName, setColorName] = useState('indigo')
+  const [useCustomColors, setUseCustomColors] = useState(false)
+  
+  // Step 3: Schedule
+  const [scheduleOffset, setScheduleOffset] = useState(0)
+  const [postsPerDay, setPostsPerDay] = useState(6)
+  
+  // Step 4: Social handles (optional)
+  const [instagramHandle, setInstagramHandle] = useState('')
+  const [facebookPage, setFacebookPage] = useState('')
+  const [youtubeChannel, setYoutubeChannel] = useState('')
+
+  // Auto-generate ID and short name from display name
   const handleNameChange = (name: string) => {
-    setBrandName(name)
-    // Auto-generate ID from name
-    setBrandId(name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, ''))
+    setDisplayName(name)
+    setError(null)
+    
+    // Auto-generate ID (lowercase, no spaces/special chars)
+    const genId = name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')
+    setBrandId(genId)
+    
+    // Auto-generate short name (first letters of each word, max 4 chars)
+    const words = name.split(/\s+/).filter(w => w.length > 0)
+    let abbrev = ''
+    if (words.length === 1) {
+      abbrev = words[0].substring(0, 3).toUpperCase()
+    } else {
+      abbrev = words.map(w => w[0]).join('').substring(0, 4).toUpperCase()
+    }
+    setShortName(abbrev)
   }
 
+  // Apply color preset
+  const applyPreset = (index: number) => {
+    const preset = COLOR_PRESETS[index]
+    setSelectedPreset(index)
+    setPrimaryColor(preset.primary)
+    setAccentColor(preset.accent)
+    setColorName(preset.colorName)
+    setUseCustomColors(false)
+  }
+
+  // Validate current step before proceeding
+  const validateStep = (): boolean => {
+    setError(null)
+    
+    if (step === 1) {
+      if (!displayName.trim()) {
+        setError('Brand name is required')
+        return false
+      }
+      if (!brandId.trim()) {
+        setError('Brand ID is required')
+        return false
+      }
+      if (brandId.length < 3) {
+        setError('Brand ID must be at least 3 characters')
+        return false
+      }
+      // Check for duplicate ID
+      if (existingBrands?.some(b => b.id === brandId)) {
+        setError('A brand with this ID already exists')
+        return false
+      }
+      if (!shortName.trim()) {
+        setError('Short name is required (used for logo fallback)')
+        return false
+      }
+    }
+    
+    if (step === 2) {
+      if (!primaryColor || !accentColor) {
+        setError('Colors are required')
+        return false
+      }
+    }
+    
+    return true
+  }
+
+  // Handle next step
+  const handleNext = () => {
+    if (validateStep()) {
+      setStep(step + 1)
+    }
+  }
+
+  // Handle brand creation
+  const handleCreate = async () => {
+    if (!validateStep()) return
+    
+    setError(null)
+    
+    // Build colors object with auto-generated mode colors
+    const modeColors = generateModeColors(primaryColor, accentColor)
+    const colors: BrandColors = {
+      primary: primaryColor,
+      accent: accentColor,
+      color_name: colorName,
+      ...modeColors,
+    }
+    
+    const input: CreateBrandInput = {
+      id: brandId,
+      display_name: displayName,
+      short_name: shortName,
+      instagram_handle: instagramHandle || undefined,
+      facebook_page_name: facebookPage || undefined,
+      youtube_channel_name: youtubeChannel || undefined,
+      schedule_offset: scheduleOffset,
+      posts_per_day: postsPerDay,
+      colors,
+    }
+    
+    try {
+      await createBrandMutation.mutateAsync(input)
+      onSuccess?.()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create brand')
+    }
+  }
+
+  const totalSteps = 4
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
       {/* Progress steps */}
       <div className="flex items-center justify-center gap-2 mb-4">
-        {[1, 2, 3].map(s => (
-          <div
-            key={s}
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              s === step 
-                ? 'bg-primary-500 text-white' 
-                : s < step 
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-200 text-gray-500'
-            }`}
-          >
-            {s < step ? <Check className="w-4 h-4" /> : s}
+        {[1, 2, 3, 4].map(s => (
+          <div key={s} className="flex items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                s === step 
+                  ? 'bg-primary-500 text-white' 
+                  : s < step 
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-200 text-gray-500'
+              }`}
+            >
+              {s < step ? <Check className="w-4 h-4" /> : s}
+            </div>
+            {s < 4 && <div className={`w-8 h-0.5 ${s < step ? 'bg-green-500' : 'bg-gray-200'}`} />}
           </div>
         ))}
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Step 1: Brand Identity */}
       {step === 1 && (
         <div className="space-y-4">
           <div className="text-center mb-6">
             <Sparkles className="w-12 h-12 text-primary-500 mx-auto mb-2" />
             <h3 className="text-lg font-semibold">Brand Identity</h3>
-            <p className="text-sm text-gray-500">Set up your brand name and visual identity</p>
+            <p className="text-sm text-gray-500">Set up your brand name and identifiers</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Brand Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Brand Name <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
-              value={brandName}
+              value={displayName}
               onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="e.g., Fitness College"
+              placeholder="e.g., THE FITNESS COLLEGE"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Brand ID</label>
-            <input
-              type="text"
-              value={brandId}
-              onChange={(e) => setBrandId(e.target.value)}
-              placeholder="fitnesscollege"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
-            />
-            <p className="text-xs text-gray-500 mt-1">Used for internal identification</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Brand Color</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={brandColor}
-                onChange={(e) => setBrandColor(e.target.value)}
-                className="w-12 h-12 rounded-lg cursor-pointer border-0"
-              />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Brand ID <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
-                value={brandColor}
-                onChange={(e) => setBrandColor(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm"
+                value={brandId}
+                onChange={(e) => setBrandId(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
+                placeholder="fitnesscollege"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
               />
+              <p className="text-xs text-gray-500 mt-1">Unique identifier</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Short Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={shortName}
+                onChange={(e) => setShortName(e.target.value.toUpperCase().substring(0, 4))}
+                placeholder="FCO"
+                maxLength={4}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm uppercase"
+              />
+              <p className="text-xs text-gray-500 mt-1">Logo fallback (3-4 chars)</p>
             </div>
           </div>
 
           {/* Preview */}
-          {brandName && (
-            <div 
-              className="rounded-xl p-4 text-center mt-4"
-              style={{ backgroundColor: brandColor }}
-            >
-              <span className="text-white font-bold">{brandName}</span>
+          {displayName && (
+            <div className="bg-gray-100 rounded-xl p-4 text-center mt-4">
+              <div className="w-16 h-16 rounded-full bg-primary-500 flex items-center justify-center mx-auto mb-2">
+                <span className="text-white font-bold text-xl">{shortName || '?'}</span>
+              </div>
+              <p className="font-semibold">{displayName}</p>
+              <p className="text-sm text-gray-500 font-mono">{brandId || 'brand-id'}</p>
             </div>
           )}
         </div>
       )}
 
+      {/* Step 2: Colors */}
       {step === 2 && (
         <div className="space-y-4">
           <div className="text-center mb-6">
-            <Image className="w-12 h-12 text-primary-500 mx-auto mb-2" />
-            <h3 className="text-lg font-semibold">Brand Assets</h3>
-            <p className="text-sm text-gray-500">Upload your logo and visual assets</p>
+            <Palette className="w-12 h-12 text-primary-500 mx-auto mb-2" />
+            <h3 className="text-lg font-semibold">Brand Colors</h3>
+            <p className="text-sm text-gray-500">Choose your brand's color scheme</p>
           </div>
 
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
-            <Image className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600 mb-2">Drop your logo here or click to upload</p>
-            <p className="text-xs text-gray-400">PNG or SVG, max 2MB</p>
-            <button className="mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-              Choose File
-            </button>
+          {/* Color presets */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Color Presets</label>
+            <div className="grid grid-cols-4 gap-2">
+              {COLOR_PRESETS.map((preset, index) => (
+                <button
+                  key={preset.name}
+                  onClick={() => applyPreset(index)}
+                  className={`relative p-2 rounded-lg border-2 transition-all ${
+                    selectedPreset === index && !useCustomColors
+                      ? 'border-primary-500 ring-2 ring-primary-200'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex gap-1 mb-1">
+                    <div 
+                      className="w-6 h-6 rounded-full"
+                      style={{ backgroundColor: preset.primary }}
+                    />
+                    <div 
+                      className="w-6 h-6 rounded-full"
+                      style={{ backgroundColor: preset.accent }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600 truncate">{preset.name}</p>
+                  {selectedPreset === index && !useCustomColors && (
+                    <Check className="absolute top-1 right-1 w-4 h-4 text-primary-500" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <p className="text-sm text-yellow-800">
-              <strong>Coming Soon:</strong> Logo upload will be available in a future update.
+          {/* Custom colors toggle */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="customColors"
+              checked={useCustomColors}
+              onChange={(e) => {
+                setUseCustomColors(e.target.checked)
+                if (e.target.checked) setSelectedPreset(null)
+              }}
+              className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+            />
+            <label htmlFor="customColors" className="text-sm text-gray-700">
+              Use custom colors
+            </label>
+          </div>
+
+          {/* Custom color pickers */}
+          {useCustomColors && (
+            <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Primary Color</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="w-10 h-10 rounded cursor-pointer border-0"
+                    />
+                    <input
+                      type="text"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Accent Color</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={accentColor}
+                      onChange={(e) => setAccentColor(e.target.value)}
+                      className="w-10 h-10 rounded cursor-pointer border-0"
+                    />
+                    <input
+                      type="text"
+                      value={accentColor}
+                      onChange={(e) => setAccentColor(e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Color Name (for AI prompts)
+                </label>
+                <input
+                  type="text"
+                  value={colorName}
+                  onChange={(e) => setColorName(e.target.value)}
+                  placeholder="e.g., vibrant blue"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Color preview */}
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="rounded-lg overflow-hidden border">
+              <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-xs text-gray-600">
+                <Sun className="w-3 h-3" /> Light Mode
+              </div>
+              <div 
+                className="p-4 text-center"
+                style={{ 
+                  backgroundColor: adjustColorBrightness(primaryColor, 180),
+                }}
+              >
+                <div 
+                  className="w-10 h-10 rounded-full mx-auto mb-2"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  <span className="text-white text-xs font-bold leading-10">{shortName}</span>
+                </div>
+                <p className="text-sm font-medium" style={{ color: primaryColor }}>
+                  {displayName || 'Brand Name'}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg overflow-hidden border">
+              <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 text-xs text-gray-300">
+                <Moon className="w-3 h-3" /> Dark Mode
+              </div>
+              <div 
+                className="p-4 text-center"
+                style={{ 
+                  backgroundColor: adjustColorBrightness(primaryColor, -40),
+                }}
+              >
+                <div 
+                  className="w-10 h-10 rounded-full mx-auto mb-2"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <span className="text-white text-xs font-bold leading-10">{shortName}</span>
+                </div>
+                <p className="text-sm font-medium text-white">
+                  {displayName || 'Brand Name'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Schedule */}
+      {step === 3 && (
+        <div className="space-y-4">
+          <div className="text-center mb-6">
+            <Clock className="w-12 h-12 text-primary-500 mx-auto mb-2" />
+            <h3 className="text-lg font-semibold">Posting Schedule</h3>
+            <p className="text-sm text-gray-500">Configure when this brand publishes content</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Schedule Offset (Hour)
+            </label>
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min={0}
+                max={23}
+                value={scheduleOffset}
+                onChange={(e) => setScheduleOffset(parseInt(e.target.value))}
+                className="flex-1"
+              />
+              <span className="w-16 text-center font-mono text-lg">{scheduleOffset}:00</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              First post of the day starts at this hour (relative to base schedule)
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Posts Per Day
+            </label>
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min={1}
+                max={12}
+                value={postsPerDay}
+                onChange={(e) => setPostsPerDay(parseInt(e.target.value))}
+                className="flex-1"
+              />
+              <span className="w-16 text-center font-mono text-lg">{postsPerDay}</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Posts are evenly distributed throughout the day (every {Math.floor(24/postsPerDay)} hours)
+            </p>
+          </div>
+
+          {/* Schedule preview */}
+          <div className="bg-gray-50 rounded-lg p-4 mt-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Posting Times Preview</p>
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: postsPerDay }, (_, i) => {
+                const hour = (scheduleOffset + i * Math.floor(24/postsPerDay)) % 24
+                const isLight = i % 2 === 0
+                return (
+                  <div
+                    key={i}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                      isLight ? 'bg-amber-100 text-amber-800' : 'bg-gray-700 text-white'
+                    }`}
+                  >
+                    {hour.toString().padStart(2, '0')}:00 {isLight ? '☀️' : '🌙'}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              ☀️ = Light mode posts, 🌙 = Dark mode posts
             </p>
           </div>
         </div>
       )}
 
-      {step === 3 && (
+      {/* Step 4: Social Handles */}
+      {step === 4 && (
         <div className="space-y-4">
           <div className="text-center mb-6">
             <Link2 className="w-12 h-12 text-primary-500 mx-auto mb-2" />
-            <h3 className="text-lg font-semibold">Connect Platforms</h3>
-            <p className="text-sm text-gray-500">Link your social media accounts</p>
+            <h3 className="text-lg font-semibold">Social Media Handles</h3>
+            <p className="text-sm text-gray-500">Add your social media accounts (optional)</p>
           </div>
 
-          <div className="space-y-3">
-            <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
                 <Instagram className="w-5 h-5 text-white" />
               </div>
-              <div className="flex-1 text-left">
-                <p className="font-medium">Instagram</p>
-                <p className="text-sm text-gray-500">Connect business account</p>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700">Instagram Handle</label>
+                <input
+                  type="text"
+                  value={instagramHandle}
+                  onChange={(e) => setInstagramHandle(e.target.value)}
+                  placeholder="@yourbrand"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm mt-1"
+                />
               </div>
-              <Plus className="w-5 h-5 text-gray-400" />
-            </button>
+            </div>
 
-            <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl">
               <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
                 <Facebook className="w-5 h-5 text-white" />
               </div>
-              <div className="flex-1 text-left">
-                <p className="font-medium">Facebook</p>
-                <p className="text-sm text-gray-500">Connect page</p>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700">Facebook Page</label>
+                <input
+                  type="text"
+                  value={facebookPage}
+                  onChange={(e) => setFacebookPage(e.target.value)}
+                  placeholder="Your Page Name"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm mt-1"
+                />
               </div>
-              <Plus className="w-5 h-5 text-gray-400" />
-            </button>
+            </div>
 
-            <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl">
               <div className="w-10 h-10 rounded-lg bg-red-500 flex items-center justify-center">
                 <Youtube className="w-5 h-5 text-white" />
               </div>
-              <div className="flex-1 text-left">
-                <p className="font-medium">YouTube</p>
-                <p className="text-sm text-gray-500">Connect channel</p>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700">YouTube Channel</label>
+                <input
+                  type="text"
+                  value={youtubeChannel}
+                  onChange={(e) => setYoutubeChannel(e.target.value)}
+                  placeholder="Your Channel Name"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm mt-1"
+                />
               </div>
-              <Plus className="w-5 h-5 text-gray-400" />
-            </button>
+            </div>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <p className="text-sm text-yellow-800">
-              <strong>Coming Soon:</strong> Full brand creation with platform connections will be available in a future update. 
-              Currently, brands require backend configuration.
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> API credentials (access tokens, page IDs) can be configured in the brand settings after creation.
             </p>
           </div>
         </div>
@@ -874,32 +1294,45 @@ function CreateBrandModal({ onClose }: CreateBrandModalProps) {
         {step > 1 ? (
           <button
             onClick={() => setStep(step - 1)}
-            className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            disabled={createBrandMutation.isPending}
+            className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
           >
             Back
           </button>
         ) : (
           <button
             onClick={onClose}
-            className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            disabled={createBrandMutation.isPending}
+            className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
           >
             Cancel
           </button>
         )}
-        {step < 3 ? (
+        {step < totalSteps ? (
           <button
-            onClick={() => setStep(step + 1)}
-            disabled={step === 1 && !brandName}
-            className="flex-1 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleNext}
+            disabled={step === 1 && !displayName}
+            className="flex-1 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Next
+            Next <ArrowRight className="w-4 h-4" />
           </button>
         ) : (
           <button
-            onClick={onClose}
-            className="flex-1 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
+            onClick={handleCreate}
+            disabled={createBrandMutation.isPending}
+            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            Done
+            {createBrandMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Create Brand
+              </>
+            )}
           </button>
         )}
       </div>
