@@ -190,8 +190,10 @@ class AnalyticsService:
         
         Fetches:
         - followers_count: Total followers
-        - views_last_7_days: Account-level reach/impressions from insights
+        - views_last_7_days: Account-level impressions from insights (time_series)
         - likes_last_7_days: From recent media
+        
+        Uses the Instagram Graph API User Insights endpoint with date range.
         """
         # Get basic account info including followers
         account_url = f"{self.META_API_BASE}/{account_id}"
@@ -205,45 +207,102 @@ class AnalyticsService:
         account_data = response.json()
         
         followers = account_data.get("followers_count", 0)
+        logger.info(f"Instagram account {account_data.get('username')}: {followers} followers")
         
-        # Get account-level insights for views (impressions/reach)
-        # This is more reliable than summing per-media metrics
+        # Get account-level insights using time_series approach with date range
         views = 0
+        
+        # Calculate date range for last 7 days
+        now = datetime.now(timezone.utc)
+        since_date = now - timedelta(days=7)
+        until_date = now
+        
+        # Unix timestamps for API
+        since_ts = int(since_date.timestamp())
+        until_ts = int(until_date.timestamp())
+        
         try:
+            # Try the time_series approach first (most accurate for views)
             insights_url = f"{self.META_API_BASE}/{account_id}/insights"
+            
+            # Method 1: time_series with impressions (best for views)
             insights_params = {
-                "metric": "impressions,reach",
-                "period": "day",
+                "metric": "impressions",
+                "metric_type": "time_series",
+                "since": since_ts,
+                "until": until_ts,
                 "access_token": access_token
             }
             
+            logger.info(f"Fetching IG insights: metric=impressions, since={since_ts}, until={until_ts}")
             insights_resp = requests.get(insights_url, params=insights_params)
-            logger.info(f"Instagram account insights response status: {insights_resp.status_code}")
             
             if insights_resp.status_code == 200:
                 insights_data = insights_resp.json()
+                logger.info(f"Instagram time_series response: {insights_data}")
                 
-                # Check for errors in response
-                if "error" in insights_data:
-                    logger.error(f"Instagram insights error: {insights_data['error']}")
-                else:
-                    # Sum impressions from last 7 days (prefer impressions over reach for views)
-                    for metric in insights_data.get("data", []):
+                if "data" in insights_data and len(insights_data["data"]) > 0:
+                    for metric in insights_data["data"]:
                         if metric.get("name") == "impressions":
-                            values = metric.get("values", [])[-7:]  # Last 7 days
-                            for v in values:
+                            for v in metric.get("values", []):
                                 views += v.get("value", 0)
+                            logger.info(f"Instagram impressions (time_series): {views}")
                             break
-                        elif metric.get("name") == "reach" and views == 0:
-                            # Fallback to reach if impressions not available
+            else:
+                logger.warning(f"IG time_series failed ({insights_resp.status_code}): {insights_resp.text}")
+                
+                # Method 2: Fallback to period=day approach
+                fallback_params = {
+                    "metric": "impressions,reach",
+                    "period": "day",
+                    "access_token": access_token
+                }
+                
+                fallback_resp = requests.get(insights_url, params=fallback_params)
+                logger.info(f"IG fallback period=day response: {fallback_resp.status_code}")
+                
+                if fallback_resp.status_code == 200:
+                    fallback_data = fallback_resp.json()
+                    logger.info(f"Instagram fallback data: {fallback_data}")
+                    
+                    for metric in fallback_data.get("data", []):
+                        if metric.get("name") == "impressions":
                             values = metric.get("values", [])[-7:]
                             for v in values:
                                 views += v.get("value", 0)
-            else:
-                logger.error(f"Instagram insights failed: {insights_resp.status_code} - {insights_resp.text}")
+                            break
+                else:
+                    logger.error(f"IG fallback also failed: {fallback_resp.text}")
+                    
+                    # Method 3: Try total_value for lifetime impressions (less ideal but works)
+                    total_params = {
+                        "metric": "impressions",
+                        "metric_type": "total_value",
+                        "since": since_ts,
+                        "until": until_ts,
+                        "access_token": access_token
+                    }
+                    
+                    total_resp = requests.get(insights_url, params=total_params)
+                    if total_resp.status_code == 200:
+                        total_data = total_resp.json()
+                        logger.info(f"Instagram total_value data: {total_data}")
+                        
+                        for metric in total_data.get("data", []):
+                            if metric.get("name") == "impressions":
+                                total_value = metric.get("total_value", {})
+                                views = total_value.get("value", 0)
+                                break
+                    else:
+                        logger.error(f"IG total_value failed: {total_resp.text}")
                 
         except Exception as e:
             logger.error(f"Could not fetch Instagram account insights: {e}")
+        
+        # If still 0, try to get views/plays from individual media items
+        if views == 0:
+            logger.info("Trying to get views from individual media items...")
+            views = self._get_ig_views_from_media(account_id, access_token)
         
         # Get likes from recent media
         likes = 0
@@ -278,6 +337,8 @@ class AnalyticsService:
         except Exception as e:
             logger.error(f"Could not fetch Instagram media: {e}")
         
+        logger.info(f"Instagram final results: followers={followers}, views={views}, likes={likes}")
+        
         return {
             "followers_count": followers,
             "views_last_7_days": views,
@@ -287,6 +348,106 @@ class AnalyticsService:
                 "media_count": account_data.get("media_count", 0)
             }
         }
+    
+    def _get_ig_views_from_media(self, account_id: str, access_token: str) -> int:
+        """
+        Fallback method to get views by summing individual media insights.
+        Gets plays/reach for reels and videos from the last 7 days.
+        """
+        views = 0
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        
+        try:
+            # Get recent media
+            media_url = f"{self.META_API_BASE}/{account_id}/media"
+            media_params = {
+                "fields": "id,timestamp,media_type,media_product_type",
+                "limit": 50,
+                "access_token": access_token
+            }
+            media_response = requests.get(media_url, params=media_params)
+            
+            if media_response.status_code != 200:
+                logger.error(f"Failed to get media list: {media_response.text}")
+                return 0
+            
+            media_data = media_response.json()
+            
+            for post in media_data.get("data", []):
+                timestamp = post.get("timestamp")
+                if not timestamp:
+                    continue
+                    
+                try:
+                    post_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    if post_time < seven_days_ago:
+                        continue  # Skip older posts
+                except Exception:
+                    continue
+                
+                media_id = post.get("id")
+                media_type = post.get("media_type", "")
+                media_product_type = post.get("media_product_type", "")
+                
+                # Determine which metrics to fetch based on media type
+                if media_type == "VIDEO" or media_product_type == "REELS":
+                    # For videos/reels, try to get plays
+                    try:
+                        insights_url = f"{self.META_API_BASE}/{media_id}/insights"
+                        
+                        # Try video_views first (for regular videos)
+                        insights_params = {
+                            "metric": "plays",
+                            "access_token": access_token
+                        }
+                        
+                        insights_resp = requests.get(insights_url, params=insights_params)
+                        
+                        if insights_resp.status_code == 200:
+                            insights_data = insights_resp.json()
+                            for metric in insights_data.get("data", []):
+                                if metric.get("name") == "plays":
+                                    views += metric.get("values", [{}])[0].get("value", 0)
+                                    break
+                        else:
+                            # Try reach as fallback
+                            insights_params["metric"] = "reach"
+                            insights_resp = requests.get(insights_url, params=insights_params)
+                            if insights_resp.status_code == 200:
+                                insights_data = insights_resp.json()
+                                for metric in insights_data.get("data", []):
+                                    if metric.get("name") == "reach":
+                                        views += metric.get("values", [{}])[0].get("value", 0)
+                                        break
+                                        
+                    except Exception as e:
+                        logger.debug(f"Could not get insights for media {media_id}: {e}")
+                        
+                else:
+                    # For images, try reach
+                    try:
+                        insights_url = f"{self.META_API_BASE}/{media_id}/insights"
+                        insights_params = {
+                            "metric": "reach",
+                            "access_token": access_token
+                        }
+                        
+                        insights_resp = requests.get(insights_url, params=insights_params)
+                        if insights_resp.status_code == 200:
+                            insights_data = insights_resp.json()
+                            for metric in insights_data.get("data", []):
+                                if metric.get("name") == "reach":
+                                    views += metric.get("values", [{}])[0].get("value", 0)
+                                    break
+                    except Exception as e:
+                        logger.debug(f"Could not get insights for media {media_id}: {e}")
+            
+            logger.info(f"Instagram views from media items: {views}")
+            
+        except Exception as e:
+            logger.error(f"Failed to get IG views from media: {e}")
+        
+        return views
     
     def _fetch_facebook_analytics(self, page_id: str, access_token: str) -> Dict[str, Any]:
         """
