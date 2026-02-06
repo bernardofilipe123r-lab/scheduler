@@ -45,7 +45,7 @@ class BrandMetrics(BaseModel):
 class RateLimitInfo(BaseModel):
     """Rate limit information."""
     remaining: int
-    max_per_hour: int
+    max_per_day: int
     next_available_at: Optional[str] = None
     can_refresh: bool
 
@@ -150,7 +150,7 @@ async def get_analytics(db: Session = Depends(get_db)):
         brands=format_analytics_response(analytics, db),
         rate_limit=RateLimitInfo(
             remaining=remaining,
-            max_per_hour=3,
+            max_per_day=10,
             next_available_at=next_available.isoformat() if next_available else None,
             can_refresh=can_refresh
         ),
@@ -163,7 +163,7 @@ async def refresh_analytics(db: Session = Depends(get_db)):
     """
     Refresh analytics data for all brands.
     
-    Rate limited to 3 refreshes per hour to avoid excessive API calls.
+    Rate limited to 10 refreshes per day to avoid excessive API calls.
     
     This fetches fresh data from:
     - Instagram Business API (followers, reach, likes)
@@ -179,7 +179,7 @@ async def refresh_analytics(db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=429,
             detail={
-                "message": "Rate limit exceeded. Maximum 3 refreshes per hour.",
+                "message": "Rate limit exceeded. Maximum 10 refreshes per day.",
                 "remaining": remaining,
                 "next_available_at": next_available.isoformat() if next_available else None
             }
@@ -199,7 +199,7 @@ async def refresh_analytics(db: Session = Depends(get_db)):
             errors=result.get("errors"),
             rate_limit=RateLimitInfo(
                 remaining=remaining_after,
-                max_per_hour=3,
+                max_per_day=10,
                 next_available_at=next_available_after.isoformat() if next_available_after else None,
                 can_refresh=remaining_after > 0
             ),
@@ -212,7 +212,7 @@ async def refresh_analytics(db: Session = Depends(get_db)):
             errors=result.get("errors"),
             rate_limit=RateLimitInfo(
                 remaining=remaining_after,
-                max_per_hour=3,
+                max_per_day=10,
                 next_available_at=next_available_after.isoformat() if next_available_after else None,
                 can_refresh=remaining_after > 0
             )
@@ -232,7 +232,7 @@ async def get_rate_limit_status(db: Session = Depends(get_db)):
     
     return RateLimitInfo(
         remaining=remaining,
-        max_per_hour=3,
+        max_per_day=10,
         next_available_at=next_available.isoformat() if next_available else None,
         can_refresh=can_refresh
     )

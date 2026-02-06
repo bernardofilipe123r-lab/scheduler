@@ -29,7 +29,7 @@ export interface BrandMetrics {
 // Rate limit information
 export interface RateLimitInfo {
   remaining: number
-  max_per_hour: number
+  max_per_day: number
   next_available_at: string | null
   can_refresh: boolean
 }

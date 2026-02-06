@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 
 # Rate limiting configuration
-MAX_REFRESHES_PER_HOUR = 3
-REFRESH_WINDOW_HOURS = 1
+MAX_REFRESHES_PER_DAY = 10
+REFRESH_WINDOW_HOURS = 24
 
 
 class AnalyticsService:
@@ -51,7 +51,7 @@ class AnalyticsService:
             AnalyticsRefreshLog.refreshed_at >= window_start
         ).scalar() or 0
         
-        remaining = max(0, MAX_REFRESHES_PER_HOUR - refresh_count)
+        remaining = max(0, MAX_REFRESHES_PER_DAY - refresh_count)
         can_refresh = remaining > 0
         
         # Find when next refresh will be available

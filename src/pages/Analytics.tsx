@@ -508,7 +508,7 @@ export function AnalyticsPage() {
             
             {rateLimit && (
               <div className="text-sm text-gray-500 px-3 py-1 bg-gray-100 rounded-full">
-                {rateLimit.remaining}/{rateLimit.max_per_hour} refreshes
+                {rateLimit.remaining}/{rateLimit.max_per_day} refreshes
               </div>
             )}
             
