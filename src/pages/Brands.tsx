@@ -23,7 +23,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { useBrandsList, useBrandConnections, type BrandConnectionStatus } from '@/features/brands'
-import { useBrands, useCreateBrand, type CreateBrandInput, type BrandColors } from '@/features/brands/api/use-brands'
+import { useBrands, useCreateBrand, useUpdateBrand, type CreateBrandInput, type BrandColors } from '@/features/brands/api/use-brands'
 import { FullPageLoader, Modal } from '@/shared/components'
 
 interface BrandInfo {
@@ -122,20 +122,31 @@ interface SettingsModalProps {
 
 function BrandSettingsModal({ brand, connections, allBrands, onClose }: SettingsModalProps) {
   const navigate = useNavigate()
-  const schedule = BRAND_SCHEDULES[brand.id] || { offset: 0, postsPerDay: 6 }
+  const updateBrandMutation = useUpdateBrand()
+  const { data: v2Brands } = useBrands()
+  
+  // Get schedule from v2 API data, fall back to hardcoded constants
+  const v2Brand = v2Brands?.find(b => b.id === brand.id)
+  const schedule = {
+    offset: v2Brand?.schedule_offset ?? BRAND_SCHEDULES[brand.id]?.offset ?? 0,
+    postsPerDay: v2Brand?.posts_per_day ?? BRAND_SCHEDULES[brand.id]?.postsPerDay ?? 6,
+  }
+  
   const [offset, setOffset] = useState(schedule.offset)
   const [postsPerDay, setPostsPerDay] = useState(schedule.postsPerDay)
   const [hasChanges, setHasChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Generate preview of schedule
   const previewSlots = generateSchedule(offset, postsPerDay)
 
-  // Check if offset conflicts with another brand
+  // Check if offset conflicts with another brand - use v2 data with fallback
   const getOffsetConflict = (checkOffset: number): string | null => {
     for (const otherBrand of allBrands) {
       if (otherBrand.id === brand.id) continue
-      const otherSchedule = BRAND_SCHEDULES[otherBrand.id]
-      if (otherSchedule && otherSchedule.offset === checkOffset) {
+      const otherV2 = v2Brands?.find(b => b.id === otherBrand.id)
+      const otherOffset = otherV2?.schedule_offset ?? BRAND_SCHEDULES[otherBrand.id]?.offset
+      if (otherOffset !== undefined && otherOffset === checkOffset) {
         return otherBrand.name
       }
     }
@@ -144,10 +155,20 @@ function BrandSettingsModal({ brand, connections, allBrands, onClose }: Settings
 
   const offsetConflict = getOffsetConflict(offset)
 
-  const handleSave = () => {
-    // TODO: Save to backend
-    console.log('Saving schedule:', { offset, postsPerDay })
-    setHasChanges(false)
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      await updateBrandMutation.mutateAsync({
+        id: brand.id,
+        schedule_offset: offset,
+        posts_per_day: postsPerDay,
+      })
+      setHasChanges(false)
+    } catch (err) {
+      console.error('Failed to save schedule:', err)
+    } finally {
+      setIsSaving(false)
+    }
   }
   
   return (
@@ -323,10 +344,20 @@ function BrandSettingsModal({ brand, connections, allBrands, onClose }: Settings
         {hasChanges && (
           <button
             onClick={handleSave}
-            className="flex-1 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[140px]"
+            disabled={isSaving}
+            className="flex-1 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2 min-w-[140px] disabled:opacity-50"
           >
-            <Save className="w-4 h-4" />
-            Save Changes
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
           </button>
         )}
         <button
@@ -347,14 +378,22 @@ interface ThemeModalProps {
 }
 
 function BrandThemeModal({ brand, onClose, onSave }: ThemeModalProps) {
-  // Get theme defaults from BRAND_THEMES
-  const themeDefaults = BRAND_THEMES[brand.id] || {
-    brandColor: brand.color,
-    lightTitleColor: '#000000',
-    lightBgColor: '#dcf6c8',
-    darkTitleColor: '#ffffff',
-    darkBgColor: brand.color
-  }
+  // Get theme from v2 API data, fall back to hardcoded BRAND_THEMES constants
+  const { data: v2Brands } = useBrands()
+  const v2Brand = v2Brands?.find(b => b.id === brand.id)
+  
+  // Build theme defaults: v2 API colors > hardcoded BRAND_THEMES > generic fallback
+  const themeDefaults = (() => {
+    const hardcoded = BRAND_THEMES[brand.id]
+    const v2Colors = v2Brand?.colors
+    return {
+      brandColor: v2Colors?.primary ?? hardcoded?.brandColor ?? brand.color,
+      lightTitleColor: v2Colors?.light_mode?.text ?? hardcoded?.lightTitleColor ?? '#000000',
+      lightBgColor: v2Colors?.light_mode?.background ?? hardcoded?.lightBgColor ?? '#dcf6c8',
+      darkTitleColor: v2Colors?.dark_mode?.text ?? hardcoded?.darkTitleColor ?? '#ffffff',
+      darkBgColor: v2Colors?.dark_mode?.background ?? hardcoded?.darkBgColor ?? brand.color,
+    }
+  })()
 
   // Theme state - editable colors (initialized from brand-specific defaults)
   const [brandColor, setBrandColor] = useState(themeDefaults.brandColor)
@@ -753,6 +792,17 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
   const createBrandMutation = useCreateBrand()
   const { data: existingBrands } = useBrands()
   
+  // Compute smart default offset: +1 from the highest existing offset
+  const defaultOffset = useMemo(() => {
+    if (!existingBrands?.length) return 0
+    // Also check hardcoded fallbacks for brands that haven't been migrated yet
+    const maxOffset = existingBrands.reduce((max, b) => {
+      const offset = b.schedule_offset ?? BRAND_SCHEDULES[b.id]?.offset ?? 0
+      return Math.max(max, offset)
+    }, -1)
+    return (maxOffset + 1) % 24
+  }, [existingBrands])
+  
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
   
@@ -768,9 +818,14 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
   const [colorName, setColorName] = useState('indigo')
   const [useCustomColors, setUseCustomColors] = useState(false)
   
-  // Step 3: Schedule
-  const [scheduleOffset, setScheduleOffset] = useState(0)
+  // Step 3: Schedule - default offset is smart: +1 from last brand
+  const [scheduleOffset, setScheduleOffset] = useState(defaultOffset)
   const [postsPerDay, setPostsPerDay] = useState(6)
+  
+  // Update default offset when data loads
+  useEffect(() => {
+    setScheduleOffset(defaultOffset)
+  }, [defaultOffset])
   
   // Step 4: Social handles (optional)
   const [instagramHandle, setInstagramHandle] = useState('')
@@ -1403,15 +1458,28 @@ export function BrandsPage() {
     }
   }
 
+  // Use v2 brands data for schedule info
+  const { data: v2Brands } = useBrands()
+  
+  // Helper: get schedule for any brand - v2 API data > hardcoded fallback
+  const getBrandScheduleData = (brandId: string) => {
+    const v2Brand = v2Brands?.find(b => b.id === brandId)
+    return {
+      offset: v2Brand?.schedule_offset ?? BRAND_SCHEDULES[brandId]?.offset ?? 0,
+      postsPerDay: v2Brand?.posts_per_day ?? BRAND_SCHEDULES[brandId]?.postsPerDay ?? 6,
+    }
+  }
+
   // Sort brands by offset
   const sortedBrands = useMemo(() => {
     const brands = brandsData?.brands || []
     return [...brands].sort((a, b) => {
-      const offsetA = BRAND_SCHEDULES[a.id]?.offset ?? 99
-      const offsetB = BRAND_SCHEDULES[b.id]?.offset ?? 99
+      const offsetA = getBrandScheduleData(a.id).offset
+      const offsetB = getBrandScheduleData(b.id).offset
       return offsetA - offsetB
     })
-  }, [brandsData?.brands])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandsData?.brands, v2Brands])
 
   if (brandsLoading || connectionsLoading) {
     return <FullPageLoader text="Loading brands..." />
@@ -1433,9 +1501,9 @@ export function BrandsPage() {
     return connections.find(b => b.brand === brandId)
   }
 
-  // Get schedule info for a brand
+  // Get schedule info for a brand - v2 API data with hardcoded fallback
   const getBrandSchedule = (brandId: string) => {
-    return BRAND_SCHEDULES[brandId] || { offset: 0, postsPerDay: 6 }
+    return getBrandScheduleData(brandId)
   }
 
   return (
@@ -1665,7 +1733,10 @@ export function BrandsPage() {
         onClose={() => setShowCreateModal(false)}
         title="Create New Brand"
       >
-        <CreateBrandModal onClose={() => setShowCreateModal(false)} />
+        <CreateBrandModal 
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => setShowCreateModal(false)}
+        />
       </Modal>
     </div>
   )
