@@ -190,7 +190,7 @@ class AnalyticsService:
         
         Fetches:
         - followers_count: Total followers
-        - views_last_7_days: Reach from insights (profile views + impressions)
+        - views_last_7_days: Sum of plays/views from recent media
         - likes_last_7_days: From media insights
         """
         # Get basic account info including followers
@@ -206,50 +206,84 @@ class AnalyticsService:
         
         followers = account_data.get("followers_count", 0)
         
-        # Get insights for the last 7 days
-        # Note: Instagram API requires specific metrics and periods
-        insights_url = f"{self.META_API_BASE}/{account_id}/insights"
-        insights_params = {
-            "metric": "reach,impressions,profile_views",
-            "period": "day",
-            "access_token": access_token
-        }
-        
+        # Get views and likes from recent media items
+        # For reels/videos, we need to get plays from each media item's insights
         views = 0
-        try:
-            insights_response = requests.get(insights_url, params=insights_params)
-            if insights_response.status_code == 200:
-                insights_data = insights_response.json()
-                for metric in insights_data.get("data", []):
-                    if metric.get("name") == "reach":
-                        # Sum last 7 days of reach
-                        values = metric.get("values", [])[-7:]
-                        views = sum(v.get("value", 0) for v in values)
-                        break
-        except Exception as e:
-            logger.warning(f"Could not fetch Instagram insights: {e}")
-        
-        # Get likes from recent media
         likes = 0
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        
         try:
+            # Get recent media with basic fields
             media_url = f"{self.META_API_BASE}/{account_id}/media"
             media_params = {
-                "fields": "id,like_count,timestamp",
-                "limit": 25,  # Get recent posts
+                "fields": "id,like_count,timestamp,media_type,media_product_type",
+                "limit": 50,  # Get more posts to cover 7 days
                 "access_token": access_token
             }
             media_response = requests.get(media_url, params=media_params)
+            
             if media_response.status_code == 200:
                 media_data = media_response.json()
-                seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+                
                 for post in media_data.get("data", []):
                     timestamp = post.get("timestamp")
-                    if timestamp:
-                        post_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                        if post_time >= seven_days_ago:
-                            likes += post.get("like_count", 0)
+                    if not timestamp:
+                        continue
+                        
+                    post_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    
+                    # Only count posts from the last 7 days
+                    if post_time >= seven_days_ago:
+                        likes += post.get("like_count", 0)
+                        
+                        # Get insights for this media item to get plays/reach
+                        media_id = post.get("id")
+                        media_type = post.get("media_type", "")
+                        media_product_type = post.get("media_product_type", "")
+                        
+                        # For reels and videos, fetch plays from insights
+                        if media_type == "VIDEO" or media_product_type == "REELS":
+                            try:
+                                insights_url = f"{self.META_API_BASE}/{media_id}/insights"
+                                # Use 'plays' for reels, 'video_views' for older videos
+                                insights_params = {
+                                    "metric": "plays,reach",
+                                    "access_token": access_token
+                                }
+                                insights_resp = requests.get(insights_url, params=insights_params)
+                                
+                                if insights_resp.status_code == 200:
+                                    insights_data = insights_resp.json()
+                                    for metric in insights_data.get("data", []):
+                                        if metric.get("name") == "plays":
+                                            views += metric.get("values", [{}])[0].get("value", 0)
+                                            break
+                                        elif metric.get("name") == "reach":
+                                            # Fallback to reach if plays not available
+                                            views += metric.get("values", [{}])[0].get("value", 0)
+                            except Exception as e:
+                                logger.debug(f"Could not fetch insights for media {media_id}: {e}")
+                        else:
+                            # For images/carousels, try to get reach
+                            try:
+                                insights_url = f"{self.META_API_BASE}/{media_id}/insights"
+                                insights_params = {
+                                    "metric": "reach,impressions",
+                                    "access_token": access_token
+                                }
+                                insights_resp = requests.get(insights_url, params=insights_params)
+                                
+                                if insights_resp.status_code == 200:
+                                    insights_data = insights_resp.json()
+                                    for metric in insights_data.get("data", []):
+                                        if metric.get("name") == "reach":
+                                            views += metric.get("values", [{}])[0].get("value", 0)
+                                            break
+                            except Exception as e:
+                                logger.debug(f"Could not fetch insights for media {media_id}: {e}")
+                                
         except Exception as e:
-            logger.warning(f"Could not fetch Instagram media likes: {e}")
+            logger.warning(f"Could not fetch Instagram media: {e}")
         
         return {
             "followers_count": followers,
