@@ -6,7 +6,7 @@ Fetches followers, views (last 7 days), and likes for each brand on:
 - Facebook (via Meta Graph API)  
 - YouTube (via YouTube Data API)
 
-Rate limited to 3 refreshes per hour to avoid excessive API calls.
+Auto-refreshes every 12 hours via scheduler. No rate limits.
 """
 import os
 import logging
@@ -24,11 +24,8 @@ from app.api.brands_routes import BRAND_NAME_MAP
 logger = logging.getLogger(__name__)
 
 
-# Rate limiting configuration - set high since we're well under API quotas
-# Meta: ~4800 calls/day, we use ~250 max
-# YouTube: 10000 units/day, we use ~50 max
-MAX_REFRESHES_PER_DAY = 1000  # Effectively unlimited
-REFRESH_WINDOW_HOURS = 24
+# Auto-refresh interval (12 hours)
+AUTO_REFRESH_INTERVAL_HOURS = 12
 
 
 class AnalyticsService:
@@ -42,31 +39,29 @@ class AnalyticsService:
         
     def can_refresh(self) -> Tuple[bool, int, Optional[datetime]]:
         """
-        Check if a refresh is allowed based on rate limiting.
+        Check if a refresh is allowed. Always returns True (no rate limits).
         
         Returns:
             Tuple of (can_refresh, remaining_refreshes, next_refresh_available_at)
         """
-        window_start = datetime.now(timezone.utc) - timedelta(hours=REFRESH_WINDOW_HOURS)
+        # No rate limits - always allow refresh
+        return True, 9999, None
+    
+    def needs_auto_refresh(self) -> bool:
+        """
+        Check if analytics data is stale and needs auto-refresh.
+        Returns True if last refresh was more than AUTO_REFRESH_INTERVAL_HOURS ago.
+        """
+        # Get most recent analytics entry
+        latest = self.db.query(BrandAnalytics).order_by(
+            BrandAnalytics.last_fetched_at.desc()
+        ).first()
         
-        refresh_count = self.db.query(func.count(AnalyticsRefreshLog.id)).filter(
-            AnalyticsRefreshLog.refreshed_at >= window_start
-        ).scalar() or 0
-        
-        remaining = max(0, MAX_REFRESHES_PER_DAY - refresh_count)
-        can_refresh = remaining > 0
-        
-        # Find when next refresh will be available
-        next_available = None
-        if not can_refresh:
-            oldest_refresh = self.db.query(AnalyticsRefreshLog.refreshed_at).filter(
-                AnalyticsRefreshLog.refreshed_at >= window_start
-            ).order_by(AnalyticsRefreshLog.refreshed_at.asc()).first()
+        if not latest or not latest.last_fetched_at:
+            return True  # Never refreshed
             
-            if oldest_refresh:
-                next_available = oldest_refresh[0] + timedelta(hours=REFRESH_WINDOW_HOURS)
-        
-        return can_refresh, remaining, next_available
+        stale_threshold = datetime.now(timezone.utc) - timedelta(hours=AUTO_REFRESH_INTERVAL_HOURS)
+        return latest.last_fetched_at < stale_threshold
     
     def log_refresh(self, status: str = "success", error_message: str = None, user_id: str = None):
         """Log a refresh attempt."""
@@ -181,7 +176,7 @@ class AnalyticsService:
             "errors": errors if errors else None,
             "rate_limit": {
                 "remaining": remaining_after,
-                "next_reset": (datetime.now(timezone.utc) + timedelta(hours=REFRESH_WINDOW_HOURS)).isoformat()
+                "next_reset": None  # No rate limits
             },
             "analytics": self.get_all_analytics()
         }

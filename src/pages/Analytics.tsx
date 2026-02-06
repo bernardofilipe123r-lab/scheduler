@@ -365,6 +365,15 @@ export function AnalyticsPage() {
   const backfillMutation = useBackfillHistoricalData()
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [backfillSuccess, setBackfillSuccess] = useState<string | null>(null)
+  const [hasAutoRefreshed, setHasAutoRefreshed] = useState(false)
+  
+  // Auto-refresh on page load if data is stale
+  useEffect(() => {
+    if (data?.needs_refresh && !hasAutoRefreshed && !refreshMutation.isPending) {
+      setHasAutoRefreshed(true)
+      refreshMutation.mutate()
+    }
+  }, [data?.needs_refresh, hasAutoRefreshed, refreshMutation])
   
   // Refresh timer state
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -546,6 +555,52 @@ export function AnalyticsPage() {
     })
   }, [data?.brands, selectedPlatform])
   
+  // Platform performance data - aggregate across all brands
+  const platformData = useMemo(() => {
+    const brands = data?.brands || []
+    const platforms: Record<string, { followers: number; views: number; likes: number }> = {
+      instagram: { followers: 0, views: 0, likes: 0 },
+      facebook: { followers: 0, views: 0, likes: 0 },
+      youtube: { followers: 0, views: 0, likes: 0 }
+    }
+    
+    brands.forEach(brand => {
+      Object.entries(brand.platforms).forEach(([platform, metrics]) => {
+        if (platforms[platform]) {
+          platforms[platform].followers += metrics.followers_count
+          platforms[platform].views += metrics.views_last_7_days
+          platforms[platform].likes += metrics.likes_last_7_days
+        }
+      })
+    })
+    
+    return Object.entries(platforms).map(([name, data]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      platform: name,
+      ...data,
+      engagement: data.views > 0 ? ((data.likes / data.views) * 100).toFixed(2) : 0,
+      color: PLATFORM_COLORS[name]
+    }))
+  }, [data?.brands])
+  
+  // Engagement rate data by brand
+  const engagementData = useMemo(() => {
+    const brands = data?.brands || []
+    return brands.map(brand => {
+      const views = brand.totals.views_7d
+      const likes = brand.totals.likes_7d
+      const engagementRate = views > 0 ? (likes / views) * 100 : 0
+      
+      return {
+        name: brand.display_name.split(' ')[0],
+        engagementRate: Number(engagementRate.toFixed(2)),
+        views,
+        likes,
+        color: brand.color
+      }
+    }).sort((a, b) => b.engagementRate - a.engagementRate)
+  }, [data?.brands])
+  
   // Get line colors for chart
   const getLineColors = () => {
     if (selectedBrand !== 'all') {
@@ -607,7 +662,6 @@ export function AnalyticsPage() {
   }
   
   const brands = data?.brands || []
-  const rateLimit = data?.rate_limit
   const lastRefresh = data?.last_refresh
   
   const brandOptions = [
@@ -668,18 +722,12 @@ export function AnalyticsPage() {
               </div>
             )}
             
-            {rateLimit && (
-              <div className="text-sm text-gray-500 px-3 py-1 bg-gray-100 rounded-full">
-                {rateLimit.remaining}/{rateLimit.max_per_day} refreshes
-              </div>
-            )}
-            
             <button
               onClick={handleRefresh}
-              disabled={refreshMutation.isPending || !rateLimit?.can_refresh}
+              disabled={refreshMutation.isPending}
               className={`
                 flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
-                ${rateLimit?.can_refresh 
+                ${!refreshMutation.isPending 
                   ? 'bg-blue-600 text-white hover:bg-blue-700' 
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }
@@ -915,6 +963,74 @@ export function AnalyticsPage() {
           )}
         </div>
         
+        {/* Second Row of Charts */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          {/* Platform Performance */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 className="w-5 h-5 text-gray-500" />
+              <h3 className="font-semibold text-gray-900">Platform Performance</h3>
+              <span className="text-xs text-gray-400 ml-2">Total across all brands</span>
+            </div>
+            
+            {platformData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={platformData} layout="vertical" barSize={24}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 12 }} stroke="#888" tickFormatter={formatNumber} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} stroke="#888" width={80} />
+                  <Tooltip 
+                    formatter={(value) => formatNumber(Number(value ?? 0))}
+                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend />
+                  <Bar dataKey="views" name="Views (7d)" fill="#10B981" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="followers" name="Followers" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-gray-400">
+                <p>No platform data available</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Engagement Rate */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center gap-2 mb-4">
+              <Heart className="w-5 h-5 text-pink-500" />
+              <h3 className="font-semibold text-gray-900">Engagement Rate</h3>
+              <span className="text-xs text-gray-400 ml-2">Likes / Views %</span>
+            </div>
+            
+            {engagementData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={engagementData} barSize={40}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#888" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#888" tickFormatter={(v) => `${v}%`} />
+                  <Tooltip 
+                    formatter={(value, name) => {
+                      if (name === 'engagementRate') return [`${value}%`, 'Engagement Rate']
+                      return [formatNumber(Number(value ?? 0)), name]
+                    }}
+                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  <Bar dataKey="engagementRate" name="Engagement Rate" radius={[4, 4, 0, 0]}>
+                    {engagementData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-gray-400">
+                <p>No engagement data available</p>
+              </div>
+            )}
+          </div>
+        </div>
+        
         {/* Brand Cards */}
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Detailed Breakdown</h2>
         {filteredBrands.length > 0 ? (
@@ -938,14 +1054,6 @@ export function AnalyticsPage() {
               <RefreshCw className={`w-4 h-4 inline mr-2 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
               Fetch Analytics
             </button>
-          </div>
-        )}
-        
-        {/* Rate Limit Notice */}
-        {rateLimit && !rateLimit.can_refresh && rateLimit.next_available_at && (
-          <div className="mt-6 text-center text-sm text-gray-500">
-            <Clock className="w-4 h-4 inline mr-1" />
-            Next refresh available {formatTimeAgo(rateLimit.next_available_at).replace(' ago', '')}
           </div>
         )}
       </div>

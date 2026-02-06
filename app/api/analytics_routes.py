@@ -55,6 +55,7 @@ class AnalyticsResponse(BaseModel):
     brands: List[BrandMetrics]
     rate_limit: RateLimitInfo
     last_refresh: Optional[str] = None
+    needs_refresh: bool = False  # True if data is stale (>12 hours old)
 
 
 class RefreshResponse(BaseModel):
@@ -133,8 +134,8 @@ async def get_analytics(db: Session = Depends(get_db)):
     # Get cached analytics
     analytics = service.get_all_analytics()
     
-    # Get rate limit status
-    can_refresh, remaining, next_available = service.can_refresh()
+    # Check if data is stale (needs auto-refresh)
+    needs_refresh = service.needs_auto_refresh()
     
     # Find last refresh time
     from app.models import AnalyticsRefreshLog
@@ -149,12 +150,13 @@ async def get_analytics(db: Session = Depends(get_db)):
     return AnalyticsResponse(
         brands=format_analytics_response(analytics, db),
         rate_limit=RateLimitInfo(
-            remaining=remaining,
-            max_per_day=10,
-            next_available_at=next_available.isoformat() if next_available else None,
-            can_refresh=can_refresh
+            remaining=9999,  # No limits
+            max_per_day=9999,
+            next_available_at=None,
+            can_refresh=True
         ),
-        last_refresh=last_refresh
+        last_refresh=last_refresh,
+        needs_refresh=needs_refresh
     )
 
 
@@ -163,7 +165,7 @@ async def refresh_analytics(db: Session = Depends(get_db)):
     """
     Refresh analytics data for all brands.
     
-    Rate limited to 10 refreshes per day to avoid excessive API calls.
+    No rate limits - refreshes on demand and auto-refreshes every 12 hours.
     
     This fetches fresh data from:
     - Instagram Business API (followers, reach, likes)
@@ -172,24 +174,8 @@ async def refresh_analytics(db: Session = Depends(get_db)):
     """
     service = AnalyticsService(db)
     
-    # Check rate limit first
-    can_refresh, remaining, next_available = service.can_refresh()
-    
-    if not can_refresh:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "message": "Rate limit exceeded. Maximum 10 refreshes per day.",
-                "remaining": remaining,
-                "next_available_at": next_available.isoformat() if next_available else None
-            }
-        )
-    
-    # Perform refresh
+    # Perform refresh (no rate limits)
     result = service.refresh_all_analytics()
-    
-    # Get updated rate limit info
-    _, remaining_after, next_available_after = service.can_refresh()
     
     if result["success"]:
         return RefreshResponse(
@@ -198,10 +184,10 @@ async def refresh_analytics(db: Session = Depends(get_db)):
             updated_count=result.get("updated_count"),
             errors=result.get("errors"),
             rate_limit=RateLimitInfo(
-                remaining=remaining_after,
-                max_per_day=10,
-                next_available_at=next_available_after.isoformat() if next_available_after else None,
-                can_refresh=remaining_after > 0
+                remaining=9999,
+                max_per_day=9999,
+                next_available_at=None,
+                can_refresh=True
             ),
             analytics=format_analytics_response(result.get("analytics", []), db)
         )
@@ -211,10 +197,10 @@ async def refresh_analytics(db: Session = Depends(get_db)):
             message=result.get("error", "Failed to refresh analytics"),
             errors=result.get("errors"),
             rate_limit=RateLimitInfo(
-                remaining=remaining_after,
-                max_per_day=10,
-                next_available_at=next_available_after.isoformat() if next_available_after else None,
-                can_refresh=remaining_after > 0
+                remaining=9999,
+                max_per_day=9999,
+                next_available_at=None,
+                can_refresh=True
             )
         )
 
@@ -223,18 +209,13 @@ async def refresh_analytics(db: Session = Depends(get_db)):
 async def get_rate_limit_status(db: Session = Depends(get_db)):
     """
     Get current rate limit status for analytics refresh.
-    
-    Returns how many refreshes are remaining and when the next
-    refresh will be available.
+    No limits applied - always returns can_refresh=True.
     """
-    service = AnalyticsService(db)
-    can_refresh, remaining, next_available = service.can_refresh()
-    
     return RateLimitInfo(
-        remaining=remaining,
-        max_per_day=10,
-        next_available_at=next_available.isoformat() if next_available else None,
-        can_refresh=can_refresh
+        remaining=9999,
+        max_per_day=9999,
+        next_available_at=None,
+        can_refresh=True
     )
 
 

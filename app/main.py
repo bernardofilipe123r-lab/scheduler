@@ -380,11 +380,39 @@ async def startup_event():
         except Exception as e:
             print(f"❌ Auto-publish check failed: {str(e)}")
     
+    def refresh_analytics():
+        """Auto-refresh analytics data every 12 hours."""
+        try:
+            from app.services.analytics_service import AnalyticsService
+            from app.db_connection import get_db_session
+            
+            print(f"\n📊 Auto-refresh analytics running at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            with get_db_session() as db:
+                service = AnalyticsService(db)
+                result = service.refresh_all_analytics()
+                
+                if result["success"]:
+                    print(f"   ✅ Analytics refreshed: {result['updated_count']} platforms updated")
+                else:
+                    print(f"   ⚠️ Analytics refresh had issues: {result.get('errors', [])}")
+                    
+        except Exception as e:
+            print(f"❌ Auto-refresh analytics failed: {str(e)}")
+    
     # Run check every 60 seconds
     scheduler.add_job(check_and_publish, 'interval', seconds=60, id='auto_publish')
+    
+    # Run analytics refresh every 12 hours
+    scheduler.add_job(refresh_analytics, 'interval', hours=12, id='analytics_refresh')
+    
+    # Also run analytics refresh once on startup (after a short delay)
+    scheduler.add_job(refresh_analytics, 'date', run_date=datetime.now(), id='analytics_startup')
+    
     scheduler.start()
     
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
+    print("✅ Analytics auto-refresh scheduled (every 12 hours)", flush=True)
     print("🎉 Startup complete! App is ready.", flush=True)
     
     # Store scheduler for shutdown

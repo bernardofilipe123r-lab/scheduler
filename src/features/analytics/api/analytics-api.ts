@@ -39,6 +39,7 @@ export interface AnalyticsResponse {
   brands: BrandMetrics[]
   rate_limit: RateLimitInfo
   last_refresh: string | null
+  needs_refresh?: boolean  // True if data is stale (>12 hours old)
 }
 
 // Response from /api/analytics/refresh
