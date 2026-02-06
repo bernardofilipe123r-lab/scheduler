@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Film, History, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid } from 'lucide-react'
+import { Film, History, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3 } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export function AppLayout() {
@@ -92,6 +92,20 @@ export function AppLayout() {
               >
                 <Calendar className="w-4 h-4" />
                 Scheduled
+              </NavLink>
+              
+              <NavLink
+                to="/analytics"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-600'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`
+                }
+              >
+                <BarChart3 className="w-4 h-4" />
+                Analytics
               </NavLink>
               
               {/* Settings Dropdown */}

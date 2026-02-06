@@ -236,3 +236,55 @@ class YouTubeChannel(Base):
             data["refresh_token"] = self.refresh_token
         
         return data
+
+class BrandAnalytics(Base):
+    """
+    Model for caching brand analytics data.
+    
+    Stores followers, views, and likes for each brand on each platform.
+    Data is refreshed on-demand with rate limiting (3 refreshes per hour).
+    """
+    __tablename__ = "brand_analytics"
+    
+    # Composite primary key: brand + platform
+    brand = Column(String(50), primary_key=True)
+    platform = Column(String(20), primary_key=True)  # instagram, facebook, youtube
+    
+    # Analytics metrics
+    followers_count = Column(Integer, default=0)
+    views_last_7_days = Column(Integer, default=0)
+    likes_last_7_days = Column(Integer, default=0)
+    
+    # Extra metrics (platform-specific)
+    extra_metrics = Column(JSON, nullable=True)
+    
+    # Timestamps
+    last_fetched_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    def to_dict(self):
+        """Convert to dictionary for API responses."""
+        return {
+            "brand": self.brand,
+            "platform": self.platform,
+            "followers_count": self.followers_count,
+            "views_last_7_days": self.views_last_7_days,
+            "likes_last_7_days": self.likes_last_7_days,
+            "extra_metrics": self.extra_metrics or {},
+            "last_fetched_at": self.last_fetched_at.isoformat() if self.last_fetched_at else None,
+        }
+
+
+class AnalyticsRefreshLog(Base):
+    """
+    Log of analytics refresh attempts for rate limiting.
+    
+    Limits refreshes to 3 per hour to avoid excessive API calls.
+    """
+    __tablename__ = "analytics_refresh_log"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    refreshed_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    user_id = Column(String(100), nullable=True)  # Optional: track who refreshed
+    status = Column(String(20), default="success")  # success, failed
+    error_message = Column(Text, nullable=True)

@@ -1,0 +1,63 @@
+/**
+ * React Query hooks for brand analytics
+ */
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { 
+  fetchAnalytics, 
+  refreshAnalytics,
+  fetchRateLimitStatus,
+  type AnalyticsResponse,
+  type RefreshResponse,
+  type RateLimitInfo
+} from '../api'
+
+/**
+ * Hook to fetch cached analytics data
+ */
+export function useAnalytics() {
+  return useQuery<AnalyticsResponse>({
+    queryKey: ['analytics'],
+    queryFn: fetchAnalytics,
+    staleTime: 60000, // Consider data stale after 1 minute
+    refetchOnWindowFocus: false, // Don't auto-refetch - user controls refresh
+  })
+}
+
+/**
+ * Hook to check rate limit status
+ */
+export function useRateLimitStatus() {
+  return useQuery<RateLimitInfo>({
+    queryKey: ['analytics-rate-limit'],
+    queryFn: fetchRateLimitStatus,
+    staleTime: 30000, // Check every 30 seconds
+  })
+}
+
+/**
+ * Hook to refresh analytics data
+ * Rate limited to 3 refreshes per hour
+ */
+export function useRefreshAnalytics() {
+  const queryClient = useQueryClient()
+  
+  return useMutation<RefreshResponse, Error>({
+    mutationFn: refreshAnalytics,
+    onSuccess: (data) => {
+      // Update the analytics cache with new data
+      if (data.analytics) {
+        queryClient.setQueryData(['analytics'], {
+          brands: data.analytics,
+          rate_limit: data.rate_limit,
+          last_refresh: new Date().toISOString()
+        })
+      }
+      // Invalidate rate limit query to get fresh status
+      queryClient.invalidateQueries({ queryKey: ['analytics-rate-limit'] })
+    },
+    onError: () => {
+      // Invalidate rate limit query on error too
+      queryClient.invalidateQueries({ queryKey: ['analytics-rate-limit'] })
+    }
+  })
+}

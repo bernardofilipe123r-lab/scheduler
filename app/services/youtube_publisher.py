@@ -511,10 +511,16 @@ class YouTubePublisher:
             
             print(f"   📤 [YT THUMBNAIL] Image size: {len(image_data)} bytes", flush=True)
             
-            # YouTube API requires the raw image bytes in the body
+            # YouTube API requires using the UPLOAD endpoint (not the regular API endpoint)
+            # URL format: https://www.googleapis.com/upload/youtube/v3/thumbnails/set
+            upload_url = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
+            
             response = requests.post(
-                f"{self.API_BASE}/thumbnails/set",
-                params={"videoId": video_id},
+                upload_url,
+                params={
+                    "videoId": video_id,
+                    "uploadType": "media"  # Required for direct media upload
+                },
                 headers={
                     "Authorization": f"Bearer {access_token}",
                     "Content-Type": content_type,

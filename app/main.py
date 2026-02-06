@@ -14,6 +14,7 @@ from app.api.routes import router as reels_router
 from app.api.jobs_routes import router as jobs_router
 from app.api.youtube_routes import router as youtube_router
 from app.api.brands_routes import router as brands_router
+from app.api.analytics_routes import router as analytics_router
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.db_connection import init_db
 
@@ -71,6 +72,7 @@ app.include_router(reels_router)
 app.include_router(jobs_router)
 app.include_router(youtube_router, prefix="/api")
 app.include_router(brands_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api")
 
 # Mount static files - use absolute path for Railway volume support
 # The output directory is at /app/output when running in Docker
