@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Stage, Layer, Image as KonvaImage, Rect, Text, Line, Group } from 'react-konva'
 import useImage from 'use-image'
 import Konva from 'konva'
@@ -15,7 +15,6 @@ import {
   Image as ImageIcon,
   Settings2,
   Upload,
-  Square,
   RotateCcw,
   Save
 } from 'lucide-react'
@@ -42,15 +41,6 @@ const DEFAULT_GENERAL_SETTINGS = {
     titleGap: DEFAULT_TITLE_GAP,
     logoGap: DEFAULT_LOGO_GAP,
     titlePaddingX: 45
-  },
-  highlight: {
-    showHighlight: true,
-    enabled: false,
-    centerXLock: true,
-    x: 40,
-    y: CANVAS_HEIGHT - 350,
-    width: CANVAS_WIDTH - 80,
-    height: 80
   }
 }
 
@@ -106,21 +96,9 @@ interface LayoutConfig {
   titlePaddingX: number // horizontal padding for title
 }
 
-// Highlight rectangle configuration
-interface HighlightConfig {
-  showHighlight: boolean // Whether to show any highlight at all
-  enabled: boolean // If true, use manual positioning; if false, auto-highlight
-  centerXLock: boolean // Lock X to center of canvas
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
 // Title configuration
 interface TitleConfig {
   text: string
-  highlightedText: string
   fontSize: number
 }
 
@@ -130,7 +108,6 @@ interface PostState {
   title: TitleConfig
   logoImage: string | null
   layout: LayoutConfig
-  highlight: HighlightConfig
 }
 
 // Background Image Component (non-interactive)
@@ -245,28 +222,23 @@ function LogoWithLines({
   )
 }
 
-// Title component with highlight support and auto-wrapping (non-draggable)
+// Title component with auto-wrapping (non-draggable)
 function TitleLayer({
   config,
-  highlightConfig,
-  highlightColor,
   x,
   y,
   paddingX
 }: {
   config: TitleConfig
-  highlightConfig: HighlightConfig
-  highlightColor: string
   x: number
   y: number
   paddingX: number
 }) {
   // Get the text content
   const textContent = config.text
-  const highlightPhrase = config.highlightedText.trim().toUpperCase()
   const textWidth = CANVAS_WIDTH - paddingX * 2
   
-  // Calculate wrapped lines for highlight detection
+  // Calculate wrapped lines
   const words = textContent.split(' ')
   const lines: string[] = []
   let currentLine = ''
@@ -290,118 +262,24 @@ function TitleLayer({
   }
   
   const lineHeight = config.fontSize * 1.1 // Tighter line height
-  // Dynamic padding based on font size
-  const paddingXRect = Math.max(6, config.fontSize * 0.1) // 10% of font size, min 6px
-  const paddingYRect = Math.max(4, config.fontSize * 0.08) // 8% of font size, min 4px
-  
-  // Check each line independently for highlight matches
-  // Each line gets its own rectangle if it contains any part of the highlight phrase
-  const lineHighlightInfo: Array<{
-    shouldHighlight: boolean
-    isFullLine: boolean // true if the entire line content is part of the highlight
-  }> = []
-  
-  const highlightWords = highlightPhrase.split(' ')
-  
-  lines.forEach((line) => {
-    const lineUpper = line.toUpperCase().trim()
-    
-    // Check if this line contains the full highlight phrase
-    const lineContainsFullPhrase = lineUpper.includes(highlightPhrase)
-    
-    // Check if this line is entirely contained within the highlight phrase
-    const lineIsPartOfPhrase = highlightPhrase.includes(lineUpper) && lineUpper.length > 0
-    
-    // Check if any words from the highlight phrase are in this line
-    const lineWords = lineUpper.split(' ')
-    const hasHighlightWords = lineWords.some(word => highlightWords.includes(word))
-    
-    const shouldHighlight = lineContainsFullPhrase || lineIsPartOfPhrase || hasHighlightWords
-    
-    // It's a full line if the whole line is part of the highlight phrase
-    // (either the line is contained in the phrase, or the phrase is exactly the line)
-    const isFullLine = lineIsPartOfPhrase || lineUpper === highlightPhrase
-    
-    lineHighlightInfo.push({
-      shouldHighlight,
-      isFullLine
-    })
-  })
   
   return (
     <Group x={x} y={y}>
-      {/* Manual highlight rectangle if enabled AND showHighlight is true */}
-      {highlightConfig.showHighlight && highlightConfig.enabled && (
-        <Rect
-          x={highlightConfig.centerXLock 
-            ? (CANVAS_WIDTH / 2) - (highlightConfig.width / 2) - x
-            : highlightConfig.x - x}
-          y={highlightConfig.y - y}
-          width={highlightConfig.width}
-          height={highlightConfig.height}
-          fill={highlightColor}
-        />
-      )}
-      
       {lines.map((line, i) => {
-        const highlightInfo = lineHighlightInfo[i]
-        
-        // Only show auto-highlight if: showHighlight=true, enabled=false, and this line should be highlighted
-        const showAutoHighlight = highlightConfig.showHighlight && !highlightConfig.enabled && highlightInfo.shouldHighlight
-        
-        // Text is dark if highlighted (either manual or auto)
-        const textIsDark = showAutoHighlight || (highlightConfig.showHighlight && highlightConfig.enabled && highlightInfo.shouldHighlight)
-        
         const lineY = i * lineHeight
         
-        // Calculate actual text width for this line
-        const lineTextWidth = line.length * avgCharWidth
-        const actualLineWidth = Math.min(lineTextWidth, textWidth)
-        
-        // Calculate highlight rectangle position and size
-        // Each line gets its own rectangle - simple and clean
-        let rectX: number
-        let rectWidth: number
-        let rectYOffset: number
-        
-        if (highlightInfo.isFullLine) {
-          // Full line (alone on its line) - center with slight width reduction and top padding
-          rectWidth = actualLineWidth + paddingXRect * 2 - 4 // Reduce by 2px on each side
-          rectX = (textWidth - rectWidth) / 2
-          rectYOffset = -paddingYRect + 2 // Add 2px padding top
-        } else {
-          // Partial line - full width of the text on this line
-          rectWidth = actualLineWidth + paddingXRect * 2
-          rectX = (textWidth - rectWidth) / 2
-          rectYOffset = -paddingYRect
-        }
-        
-        // Dynamic rectangle height based on font size
-        const rectHeight = config.fontSize + paddingYRect * 2
-        
         return (
-          <Group key={i} y={lineY}>
-            {/* Background for highlighted text (auto mode) - one rectangle per line */}
-            {showAutoHighlight && (
-              <Rect
-                x={rectX}
-                y={rectYOffset}
-                width={rectWidth}
-                height={rectHeight}
-                fill={highlightColor}
-              />
-            )}
-            {/* Text */}
-            <Text
-              text={line}
-              fontSize={config.fontSize}
-              fontFamily="Anton"
-              fontStyle="normal"
-              fill={textIsDark ? 'black' : 'white'}
-              width={textWidth}
-              align="center"
-            />
-          </Group>
+          <Text
+            key={i}
+            text={line}
+            fontSize={config.fontSize}
+            fontFamily="Anton"
+            fontStyle="normal"
+            fill="white"
+            width={textWidth}
+            align="center"
+            y={lineY}
+          />
         )
       })}
     </Group>
@@ -457,6 +335,16 @@ export function PostsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   
+  // Font loading state
+  const [fontLoaded, setFontLoaded] = useState(false)
+  
+  // Preload font on mount
+  useEffect(() => {
+    document.fonts.load('1em Anton').then(() => {
+      setFontLoaded(true)
+    })
+  }, [])
+  
   // Step state: 'generate' | 'finetune'
   const [step, setStep] = useState<'generate' | 'finetune'>('generate')
   
@@ -488,7 +376,7 @@ export function PostsPage() {
   
   // Preview title for Step 1 (before generation)
   const [previewTitle, setPreviewTitle] = useState('STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%')
-  const [previewHighlightedText, setPreviewHighlightedText] = useState('STRESS & CORTISOL BY 40%')
+  
   
   // Post states for each brand (populated after generation, for Step 2)
   const [postStates, setPostStates] = useState<Record<string, PostState>>(() => {
@@ -498,7 +386,6 @@ export function PostsPage() {
         backgroundImage: null,
         title: {
           text: '',
-          highlightedText: '',
           fontSize: 70
         },
         logoImage: null,
@@ -507,15 +394,6 @@ export function PostsPage() {
           titleGap: DEFAULT_TITLE_GAP,
           logoGap: DEFAULT_LOGO_GAP,
           titlePaddingX: 45
-        },
-        highlight: {
-          showHighlight: true,
-          enabled: false,
-          centerXLock: true,
-          x: 40,
-          y: CANVAS_HEIGHT - 350,
-          width: CANVAS_WIDTH - 80,
-          height: 80
         }
       }
     })
@@ -570,29 +448,11 @@ export function PostsPage() {
     }))
   }, [activeBrand])
   
-  // Update highlight (for Step 2 per-brand)
-  const updateHighlight = useCallback((updates: Partial<HighlightConfig>) => {
-    setPostStates(prev => ({
-      ...prev,
-      [activeBrand]: {
-        ...prev[activeBrand],
-        highlight: { ...prev[activeBrand].highlight, ...updates }
-      }
-    }))
-  }, [activeBrand])
-  
   // Update general settings (Step 1 - applies to ALL brands)
   const updateGeneralLayout = useCallback((updates: Partial<LayoutConfig>) => {
     setGeneralSettings(prev => ({
       ...prev,
       layout: { ...prev.layout, ...updates }
-    }))
-  }, [])
-  
-  const updateGeneralHighlight = useCallback((updates: Partial<HighlightConfig>) => {
-    setGeneralSettings(prev => ({
-      ...prev,
-      highlight: { ...prev.highlight, ...updates }
     }))
   }, [])
   
@@ -612,22 +472,6 @@ export function PostsPage() {
     localStorage.removeItem(STORAGE_KEY)
     toast.success('Settings reset to default')
   }, [])
-  
-  // Calculate auto highlight position based on title
-  const getAutoHighlightPosition = useCallback(() => {
-    const titleHeight = calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX)
-    const readCaptionY = CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24
-    const titleY = readCaptionY - generalSettings.layout.titleGap - titleHeight
-    // Auto highlight is roughly at last line of title
-    const avgCharWidth = generalSettings.fontSize * 0.55
-    const textWidth = CANVAS_WIDTH - generalSettings.layout.titlePaddingX * 2
-    const highlightWidth = Math.min(previewHighlightedText.length * avgCharWidth, textWidth) * 0.8
-    return {
-      y: titleY + titleHeight - generalSettings.fontSize - 4,
-      width: highlightWidth,
-      height: generalSettings.fontSize + 12
-    }
-  }, [previewTitle, previewHighlightedText, generalSettings])
   
   // Toggle brand selection
   const toggleBrand = (brand: string) => {
@@ -673,10 +517,6 @@ export function PostsPage() {
         setAiPrompt(data.image_prompt)
       }
       
-      // Extract highlighted text (last 3 words)
-      const highlightedText = data.title.split(' ').slice(-3).join(' ')
-      setPreviewHighlightedText(highlightedText)
-      
       // Update all selected brands with generated content AND general settings
       setPostStates(prev => {
         const updated = { ...prev }
@@ -685,11 +525,9 @@ export function PostsPage() {
             ...updated[brand],
             title: {
               text: data.title,
-              highlightedText: highlightedText,
               fontSize: generalSettings.fontSize
             },
-            layout: { ...generalSettings.layout },
-            highlight: { ...generalSettings.highlight }
+            layout: { ...generalSettings.layout }
           }
         })
         return updated
@@ -733,9 +571,7 @@ export function PostsPage() {
           ai_prompt: aiPrompt,
           post_config: {
             layout: currentPost.layout,
-            highlight: currentPost.highlight,
-            fontSize: currentPost.title.fontSize,
-            highlightedText: currentPost.title.highlightedText
+            fontSize: currentPost.title.fontSize
           }
         })
       })
@@ -829,8 +665,6 @@ export function PostsPage() {
   
   // STEP 1: Generate Viral Post
   if (step === 'generate') {
-    const previewConfig = BRAND_CONFIGS[previewBrand]
-    
     return (
       <div className="space-y-6">
         {/* Header */}
@@ -861,6 +695,7 @@ export function PostsPage() {
                 </select>
               </div>
               <Stage
+                key={`step1-canvas-${fontLoaded}`}
                 width={CANVAS_WIDTH * PREVIEW_SCALE}
                 height={CANVAS_HEIGHT * PREVIEW_SCALE}
                 style={{ 
@@ -882,11 +717,8 @@ export function PostsPage() {
                   <TitleLayer
                     config={{
                       text: previewTitle,
-                      highlightedText: previewHighlightedText,
                       fontSize: generalSettings.fontSize
                     }}
-                    highlightConfig={generalSettings.highlight}
-                    highlightColor={previewConfig.color}
                     x={generalSettings.layout.titlePaddingX}
                     y={CANVAS_HEIGHT - generalSettings.layout.readCaptionBottom - 24 - generalSettings.layout.titleGap - calculateTitleHeight(previewTitle, generalSettings.fontSize, generalSettings.layout.titlePaddingX)}
                     paddingX={generalSettings.layout.titlePaddingX}
@@ -1031,122 +863,6 @@ export function PostsPage() {
                 />
               </div>
               
-              {/* Highlight Controls */}
-              <div className="border-t border-gray-100 pt-4">
-                {/* Show Highlight Toggle */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-700">Show Highlight</span>
-                  <button
-                    onClick={() => updateGeneralHighlight({ showHighlight: !generalSettings.highlight.showHighlight })}
-                    className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-                      generalSettings.highlight.showHighlight ? 'bg-primary-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
-                      generalSettings.highlight.showHighlight ? 'translate-x-5' : 'translate-x-0.5'
-                    }`} />
-                  </button>
-                </div>
-                
-                {generalSettings.highlight.showHighlight && (
-                  <>
-                    {/* Manual vs Auto toggle */}
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-600">Manual Rectangle</span>
-                      <button
-                        onClick={() => {
-                          if (!generalSettings.highlight.enabled) {
-                            // When enabling manual, spawn at auto position
-                            const autoPos = getAutoHighlightPosition()
-                            updateGeneralHighlight({ 
-                              enabled: true,
-                              y: autoPos.y,
-                              width: autoPos.width,
-                              height: autoPos.height
-                            })
-                          } else {
-                            updateGeneralHighlight({ enabled: false })
-                          }
-                        }}
-                        className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-                          generalSettings.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
-                          generalSettings.highlight.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                        }`} />
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-400 mb-3">
-                      {generalSettings.highlight.enabled 
-                        ? 'Position rectangle manually' 
-                        : 'Auto-highlight based on "Highlighted Text"'}
-                    </p>
-                    
-                    {generalSettings.highlight.enabled && (
-                      <div className="space-y-3">
-                        {/* Center X Lock */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-500">Center X Lock</span>
-                          <button
-                            onClick={() => updateGeneralHighlight({ centerXLock: !generalSettings.highlight.centerXLock })}
-                            className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-                              generalSettings.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
-                            }`}
-                          >
-                            <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
-                              generalSettings.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
-                            }`} />
-                          </button>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className={generalSettings.highlight.centerXLock ? 'opacity-40' : ''}>
-                            <label className="text-xs text-gray-500">
-                              X: {generalSettings.highlight.centerXLock ? 'Centered' : generalSettings.highlight.x}
-                            </label>
-                            <input
-                              type="range" min={0} max={CANVAS_WIDTH - 100}
-                              value={generalSettings.highlight.x}
-                              onChange={(e) => updateGeneralHighlight({ x: Number(e.target.value) })}
-                              disabled={generalSettings.highlight.centerXLock}
-                              className="w-full accent-primary-500 disabled:opacity-50"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500">Y: {generalSettings.highlight.y}</label>
-                            <input
-                              type="range" min={0} max={CANVAS_HEIGHT - 100}
-                              value={generalSettings.highlight.y}
-                              onChange={(e) => updateGeneralHighlight({ y: Number(e.target.value) })}
-                              className="w-full accent-primary-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500">Width: {generalSettings.highlight.width}</label>
-                            <input
-                              type="range" min={100} max={CANVAS_WIDTH}
-                              value={generalSettings.highlight.width}
-                              onChange={(e) => updateGeneralHighlight({ width: Number(e.target.value) })}
-                              className="w-full accent-primary-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500">Height: {generalSettings.highlight.height}</label>
-                            <input
-                              type="range" min={40} max={200}
-                              value={generalSettings.highlight.height}
-                              onChange={(e) => updateGeneralHighlight({ height: Number(e.target.value) })}
-                              className="w-full accent-primary-500"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-              
               {/* Save / Reset buttons */}
               <div className="border-t border-gray-100 pt-4 flex gap-2">
                 <button
@@ -1181,16 +897,6 @@ export function PostsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-600 mb-1 block">Highlighted Text</label>
-                  <input
-                    type="text"
-                    value={previewHighlightedText}
-                    onChange={(e) => setPreviewHighlightedText(e.target.value)}
-                    placeholder="Text to highlight..."
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
                   <label className="text-sm text-gray-600 mb-1 block">AI Image Prompt</label>
                   <textarea
                     value={aiPrompt}
@@ -1211,11 +917,9 @@ export function PostsPage() {
                             ...updated[brand],
                             title: {
                               text: previewTitle,
-                              highlightedText: previewHighlightedText,
                               fontSize: generalSettings.fontSize
                             },
-                            layout: { ...generalSettings.layout },
-                            highlight: { ...generalSettings.highlight }
+                            layout: { ...generalSettings.layout }
                           }
                         })
                         return updated
@@ -1331,6 +1035,7 @@ export function PostsPage() {
             }}
           >
             <Stage
+              key={`step2-canvas-${fontLoaded}`}
               ref={stageRef}
               width={CANVAS_WIDTH * PREVIEW_SCALE}
               height={CANVAS_HEIGHT * PREVIEW_SCALE}
@@ -1365,8 +1070,6 @@ export function PostsPage() {
                 {/* Title */}
                 <TitleLayer
                   config={currentPost.title}
-                  highlightConfig={currentPost.highlight}
-                  highlightColor={brandConfig.color}
                   x={layout.titlePaddingX}
                   y={titleY}
                   paddingX={layout.titlePaddingX}
@@ -1469,18 +1172,6 @@ export function PostsPage() {
               
               <div>
                 <label className="text-sm text-gray-600 mb-1 block">
-                  Highlighted Text
-                </label>
-                <input
-                  type="text"
-                  value={currentPost.title.highlightedText}
-                  onChange={(e) => updateTitle({ highlightedText: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">
                   Font Size: {currentPost.title.fontSize}px
                 </label>
                 <input
@@ -1493,118 +1184,6 @@ export function PostsPage() {
                 />
               </div>
             </div>
-          </div>
-          
-          {/* Highlight Rectangle Controls */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Square className="w-5 h-5 text-primary-500" />
-                Highlight
-              </h3>
-              <button
-                onClick={() => updateHighlight({ showHighlight: !currentPost.highlight.showHighlight })}
-                className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-                  currentPost.highlight.showHighlight ? 'bg-primary-500' : 'bg-gray-300'
-                }`}
-              >
-                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
-                  currentPost.highlight.showHighlight ? 'translate-x-5' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-            
-            {currentPost.highlight.showHighlight && (
-              <>
-                {/* Manual vs Auto */}
-                <div className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded mb-3">
-                  <span className="text-xs text-gray-600">Manual Rectangle</span>
-                  <button
-                    onClick={() => updateHighlight({ enabled: !currentPost.highlight.enabled })}
-                    className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-                      currentPost.highlight.enabled ? 'bg-primary-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
-                      currentPost.highlight.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    }`} />
-                  </button>
-                </div>
-                
-                {currentPost.highlight.enabled && (
-                  <div className="space-y-3">
-                    {/* Center X Lock */}
-                    <div className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded">
-                      <span className="text-xs text-gray-600">Center X Lock</span>
-                      <button
-                        onClick={() => updateHighlight({ centerXLock: !currentPost.highlight.centerXLock })}
-                        className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-                          currentPost.highlight.centerXLock ? 'bg-primary-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
-                          currentPost.highlight.centerXLock ? 'translate-x-4' : 'translate-x-0.5'
-                        }`} />
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className={currentPost.highlight.centerXLock ? 'opacity-40' : ''}>
-                        <label className="text-xs text-gray-500 mb-1 block">
-                          X Position {currentPost.highlight.centerXLock && '(Centered)'}
-                        </label>
-                        <input
-                          type="number"
-                          value={currentPost.highlight.x}
-                          onChange={(e) => updateHighlight({ x: parseInt(e.target.value) || 0 })}
-                          disabled={currentPost.highlight.centerXLock}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm disabled:bg-gray-100"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Y Position</label>
-                        <input
-                          type="number"
-                          value={currentPost.highlight.y}
-                          onChange={(e) => updateHighlight({ y: parseInt(e.target.value) || 0 })}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Width</label>
-                        <input
-                          type="number"
-                          value={currentPost.highlight.width}
-                          onChange={(e) => updateHighlight({ width: parseInt(e.target.value) || 100 })}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Height</label>
-                        <input
-                          type="number"
-                          value={currentPost.highlight.height}
-                          onChange={(e) => updateHighlight({ height: parseInt(e.target.value) || 50 })}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {!currentPost.highlight.enabled && (
-                  <p className="text-xs text-gray-500">
-                    Auto-highlights matching text (80% width, 4px up)
-                  </p>
-                )}
-              </>
-            )}
-            
-            {!currentPost.highlight.showHighlight && (
-              <p className="text-xs text-gray-500">
-                No highlight rectangle will be shown
-              </p>
-            )}
           </div>
           
           {/* Layout Controls */}
