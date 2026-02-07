@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Film, History, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export function AppLayout() {
@@ -76,8 +76,8 @@ export function AppLayout() {
                   }`
                 }
               >
-                <History className="w-4 h-4" />
-                History
+                <Briefcase className="w-4 h-4" />
+                Jobs
               </NavLink>
               
               <NavLink

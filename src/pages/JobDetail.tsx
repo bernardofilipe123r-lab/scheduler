@@ -31,6 +31,7 @@ import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
 import { StatusBadge, FullPageLoader, Modal } from '@/shared/components'
 import { createFacebookCaption } from '@/shared/lib/captionUtils'
+import { PostJobDetail } from './PostJobDetail'
 import type { BrandName, BrandOutput } from '@/shared/types'
 
 export function JobDetailPage() {
@@ -328,10 +329,15 @@ export function JobDetailPage() {
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Job not found</h2>
         <button onClick={() => navigate('/history')} className="btn btn-primary mt-4">
-          Back to History
+          Back to Jobs
         </button>
       </div>
     )
+  }
+
+  // Delegate to post-specific detail view
+  if (job.variant === 'post') {
+    return <PostJobDetail job={job} refetch={refetch} />
   }
   
   const completedCount = Object.values(job.brand_outputs || {})

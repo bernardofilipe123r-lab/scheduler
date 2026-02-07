@@ -16,7 +16,7 @@ from app.services.job_manager import JobManager
 class JobCreateRequest(BaseModel):
     """Request to create a new generation job."""
     title: str
-    content_lines: List[str]
+    content_lines: Optional[List[str]] = None  # Not needed for post variant
     brands: List[str]  # ["gymcollege", "healthycollege", etc.]
     variant: str = "light"
     ai_prompt: Optional[str] = None
@@ -119,7 +119,7 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
             job = manager.create_job(
                 user_id=request.user_id,
                 title=request.title,
-                content_lines=request.content_lines,
+                content_lines=request.content_lines or [],
                 brands=request.brands,
                 variant=request.variant,
                 ai_prompt=request.ai_prompt,

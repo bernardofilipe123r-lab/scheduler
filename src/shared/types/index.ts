@@ -11,7 +11,7 @@ export type BrandStatus = 'pending' | 'generating' | 'completed' | 'failed' | 's
 export type ScheduleStatus = 'scheduled' | 'publishing' | 'published' | 'partial' | 'failed'
 
 // Variant type
-export type Variant = 'light' | 'dark'
+export type Variant = 'light' | 'dark' | 'post'
 
 // Brand output for a single brand in a job
 export interface BrandOutput {
@@ -27,6 +27,7 @@ export interface BrandOutput {
   error?: string
   progress_message?: string
   progress_percent?: number
+  background_data?: string  // base64 data URL for post background
 }
 
 // Job entity

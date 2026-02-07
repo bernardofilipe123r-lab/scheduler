@@ -8,7 +8,7 @@ interface BackendJob {
   title: string
   content_lines: string[]
   brands: BrandName[]
-  variant: 'light' | 'dark'
+  variant: 'light' | 'dark' | 'post'
   ai_prompt?: string
   cta_type: string
   status: string
@@ -45,11 +45,11 @@ function transformJob(backendJob: BackendJob): Job {
 // Job create request
 export interface JobCreateRequest {
   title: string
-  content_lines: string[]
+  content_lines?: string[]
   brands: BrandName[]
-  variant: 'light' | 'dark'
+  variant: 'light' | 'dark' | 'post'
   ai_prompt?: string
-  cta_type: string
+  cta_type?: string
   platforms?: string[]  // ['instagram', 'facebook', 'youtube']
 }
 

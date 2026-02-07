@@ -471,6 +471,84 @@ class JobManager:
             })
             
             return {"success": False, "error": error_msg}
+
+    def process_post_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
+        """
+        Process a single brand for a POST job.
+        Only generates the AI background image — composite rendering happens client-side.
+        """
+        import sys
+        print(f"\n📸 process_post_brand() — {brand}", flush=True)
+
+        job = self.get_job(job_id)
+        if not job:
+            return {"success": False, "error": f"Job not found: {job_id}"}
+
+        self.update_brand_output(job_id, brand, {
+            "status": "generating",
+            "progress_message": f"Generating AI background for {brand}...",
+            "progress_percent": 10,
+        })
+
+        try:
+            from app.services.ai_background_generator import AIBackgroundGenerator
+            import base64 as b64
+            from io import BytesIO
+
+            output_dir = Path("output")
+            posts_dir = output_dir / "posts"
+            posts_dir.mkdir(parents=True, exist_ok=True)
+
+            reel_id = f"{job_id}_{brand}"
+
+            # Generate AI background
+            ai_prompt = job.ai_prompt or job.title
+            generator = AIBackgroundGenerator()
+            print(f"   Prompt: {ai_prompt[:80]}...", flush=True)
+
+            self.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_message": f"Generating unique AI background (~30s)...",
+                "progress_percent": 30,
+            })
+
+            image = generator.generate_background(
+                brand_name=brand,
+                user_prompt=ai_prompt,
+            )
+
+            # Save as file
+            bg_path = posts_dir / f"{reel_id}_background.png"
+            image.save(str(bg_path), format="PNG")
+            print(f"   ✓ Background saved: {bg_path}", flush=True)
+
+            # Also create base64 data URL for immediate frontend use
+            buf = BytesIO()
+            image.save(buf, format="PNG")
+            buf.seek(0)
+            b64_image = b64.b64encode(buf.getvalue()).decode("utf-8")
+
+            self.update_brand_output(job_id, brand, {
+                "status": "completed",
+                "reel_id": reel_id,
+                "thumbnail_path": f"/output/posts/{reel_id}_background.png",
+                "background_data": f"data:image/png;base64,{b64_image}",
+                "regenerated_at": datetime.utcnow().isoformat(),
+            })
+
+            print(f"   ✅ {brand} post background completed", flush=True)
+            return {"success": True, "brand": brand, "reel_id": reel_id}
+
+        except Exception as e:
+            import traceback
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            print(f"   ❌ Failed: {error_msg}", flush=True)
+            traceback.print_exc()
+            self.update_brand_output(job_id, brand, {
+                "status": "failed",
+                "error": error_msg,
+            })
+            return {"success": False, "error": error_msg}
     
     def process_job(self, job_id: str) -> Dict[str, Any]:
         """
@@ -509,6 +587,46 @@ class JobManager:
         self.update_job_status(job_id, "generating", "Starting generation...", 0)
         print(f"   ✓ Status updated", flush=True)
         
+        # ── POST variant: only generate backgrounds ──────────────────
+        if job.variant == "post":
+            print(f"📸 POST variant — generating backgrounds only", flush=True)
+            results = {}
+            total_brands = len(job.brands)
+            try:
+                # Auto-generate image prompt if missing
+                if not job.ai_prompt:
+                    try:
+                        from app.services.content_generator_v2 import ContentGenerator
+                        cg = ContentGenerator()
+                        generated_prompt = cg.generate_image_prompt(job.title)
+                        if generated_prompt:
+                            job.ai_prompt = generated_prompt
+                            self.db.commit()
+                            print(f"   ✓ Auto-generated image prompt: {generated_prompt[:60]}...", flush=True)
+                    except Exception as e:
+                        print(f"   ⚠️ Could not auto-generate prompt: {e}", flush=True)
+
+                for i, brand in enumerate(job.brands):
+                    job = self.get_job(job_id)
+                    if job.status == "cancelled":
+                        return {"success": False, "error": "Job was cancelled", "results": results}
+                    progress = int((i / total_brands) * 100)
+                    self.update_job_status(job_id, "generating", f"Generating {brand}...", progress)
+                    result = self.process_post_brand(job_id, brand)
+                    results[brand] = result
+
+                all_ok = all(r.get("success") for r in results.values())
+                any_ok = any(r.get("success") for r in results.values())
+                final_status = "completed" if all_ok else ("completed" if any_ok else "failed")
+                self.update_job_status(job_id, final_status, progress_percent=100)
+                return {"success": any_ok, "results": results}
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.update_job_status(job_id, "failed", error_message=str(e))
+                return {"success": False, "error": str(e)}
+
+        # ── REEL variants (light / dark) ─────────────────────────────
         results = {}
         total_brands = len(job.brands)
         
