@@ -22,7 +22,7 @@ export function useAnalytics() {
   return useQuery<AnalyticsResponse>({
     queryKey: ['analytics'],
     queryFn: fetchAnalytics,
-    staleTime: 60000, // Consider data stale after 1 minute
+    staleTime: 60000, // Consider data stale after 1 minute test
     refetchOnWindowFocus: false, // Don't auto-refetch - user controls refresh
   })
 }

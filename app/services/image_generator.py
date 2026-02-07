@@ -296,7 +296,7 @@ class ImageGenerator:
             get_text_dimensions(line, title_font)[1] for line in title_lines
         ) + (LINE_SPACING * (len(title_lines) - 1))
         
-        title_y = (self.height - title_height) // 2
+        title_y = (self.height - title_height) // 2 test
         
         # Draw title lines using brand_colors configuration
         text_color = self.brand_colors.thumbnail_text_color
