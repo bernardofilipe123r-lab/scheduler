@@ -362,7 +362,7 @@ export function PostsPage() {
                     <input
                       type="range"
                       min={10}
-                      max={60}
+                      max={300}
                       value={settings.layout.titleGap}
                       onChange={(e) =>
                         updateLayout({ titleGap: Number(e.target.value) })

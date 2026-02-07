@@ -13,7 +13,7 @@ export const PREVIEW_SCALE = 0.4
 export const GRID_PREVIEW_SCALE = 0.25
 
 export const DEFAULT_READ_CAPTION_BOTTOM = 45
-export const DEFAULT_TITLE_GAP = 30
+export const DEFAULT_TITLE_GAP = 80
 export const DEFAULT_LOGO_GAP = 36
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
