@@ -150,7 +150,7 @@ function GradientOverlay() {
 // Brand abbreviations for logo fallback
 const BRAND_ABBREVIATIONS: Record<string, string> = {
   healthycollege: 'HCO',
-  holisticcollege: 'HLC',
+  holisticcollege: 'HCO',
   longevitycollege: 'LCO',
   vitalitycollege: 'VCO',
   wellbeingcollege: 'WCO'
@@ -228,7 +228,9 @@ function LogoWithLines({
           fontFamily="Inter, sans-serif"
           fontStyle="bold"
           fill="white"
-          x={CANVAS_WIDTH / 2 - (abbreviation.length * 8)}
+          width={logoGapWidth}
+          align="center"
+          x={(CANVAS_WIDTH - logoGapWidth) / 2}
           y={logoHeight / 2 - 14}
         />
       )}

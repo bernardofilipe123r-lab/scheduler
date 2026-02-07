@@ -168,7 +168,7 @@ DEFAULT_BRANDS = {
     },
     "holisticcollege": {
         "display_name": "THE HOLISTIC COLLEGE",
-        "short_name": "HLC",
+        "short_name": "HCO",
         "instagram_handle": "@theholisticcollege",
         "facebook_page_name": "The Holistic College",
         "youtube_channel_name": "The Holistic College",
