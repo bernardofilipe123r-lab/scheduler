@@ -74,15 +74,17 @@ export function PostsPage() {
   const handleGenerateTitle = async () => {
     setIsGeneratingTitle(true)
     try {
-      const resp = await fetch('/reels/generate-title', {
+      const resp = await fetch('/reels/auto-generate-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: 'health wellness fitness college lifestyle' }),
+        body: JSON.stringify({}),
       })
+      if (!resp.ok) throw new Error('Failed')
       const data = await resp.json()
       if (data.title) {
         setTitle(data.title)
-        toast.success('Title generated!')
+        if (data.image_prompt) setAiPrompt(data.image_prompt)
+        toast.success('Title & prompt generated!')
       }
     } catch {
       toast.error('Failed to generate title')
@@ -119,30 +121,25 @@ export function PostsPage() {
   const handleAutoGenerate = async () => {
     setIsCreating(true)
     try {
-      // 1) Generate title
-      toast.loading('Generating title...', { id: 'auto' })
-      const titleResp = await fetch('/reels/generate-title', {
+      // 1) Auto-generate viral content (title + content + image prompt)
+      toast.loading('Generating viral content...', { id: 'auto' })
+      const resp = await fetch('/reels/auto-generate-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: 'health wellness fitness college lifestyle' }),
+        body: JSON.stringify({}),
       })
-      const titleData = await titleResp.json()
-      const generatedTitle = titleData.title
-      if (!generatedTitle) throw new Error('No title')
+      if (!resp.ok) {
+        const err = await resp.json()
+        throw new Error(err.detail || 'Failed to generate content')
+      }
+      const data = await resp.json()
+      const generatedTitle = data.title
+      const generatedPrompt = data.image_prompt || ''
+      if (!generatedTitle) throw new Error('No title generated')
       setTitle(generatedTitle)
-
-      // 2) Generate prompt
-      toast.loading('Generating image prompt...', { id: 'auto' })
-      const promptResp = await fetch('/reels/generate-image-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: generatedTitle }),
-      })
-      const promptData = await promptResp.json()
-      const generatedPrompt = promptData.prompt || ''
       setAiPrompt(generatedPrompt)
 
-      // 3) Create job
+      // 2) Create job
       toast.loading('Creating job...', { id: 'auto' })
       const job = await createJob.mutateAsync({
         title: generatedTitle,
@@ -466,7 +463,7 @@ export function PostsPage() {
               ) : (
                 <FileImage className="w-5 h-5" />
               )}
-              Create Job
+              Generate Reels
             </button>
           </div>
         </div>
