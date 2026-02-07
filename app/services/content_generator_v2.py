@@ -536,7 +536,7 @@ class ContentGeneratorV2:
             return self._fallback_post_title()
         
         # Get recent titles to avoid repetition
-        recent = self._get_recent_outputs(10)
+        recent = self._get_recent_outputs()
         history_context = ""
         if recent:
             recent_titles = [r.get("title", "") for r in recent if r.get("title")]
@@ -653,6 +653,124 @@ Generate now:"""
         fallback = random.choice(fallbacks)
         fallback["is_fallback"] = True
         return fallback
+
+    # ============================================================
+    # IMAGE PROMPT GENERATION (standalone, from title only)
+    # ============================================================
+
+    def generate_image_prompt(self, title: str) -> Dict:
+        """
+        Generate an AI image prompt based on a given title.
+        
+        Used when the user provides a title but leaves the image prompt blank.
+        Works for both posts and dark mode reels.
+        
+        Args:
+            title: The content title to base the image prompt on
+            
+        Returns:
+            Dict with 'image_prompt' and 'is_fallback' keys
+        """
+        if not self.api_key or not title.strip():
+            return self._fallback_image_prompt(title)
+        
+        prompt = f"""You are a visual prompt engineer specializing in wellness and health imagery for Instagram.
+
+Given the following title, generate a DETAILED cinematic image prompt suitable for AI image generation (DALL-E / Flux).
+
+### TITLE:
+"{title}"
+
+### REQUIREMENTS:
+- The image must visually represent the theme/topic of the title
+- Cinematic, high-quality, premium wellness aesthetic
+- Include specific visual elements, colors, lighting, and mood
+- Must end with "No text, no letters, no numbers, no symbols, no logos."
+- Should be 2-3 sentences long
+- Should be visually striking and scroll-stopping
+
+### EXAMPLES:
+Title: "STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%"
+Prompt: "A cinematic close-up of vibrant orange slices and vitamin supplements on a clean marble surface with soft morning sunlight streaming through, surrounded by fresh citrus fruits and green herbs. Warm golden and orange tones with premium wellness aesthetic. No text, no letters, no numbers, no symbols, no logos."
+
+Title: "5 SIGNS YOUR BODY IS BEGGING FOR MORE WATER"
+Prompt: "Crystal clear water droplets splashing in ultra slow motion with a glass water bottle surrounded by fresh cucumber slices and mint leaves. Bright, clean blue and green tones with studio-quality cinematic lighting and bokeh effects. No text, no letters, no numbers, no symbols, no logos."
+
+### OUTPUT FORMAT (JSON only, no markdown):
+{{
+    "image_prompt": "Your detailed cinematic image prompt here"
+}}
+
+Generate now:"""
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.8,
+                    "max_tokens": 300
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                content_text = data["choices"][0]["message"]["content"].strip()
+                
+                # Clean up markdown if present
+                if content_text.startswith("```"):
+                    content_text = content_text.split("```")[1]
+                    if content_text.startswith("json"):
+                        content_text = content_text[4:]
+                    content_text = content_text.strip()
+                
+                try:
+                    result = json.loads(content_text)
+                    result["is_fallback"] = False
+                    return result
+                except json.JSONDecodeError as e:
+                    print(f"⚠️ JSON parse error in image prompt generation: {e}")
+                    return self._fallback_image_prompt(title)
+            else:
+                print(f"⚠️ DeepSeek API error: {response.status_code}")
+                return self._fallback_image_prompt(title)
+                
+        except Exception as e:
+            print(f"⚠️ Image prompt generation error: {e}")
+            return self._fallback_image_prompt(title)
+    
+    def _fallback_image_prompt(self, title: str = "") -> Dict:
+        """Fallback image prompt when AI fails."""
+        # Try to extract theme keywords from title for a semi-relevant fallback
+        title_lower = title.lower()
+        
+        if any(w in title_lower for w in ["vitamin", "supplement", "nutrient"]):
+            prompt = "A cinematic arrangement of colorful vitamin supplements and fresh fruits on a clean surface with warm golden sunlight. Premium wellness aesthetic with soft bokeh background. No text, no letters, no numbers, no symbols, no logos."
+        elif any(w in title_lower for w in ["sleep", "rest", "nap", "bed"]):
+            prompt = "A serene bedroom scene with soft morning light filtering through white curtains, cozy bedding and calming lavender tones. Premium minimalist wellness aesthetic. No text, no letters, no numbers, no symbols, no logos."
+        elif any(w in title_lower for w in ["walk", "step", "run", "exercise", "fitness"]):
+            prompt = "A scenic nature path through a lush green forest with golden morning sunlight streaming through the trees. Fresh, vibrant greens with cinematic depth of field. No text, no letters, no numbers, no symbols, no logos."
+        elif any(w in title_lower for w in ["food", "eat", "diet", "meal", "fruit", "berry"]):
+            prompt = "A beautiful overhead shot of colorful fresh fruits, vegetables and superfoods arranged on a clean marble surface. Bright, vibrant colors with premium food photography lighting. No text, no letters, no numbers, no symbols, no logos."
+        elif any(w in title_lower for w in ["meditat", "mind", "stress", "anxiety", "mental"]):
+            prompt = "A peaceful person in meditation pose surrounded by soft natural light and minimalist zen elements. Calming lavender and white tones with premium wellness aesthetic. No text, no letters, no numbers, no symbols, no logos."
+        elif any(w in title_lower for w in ["water", "hydrat", "drink"]):
+            prompt = "Crystal clear water droplets and a glass bottle surrounded by fresh cucumber and mint on a bright clean surface. Fresh blue and green tones with studio lighting. No text, no letters, no numbers, no symbols, no logos."
+        else:
+            prompt = "A cinematic wellness scene with fresh green elements, soft golden sunlight, and premium health-focused objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting. No text, no letters, no numbers, no symbols, no logos."
+        
+        return {
+            "image_prompt": prompt,
+            "is_fallback": True
+        }
 
 
 # ============================================================

@@ -186,6 +186,42 @@ async def generate_post_title(request: AutoContentRequest = None):
         )
 
 
+class GenerateImagePromptRequest(BaseModel):
+    title: str
+
+
+@router.post(
+    "/generate-image-prompt",
+    summary="Generate AI image prompt from title",
+    description="Generate a cinematic image prompt based on a content title, for use with image generation APIs"
+)
+async def generate_image_prompt(request: GenerateImagePromptRequest):
+    """
+    Generate an AI image prompt from a title.
+    
+    Used when the user provides a title but leaves the image prompt blank.
+    Returns a detailed cinematic prompt suitable for DALL-E/Flux.
+    """
+    try:
+        result = content_generator.generate_image_prompt(request.title)
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate image prompt"
+            )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate image prompt: {str(e)}"
+        )
+
+
 class GenerateBackgroundRequest(BaseModel):
     prompt: str
     brand: str = "healthycollege"

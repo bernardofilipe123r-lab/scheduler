@@ -135,12 +135,36 @@ export function GeneratorPage() {
     
     setIsCreatingJob(true)
     try {
+      // For dark mode: auto-generate image prompt if user left it blank
+      let finalAiPrompt = variant === 'dark' ? aiPrompt : undefined
+      if (variant === 'dark' && !aiPrompt.trim()) {
+        toast.loading('Auto-generating image prompt...', { id: 'auto-prompt' })
+        try {
+          const promptResponse = await fetch('/reels/generate-image-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title })
+          })
+          if (promptResponse.ok) {
+            const promptData = await promptResponse.json()
+            if (promptData.image_prompt) {
+              finalAiPrompt = promptData.image_prompt
+              setAiPrompt(promptData.image_prompt)
+              toast.success('Image prompt generated!', { id: 'auto-prompt' })
+            }
+          }
+        } catch (e) {
+          console.error('Failed to auto-generate image prompt:', e)
+          toast.dismiss('auto-prompt')
+        }
+      }
+
       const job = await createJob.mutateAsync({
         title,
         content_lines: contentLines,
         brands: selectedBrands,
         variant,
-        ai_prompt: variant === 'dark' ? aiPrompt : undefined,
+        ai_prompt: finalAiPrompt || undefined,
         cta_type: ctaType,
         platforms: selectedPlatforms,
       })
@@ -234,10 +258,10 @@ export function GeneratorPage() {
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               rows={3}
-              placeholder="Describe the background you want for dark mode..."
+              placeholder="Leave blank to auto-generate from title, or describe the background..."
               className="w-full px-4 py-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
             />
-            <p className="text-xs text-purple-700 mt-1">Optional: Customize the AI-generated background</p>
+            <p className="text-xs text-purple-700 mt-1">Optional: Leave blank to auto-generate, or customize the AI-generated background</p>
           </div>
         )}
         

@@ -16,7 +16,8 @@ import {
   Settings2,
   Upload,
   RotateCcw,
-  Save
+  Save,
+  ChevronDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
@@ -376,6 +377,7 @@ export function PostsPage() {
   // Generated content
   const [generatedTitle, setGeneratedTitle] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
   
   // GENERAL settings that apply to ALL brands (Step 1) - load from localStorage
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(() => {
@@ -507,6 +509,24 @@ export function PostsPage() {
     })
   }
   
+  // Auto-generate image prompt from title if user left it blank
+  const autoGenerateImagePrompt = async (title: string): Promise<string> => {
+    try {
+      const response = await fetch('/reels/generate-image-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      })
+      if (response.ok) {
+        const data = await response.json()
+        return data.image_prompt || ''
+      }
+    } catch (e) {
+      console.error('Failed to auto-generate image prompt:', e)
+    }
+    return ''
+  }
+
   // Generate viral post content (Step 1)
   const handleGenerateViralPost = async () => {
     setIsGenerating(true)
@@ -835,16 +855,21 @@ export function PostsPage() {
               </div>
             </div>
             
-            {/* General Settings */}
+            {/* General Settings (collapsible) */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <button
+                onClick={() => setShowSettings(prev => !prev)}
+                className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-primary-600 transition-colors"
+              >
                 <Settings2 className="w-4 h-4" />
                 General Settings
                 <span className="text-xs font-normal text-gray-500">(applies to all brands)</span>
-              </h2>
+                <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showSettings ? 'rotate-180' : ''}`} />
+              </button>
               
+              {showSettings && <>
               {/* Font Size */}
-              <div className="mb-4">
+              <div className="mt-4 mb-4">
                 <label className="text-sm text-gray-600 mb-1 block">Font Size: {generalSettings.fontSize}px</label>
                 <input
                   type="range"
@@ -926,6 +951,7 @@ export function PostsPage() {
                   Reset
                 </button>
               </div>
+              </>}
             </div>
             
             {/* Manual Entry */}
@@ -943,18 +969,29 @@ export function PostsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-600 mb-1 block">AI Image Prompt</label>
+                  <label className="text-sm text-gray-600 mb-1 block">AI Image Prompt <span className="text-xs text-gray-400">(optional — auto-generated if blank)</span></label>
                   <textarea
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     rows={2}
-                    placeholder="Describe the background image..."
+                    placeholder="Leave blank to auto-generate from title, or describe the background image..."
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (previewTitle.trim()) {
+                      // Auto-generate image prompt if blank
+                      if (!aiPrompt.trim()) {
+                        toast.loading('Auto-generating image prompt...', { id: 'auto-prompt' })
+                        const generatedPrompt = await autoGenerateImagePrompt(previewTitle)
+                        if (generatedPrompt) {
+                          setAiPrompt(generatedPrompt)
+                          toast.success('Image prompt generated!', { id: 'auto-prompt' })
+                        } else {
+                          toast.dismiss('auto-prompt')
+                        }
+                      }
                       // Apply general settings to all selected brands
                       setPostStates(prev => {
                         const updated = { ...prev }
