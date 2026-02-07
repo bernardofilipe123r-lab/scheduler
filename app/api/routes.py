@@ -1480,3 +1480,81 @@ async def get_all_next_slots():
             detail=f"Failed to get next slots: {str(e)}"
         )
 
+
+# ==================== POST IMAGE SCHEDULING ====================
+
+class SchedulePostImageRequest(BaseModel):
+    brand: str
+    title: str
+    image_data: str  # base64 PNG (may include data:image/png;base64, prefix)
+    schedule_time: str  # ISO datetime string
+
+@router.post("/schedule-post-image")
+async def schedule_post_image(request: SchedulePostImageRequest):
+    """Schedule a single post image for a specific brand at a given time."""
+    try:
+        from datetime import datetime
+        
+        print(f"\n{'='*80}")
+        print(f"📸 SCHEDULING POST IMAGE")
+        print(f"   Brand: {request.brand}")
+        print(f"   Title: {request.title[:60]}...")
+        print(f"   Schedule: {request.schedule_time}")
+        print(f"{'='*80}")
+        
+        # Generate unique post ID
+        post_id = f"post_{request.brand}_{str(uuid.uuid4())[:8]}"
+        
+        # Decode and save image
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        posts_dir = base_dir / "output" / "posts"
+        posts_dir.mkdir(parents=True, exist_ok=True)
+        
+        image_path = posts_dir / f"{post_id}.png"
+        
+        # Remove data URL prefix if present
+        image_b64 = request.image_data
+        if ',' in image_b64:
+            image_b64 = image_b64.split(',', 1)[1]
+        
+        image_bytes = base64.b64decode(image_b64)
+        image_path.write_bytes(image_bytes)
+        print(f"   💾 Saved image: {image_path} ({len(image_bytes)} bytes)")
+        
+        # Parse schedule time
+        schedule_dt = datetime.fromisoformat(request.schedule_time.replace('Z', '+00:00'))
+        if schedule_dt.tzinfo is not None:
+            schedule_dt = schedule_dt.replace(tzinfo=None)
+        
+        # Schedule using existing scheduler (post = image only, no video)
+        result = scheduler_service.schedule_reel(
+            user_id="web_user",
+            reel_id=post_id,
+            scheduled_time=schedule_dt,
+            video_path=None,
+            thumbnail_path=image_path,
+            caption=request.title,
+            platforms=["instagram", "facebook"],
+            user_name="Web Interface User",
+            brand=request.brand,
+            variant="post"
+        )
+        
+        print(f"   ✅ Scheduled successfully! ID: {result.get('schedule_id')}")
+        print(f"{'='*80}\n")
+        
+        return {
+            "status": "scheduled",
+            "post_id": post_id,
+            "brand": request.brand,
+            "scheduled_for": schedule_dt.isoformat(),
+            "schedule_id": result.get("schedule_id")
+        }
+        
+    except Exception as e:
+        print(f"   ❌ Failed to schedule post: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to schedule post image: {str(e)}"
+        )
+

@@ -4,24 +4,18 @@ import useImage from 'use-image'
 import Konva from 'konva'
 import { 
   FileImage,
-  Sparkles,
-  Type,
-  Palette,
   Download,
   Loader2,
   Check,
   Wand2,
-  Eye,
-  Image as ImageIcon,
   Settings2,
-  Upload,
   RotateCcw,
   Save,
-  ChevronDown
+  ChevronDown,
+  Calendar
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
 
 // Constants matching the design requirements
 const CANVAS_WIDTH = 1080
@@ -46,6 +40,16 @@ const DEFAULT_GENERAL_SETTINGS = {
 }
 
 const STORAGE_KEY = 'posts-general-settings'
+const GRID_PREVIEW_SCALE = 0.25
+
+// Post scheduling: 2 slots/day (12AM, 12PM) with brand offsets
+const POST_BRAND_OFFSETS: Record<string, number> = {
+  healthycollege: 0,
+  longevitycollege: 1,
+  wellbeingcollege: 2,
+  vitalitycollege: 3,
+  holisticcollege: 4,
+}
 
 // Type for general settings
 type GeneralSettings = typeof DEFAULT_GENERAL_SETTINGS
@@ -350,7 +354,6 @@ function ReadCaption({ y }: { y: number }) {
 // Main Posts Page Component
 export function PostsPage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   
   // Font loading state
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -372,12 +375,12 @@ export function PostsPage() {
   
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false)
-  const [isCreatingJob, setIsCreatingJob] = useState(false)
-  
   // Generated content
   const [generatedTitle, setGeneratedTitle] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [generatingBrands, setGeneratingBrands] = useState<Record<string, string>>({})
+  const [isScheduling, setIsScheduling] = useState(false)
   
   // GENERAL settings that apply to ALL brands (Step 1) - load from localStorage
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(() => {
@@ -419,52 +422,7 @@ export function PostsPage() {
   })
   
   // Refs
-  const stageRef = useRef<Konva.Stage>(null)
-  
-  // Get current post state
-  const currentPost = postStates[activeBrand]
-  const brandConfig = BRAND_CONFIGS[activeBrand]
-  
-  // Calculate positions based on layout config
-  const layout = currentPost.layout
-  const titleHeight = calculateTitleHeight(
-    currentPost.title.text || 'PLACEHOLDER TEXT', 
-    currentPost.title.fontSize, 
-    layout.titlePaddingX
-  )
-  const readCaptionY = CANVAS_HEIGHT - layout.readCaptionBottom - 24
-  const titleY = readCaptionY - layout.titleGap - titleHeight
-  const logoY = titleY - layout.logoGap - 40
-  
-  // Update post state helper
-  const updatePostState = useCallback((brand: string, updates: Partial<PostState>) => {
-    setPostStates(prev => ({
-      ...prev,
-      [brand]: { ...prev[brand], ...updates }
-    }))
-  }, [])
-  
-  // Update title
-  const updateTitle = useCallback((updates: Partial<TitleConfig>) => {
-    setPostStates(prev => ({
-      ...prev,
-      [activeBrand]: {
-        ...prev[activeBrand],
-        title: { ...prev[activeBrand].title, ...updates }
-      }
-    }))
-  }, [activeBrand])
-  
-  // Update layout (for Step 2 per-brand)
-  const updateLayout = useCallback((updates: Partial<LayoutConfig>) => {
-    setPostStates(prev => ({
-      ...prev,
-      [activeBrand]: {
-        ...prev[activeBrand],
-        layout: { ...prev[activeBrand].layout, ...updates }
-      }
-    }))
-  }, [activeBrand])
+  const stageRefs = useRef<Map<string, Konva.Stage>>(new Map())
   
   // Update general settings (Step 1 - applies to ALL brands)
   const updateGeneralLayout = useCallback((updates: Partial<LayoutConfig>) => {
@@ -527,13 +485,47 @@ export function PostsPage() {
     return ''
   }
 
-  // Generate viral post content (Step 1)
+  // Generate AI backgrounds for all selected brands sequentially
+  const generateBackgroundsForBrands = async (prompt: string) => {
+    const statuses: Record<string, string> = {}
+    selectedBrands.forEach(b => { statuses[b] = 'pending' })
+    setGeneratingBrands(statuses)
+
+    for (let i = 0; i < selectedBrands.length; i++) {
+      const brand = selectedBrands[i]
+      setGeneratingBrands(prev => ({ ...prev, [brand]: 'generating' }))
+      toast.loading(`Generating image ${i + 1}/${selectedBrands.length} (${BRAND_CONFIGS[brand].name})...`, { id: 'generate-bg' })
+
+      try {
+        const bgResponse = await fetch('/reels/generate-background', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, brand })
+        })
+
+        if (!bgResponse.ok) throw new Error('Failed')
+
+        const bgData = await bgResponse.json()
+        setPostStates(prev => ({
+          ...prev,
+          [brand]: { ...prev[brand], backgroundImage: bgData.image_data }
+        }))
+        setGeneratingBrands(prev => ({ ...prev, [brand]: 'done' }))
+      } catch {
+        setGeneratingBrands(prev => ({ ...prev, [brand]: 'error' }))
+      }
+    }
+
+    toast.success('All backgrounds generated!', { id: 'generate-bg' })
+  }
+
+  // Generate viral post content (Step 1) — generates title + prompt + backgrounds for ALL brands
   const handleGenerateViralPost = async () => {
     setIsGenerating(true)
     toast.loading('Generating viral post title...', { id: 'generate-post' })
     
     try {
-      // Use the new post-specific endpoint that generates statement-based titles
+      // Step 1: Generate title + prompt
       const response = await fetch('/reels/generate-post-title', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -547,32 +539,38 @@ export function PostsPage() {
       
       const data = await response.json()
       
-      // Set generated content
       setGeneratedTitle(data.title)
       setPreviewTitle(data.title)
-      if (data.image_prompt) {
-        setAiPrompt(data.image_prompt)
-      }
       
-      // Update all selected brands with generated content AND general settings
-      // Do NOT modify generalSettings - keep bar width and other settings as-is
+      let imagePrompt = data.image_prompt || ''
+      if (!imagePrompt) {
+        toast.loading('Auto-generating image prompt...', { id: 'generate-post' })
+        imagePrompt = await autoGenerateImagePrompt(data.title)
+      }
+      setAiPrompt(imagePrompt)
+      
+      // Update all brands with title + general settings
       setPostStates(prev => {
         const updated = { ...prev }
         selectedBrands.forEach(brand => {
           updated[brand] = {
             ...updated[brand],
-            title: {
-              text: data.title,
-              fontSize: generalSettings.fontSize
-            },
+            title: { text: data.title, fontSize: generalSettings.fontSize },
             layout: { ...generalSettings.layout }
           }
         })
         return updated
       })
       
-      toast.success(`🎉 Generated: "${data.title.slice(0, 50)}..."`, { id: 'generate-post', duration: 5000 })
+      toast.success(`🎉 Title generated! Now creating backgrounds...`, { id: 'generate-post', duration: 3000 })
+      
+      // Step 2: Move to finetune and start generating backgrounds
       setStep('finetune')
+      
+      // Generate backgrounds for each brand (runs while user sees the grid)
+      if (imagePrompt) {
+        await generateBackgroundsForBrands(imagePrompt)
+      }
       
     } catch (error) {
       console.error('Generate error:', error)
@@ -582,152 +580,100 @@ export function PostsPage() {
     }
   }
   
-  // Create post job (Step 2)
-  const handleCreatePostJob = async () => {
-    if (!generatedTitle.trim()) {
-      toast.error('Generate content first')
+  // Auto-schedule posts for all brands with offset timing
+  const handleAutoSchedule = async () => {
+    const allDone = selectedBrands.every(b => generatingBrands[b] === 'done' || postStates[b].backgroundImage)
+    if (!allDone) {
+      toast.error('Wait for all backgrounds to finish generating')
       return
     }
-    
-    if (selectedBrands.length === 0) {
-      toast.error('Select at least one brand')
-      return
-    }
-    
-    setIsCreatingJob(true)
-    toast.loading('Creating post job...', { id: 'create-job' })
-    
+
+    setIsScheduling(true)
+    toast.loading('Scheduling posts for all brands...', { id: 'schedule' })
+
+    let scheduled = 0
+    let failed = 0
+
     try {
-      // Create job via API (similar to reels)
-      const response = await fetch('/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'post',
-          title: generatedTitle,
-          brands: selectedBrands,
-          ai_prompt: aiPrompt,
-          post_config: {
-            layout: currentPost.layout,
-            fontSize: currentPost.title.fontSize
+      for (const brand of selectedBrands) {
+        const stage = stageRefs.current.get(brand)
+        if (!stage) { failed++; continue }
+
+        // Export canvas at full resolution
+        const imageData = stage.toDataURL({ pixelRatio: 1 / GRID_PREVIEW_SCALE, mimeType: 'image/png' })
+        const offset = POST_BRAND_OFFSETS[brand] || 0
+
+        // Find next available slot: base hours are 0 (12AM) and 12 (12PM)
+        const now = new Date()
+        let scheduleTime: Date | null = null
+        for (const baseHour of [0, 12]) {
+          const slot = new Date(now)
+          slot.setHours(baseHour + offset, 0, 0, 0)
+          if (slot > now) {
+            scheduleTime = slot
+            break
           }
-        })
-      })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to create job')
-      }
-      
-      const job = await response.json()
-      
-      // Invalidate jobs cache
-      queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      
-      toast.success(`✅ Post job created! ID: ${job.id?.slice(0, 8)}...`, { id: 'create-job' })
-      
-      // Reset and go back to generate step
-      setStep('generate')
-      setGeneratedTitle('')
-      setAiPrompt('')
-      
-      // Navigate to jobs page
-      navigate('/jobs')
-      
-    } catch (error) {
-      console.error('Create job error:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to create job', { id: 'create-job' })
-    } finally {
-      setIsCreatingJob(false)
-    }
-  }
-  
-  // Handle background upload
-  const handleBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      updatePostState(activeBrand, { backgroundImage: event.target?.result as string })
-    }
-    reader.readAsDataURL(file)
-  }
-  
-  // Handle logo upload
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      updatePostState(activeBrand, { logoImage: event.target?.result as string })
-    }
-    reader.readAsDataURL(file)
-  }
-  
-  // Export single image
-  const exportImage = () => {
-    if (!stageRef.current) return
-    
-    const uri = stageRef.current.toDataURL({
-      pixelRatio: 1 / PREVIEW_SCALE,
-      mimeType: 'image/png'
-    })
-    
-    const link = document.createElement('a')
-    link.download = `post-${activeBrand}-${Date.now()}.png`
-    link.href = uri
-    link.click()
-    
-    toast.success('Image exported!')
-  }
-  
-  // Generate AI background
-  const generateBackground = async () => {
-    if (!aiPrompt.trim()) {
-      toast.error('Enter a prompt first')
-      return
-    }
-    
-    setIsGenerating(true)
-    toast.loading('Generating AI background (this may take ~30s)...', { id: 'generate-bg' })
-    
-    try {
-      const response = await fetch('/reels/generate-background', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: aiPrompt,
-          brand: activeBrand
-        })
-      })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to generate background')
-      }
-      
-      const data = await response.json()
-      
-      // Update the background image for current brand
-      setPostStates(prev => ({
-        ...prev,
-        [activeBrand]: {
-          ...prev[activeBrand],
-          backgroundImage: data.image_data
         }
-      }))
-      
-      toast.success('Background generated!', { id: 'generate-bg' })
+        if (!scheduleTime) {
+          // All today's slots passed → use tomorrow 12AM + offset
+          scheduleTime = new Date(now)
+          scheduleTime.setDate(scheduleTime.getDate() + 1)
+          scheduleTime.setHours(offset, 0, 0, 0)
+        }
+
+        try {
+          const response = await fetch('/reels/schedule-post-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              brand,
+              title: generatedTitle,
+              image_data: imageData,
+              schedule_time: scheduleTime.toISOString(),
+            })
+          })
+
+          if (response.ok) {
+            scheduled++
+          } else {
+            failed++
+          }
+        } catch {
+          failed++
+        }
+      }
+
+      if (scheduled > 0) {
+        const msg = failed > 0
+          ? `✅ ${scheduled} brand(s) scheduled! ${failed} failed.`
+          : `🎉 All ${scheduled} brand(s) scheduled!`
+        toast.success(msg, { id: 'schedule', duration: 5000 })
+        setTimeout(() => navigate('/scheduled'), 1500)
+      } else {
+        toast.error('Failed to schedule posts', { id: 'schedule' })
+      }
     } catch (error) {
-      console.error('Generate background error:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to generate background', { id: 'generate-bg' })
+      console.error('Schedule error:', error)
+      toast.error('Failed to schedule posts', { id: 'schedule' })
     } finally {
-      setIsGenerating(false)
+      setIsScheduling(false)
     }
   }
-  
+
+  // Download all brand images
+  const downloadAll = () => {
+    selectedBrands.forEach(brand => {
+      const stage = stageRefs.current.get(brand)
+      if (!stage) return
+      const uri = stage.toDataURL({ pixelRatio: 1 / GRID_PREVIEW_SCALE, mimeType: 'image/png' })
+      const link = document.createElement('a')
+      link.download = `post-${brand}-${Date.now()}.png`
+      link.href = uri
+      link.click()
+    })
+    toast.success('All images downloaded!')
+  }
+
   // STEP 1: Generate Viral Post
   if (step === 'generate') {
     return (
@@ -982,11 +928,12 @@ export function PostsPage() {
                   onClick={async () => {
                     if (previewTitle.trim()) {
                       // Auto-generate image prompt if blank
-                      if (!aiPrompt.trim()) {
+                      let prompt = aiPrompt
+                      if (!prompt.trim()) {
                         toast.loading('Auto-generating image prompt...', { id: 'auto-prompt' })
-                        const generatedPrompt = await autoGenerateImagePrompt(previewTitle)
-                        if (generatedPrompt) {
-                          setAiPrompt(generatedPrompt)
+                        prompt = await autoGenerateImagePrompt(previewTitle)
+                        if (prompt) {
+                          setAiPrompt(prompt)
                           toast.success('Image prompt generated!', { id: 'auto-prompt' })
                         } else {
                           toast.dismiss('auto-prompt')
@@ -1009,6 +956,10 @@ export function PostsPage() {
                       })
                       setGeneratedTitle(previewTitle)
                       setStep('finetune')
+                      // Start generating backgrounds for all brands
+                      if (prompt) {
+                        generateBackgroundsForBrands(prompt)
+                      }
                     } else {
                       toast.error('Enter a title first')
                     }
@@ -1025,7 +976,9 @@ export function PostsPage() {
     )
   }
   
-  // STEP 2: Fine-tune and Preview
+  // STEP 2: Fine-tune and Preview All Brands
+  const allBackgroundsDone = selectedBrands.every(b => generatingBrands[b] === 'done' || postStates[b].backgroundImage)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1036,7 +989,7 @@ export function PostsPage() {
             Fine-tune Post
           </h1>
           <p className="text-gray-500 mt-1">
-            Adjust layout and styling, then generate for all brands
+            Adjust layout for all brands, then auto-schedule
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1047,309 +1000,191 @@ export function PostsPage() {
             ← Back
           </button>
           <button
-            onClick={exportImage}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+            onClick={downloadAll}
+            disabled={!allBackgroundsDone}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            Export Preview
+            Download All
           </button>
           <button
-            onClick={handleCreatePostJob}
-            disabled={isCreatingJob}
+            onClick={handleAutoSchedule}
+            disabled={isScheduling || !allBackgroundsDone}
             className="flex items-center gap-2 px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50"
           >
-            {isCreatingJob ? (
+            {isScheduling ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4" />
+              <Calendar className="w-4 h-4" />
             )}
-            Generate Posts
+            Auto Schedule
           </button>
         </div>
       </div>
-      
-      {/* Brand tabs */}
+
+      {/* Title editing (applies to all brands) */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {selectedBrands.map(brand => (
-            <button
-              key={brand}
-              onClick={() => setActiveBrand(brand)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all ${
-                activeBrand === brand
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: BRAND_CONFIGS[brand].color }}
-              />
-              {BRAND_CONFIGS[brand].name}
-            </button>
-          ))}
-        </div>
+        <label className="text-sm font-medium text-gray-700 mb-2 block">Title (applies to all brands)</label>
+        <textarea
+          value={generatedTitle}
+          onChange={(e) => {
+            const text = e.target.value
+            setGeneratedTitle(text)
+            setPostStates(prev => {
+              const updated = { ...prev }
+              selectedBrands.forEach(brand => {
+                updated[brand] = { ...updated[brand], title: { ...updated[brand].title, text } }
+              })
+              return updated
+            })
+          }}
+          rows={2}
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
       </div>
-      
-      {/* Main Editor */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Canvas Preview */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              <Eye className="w-5 h-5 text-gray-500" />
-              Preview
-              <span 
-                className="ml-2 px-2 py-0.5 text-xs rounded-full text-white"
-                style={{ backgroundColor: brandConfig.color }}
-              >
-                {brandConfig.name}
-              </span>
-            </h2>
-            <span className="text-sm text-gray-500">1080 × 1350</span>
+
+      {/* Brand Previews Grid */}
+      <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
+        {selectedBrands.map(brand => {
+          const post = postStates[brand]
+          const brandCfg = BRAND_CONFIGS[brand]
+          const bgStatus = generatingBrands[brand]
+          const gl = generalSettings.layout
+          const th = calculateTitleHeight(generatedTitle || 'PLACEHOLDER', generalSettings.fontSize, gl.titlePaddingX)
+          const rcy = CANVAS_HEIGHT - gl.readCaptionBottom - 24
+          const ty = rcy - gl.titleGap - th
+          const ly = ty - gl.logoGap - 40
+
+          return (
+            <div key={brand} className="bg-white rounded-xl border border-gray-200 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: brandCfg.color }}
+                />
+                <span className="text-sm font-medium text-gray-900">{brandCfg.name}</span>
+                <span className="ml-auto">
+                  {bgStatus === 'generating' && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
+                  {bgStatus === 'done' && <Check className="w-4 h-4 text-green-500" />}
+                  {bgStatus === 'error' && <span className="text-xs text-red-500 font-medium">Failed</span>}
+                </span>
+              </div>
+              <div className="rounded-lg overflow-hidden border border-gray-100">
+                <Stage
+                  key={`grid-${brand}-${fontLoaded}`}
+                  ref={(node: Konva.Stage | null) => {
+                    if (node) stageRefs.current.set(brand, node)
+                  }}
+                  width={CANVAS_WIDTH * GRID_PREVIEW_SCALE}
+                  height={CANVAS_HEIGHT * GRID_PREVIEW_SCALE}
+                  scaleX={GRID_PREVIEW_SCALE}
+                  scaleY={GRID_PREVIEW_SCALE}
+                >
+                  <Layer>
+                    {post.backgroundImage ? (
+                      <BackgroundImageLayer imageUrl={post.backgroundImage} />
+                    ) : (
+                      <Rect x={0} y={0} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="#1a1a2e" />
+                    )}
+                    <GradientOverlay />
+                    <LogoWithLines
+                      logoUrl={null}
+                      y={ly}
+                      barWidth={generalSettings.barWidth}
+                      titleWidth={CANVAS_WIDTH - gl.titlePaddingX * 2}
+                      brandName={brand}
+                    />
+                    <TitleLayer
+                      config={{ text: generatedTitle, fontSize: generalSettings.fontSize }}
+                      x={gl.titlePaddingX}
+                      y={ty}
+                      paddingX={gl.titlePaddingX}
+                    />
+                    <ReadCaption y={rcy} />
+                  </Layer>
+                </Stage>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Global Layout Settings (collapsible) */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <button
+          onClick={() => setShowSettings(prev => !prev)}
+          className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-primary-600 transition-colors"
+        >
+          <Settings2 className="w-4 h-4" />
+          Layout Settings
+          <span className="text-xs font-normal text-gray-500">(applies to all brands)</span>
+          <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showSettings ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showSettings && <>
+          <div className="mt-4 mb-4">
+            <label className="text-sm text-gray-600 mb-1 block">Font Size: {generalSettings.fontSize}px</label>
+            <input
+              type="range" min={40} max={90}
+              value={generalSettings.fontSize}
+              onChange={(e) => setGeneralSettings(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
+              className="w-full accent-primary-500"
+            />
           </div>
-          
-          {/* Canvas Container */}
-          <div 
-            className="relative mx-auto bg-gray-900 rounded-lg overflow-hidden shadow-2xl"
-            style={{ 
-              width: CANVAS_WIDTH * PREVIEW_SCALE, 
-              height: CANVAS_HEIGHT * PREVIEW_SCALE 
-            }}
-          >
-            <Stage
-              key={`step2-canvas-${fontLoaded}`}
-              ref={stageRef}
-              width={CANVAS_WIDTH * PREVIEW_SCALE}
-              height={CANVAS_HEIGHT * PREVIEW_SCALE}
-              scaleX={PREVIEW_SCALE}
-              scaleY={PREVIEW_SCALE}
-            >
-              <Layer>
-                {/* Background */}
-                {currentPost.backgroundImage ? (
-                  <BackgroundImageLayer imageUrl={currentPost.backgroundImage} />
-                ) : (
-                  <Rect
-                    x={0}
-                    y={0}
-                    width={CANVAS_WIDTH}
-                    height={CANVAS_HEIGHT}
-                    fill="#1a1a2e"
-                  />
-                )}
-                
-                {/* Gradient Overlay */}
-                <GradientOverlay />
-                
-                {/* Logo with lines */}
-                <LogoWithLines
-                  logoUrl={currentPost.logoImage}
-                  y={logoY}
-                  barWidth={generalSettings.barWidth}
-                  titleWidth={CANVAS_WIDTH - layout.titlePaddingX * 2}
-                  brandName={activeBrand}
-                />
-                
-                {/* Title */}
-                <TitleLayer
-                  config={currentPost.title}
-                  x={layout.titlePaddingX}
-                  y={titleY}
-                  paddingX={layout.titlePaddingX}
-                />
-                
-                {/* Read Caption */}
-                <ReadCaption y={readCaptionY} />
-              </Layer>
-            </Stage>
-          </div>
-        </div>
-        
-        {/* Right Sidebar - Controls */}
-        <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-          {/* Background Controls */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-primary-500" />
-              Background
-            </h3>
-            
-            <div className="space-y-3">
-              <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-400 hover:bg-primary-50/50 transition-all">
-                <Upload className="w-5 h-5 text-gray-400" />
-                <span className="text-sm text-gray-600">Upload Image</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBackgroundUpload}
-                  className="hidden"
-                />
-              </label>
-              
-              <button
-                onClick={generateBackground}
-                disabled={isGenerating}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:from-primary-600 hover:to-primary-700 disabled:opacity-50"
-              >
-                {isGenerating ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-5 h-5" />
-                )}
-                Generate with AI
-              </button>
-              
-              {aiPrompt && (
-                <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                  <strong>Prompt:</strong> {aiPrompt}
-                </div>
-              )}
+
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="text-xs text-gray-500">Read Caption Bottom: {generalSettings.layout.readCaptionBottom}px</label>
+              <input type="range" min={20} max={80} value={generalSettings.layout.readCaptionBottom}
+                onChange={(e) => updateGeneralLayout({ readCaptionBottom: Number(e.target.value) })}
+                className="w-full accent-primary-500" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Title Gap: {generalSettings.layout.titleGap}px</label>
+              <input type="range" min={10} max={60} value={generalSettings.layout.titleGap}
+                onChange={(e) => updateGeneralLayout({ titleGap: Number(e.target.value) })}
+                className="w-full accent-primary-500" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Logo Gap: {generalSettings.layout.logoGap}px</label>
+              <input type="range" min={20} max={60} value={generalSettings.layout.logoGap}
+                onChange={(e) => updateGeneralLayout({ logoGap: Number(e.target.value) })}
+                className="w-full accent-primary-500" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Title Padding X: {generalSettings.layout.titlePaddingX}px</label>
+              <input type="range" min={0} max={120} value={generalSettings.layout.titlePaddingX}
+                onChange={(e) => updateGeneralLayout({ titlePaddingX: Number(e.target.value) })}
+                className="w-full accent-primary-500" />
             </div>
           </div>
-          
-          {/* Logo Upload */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Palette className="w-5 h-5 text-primary-500" />
-              Brand Logo
-            </h3>
-            
-            <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-400 hover:bg-primary-50/50 transition-all">
-              {currentPost.logoImage ? (
-                <div className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-500" />
-                  <span className="text-sm text-gray-600">Logo uploaded</span>
-                </div>
-              ) : (
-                <>
-                  <Upload className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-600">Upload Logo</span>
-                </>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="hidden"
-              />
+
+          <div className="border-t border-gray-100 pt-4 mb-4">
+            <label className="text-xs text-gray-500 mb-1 block">
+              Bar Width: {generalSettings.barWidth === 0 ? 'Auto (match title)' : `${generalSettings.barWidth}px`}
             </label>
+            <input type="range" min={0} max={400} value={generalSettings.barWidth}
+              onChange={(e) => setGeneralSettings(prev => ({ ...prev, barWidth: Number(e.target.value) }))}
+              className="w-full accent-primary-500" />
           </div>
-          
-          {/* Title Controls */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Type className="w-5 h-5 text-primary-500" />
-              Title
-            </h3>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">Title Text</label>
-                <textarea
-                  value={currentPost.title.text}
-                  onChange={(e) => updateTitle({ text: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">
-                  Font Size: {currentPost.title.fontSize}px
-                </label>
-                <input
-                  type="range"
-                  min="30"
-                  max="90"
-                  value={currentPost.title.fontSize}
-                  onChange={(e) => updateTitle({ fontSize: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-              </div>
-            </div>
+
+          <div className="border-t border-gray-100 pt-4 flex gap-2">
+            <button
+              onClick={saveSettings}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600"
+            >
+              <Save className="w-4 h-4" />
+              Save Settings
+            </button>
+            <button
+              onClick={resetToDefault}
+              className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset
+            </button>
           </div>
-          
-          {/* Layout Controls */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Settings2 className="w-5 h-5 text-primary-500" />
-              Layout Spacing
-            </h3>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Read Caption from Bottom: {layout.readCaptionBottom}px
-                </label>
-                <input
-                  type="range"
-                  min="20"
-                  max="100"
-                  value={layout.readCaptionBottom}
-                  onChange={(e) => updateLayout({ readCaptionBottom: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-              </div>
-              
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Title to Read Caption Gap: {layout.titleGap}px
-                </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="80"
-                  value={layout.titleGap}
-                  onChange={(e) => updateLayout({ titleGap: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-              </div>
-              
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Logo to Title Gap: {layout.logoGap}px
-                </label>
-                <input
-                  type="range"
-                  min="15"
-                  max="80"
-                  value={layout.logoGap}
-                  onChange={(e) => updateLayout({ logoGap: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-              </div>
-              
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Title Padding X: {layout.titlePaddingX}px
-                </label>
-                <input
-                  type="range"
-                  min="20"
-                  max="100"
-                  value={layout.titlePaddingX}
-                  onChange={(e) => updateLayout({ titlePaddingX: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-              </div>
-              
-              <button
-                onClick={() => {
-                  updateLayout({
-                    readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
-                    titleGap: DEFAULT_TITLE_GAP,
-                    logoGap: DEFAULT_LOGO_GAP,
-                    titlePaddingX: 40
-                  })
-                }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-              >
-                Reset to Defaults
-              </button>
-            </div>
-          </div>
-        </div>
+        </>}
       </div>
     </div>
   )
