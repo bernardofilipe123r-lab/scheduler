@@ -390,13 +390,13 @@ Chicken — Let it rest after cooking`}
               </>
             ) : (
               <>
-                🤖 Auto-Generate Viral Post
+                🤖 Auto-Generate Viral Reel
               </>
             )}
           </button>
         </div>
         <p className="text-sm text-gray-600 text-center">
-          💡 <strong>Auto-Generate</strong> uses AI to create a complete viral post (title, content & image prompt) from scratch!
+          💡 <strong>Auto-Generate</strong> uses AI to create a complete viral reel (title, content & image prompt) from scratch!
         </p>
       </form>
     </div>

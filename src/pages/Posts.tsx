@@ -463,7 +463,7 @@ export function PostsPage() {
               ) : (
                 <FileImage className="w-5 h-5" />
               )}
-              Generate Reels
+              Generate Posts
             </button>
           </div>
         </div>
