@@ -492,8 +492,6 @@ class JobManager:
 
         try:
             from app.services.ai_background_generator import AIBackgroundGenerator
-            import base64 as b64
-            from io import BytesIO
 
             output_dir = Path("output")
             posts_dir = output_dir / "posts"
@@ -522,17 +520,12 @@ class JobManager:
             image.save(str(bg_path), format="PNG")
             print(f"   ✓ Background saved: {bg_path}", flush=True)
 
-            # Also create base64 data URL for immediate frontend use
-            buf = BytesIO()
-            image.save(buf, format="PNG")
-            buf.seek(0)
-            b64_image = b64.b64encode(buf.getvalue()).decode("utf-8")
-
+            import time as _time
+            cache_bust = int(_time.time())
             self.update_brand_output(job_id, brand, {
                 "status": "completed",
                 "reel_id": reel_id,
-                "thumbnail_path": f"/output/posts/{reel_id}_background.png",
-                "background_data": f"data:image/png;base64,{b64_image}",
+                "thumbnail_path": f"/output/posts/{reel_id}_background.png?t={cache_bust}",
                 "regenerated_at": datetime.utcnow().isoformat(),
             })
 

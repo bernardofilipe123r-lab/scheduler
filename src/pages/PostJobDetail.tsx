@@ -352,7 +352,7 @@ export function PostJobDetail({ job, refetch }: Props) {
       >
         {job.brands.map((brand) => {
           const output: BrandOutput | undefined = job.brand_outputs[brand as BrandName]
-          const bgData = (output as any)?.background_data || null
+          const bgUrl = output?.thumbnail_path || null
           const status = output?.status || 'pending'
 
           return (
@@ -404,7 +404,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                   <PostCanvas
                     brand={brand}
                     title={job.title}
-                    backgroundImage={bgData}
+                    backgroundImage={bgUrl}
                     settings={settings}
                     scale={GRID_PREVIEW_SCALE}
                     stageRef={(node) => {
