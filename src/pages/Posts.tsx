@@ -372,12 +372,12 @@ export function PostsPage() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">
-                      Title Padding: {settings.layout.titlePaddingX}px
+                      Horizontal Padding: {settings.layout.titlePaddingX}px
                     </label>
                     <input
                       type="range"
                       min={0}
-                      max={120}
+                      max={200}
                       value={settings.layout.titlePaddingX}
                       onChange={(e) =>
                         updateLayout({ titlePaddingX: Number(e.target.value) })
