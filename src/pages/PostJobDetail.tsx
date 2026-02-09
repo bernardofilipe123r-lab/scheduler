@@ -258,6 +258,13 @@ export function PostJobDetail({ job, refetch }: Props) {
               Created{' '}
               {format(new Date(job.created_at), 'MMMM d, yyyy h:mm a')}
             </p>
+            {/* AI Image Prompt */}
+            {job.ai_prompt && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-xs font-medium text-gray-500 mb-1">AI Image Prompt</p>
+                <p className="text-xs text-gray-600 leading-relaxed">{job.ai_prompt}</p>
+              </div>
+            )}
           </div>
         </div>
 
