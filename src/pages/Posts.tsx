@@ -409,6 +409,27 @@ export function PostsPage() {
                     className="w-full accent-primary-500"
                   />
                 </div>
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="text-xs text-gray-500">
+                    Posts Per Day: {settings.postsPerDay ?? 6}
+                  </label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={12}
+                    value={settings.postsPerDay ?? 6}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        postsPerDay: Number(e.target.value),
+                      }))
+                    }
+                    className="w-full accent-primary-500"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Controls how many posts per day per brand (interleaved with reels)
+                  </p>
+                </div>
                 <div className="flex gap-2 pt-2 border-t border-gray-100">
                   <button
                     onClick={handleSaveSettings}

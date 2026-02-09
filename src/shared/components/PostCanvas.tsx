@@ -55,6 +55,7 @@ export interface GeneralSettings {
   fontSize: number
   barWidth: number
   layout: LayoutConfig
+  postsPerDay?: number
 }
 
 // ─── Brand configurations ────────────────────────────────────────────

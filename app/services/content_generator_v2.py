@@ -814,10 +814,32 @@ Pick {count} DIFFERENT categories from this list (one per post):
 ### WHAT MAKES A GREAT POST TITLE:
 - A short, clear health statement written in simple, wellness-friendly tone
 - Focused on one or two main benefits
-- Some titles may include percentages for extra impact
 - Positive, empowering, and slightly exaggerated to create scroll-stop engagement
 - Do NOT lie, but dramatize slightly to spark discussion
 - Do NOT end the title with a period (.) — end cleanly without punctuation or with a question mark only
+
+### TITLE STYLE VARIETY (CRITICAL — mix these across the batch):
+You MUST use a MIX of these 3 title styles. Never generate all titles in the same style!
+
+**Style A — Direct with percentage/data** (~40% of titles):
+Examples:
+- "Study shows sleeping in a cold room helps burn fat and slow aging by 40%"
+- "Eating berries daily can improve memory and focus by 25%"
+- "Walking 20 minutes after meals reduces blood sugar spikes by 30%"
+
+**Style B — Direct statement without data** (~30% of titles):
+Examples:
+- "Sleeping in a cold room helps burn fat and slow aging"
+- "One tablespoon of olive oil before bed can transform your skin overnight"
+- "Magnesium before sleep helps your muscles recover faster than any supplement"
+
+**Style C — Curiosity / intrigue hook** (~30% of titles):
+Examples:
+- "What happens to your body when you drink warm lemon water every morning"
+- "The reason most women over 40 feel tired has nothing to do with sleep"
+- "This ancient spice does more for your brain than most supplements combined"
+
+For {count} posts, distribute the styles. Example for 10 posts: ~4 Style A, ~3 Style B, ~3 Style C.
 
 ### WHAT TO AVOID:
 - Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."

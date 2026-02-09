@@ -44,7 +44,6 @@ import toast from 'react-hot-toast'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
-  POST_BRAND_OFFSETS,
   PostCanvas,
 } from '@/shared/components/PostCanvas'
 import type { GeneralSettings } from '@/shared/components/PostCanvas'
@@ -55,6 +54,16 @@ import { getBrandLabel, getBrandColor } from '@/features/brands'
 const STORAGE_KEY = 'god-automation-session'
 const REVIEW_SCALE = 0.3
 const MAX_CONCURRENT = 5
+const DEFAULT_POSTS_PER_DAY = 6
+
+// Reel brand offsets (matching db_scheduler.py) — used for post interleaving
+const BRAND_REEL_OFFSETS: Record<string, number> = {
+  holisticcollege: 0,
+  healthycollege: 1,
+  vitalitycollege: 2,
+  longevitycollege: 3,
+  wellbeingcollege: 4,
+}
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface GodPost {
@@ -100,7 +109,7 @@ interface Props {
 // ─── Helpers ─────────────────────────────────────────────────────────
 function sortBrandsByOffset(brands: BrandName[]): BrandName[] {
   return [...brands].sort(
-    (a, b) => (POST_BRAND_OFFSETS[a] ?? 99) - (POST_BRAND_OFFSETS[b] ?? 99),
+    (a, b) => (BRAND_REEL_OFFSETS[a] ?? 99) - (BRAND_REEL_OFFSETS[b] ?? 99),
   )
 }
 
@@ -157,8 +166,20 @@ function clearSession() {
 function getNextSlotForBrand(
   brand: BrandName,
   occupied: Record<string, string[]>,
+  postsPerDay: number = DEFAULT_POSTS_PER_DAY,
 ): Date {
-  const offset = POST_BRAND_OFFSETS[brand] || 0
+  const reelOffset = BRAND_REEL_OFFSETS[brand.toLowerCase()] ?? 0
+  // Posts interleave between reels: reels at offset+0h, offset+4h, ...
+  // Posts sit 2h after each reel. For variable postsPerDay, evenly space across 24h.
+  const gap = 24 / postsPerDay
+  const postSlots: Array<{ h: number; m: number }> = []
+  for (let i = 0; i < postsPerDay; i++) {
+    const raw = (reelOffset + 2 + i * gap) % 24
+    postSlots.push({ h: Math.floor(raw), m: Math.round((raw - Math.floor(raw)) * 60) })
+  }
+  // Sort ascending by time
+  postSlots.sort((a, b) => a.h * 60 + a.m - (b.h * 60 + b.m))
+
   const now = new Date()
   const brandOccupied = occupied[brand.toLowerCase()] || []
   const isOccupied = (dt: Date): boolean => {
@@ -166,10 +187,10 @@ function getNextSlotForBrand(
     return brandOccupied.some((s) => s.slice(0, 16) === key)
   }
   for (let dayOff = 0; dayOff < 90; dayOff++) {
-    for (const baseHour of [0, 12]) {
+    for (const { h, m } of postSlots) {
       const slot = new Date(now)
       slot.setDate(slot.getDate() + dayOff)
-      slot.setHours(baseHour + offset, 0, 0, 0)
+      slot.setHours(h, m, 0, 0)
       if (slot <= now) continue
       if (isOccupied(slot)) continue
       return slot
@@ -177,7 +198,7 @@ function getNextSlotForBrand(
   }
   const fb = new Date(now)
   fb.setDate(fb.getDate() + 90)
-  fb.setHours(offset, 0, 0, 0)
+  fb.setHours(reelOffset + 2, 0, 0, 0)
   return fb
 }
 
@@ -597,7 +618,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
           mimeType: 'image/png',
         })
 
-        const slot = getNextSlotForBrand(post.brand, occupiedRef.current)
+        const slot = getNextSlotForBrand(post.brand, occupiedRef.current, settings.postsPerDay ?? DEFAULT_POSTS_PER_DAY)
 
         const resp = await fetch('/reels/schedule-post-image', {
           method: 'POST',
@@ -927,6 +948,16 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                 )}
               </div>
 
+              {/* Caption / description */}
+              {currentPost.caption && (
+                <div>
+                  <label className="text-white/30 text-xs font-medium mb-1 block">Caption</label>
+                  <div className="max-h-32 overflow-y-auto rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-white/60 leading-relaxed whitespace-pre-wrap custom-scrollbar">
+                    {currentPost.caption}
+                  </div>
+                </div>
+              )}
+
               {/* Font size + retry image */}
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-1 border border-white/10">
@@ -1144,9 +1175,9 @@ function PreGenProgress({
         : `Generating ${totalPosts} images...`
 
   // ETA calculation
-  const elapsed = (Date.now() - startTime) / 1000
+  const elapsed = startTime > 0 ? (Date.now() - startTime) / 1000 : 0
   let etaLabel = ''
-  if (progress > 5 && progress < 100) {
+  if (progress > 5 && progress < 100 && startTime > 0) {
     const totalEstimate = (elapsed / progress) * 100
     const remaining = Math.max(0, totalEstimate - elapsed)
     if (remaining < 60) {
