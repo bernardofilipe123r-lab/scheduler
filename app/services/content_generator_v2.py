@@ -515,6 +515,41 @@ class ContentGeneratorV2:
         options = self.CTA_OPTIONS[selected]["options"]
         return random.choice(options) if options else None
 
+    def _get_recent_post_titles_from_db(self, limit: int = 25) -> List[str]:
+        """Fetch recent post titles from the database to avoid repetition."""
+        try:
+            from app.database.db import SessionLocal
+            from app.models import Job
+            from sqlalchemy import desc
+
+            db = SessionLocal()
+            try:
+                recent_jobs = (
+                    db.query(Job)
+                    .filter(Job.variant == "post")
+                    .order_by(desc(Job.created_at))
+                    .limit(limit)
+                    .all()
+                )
+                titles = []
+                for j in recent_jobs:
+                    # Extract per-brand titles from brand_outputs JSON
+                    if j.brand_outputs and isinstance(j.brand_outputs, dict):
+                        for brand_key, brand_data in j.brand_outputs.items():
+                            if isinstance(brand_data, dict):
+                                t = brand_data.get("title", "")
+                                if t and t not in titles:
+                                    titles.append(t)
+                    # Also check job-level title
+                    if j.title and j.title not in titles:
+                        titles.append(j.title)
+                return titles[:limit]
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"⚠️ Could not fetch recent post titles from DB: {e}", flush=True)
+            return []
+
     # ============================================================
     # POST TITLE GENERATION (for Instagram image posts, NOT reels)
     # ============================================================
@@ -535,13 +570,18 @@ class ContentGeneratorV2:
         if not self.api_key:
             return self._fallback_post_title()
         
-        # Get recent titles to avoid repetition
+        # Get recent titles to avoid repetition (from DB + in-memory)
+        db_titles = self._get_recent_post_titles_from_db(25)
         recent = self._get_recent_outputs()
         history_context = ""
+        all_recent = list(db_titles)
         if recent:
-            recent_titles = [r.get("title", "") for r in recent if r.get("title")]
-            if recent_titles:
-                history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating):\n{chr(10).join('- ' + t for t in recent_titles[-5:])}\n"""
+            for r in recent:
+                t = r.get("title", "")
+                if t and t not in all_recent:
+                    all_recent.append(t)
+        if all_recent:
+            history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
         
         prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
 
@@ -556,6 +596,7 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 - Some titles may include percentages for extra impact
 - Positive, empowering, and slightly exaggerated to create scroll-stop engagement
 - Do NOT lie, but dramatize slightly to spark discussion (comments, shares, saves)
+- Do NOT end the title with a period (.)  — end cleanly without punctuation or with a question mark only
 
 ### TOPICS TO COVER (pick one):
 - Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)
@@ -666,6 +707,10 @@ Generate now:"""
                     result = json.loads(content_text)
                     result["is_fallback"] = False
                     
+                    # Strip trailing period from title
+                    if result.get("title"):
+                        result["title"] = result["title"].rstrip(".")
+                    
                     # Add to history
                     self._add_to_history({"title": result.get("title", "")})
                     
@@ -685,22 +730,22 @@ Generate now:"""
         """Fallback titles for posts if AI fails."""
         fallbacks = [
             {
-                "title": "Vitamin D and magnesium helps reduce depression and brain aging.",
+                "title": "Vitamin D and magnesium helps reduce depression and brain aging",
                 "caption": "Most people take vitamin D for bone health, but its role in brain function and mood regulation is far more significant than commonly understood. Vitamin D receptors are found throughout the brain, including regions involved in emotional processing and memory.\n\nWhen levels drop below optimal, your nervous system becomes more vulnerable to inflammation and oxidative stress — both key drivers of depressive symptoms and accelerated cognitive decline. Magnesium amplifies this effect because it's required to convert vitamin D into its active form.\n\nTogether, these two nutrients support serotonin production, reduce neuroinflammation, and help maintain synaptic plasticity — the brain's ability to form new connections and adapt.\n\nConsistent supplementation can lead to noticeable improvements in mood stability, mental clarity, and long-term brain resilience.\n\nSource:\nSarris, J., Murphy, J., Mischoulon, D., et al. (2016). Adjunctive Nutraceuticals for Depression: A Systematic Review and Meta-Analyses. American Journal of Psychiatry, 173(6), 575–587.\nDOI: 10.1176/appi.ajp.2016.15091228\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of vitamin D supplements and magnesium capsules arranged on a clean white stone countertop in a bright modern kitchen. A glass of warm lemon water sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "A cup of chamomile tea before bed may improve sleep quality by 30%.",
+                "title": "A cup of chamomile tea before bed may improve sleep quality by 30%",
                 "caption": "Chamomile is one of the most studied herbal remedies for sleep, and the results are more impressive than most people realize. The key compound — apigenin — binds to specific receptors in the brain that reduce anxiety and initiate sedation naturally.\n\nDrinking chamomile tea 30–60 minutes before bed helps lower cortisol levels, calm the nervous system, and promote the transition into deeper sleep stages. Unlike synthetic sleep aids, chamomile doesn't suppress REM sleep or create dependency.\n\nOver time, consistent use has been shown to improve overall sleep quality scores by up to 30%, with participants reporting fewer nighttime awakenings and feeling more rested upon waking.\n\nA simple nightly ritual that costs almost nothing can fundamentally change how well you rest and recover.\n\nSource:\nSrivastava, J. K., Shankar, E., & Gupta, S. (2010). Chamomile: A herbal medicine of the past with bright future. Molecular Medicine Reports, 3(6), 895–901.\nDOI: 10.3892/mmr.2010.377\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of a steaming cup of chamomile tea on a wooden bedside table with dried chamomile flowers scattered around. Warm evening light, cozy minimal setting. Calming wellness aesthetic, neutral tones, high-end lifestyle photography, soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "Collagen may improve skin elasticity by up to 20% after 8 weeks.",
+                "title": "Collagen may improve skin elasticity by up to 20% after 8 weeks",
                 "caption": "As we age, collagen production drops by roughly 1% per year after 25. This gradual loss is what drives wrinkles, sagging, and that loss of firmness that becomes more noticeable in your 30s and beyond.\n\nOral collagen peptides work differently from topical creams — they're absorbed into the bloodstream and stimulate your body's own collagen-producing cells (fibroblasts) to increase production from within. This means the effects are systemic, not just surface-level.\n\nClinical trials show that after 8 weeks of daily supplementation, skin elasticity can improve by up to 20%, with visible reductions in fine lines and improved hydration levels across the dermis.\n\nThe key is consistency. Daily intake of hydrolyzed collagen peptides gives your body the building blocks it needs to repair and rebuild skin structure at a cellular level.\n\nSource:\nBolke, L., Schlippe, G., Gerß, J., & Voss, W. (2019). A Collagen Supplement Improves Skin Hydration, Elasticity, Roughness, and Density: Results of a Randomized, Placebo-Controlled, Blind Study. Nutrients, 11(10), 2494.\nDOI: 10.3390/nu11102494\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of collagen powder being stirred into a glass of water on a clean marble countertop. Fresh berries and a small plant nearby in gentle morning light. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "Adding turmeric to your meals may lower joint pain and inflammation.",
+                "title": "Adding turmeric to your meals may lower joint pain and inflammation",
                 "caption": "Turmeric's active compound — curcumin — is one of the most researched natural anti-inflammatories in modern nutrition science. It works by inhibiting NF-κB, a molecule that triggers inflammatory gene expression in nearly every cell of the body.\n\nChronic low-grade inflammation is linked to joint stiffness, fatigue, skin issues, and accelerated aging. By incorporating turmeric into daily meals — especially paired with black pepper (which increases absorption by 2000%) — you can meaningfully reduce systemic inflammatory markers.\n\nStudies show that curcumin supplementation can match the effectiveness of some over-the-counter anti-inflammatory drugs for joint pain, without the gastrointestinal side effects.\n\nWhether added to soups, smoothies, or golden milk, consistent turmeric intake supports long-term joint health and overall inflammatory balance.\n\nSource:\nHewlings, S. J., & Kalman, D. S. (2017). Curcumin: A Review of Its Effects on Human Health. Foods, 6(10), 92.\nDOI: 10.3390/foods6100092\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of golden turmeric powder on a small ceramic spoon beside a warm glass of golden milk on a clean white countertop. Gentle morning sunlight, a cinnamon stick and fresh turmeric root nearby. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos."
             }
@@ -730,13 +775,18 @@ Generate now:"""
         if not self.api_key or count <= 0:
             return [self._fallback_post_title() for _ in range(max(count, 1))]
 
-        # Get recent titles to avoid repetition
+        # Get recent titles to avoid repetition (from DB + in-memory)
+        db_titles = self._get_recent_post_titles_from_db(25)
         recent = self._get_recent_outputs()
         history_context = ""
+        all_recent = list(db_titles)
         if recent:
-            recent_titles = [r.get("title", "") for r in recent if r.get("title")]
-            if recent_titles:
-                history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating):\n{chr(10).join('- ' + t for t in recent_titles[-8:])}\n"""
+            for r in recent:
+                t = r.get("title", "")
+                if t and t not in all_recent:
+                    all_recent.append(t)
+        if all_recent:
+            history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
 
         prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
 
@@ -767,6 +817,7 @@ Pick {count} DIFFERENT categories from this list (one per post):
 - Some titles may include percentages for extra impact
 - Positive, empowering, and slightly exaggerated to create scroll-stop engagement
 - Do NOT lie, but dramatize slightly to spark discussion
+- Do NOT end the title with a period (.) — end cleanly without punctuation or with a question mark only
 
 ### WHAT TO AVOID:
 - Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
@@ -849,12 +900,16 @@ Generate exactly {count} posts now:"""
                     if isinstance(results, list) and len(results) >= count:
                         for r in results:
                             r["is_fallback"] = False
+                            if r.get("title"):
+                                r["title"] = r["title"].rstrip(".")
                             self._add_to_history({"title": r.get("title", "")})
                         return results[:count]
                     elif isinstance(results, list) and len(results) > 0:
                         # Got fewer than requested — pad with fallbacks
                         for r in results:
                             r["is_fallback"] = False
+                            if r.get("title"):
+                                r["title"] = r["title"].rstrip(".")
                             self._add_to_history({"title": r.get("title", "")})
                         while len(results) < count:
                             results.append(self._fallback_post_title())

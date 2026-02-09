@@ -19,6 +19,7 @@ import {
   Clock,
   Settings2,
   ChevronDown,
+  ChevronUp,
   Save,
   RotateCcw,
   Pencil,
@@ -116,6 +117,9 @@ export function PostJobDetail({ job, refetch }: Props) {
   const [editTitle, setEditTitle] = useState('')
   const [editCaption, setEditCaption] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
+
+  // Expanded captions (track which brands have expanded captions)
+  const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(new Set())
 
   // Stage refs for export (one per brand)
   const stageRefs = useRef<Map<string, Konva.Stage>>(new Map())
@@ -603,9 +607,36 @@ export function PostJobDetail({ job, refetch }: Props) {
 
               {/* Caption preview */}
               {brandCaption && (status === 'completed' || status === 'scheduled') && (
-                <p className="text-[10px] text-gray-400 mt-2 line-clamp-2 leading-relaxed">
-                  {brandCaption}
-                </p>
+                <div className="mt-2">
+                  <p
+                    className={`text-[10px] text-gray-400 leading-relaxed whitespace-pre-line ${
+                      expandedCaptions.has(brand) ? '' : 'line-clamp-2'
+                    }`}
+                  >
+                    {brandCaption}
+                  </p>
+                  <button
+                    onClick={() =>
+                      setExpandedCaptions((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(brand)) next.delete(brand)
+                        else next.add(brand)
+                        return next
+                      })
+                    }
+                    className="flex items-center gap-0.5 text-[10px] text-blue-500 hover:text-blue-700 mt-1 transition-colors"
+                  >
+                    {expandedCaptions.has(brand) ? (
+                      <>
+                        <ChevronUp className="w-3 h-3" /> Show less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3 h-3" /> Show more
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
 
               {/* Error */}
