@@ -16,7 +16,8 @@ import {
   Send,
   Filter,
   X,
-  Check
+  Check,
+  Wrench,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
@@ -101,6 +102,7 @@ export function ScheduledPage() {
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<ContentTypeFilter>('all')
   const [selectedDayForMissing, setSelectedDayForMissing] = useState<Date | null>(null)
+  const [isCleaning, setIsCleaning] = useState(false)
   
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate)
@@ -249,6 +251,27 @@ export function ScheduledPage() {
       toast.error('Failed to queue for publishing')
     }
   }
+
+  const handleCleanPostSlots = async () => {
+    setIsCleaning(true)
+    toast.loading('Cleaning post schedule collisions...', { id: 'clean' })
+    try {
+      const resp = await fetch('/reels/scheduled/clean-post-slots', { method: 'POST' })
+      if (!resp.ok) throw new Error('Failed')
+      const data = await resp.json()
+      if (data.collisions_found === 0) {
+        toast.success('No collisions found – schedule is clean!', { id: 'clean' })
+      } else {
+        toast.success(data.message, { id: 'clean', duration: 5000 })
+      }
+      // Refresh the posts list
+      window.location.reload()
+    } catch {
+      toast.error('Failed to clean post slots', { id: 'clean' })
+    } finally {
+      setIsCleaning(false)
+    }
+  }
   
   const openRescheduleModal = (post: ScheduledPost) => {
     // Pre-fill with current scheduled time
@@ -315,7 +338,18 @@ export function ScheduledPage() {
           <p className="text-gray-500">{stats.total} posts scheduled</p>
         </div>
         
-        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleCleanPostSlots}
+            disabled={isCleaning}
+            className="btn btn-secondary text-sm"
+            title="Fix collisions: if multiple posts share the same time slot, re-schedule the extras"
+          >
+            {isCleaning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+            Post Schedule Cleaner
+          </button>
+          
+          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
           <button
             onClick={() => setViewMode('month')}
             className={clsx(
@@ -340,6 +374,7 @@ export function ScheduledPage() {
             <List className="w-4 h-4 inline mr-1" />
             Week
           </button>
+        </div>
         </div>
       </div>
       

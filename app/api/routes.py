@@ -1578,3 +1578,149 @@ async def schedule_post_image(request: SchedulePostImageRequest):
             detail=f"Failed to schedule post image: {str(e)}"
         )
 
+
+# ==================== POST SCHEDULE COLLISION DETECTION ====================
+
+@router.get("/scheduled/occupied-post-slots")
+async def get_occupied_post_slots():
+    """
+    Return all occupied post slots (variant='post') grouped by brand.
+    Frontend uses this to avoid scheduling collisions.
+    """
+    try:
+        all_scheduled = scheduler_service.get_all_scheduled()
+        
+        # Build dict of brand -> list of ISO datetime strings
+        occupied: dict[str, list[str]] = {}
+        
+        for schedule in all_scheduled:
+            metadata = schedule.get("metadata", {})
+            if metadata.get("variant") != "post":
+                continue
+            status = schedule.get("status", "")
+            if status not in ("scheduled", "publishing"):
+                continue
+            brand = metadata.get("brand", "unknown").lower()
+            sched_time = schedule.get("scheduled_time")
+            if sched_time:
+                if brand not in occupied:
+                    occupied[brand] = []
+                # Normalise to ISO string
+                if hasattr(sched_time, 'isoformat'):
+                    occupied[brand].append(sched_time.isoformat())
+                else:
+                    occupied[brand].append(str(sched_time))
+        
+        return {"occupied": occupied}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/scheduled/clean-post-slots")
+async def clean_post_slots():
+    """
+    Post Schedule Cleaner: find collisions (multiple posts at exact same 
+    time for any brand) and re-schedule the duplicates so no two posts 
+    share the exact same minute.
+    
+    For variant='post' only (images). Reels are handled separately.
+    """
+    try:
+        from datetime import timedelta
+        
+        all_scheduled = scheduler_service.get_all_scheduled()
+        
+        # Collect only post-type scheduled entries that are still pending
+        posts_by_slot: dict[str, list[dict]] = {}  # key = "brand|datetime"
+        
+        for schedule in all_scheduled:
+            metadata = schedule.get("metadata", {})
+            if metadata.get("variant") != "post":
+                continue
+            status = schedule.get("status", "")
+            if status not in ("scheduled", "publishing"):
+                continue
+            
+            brand = metadata.get("brand", "unknown").lower()
+            sched_time = schedule.get("scheduled_time")
+            if not sched_time:
+                continue
+            
+            # Round to minute to find exact collisions
+            if hasattr(sched_time, 'strftime'):
+                time_key = sched_time.strftime("%Y-%m-%d %H:%M")
+            else:
+                time_key = str(sched_time)[:16]
+            
+            slot_key = f"{brand}|{time_key}"
+            if slot_key not in posts_by_slot:
+                posts_by_slot[slot_key] = []
+            posts_by_slot[slot_key].append(schedule)
+        
+        # Find collisions and reschedule duplicates
+        fixed = 0
+        collisions_found = 0
+        
+        # Track all occupied slots per brand to avoid re-collisions
+        brand_occupied: dict[str, set[str]] = {}
+        for slot_key, entries in posts_by_slot.items():
+            brand = slot_key.split("|")[0]
+            time_key = slot_key.split("|")[1]
+            if brand not in brand_occupied:
+                brand_occupied[brand] = set()
+            brand_occupied[brand].add(time_key)
+        
+        for slot_key, entries in posts_by_slot.items():
+            if len(entries) <= 1:
+                continue
+            
+            collisions_found += len(entries) - 1
+            brand = slot_key.split("|")[0]
+            
+            # Keep the first one, reschedule the rest
+            for extra in entries[1:]:
+                schedule_id = extra.get("id") or extra.get("schedule_id")
+                sched_time = extra.get("scheduled_time")
+                if not schedule_id or not sched_time:
+                    continue
+                
+                if not hasattr(sched_time, 'hour'):
+                    from datetime import datetime as dt
+                    sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
+                    if sched_time.tzinfo is not None:
+                        sched_time = sched_time.replace(tzinfo=None)
+                
+                # Move to same hour next day, keep looking until slot is free
+                new_time = sched_time + timedelta(days=1)
+                attempts = 0
+                while attempts < 60:
+                    new_key = new_time.strftime("%Y-%m-%d %H:%M")
+                    if new_key not in brand_occupied.get(brand, set()):
+                        break
+                    new_time += timedelta(days=1)
+                    attempts += 1
+                
+                # Reserve this slot
+                if brand not in brand_occupied:
+                    brand_occupied[brand] = set()
+                brand_occupied[brand].add(new_time.strftime("%Y-%m-%d %H:%M"))
+                
+                # Update in DB
+                try:
+                    scheduler_service.reschedule(schedule_id, new_time)
+                    fixed += 1
+                    print(f"   🔧 Moved {schedule_id} ({brand}) from {sched_time} → {new_time}")
+                except Exception as e:
+                    print(f"   ❌ Failed to reschedule {schedule_id}: {e}")
+        
+        return {
+            "status": "ok",
+            "collisions_found": collisions_found,
+            "fixed": fixed,
+            "message": f"Found {collisions_found} collision(s), fixed {fixed}."
+        }
+        
+    except Exception as e:
+        print(f"❌ Clean post slots failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+

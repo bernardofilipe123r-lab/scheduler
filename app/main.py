@@ -84,6 +84,7 @@ output_dir = Path("/app/output") if Path("/app/output").exists() else Path("outp
 output_dir.mkdir(parents=True, exist_ok=True)
 (output_dir / "videos").mkdir(exist_ok=True)
 (output_dir / "thumbnails").mkdir(exist_ok=True)
+(output_dir / "posts").mkdir(exist_ok=True)
 print(f"📁 Static files directory: {output_dir.absolute()}")
 app.mount("/output", StaticFiles(directory=str(output_dir)), name="output")
 
@@ -282,51 +283,140 @@ async def startup_event():
                         video_path_str = metadata.get('video_path')
                         thumbnail_path_str = metadata.get('thumbnail_path')
                         brand = metadata.get('brand', '')
+                        variant = metadata.get('variant', 'light')
                         
-                        print(f"      📦 Metadata: video={video_path_str}, thumbnail={thumbnail_path_str}, brand={brand}")
+                        print(f"      📦 Metadata: video={video_path_str}, thumbnail={thumbnail_path_str}, brand={brand}, variant={variant}")
                         
-                        # If paths stored in metadata, use those
-                        if video_path_str:
-                            video_path = Path(video_path_str)
-                            # Handle relative paths (e.g., /output/videos/xxx.mp4)
-                            if not video_path.is_absolute():
-                                video_path = Path("/app") / video_path.as_posix().lstrip('/')
+                        # ── POST (image) vs REEL (video) publishing ──
+                        is_post = (variant == 'post')
+                        
+                        if is_post:
+                            # ── IMAGE POST PUBLISHING ──
+                            # Posts use thumbnail_path as the image (video_path is None)
+                            if thumbnail_path_str:
+                                image_path = Path(thumbnail_path_str)
+                                if not image_path.is_absolute():
+                                    image_path = Path("/app") / image_path.as_posix().lstrip('/')
+                            else:
+                                # Try common post paths
+                                image_path = Path(f"/app/output/posts/{reel_id}.png")
+                            
+                            print(f"      🖼️  Image post: {image_path} (exists: {image_path.exists()})")
+                            
+                            if not image_path.exists():
+                                raise FileNotFoundError(f"Post image not found: {image_path}")
+                            
+                            # Build public image URL
+                            railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+                            if railway_domain:
+                                public_url_base = f"https://{railway_domain}"
+                            else:
+                                public_url_base = os.getenv("PUBLIC_URL_BASE", "http://localhost:8000")
+                            
+                            # Determine URL path based on where image is stored
+                            image_rel = image_path.as_posix()
+                            if '/output/posts/' in image_rel:
+                                image_url = f"{public_url_base}/output/posts/{image_path.name}"
+                            elif '/output/thumbnails/' in image_rel:
+                                image_url = f"{public_url_base}/output/thumbnails/{image_path.name}"
+                            else:
+                                image_url = f"{public_url_base}/output/posts/{image_path.name}"
+                            
+                            print(f"      🌐 Image URL: {image_url}")
+                            print(f"      🏷️ Publishing IMAGE POST with brand: {brand}")
+                            
+                            # Resolve brand credentials and publish image
+                            from app.services.social_publisher import SocialPublisher
+                            from app.core.config import BrandType, BRAND_CONFIGS
+                            
+                            publisher = None
+                            brand_name_normalized = brand.lower().replace(' ', '_').replace('-', '_')
+                            brand_mapping = {
+                                'gymcollege': BrandType.THE_GYM_COLLEGE,
+                                'gym_college': BrandType.THE_GYM_COLLEGE,
+                                'the_gym_college': BrandType.THE_GYM_COLLEGE,
+                                'thegymcollege': BrandType.THE_GYM_COLLEGE,
+                                'healthycollege': BrandType.HEALTHY_COLLEGE,
+                                'healthy_college': BrandType.HEALTHY_COLLEGE,
+                                'thehealthycollege': BrandType.HEALTHY_COLLEGE,
+                                'vitalitycollege': BrandType.VITALITY_COLLEGE,
+                                'vitality_college': BrandType.VITALITY_COLLEGE,
+                                'thevitalitycollege': BrandType.VITALITY_COLLEGE,
+                                'longevitycollege': BrandType.LONGEVITY_COLLEGE,
+                                'longevity_college': BrandType.LONGEVITY_COLLEGE,
+                                'thelongevitycollege': BrandType.LONGEVITY_COLLEGE,
+                                'holisticcollege': BrandType.HOLISTIC_COLLEGE,
+                                'holistic_college': BrandType.HOLISTIC_COLLEGE,
+                                'theholisticcollege': BrandType.HOLISTIC_COLLEGE,
+                                'wellbeingcollege': BrandType.WELLBEING_COLLEGE,
+                                'wellbeing_college': BrandType.WELLBEING_COLLEGE,
+                                'thewellbeingcollege': BrandType.WELLBEING_COLLEGE,
+                            }
+                            
+                            brand_type = brand_mapping.get(brand_name_normalized)
+                            if brand_type and brand_type in BRAND_CONFIGS:
+                                resolved_config = BRAND_CONFIGS[brand_type]
+                                publisher = SocialPublisher(brand_config=resolved_config)
+                            else:
+                                publisher = SocialPublisher()
+                            
+                            result = {}
+                            if "instagram" in platforms:
+                                print("📸 Publishing image post to Instagram...")
+                                result["instagram"] = publisher.publish_instagram_image_post(
+                                    image_url=image_url,
+                                    caption=caption,
+                                )
+                            if "facebook" in platforms:
+                                print("📘 Publishing image post to Facebook...")
+                                result["facebook"] = publisher.publish_facebook_image_post(
+                                    image_url=image_url,
+                                    caption=caption,
+                                )
                         else:
-                            # Try with _video suffix first (new naming), then without
-                            video_path = Path(f"/app/output/videos/{reel_id}_video.mp4")
+                            # ── REEL (VIDEO) PUBLISHING ──
+                            # If paths stored in metadata, use those
+                            if video_path_str:
+                                video_path = Path(video_path_str)
+                                # Handle relative paths (e.g., /output/videos/xxx.mp4)
+                                if not video_path.is_absolute():
+                                    video_path = Path("/app") / video_path.as_posix().lstrip('/')
+                            else:
+                                # Try with _video suffix first (new naming), then without
+                                video_path = Path(f"/app/output/videos/{reel_id}_video.mp4")
+                                if not video_path.exists():
+                                    video_path = Path(f"/app/output/videos/{reel_id}.mp4")
+                            
+                            if thumbnail_path_str:
+                                thumbnail_path = Path(thumbnail_path_str)
+                                if not thumbnail_path.is_absolute():
+                                    thumbnail_path = Path("/app") / thumbnail_path.as_posix().lstrip('/')
+                            else:
+                                # Try with _thumbnail suffix first, then without
+                                thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}_thumbnail.png")
+                                if not thumbnail_path.exists():
+                                    thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.png")
+                                if not thumbnail_path.exists():
+                                    thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.jpg")
+                            
+                            print(f"      🎬 Video: {video_path} (exists: {video_path.exists()})")
+                            print(f"      🖼️  Thumbnail: {thumbnail_path} (exists: {thumbnail_path.exists()})")
+                            
                             if not video_path.exists():
-                                video_path = Path(f"/app/output/videos/{reel_id}.mp4")
-                        
-                        if thumbnail_path_str:
-                            thumbnail_path = Path(thumbnail_path_str)
-                            if not thumbnail_path.is_absolute():
-                                thumbnail_path = Path("/app") / thumbnail_path.as_posix().lstrip('/')
-                        else:
-                            # Try with _thumbnail suffix first, then without
-                            thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}_thumbnail.png")
+                                raise FileNotFoundError(f"Video not found: {video_path}")
                             if not thumbnail_path.exists():
-                                thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.png")
-                            if not thumbnail_path.exists():
-                                thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.jpg")
-                        
-                        print(f"      🎬 Video: {video_path} (exists: {video_path.exists()})")
-                        print(f"      🖼️  Thumbnail: {thumbnail_path} (exists: {thumbnail_path.exists()})")
-                        
-                        if not video_path.exists():
-                            raise FileNotFoundError(f"Video not found: {video_path}")
-                        if not thumbnail_path.exists():
-                            raise FileNotFoundError(f"Thumbnail not found: {thumbnail_path}")
-                        
-                        # Publish now - CRITICAL: pass brand name for correct credentials!
-                        print(f"      🏷️ Publishing with brand: {brand}")
-                        result = scheduler_service.publish_now(
-                            video_path=video_path,
-                            thumbnail_path=thumbnail_path,
-                            caption=caption,
-                            platforms=platforms,
-                            brand_name=brand,  # Pass brand name to use correct credentials
-                            metadata=metadata  # Pass metadata for YouTube title and thumbnail
-                        )
+                                raise FileNotFoundError(f"Thumbnail not found: {thumbnail_path}")
+                            
+                            # Publish now - CRITICAL: pass brand name for correct credentials!
+                            print(f"      🏷️ Publishing REEL with brand: {brand}")
+                            result = scheduler_service.publish_now(
+                                video_path=video_path,
+                                thumbnail_path=thumbnail_path,
+                                caption=caption,
+                                platforms=platforms,
+                                brand_name=brand,
+                                metadata=metadata
+                            )
                         
                         print(f"      📊 Publish result: {result}")
                         

@@ -281,6 +281,33 @@ export function PostJobDetail({ job, refetch }: Props) {
     let failed = 0
 
     try {
+      // 1) Fetch already-occupied post slots from the backend
+      let occupiedByBrand: Record<string, string[]> = {}
+      try {
+        const occResp = await fetch('/reels/scheduled/occupied-post-slots')
+        if (occResp.ok) {
+          const occData = await occResp.json()
+          occupiedByBrand = occData.occupied || {}
+        }
+      } catch {
+        // If fetch fails, continue without collision data
+        console.warn('Could not fetch occupied post slots')
+      }
+
+      // Helper: check if a slot is occupied for a brand (compare to minute)
+      const isSlotOccupied = (brand: string, dt: Date): boolean => {
+        const brandSlots = occupiedByBrand[brand.toLowerCase()] || []
+        const dtMinute = dt.toISOString().slice(0, 16) // YYYY-MM-DDTHH:MM
+        return brandSlots.some(s => s.slice(0, 16) === dtMinute)
+      }
+
+      // Helper: mark a slot as occupied (so subsequent brands in this batch don't collide)
+      const markOccupied = (brand: string, dt: Date) => {
+        const key = brand.toLowerCase()
+        if (!occupiedByBrand[key]) occupiedByBrand[key] = []
+        occupiedByBrand[key].push(dt.toISOString())
+      }
+
       for (const brand of job.brands) {
         const stage = stageRefs.current.get(brand)
         if (!stage) { failed++; continue }
@@ -293,20 +320,27 @@ export function PostJobDetail({ job, refetch }: Props) {
         const output = job.brand_outputs[brand as BrandName]
         const brandTitle = output?.title || job.title
 
-        // Find next slot: base hours 0 (12AM) and 12 (12PM)
+        // 2) Find next free slot: base hours 0 (12AM) and 12 (12PM), with collision avoidance
         const now = new Date()
         let scheduleTime: Date | null = null
-        for (const baseHour of [0, 12]) {
-          const slot = new Date(now)
-          slot.setHours(baseHour + offset, 0, 0, 0)
-          if (slot > now) {
+
+        // Try slots for the next 30 days to find a free one
+        for (let dayOffset = 0; dayOffset < 30 && !scheduleTime; dayOffset++) {
+          for (const baseHour of [0, 12]) {
+            const slot = new Date(now)
+            slot.setDate(slot.getDate() + dayOffset)
+            slot.setHours(baseHour + offset, 0, 0, 0)
+            if (slot <= now) continue
+            if (isSlotOccupied(brand, slot)) continue
             scheduleTime = slot
             break
           }
         }
+
         if (!scheduleTime) {
+          // Fallback: 30 days out at offset hour
           scheduleTime = new Date(now)
-          scheduleTime.setDate(scheduleTime.getDate() + 1)
+          scheduleTime.setDate(scheduleTime.getDate() + 30)
           scheduleTime.setHours(offset, 0, 0, 0)
         }
 
@@ -324,6 +358,8 @@ export function PostJobDetail({ job, refetch }: Props) {
           })
           if (resp.ok) {
             scheduled++
+            // Mark this slot as occupied for the rest of this batch
+            markOccupied(brand, scheduleTime)
             try {
               await updateBrandStatus.mutateAsync({
                 id: job.id,

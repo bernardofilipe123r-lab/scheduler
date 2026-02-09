@@ -215,6 +215,288 @@ class SocialPublisher:
             print(f"   ❌ Exception in /me/accounts: {e}")
             return None
     
+    # ==================== IMAGE POST PUBLISHING ====================
+
+    def publish_instagram_image_post(
+        self,
+        image_url: str,
+        caption: str = "CHANGE ME",
+    ) -> Dict[str, Any]:
+        """
+        Publish a single image post to Instagram using the Content Publishing API.
+        
+        Steps:
+        1. Create media container with image_url + caption
+        2. Wait for processing (STATUS_CODE == FINISHED)
+        3. Publish the container
+        
+        Args:
+            image_url: Public URL to the image file (must be accessible)
+            caption: Caption text for the post
+            
+        Returns:
+            Dict with publish status and Instagram post ID
+        """
+        if not self.ig_access_token or not self.ig_business_account_id:
+            return {
+                "success": False,
+                "error": "Instagram credentials not configured",
+                "platform": "instagram"
+            }
+        
+        try:
+            # Step 1: Create media container for image post
+            container_url = f"https://graph.facebook.com/{self.api_version}/{self.ig_business_account_id}/media"
+            
+            print(f"📤 Image URL for Instagram post: {image_url}")
+            print(f"   Instagram Account ID: {self.ig_business_account_id}")
+            print(f"   Using IMAGE POST method (not Reels)...")
+            
+            container_payload = {
+                "image_url": image_url,
+                "caption": caption,
+                "access_token": self.ig_access_token
+            }
+            
+            print(f"📸 Creating Instagram image post container...")
+            container_response = requests.post(container_url, data=container_payload, timeout=30)
+            container_data = container_response.json()
+            
+            print(f"   Container response: {container_data}")
+            
+            if "error" in container_data:
+                error_msg = container_data["error"].get("message", "Unknown error")
+                error_code = container_data["error"].get("code", "")
+                error_subcode = container_data["error"].get("error_subcode", "")
+                print(f"   ❌ Container error: {error_msg} (code: {error_code}, subcode: {error_subcode})")
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "platform": "instagram",
+                    "step": "create_container",
+                    "error_code": error_code,
+                    "error_subcode": error_subcode
+                }
+            
+            creation_id = container_data.get("id")
+            if not creation_id:
+                return {
+                    "success": False,
+                    "error": "No creation ID returned",
+                    "platform": "instagram"
+                }
+            
+            print(f"✅ Container created: {creation_id}")
+            
+            # Step 2: Wait for processing
+            status_url = f"https://graph.facebook.com/{self.api_version}/{creation_id}"
+            max_wait_seconds = 60
+            check_interval = 3
+            waited = 0
+            
+            print(f"⏳ Waiting for Instagram to process image...")
+            while waited < max_wait_seconds:
+                status_response = requests.get(
+                    status_url,
+                    params={"fields": "status_code,status", "access_token": self.ig_access_token},
+                    timeout=10
+                )
+                status_data = status_response.json()
+                
+                if "error" in status_data:
+                    error_msg = status_data["error"].get("message", "Unknown error")
+                    print(f"   ❌ Status check error: {error_msg}")
+                    return {
+                        "success": False,
+                        "error": f"Status check failed: {error_msg}",
+                        "platform": "instagram",
+                        "step": "status_check"
+                    }
+                
+                status_code = status_data.get("status_code")
+                print(f"   📊 Status: {status_code} (waited {waited}s)")
+                
+                if status_code == "FINISHED":
+                    print(f"✅ Image processing complete!")
+                    break
+                elif status_code == "ERROR":
+                    return {
+                        "success": False,
+                        "error": f"Instagram image processing failed: {status_data.get('status', '')}",
+                        "platform": "instagram",
+                        "step": "processing"
+                    }
+                
+                time.sleep(check_interval)
+                waited += check_interval
+            
+            if waited >= max_wait_seconds:
+                return {
+                    "success": False,
+                    "error": f"Image processing timeout after {max_wait_seconds}s",
+                    "platform": "instagram",
+                    "step": "processing_timeout",
+                    "creation_id": creation_id
+                }
+            
+            # Step 3: Publish the container
+            publish_url = f"https://graph.facebook.com/{self.api_version}/{self.ig_business_account_id}/media_publish"
+            publish_payload = {
+                "creation_id": creation_id,
+                "access_token": self.ig_access_token
+            }
+            
+            print(f"🚀 Publishing Instagram image post...")
+            publish_response = requests.post(publish_url, data=publish_payload, timeout=30)
+            publish_data = publish_response.json()
+            
+            if "error" in publish_data:
+                return {
+                    "success": False,
+                    "error": publish_data["error"].get("message", "Unknown error"),
+                    "platform": "instagram",
+                    "step": "publish",
+                    "creation_id": creation_id
+                }
+            
+            instagram_post_id = publish_data.get("id")
+            print(f"🎉 Instagram image post published! Post ID: {instagram_post_id}")
+            
+            return {
+                "success": True,
+                "platform": "instagram",
+                "post_id": instagram_post_id,
+                "creation_id": creation_id
+            }
+            
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "error": "Request timed out",
+                "platform": "instagram"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "platform": "instagram"
+            }
+
+    def publish_facebook_image_post(
+        self,
+        image_url: str,
+        caption: str = "CHANGE ME",
+    ) -> Dict[str, Any]:
+        """
+        Publish a single image post to a Facebook Page using the Photos API.
+        
+        Uses: POST /{page_id}/photos with url + message
+        
+        Args:
+            image_url: Public URL to the image file
+            caption: Caption text (will be shortened for FB)
+            
+        Returns:
+            Dict with publish status and Facebook post ID
+        """
+        fb_caption = create_facebook_caption(caption, max_length=400)
+        if len(caption) != len(fb_caption):
+            print(f"   📝 Facebook caption created: {len(caption)} → {len(fb_caption)} chars")
+        
+        if not self._system_user_token or not self.fb_page_id:
+            return {
+                "success": False,
+                "error": "Facebook credentials not configured",
+                "platform": "facebook"
+            }
+        
+        try:
+            # Get Page Access Token (required for posting)
+            page_access_token = self._get_page_access_token(self.fb_page_id)
+            
+            if not page_access_token:
+                return {
+                    "success": False,
+                    "error": "Failed to get Page Access Token",
+                    "platform": "facebook",
+                    "step": "auth"
+                }
+            
+            # POST /{page_id}/photos with url + message
+            photos_url = f"https://graph.facebook.com/{self.api_version}/{self.fb_page_id}/photos"
+            
+            print(f"📤 Publishing image post to Facebook...")
+            print(f"   Page ID: {self.fb_page_id}")
+            print(f"   Image URL: {image_url}")
+            
+            payload = {
+                "url": image_url,
+                "message": fb_caption,
+                "access_token": page_access_token,
+                "published": True,
+            }
+            
+            response = requests.post(photos_url, data=payload, timeout=30)
+            data = response.json()
+            
+            print(f"   Response: {data}")
+            
+            if "error" in data:
+                error_msg = data["error"].get("message", "Unknown error")
+                error_code = data["error"].get("code", "")
+                print(f"   ❌ Publish error: {error_msg} (code: {error_code})")
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "platform": "facebook",
+                    "step": "publish",
+                    "error_code": error_code
+                }
+            
+            photo_id = data.get("id") or data.get("post_id")
+            print(f"🎉 Facebook image post published! Photo ID: {photo_id}")
+            
+            return {
+                "success": True,
+                "platform": "facebook",
+                "post_id": photo_id,
+                "page_id": self.fb_page_id,
+                "brand_used": self.brand_name
+            }
+            
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "error": "Request timed out",
+                "platform": "facebook"
+            }
+        except Exception as e:
+            print(f"   ❌ Exception: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "platform": "facebook"
+            }
+
+    def publish_image_to_both(
+        self,
+        image_url: str,
+        caption: str = "CHANGE ME",
+    ) -> Dict[str, Any]:
+        """
+        Publish an image post to both Instagram and Facebook.
+        """
+        instagram_result = self.publish_instagram_image_post(image_url, caption)
+        facebook_result = self.publish_facebook_image_post(image_url, caption)
+        
+        return {
+            "instagram": instagram_result,
+            "facebook": facebook_result,
+            "overall_success": instagram_result.get("success") and facebook_result.get("success")
+        }
+
+    # ==================== REEL (VIDEO) PUBLISHING ====================
+
     def publish_instagram_reel(
         self,
         video_url: str,
