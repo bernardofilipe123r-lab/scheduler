@@ -186,6 +186,65 @@ async def generate_post_title(request: AutoContentRequest = None):
         )
 
 
+# ==================== GOD AUTOMATION ENDPOINTS ====================
+
+class BatchTitlesRequest(BaseModel):
+    count: int = 5
+    topic_hint: Optional[str] = None
+
+
+@router.post(
+    "/generate-post-titles-batch",
+    summary="Generate N unique post titles + captions + prompts in one AI call",
+)
+async def generate_post_titles_batch(request: BatchTitlesRequest = None):
+    """Generate N unique posts in a single AI call (for God Automation)."""
+    try:
+        count = request.count if request else 5
+        topic_hint = request.topic_hint if request else None
+        results = content_generator.generate_post_titles_batch(count, topic_hint)
+        return {"posts": results}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate batch titles: {str(e)}"
+        )
+
+
+class GeneratePostBgRequest(BaseModel):
+    brand: str
+    prompt: str
+
+
+@router.post(
+    "/generate-post-background",
+    summary="Generate a single post background image (returns base64)",
+)
+async def generate_post_background(request: GeneratePostBgRequest):
+    """Generate a single AI background image for a post. Returns base64 PNG."""
+    try:
+        from app.services.ai_background_generator import AIBackgroundGenerator
+        import base64
+        from io import BytesIO
+
+        generator = AIBackgroundGenerator()
+        image = generator.generate_post_background(
+            brand_name=request.brand,
+            user_prompt=request.prompt,
+        )
+
+        buf = BytesIO()
+        image.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+        return {"background_data": f"data:image/png;base64,{b64}"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate background: {str(e)}"
+        )
+
+
 class GenerateImagePromptRequest(BaseModel):
     title: str
 

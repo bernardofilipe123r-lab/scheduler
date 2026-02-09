@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Save,
   RotateCcw,
+  Zap,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
@@ -26,6 +27,7 @@ import {
 } from '@/shared/components/PostCanvas'
 import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
 import type { BrandName } from '@/shared/types'
+import { GodAutomation } from '@/shared/components/GodAutomation'
 
 const ALL_BRANDS: BrandName[] = [
   'healthycollege',
@@ -50,6 +52,7 @@ export function PostsPage() {
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [showGodMode, setShowGodMode] = useState(false)
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -443,8 +446,9 @@ export function PostsPage() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isCreating || selectedBrands.length === 0}
+                disabled={isCreating || selectedBrands.length === 0 || !title.trim()}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 font-medium disabled:opacity-50"
+                title={!title.trim() ? 'Enter a topic hint first' : ''}
               >
                 {isCreating ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -454,8 +458,15 @@ export function PostsPage() {
                 Generate Posts
               </button>
             </div>
+            <button
+              onClick={() => setShowGodMode(true)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:via-yellow-600 hover:to-amber-700 font-bold shadow-lg shadow-amber-200/50 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Zap className="w-5 h-5" />
+              God Automation 🔱
+            </button>
             <p className="text-xs text-gray-400 text-center">
-              💡 Click <strong>Generate Posts</strong> directly — each brand gets a unique title & image automatically
+              💡 <strong>Generate Posts</strong> needs a topic hint · <strong>God Automation</strong> does everything automatically
             </p>
           </div>
         </div>
@@ -479,6 +490,15 @@ export function PostsPage() {
           </div>
         </div>
       </div>
+
+      {/* God Automation overlay */}
+      {showGodMode && (
+        <GodAutomation
+          brands={selectedBrands}
+          settings={settings}
+          onClose={() => setShowGodMode(false)}
+        />
+      )}
     </div>
   )
 }
