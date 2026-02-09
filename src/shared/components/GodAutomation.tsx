@@ -206,6 +206,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   const [activeGens, setActiveGens] = useState(0)
   const [isSchedulingCurrent, setIsSchedulingCurrent] = useState(false)
   const [preGenStep, setPreGenStep] = useState<'slots' | 'titles' | 'images'>('slots')
+  const [preGenStartTime, setPreGenStartTime] = useState<number>(0)
 
   // Edit state for current review card
   const [editingTitle, setEditingTitle] = useState(false)
@@ -396,6 +397,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     setPhase('pre_generating')
     setPreGenProgress(0)
     setPreGenStep('slots')
+    setPreGenStartTime(Date.now())
     await fetchOccupiedSlots()
 
     const FIRST_BATCH = 2 // Only generate 2 posts before review starts
@@ -764,9 +766,9 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   //  RENDER
   // ═══════════════════════════════════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col overflow-hidden">
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-white/5 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
             <Zap className="w-4 h-4 text-white" />
@@ -792,7 +794,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
       </div>
 
       {/* ── Content ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center overflow-hidden">
         {/* Resume dialog */}
         {phase === 'batch_select' && resumeSession && (
           <ResumeDialog
@@ -822,87 +824,166 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
             activeGens={activeGens}
             totalPosts={2}
             step={preGenStep}
+            startTime={preGenStartTime}
           />
         )}
 
-        {/* ─── Reviewing ────────────────────────────────────────── */}
+        {/* ─── Reviewing — DESKTOP HORIZONTAL LAYOUT ────────────── */}
         {phase === 'reviewing' && currentPost && (
-          <div className="flex flex-col items-center gap-5 w-full max-w-lg">
-            {/* Progress */}
-            <ReviewProgressBar
-              accepted={stats.accepted}
-              total={totalPosts}
-              ready={stats.ready}
-              generating={stats.generating}
-            />
-
-            {/* Brand badge */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-              <div
-                className="w-2.5 h-2.5 rounded-full ring-2 ring-white/20"
-                style={{ backgroundColor: getBrandColor(currentPost.brand) }}
-              />
-              <span className="text-white/80 text-sm font-medium">
-                {getBrandLabel(currentPost.brand)}
-              </span>
-              <span className="text-white/30 text-xs">
-                Round {currentPost.round + 1}
-              </span>
-            </div>
-
-            {/* Card */}
-            <ReviewCard
-              post={currentPost}
-              isGenerating={isCurrentGenerating}
-              displayTitle={displayTitle}
-              displayFontSize={displayFontSize}
-              settings={settings}
-              editingTitle={editingTitle}
-              editTitleValue={editTitleValue}
-              stageRef={(node) => {
-                stageRef.current = node
-              }}
-              onStartEditTitle={() => {
-                setEditTitleValue(currentPost.title)
-                setEditingTitle(true)
-              }}
-              onEditTitleChange={setEditTitleValue}
-              onCommitTitleEdit={commitTitleEdit}
-              onFontSizeChange={(delta) =>
-                setFontSizeOverride((prev) =>
-                  Math.max(30, Math.min(120, (prev ?? settings.fontSize) + delta)),
-                )
-              }
-              onRetryImage={retryImage}
-            />
-
-            {/* Action buttons */}
-            <div className="flex items-center gap-5">
+          <div className="flex items-center gap-8 px-8 w-full max-w-5xl">
+            {/* Left: Reject button */}
+            <div className="shrink-0">
               <button
                 onClick={handleNo}
                 disabled={!isCurrentReady || isSchedulingCurrent}
-                className="group w-14 h-14 rounded-full bg-white/5 border-2 border-red-400/40 text-red-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-red-500/20 hover:border-red-400 hover:scale-110 active:scale-95"
+                className="group w-16 h-16 rounded-full bg-white/5 border-2 border-red-400/40 text-red-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-red-500/20 hover:border-red-400 hover:scale-110 active:scale-95"
                 title="Reject — generate new post"
               >
                 <ThumbsDown className="w-6 h-6 group-hover:scale-110 transition-transform" />
               </button>
+            </div>
+
+            {/* Center: Canvas */}
+            <div className="shrink-0">
+              {isCurrentGenerating ? (
+                <div
+                  className="flex flex-col items-center justify-center bg-white/5 rounded-2xl border border-white/10"
+                  style={{ width: CANVAS_WIDTH * REVIEW_SCALE, height: CANVAS_HEIGHT * REVIEW_SCALE }}
+                >
+                  <div className="w-12 h-12 rounded-full border-[3px] border-amber-200 border-t-amber-500 animate-spin" />
+                  <p className="text-sm text-white/40 mt-4 font-medium">
+                    {currentPost.status === 'pending_content'
+                      ? 'Creating content...'
+                      : 'Generating image...'}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl overflow-hidden shadow-2xl shadow-black/30">
+                  <PostCanvas
+                    brand={currentPost.brand}
+                    title={displayTitle || 'GENERATING...'}
+                    backgroundImage={currentPost.backgroundUrl}
+                    settings={{ ...settings, fontSize: displayFontSize }}
+                    scale={REVIEW_SCALE}
+                    stageRef={(node: Konva.Stage | null) => { stageRef.current = node }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Right: Controls panel */}
+            <div className="flex-1 min-w-0 flex flex-col gap-4">
+              {/* Progress bar */}
+              <ReviewProgressBar
+                accepted={stats.accepted}
+                total={totalPosts}
+                ready={stats.ready}
+                generating={stats.generating}
+              />
+
+              {/* Brand badge */}
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full ring-2 ring-white/20"
+                  style={{ backgroundColor: getBrandColor(currentPost.brand) }}
+                />
+                <span className="text-white/80 text-sm font-semibold">
+                  {getBrandLabel(currentPost.brand)}
+                </span>
+                <span className="text-white/30 text-xs">
+                  Round {currentPost.round + 1}
+                </span>
+              </div>
+
+              {/* Title edit */}
+              <div>
+                <label className="text-white/30 text-xs font-medium mb-1 block">Title</label>
+                {editingTitle ? (
+                  <input
+                    type="text"
+                    value={editTitleValue}
+                    onChange={(e) => setEditTitleValue(e.target.value)}
+                    onBlur={commitTitleEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === 'Escape') commitTitleEdit()
+                    }}
+                    autoFocus
+                    className="w-full text-sm px-3 py-2 border border-amber-400/50 rounded-lg bg-amber-500/10 text-white focus:outline-none focus:ring-2 focus:ring-amber-400/30 placeholder-white/30"
+                    placeholder="Enter title..."
+                  />
+                ) : (
+                  <div
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors group"
+                    onClick={() => {
+                      setEditTitleValue(currentPost.title)
+                      setEditingTitle(true)
+                    }}
+                  >
+                    <p className="flex-1 text-sm text-white/80 font-medium truncate">
+                      {currentPost.title || 'No title'}
+                    </p>
+                    <Pencil className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
+                  </div>
+                )}
+              </div>
+
+              {/* Font size + retry image */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 bg-white/5 rounded-lg px-2 py-1 border border-white/10">
+                  <button
+                    onClick={() =>
+                      setFontSizeOverride((prev) =>
+                        Math.max(30, (prev ?? settings.fontSize) - 4),
+                      )
+                    }
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <Minus className="w-3 h-3 text-white/50" />
+                  </button>
+                  <span className="text-xs text-white/60 font-mono w-7 text-center">
+                    {displayFontSize}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setFontSizeOverride((prev) =>
+                        Math.min(120, (prev ?? settings.fontSize) + 4),
+                      )
+                    }
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <Plus className="w-3 h-3 text-white/50" />
+                  </button>
+                </div>
+                <button
+                  onClick={retryImage}
+                  disabled={isCurrentGenerating}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg disabled:opacity-40 transition-colors text-white/60"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  New Image
+                </button>
+              </div>
+
+              {/* Accept button */}
               <button
                 onClick={handleYes}
                 disabled={!isCurrentReady || isSchedulingCurrent}
-                className="group w-[4.5rem] h-[4.5rem] rounded-full bg-gradient-to-br from-green-400 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-green-500/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-green-500/40 hover:scale-110 active:scale-95"
-                title="Accept — schedule now"
+                className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-green-500/40 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 {isSchedulingCurrent ? (
-                  <Loader2 className="w-7 h-7 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <Check className="w-8 h-8 group-hover:scale-110 transition-transform" />
+                  <>
+                    <Check className="w-5 h-5" />
+                    Schedule Post
+                  </>
                 )}
               </button>
-            </div>
 
-            <p className="text-white/20 text-xs">
-              Edit title or retry image before accepting
-            </p>
+              <p className="text-white/20 text-xs text-center">
+                Click title to edit · Reject to regenerate
+              </p>
+            </div>
           </div>
         )}
 
@@ -1039,17 +1120,19 @@ function BatchSelector({
   )
 }
 
-/** Pre-generation progress screen */
+/** Pre-generation progress screen with ETA */
 function PreGenProgress({
   progress,
   activeGens,
   totalPosts,
   step,
+  startTime,
 }: {
   progress: number
   activeGens: number
   totalPosts: number
   step: 'slots' | 'titles' | 'images'
+  startTime: number
 }) {
   const circumference = 2 * Math.PI * 34
 
@@ -1059,6 +1142,19 @@ function PreGenProgress({
       : step === 'titles'
         ? 'Generating 2 titles...'
         : `Generating ${totalPosts} images...`
+
+  // ETA calculation
+  const elapsed = (Date.now() - startTime) / 1000
+  let etaLabel = ''
+  if (progress > 5 && progress < 100) {
+    const totalEstimate = (elapsed / progress) * 100
+    const remaining = Math.max(0, totalEstimate - elapsed)
+    if (remaining < 60) {
+      etaLabel = `~${Math.ceil(remaining)}s remaining`
+    } else {
+      etaLabel = `~${Math.ceil(remaining / 60)}m remaining`
+    }
+  }
 
   return (
     <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
@@ -1096,10 +1192,10 @@ function PreGenProgress({
         </div>
       </div>
       <h2 className="text-xl font-bold text-gray-900 mb-1">Preparing first posts</h2>
-      <p className="text-gray-500 text-sm mb-4">
+      <p className="text-gray-500 text-sm mb-3">
         Just {totalPosts} posts to start — rest generates while you swipe
       </p>
-      <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
+      <div className="flex flex-col items-center gap-1.5 text-xs text-gray-400">
         <span className="flex items-center gap-1.5">
           {step === 'images' && activeGens > 0 ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1108,6 +1204,9 @@ function PreGenProgress({
           )}
           {stepLabel}
         </span>
+        {etaLabel && (
+          <span className="text-gray-300 font-medium">{etaLabel}</span>
+        )}
       </div>
     </div>
   )
@@ -1152,138 +1251,6 @@ function ReviewProgressBar({
           className="bg-gradient-to-r from-green-400 to-emerald-400 h-1.5 rounded-full transition-all duration-500"
           style={{ width: `${pct}%` }}
         />
-      </div>
-    </div>
-  )
-}
-
-/** Single review card with canvas + controls */
-function ReviewCard({
-  post,
-  isGenerating,
-  displayTitle,
-  displayFontSize,
-  settings,
-  editingTitle,
-  editTitleValue,
-  stageRef,
-  onStartEditTitle,
-  onEditTitleChange,
-  onCommitTitleEdit,
-  onFontSizeChange,
-  onRetryImage,
-}: {
-  post: GodPost
-  isGenerating: boolean
-  displayTitle: string
-  displayFontSize: number
-  settings: GeneralSettings
-  editingTitle: boolean
-  editTitleValue: string
-  stageRef: (node: Konva.Stage | null) => void
-  onStartEditTitle: () => void
-  onEditTitleChange: (v: string) => void
-  onCommitTitleEdit: () => void
-  onFontSizeChange: (delta: number) => void
-  onRetryImage: () => void
-}) {
-  const cardWidth = CANVAS_WIDTH * REVIEW_SCALE
-  const cardHeight = CANVAS_HEIGHT * REVIEW_SCALE
-
-  return (
-    <div
-      className="bg-white rounded-2xl shadow-2xl shadow-black/20 overflow-hidden"
-      style={{ width: cardWidth }}
-    >
-      {/* Canvas area */}
-      {isGenerating ? (
-        <div
-          className="flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100"
-          style={{ width: cardWidth, height: cardHeight }}
-        >
-          <div className="w-12 h-12 rounded-full border-[3px] border-amber-200 border-t-amber-500 animate-spin" />
-          <p className="text-sm text-gray-400 mt-4 font-medium">
-            {post.status === 'pending_content'
-              ? 'Creating content...'
-              : 'Generating image...'}
-          </p>
-        </div>
-      ) : (
-        <PostCanvas
-          brand={post.brand}
-          title={displayTitle || 'GENERATING...'}
-          backgroundImage={post.backgroundUrl}
-          settings={{ ...settings, fontSize: displayFontSize }}
-          scale={REVIEW_SCALE}
-          stageRef={stageRef}
-        />
-      )}
-
-      {/* Controls */}
-      <div className="p-3 border-t border-gray-100 space-y-2.5">
-        {/* Title row */}
-        <div className="flex items-center gap-2">
-          {editingTitle ? (
-            <input
-              type="text"
-              value={editTitleValue}
-              onChange={(e) => onEditTitleChange(e.target.value)}
-              onBlur={onCommitTitleEdit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === 'Escape') onCommitTitleEdit()
-              }}
-              autoFocus
-              className="flex-1 text-sm px-3 py-1.5 border border-amber-300 rounded-lg bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-200"
-              placeholder="Enter title..."
-            />
-          ) : (
-            <p
-              className="flex-1 text-sm text-gray-700 font-medium truncate cursor-pointer hover:text-amber-600 transition-colors"
-              onClick={onStartEditTitle}
-              title="Click to edit title"
-            >
-              {post.title || 'No title'}
-            </p>
-          )}
-          {!editingTitle && (
-            <button
-              onClick={onStartEditTitle}
-              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Edit title"
-            >
-              <Pencil className="w-3.5 h-3.5 text-gray-400" />
-            </button>
-          )}
-        </div>
-
-        {/* Font size + retry */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 bg-gray-50 rounded-lg px-1">
-            <button
-              onClick={() => onFontSizeChange(-4)}
-              className="p-1.5 hover:bg-white rounded transition-colors"
-            >
-              <Minus className="w-3 h-3 text-gray-500" />
-            </button>
-            <span className="text-xs text-gray-600 font-mono w-8 text-center">
-              {displayFontSize}
-            </span>
-            <button
-              onClick={() => onFontSizeChange(4)}
-              className="p-1.5 hover:bg-white rounded transition-colors"
-            >
-              <Plus className="w-3 h-3 text-gray-500" />
-            </button>
-          </div>
-          <button
-            onClick={onRetryImage}
-            disabled={isGenerating}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-50 hover:bg-gray-100 rounded-lg disabled:opacity-40 transition-colors"
-          >
-            <RefreshCw className="w-3 h-3" />
-            New Image
-          </button>
-        </div>
       </div>
     </div>
   )
