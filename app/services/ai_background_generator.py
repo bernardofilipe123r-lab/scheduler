@@ -143,17 +143,23 @@ class AIBackgroundGenerator:
                     else:
                         raise RuntimeError(f"Rate limited after {MAX_RETRIES} retries. DEAPI is overloaded. Try again later.")
                 
-                # For other errors, raise immediately
+                # For other errors, log full body and raise
+                if response.status_code >= 400:
+                    print(f"❌ HTTP {response.status_code} Error!", flush=True)
+                    print(f"❌ Response body: {response.text[:1000]}", flush=True)
+                    print(f"❌ Response headers: {dict(response.headers)}", flush=True)
                 response.raise_for_status()
                 return response
                 
             except requests.exceptions.HTTPError as e:
-                if e.response is not None and e.response.status_code == 429:
-                    if attempt < MAX_RETRIES:
-                        print(f"⚠️  Rate limited (429). Waiting {retry_delay}s before retry {attempt + 1}/{MAX_RETRIES}...")
-                        time.sleep(retry_delay)
-                        retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
-                        continue
+                if e.response is not None:
+                    print(f"❌ HTTPError {e.response.status_code}: {e.response.text[:1000]}", flush=True)
+                    if e.response.status_code == 429:
+                        if attempt < MAX_RETRIES:
+                            print(f"⚠️  Rate limited (429). Waiting {retry_delay}s before retry {attempt + 1}/{MAX_RETRIES}...")
+                            time.sleep(retry_delay)
+                            retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                            continue
                 raise
         
         raise RuntimeError(f"Request failed after {MAX_RETRIES} retries")
@@ -477,6 +483,7 @@ class AIBackgroundGenerator:
             }
             
             print(f"📊 API Request: model={payload['model']}, {width}x{height}, steps={payload['steps']}")
+            print(f"📊 Full payload: {payload}", flush=True)
             
             response = self._request_with_retry(
                 'post',
