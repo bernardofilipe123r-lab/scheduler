@@ -5,7 +5,7 @@
  * Shows per-brand background previews with unique titles,
  * pencil edit per brand, layout controls, auto-schedule.
  */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Konva from 'konva'
 import {
   ArrowLeft,
@@ -24,6 +24,9 @@ import {
   Pencil,
   Minus,
   Plus,
+  Upload,
+  ImagePlus,
+  X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -32,6 +35,8 @@ import {
   useDeleteJob,
   useRegenerateJob,
   useUpdateBrandStatus,
+  useUpdateBrandContent,
+  useRegenerateBrandImage,
 } from '@/features/jobs'
 import { getBrandLabel, getBrandColor } from '@/features/brands'
 import { StatusBadge, Modal } from '@/shared/components'
@@ -61,6 +66,18 @@ function loadBrandLogos(): Record<string, string> {
   return {}
 }
 
+function saveBrandLogo(brand: string, dataUrl: string) {
+  const logos = loadBrandLogos()
+  logos[brand] = dataUrl
+  localStorage.setItem(LOGOS_STORAGE_KEY, JSON.stringify(logos))
+}
+
+function removeBrandLogo(brand: string) {
+  const logos = loadBrandLogos()
+  delete logos[brand]
+  localStorage.setItem(LOGOS_STORAGE_KEY, JSON.stringify(logos))
+}
+
 interface Props {
   job: Job
   refetch: () => void
@@ -71,6 +88,8 @@ export function PostJobDetail({ job, refetch }: Props) {
   const deleteJob = useDeleteJob()
   const regenerateJob = useRegenerateJob()
   const updateBrandStatus = useUpdateBrandStatus()
+  const updateBrandContent = useUpdateBrandContent()
+  const regenerateBrandImage = useRegenerateBrandImage()
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -88,10 +107,15 @@ export function PostJobDetail({ job, refetch }: Props) {
 
   // Per-brand font size overrides (non-permanent, session only)
   const [brandFontSizes, setBrandFontSizes] = useState<Record<string, number>>({})
-  const [fontSizeEditBrand, setFontSizeEditBrand] = useState<string | null>(null)
 
   // Brand logos
-  const [brandLogos] = useState<Record<string, string>>(loadBrandLogos)
+  const [brandLogos, setBrandLogos] = useState<Record<string, string>>(loadBrandLogos)
+
+  // Edit modal state
+  const [editingBrand, setEditingBrand] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editCaption, setEditCaption] = useState('')
+  const [editPrompt, setEditPrompt] = useState('')
 
   // Stage refs for export (one per brand)
   const stageRefs = useRef<Map<string, Konva.Stage>>(new Map())
@@ -134,6 +158,69 @@ export function PostJobDetail({ job, refetch }: Props) {
       const next = Math.max(30, Math.min(120, current + delta))
       return { ...prev, [brand]: next }
     })
+  }
+
+  // ── Edit brand modal helpers ────────────────────────────────────────
+  const openEditBrand = useCallback((brand: string) => {
+    const output = job.brand_outputs[brand as BrandName]
+    setEditTitle(output?.title || job.title || '')
+    setEditCaption(output?.caption || '')
+    setEditPrompt(output?.ai_prompt || '')
+    setEditingBrand(brand)
+  }, [job])
+
+  const saveEditBrand = async () => {
+    if (!editingBrand) return
+    try {
+      await updateBrandContent.mutateAsync({
+        id: job.id,
+        brand: editingBrand as BrandName,
+        data: { title: editTitle, caption: editCaption },
+      })
+      toast.success('Content updated!')
+      refetch()
+    } catch {
+      toast.error('Failed to update content')
+    }
+  }
+
+  const handleRegenBrandImage = async (newPrompt?: boolean) => {
+    if (!editingBrand) return
+    try {
+      await regenerateBrandImage.mutateAsync({
+        id: job.id,
+        brand: editingBrand as BrandName,
+        aiPrompt: newPrompt ? editPrompt : undefined,
+      })
+      toast.success('Image regeneration started!')
+      setEditingBrand(null)
+      refetch()
+    } catch {
+      toast.error('Failed to regenerate image')
+    }
+  }
+
+  const handleLogoUpload = (brand: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      saveBrandLogo(brand, dataUrl)
+      setBrandLogos((prev) => ({ ...prev, [brand]: dataUrl }))
+      toast.success('Logo saved!')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveLogo = (brand: string) => {
+    removeBrandLogo(brand)
+    setBrandLogos((prev) => {
+      const next = { ...prev }
+      delete next[brand]
+      return next
+    })
+    toast.success('Logo removed')
   }
 
   // ── Delete ─────────────────────────────────────────────────────────
@@ -420,17 +507,9 @@ export function PostJobDetail({ job, refetch }: Props) {
                 <span className="ml-auto flex items-center gap-1">
                   {(status === 'completed' || status === 'scheduled') && (
                     <button
-                      onClick={() =>
-                        setFontSizeEditBrand((prev) =>
-                          prev === brand ? null : brand
-                        )
-                      }
-                      className={`p-1 rounded hover:bg-gray-100 ${
-                        fontSizeEditBrand === brand
-                          ? 'text-primary-600 bg-primary-50'
-                          : 'text-gray-400 hover:text-gray-600'
-                      }`}
-                      title="Adjust font size"
+                      onClick={() => openEditBrand(brand)}
+                      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                      title="Edit brand"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -452,27 +531,6 @@ export function PostJobDetail({ job, refetch }: Props) {
                   )}
                 </span>
               </div>
-
-              {/* Inline font-size control */}
-              {fontSizeEditBrand === brand && (
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <button
-                    onClick={() => adjustBrandFontSize(brand, -2)}
-                    className="p-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-600"
-                  >
-                    <Minus className="w-3 h-3" />
-                  </button>
-                  <span className="text-xs text-gray-500 tabular-nums min-w-[40px] text-center">
-                    {getBrandFontSize(brand)}px
-                  </span>
-                  <button
-                    onClick={() => adjustBrandFontSize(brand, 2)}
-                    className="p-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-600"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
 
               {/* Per-brand title preview */}
               {brandTitle && (status === 'completed' || status === 'scheduled') && (
@@ -687,6 +745,171 @@ export function PostJobDetail({ job, refetch }: Props) {
           </>
         )}
       </div>
+
+      {/* Edit Brand Modal */}
+      {editingBrand && (
+        <Modal
+          isOpen={!!editingBrand}
+          onClose={() => setEditingBrand(null)}
+          title={`Edit — ${BRAND_CONFIGS[editingBrand]?.name || getBrandLabel(editingBrand as BrandName)}`}
+        >
+          <div className="space-y-4">
+            {/* Title */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Title</label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+
+            {/* Caption */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Caption</label>
+              <textarea
+                value={editCaption}
+                onChange={(e) => setEditCaption(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+              />
+            </div>
+
+            {/* Save title/caption */}
+            <button
+              onClick={saveEditBrand}
+              disabled={updateBrandContent.isPending}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-50"
+            >
+              {updateBrandContent.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Save Title & Caption
+            </button>
+
+            <hr className="border-gray-200" />
+
+            {/* Logo */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-2">Brand Logo</label>
+              {brandLogos[editingBrand] ? (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={brandLogos[editingBrand]}
+                    alt="Logo"
+                    className="w-12 h-12 object-contain rounded border border-gray-200"
+                  />
+                  <button
+                    onClick={() => handleRemoveLogo(editingBrand)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+                  >
+                    <X className="w-3 h-3" />
+                    Remove
+                  </button>
+                  <label className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <Upload className="w-3 h-3" />
+                    Replace
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleLogoUpload(editingBrand, e)}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600 cursor-pointer">
+                  <ImagePlus className="w-4 h-4" />
+                  Upload Logo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleLogoUpload(editingBrand, e)}
+                  />
+                </label>
+              )}
+            </div>
+
+            <hr className="border-gray-200" />
+
+            {/* AI Image Prompt */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">AI Image Prompt</label>
+              <textarea
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none font-mono text-xs"
+              />
+            </div>
+
+            {/* Retry buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleRegenBrandImage(true)}
+                disabled={regenerateBrandImage.isPending}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50"
+              >
+                {regenerateBrandImage.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                Retry with New Prompt
+              </button>
+              <button
+                onClick={() => handleRegenBrandImage(false)}
+                disabled={regenerateBrandImage.isPending}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 disabled:opacity-50"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Retry Same Prompt
+              </button>
+            </div>
+
+            <hr className="border-gray-200" />
+
+            {/* Font Size (non-permanent, session only) */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-2">
+                Font Size (preview only): {getBrandFontSize(editingBrand)}px
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => adjustBrandFontSize(editingBrand, -2)}
+                  className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="range"
+                  min={30}
+                  max={120}
+                  value={getBrandFontSize(editingBrand)}
+                  onChange={(e) =>
+                    setBrandFontSizes((prev) => ({
+                      ...prev,
+                      [editingBrand]: Number(e.target.value),
+                    }))
+                  }
+                  className="flex-1 accent-primary-500"
+                />
+                <button
+                  onClick={() => adjustBrandFontSize(editingBrand, 2)}
+                  className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">This change is temporary and won't be saved.</p>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Delete Modal */}
       <Modal
