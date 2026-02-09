@@ -58,47 +58,10 @@ const STORAGE_KEY = 'god-automation-session'
 const REVIEW_SCALE = 0.3
 const MAX_CONCURRENT = 5
 const DEFAULT_POSTS_PER_DAY = 6
-const FEEDBACK_STORAGE_KEY = 'god-automation-feedback'
-const MAX_FEEDBACK_ENTRIES = 30
 
 // ─── Rejection feedback types ────────────────────────────────────────
 type RejectCategory = 'bad_image' | 'bad_topic'
 type ImageIssue = 'not_centered' | 'image_bug' | 'image_mismatch'
-
-interface RejectionEntry {
-  category: RejectCategory
-  imageIssue?: ImageIssue
-  title: string
-  timestamp: string
-}
-
-function loadFeedback(): RejectionEntry[] {
-  try {
-    const raw = localStorage.getItem(FEEDBACK_STORAGE_KEY)
-    if (!raw) return []
-    return JSON.parse(raw) as RejectionEntry[]
-  } catch {
-    return []
-  }
-}
-
-function saveFeedback(entries: RejectionEntry[]) {
-  try {
-    localStorage.setItem(
-      FEEDBACK_STORAGE_KEY,
-      JSON.stringify(entries.slice(-MAX_FEEDBACK_ENTRIES)),
-    )
-  } catch { /* quota exceeded */ }
-}
-
-function buildFeedbackPayload(): Array<{ category: string; detail?: string; title: string }> {
-  const all = loadFeedback()
-  return all.slice(-15).map((e) => ({
-    category: e.category,
-    detail: e.imageIssue,
-    title: e.title,
-  }))
-}
 
 // Reel brand offsets (matching db_scheduler.py) — used for post interleaving
 const BRAND_REEL_OFFSETS: Record<string, number> = {
@@ -278,6 +241,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   const [editTitleValue, setEditTitleValue] = useState('')
   const [fontSizeOverride, setFontSizeOverride] = useState<number | null>(null)
   const [showRejectMenu, setShowRejectMenu] = useState<false | 'main' | 'image_sub'>(false)
+  const [rejectNote, setRejectNote] = useState('')
 
   // Refs
   const stageRef = useRef<Konva.Stage | null>(null)
@@ -413,7 +377,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         const contentResp = await fetch('/reels/generate-post-titles-batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: 1, rejection_feedback: buildFeedbackPayload() }),
+          body: JSON.stringify({ count: 1 }),
         })
         if (!contentResp.ok) throw new Error('Content gen failed')
         const { posts } = await contentResp.json()
@@ -478,7 +442,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
       const contentResp = await fetch('/reels/generate-post-titles-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count: firstCount, rejection_feedback: buildFeedbackPayload() }),
+        body: JSON.stringify({ count: firstCount }),
       })
       if (!contentResp.ok) throw new Error('Failed to generate content')
       const data = await contentResp.json()
@@ -542,7 +506,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         const contentResp = await fetch('/reels/generate-post-titles-batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count, rejection_feedback: buildFeedbackPayload() }),
+          body: JSON.stringify({ count }),
         })
         if (!contentResp.ok) {
           console.error(`[GOD] BG: title gen failed for batch starting at ${i}`)
@@ -790,19 +754,42 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     if (!currentPost || !isCurrentReady) return
     const idx = reviewIndex
 
-    // Record feedback
-    const entry: RejectionEntry = {
-      category,
-      imageIssue,
-      title: currentPost.title,
-      timestamp: new Date().toISOString(),
+    // Capture canvas image before regeneration changes it
+    let imageData = ''
+    try {
+      if (stageRef.current) {
+        imageData = stageRef.current.toDataURL({ pixelRatio: 1 / REVIEW_SCALE, mimeType: 'image/png' })
+      }
+    } catch (e) {
+      console.warn('[GOD] Could not capture canvas for feedback:', e)
     }
-    const all = loadFeedback()
-    all.push(entry)
-    saveFeedback(all)
-    console.log(`[GOD] Rejection recorded: ${category}${imageIssue ? ' / ' + imageIssue : ''} — "${currentPost.title.slice(0, 40)}"`)
+
+    // Save feedback permanently to server (fire-and-forget)
+    const note = rejectNote.trim() || undefined
+    fetch('/reels/rejection-feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category,
+        detail: imageIssue || null,
+        note,
+        title: currentPost.title,
+        caption: currentPost.caption || '',
+        image_prompt: currentPost.aiPrompt || '',
+        image_data: imageData,
+        brand: currentPost.brand || null,
+      }),
+    })
+      .then((r) => {
+        if (r.ok) console.log(`[GOD] Feedback saved to server: ${category}${imageIssue ? ' / ' + imageIssue : ''}`)
+        else console.warn('[GOD] Feedback save failed:', r.status)
+      })
+      .catch((e) => console.warn('[GOD] Feedback save error:', e))
+
+    console.log(`[GOD] Rejection: ${category}${imageIssue ? ' / ' + imageIssue : ''}${note ? ' — note: ' + note : ''} — "${currentPost.title.slice(0, 40)}"`)
 
     setShowRejectMenu(false)
+    setRejectNote('')
 
     // If bad image only, just retry image (keep the same title)
     if (category === 'bad_image') {
@@ -940,7 +927,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                     <>
                       <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
                         <span className="text-xs font-semibold text-white/60">Why reject?</span>
-                        <button onClick={() => setShowRejectMenu(false)} className="text-white/30 hover:text-white/60">
+                        <button onClick={() => { setShowRejectMenu(false); setRejectNote('') }} className="text-white/30 hover:text-white/60">
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -959,6 +946,16 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                         <MessageSquareX className="w-4 h-4 text-amber-400 shrink-0" />
                         <span>Bad Topic</span>
                       </button>
+                      {/* Optional note */}
+                      <div className="px-3 py-2 border-t border-white/10">
+                        <textarea
+                          value={rejectNote}
+                          onChange={(e) => setRejectNote(e.target.value)}
+                          placeholder="Optional note..."
+                          rows={2}
+                          className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 placeholder:text-white/30 resize-none focus:outline-none focus:border-white/20"
+                        />
+                      </div>
                     </>
                   ) : (
                     <>
@@ -986,6 +983,16 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                       >
                         🔗 Doesn't match topic
                       </button>
+                      {/* Optional note */}
+                      <div className="px-3 py-2 border-t border-white/10">
+                        <textarea
+                          value={rejectNote}
+                          onChange={(e) => setRejectNote(e.target.value)}
+                          placeholder="Optional note..."
+                          rows={2}
+                          className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 placeholder:text-white/30 resize-none focus:outline-none focus:border-white/20"
+                        />
+                      </div>
                     </>
                   )}
                 </div>
