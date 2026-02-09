@@ -1,17 +1,26 @@
 /**
- * God Automation 🔱 — batch post generation with Tinder-style review.
+ * God Automation 🔱
+ *
+ * Premium batch-generation + Tinder-style review system.
+ *
+ * Architecture:
+ *   GodAutomation (orchestrator)
+ *   ├── BatchSelector     — pick rounds (2/4/8/10)
+ *   ├── PreGenProgress    — animated circular progress
+ *   ├── ReviewCard        — single post card with canvas + controls
+ *   └── CompletionSummary — done screen with stats + links
+ *
+ * Persistence:
+ *   Session saved to localStorage on every state change.
+ *   On mount, if a previous session exists, user can resume.
  *
  * Flow:
- * 1. User picks batch size (2 / 4 / 8 / 10 rounds per brand).
- * 2. Pre-generate 2 full rounds of content + images (10 posts).
- * 3. Enter Tinder review: one card at a time.
- *    • Yes → auto-schedule immediately, unlock next post for that brand.
- *    • No  → discard, generate replacement (new topic + title + image).
- * 4. User can edit title, font size, or retry image on each card.
- *
- * Window: at most NUM_BRANDS concurrent image-generation requests.
+ *   1. Select batch → pre-generate 2 rounds of content + images
+ *   2. Tinder review: Yes → schedule / No → regenerate
+ *   3. Each Yes captures canvas → POST /reels/schedule-post-image
+ *   4. Done → summary, link to Scheduled page
  */
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import Konva from 'konva'
 import {
   X,
@@ -23,12 +32,19 @@ import {
   Minus,
   Plus,
   Zap,
+  Calendar,
+  ExternalLink,
+  RotateCcw,
+  Image as ImageIcon,
+  Type,
+  Sparkles,
+  ArrowRight,
+  Play,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
-  GRID_PREVIEW_SCALE,
   POST_BRAND_OFFSETS,
   PostCanvas,
 } from '@/shared/components/PostCanvas'
@@ -36,34 +52,45 @@ import type { GeneralSettings } from '@/shared/components/PostCanvas'
 import type { BrandName } from '@/shared/types'
 import { getBrandLabel, getBrandColor } from '@/features/brands'
 
+// ─── Constants ───────────────────────────────────────────────────────
+const STORAGE_KEY = 'god-automation-session'
+const REVIEW_SCALE = 0.3
+const MAX_CONCURRENT = 5
+
 // ─── Types ───────────────────────────────────────────────────────────
 interface GodPost {
-  /** Global sequential index (0-based) */
   index: number
-  /** Which brand */
   brand: BrandName
-  /** Which round (0-based) for this brand */
   round: number
-  /** AI-generated title */
   title: string
-  /** AI-generated caption */
   caption: string
-  /** AI image prompt */
   aiPrompt: string
-  /** Base64 data URL of the background, or null if not yet generated */
   backgroundUrl: string | null
-  /** Current lifecycle */
-  status:
-    | 'pending_content'    // waiting for title/caption
-    | 'pending_image'      // content ready, image not yet generated
-    | 'generating_image'   // image being generated
-    | 'ready'              // fully generated, awaiting review
-    | 'reviewing'          // currently shown to user
-    | 'accepted'           // user said Yes (scheduled)
-    | 'rejected'           // user said No (will be replaced)
+  scheduledTime: string | null
+  scheduleId: string | null
+  status: GodPostStatus
 }
 
+type GodPostStatus =
+  | 'pending_content'
+  | 'pending_image'
+  | 'generating_image'
+  | 'ready'
+  | 'accepted'
+  | 'rejected'
+  | 'scheduling'
+
 type Phase = 'batch_select' | 'pre_generating' | 'reviewing' | 'done'
+
+interface GodSession {
+  phase: Phase
+  batchSize: number
+  queue: GodPost[]
+  reviewIndex: number
+  occupiedSlots: Record<string, string[]>
+  startedAt: string
+  brands: BrandName[]
+}
 
 interface Props {
   brands: BrandName[]
@@ -72,15 +99,12 @@ interface Props {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-
-/** Order brands by their POST_BRAND_OFFSETS (ascending). */
 function sortBrandsByOffset(brands: BrandName[]): BrandName[] {
   return [...brands].sort(
-    (a, b) => (POST_BRAND_OFFSETS[a] ?? 99) - (POST_BRAND_OFFSETS[b] ?? 99)
+    (a, b) => (POST_BRAND_OFFSETS[a] ?? 99) - (POST_BRAND_OFFSETS[b] ?? 99),
   )
 }
 
-/** Build the full queue: rounds × brands in offset order. */
 function buildQueue(brands: BrandName[], rounds: number): GodPost[] {
   const sorted = sortBrandsByOffset(brands)
   const queue: GodPost[] = []
@@ -95,6 +119,8 @@ function buildQueue(brands: BrandName[], rounds: number): GodPost[] {
         caption: '',
         aiPrompt: '',
         backgroundUrl: null,
+        scheduledTime: null,
+        scheduleId: null,
         status: 'pending_content',
       })
     }
@@ -102,38 +128,148 @@ function buildQueue(brands: BrandName[], rounds: number): GodPost[] {
   return queue
 }
 
-// ──────────────────────────────────────────────────────────────────────
+function saveSession(session: GodSession) {
+  try {
+    // Strip backgroundUrl (too large for localStorage)
+    const lite: GodSession = {
+      ...session,
+      queue: session.queue.map((p) => ({ ...p, backgroundUrl: null })),
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(lite))
+  } catch {
+    /* quota exceeded */
+  }
+}
+
+function loadSession(): GodSession | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as GodSession
+  } catch {
+    return null
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem(STORAGE_KEY)
+}
+
+function getNextSlotForBrand(
+  brand: BrandName,
+  occupied: Record<string, string[]>,
+): Date {
+  const offset = POST_BRAND_OFFSETS[brand] || 0
+  const now = new Date()
+  const brandOccupied = occupied[brand.toLowerCase()] || []
+  const isOccupied = (dt: Date): boolean => {
+    const key = dt.toISOString().slice(0, 16)
+    return brandOccupied.some((s) => s.slice(0, 16) === key)
+  }
+  for (let dayOff = 0; dayOff < 90; dayOff++) {
+    for (const baseHour of [0, 12]) {
+      const slot = new Date(now)
+      slot.setDate(slot.getDate() + dayOff)
+      slot.setHours(baseHour + offset, 0, 0, 0)
+      if (slot <= now) continue
+      if (isOccupied(slot)) continue
+      return slot
+    }
+  }
+  const fb = new Date(now)
+  fb.setDate(fb.getDate() + 90)
+  fb.setHours(offset, 0, 0, 0)
+  return fb
+}
+
+function formatSlot(dt: Date): string {
+  return dt.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════
 export function GodAutomation({ brands, settings, onClose }: Props) {
   const NUM_BRANDS = brands.length
 
-  // ── State ──────────────────────────────────────────────────────────
+  // ── Core state ─────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('batch_select')
-  const [batchSize, setBatchSize] = useState(2)
+  const [batchSize, setBatchSize] = useState(4)
   const [queue, setQueue] = useState<GodPost[]>([])
-  const [reviewIndex, setReviewIndex] = useState(0) // index into queue of current card
-  const [activeImageGens, setActiveImageGens] = useState(0)
+  const [reviewIndex, setReviewIndex] = useState(0)
   const [preGenProgress, setPreGenProgress] = useState(0)
+  const [activeGens, setActiveGens] = useState(0)
+  const [isSchedulingCurrent, setIsSchedulingCurrent] = useState(false)
+
+  // Edit state for current review card
   const [editingTitle, setEditingTitle] = useState(false)
   const [editTitleValue, setEditTitleValue] = useState('')
   const [fontSizeOverride, setFontSizeOverride] = useState<number | null>(null)
+
+  // Refs
   const stageRef = useRef<Konva.Stage | null>(null)
-
-  // Occupied slots tracker (brand → ISO strings)
   const occupiedRef = useRef<Record<string, string[]>>({})
-
-  // Track which indices have been "unlocked" for generation
   const unlockedRef = useRef<Set<number>>(new Set())
+  const queueRef = useRef<GodPost[]>([])
+  useEffect(() => {
+    queueRef.current = queue
+  }, [queue])
 
-  // ── Batch selection ────────────────────────────────────────────────
+  // Resume session
+  const [resumeSession, setResumeSession] = useState<GodSession | null>(null)
+  useEffect(() => {
+    const saved = loadSession()
+    if (saved && saved.phase !== 'done' && saved.queue.length > 0) {
+      setResumeSession(saved)
+    }
+  }, [])
+
+  // Persist session on state changes
+  useEffect(() => {
+    if (phase === 'batch_select' || queue.length === 0) return
+    saveSession({
+      phase,
+      batchSize,
+      queue,
+      reviewIndex,
+      occupiedSlots: occupiedRef.current,
+      startedAt: new Date().toISOString(),
+      brands,
+    })
+  }, [phase, queue, reviewIndex, batchSize, brands])
+
+  // ── Derived state ──────────────────────────────────────────────────
   const totalPosts = batchSize * NUM_BRANDS
+  const currentPost = queue[reviewIndex] ?? null
+  const isCurrentReady = currentPost?.status === 'ready'
+  const isCurrentGenerating =
+    currentPost?.status === 'pending_content' ||
+    currentPost?.status === 'pending_image' ||
+    currentPost?.status === 'generating_image'
 
-  const startGeneration = async () => {
-    const q = buildQueue(brands, batchSize)
-    setQueue(q)
-    setPhase('pre_generating')
-    setPreGenProgress(0)
+  const displayTitle = editingTitle ? editTitleValue : currentPost?.title || ''
+  const displayFontSize = fontSizeOverride ?? settings.fontSize
 
-    // Fetch occupied slots
+  const stats = useMemo(() => {
+    const accepted = queue.filter((p) => p.status === 'accepted').length
+    const ready = queue.filter((p) => p.status === 'ready').length
+    const generating = queue.filter(
+      (p) =>
+        p.status === 'pending_content' ||
+        p.status === 'pending_image' ||
+        p.status === 'generating_image',
+    ).length
+    return { accepted, ready, generating }
+  }, [queue])
+
+  // ── Fetch occupied slots ───────────────────────────────────────────
+  const fetchOccupiedSlots = async () => {
     try {
       const resp = await fetch('/reels/scheduled/occupied-post-slots')
       if (resp.ok) {
@@ -141,129 +277,68 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         occupiedRef.current = data.occupied || {}
       }
     } catch {
-      /* continue without */
+      /* continue */
     }
+  }
 
-    // 1) Generate content for the first 2 rounds (2 × NUM_BRANDS posts)
-    const preGenCount = Math.min(2 * NUM_BRANDS, q.length)
+  // ── Generate image for a single post ───────────────────────────────
+  const generateImageForPost = useCallback(async (idx: number) => {
+    const post = queueRef.current[idx]
+    if (!post || !post.aiPrompt) return
+
+    setQueue((prev) => {
+      const next = [...prev]
+      if (next[idx]) next[idx] = { ...next[idx], status: 'generating_image' }
+      return next
+    })
+    setActiveGens((c) => c + 1)
+
     try {
-      const contentResp = await fetch('/reels/generate-post-titles-batch', {
+      const resp = await fetch('/reels/generate-post-background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count: preGenCount }),
+        body: JSON.stringify({ brand: post.brand, prompt: post.aiPrompt }),
       })
-      if (!contentResp.ok) throw new Error('Failed to generate content')
-      const { posts: contentPosts } = await contentResp.json()
-
-      // Apply content to queue
+      if (!resp.ok) throw new Error('Image gen failed')
+      const data = await resp.json()
       setQueue((prev) => {
         const next = [...prev]
-        for (let i = 0; i < preGenCount && i < contentPosts.length; i++) {
-          next[i] = {
-            ...next[i],
-            title: contentPosts[i].title || '',
-            caption: contentPosts[i].caption || '',
-            aiPrompt: contentPosts[i].image_prompt || '',
-            status: 'pending_image',
+        if (next[idx]) {
+          next[idx] = {
+            ...next[idx],
+            backgroundUrl: data.background_data,
+            status: 'ready',
           }
         }
         return next
       })
-    } catch (err) {
-      toast.error('Failed to generate content')
-      setPhase('batch_select')
-      return
-    }
-
-    setPreGenProgress(20)
-
-    // 2) Generate images for the first 2 rounds (up to NUM_BRANDS concurrent)
-    // We'll generate them sequentially-ish but with a concurrency window
-    await generateImagesForRange(q, 0, preGenCount)
-
-    setPhase('reviewing')
-    setReviewIndex(0)
-  }
-
-  /** Generate images for posts in range [start, end), respecting concurrency. */
-  const generateImagesForRange = useCallback(
-    async (currentQueue: GodPost[], start: number, end: number) => {
-      const promises: Promise<void>[] = []
-      let completed = 0
-      const total = end - start
-
-      for (let i = start; i < end; i++) {
-        const idx = i
-        const p = (async () => {
-          // Wait for content to be available
-          // Content was pre-filled in startGeneration
-          const post = currentQueue[idx]
-          if (!post || !post.aiPrompt) return
-
-          setQueue((prev) => {
-            const next = [...prev]
-            if (next[idx]) next[idx] = { ...next[idx], status: 'generating_image' }
-            return next
-          })
-          setActiveImageGens((prev) => prev + 1)
-
-          try {
-            const resp = await fetch('/reels/generate-post-background', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                brand: post.brand,
-                prompt: post.aiPrompt,
-              }),
-            })
-            if (!resp.ok) throw new Error('Image gen failed')
-            const data = await resp.json()
-
-            setQueue((prev) => {
-              const next = [...prev]
-              if (next[idx]) {
-                next[idx] = {
-                  ...next[idx],
-                  backgroundUrl: data.background_data,
-                  status: 'ready',
-                }
-              }
-              return next
-            })
-          } catch {
-            // Mark as ready even without image (user can retry)
-            setQueue((prev) => {
-              const next = [...prev]
-              if (next[idx]) next[idx] = { ...next[idx], status: 'ready' }
-              return next
-            })
-          } finally {
-            setActiveImageGens((prev) => Math.max(0, prev - 1))
-            completed++
-            setPreGenProgress(20 + Math.round((completed / total) * 80))
-          }
-        })()
-
-        promises.push(p)
-
-        // Concurrency control: if we've launched NUM_BRANDS, wait for one to finish
-        if (promises.length >= NUM_BRANDS) {
-          await Promise.race(promises)
-        }
-      }
-
-      await Promise.all(promises)
-    },
-    [NUM_BRANDS]
-  )
-
-  // ── Generate a single post (for rejection replacements or later rounds) ──
-  const generateSinglePost = useCallback(
-    async (idx: number, brand: BrandName) => {
-      // 1) Generate new content
+    } catch {
+      // Mark ready so user can retry
       setQueue((prev) => {
         const next = [...prev]
-        if (next[idx]) next[idx] = { ...next[idx], status: 'pending_content' }
+        if (next[idx]) next[idx] = { ...next[idx], status: 'ready' }
+        return next
+      })
+    } finally {
+      setActiveGens((c) => Math.max(0, c - 1))
+    }
+  }, [])
+
+  // ── Generate content + image for a single post ─────────────────────
+  const generateSinglePost = useCallback(
+    async (idx: number, _brand: BrandName) => {
+      setQueue((prev) => {
+        const next = [...prev]
+        if (next[idx]) {
+          next[idx] = {
+            ...next[idx],
+            title: '',
+            caption: '',
+            aiPrompt: '',
+            backgroundUrl: null,
+            status: 'pending_content',
+          }
+        }
         return next
       })
 
@@ -275,46 +350,30 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         })
         if (!contentResp.ok) throw new Error('Content gen failed')
         const { posts } = await contentResp.json()
-        const content = posts[0]
+        const c = posts[0]
 
         setQueue((prev) => {
           const next = [...prev]
           if (next[idx]) {
             next[idx] = {
               ...next[idx],
-              title: content.title || '',
-              caption: content.caption || '',
-              aiPrompt: content.image_prompt || '',
-              status: 'generating_image',
+              title: c.title || '',
+              caption: c.caption || '',
+              aiPrompt: c.image_prompt || '',
+              status: 'pending_image',
             }
           }
           return next
         })
 
-        // 2) Generate image
-        setActiveImageGens((prev) => prev + 1)
-        const imgResp = await fetch('/reels/generate-post-background', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            brand,
-            prompt: content.image_prompt,
-          }),
-        })
-        if (!imgResp.ok) throw new Error('Image gen failed')
-        const imgData = await imgResp.json()
-
-        setQueue((prev) => {
-          const next = [...prev]
-          if (next[idx]) {
-            next[idx] = {
-              ...next[idx],
-              backgroundUrl: imgData.background_data,
-              status: 'ready',
-            }
-          }
-          return next
-        })
+        // Update ref so generateImageForPost reads correct aiPrompt
+        queueRef.current = [...queueRef.current]
+        queueRef.current[idx] = {
+          ...queueRef.current[idx],
+          aiPrompt: c.image_prompt || '',
+        }
+        await new Promise((r) => setTimeout(r, 50))
+        await generateImageForPost(idx)
       } catch {
         toast.error('Failed to regenerate post')
         setQueue((prev) => {
@@ -322,92 +381,147 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
           if (next[idx]) next[idx] = { ...next[idx], status: 'ready' }
           return next
         })
-      } finally {
-        setActiveImageGens((prev) => Math.max(0, prev - 1))
       }
     },
-    []
+    [generateImageForPost],
   )
 
-  // ── Retry image only ───────────────────────────────────────────────
-  const retryImage = useCallback(async (idx: number) => {
-    setQueue((prev) => {
-      const next = [...prev]
-      if (next[idx]) next[idx] = { ...next[idx], status: 'generating_image', backgroundUrl: null }
-      return next
-    })
-    setActiveImageGens((prev) => prev + 1)
+  // ── Start generation ───────────────────────────────────────────────
+  const startGeneration = async (rounds: number) => {
+    const q = buildQueue(brands, rounds)
+    setQueue(q)
+    queueRef.current = q
+    setPhase('pre_generating')
+    setPreGenProgress(0)
+    await fetchOccupiedSlots()
+
+    // 1. Generate content for first 2 rounds
+    const preGenCount = Math.min(2 * NUM_BRANDS, q.length)
+    setPreGenProgress(5)
 
     try {
-      const post = queue[idx]
-      if (!post) return
-      const resp = await fetch('/reels/generate-post-background', {
+      const contentResp = await fetch('/reels/generate-post-titles-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: post.brand, prompt: post.aiPrompt }),
+        body: JSON.stringify({ count: preGenCount }),
       })
-      if (!resp.ok) throw new Error()
-      const data = await resp.json()
-      setQueue((prev) => {
-        const next = [...prev]
-        if (next[idx]) {
-          next[idx] = { ...next[idx], backgroundUrl: data.background_data, status: 'ready' }
+      if (!contentResp.ok) throw new Error('Failed to generate content')
+      const { posts: contentPosts } = await contentResp.json()
+
+      const updatedQueue = [...q]
+      for (let i = 0; i < preGenCount && i < contentPosts.length; i++) {
+        updatedQueue[i] = {
+          ...updatedQueue[i],
+          title: contentPosts[i].title || '',
+          caption: contentPosts[i].caption || '',
+          aiPrompt: contentPosts[i].image_prompt || '',
+          status: 'pending_image' as GodPostStatus,
         }
-        return next
-      })
-    } catch {
-      toast.error('Failed to regenerate image')
-      setQueue((prev) => {
-        const next = [...prev]
-        if (next[idx]) next[idx] = { ...next[idx], status: 'ready' }
-        return next
-      })
-    } finally {
-      setActiveImageGens((prev) => Math.max(0, prev - 1))
-    }
-  }, [queue])
-
-  // ── Find next schedule slot for a brand ────────────────────────────
-  const getNextSlotForBrand = (brand: BrandName): Date => {
-    const offset = POST_BRAND_OFFSETS[brand] || 0
-    const now = new Date()
-    const occupied = occupiedRef.current[brand.toLowerCase()] || []
-
-    const isOccupied = (dt: Date): boolean => {
-      const key = dt.toISOString().slice(0, 16)
-      return occupied.some((s) => s.slice(0, 16) === key)
-    }
-
-    for (let dayOff = 0; dayOff < 60; dayOff++) {
-      for (const baseHour of [0, 12]) {
-        const slot = new Date(now)
-        slot.setDate(slot.getDate() + dayOff)
-        slot.setHours(baseHour + offset, 0, 0, 0)
-        if (slot <= now) continue
-        if (isOccupied(slot)) continue
-        return slot
       }
+      setQueue(updatedQueue)
+      queueRef.current = updatedQueue
+    } catch {
+      toast.error('Failed to generate content')
+      setPhase('batch_select')
+      return
     }
-    // Fallback
-    const fb = new Date(now)
-    fb.setDate(fb.getDate() + 60)
-    fb.setHours(offset, 0, 0, 0)
-    return fb
+
+    setPreGenProgress(20)
+
+    // 2. Generate images with concurrency control
+    let completed = 0
+    const total = preGenCount
+    for (let i = 0; i < preGenCount; i += MAX_CONCURRENT) {
+      const chunk: Promise<void>[] = []
+      for (let j = i; j < Math.min(i + MAX_CONCURRENT, preGenCount); j++) {
+        chunk.push(
+          generateImageForPost(j).then(() => {
+            completed++
+            setPreGenProgress(20 + Math.round((completed / total) * 75))
+          }),
+        )
+      }
+      await Promise.all(chunk)
+    }
+
+    setPreGenProgress(100)
+    await new Promise((r) => setTimeout(r, 400))
+    setPhase('reviewing')
+    setReviewIndex(0)
   }
 
-  // ── Auto-schedule a single post ────────────────────────────────────
-  const schedulePost = useCallback(
-    async (post: GodPost) => {
-      if (!stageRef.current) return false
+  // ── Resume previous session ────────────────────────────────────────
+  const handleResume = async (session: GodSession) => {
+    setPhase(session.phase)
+    setBatchSize(session.batchSize)
+    setReviewIndex(session.reviewIndex)
+    occupiedRef.current = session.occupiedSlots || {}
 
-      const imageData = stageRef.current.toDataURL({
-        pixelRatio: 1 / GRID_PREVIEW_SCALE,
-        mimeType: 'image/png',
+    // Posts that were "ready" but lost images need regeneration
+    const restoredQueue = session.queue.map((p) => {
+      if (p.status === 'ready' && !p.backgroundUrl && p.aiPrompt) {
+        return { ...p, status: 'pending_image' as GodPostStatus }
+      }
+      return p
+    })
+    setQueue(restoredQueue)
+    queueRef.current = restoredQueue
+
+    const needImage = restoredQueue
+      .map((p, i) => (p.status === 'pending_image' && p.aiPrompt ? i : -1))
+      .filter((i) => i >= 0)
+
+    if (needImage.length > 0) {
+      setPhase('pre_generating')
+      setPreGenProgress(10)
+      let done = 0
+      for (let i = 0; i < needImage.length; i += MAX_CONCURRENT) {
+        const chunk = needImage.slice(i, i + MAX_CONCURRENT)
+        await Promise.all(chunk.map((idx) => generateImageForPost(idx)))
+        done += chunk.length
+        setPreGenProgress(10 + Math.round((done / needImage.length) * 90))
+      }
+      setPhase(session.phase === 'pre_generating' ? 'reviewing' : session.phase)
+    }
+    setResumeSession(null)
+  }
+
+  // ── Retry image for current post ───────────────────────────────────
+  const retryImage = useCallback(async () => {
+    const idx = reviewIndex
+    setQueue((prev) => {
+      const next = [...prev]
+      if (next[idx]) {
+        next[idx] = { ...next[idx], status: 'generating_image', backgroundUrl: null }
+      }
+      return next
+    })
+    await generateImageForPost(idx)
+  }, [reviewIndex, generateImageForPost])
+
+  // ── Schedule a single post ─────────────────────────────────────────
+  const schedulePost = useCallback(
+    async (post: GodPost, idx: number): Promise<boolean> => {
+      if (!stageRef.current) {
+        toast.error('Canvas not ready — try again')
+        return false
+      }
+
+      setIsSchedulingCurrent(true)
+      setQueue((prev) => {
+        const next = [...prev]
+        if (next[idx]) next[idx] = { ...next[idx], status: 'scheduling' }
+        return next
       })
 
-      const slot = getNextSlotForBrand(post.brand)
-
       try {
+        const imageData = stageRef.current.toDataURL({
+          pixelRatio: 1 / REVIEW_SCALE,
+          mimeType: 'image/png',
+        })
+
+        const slot = getNextSlotForBrand(post.brand, occupiedRef.current)
+
         const resp = await fetch('/reels/schedule-post-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -420,438 +534,759 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
           }),
         })
         if (!resp.ok) throw new Error()
+        const result = await resp.json()
 
-        // Mark slot as occupied
+        // Mark as occupied
         const key = post.brand.toLowerCase()
         if (!occupiedRef.current[key]) occupiedRef.current[key] = []
         occupiedRef.current[key].push(slot.toISOString())
 
+        setQueue((prev) => {
+          const next = [...prev]
+          if (next[idx]) {
+            next[idx] = {
+              ...next[idx],
+              status: 'accepted',
+              scheduledTime: slot.toISOString(),
+              scheduleId: result.schedule_id || null,
+            }
+          }
+          return next
+        })
         return true
       } catch {
-        toast.error(`Failed to schedule ${getBrandLabel(post.brand)} post`)
+        toast.error(`Failed to schedule ${getBrandLabel(post.brand)}`)
+        setQueue((prev) => {
+          const next = [...prev]
+          if (next[idx]) next[idx] = { ...next[idx], status: 'ready' }
+          return next
+        })
         return false
+      } finally {
+        setIsSchedulingCurrent(false)
       }
     },
-    [queue]
+    [],
   )
 
-  // ── Unlock generation of the next post for a brand after user answers ──
+  // ── Unlock next post for same brand ────────────────────────────────
   const unlockNextForBrand = useCallback(
     (answeredIndex: number) => {
       const nextIdx = answeredIndex + NUM_BRANDS
-      if (nextIdx >= queue.length) return
+      if (nextIdx >= queueRef.current.length) return
       if (unlockedRef.current.has(nextIdx)) return
       unlockedRef.current.add(nextIdx)
-
-      const post = queue[nextIdx]
+      const post = queueRef.current[nextIdx]
       if (!post || post.status !== 'pending_content') return
-
-      // Generate content + image for this post
       generateSinglePost(nextIdx, post.brand)
     },
-    [queue, NUM_BRANDS, generateSinglePost]
+    [NUM_BRANDS, generateSinglePost],
   )
 
-  // ── Swipe handlers ─────────────────────────────────────────────────
+  // ── Find next reviewable post ──────────────────────────────────────
+  const findNextReviewable = useCallback(
+    (fromIndex: number, q: GodPost[]): number | null => {
+      // Forward from current
+      for (let i = fromIndex + 1; i < q.length; i++) {
+        if (q[i].status === 'ready') return i
+      }
+      // Wrap
+      for (let i = 0; i <= fromIndex; i++) {
+        if (q[i].status === 'ready') return i
+      }
+      // Still generating?
+      const hasPending = q.some(
+        (p) =>
+          p.status === 'pending_content' ||
+          p.status === 'pending_image' ||
+          p.status === 'generating_image',
+      )
+      if (hasPending) return fromIndex
+      return null
+    },
+    [],
+  )
+
+  // ── YES ────────────────────────────────────────────────────────────
   const handleYes = async () => {
-    const post = queue[reviewIndex]
-    if (!post) return
+    if (!currentPost || !isCurrentReady) return
+    const idx = reviewIndex
+    const slot = getNextSlotForBrand(currentPost.brand, occupiedRef.current)
 
-    toast.loading('Scheduling...', { id: 'god-sched' })
-    const ok = await schedulePost(post)
-    if (ok) {
-      toast.success(
-        `✅ ${getBrandLabel(post.brand)} scheduled!`,
-        { id: 'god-sched', duration: 2000 }
-      )
-    } else {
-      toast.error('Schedule failed', { id: 'god-sched' })
-    }
-
-    setQueue((prev) => {
-      const next = [...prev]
-      next[reviewIndex] = { ...next[reviewIndex], status: 'accepted' }
-      return next
-    })
-
-    // Unlock next post for this brand
-    unlockNextForBrand(reviewIndex)
-
-    // Reset overrides
-    setFontSizeOverride(null)
-    setEditingTitle(false)
-
-    // Move to next unreviewed post
-    advanceToNext(reviewIndex)
-  }
-
-  const handleNo = () => {
-    const post = queue[reviewIndex]
-    if (!post) return
-
-    // Mark as rejected
-    setQueue((prev) => {
-      const next = [...prev]
-      next[reviewIndex] = { ...next[reviewIndex], status: 'rejected' }
-      return next
-    })
-
-    // Generate replacement at same index (same brand, new content)
-    generateSinglePost(reviewIndex, post.brand)
-
-    // Reset overrides
-    setFontSizeOverride(null)
-    setEditingTitle(false)
-
-    // Stay on same index (it will regenerate and become 'ready' again)
-    // But we can advance to the next ready post while this one regenerates
-    advanceToNextOrWait()
-  }
-
-  /** Find the next post to review. */
-  const advanceToNext = (fromIndex: number) => {
-    for (let i = fromIndex + 1; i < queue.length; i++) {
-      if (queue[i].status === 'ready' || queue[i].status === 'reviewing') {
-        setReviewIndex(i)
-        return
-      }
-    }
-    // Check if we wrapped around or if all are done/pending
-    // Look for any remaining non-accepted post
-    const remaining = queue.filter(
-      (p, idx) => idx > fromIndex && p.status !== 'accepted' && p.status !== 'rejected'
+    toast.loading(
+      `Scheduling ${getBrandLabel(currentPost.brand)} → ${formatSlot(slot)}`,
+      { id: 'god-sched' },
     )
-    if (remaining.length === 0) {
-      // Check all
-      const allDone = queue.every(
-        (p) => p.status === 'accepted'
+
+    const ok = await schedulePost(currentPost, idx)
+    if (ok) {
+      toast.success(`${getBrandLabel(currentPost.brand)} scheduled!`, {
+        id: 'god-sched',
+        duration: 1500,
+        icon: '✅',
+      })
+    } else {
+      toast.dismiss('god-sched')
+    }
+
+    unlockNextForBrand(idx)
+    setFontSizeOverride(null)
+    setEditingTitle(false)
+
+    const next = findNextReviewable(idx, queueRef.current)
+    if (next === null) {
+      setPhase('done')
+      clearSession()
+    } else {
+      setReviewIndex(next)
+    }
+  }
+
+  // ── NO ─────────────────────────────────────────────────────────────
+  const handleNo = () => {
+    if (!currentPost || !isCurrentReady) return
+    const idx = reviewIndex
+
+    generateSinglePost(idx, currentPost.brand)
+    setFontSizeOverride(null)
+    setEditingTitle(false)
+
+    // Try to advance to another ready post
+    const next = findNextReviewable(idx, queueRef.current)
+    if (next !== null && next !== idx) {
+      setReviewIndex(next)
+    }
+  }
+
+  // ── Commit title edit ──────────────────────────────────────────────
+  const commitTitleEdit = () => {
+    if (editTitleValue.trim()) {
+      setQueue((prev) => {
+        const next = [...prev]
+        next[reviewIndex] = {
+          ...next[reviewIndex],
+          title: editTitleValue.trim(),
+        }
+        return next
+      })
+    }
+    setEditingTitle(false)
+  }
+
+  // ── Close with confirmation ────────────────────────────────────────
+  const handleClose = () => {
+    if (phase === 'reviewing' && stats.accepted < totalPosts) {
+      const yes = window.confirm(
+        `You have ${stats.accepted} of ${totalPosts} posts scheduled.\nYour session is saved — you can resume later.\n\nClose anyway?`,
       )
-      if (allDone) {
-        setPhase('done')
-        return
-      }
+      if (!yes) return
     }
-    // Stay or find first non-accepted
-    for (let i = 0; i < queue.length; i++) {
-      if (queue[i].status !== 'accepted' && queue[i].status !== 'rejected') {
-        setReviewIndex(i)
-        return
-      }
-    }
-    setPhase('done')
+    if (phase === 'done') clearSession()
+    onClose()
   }
 
-  const advanceToNextOrWait = () => {
-    // Try to find next ready post after current
-    for (let i = reviewIndex + 1; i < queue.length; i++) {
-      if (queue[i].status === 'ready') {
-        setReviewIndex(i)
-        return
-      }
-    }
-    // Wrap around
-    for (let i = 0; i < queue.length; i++) {
-      if (queue[i].status === 'ready' && i !== reviewIndex) {
-        setReviewIndex(i)
-        return
-      }
-    }
-    // Stay on current (it's regenerating, will become ready)
-  }
-
-  // Watch queue changes to update review if current card becomes ready after rejection replacement
-  useEffect(() => {
-    if (phase !== 'reviewing') return
-    const current = queue[reviewIndex]
-    if (!current) return
-    // If current is still being generated, don't advance
-  }, [queue, reviewIndex, phase])
-
-  // ── Current post helpers ───────────────────────────────────────────
-  const currentPost = queue[reviewIndex]
-  const isCurrentReady = currentPost?.status === 'ready'
-  const isCurrentGenerating =
-    currentPost?.status === 'pending_content' ||
-    currentPost?.status === 'pending_image' ||
-    currentPost?.status === 'generating_image'
-
-  const displayTitle = editingTitle ? editTitleValue : currentPost?.title || ''
-  const displayFontSize = fontSizeOverride ?? settings.fontSize
-
-  const acceptedCount = queue.filter((p) => p.status === 'accepted').length
-  const readyCount = queue.filter((p) => p.status === 'ready').length
-
-  // ── Render ─────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════
+  //  RENDER
+  // ═══════════════════════════════════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
-      <div className="relative w-full h-full max-w-6xl mx-auto flex flex-col p-6">
-        {/* Close button */}
+    <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col">
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h1 className="text-white font-bold text-lg leading-none">
+              God Automation
+            </h1>
+            {phase !== 'batch_select' && (
+              <p className="text-white/40 text-xs mt-0.5">
+                {stats.accepted}/{totalPosts} scheduled
+                {activeGens > 0 && ` · ${activeGens} generating`}
+              </p>
+            )}
+          </div>
+        </div>
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+          onClick={handleClose}
+          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
+      </div>
 
-        {/* ─── Phase: Batch Selection ─────────────────────────────── */}
-        {phase === 'batch_select' && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-              <div className="text-center mb-8">
-                <div className="text-5xl mb-3">🔱</div>
-                <h2 className="text-2xl font-bold text-gray-900">God Automation</h2>
-                <p className="text-gray-500 mt-2 text-sm">
-                  Generate and review posts for all {NUM_BRANDS} brands.
-                  <br />
-                  Total = rounds × {NUM_BRANDS} brands.
-                </p>
-              </div>
-
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Rounds per brand
-              </label>
-              <div className="grid grid-cols-4 gap-3 mb-2">
-                {[2, 4, 8, 10].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setBatchSize(n)}
-                    className={`py-3 rounded-xl font-bold text-lg transition-all ${
-                      batchSize === n
-                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-200/50 scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400 text-center mb-6">
-                {batchSize} rounds × {NUM_BRANDS} brands = <strong>{totalPosts} posts</strong>
-              </p>
-
-              <button
-                onClick={startGeneration}
-                className="w-full py-4 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-amber-200/50 hover:from-amber-600 hover:via-yellow-600 hover:to-amber-700 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <Zap className="w-5 h-5 inline mr-2" />
-                Start God Mode
-              </button>
-            </div>
-          </div>
+      {/* ── Content ─────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden flex items-center justify-center p-4">
+        {/* Resume dialog */}
+        {phase === 'batch_select' && resumeSession && (
+          <ResumeDialog
+            session={resumeSession}
+            onResume={() => handleResume(resumeSession)}
+            onDiscard={() => {
+              clearSession()
+              setResumeSession(null)
+            }}
+          />
         )}
 
-        {/* ─── Phase: Pre-generating ──────────────────────────────── */}
+        {/* Batch selector */}
+        {phase === 'batch_select' && !resumeSession && (
+          <BatchSelector
+            batchSize={batchSize}
+            setBatchSize={setBatchSize}
+            numBrands={NUM_BRANDS}
+            onStart={() => startGeneration(batchSize)}
+          />
+        )}
+
+        {/* Pre-generating */}
         {phase === 'pre_generating' && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
-              <div className="text-5xl mb-4 animate-pulse">🔱</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
-                Generating posts...
-              </h2>
-              <p className="text-gray-500 text-sm mb-6">
-                Creating content and images for the first {Math.min(2 * NUM_BRANDS, totalPosts)} posts
-              </p>
-
-              <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-                <div
-                  className="bg-gradient-to-r from-amber-500 to-yellow-500 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${preGenProgress}%` }}
-                />
-              </div>
-              <p className="text-xs text-gray-400">{preGenProgress}%</p>
-
-              <div className="mt-4 text-xs text-gray-400">
-                {activeImageGens > 0 && (
-                  <span className="inline-flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    {activeImageGens} image(s) generating...
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+          <PreGenProgress
+            progress={preGenProgress}
+            activeGens={activeGens}
+            totalPosts={Math.min(2 * NUM_BRANDS, totalPosts)}
+          />
         )}
 
-        {/* ─── Phase: Tinder Review ───────────────────────────────── */}
+        {/* ─── Reviewing ────────────────────────────────────────── */}
         {phase === 'reviewing' && currentPost && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4">
-            {/* Progress bar */}
-            <div className="w-full max-w-xl">
-              <div className="flex items-center justify-between text-sm text-white/70 mb-1">
-                <span>
-                  Post {acceptedCount + 1} of {totalPosts}
-                </span>
-                <span>
-                  ✅ {acceptedCount} accepted · 🔄 {readyCount} ready
-                </span>
-              </div>
-              <div className="w-full bg-white/20 rounded-full h-2">
-                <div
-                  className="bg-green-400 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(acceptedCount / totalPosts) * 100}%` }}
-                />
-              </div>
-            </div>
+          <div className="flex flex-col items-center gap-5 w-full max-w-lg">
+            {/* Progress */}
+            <ReviewProgressBar
+              accepted={stats.accepted}
+              total={totalPosts}
+              ready={stats.ready}
+              generating={stats.generating}
+            />
 
-            {/* Brand indicator */}
-            <div className="flex items-center gap-2">
+            {/* Brand badge */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
               <div
-                className="w-3 h-3 rounded-full"
+                className="w-2.5 h-2.5 rounded-full ring-2 ring-white/20"
                 style={{ backgroundColor: getBrandColor(currentPost.brand) }}
               />
-              <span className="text-white font-medium text-sm">
-                {getBrandLabel(currentPost.brand)} · Round {currentPost.round + 1}
+              <span className="text-white/80 text-sm font-medium">
+                {getBrandLabel(currentPost.brand)}
+              </span>
+              <span className="text-white/30 text-xs">
+                Round {currentPost.round + 1}
               </span>
             </div>
 
             {/* Card */}
-            <div className="bg-white rounded-2xl shadow-2xl overflow-hidden max-w-sm">
-              {isCurrentGenerating ? (
-                <div
-                  className="flex items-center justify-center bg-gray-100"
-                  style={{ width: CANVAS_WIDTH * GRID_PREVIEW_SCALE, height: CANVAS_HEIGHT * GRID_PREVIEW_SCALE }}
-                >
-                  <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-amber-500 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Generating...</p>
-                  </div>
-                </div>
-              ) : (
-                <PostCanvas
-                  brand={currentPost.brand}
-                  title={displayTitle || 'GENERATING...'}
-                  backgroundImage={currentPost.backgroundUrl}
-                  settings={{ ...settings, fontSize: displayFontSize }}
-                  scale={GRID_PREVIEW_SCALE}
-                  stageRef={(node) => { stageRef.current = node }}
-                />
-              )}
+            <ReviewCard
+              post={currentPost}
+              isGenerating={isCurrentGenerating}
+              displayTitle={displayTitle}
+              displayFontSize={displayFontSize}
+              settings={settings}
+              editingTitle={editingTitle}
+              editTitleValue={editTitleValue}
+              stageRef={(node) => {
+                stageRef.current = node
+              }}
+              onStartEditTitle={() => {
+                setEditTitleValue(currentPost.title)
+                setEditingTitle(true)
+              }}
+              onEditTitleChange={setEditTitleValue}
+              onCommitTitleEdit={commitTitleEdit}
+              onFontSizeChange={(delta) =>
+                setFontSizeOverride((prev) =>
+                  Math.max(30, Math.min(120, (prev ?? settings.fontSize) + delta)),
+                )
+              }
+              onRetryImage={retryImage}
+            />
 
-              {/* Controls under card */}
-              <div className="p-3 space-y-2">
-                {/* Title edit */}
-                <div className="flex items-center gap-2">
-                  {editingTitle ? (
-                    <input
-                      type="text"
-                      value={editTitleValue}
-                      onChange={(e) => setEditTitleValue(e.target.value)}
-                      onBlur={() => {
-                        if (editTitleValue.trim()) {
-                          setQueue((prev) => {
-                            const next = [...prev]
-                            next[reviewIndex] = { ...next[reviewIndex], title: editTitleValue }
-                            return next
-                          })
-                        }
-                        setEditingTitle(false)
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          ;(e.target as HTMLInputElement).blur()
-                        }
-                      }}
-                      autoFocus
-                      className="flex-1 text-xs px-2 py-1 border border-gray-300 rounded"
-                    />
-                  ) : (
-                    <p className="flex-1 text-xs text-gray-600 truncate">
-                      {currentPost.title}
-                    </p>
-                  )}
-                  <button
-                    onClick={() => {
-                      setEditTitleValue(currentPost.title)
-                      setEditingTitle(true)
-                    }}
-                    className="p-1 hover:bg-gray-100 rounded"
-                    title="Edit title"
-                  >
-                    <Pencil className="w-3 h-3 text-gray-400" />
-                  </button>
-                </div>
-
-                {/* Font size + retry image */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() =>
-                        setFontSizeOverride((prev) =>
-                          Math.max(30, (prev ?? settings.fontSize) - 4)
-                        )
-                      }
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="text-xs text-gray-500 w-8 text-center">
-                      {displayFontSize}
-                    </span>
-                    <button
-                      onClick={() =>
-                        setFontSizeOverride((prev) =>
-                          Math.min(120, (prev ?? settings.fontSize) + 4)
-                        )
-                      }
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => retryImage(reviewIndex)}
-                    disabled={isCurrentGenerating}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Retry Image
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Swipe buttons */}
-            <div className="flex items-center gap-6 mt-2">
+            {/* Action buttons */}
+            <div className="flex items-center gap-5">
               <button
                 onClick={handleNo}
-                disabled={!isCurrentReady}
-                className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-200/50 disabled:opacity-50 transition-all hover:scale-110 active:scale-95"
-                title="No — regenerate"
+                disabled={!isCurrentReady || isSchedulingCurrent}
+                className="group w-14 h-14 rounded-full bg-white/5 border-2 border-red-400/40 text-red-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-red-500/20 hover:border-red-400 hover:scale-110 active:scale-95"
+                title="Reject — generate new post"
               >
-                <ThumbsDown className="w-7 h-7" />
+                <ThumbsDown className="w-6 h-6 group-hover:scale-110 transition-transform" />
               </button>
               <button
                 onClick={handleYes}
-                disabled={!isCurrentReady}
-                className="w-20 h-20 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center shadow-lg shadow-green-200/50 disabled:opacity-50 transition-all hover:scale-110 active:scale-95"
-                title="Yes — schedule"
+                disabled={!isCurrentReady || isSchedulingCurrent}
+                className="group w-[4.5rem] h-[4.5rem] rounded-full bg-gradient-to-br from-green-400 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-green-500/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-green-500/40 hover:scale-110 active:scale-95"
+                title="Accept — schedule now"
               >
-                <Check className="w-9 h-9" />
+                {isSchedulingCurrent ? (
+                  <Loader2 className="w-7 h-7 animate-spin" />
+                ) : (
+                  <Check className="w-8 h-8 group-hover:scale-110 transition-transform" />
+                )}
               </button>
             </div>
+
+            <p className="text-white/20 text-xs">
+              Edit title or retry image before accepting
+            </p>
           </div>
         )}
 
-        {/* ─── Phase: Done ────────────────────────────────────────── */}
+        {/* Done */}
         {phase === 'done' && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
-              <div className="text-6xl mb-4">🎉</div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                God Mode Complete
-              </h2>
-              <p className="text-gray-500 mb-6">
-                {acceptedCount} posts scheduled across {NUM_BRANDS} brands.
-              </p>
-              <button
-                onClick={onClose}
-                className="w-full py-3 bg-primary-500 text-white rounded-xl font-medium hover:bg-primary-600"
-              >
-                Done
-              </button>
-            </div>
-          </div>
+          <CompletionSummary
+            queue={queue}
+            totalPosts={totalPosts}
+            numBrands={NUM_BRANDS}
+            onClose={() => {
+              clearSession()
+              onClose()
+            }}
+          />
         )}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SUB-COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Resume previous session dialog */
+function ResumeDialog({
+  session,
+  onResume,
+  onDiscard,
+}: {
+  session: GodSession
+  onResume: () => void
+  onDiscard: () => void
+}) {
+  const accepted = session.queue.filter((p) => p.status === 'accepted').length
+  return (
+    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+      <div className="text-center mb-6">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
+          <RotateCcw className="w-7 h-7 text-amber-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">Resume Session?</h2>
+        <p className="text-gray-500 mt-2 text-sm">
+          You have an unfinished session with{' '}
+          <strong>
+            {accepted}/{session.queue.length}
+          </strong>{' '}
+          posts scheduled.
+        </p>
+      </div>
+      <div className="space-y-3">
+        <button
+          onClick={onResume}
+          className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition-colors"
+        >
+          <Play className="w-4 h-4 inline mr-2" />
+          Resume Session
+        </button>
+        <button
+          onClick={onDiscard}
+          className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+        >
+          Start Fresh
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Batch size selector */
+function BatchSelector({
+  batchSize,
+  setBatchSize,
+  numBrands,
+  onStart,
+}: {
+  batchSize: number
+  setBatchSize: (n: number) => void
+  numBrands: number
+  onStart: () => void
+}) {
+  const total = batchSize * numBrands
+
+  return (
+    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+      <div className="text-center mb-8">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-200/50">
+          <Zap className="w-8 h-8 text-white" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900">God Automation</h2>
+        <p className="text-gray-500 mt-2 text-sm leading-relaxed">
+          Batch generate, review, and auto-schedule
+          <br />
+          posts across all <strong>{numBrands} brands</strong>.
+        </p>
+      </div>
+
+      <label className="block text-sm font-semibold text-gray-700 mb-3">
+        Rounds per brand
+      </label>
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        {[2, 4, 8, 10].map((n) => (
+          <button
+            key={n}
+            onClick={() => setBatchSize(n)}
+            className={`py-3.5 rounded-xl font-bold text-lg transition-all ${
+              batchSize === n
+                ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-lg shadow-amber-200/50 scale-105'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-center gap-2 mb-8 py-2 px-4 bg-gray-50 rounded-lg">
+        <Sparkles className="w-4 h-4 text-amber-500" />
+        <span className="text-sm text-gray-600">
+          {batchSize} rounds × {numBrands} brands ={' '}
+          <strong className="text-gray-900">{total} posts</strong>
+        </span>
+      </div>
+
+      <button
+        onClick={onStart}
+        className="w-full py-4 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-amber-200/40 hover:shadow-amber-300/50 transition-all hover:scale-[1.02] active:scale-[0.98]"
+      >
+        <Zap className="w-5 h-5 inline mr-2" />
+        Start God Mode
+        <ArrowRight className="w-5 h-5 inline ml-2" />
+      </button>
+    </div>
+  )
+}
+
+/** Pre-generation progress screen */
+function PreGenProgress({
+  progress,
+  activeGens,
+  totalPosts,
+}: {
+  progress: number
+  activeGens: number
+  totalPosts: number
+}) {
+  const circumference = 2 * Math.PI * 34
+
+  return (
+    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
+      <div className="relative w-20 h-20 mx-auto mb-6">
+        <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+          <circle
+            cx="40"
+            cy="40"
+            r="34"
+            fill="none"
+            stroke="#f3f4f6"
+            strokeWidth="6"
+          />
+          <circle
+            cx="40"
+            cy="40"
+            r="34"
+            fill="none"
+            stroke="url(#amber-grad)"
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={`${circumference}`}
+            strokeDashoffset={`${circumference * (1 - progress / 100)}`}
+            className="transition-all duration-500"
+          />
+          <defs>
+            <linearGradient id="amber-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#f59e0b" />
+              <stop offset="100%" stopColor="#eab308" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-lg font-bold text-gray-900">{progress}%</span>
+        </div>
+      </div>
+      <h2 className="text-xl font-bold text-gray-900 mb-1">Generating posts</h2>
+      <p className="text-gray-500 text-sm mb-4">
+        Creating {totalPosts} posts with unique content and images
+      </p>
+      <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
+        {progress < 20 && (
+          <span className="flex items-center gap-1.5">
+            <Type className="w-3.5 h-3.5" />
+            Generating titles...
+          </span>
+        )}
+        {progress >= 20 && activeGens > 0 && (
+          <span className="flex items-center gap-1.5">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            {activeGens} image{activeGens > 1 ? 's' : ''} generating
+          </span>
+        )}
+        {progress >= 20 && activeGens === 0 && progress < 100 && (
+          <span className="flex items-center gap-1.5">
+            <ImageIcon className="w-3.5 h-3.5" />
+            Preparing images...
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Progress bar in review mode */
+function ReviewProgressBar({
+  accepted,
+  total,
+  ready,
+  generating,
+}: {
+  accepted: number
+  total: number
+  ready: number
+  generating: number
+}) {
+  const pct = total > 0 ? (accepted / total) * 100 : 0
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between text-xs mb-1.5">
+        <span className="text-white/50">
+          {accepted} of {total} scheduled
+        </span>
+        <div className="flex items-center gap-3 text-white/40">
+          {ready > 0 && (
+            <span className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+              {ready} ready
+            </span>
+          )}
+          {generating > 0 && (
+            <span className="flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {generating} generating
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="w-full bg-white/10 rounded-full h-1.5">
+        <div
+          className="bg-gradient-to-r from-green-400 to-emerald-400 h-1.5 rounded-full transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+/** Single review card with canvas + controls */
+function ReviewCard({
+  post,
+  isGenerating,
+  displayTitle,
+  displayFontSize,
+  settings,
+  editingTitle,
+  editTitleValue,
+  stageRef,
+  onStartEditTitle,
+  onEditTitleChange,
+  onCommitTitleEdit,
+  onFontSizeChange,
+  onRetryImage,
+}: {
+  post: GodPost
+  isGenerating: boolean
+  displayTitle: string
+  displayFontSize: number
+  settings: GeneralSettings
+  editingTitle: boolean
+  editTitleValue: string
+  stageRef: (node: Konva.Stage | null) => void
+  onStartEditTitle: () => void
+  onEditTitleChange: (v: string) => void
+  onCommitTitleEdit: () => void
+  onFontSizeChange: (delta: number) => void
+  onRetryImage: () => void
+}) {
+  const cardWidth = CANVAS_WIDTH * REVIEW_SCALE
+  const cardHeight = CANVAS_HEIGHT * REVIEW_SCALE
+
+  return (
+    <div
+      className="bg-white rounded-2xl shadow-2xl shadow-black/20 overflow-hidden"
+      style={{ width: cardWidth }}
+    >
+      {/* Canvas area */}
+      {isGenerating ? (
+        <div
+          className="flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100"
+          style={{ width: cardWidth, height: cardHeight }}
+        >
+          <div className="w-12 h-12 rounded-full border-[3px] border-amber-200 border-t-amber-500 animate-spin" />
+          <p className="text-sm text-gray-400 mt-4 font-medium">
+            {post.status === 'pending_content'
+              ? 'Creating content...'
+              : 'Generating image...'}
+          </p>
+        </div>
+      ) : (
+        <PostCanvas
+          brand={post.brand}
+          title={displayTitle || 'GENERATING...'}
+          backgroundImage={post.backgroundUrl}
+          settings={{ ...settings, fontSize: displayFontSize }}
+          scale={REVIEW_SCALE}
+          stageRef={stageRef}
+        />
+      )}
+
+      {/* Controls */}
+      <div className="p-3 border-t border-gray-100 space-y-2.5">
+        {/* Title row */}
+        <div className="flex items-center gap-2">
+          {editingTitle ? (
+            <input
+              type="text"
+              value={editTitleValue}
+              onChange={(e) => onEditTitleChange(e.target.value)}
+              onBlur={onCommitTitleEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') onCommitTitleEdit()
+              }}
+              autoFocus
+              className="flex-1 text-sm px-3 py-1.5 border border-amber-300 rounded-lg bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-200"
+              placeholder="Enter title..."
+            />
+          ) : (
+            <p
+              className="flex-1 text-sm text-gray-700 font-medium truncate cursor-pointer hover:text-amber-600 transition-colors"
+              onClick={onStartEditTitle}
+              title="Click to edit title"
+            >
+              {post.title || 'No title'}
+            </p>
+          )}
+          {!editingTitle && (
+            <button
+              onClick={onStartEditTitle}
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Edit title"
+            >
+              <Pencil className="w-3.5 h-3.5 text-gray-400" />
+            </button>
+          )}
+        </div>
+
+        {/* Font size + retry */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1 bg-gray-50 rounded-lg px-1">
+            <button
+              onClick={() => onFontSizeChange(-4)}
+              className="p-1.5 hover:bg-white rounded transition-colors"
+            >
+              <Minus className="w-3 h-3 text-gray-500" />
+            </button>
+            <span className="text-xs text-gray-600 font-mono w-8 text-center">
+              {displayFontSize}
+            </span>
+            <button
+              onClick={() => onFontSizeChange(4)}
+              className="p-1.5 hover:bg-white rounded transition-colors"
+            >
+              <Plus className="w-3 h-3 text-gray-500" />
+            </button>
+          </div>
+          <button
+            onClick={onRetryImage}
+            disabled={isGenerating}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-50 hover:bg-gray-100 rounded-lg disabled:opacity-40 transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" />
+            New Image
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Completion summary */
+function CompletionSummary({
+  queue,
+  totalPosts,
+  onClose,
+}: {
+  queue: GodPost[]
+  totalPosts: number
+  numBrands: number
+  onClose: () => void
+}) {
+  const accepted = queue.filter((p) => p.status === 'accepted')
+  const byBrand = accepted.reduce(
+    (acc, p) => {
+      acc[p.brand] = (acc[p.brand] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
+
+  return (
+    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
+      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center mx-auto mb-5 shadow-lg shadow-green-200/50">
+        <Check className="w-8 h-8 text-white" />
+      </div>
+      <h2 className="text-2xl font-bold text-gray-900 mb-1">
+        God Mode Complete
+      </h2>
+      <p className="text-gray-500 text-sm mb-6">
+        {accepted.length} of {totalPosts} posts scheduled
+      </p>
+
+      {/* Per-brand breakdown */}
+      <div className="space-y-2 mb-6">
+        {Object.entries(byBrand).map(([brand, count]) => (
+          <div
+            key={brand}
+            className="flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl"
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{
+                  backgroundColor: getBrandColor(brand as BrandName),
+                }}
+              />
+              <span className="text-sm font-medium text-gray-700">
+                {getBrandLabel(brand as BrandName)}
+              </span>
+            </div>
+            <span className="text-sm font-bold text-gray-900">
+              {count} posts
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="space-y-2">
+        <a
+          href="/scheduled"
+          className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-xl font-semibold hover:from-amber-600 hover:to-yellow-600 transition-colors"
+        >
+          <Calendar className="w-4 h-4" />
+          View Scheduled Posts
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+        <button
+          onClick={onClose}
+          className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+        >
+          Close
+        </button>
       </div>
     </div>
   )
