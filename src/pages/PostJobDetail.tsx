@@ -5,7 +5,7 @@
  * Shows per-brand background previews with unique titles,
  * pencil edit per brand, layout controls, auto-schedule.
  */
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Konva from 'konva'
 import {
   ArrowLeft,
@@ -22,8 +22,8 @@ import {
   Save,
   RotateCcw,
   Pencil,
-  ImagePlus,
-  Upload,
+  Minus,
+  Plus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -32,8 +32,6 @@ import {
   useDeleteJob,
   useRegenerateJob,
   useUpdateBrandStatus,
-  useUpdateBrandContent,
-  useRegenerateBrandImage,
 } from '@/features/jobs'
 import { getBrandLabel, getBrandColor } from '@/features/brands'
 import { StatusBadge, Modal } from '@/shared/components'
@@ -63,18 +61,6 @@ function loadBrandLogos(): Record<string, string> {
   return {}
 }
 
-function saveBrandLogo(brand: string, dataUrl: string) {
-  const logos = loadBrandLogos()
-  logos[brand] = dataUrl
-  localStorage.setItem(LOGOS_STORAGE_KEY, JSON.stringify(logos))
-}
-
-function removeBrandLogo(brand: string) {
-  const logos = loadBrandLogos()
-  delete logos[brand]
-  localStorage.setItem(LOGOS_STORAGE_KEY, JSON.stringify(logos))
-}
-
 interface Props {
   job: Job
   refetch: () => void
@@ -85,8 +71,6 @@ export function PostJobDetail({ job, refetch }: Props) {
   const deleteJob = useDeleteJob()
   const regenerateJob = useRegenerateJob()
   const updateBrandStatus = useUpdateBrandStatus()
-  const updateBrandContent = useUpdateBrandContent()
-  const regenerateBrandImage = useRegenerateBrandImage()
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -102,14 +86,12 @@ export function PostJobDetail({ job, refetch }: Props) {
   const [isScheduling, setIsScheduling] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
-  // Per-brand edit state
-  const [editingBrand, setEditingBrand] = useState<string | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editCaption, setEditCaption] = useState('')
-  const [editPrompt, setEditPrompt] = useState('')
+  // Per-brand font size overrides (non-permanent, session only)
+  const [brandFontSizes, setBrandFontSizes] = useState<Record<string, number>>({})
+  const [fontSizeEditBrand, setFontSizeEditBrand] = useState<string | null>(null)
 
   // Brand logos
-  const [brandLogos, setBrandLogos] = useState<Record<string, string>>(loadBrandLogos)
+  const [brandLogos] = useState<Record<string, string>>(loadBrandLogos)
 
   // Stage refs for export (one per brand)
   const stageRefs = useRef<Map<string, Konva.Stage>>(new Map())
@@ -142,70 +124,17 @@ export function PostJobDetail({ job, refetch }: Props) {
     (b) => job.brand_outputs[b]?.status === 'scheduled'
   )
 
-  // ── Edit brand ──────────────────────────────────────────────────────
-  const openEditBrand = (brand: string) => {
-    const output = job.brand_outputs[brand as BrandName]
-    setEditTitle(output?.title || job.title || '')
-    setEditCaption(output?.caption || '')
-    setEditPrompt(output?.ai_prompt || '')
-    setEditingBrand(brand)
+  // ── Per-brand font size ─────────────────────────────────────────────
+  const getBrandFontSize = (brand: string) =>
+    brandFontSizes[brand] ?? settings.fontSize
+
+  const adjustBrandFontSize = (brand: string, delta: number) => {
+    setBrandFontSizes((prev) => {
+      const current = prev[brand] ?? settings.fontSize
+      const next = Math.max(30, Math.min(120, current + delta))
+      return { ...prev, [brand]: next }
+    })
   }
-
-  const saveEditBrand = async () => {
-    if (!editingBrand) return
-    try {
-      await updateBrandContent.mutateAsync({
-        id: job.id,
-        brand: editingBrand as BrandName,
-        data: { title: editTitle, caption: editCaption },
-      })
-      toast.success('Content updated!')
-      setEditingBrand(null)
-      refetch()
-    } catch {
-      toast.error('Failed to update content')
-    }
-  }
-
-  const handleRegenBrandImage = async (brand: string, customPrompt?: string) => {
-    try {
-      await regenerateBrandImage.mutateAsync({
-        id: job.id,
-        brand: brand as BrandName,
-        aiPrompt: customPrompt,
-      })
-      toast.success(`Regenerating image for ${BRAND_CONFIGS[brand]?.name || brand}...`)
-      refetch()
-    } catch {
-      toast.error('Failed to start regeneration')
-    }
-  }
-
-  // ── Logo upload ────────────────────────────────────────────────────
-  const handleLogoUpload = useCallback((brand: string) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/png,image/jpeg,image/svg+xml,image/webp'
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        const dataUrl = reader.result as string
-        saveBrandLogo(brand, dataUrl)
-        setBrandLogos(loadBrandLogos())
-        toast.success(`Logo set for ${BRAND_CONFIGS[brand]?.name || brand}`)
-      }
-      reader.readAsDataURL(file)
-    }
-    input.click()
-  }, [])
-
-  const handleRemoveLogo = useCallback((brand: string) => {
-    removeBrandLogo(brand)
-    setBrandLogos(loadBrandLogos())
-    toast.success('Logo removed')
-  }, [])
 
   // ── Delete ─────────────────────────────────────────────────────────
   const handleDelete = async () => {
@@ -491,9 +420,17 @@ export function PostJobDetail({ job, refetch }: Props) {
                 <span className="ml-auto flex items-center gap-1">
                   {(status === 'completed' || status === 'scheduled') && (
                     <button
-                      onClick={() => openEditBrand(brand)}
-                      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                      title="Edit title, image, or logo"
+                      onClick={() =>
+                        setFontSizeEditBrand((prev) =>
+                          prev === brand ? null : brand
+                        )
+                      }
+                      className={`p-1 rounded hover:bg-gray-100 ${
+                        fontSizeEditBrand === brand
+                          ? 'text-primary-600 bg-primary-50'
+                          : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                      title="Adjust font size"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -516,6 +453,27 @@ export function PostJobDetail({ job, refetch }: Props) {
                 </span>
               </div>
 
+              {/* Inline font-size control */}
+              {fontSizeEditBrand === brand && (
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <button
+                    onClick={() => adjustBrandFontSize(brand, -2)}
+                    className="p-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-600"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <span className="text-xs text-gray-500 tabular-nums min-w-[40px] text-center">
+                    {getBrandFontSize(brand)}px
+                  </span>
+                  <button
+                    onClick={() => adjustBrandFontSize(brand, 2)}
+                    className="p-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-600"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
               {/* Per-brand title preview */}
               {brandTitle && (status === 'completed' || status === 'scheduled') && (
                 <p className="text-xs text-gray-600 mb-2 line-clamp-2 leading-relaxed">
@@ -537,7 +495,10 @@ export function PostJobDetail({ job, refetch }: Props) {
                     brand={brand}
                     title={brandTitle}
                     backgroundImage={bgUrl}
-                    settings={settings}
+                    settings={{
+                      ...settings,
+                      fontSize: getBrandFontSize(brand),
+                    }}
                     scale={GRID_PREVIEW_SCALE}
                     logoUrl={logoUrl}
                     stageRef={(node) => {
@@ -726,131 +687,6 @@ export function PostJobDetail({ job, refetch }: Props) {
           </>
         )}
       </div>
-
-      {/* ── Edit Brand Modal ───────────────────────────────────────── */}
-      <Modal
-        isOpen={!!editingBrand}
-        onClose={() => setEditingBrand(null)}
-        title={`Edit — ${BRAND_CONFIGS[editingBrand || '']?.name || editingBrand}`}
-      >
-        <div className="space-y-4">
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-            <textarea
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
-          </div>
-
-          {/* Caption */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Caption</label>
-            <textarea
-              value={editCaption}
-              onChange={(e) => setEditCaption(e.target.value)}
-              rows={3}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
-          </div>
-
-          {/* Logo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Brand Logo</label>
-            <div className="flex items-center gap-3">
-              {editingBrand && brandLogos[editingBrand] ? (
-                <div className="flex items-center gap-2">
-                  <img
-                    src={brandLogos[editingBrand]}
-                    alt="logo"
-                    className="h-8 w-auto object-contain bg-gray-100 rounded px-2 py-1"
-                  />
-                  <button
-                    onClick={() => {
-                      if (editingBrand) handleRemoveLogo(editingBrand)
-                    }}
-                    className="text-xs text-red-500 hover:underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <span className="text-xs text-gray-400">No custom logo</span>
-              )}
-              <button
-                onClick={() => {
-                  if (editingBrand) handleLogoUpload(editingBrand)
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600"
-              >
-                <Upload className="w-3 h-3" />
-                Upload Logo
-              </button>
-            </div>
-            <p className="text-[10px] text-gray-400 mt-1">
-              Logo is saved permanently for this brand across all posts.
-            </p>
-          </div>
-
-          {/* Image regeneration */}
-          <div className="border-t border-gray-100 pt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Regenerate Image</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  if (editingBrand) {
-                    handleRegenBrandImage(editingBrand)
-                    setEditingBrand(null)
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Retry (same prompt)
-              </button>
-              <button
-                onClick={() => {
-                  if (editingBrand && editPrompt.trim()) {
-                    handleRegenBrandImage(editingBrand, editPrompt.trim())
-                    setEditingBrand(null)
-                  } else {
-                    toast.error('Enter a custom prompt first')
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg"
-              >
-                <ImagePlus className="w-3.5 h-3.5" />
-                Custom Prompt
-              </button>
-            </div>
-            <textarea
-              value={editPrompt}
-              onChange={(e) => setEditPrompt(e.target.value)}
-              placeholder="Enter custom image prompt for regeneration..."
-              rows={2}
-              className="w-full mt-2 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 justify-end pt-2">
-            <button
-              onClick={() => setEditingBrand(null)}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={saveEditBrand}
-              className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm"
-            >
-              Save Changes
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Delete Modal */}
       <Modal
