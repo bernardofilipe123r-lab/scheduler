@@ -510,7 +510,7 @@ class JobManager:
                 "progress_percent": 30,
             })
 
-            image = generator.generate_background(
+            image = generator.generate_post_background(
                 brand_name=brand,
                 user_prompt=ai_prompt,
             )

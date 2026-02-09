@@ -12,7 +12,7 @@ from io import BytesIO
 from datetime import datetime
 import requests
 from PIL import Image
-from app.core.constants import REEL_WIDTH, REEL_HEIGHT
+from app.core.constants import REEL_WIDTH, REEL_HEIGHT, POST_WIDTH, POST_HEIGHT
 
 
 # Global lock to ensure only one DEAPI request at a time (FIFO queue)
@@ -401,3 +401,170 @@ class AIBackgroundGenerator:
             self._release_queue_position()
             print(f"🔓 Released DEAPI queue position: {queue_pos} (general error)")
             raise RuntimeError(f"Failed to generate AI background: {str(e)}")
+
+    def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None) -> Image.Image:
+        """
+        Generate a HIGH QUALITY AI background for posts using FLUX.2 Klein 4B BF16.
+        
+        This model produces significantly better images than Flux1schnell:
+        - Higher fidelity details and textures
+        - Better prompt adherence
+        - More photorealistic output
+        - Supports up to 1536px resolution
+        
+        Uses 1080x1350 post dimensions (16px steps for Flux2Klein).
+        """
+        start_time = time.time()
+        
+        if progress_callback:
+            progress_callback("Preparing HQ image prompt...", 10)
+        
+        # For posts, we use the user prompt directly (already wellness-styled from AI)
+        # Add a quality-boosting suffix
+        quality_suffix = (
+            "Ultra high quality, 8K, sharp focus, professional photography, "
+            "soft natural lighting, premium lifestyle aesthetic. "
+            "Photorealistic, detailed textures, beautiful composition."
+        )
+        
+        prompt = user_prompt or "Soft cinematic wellness still life with natural ingredients on white countertop in morning light."
+        prompt = f"{prompt} {quality_suffix}"
+        
+        # Add unique identifier
+        unique_id = str(uuid.uuid4())[:8]
+        prompt = f"{prompt} [ID: {unique_id}]"
+        
+        print(f"\n{'='*80}")
+        print(f"🎨 POST BACKGROUND GENERATION (HQ - FLUX.2 Klein 4B)")
+        print(f"{'='*80}")
+        print(f"🏷️  Brand: {brand_name}")
+        print(f"📝 Prompt length: {len(prompt)} chars")
+        print(f"📄 Full prompt: {prompt[:200]}...")
+        print(f"{'='*80}\n")
+        
+        if progress_callback:
+            progress_callback("Waiting in queue for deAPI...", 25)
+        
+        queue_pos = self._acquire_queue_position()
+        print(f"🔒 Acquired DEAPI queue position: {queue_pos}")
+        
+        try:
+            if progress_callback:
+                progress_callback(f"Calling deAPI (FLUX.2 Klein 4B — HQ) for {brand_name}...", 30)
+            
+            api_start = time.time()
+            
+            # FLUX.2 Klein 4B BF16 uses 16px steps, supports up to 1536px
+            # Post dimensions: 1080x1350 — both divisible by 16 ✓
+            width = ((POST_WIDTH + 15) // 16) * 16   # 1080 → 1088
+            height = ((POST_HEIGHT + 15) // 16) * 16  # 1350 → 1360
+            
+            print(f"📐 Target: {POST_WIDTH}x{POST_HEIGHT} → Rounded: {width}x{height} (16px steps)")
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            
+            payload = {
+                "prompt": prompt,
+                "model": "Flux2Klein4B_BF16",  # Higher quality model
+                "width": width,
+                "height": height,
+                "steps": 4,  # Flux2Klein default is 4 steps
+                "guidance": 1.0,  # Flux2Klein fixed guidance at 1.0
+                "seed": int(unique_id, 16) % (2**31),
+                "loras": []
+            }
+            
+            print(f"📊 API Request: model={payload['model']}, {width}x{height}, steps={payload['steps']}")
+            
+            response = self._request_with_retry(
+                'post',
+                f"{self.base_url}/txt2img",
+                headers=headers,
+                json=payload,
+                timeout=120
+            )
+            
+            result = response.json()
+            request_id = result.get("request_id") or result.get("data", {}).get("request_id")
+            if not request_id:
+                raise RuntimeError(f"No request_id in response: {result}")
+            
+            print(f"✅ Generation queued — Request ID: {request_id}")
+            
+            if progress_callback:
+                progress_callback(f"Generating HQ image (ID: {request_id})...", 50)
+            
+            # Poll for results
+            max_attempts = 120  # 120 × 2s = 4 minutes max (HQ takes longer)
+            attempt = 0
+            
+            while attempt < max_attempts:
+                time.sleep(2)
+                attempt += 1
+                
+                status_response = self._request_with_retry(
+                    'get',
+                    f"{self.base_url}/request-status/{request_id}",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=30
+                )
+                status_result = status_response.json()
+                data = status_result.get("data", {})
+                status = data.get("status")
+                
+                if status == "done":
+                    result_url = data.get("result_url")
+                    if not result_url:
+                        raise RuntimeError(f"No result_url in completed result: {status_result}")
+                    
+                    api_duration = time.time() - api_start
+                    
+                    if progress_callback:
+                        progress_callback(f"HQ generation done in {api_duration:.1f}s, downloading...", 70)
+                    
+                    image_response = requests.get(result_url, timeout=60)
+                    image_response.raise_for_status()
+                    image = Image.open(BytesIO(image_response.content))
+                    
+                    # Resize to exact post dimensions
+                    if image.size != (POST_WIDTH, POST_HEIGHT):
+                        image = image.resize((POST_WIDTH, POST_HEIGHT), Image.Resampling.LANCZOS)
+                    
+                    total_duration = time.time() - start_time
+                    
+                    if progress_callback:
+                        progress_callback(f"HQ background generated in {total_duration:.1f}s", 100)
+                    
+                    print(f"✅ HQ post background: {POST_WIDTH}x{POST_HEIGHT} for {brand_name}")
+                    print(f"⏱️  Total: {total_duration:.1f}s (API: {api_duration:.1f}s)")
+                    
+                    self._release_queue_position()
+                    return image
+                
+                elif status == "failed":
+                    error_msg = status_result.get("error", "Unknown error")
+                    raise RuntimeError(f"HQ generation failed: {error_msg}")
+                
+                elif status in ["pending", "processing"]:
+                    if progress_callback:
+                        progress_callback(f"Generating HQ image... ({attempt}/{max_attempts})", 30 + (attempt * 20 // max_attempts))
+                    continue
+                
+                else:
+                    raise RuntimeError(f"Unknown status: {status}")
+            
+            raise RuntimeError(f"HQ generation timed out after {max_attempts * 2}s")
+            
+        except requests.exceptions.Timeout as e:
+            self._release_queue_position()
+            raise RuntimeError(f"Network timeout: {str(e)}")
+        except requests.exceptions.RequestException as e:
+            self._release_queue_position()
+            raise RuntimeError(f"Network error: {str(e)}")
+        except Exception as e:
+            self._release_queue_position()
+            raise RuntimeError(f"Failed to generate HQ post background: {str(e)}")

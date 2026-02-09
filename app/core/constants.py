@@ -6,6 +6,10 @@ Application-wide constants for the reels automation system.
 REEL_WIDTH = 1080
 REEL_HEIGHT = 1920
 
+# Post image dimensions (Instagram square/portrait)
+POST_WIDTH = 1080
+POST_HEIGHT = 1350
+
 # Video settings
 VIDEO_DURATION = 7  # seconds
 VIDEO_CODEC = "libx264"
