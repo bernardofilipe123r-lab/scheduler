@@ -670,28 +670,43 @@ class AnalyticsService:
         days: int = 30
     ) -> List[Dict[str, Any]]:
         """
-        Get historical analytics snapshots.
-        
+        Get historical analytics snapshots, deduplicated to the latest
+        snapshot per brand/platform/day.
+
         Args:
             brand: Filter by brand name (optional)
             platform: Filter by platform (optional)
             days: Number of days to look back (default 30)
-            
+
         Returns:
             List of snapshot dictionaries ordered by time
         """
         since = datetime.now(timezone.utc) - timedelta(days=days)
-        
-        query = self.db.query(AnalyticsSnapshot).filter(
+
+        # Subquery: get the latest snapshot id per (brand, platform, date)
+        from sqlalchemy import cast, Date
+        base_q = self.db.query(
+            func.max(AnalyticsSnapshot.id).label("max_id")
+        ).filter(
             AnalyticsSnapshot.snapshot_at >= since
         )
-        
         if brand:
-            query = query.filter(AnalyticsSnapshot.brand == brand)
+            base_q = base_q.filter(AnalyticsSnapshot.brand == brand)
         if platform:
-            query = query.filter(AnalyticsSnapshot.platform == platform)
-        
-        snapshots = query.order_by(AnalyticsSnapshot.snapshot_at.asc()).all()
+            base_q = base_q.filter(AnalyticsSnapshot.platform == platform)
+
+        subq = base_q.group_by(
+            AnalyticsSnapshot.brand,
+            AnalyticsSnapshot.platform,
+            cast(AnalyticsSnapshot.snapshot_at, Date)
+        ).subquery()
+
+        snapshots = (
+            self.db.query(AnalyticsSnapshot)
+            .filter(AnalyticsSnapshot.id.in_(self.db.query(subq.c.max_id)))
+            .order_by(AnalyticsSnapshot.snapshot_at.asc())
+            .all()
+        )
         return [s.to_dict() for s in snapshots]
     
     def backfill_historical_data(self, days_back: int = 28) -> Dict[str, Any]:

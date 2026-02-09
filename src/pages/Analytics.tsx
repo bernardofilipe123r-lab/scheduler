@@ -1,52 +1,48 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { 
-  BarChart3, 
-  Users, 
-  Eye, 
-  Heart, 
+import {
+  BarChart3,
+  Users,
+  Eye,
+  Heart,
   RefreshCw,
-  Instagram,
-  Facebook,
-  Youtube,
   Clock,
   AlertCircle,
   CheckCircle2,
   Filter,
   TrendingUp,
-  PieChart as PieChartIcon,
   ChevronDown,
   Loader2,
-  History
+  History,
+  Instagram,
+  Facebook,
+  Youtube,
 } from 'lucide-react'
 import {
   AreaChart,
   Area,
-  BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer
+  ResponsiveContainer,
+  ReferenceLine,
+  ComposedChart,
 } from 'recharts'
-import { 
-  useAnalytics, 
+import {
+  useAnalytics,
   useRefreshAnalytics,
   useSnapshots,
   useBackfillHistoricalData,
   type BrandMetrics,
-  type PlatformMetrics
+  type PlatformMetrics,
+  type AnalyticsSnapshot,
 } from '@/features/analytics'
 import { FullPageLoader } from '@/shared/components'
 
-type Platform = 'instagram' | 'facebook' | 'youtube'
-type MetricType = 'followers' | 'views' | 'likes'
+// ─── Constants ──────────────────────────────────────────────────────
 
-// Brand colors
 const BRAND_COLORS: Record<string, string> = {
   healthycollege: '#004f00',
   vitalitycollege: '#028f7a',
@@ -55,29 +51,25 @@ const BRAND_COLORS: Record<string, string> = {
   wellbeingcollege: '#ebbe4d',
 }
 
-const PLATFORM_COLORS: Record<string, string> = {
-  instagram: '#E4405F',
-  facebook: '#1877F2',
-  youtube: '#FF0000',
+const BRAND_LABELS: Record<string, string> = {
+  healthycollege: 'Healthy',
+  vitalitycollege: 'Vitality',
+  longevitycollege: 'Longevity',
+  holisticcollege: 'Holistic',
+  wellbeingcollege: 'Wellbeing',
 }
 
+// ─── Utility functions ──────────────────────────────────────────────
+
 function formatNumber(num: number): string {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M'
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K'
-  }
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M'
+  if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K'
   return num.toLocaleString()
 }
 
 function formatTimeAgo(dateString: string | null): string {
   if (!dateString) return 'Never'
-  
-  const date = new Date(dateString)
-  const now = new Date()
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-  
+  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
   if (seconds < 60) return 'Just now'
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
@@ -85,225 +77,119 @@ function formatTimeAgo(dateString: string | null): string {
 }
 
 function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
-function PlatformIcon({ platform, className = 'w-5 h-5' }: { platform: Platform; className?: string }) {
+function formatDateKey(dateString: string): string {
+  return new Date(dateString).toISOString().slice(0, 10)
+}
+
+// ─── Small components ───────────────────────────────────────────────
+
+function PlatformIcon({ platform, className = 'w-4 h-4' }: { platform: string; className?: string }) {
   switch (platform) {
-    case 'instagram':
-      return <Instagram className={className} />
-    case 'facebook':
-      return <Facebook className={className} />
-    case 'youtube':
-      return <Youtube className={className} />
+    case 'instagram': return <Instagram className={className} />
+    case 'facebook':  return <Facebook className={className} />
+    case 'youtube':   return <Youtube className={className} />
+    default:          return null
   }
 }
 
-function getPlatformBgColor(platform: Platform): string {
-  switch (platform) {
-    case 'instagram':
-      return 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500'
-    case 'facebook':
-      return 'bg-blue-600'
-    case 'youtube':
-      return 'bg-red-500'
-  }
-}
-
-interface RefreshOverlayProps {
-  elapsedSeconds: number
-  platformsStatus: { name: string; done: boolean }[]
-}
-
-function RefreshOverlay({ elapsedSeconds, platformsStatus }: RefreshOverlayProps) {
-  const completedCount = platformsStatus.filter(p => p.done).length
-  const totalCount = platformsStatus.length || 15 // 5 brands x 3 platforms
-  const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
-  
-  // Estimate ~15-20 seconds for full refresh
-  const estimatedTotal = 18
-  const estimatedRemaining = Math.max(0, estimatedTotal - elapsedSeconds)
-  
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop with blur */}
-      <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
-      
-      {/* Content */}
-      <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in duration-200">
-        {/* Animated loader */}
-        <div className="flex justify-center mb-6">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full border-4 border-gray-100" />
-            <div 
-              className="absolute inset-0 w-20 h-20 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-blue-500 animate-pulse" />
-            </div>
-          </div>
-        </div>
-        
-        <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
-          Refreshing Analytics
-        </h3>
-        
-        <p className="text-gray-500 text-center mb-6">
-          Fetching latest data from all platforms...
-        </p>
-        
-        {/* Progress bar */}
-        <div className="mb-4">
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500 ease-out"
-              style={{ width: `${Math.max(10, progress)}%` }}
-            />
-          </div>
-        </div>
-        
-        {/* Stats */}
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-gray-500">
-            <Clock className="w-4 h-4" />
-            <span>Elapsed: {elapsedSeconds}s</span>
-          </div>
-          <div className="text-gray-500">
-            {estimatedRemaining > 0 ? (
-              <span>~{estimatedRemaining}s remaining</span>
-            ) : (
-              <span>Finishing up...</span>
-            )}
-          </div>
-        </div>
-        
-        {/* Platform status */}
-        <div className="mt-6 grid grid-cols-3 gap-2">
-          {['Instagram', 'Facebook', 'YouTube'].map((platform) => (
-            <div 
-              key={platform}
-              className="flex items-center gap-1.5 text-xs text-gray-500"
-            >
-              <div className={`w-2 h-2 rounded-full ${
-                elapsedSeconds > 5 ? 'bg-green-500' : 'bg-yellow-400 animate-pulse'
-              }`} />
-              <span>{platform}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-interface MetricCardProps {
+function MetricCard({
+  icon,
+  label,
+  value,
+  color,
+}: {
   icon: React.ReactNode
   label: string
   value: number
-  color?: string
-  trend?: number
-}
-
-function MetricCard({ icon, label, value, color = 'text-gray-600', trend }: MetricCardProps) {
+  color: string
+}) {
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-gray-500">
-          {icon}
-          <span className="text-sm font-medium">{label}</span>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg bg-gray-50 ${color}`}>{icon}</div>
+        <div>
+          <p className="text-sm text-gray-500">{label}</p>
+          <p className="text-2xl font-bold text-gray-900">{formatNumber(value)}</p>
         </div>
-        {trend !== undefined && (
-          <div className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            <TrendingUp className={`w-3 h-3 ${trend < 0 ? 'rotate-180' : ''}`} />
-            {Math.abs(trend).toFixed(1)}%
-          </div>
-        )}
       </div>
-      <p className={`text-3xl font-bold ${color}`}>{formatNumber(value)}</p>
     </div>
   )
 }
 
-interface FilterDropdownProps {
+function FilterDropdown({
+  label,
+  value,
+  options,
+  onChange,
+}: {
   label: string
   value: string
   options: { value: string; label: string }[]
-  onChange: (value: string) => void
-}
-
-function FilterDropdown({ label, value, options, onChange }: FilterDropdownProps) {
+  onChange: (v: string) => void
+}) {
   return (
-    <div className="relative">
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
-      <ChevronDown className="absolute right-2 bottom-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
-    </div>
-  )
-}
-
-interface PlatformRowProps {
-  platform: string
-  metrics: PlatformMetrics
-}
-
-function PlatformRow({ platform, metrics }: PlatformRowProps) {
-  const platformKey = platform as Platform
-  
-  return (
-    <div className="flex items-center gap-4 py-3 px-4 hover:bg-gray-50 border-b last:border-b-0 border-gray-100">
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white ${getPlatformBgColor(platformKey)}`}>
-        <PlatformIcon platform={platformKey} className="w-5 h-5" />
-      </div>
-      
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-900 capitalize">{platform}</p>
-        <p className="text-xs text-gray-400">
-          Updated {formatTimeAgo(metrics.last_fetched_at)}
-        </p>
-      </div>
-      
-      <div className="grid grid-cols-3 gap-8 text-center">
-        <div>
-          <p className="text-xs text-gray-500 mb-0.5">Followers</p>
-          <p className="font-semibold text-gray-900">{formatNumber(metrics.followers_count)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 mb-0.5">Views (7d)</p>
-          <p className="font-semibold text-gray-900">{formatNumber(metrics.views_last_7_days)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500 mb-0.5">Likes (7d)</p>
-          <p className="font-semibold text-gray-900">{formatNumber(metrics.likes_last_7_days)}</p>
-        </div>
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-400">{label}</span>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="appearance-none bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
       </div>
     </div>
   )
 }
 
-interface BrandCardProps {
-  brand: BrandMetrics
+function PlatformRow({ platform, metrics }: { platform: string; metrics: PlatformMetrics }) {
+  return (
+    <div className="flex items-center gap-4 px-5 py-3 border-t border-gray-50 hover:bg-gray-50 transition-colors">
+      <div className="flex items-center gap-2 w-28">
+        <PlatformIcon platform={platform} className="w-4 h-4 text-gray-500" />
+        <span className="text-sm font-medium text-gray-700 capitalize">{platform}</span>
+      </div>
+      <div className="text-xs text-gray-400 flex-shrink-0">
+        Updated {formatTimeAgo(metrics.last_fetched_at)}
+      </div>
+      <div className="flex-1" />
+      <div className="text-right w-20">
+        <p className="text-xs text-gray-400">Followers</p>
+        <p className="text-sm font-semibold text-gray-800">{formatNumber(metrics.followers_count)}</p>
+      </div>
+      <div className="text-right w-20">
+        <p className="text-xs text-gray-400">Views (7d)</p>
+        <p className="text-sm font-semibold text-gray-800">{formatNumber(metrics.views_last_7_days)}</p>
+      </div>
+      <div className="text-right w-20">
+        <p className="text-xs text-gray-400">Likes (7d)</p>
+        <p className="text-sm font-semibold text-pink-500">{formatNumber(metrics.likes_last_7_days)}</p>
+      </div>
+    </div>
+  )
 }
 
-function BrandCard({ brand }: BrandCardProps) {
+function BrandCard({ brand }: { brand: BrandMetrics }) {
   const platforms = Object.entries(brand.platforms)
   const hasPlatforms = platforms.length > 0
-  
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div 
+      <div
         className="px-5 py-4 flex items-center gap-3"
         style={{ borderLeft: `4px solid ${brand.color}` }}
       >
-        <div 
+        <div
           className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-lg"
           style={{ backgroundColor: brand.color }}
         >
@@ -312,13 +198,11 @@ function BrandCard({ brand }: BrandCardProps) {
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900">{brand.display_name}</h3>
           <p className="text-sm text-gray-500">
-            {hasPlatforms 
+            {hasPlatforms
               ? `${platforms.length} platform${platforms.length > 1 ? 's' : ''} connected`
-              : 'No platforms connected'
-            }
+              : 'No platforms connected'}
           </p>
         </div>
-        
         {hasPlatforms && (
           <div className="flex gap-6 text-right">
             <div>
@@ -342,11 +226,10 @@ function BrandCard({ brand }: BrandCardProps) {
           </div>
         )}
       </div>
-      
       {hasPlatforms ? (
         <div className="border-t border-gray-100">
-          {platforms.map(([platform, metrics]) => (
-            <PlatformRow key={platform} platform={platform} metrics={metrics} />
+          {platforms.map(([p, m]) => (
+            <PlatformRow key={p} platform={p} metrics={m} />
           ))}
         </div>
       ) : (
@@ -359,6 +242,133 @@ function BrandCard({ brand }: BrandCardProps) {
   )
 }
 
+// ─── Refresh overlay ────────────────────────────────────────────────
+
+function RefreshOverlay({ elapsedSeconds }: { elapsedSeconds: number }) {
+  const mins = Math.floor(elapsedSeconds / 60)
+  const secs = elapsedSeconds % 60
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+      <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
+        <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Refreshing Analytics</h3>
+        <p className="text-sm text-gray-500 mb-3">
+          Fetching data from Instagram, Facebook &amp; YouTube…
+        </p>
+        <p className="text-xs text-gray-400 font-mono">
+          {mins > 0 ? `${mins}m ` : ''}{secs}s
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Data helpers ───────────────────────────────────────────────────
+
+/**
+ * Build cumulative chart data: {date, brand1: val, brand2: val, ...}
+ * Deduplicates to latest snapshot per (brand, platform, day) then
+ * sums all platforms per brand.
+ */
+function buildCumulativeData(
+  snapshots: AnalyticsSnapshot[],
+  metric: 'followers_count' | 'views_last_7_days' | 'likes_last_7_days',
+  filterBrand?: string,
+) {
+  // 1. Deduplicate: latest per (brand, platform, dateKey)
+  const latest = new Map<string, AnalyticsSnapshot>()
+  for (const s of snapshots) {
+    const dk = formatDateKey(s.snapshot_at)
+    const key = `${s.brand}|${s.platform}|${dk}`
+    const existing = latest.get(key)
+    if (!existing || new Date(s.snapshot_at) > new Date(existing.snapshot_at)) {
+      latest.set(key, s)
+    }
+  }
+
+  // 2. Aggregate by (date, brand) — sum platforms
+  const byDateBrand = new Map<string, Map<string, number>>()
+  const allDates = new Set<string>()
+  const allBrands = new Set<string>()
+
+  for (const s of latest.values()) {
+    if (filterBrand && s.brand !== filterBrand) continue
+    const dk = formatDateKey(s.snapshot_at)
+    allDates.add(dk)
+    allBrands.add(s.brand)
+
+    if (!byDateBrand.has(dk)) byDateBrand.set(dk, new Map())
+    const bm = byDateBrand.get(dk)!
+    bm.set(s.brand, (bm.get(s.brand) || 0) + s[metric])
+  }
+
+  // 3. Sorted rows
+  const sortedDates = [...allDates].sort()
+  return sortedDates.map((dk) => {
+    const row: Record<string, number | string> = { date: formatDate(dk), dateKey: dk }
+    const bm = byDateBrand.get(dk)
+    for (const b of allBrands) {
+      row[b] = bm?.get(b) ?? 0
+    }
+    return row
+  })
+}
+
+/**
+ * Calculate daily delta from cumulative data.
+ * Returns the chart rows + overall average.
+ */
+function buildDailyGainData(
+  snapshots: AnalyticsSnapshot[],
+  metric: 'followers_count' | 'views_last_7_days' | 'likes_last_7_days',
+  filterBrand?: string,
+): { data: Record<string, number | string>[]; average: number } {
+  const cum = buildCumulativeData(snapshots, metric, filterBrand)
+  if (cum.length < 2) return { data: [], average: 0 }
+
+  const brands = Object.keys(cum[0]).filter((k) => k !== 'date' && k !== 'dateKey')
+  const dailyData: Record<string, number | string>[] = []
+  let totalGain = 0
+  let totalEntries = 0
+
+  for (let i = 1; i < cum.length; i++) {
+    const row: Record<string, number | string> = { date: cum[i].date as string, dateKey: cum[i].dateKey as string }
+    let dayTotal = 0
+    for (const b of brands) {
+      const prev = (cum[i - 1][b] as number) || 0
+      const curr = (cum[i][b] as number) || 0
+      const delta = Math.max(0, curr - prev)
+      row[b] = delta
+      dayTotal += delta
+    }
+    row['_total'] = dayTotal
+    totalGain += dayTotal
+    totalEntries++
+    dailyData.push(row)
+  }
+
+  return {
+    data: dailyData,
+    average: totalEntries > 0 ? Math.round(totalGain / totalEntries) : 0,
+  }
+}
+
+// ─── Empty chart placeholder ────────────────────────────────────────
+
+function EmptyChart({ message }: { message: string }) {
+  return (
+    <div className="h-[200px] flex items-center justify-center text-gray-400">
+      <div className="text-center">
+        <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-40" />
+        <p className="text-sm">{message}</p>
+        <p className="text-xs mt-1">Refresh or backfill to start tracking</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ──────────────────────────────────────────────────────
+
 export function AnalyticsPage() {
   const { data, isLoading, error } = useAnalytics()
   const refreshMutation = useRefreshAnalytics()
@@ -366,7 +376,7 @@ export function AnalyticsPage() {
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [backfillSuccess, setBackfillSuccess] = useState<string | null>(null)
   const [hasAutoRefreshed, setHasAutoRefreshed] = useState(false)
-  
+
   // Auto-refresh on page load if data is stale
   useEffect(() => {
     if (data?.needs_refresh && !hasAutoRefreshed && !refreshMutation.isPending) {
@@ -374,281 +384,103 @@ export function AnalyticsPage() {
       refreshMutation.mutate()
     }
   }, [data?.needs_refresh, hasAutoRefreshed, refreshMutation])
-  
-  // Refresh timer state
+
+  // Elapsed timer for refresh overlay
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  
-  // Start/stop timer based on refresh state
   useEffect(() => {
     if (refreshMutation.isPending) {
       setElapsedSeconds(0)
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds(prev => prev + 1)
-      }, 1000)
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
+      timerRef.current = setInterval(() => setElapsedSeconds((p) => p + 1), 1000)
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
     }
-    
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-      }
-    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [refreshMutation.isPending])
-  
-  // Filter state
+
+  // Filters
   const [selectedBrand, setSelectedBrand] = useState<string>('all')
-  const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
-  const [selectedMetric, setSelectedMetric] = useState<MetricType>('followers')
   const [timeRange, setTimeRange] = useState<number>(30)
-  
-  // Fetch snapshots for charts
-  const { data: snapshotsData } = useSnapshots({
-    brand: selectedBrand !== 'all' ? selectedBrand : undefined,
-    platform: selectedPlatform !== 'all' ? selectedPlatform : undefined,
-    days: timeRange
-  })
-  
+
+  // Fetch snapshots (backend now deduplicates per day)
+  const { data: snapshotsData } = useSnapshots({ days: timeRange })
+
   const handleRefresh = async () => {
     setRefreshError(null)
-    try {
-      await refreshMutation.mutateAsync()
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 429) {
+    try { await refreshMutation.mutateAsync() }
+    catch (err: unknown) {
+      if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 429)
         setRefreshError('Rate limit exceeded. Please wait before refreshing again.')
-      } else {
+      else
         setRefreshError('Failed to refresh analytics. Please try again.')
-      }
     }
   }
-  
+
   const handleBackfill = async () => {
     setBackfillSuccess(null)
     setRefreshError(null)
     try {
       const result = await backfillMutation.mutateAsync(28)
-      const deletedMsg = result.deleted_count ? `Cleared ${result.deleted_count} old entries. ` : ''
-      const createdMsg = `Backfilled ${result.snapshots_created} historical view snapshots.`
-      const noteMsg = result.note ? ` Note: ${result.note}` : ''
-      setBackfillSuccess(`${deletedMsg}${createdMsg}${noteMsg}`)
+      setBackfillSuccess(
+        `${result.deleted_count ? `Cleared ${result.deleted_count} old entries. ` : ''}Backfilled ${result.snapshots_created} snapshots.${result.note ? ` ${result.note}` : ''}`
+      )
     } catch {
       setRefreshError('Failed to backfill historical data. Please try again.')
     }
   }
-  
-  // Calculate totals
+
+  // ── Computed data ──
+
   const totals = useMemo(() => {
     const brands = data?.brands || []
     return brands.reduce(
-      (acc, brand) => ({
-        followers: acc.followers + brand.totals.followers,
-        views: acc.views + brand.totals.views_7d,
-        likes: acc.likes + brand.totals.likes_7d,
+      (acc, b) => ({
+        followers: acc.followers + b.totals.followers,
+        views: acc.views + b.totals.views_7d,
+        likes: acc.likes + b.totals.likes_7d,
       }),
       { followers: 0, views: 0, likes: 0 }
     )
   }, [data?.brands])
-  
-  // Prepare chart data
-  const chartData = useMemo(() => {
-    if (!snapshotsData?.snapshots.length) return []
-    
-    // Group snapshots by date
-    const byDate: Record<string, Record<string, number | string>> = {}
-    
-    snapshotsData.snapshots.forEach(snapshot => {
-      const date = formatDate(snapshot.snapshot_at)
-      if (!byDate[date]) {
-        byDate[date] = { date }
-      }
-      
-      const key = selectedBrand === 'all' 
-        ? snapshot.brand 
-        : selectedPlatform === 'all' 
-          ? snapshot.platform 
-          : 'value'
-      
-      const value = selectedMetric === 'followers' 
-        ? snapshot.followers_count
-        : selectedMetric === 'views' 
-          ? snapshot.views_last_7_days 
-          : snapshot.likes_last_7_days
-      
-      byDate[date][key] = ((byDate[date][key] as number) || 0) + value
-    })
-    
-    return Object.values(byDate)
-  }, [snapshotsData, selectedBrand, selectedPlatform, selectedMetric])
-  
-  // Prepare pie chart data for distribution
-  const pieData = useMemo(() => {
-    const brands = data?.brands || []
-    
-    // When a specific platform is selected, show distribution by brand for that platform
-    // When all platforms, show distribution by brand across all platforms
-    return brands.map(brand => {
-      let value: number
-      
-      if (selectedPlatform === 'all') {
-        // Sum across all platforms
-        value = selectedMetric === 'followers' 
-          ? brand.totals.followers
-          : selectedMetric === 'views' 
-            ? brand.totals.views_7d 
-            : brand.totals.likes_7d
-      } else {
-        // Get value for specific platform only
-        const platformMetrics = brand.platforms[selectedPlatform]
-        if (!platformMetrics) {
-          value = 0
-        } else {
-          value = selectedMetric === 'followers' 
-            ? platformMetrics.followers_count
-            : selectedMetric === 'views' 
-              ? platformMetrics.views_last_7_days 
-              : platformMetrics.likes_last_7_days
-        }
-      }
-      
-      return {
-        name: brand.display_name,
-        value,
-        color: brand.color
-      }
-    }).filter(d => d.value > 0)
-  }, [data?.brands, selectedPlatform, selectedMetric])
-  
-  // Bar chart data - compare brands (respects platform filter)
-  const barData = useMemo(() => {
-    const brands = data?.brands || []
-    return brands.map(brand => {
-      let followers: number, views: number, likes: number
-      
-      if (selectedPlatform === 'all') {
-        followers = brand.totals.followers
-        views = brand.totals.views_7d
-        likes = brand.totals.likes_7d
-      } else {
-        const platformMetrics = brand.platforms[selectedPlatform]
-        if (!platformMetrics) {
-          followers = 0
-          views = 0
-          likes = 0
-        } else {
-          followers = platformMetrics.followers_count
-          views = platformMetrics.views_last_7_days
-          likes = platformMetrics.likes_last_7_days
-        }
-      }
-      
-      return {
-        name: brand.display_name.split(' ')[0],
-        followers,
-        views,
-        likes,
-        color: brand.color
-      }
-    })
-  }, [data?.brands, selectedPlatform])
-  
-  // Platform performance data - aggregate across all brands
-  const platformData = useMemo(() => {
-    const brands = data?.brands || []
-    const platforms: Record<string, { followers: number; views: number; likes: number }> = {
-      instagram: { followers: 0, views: 0, likes: 0 },
-      facebook: { followers: 0, views: 0, likes: 0 },
-      youtube: { followers: 0, views: 0, likes: 0 }
-    }
-    
-    brands.forEach(brand => {
-      Object.entries(brand.platforms).forEach(([platform, metrics]) => {
-        if (platforms[platform]) {
-          platforms[platform].followers += metrics.followers_count
-          platforms[platform].views += metrics.views_last_7_days
-          platforms[platform].likes += metrics.likes_last_7_days
-        }
-      })
-    })
-    
-    return Object.entries(platforms).map(([name, data]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      platform: name,
-      ...data,
-      engagement: data.views > 0 ? ((data.likes / data.views) * 100).toFixed(2) : 0,
-      color: PLATFORM_COLORS[name]
-    }))
-  }, [data?.brands])
-  
-  // Engagement rate data by brand
-  const engagementData = useMemo(() => {
-    const brands = data?.brands || []
-    return brands.map(brand => {
-      const views = brand.totals.views_7d
-      const likes = brand.totals.likes_7d
-      const engagementRate = views > 0 ? (likes / views) * 100 : 0
-      
-      return {
-        name: brand.display_name.split(' ')[0],
-        engagementRate: Number(engagementRate.toFixed(2)),
-        views,
-        likes,
-        color: brand.color
-      }
-    }).sort((a, b) => b.engagementRate - a.engagementRate)
-  }, [data?.brands])
-  
-  // Get line colors for chart
-  const getLineColors = () => {
-    if (selectedBrand !== 'all') {
-      // Show platforms
-      return ['instagram', 'facebook', 'youtube'].map(p => PLATFORM_COLORS[p])
-    }
-    // Show brands
-    return Object.values(BRAND_COLORS)
-  }
-  
-  const getLineKeys = () => {
-    if (selectedBrand !== 'all') {
-      return selectedPlatform === 'all' 
-        ? ['instagram', 'facebook', 'youtube']
-        : ['value']
-    }
+
+  const snapshots = snapshotsData?.snapshots || []
+
+  // Cumulative followers over time
+  const followerTrendData = useMemo(
+    () => buildCumulativeData(snapshots, 'followers_count', selectedBrand !== 'all' ? selectedBrand : undefined),
+    [snapshots, selectedBrand]
+  )
+
+  // Daily follower growth
+  const followerGain = useMemo(
+    () => buildDailyGainData(snapshots, 'followers_count', selectedBrand !== 'all' ? selectedBrand : undefined),
+    [snapshots, selectedBrand]
+  )
+
+  // Daily views
+  const viewsGain = useMemo(
+    () => buildDailyGainData(snapshots, 'views_last_7_days', selectedBrand !== 'all' ? selectedBrand : undefined),
+    [snapshots, selectedBrand]
+  )
+
+  // Brands to render in charts
+  const chartBrands = useMemo(() => {
+    if (selectedBrand !== 'all') return [selectedBrand]
     return Object.keys(BRAND_COLORS)
-  }
-  
-  // Filter brands for display
+  }, [selectedBrand])
+
+  // Filter brand cards
   const filteredBrands = useMemo(() => {
-    let brands = data?.brands || []
-    
-    if (selectedBrand !== 'all') {
-      brands = brands.filter(b => b.brand === selectedBrand)
-    }
-    
-    if (selectedPlatform !== 'all') {
-      brands = brands.map(b => ({
-        ...b,
-        platforms: Object.fromEntries(
-          Object.entries(b.platforms).filter(([p]) => p === selectedPlatform)
-        ),
-        totals: {
-          followers: b.platforms[selectedPlatform]?.followers_count || 0,
-          views_7d: b.platforms[selectedPlatform]?.views_last_7_days || 0,
-          likes_7d: b.platforms[selectedPlatform]?.likes_last_7_days || 0,
-        }
-      }))
-    }
-    
+    const brands = data?.brands || []
+    if (selectedBrand !== 'all') return brands.filter((b) => b.brand === selectedBrand)
     return brands
-  }, [data?.brands, selectedBrand, selectedPlatform])
-  
-  if (isLoading) {
-    return <FullPageLoader text="Loading analytics..." />
-  }
-  
+  }, [data?.brands, selectedBrand])
+
+  // ── Render ──
+
+  if (isLoading) return <FullPageLoader text="Loading analytics..." />
+
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -660,49 +492,31 @@ export function AnalyticsPage() {
       </div>
     )
   }
-  
+
   const brands = data?.brands || []
   const lastRefresh = data?.last_refresh
-  
+
   const brandOptions = [
     { value: 'all', label: 'All Brands' },
-    ...brands.map(b => ({ value: b.brand, label: b.display_name }))
+    ...brands.map((b) => ({ value: b.brand, label: b.display_name })),
   ]
-  
-  const platformOptions = [
-    { value: 'all', label: 'All Platforms' },
-    { value: 'instagram', label: 'Instagram' },
-    { value: 'facebook', label: 'Facebook' },
-    { value: 'youtube', label: 'YouTube' }
-  ]
-  
-  const metricOptions = [
-    { value: 'followers', label: 'Followers' },
-    { value: 'views', label: 'Views (7d)' },
-    { value: 'likes', label: 'Likes (7d)' }
-  ]
-  
   const timeOptions = [
     { value: '7', label: 'Last 7 days' },
     { value: '14', label: 'Last 14 days' },
     { value: '30', label: 'Last 30 days' },
-    { value: '60', label: 'Last 60 days' }
+    { value: '60', label: 'Last 60 days' },
   ]
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Refresh Loading Overlay */}
-      {refreshMutation.isPending && (
-        <RefreshOverlay 
-          elapsedSeconds={elapsedSeconds} 
-          platformsStatus={[]} 
-        />
-      )}
-      
-      <div className={`max-w-7xl mx-auto px-6 py-8 transition-all duration-300 ${
-        refreshMutation.isPending ? 'opacity-50 blur-sm pointer-events-none' : ''
-      }`}>
-        {/* Header */}
+      {refreshMutation.isPending && <RefreshOverlay elapsedSeconds={elapsedSeconds} />}
+
+      <div
+        className={`max-w-7xl mx-auto px-6 py-8 transition-all duration-300 ${
+          refreshMutation.isPending ? 'opacity-50 blur-sm pointer-events-none' : ''
+        }`}
+      >
+        {/* ── Header ── */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -710,333 +524,218 @@ export function AnalyticsPage() {
               Analytics
             </h1>
             <p className="text-gray-500 mt-1">
-              Track followers, views, and engagement across all platforms
+              Track follower growth &amp; daily performance across all brands
             </p>
           </div>
-          
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {lastRefresh && (
-              <div className="text-sm text-gray-500 flex items-center gap-1">
+              <span className="text-sm text-gray-400 flex items-center gap-1">
                 <Clock className="w-4 h-4" />
-                Updated: {formatTimeAgo(lastRefresh)}
-              </div>
+                {formatTimeAgo(lastRefresh)}
+              </span>
             )}
-            
             <button
               onClick={handleRefresh}
               disabled={refreshMutation.isPending}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
-                ${!refreshMutation.isPending 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }
-              `}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            
             <button
               onClick={handleBackfill}
               disabled={backfillMutation.isPending}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
-                ${!backfillMutation.isPending 
-                  ? 'bg-purple-600 text-white hover:bg-purple-700' 
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }
-              `}
-              title="Fetch 28 days of historical analytics data"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+              title="Fetch 28 days of historical data"
             >
               <History className={`w-4 h-4 ${backfillMutation.isPending ? 'animate-spin' : ''}`} />
-              Backfill History
+              Backfill
             </button>
           </div>
         </div>
-        
-        {/* Success/Error Messages */}
+
+        {/* ── Status messages ── */}
         {refreshMutation.isSuccess && !refreshError && (
-          <div className="mb-6 px-4 py-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
-            <CheckCircle2 className="w-5 h-5" />
-            <span>Analytics refreshed successfully!</span>
+          <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 text-sm">
+            <CheckCircle2 className="w-4 h-4" /> Analytics refreshed successfully!
           </div>
         )}
-        
         {backfillSuccess && (
-          <div className="mb-6 px-4 py-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center gap-2 text-purple-700">
-            <CheckCircle2 className="w-5 h-5" />
-            <span>{backfillSuccess}</span>
+          <div className="mb-4 px-4 py-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center gap-2 text-purple-700 text-sm">
+            <CheckCircle2 className="w-4 h-4" /> {backfillSuccess}
           </div>
         )}
-        
         {refreshError && (
-          <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
-            <AlertCircle className="w-5 h-5" />
-            <span>{refreshError}</span>
+          <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+            <AlertCircle className="w-4 h-4" /> {refreshError}
           </div>
         )}
-        
-        {/* Filters */}
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mb-6">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 text-gray-600">
-              <Filter className="w-4 h-4" />
-              <span className="font-medium text-sm">Filters:</span>
-            </div>
-            <FilterDropdown
-              label="Brand"
-              value={selectedBrand}
-              options={brandOptions}
-              onChange={setSelectedBrand}
-            />
-            <FilterDropdown
-              label="Platform"
-              value={selectedPlatform}
-              options={platformOptions}
-              onChange={setSelectedPlatform}
-            />
-            <FilterDropdown
-              label="Metric"
-              value={selectedMetric}
-              options={metricOptions}
-              onChange={(v) => setSelectedMetric(v as MetricType)}
-            />
-            <FilterDropdown
-              label="Time Range"
-              value={timeRange.toString()}
-              options={timeOptions}
-              onChange={(v) => setTimeRange(parseInt(v))}
-            />
+
+        {/* ── Filters ── */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mb-6 flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-gray-500">
+            <Filter className="w-4 h-4" />
+            <span className="text-sm font-medium">Filters:</span>
           </div>
+          <FilterDropdown label="Brand" value={selectedBrand} options={brandOptions} onChange={setSelectedBrand} />
+          <FilterDropdown
+            label="Time Range"
+            value={timeRange.toString()}
+            options={timeOptions}
+            onChange={(v) => setTimeRange(parseInt(v))}
+          />
         </div>
-        
-        {/* Summary Cards */}
+
+        {/* ── Summary Cards ── */}
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <MetricCard
-            icon={<Users className="w-5 h-5" />}
-            label="Total Followers"
-            value={totals.followers}
-            color="text-blue-600"
-          />
-          <MetricCard
-            icon={<Eye className="w-5 h-5" />}
-            label="Total Views (7d)"
-            value={totals.views}
-            color="text-green-600"
-          />
-          <MetricCard
-            icon={<Heart className="w-5 h-5" />}
-            label="Total Likes (7d)"
-            value={totals.likes}
-            color="text-pink-500"
-          />
+          <MetricCard icon={<Users className="w-5 h-5" />} label="Total Followers" value={totals.followers} color="text-blue-600" />
+          <MetricCard icon={<Eye className="w-5 h-5" />} label="Total Views (7d)" value={totals.views} color="text-green-600" />
+          <MetricCard icon={<Heart className="w-5 h-5" />} label="Total Likes (7d)" value={totals.likes} color="text-pink-500" />
         </div>
-        
-        {/* Charts Row */}
-        <div className="grid grid-cols-2 gap-6 mb-6">
-          {/* Line/Area Chart - Trend over time */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-gray-500" />
-              <h3 className="font-semibold text-gray-900">
-                {selectedMetric === 'followers' ? 'Follower' : selectedMetric === 'views' ? 'Views' : 'Likes'} Trend
-              </h3>
-            </div>
-            
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={chartData}>
-                  <defs>
-                    {getLineKeys().map((key, i) => (
-                      <linearGradient key={key} id={`gradient-${key}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={getLineColors()[i]} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={getLineColors()[i]} stopOpacity={0}/>
-                      </linearGradient>
-                    ))}
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#888" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#888" tickFormatter={formatNumber} />
-                  <Tooltip 
-                    formatter={(value) => formatNumber(Number(value ?? 0))}
-                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  />
-                  {getLineKeys().map((key, i) => (
-                    <Area
-                      key={key}
-                      type="monotone"
-                      dataKey={key}
-                      stroke={getLineColors()[i]}
-                      fill={`url(#gradient-${key})`}
-                      strokeWidth={2}
-                    />
-                  ))}
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[250px] flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p>No historical data yet</p>
-                  <p className="text-sm">Refresh to start tracking trends</p>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Pie Chart - Distribution */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center gap-2 mb-4">
-              <PieChartIcon className="w-5 h-5 text-gray-500" />
-              <h3 className="font-semibold text-gray-900">
-                {selectedMetric === 'followers' ? 'Follower' : selectedMetric === 'views' ? 'Views' : 'Likes'} Distribution
-              </h3>
-            </div>
-            
-            {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value) => formatNumber(Number(value ?? 0))}
-                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  />
-                  <Legend 
-                    layout="vertical" 
-                    align="right" 
-                    verticalAlign="middle"
-                    formatter={(value) => <span className="text-sm text-gray-600">{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[250px] flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <PieChartIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p>No data to display</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Bar Chart - Compare All Brands */}
+
+        {/* ── 1. Followers Over Time (cumulative) ── */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-gray-500" />
-            <h3 className="font-semibold text-gray-900">Brand Comparison</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-5 h-5 text-blue-500" />
+            <h3 className="font-semibold text-gray-900">Followers Over Time</h3>
           </div>
-          
-          {barData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={barData} barGap={8}>
+          <p className="text-xs text-gray-400 mb-4">Cumulative follower count per brand (all platforms combined)</p>
+
+          {followerTrendData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={followerTrendData}>
+                <defs>
+                  {chartBrands.map((b) => (
+                    <linearGradient key={b} id={`fg-${b}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={BRAND_COLORS[b] || '#888'} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={BRAND_COLORS[b] || '#888'} stopOpacity={0} />
+                    </linearGradient>
+                  ))}
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#888" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#888" tickFormatter={formatNumber} />
-                <Tooltip 
-                  formatter={(value) => formatNumber(Number(value ?? 0))}
-                  contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#aaa" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#aaa" tickFormatter={formatNumber} />
+                <Tooltip
+                  formatter={(value, name) => [formatNumber(Number(value ?? 0)), BRAND_LABELS[name ?? ''] || name || '']}
+                  contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
                 />
-                <Legend />
-                <Bar dataKey="followers" name="Followers" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="views" name="Views (7d)" fill="#10B981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="likes" name="Likes (7d)" fill="#EC4899" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Legend formatter={(v) => BRAND_LABELS[v] || v} />
+                {chartBrands.map((b) => (
+                  <Area
+                    key={b}
+                    type="monotone"
+                    dataKey={b}
+                    stroke={BRAND_COLORS[b] || '#888'}
+                    fill={`url(#fg-${b})`}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                ))}
+              </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">
-              <p>No brand data available</p>
-            </div>
+            <EmptyChart message="No follower data yet" />
           )}
         </div>
-        
-        {/* Second Row of Charts */}
-        <div className="grid grid-cols-2 gap-6 mb-6">
-          {/* Platform Performance */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="w-5 h-5 text-gray-500" />
-              <h3 className="font-semibold text-gray-900">Platform Performance</h3>
-              <span className="text-xs text-gray-400 ml-2">Total across all brands</span>
-            </div>
-            
-            {platformData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={platformData} layout="vertical" barSize={24}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis type="number" tick={{ fontSize: 12 }} stroke="#888" tickFormatter={formatNumber} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} stroke="#888" width={80} />
-                  <Tooltip 
-                    formatter={(value) => formatNumber(Number(value ?? 0))}
-                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  />
-                  <Legend />
-                  <Bar dataKey="views" name="Views (7d)" fill="#10B981" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="followers" name="Followers" fill="#3B82F6" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[250px] flex items-center justify-center text-gray-400">
-                <p>No platform data available</p>
-              </div>
+
+        {/* ── 2. Daily Follower Growth ── */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Users className="w-5 h-5 text-green-500" />
+            <h3 className="font-semibold text-gray-900">Daily New Followers</h3>
+            {followerGain.average > 0 && (
+              <span className="ml-2 text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                avg {formatNumber(followerGain.average)}/day
+              </span>
             )}
           </div>
-          
-          {/* Engagement Rate */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center gap-2 mb-4">
-              <Heart className="w-5 h-5 text-pink-500" />
-              <h3 className="font-semibold text-gray-900">Engagement Rate</h3>
-              <span className="text-xs text-gray-400 ml-2">Likes / Views %</span>
-            </div>
-            
-            {engagementData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={engagementData} barSize={40}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#888" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#888" tickFormatter={(v) => `${v}%`} />
-                  <Tooltip 
-                    formatter={(value, name) => {
-                      if (name === 'engagementRate') return [`${value}%`, 'Engagement Rate']
-                      return [formatNumber(Number(value ?? 0)), name]
-                    }}
-                    contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  />
-                  <Bar dataKey="engagementRate" name="Engagement Rate" radius={[4, 4, 0, 0]}>
-                    {engagementData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[250px] flex items-center justify-center text-gray-400">
-                <p>No engagement data available</p>
-              </div>
-            )}
-          </div>
+          <p className="text-xs text-gray-400 mb-4">
+            New followers gained each day — dashed line is the average
+          </p>
+
+          {followerGain.data.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <ComposedChart data={followerGain.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#aaa" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#aaa" tickFormatter={formatNumber} />
+                <Tooltip
+                  formatter={(value, name) => {
+                    if (name === 'Average') return [formatNumber(Number(value ?? 0)), name]
+                    return [formatNumber(Number(value ?? 0)), BRAND_LABELS[name ?? ''] || name || '']
+                  }}
+                  contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                />
+                <Legend formatter={(v) => (v === 'Average' ? v : BRAND_LABELS[v] || v)} />
+                {chartBrands.map((b) => (
+                  <Bar key={b} dataKey={b} stackId="stack" fill={BRAND_COLORS[b] || '#888'} radius={[2, 2, 0, 0]} />
+                ))}
+                <ReferenceLine
+                  y={followerGain.average}
+                  stroke="#6B7280"
+                  strokeDasharray="6 4"
+                  strokeWidth={1.5}
+                  label={{ value: 'avg', position: 'right', fill: '#6B7280', fontSize: 11 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart message="Need at least 2 days of data to show growth" />
+          )}
         </div>
-        
-        {/* Brand Cards */}
+
+        {/* ── 3. Daily Views ── */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Eye className="w-5 h-5 text-purple-500" />
+            <h3 className="font-semibold text-gray-900">Daily Views</h3>
+            {viewsGain.average > 0 && (
+              <span className="ml-2 text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                avg {formatNumber(viewsGain.average)}/day
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mb-4">
+            Views per day — dashed line is the average
+          </p>
+
+          {viewsGain.data.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <ComposedChart data={viewsGain.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#aaa" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#aaa" tickFormatter={formatNumber} />
+                <Tooltip
+                  formatter={(value, name) => {
+                    if (name === 'Average') return [formatNumber(Number(value ?? 0)), name]
+                    return [formatNumber(Number(value ?? 0)), BRAND_LABELS[name ?? ''] || name || '']
+                  }}
+                  contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                />
+                <Legend formatter={(v) => (v === 'Average' ? v : BRAND_LABELS[v] || v)} />
+                {chartBrands.map((b) => (
+                  <Bar key={b} dataKey={b} stackId="stack" fill={BRAND_COLORS[b] || '#888'} radius={[2, 2, 0, 0]} />
+                ))}
+                <ReferenceLine
+                  y={viewsGain.average}
+                  stroke="#6B7280"
+                  strokeDasharray="6 4"
+                  strokeWidth={1.5}
+                  label={{ value: 'avg', position: 'right', fill: '#6B7280', fontSize: 11 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart message="Need at least 2 days of data to show views" />
+          )}
+        </div>
+
+        {/* ── Brand Cards ── */}
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Detailed Breakdown</h2>
         {filteredBrands.length > 0 ? (
           <div className="space-y-4">
-            {filteredBrands.map((brand) => (
-              <BrandCard key={brand.brand} brand={brand} />
+            {filteredBrands.map((b) => (
+              <BrandCard key={b.brand} brand={b} />
             ))}
           </div>
         ) : (
