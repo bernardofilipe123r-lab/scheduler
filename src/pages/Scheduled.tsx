@@ -54,6 +54,7 @@ const BRAND_OFFSETS: Record<BrandName, number> = {
 
 // Platform type for filtering
 type PlatformFilter = 'all' | 'instagram' | 'facebook' | 'youtube'
+type ContentTypeFilter = 'all' | 'reels' | 'posts'
 
 const BASE_SLOTS: Array<{ hour: number; variant: Variant }> = [
   { hour: 0, variant: 'light' },   // 12 AM
@@ -98,6 +99,7 @@ export function ScheduledPage() {
   const [statsFilter, setStatsFilter] = useState<'future' | 'all'>('future')
   const [brandFilter, setBrandFilter] = useState<BrandName | null>(null)
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
+  const [contentTypeFilter, setContentTypeFilter] = useState<ContentTypeFilter>('all')
   const [selectedDayForMissing, setSelectedDayForMissing] = useState<Date | null>(null)
   
   const calendarDays = useMemo(() => {
@@ -119,6 +121,14 @@ export function ScheduledPage() {
     const grouped: Record<string, ScheduledPost[]> = {}
     
     posts.forEach(post => {
+      // Apply content type filter
+      if (contentTypeFilter !== 'all') {
+        const variant = post.metadata?.variant || 'light'
+        const isPost = variant === 'post'
+        if (contentTypeFilter === 'posts' && !isPost) return
+        if (contentTypeFilter === 'reels' && isPost) return
+      }
+
       const dateKey = format(parseISO(post.scheduled_time), 'yyyy-MM-dd')
       if (!grouped[dateKey]) {
         grouped[dateKey] = []
@@ -127,7 +137,7 @@ export function ScheduledPage() {
     })
     
     return grouped
-  }, [posts])
+  }, [posts, contentTypeFilter])
   
   // Analyze slots for a specific brand on a specific day
   const analyzeSlots = useMemo(() => {
@@ -267,9 +277,20 @@ export function ScheduledPage() {
   
   const stats = useMemo(() => {
     const now = new Date()
-    const filteredPosts = statsFilter === 'future'
+    let filteredPosts = statsFilter === 'future'
       ? posts.filter(post => parseISO(post.scheduled_time) > now)
       : posts
+
+    // Apply content type filter to stats too
+    if (contentTypeFilter !== 'all') {
+      filteredPosts = filteredPosts.filter(post => {
+        const variant = post.metadata?.variant || 'light'
+        const isPost = variant === 'post'
+        if (contentTypeFilter === 'posts') return isPost
+        if (contentTypeFilter === 'reels') return !isPost
+        return true
+      })
+    }
     
     const byBrand: Record<string, number> = {}
     filteredPosts.forEach(post => {
@@ -279,7 +300,7 @@ export function ScheduledPage() {
       total: filteredPosts.length,
       byBrand,
     }
-  }, [posts, statsFilter])
+  }, [posts, statsFilter, contentTypeFilter])
   
   if (isLoading) {
     return <FullPageLoader text="Loading scheduled posts..." />
@@ -446,6 +467,56 @@ export function ScheduledPage() {
               <span className="text-gray-400">• Click any day to see slot details</span>
             </div>
           )}
+        </div>
+
+        {/* Content Type Filter */}
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Content:</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setContentTypeFilter('all')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5',
+                  contentTypeFilter === 'all'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setContentTypeFilter('reels')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5',
+                  contentTypeFilter === 'reels'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                🎬 Reels
+              </button>
+              <button
+                onClick={() => setContentTypeFilter('posts')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5',
+                  contentTypeFilter === 'posts'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                🖼️ Posts
+              </button>
+            </div>
+            {contentTypeFilter !== 'all' && (
+              <span className="text-xs text-gray-500">
+                Showing {contentTypeFilter} only
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Platform Filter */}
