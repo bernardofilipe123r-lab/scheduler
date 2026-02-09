@@ -506,13 +506,32 @@ export function PostJobDetail({ job, refetch }: Props) {
                 </span>
                 <span className="ml-auto flex items-center gap-1">
                   {(status === 'completed' || status === 'scheduled') && (
-                    <button
-                      onClick={() => openEditBrand(brand)}
-                      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                      title="Edit brand"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => adjustBrandFontSize(brand, -2)}
+                        className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        title="Decrease font size"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="text-[10px] text-gray-400 tabular-nums min-w-[28px] text-center">
+                        {getBrandFontSize(brand)}
+                      </span>
+                      <button
+                        onClick={() => adjustBrandFontSize(brand, 2)}
+                        className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        title="Increase font size"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => openEditBrand(brand)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        title="Edit brand"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </>
                   )}
                   {status === 'generating' && (
                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
@@ -871,42 +890,6 @@ export function PostJobDetail({ job, refetch }: Props) {
               </button>
             </div>
 
-            <hr className="border-gray-200" />
-
-            {/* Font Size (non-permanent, session only) */}
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">
-                Font Size (preview only): {getBrandFontSize(editingBrand)}px
-              </label>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => adjustBrandFontSize(editingBrand, -2)}
-                  className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <input
-                  type="range"
-                  min={30}
-                  max={120}
-                  value={getBrandFontSize(editingBrand)}
-                  onChange={(e) =>
-                    setBrandFontSizes((prev) => ({
-                      ...prev,
-                      [editingBrand]: Number(e.target.value),
-                    }))
-                  }
-                  className="flex-1 accent-primary-500"
-                />
-                <button
-                  onClick={() => adjustBrandFontSize(editingBrand, 2)}
-                  className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">This change is temporary and won't be saved.</p>
-            </div>
           </div>
         </Modal>
       )}
