@@ -39,6 +39,9 @@ import {
   Sparkles,
   ArrowRight,
   Play,
+  ImageOff,
+  MessageSquareX,
+  ChevronLeft,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -55,6 +58,47 @@ const STORAGE_KEY = 'god-automation-session'
 const REVIEW_SCALE = 0.3
 const MAX_CONCURRENT = 5
 const DEFAULT_POSTS_PER_DAY = 6
+const FEEDBACK_STORAGE_KEY = 'god-automation-feedback'
+const MAX_FEEDBACK_ENTRIES = 30
+
+// ─── Rejection feedback types ────────────────────────────────────────
+type RejectCategory = 'bad_image' | 'bad_topic'
+type ImageIssue = 'not_centered' | 'image_bug' | 'image_mismatch'
+
+interface RejectionEntry {
+  category: RejectCategory
+  imageIssue?: ImageIssue
+  title: string
+  timestamp: string
+}
+
+function loadFeedback(): RejectionEntry[] {
+  try {
+    const raw = localStorage.getItem(FEEDBACK_STORAGE_KEY)
+    if (!raw) return []
+    return JSON.parse(raw) as RejectionEntry[]
+  } catch {
+    return []
+  }
+}
+
+function saveFeedback(entries: RejectionEntry[]) {
+  try {
+    localStorage.setItem(
+      FEEDBACK_STORAGE_KEY,
+      JSON.stringify(entries.slice(-MAX_FEEDBACK_ENTRIES)),
+    )
+  } catch { /* quota exceeded */ }
+}
+
+function buildFeedbackPayload(): Array<{ category: string; detail?: string; title: string }> {
+  const all = loadFeedback()
+  return all.slice(-15).map((e) => ({
+    category: e.category,
+    detail: e.imageIssue,
+    title: e.title,
+  }))
+}
 
 // Reel brand offsets (matching db_scheduler.py) — used for post interleaving
 const BRAND_REEL_OFFSETS: Record<string, number> = {
@@ -233,6 +277,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [editTitleValue, setEditTitleValue] = useState('')
   const [fontSizeOverride, setFontSizeOverride] = useState<number | null>(null)
+  const [showRejectMenu, setShowRejectMenu] = useState<false | 'main' | 'image_sub'>(false)
 
   // Refs
   const stageRef = useRef<Konva.Stage | null>(null)
@@ -368,7 +413,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         const contentResp = await fetch('/reels/generate-post-titles-batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: 1 }),
+          body: JSON.stringify({ count: 1, rejection_feedback: buildFeedbackPayload() }),
         })
         if (!contentResp.ok) throw new Error('Content gen failed')
         const { posts } = await contentResp.json()
@@ -433,7 +478,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
       const contentResp = await fetch('/reels/generate-post-titles-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count: firstCount }),
+        body: JSON.stringify({ count: firstCount, rejection_feedback: buildFeedbackPayload() }),
       })
       if (!contentResp.ok) throw new Error('Failed to generate content')
       const data = await contentResp.json()
@@ -497,7 +542,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         const contentResp = await fetch('/reels/generate-post-titles-batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count }),
+          body: JSON.stringify({ count, rejection_feedback: buildFeedbackPayload() }),
         })
         if (!contentResp.ok) {
           console.error(`[GOD] BG: title gen failed for batch starting at ${i}`)
@@ -740,19 +785,45 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     }
   }
 
-  // ── NO ─────────────────────────────────────────────────────────────
-  const handleNo = () => {
+  // ── NO — with rejection reason ──────────────────────────────────
+  const handleNo = (category: RejectCategory, imageIssue?: ImageIssue) => {
     if (!currentPost || !isCurrentReady) return
     const idx = reviewIndex
 
-    generateSinglePost(idx, currentPost.brand)
-    setFontSizeOverride(null)
-    setEditingTitle(false)
+    // Record feedback
+    const entry: RejectionEntry = {
+      category,
+      imageIssue,
+      title: currentPost.title,
+      timestamp: new Date().toISOString(),
+    }
+    const all = loadFeedback()
+    all.push(entry)
+    saveFeedback(all)
+    console.log(`[GOD] Rejection recorded: ${category}${imageIssue ? ' / ' + imageIssue : ''} — "${currentPost.title.slice(0, 40)}"`)
 
-    // Try to advance to another ready post
-    const next = findNextReviewable(idx, queueRef.current)
-    if (next !== null && next !== idx) {
-      setReviewIndex(next)
+    setShowRejectMenu(false)
+
+    // If bad image only, just retry image (keep the same title)
+    if (category === 'bad_image') {
+      setQueue((prev) => {
+        const next = [...prev]
+        if (next[idx]) {
+          next[idx] = { ...next[idx], status: 'generating_image', backgroundUrl: null }
+        }
+        return next
+      })
+      generateImageForPost(idx)
+      // Try to advance to another ready post while regenerating
+      const next = findNextReviewable(idx, queueRef.current)
+      if (next !== null && next !== idx) setReviewIndex(next)
+    } else {
+      // Bad topic — regenerate everything
+      generateSinglePost(idx, currentPost.brand)
+      setFontSizeOverride(null)
+      setEditingTitle(false)
+      const next = findNextReviewable(idx, queueRef.current)
+      if (next !== null && next !== idx) setReviewIndex(next)
     }
   }
 
@@ -852,16 +923,73 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         {/* ─── Reviewing — DESKTOP HORIZONTAL LAYOUT ────────────── */}
         {phase === 'reviewing' && currentPost && (
           <div className="flex items-center gap-8 px-8 w-full max-w-5xl">
-            {/* Left: Reject button */}
-            <div className="shrink-0">
-              <button
-                onClick={handleNo}
-                disabled={!isCurrentReady || isSchedulingCurrent}
-                className="group w-16 h-16 rounded-full bg-white/5 border-2 border-red-400/40 text-red-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-red-500/20 hover:border-red-400 hover:scale-110 active:scale-95"
-                title="Reject — generate new post"
-              >
-                <ThumbsDown className="w-6 h-6 group-hover:scale-110 transition-transform" />
-              </button>
+            {/* Left: Reject button + menu */}
+            <div className="shrink-0 relative">
+              {!showRejectMenu ? (
+                <button
+                  onClick={() => setShowRejectMenu('main')}
+                  disabled={!isCurrentReady || isSchedulingCurrent}
+                  className="group w-16 h-16 rounded-full bg-white/5 border-2 border-red-400/40 text-red-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-red-500/20 hover:border-red-400 hover:scale-110 active:scale-95"
+                  title="Reject — tell us why"
+                >
+                  <ThumbsDown className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                </button>
+              ) : (
+                <div className="w-56 bg-gray-800 border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-in fade-in slide-in-from-left-2 duration-150">
+                  {showRejectMenu === 'main' ? (
+                    <>
+                      <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white/60">Why reject?</span>
+                        <button onClick={() => setShowRejectMenu(false)} className="text-white/30 hover:text-white/60">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setShowRejectMenu('image_sub')}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+                      >
+                        <ImageOff className="w-4 h-4 text-red-400 shrink-0" />
+                        <span>Bad Image</span>
+                        <ArrowRight className="w-3.5 h-3.5 ml-auto text-white/30" />
+                      </button>
+                      <button
+                        onClick={() => handleNo('bad_topic')}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+                      >
+                        <MessageSquareX className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Bad Topic</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
+                        <button onClick={() => setShowRejectMenu('main')} className="text-white/30 hover:text-white/60">
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-xs font-semibold text-white/60">What's wrong?</span>
+                      </div>
+                      <button
+                        onClick={() => handleNo('bad_image', 'not_centered')}
+                        className="w-full text-left px-3 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+                      >
+                        🖼️ Not centered / needs more content
+                      </button>
+                      <button
+                        onClick={() => handleNo('bad_image', 'image_bug')}
+                        className="w-full text-left px-3 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+                      >
+                        🐛 Bug (extra limbs, artifacts)
+                      </button>
+                      <button
+                        onClick={() => handleNo('bad_image', 'image_mismatch')}
+                        className="w-full text-left px-3 py-2.5 text-sm text-white/80 hover:bg-white/10 transition-colors"
+                      >
+                        🔗 Doesn't match topic
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Center: Canvas */}

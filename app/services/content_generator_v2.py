@@ -759,7 +759,7 @@ Generate now:"""
     # BATCH POST GENERATION (unique post per brand)
     # ============================================================
 
-    def generate_post_titles_batch(self, count: int, topic_hint: str = None) -> List[Dict]:
+    def generate_post_titles_batch(self, count: int, topic_hint: str = None, rejection_feedback: list = None) -> List[Dict]:
         """
         Generate N completely unique posts in a single AI call.
         Each post has a different topic, title, caption, and image prompt.
@@ -768,6 +768,7 @@ Generate now:"""
         Args:
             count: Number of unique posts to generate
             topic_hint: Optional hint to guide topic selection
+            rejection_feedback: Optional list of dicts with 'category', 'detail', 'title' from user rejections
 
         Returns:
             List of dicts, each with 'title', 'caption', 'image_prompt', 'is_fallback'
@@ -787,6 +788,38 @@ Generate now:"""
                     all_recent.append(t)
         if all_recent:
             history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
+
+        # Build rejection feedback context from user's session
+        feedback_context = ""
+        if rejection_feedback:
+            bad_topic_titles = []
+            image_issues = {"not_centered": 0, "image_bug": 0, "image_mismatch": 0}
+            for fb in rejection_feedback:
+                cat = fb.get("category", "")
+                detail = fb.get("detail", "")
+                title = fb.get("title", "")
+                if cat == "bad_topic" and title:
+                    bad_topic_titles.append(title)
+                if cat == "bad_image" and detail:
+                    image_issues[detail] = image_issues.get(detail, 0) + 1
+            
+            parts = []
+            if bad_topic_titles:
+                parts.append(f"User REJECTED these topics (generate DIFFERENT topics, avoid similar themes):\n" +
+                           "\n".join(f"  ❌ {t}" for t in bad_topic_titles[-10:]))
+            img_complaints = []
+            if image_issues.get("not_centered", 0) > 0:
+                img_complaints.append(f"- Images not centered / need more content on top ({image_issues['not_centered']}x rejected)")
+            if image_issues.get("image_bug", 0) > 0:
+                img_complaints.append(f"- Images with anatomical bugs like extra limbs ({image_issues['image_bug']}x rejected)")
+            if image_issues.get("image_mismatch", 0) > 0:
+                img_complaints.append(f"- Images that don't match the title topic ({image_issues['image_mismatch']}x rejected)")
+            if img_complaints:
+                parts.append("User has these IMAGE quality complaints — adjust image prompts accordingly:\n" +
+                           "\n".join(img_complaints) +
+                           "\nTo fix: make image prompts MORE specific about the exact subject, ensure the focal subject is CENTERED, and avoid complex human anatomy.")
+            if parts:
+                feedback_context = "\n### USER FEEDBACK (CRITICAL — learn from these rejections):\n" + "\n\n".join(parts) + "\n"
 
         prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
 
@@ -869,6 +902,8 @@ Write a full Instagram caption (4-5 paragraphs) that:
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 {history_context}
+
+{feedback_context}
 
 {"Topic hint: " + topic_hint if topic_hint else ""}
 

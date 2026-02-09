@@ -191,6 +191,7 @@ async def generate_post_title(request: AutoContentRequest = None):
 class BatchTitlesRequest(BaseModel):
     count: int = 5
     topic_hint: Optional[str] = None
+    rejection_feedback: Optional[list] = None
 
 
 @router.post(
@@ -203,9 +204,10 @@ async def generate_post_titles_batch(request: BatchTitlesRequest = None):
     try:
         count = request.count if request else 5
         topic_hint = request.topic_hint if request else None
-        print(f"\n🔱 [GOD] generate_post_titles_batch: count={count}, topic_hint={topic_hint!r}", flush=True)
+        rejection_feedback = request.rejection_feedback if request else None
+        print(f"\n🔱 [GOD] generate_post_titles_batch: count={count}, topic_hint={topic_hint!r}, feedback={len(rejection_feedback or [])} entries", flush=True)
         t0 = _time.time()
-        results = content_generator.generate_post_titles_batch(count, topic_hint)
+        results = content_generator.generate_post_titles_batch(count, topic_hint, rejection_feedback)
         elapsed = _time.time() - t0
         titles = [r.get('title', '?')[:50] for r in results]
         print(f"🔱 [GOD] titles generated in {elapsed:.1f}s: {titles}", flush=True)
@@ -1689,16 +1691,60 @@ async def get_occupied_post_slots():
 
 
 @router.post("/scheduled/clean-post-slots")
-async def clean_post_slots():
+async def clean_post_slots(posts_per_day: int = 6):
     """
     Post Schedule Cleaner: find collisions (multiple posts at exact same 
-    time for any brand) and re-schedule the duplicates so no two posts 
-    share the exact same minute.
+    time for any brand) and re-schedule the duplicates to the next valid
+    post slot for that brand.
+    
+    Post slots are dynamically computed: interleaved with reels (2h offset
+    from each reel slot), evenly spaced across 24h based on posts_per_day.
     
     For variant='post' only (images). Reels are handled separately.
     """
     try:
-        from datetime import timedelta
+        from datetime import timedelta, datetime as dt
+        import math
+        
+        # Brand reel offsets (matching db_scheduler.py)
+        BRAND_REEL_OFFSETS = {
+            "holisticcollege": 0,
+            "healthycollege": 1,
+            "vitalitycollege": 2,
+            "longevitycollege": 3,
+            "wellbeingcollege": 4,
+        }
+        
+        def get_post_slots_for_brand(brand: str, ppd: int) -> list[tuple[int, int]]:
+            """Return list of (hour, minute) for valid post slots for a brand."""
+            reel_offset = BRAND_REEL_OFFSETS.get(brand, 0)
+            gap = 24 / ppd
+            slots = []
+            for i in range(ppd):
+                raw = (reel_offset + 2 + i * gap) % 24
+                h = int(raw)
+                m = round((raw - h) * 60)
+                slots.append((h, m))
+            slots.sort(key=lambda s: s[0] * 60 + s[1])
+            return slots
+        
+        def find_next_valid_slot(brand: str, after: dt, occupied: set[str], ppd: int) -> dt:
+            """Find next unoccupied valid post slot for brand after given time."""
+            slots = get_post_slots_for_brand(brand, ppd)
+            current_day = after.replace(hour=0, minute=0, second=0, microsecond=0)
+            for day_off in range(90):
+                check_date = current_day + timedelta(days=day_off)
+                for h, m in slots:
+                    candidate = check_date.replace(hour=h, minute=m)
+                    if candidate <= after:
+                        continue
+                    key = candidate.strftime("%Y-%m-%d %H:%M")
+                    if key not in occupied:
+                        return candidate
+            # Fallback: tomorrow first slot
+            tomorrow = after + timedelta(days=1)
+            h, m = slots[0]
+            return tomorrow.replace(hour=h, minute=m, second=0, microsecond=0)
         
         all_scheduled = scheduler_service.get_all_scheduled()
         
@@ -1749,7 +1795,7 @@ async def clean_post_slots():
             collisions_found += len(entries) - 1
             brand = slot_key.split("|")[0]
             
-            # Keep the first one, reschedule the rest
+            # Keep the first one, reschedule the rest to next valid post slot
             for extra in entries[1:]:
                 schedule_id = extra.get("id") or extra.get("schedule_id")
                 sched_time = extra.get("scheduled_time")
@@ -1757,20 +1803,16 @@ async def clean_post_slots():
                     continue
                 
                 if not hasattr(sched_time, 'hour'):
-                    from datetime import datetime as dt
                     sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
                     if sched_time.tzinfo is not None:
                         sched_time = sched_time.replace(tzinfo=None)
                 
-                # Move to same hour next day, keep looking until slot is free
-                new_time = sched_time + timedelta(days=1)
-                attempts = 0
-                while attempts < 60:
-                    new_key = new_time.strftime("%Y-%m-%d %H:%M")
-                    if new_key not in brand_occupied.get(brand, set()):
-                        break
-                    new_time += timedelta(days=1)
-                    attempts += 1
+                # Find next valid post slot for this brand
+                new_time = find_next_valid_slot(
+                    brand, sched_time,
+                    brand_occupied.get(brand, set()),
+                    posts_per_day
+                )
                 
                 # Reserve this slot
                 if brand not in brand_occupied:
@@ -1789,7 +1831,8 @@ async def clean_post_slots():
             "status": "ok",
             "collisions_found": collisions_found,
             "fixed": fixed,
-            "message": f"Found {collisions_found} collision(s), fixed {fixed}."
+            "posts_per_day": posts_per_day,
+            "message": f"Found {collisions_found} collision(s), fixed {fixed}. Using {posts_per_day} posts/day."
         }
         
     except Exception as e:
