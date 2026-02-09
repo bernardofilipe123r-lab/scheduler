@@ -35,7 +35,6 @@ import {
   Calendar,
   ExternalLink,
   RotateCcw,
-  Image as ImageIcon,
   Type,
   Sparkles,
   ArrowRight,
@@ -206,6 +205,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   const [preGenProgress, setPreGenProgress] = useState(0)
   const [activeGens, setActiveGens] = useState(0)
   const [isSchedulingCurrent, setIsSchedulingCurrent] = useState(false)
+  const [preGenStep, setPreGenStep] = useState<'slots' | 'titles' | 'images'>('slots')
 
   // Edit state for current review card
   const [editingTitle, setEditingTitle] = useState(false)
@@ -386,68 +386,143 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     [generateImageForPost],
   )
 
-  // ── Start generation ───────────────────────────────────────────────
+  // ── Start generation (streaming pipeline) ─────────────────────────
+  // Strategy: generate just 2 titles → 2 images → review immediately.
+  // Continue generating the rest in background pairs while user swipes.
   const startGeneration = async (rounds: number) => {
     const q = buildQueue(brands, rounds)
     setQueue(q)
     queueRef.current = q
     setPhase('pre_generating')
     setPreGenProgress(0)
+    setPreGenStep('slots')
     await fetchOccupiedSlots()
 
-    // 1. Generate content for first 2 rounds
-    const preGenCount = Math.min(2 * NUM_BRANDS, q.length)
-    setPreGenProgress(5)
+    const FIRST_BATCH = 2 // Only generate 2 posts before review starts
+    const firstCount = Math.min(FIRST_BATCH, q.length)
+    setPreGenProgress(10)
+    setPreGenStep('titles')
 
+    // 1. Generate just 2 titles — fast
+    console.log(`[GOD] Generating first ${firstCount} titles...`)
+    let firstPosts: Array<{ title: string; caption: string; image_prompt: string }>
     try {
       const contentResp = await fetch('/reels/generate-post-titles-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count: preGenCount }),
+        body: JSON.stringify({ count: firstCount }),
       })
       if (!contentResp.ok) throw new Error('Failed to generate content')
-      const { posts: contentPosts } = await contentResp.json()
-
-      const updatedQueue = [...q]
-      for (let i = 0; i < preGenCount && i < contentPosts.length; i++) {
-        updatedQueue[i] = {
-          ...updatedQueue[i],
-          title: contentPosts[i].title || '',
-          caption: contentPosts[i].caption || '',
-          aiPrompt: contentPosts[i].image_prompt || '',
-          status: 'pending_image' as GodPostStatus,
-        }
-      }
-      setQueue(updatedQueue)
-      queueRef.current = updatedQueue
-    } catch {
+      const data = await contentResp.json()
+      firstPosts = data.posts
+      console.log(`[GOD] Got ${firstPosts.length} titles`)
+    } catch (err) {
+      console.error('[GOD] Title gen failed:', err)
       toast.error('Failed to generate content')
       setPhase('batch_select')
       return
     }
 
-    setPreGenProgress(20)
-
-    // 2. Generate images with concurrency control
-    let completed = 0
-    const total = preGenCount
-    for (let i = 0; i < preGenCount; i += MAX_CONCURRENT) {
-      const chunk: Promise<void>[] = []
-      for (let j = i; j < Math.min(i + MAX_CONCURRENT, preGenCount); j++) {
-        chunk.push(
-          generateImageForPost(j).then(() => {
-            completed++
-            setPreGenProgress(20 + Math.round((completed / total) * 75))
-          }),
-        )
+    // Apply titles to queue
+    const updatedQ = [...q]
+    for (let i = 0; i < firstCount && i < firstPosts.length; i++) {
+      updatedQ[i] = {
+        ...updatedQ[i],
+        title: firstPosts[i].title || '',
+        caption: firstPosts[i].caption || '',
+        aiPrompt: firstPosts[i].image_prompt || '',
+        status: 'pending_image' as GodPostStatus,
       }
-      await Promise.all(chunk)
     }
+    setQueue(updatedQ)
+    queueRef.current = updatedQ
+    setPreGenProgress(40)
+    setPreGenStep('images')
+
+    // 2. Generate 2 images in parallel — fast
+    console.log(`[GOD] Generating first ${firstCount} images...`)
+    await Promise.all(
+      Array.from({ length: firstCount }, (_, i) =>
+        generateImageForPost(i).then(() => {
+          setPreGenProgress((prev) => Math.min(95, prev + 25))
+        }),
+      ),
+    )
 
     setPreGenProgress(100)
-    await new Promise((r) => setTimeout(r, 400))
+    console.log('[GOD] First batch ready — switching to review')
+    await new Promise((r) => setTimeout(r, 300))
     setPhase('reviewing')
     setReviewIndex(0)
+
+    // 3. Background: generate remaining posts in pairs while user swipes
+    const remaining = q.length - firstCount
+    if (remaining > 0) {
+      console.log(`[GOD] Background: generating remaining ${remaining} posts in pairs...`)
+      backgroundGenerateRemaining(firstCount, q.length)
+    }
+  }
+
+  // Background generation — runs during review, generates content+image in pairs
+  const backgroundGenerateRemaining = async (startIdx: number, total: number) => {
+    const PAIR_SIZE = 2
+    for (let i = startIdx; i < total; i += PAIR_SIZE) {
+      const count = Math.min(PAIR_SIZE, total - i)
+      console.log(`[GOD] BG: generating titles for posts ${i}-${i + count - 1}`)
+
+      try {
+        const contentResp = await fetch('/reels/generate-post-titles-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count }),
+        })
+        if (!contentResp.ok) {
+          console.error(`[GOD] BG: title gen failed for batch starting at ${i}`)
+          continue
+        }
+        const { posts: contentPosts } = await contentResp.json()
+
+        // Apply content
+        setQueue((prev) => {
+          const next = [...prev]
+          for (let j = 0; j < count && j < contentPosts.length; j++) {
+            const idx = i + j
+            if (next[idx]) {
+              next[idx] = {
+                ...next[idx],
+                title: contentPosts[j].title || '',
+                caption: contentPosts[j].caption || '',
+                aiPrompt: contentPosts[j].image_prompt || '',
+                status: 'pending_image',
+              }
+            }
+          }
+          return next
+        })
+        // Update ref for image gen
+        for (let j = 0; j < count && j < contentPosts.length; j++) {
+          const idx = i + j
+          queueRef.current = [...queueRef.current]
+          if (queueRef.current[idx]) {
+            queueRef.current[idx] = {
+              ...queueRef.current[idx],
+              aiPrompt: contentPosts[j].image_prompt || '',
+            }
+          }
+        }
+        await new Promise((r) => setTimeout(r, 50))
+
+        // Generate images for this pair in parallel
+        console.log(`[GOD] BG: generating images for posts ${i}-${i + count - 1}`)
+        await Promise.all(
+          Array.from({ length: count }, (_, j) => generateImageForPost(i + j)),
+        )
+        console.log(`[GOD] BG: posts ${i}-${i + count - 1} ready`)
+      } catch (err) {
+        console.error(`[GOD] BG: error generating batch at ${i}:`, err)
+      }
+    }
+    console.log('[GOD] BG: all background generation complete')
   }
 
   // ── Resume previous session ────────────────────────────────────────
@@ -689,7 +764,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   //  RENDER
   // ═══════════════════════════════════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col">
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
         <div className="flex items-center gap-3">
@@ -745,7 +820,8 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
           <PreGenProgress
             progress={preGenProgress}
             activeGens={activeGens}
-            totalPosts={Math.min(2 * NUM_BRANDS, totalPosts)}
+            totalPosts={2}
+            step={preGenStep}
           />
         )}
 
@@ -968,12 +1044,21 @@ function PreGenProgress({
   progress,
   activeGens,
   totalPosts,
+  step,
 }: {
   progress: number
   activeGens: number
   totalPosts: number
+  step: 'slots' | 'titles' | 'images'
 }) {
   const circumference = 2 * Math.PI * 34
+
+  const stepLabel =
+    step === 'slots'
+      ? 'Checking schedule slots...'
+      : step === 'titles'
+        ? 'Generating 2 titles...'
+        : `Generating ${totalPosts} images...`
 
   return (
     <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
@@ -1010,29 +1095,19 @@ function PreGenProgress({
           <span className="text-lg font-bold text-gray-900">{progress}%</span>
         </div>
       </div>
-      <h2 className="text-xl font-bold text-gray-900 mb-1">Generating posts</h2>
+      <h2 className="text-xl font-bold text-gray-900 mb-1">Preparing first posts</h2>
       <p className="text-gray-500 text-sm mb-4">
-        Creating {totalPosts} posts with unique content and images
+        Just {totalPosts} posts to start — rest generates while you swipe
       </p>
       <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
-        {progress < 20 && (
-          <span className="flex items-center gap-1.5">
-            <Type className="w-3.5 h-3.5" />
-            Generating titles...
-          </span>
-        )}
-        {progress >= 20 && activeGens > 0 && (
-          <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5">
+          {step === 'images' && activeGens > 0 ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {activeGens} image{activeGens > 1 ? 's' : ''} generating
-          </span>
-        )}
-        {progress >= 20 && activeGens === 0 && progress < 100 && (
-          <span className="flex items-center gap-1.5">
-            <ImageIcon className="w-3.5 h-3.5" />
-            Preparing images...
-          </span>
-        )}
+          ) : (
+            <Type className="w-3.5 h-3.5" />
+          )}
+          {stepLabel}
+        </span>
       </div>
     </div>
   )

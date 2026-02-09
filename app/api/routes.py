@@ -199,12 +199,19 @@ class BatchTitlesRequest(BaseModel):
 )
 async def generate_post_titles_batch(request: BatchTitlesRequest = None):
     """Generate N unique posts in a single AI call (for God Automation)."""
+    import time as _time
     try:
         count = request.count if request else 5
         topic_hint = request.topic_hint if request else None
+        print(f"\n🔱 [GOD] generate_post_titles_batch: count={count}, topic_hint={topic_hint!r}", flush=True)
+        t0 = _time.time()
         results = content_generator.generate_post_titles_batch(count, topic_hint)
+        elapsed = _time.time() - t0
+        titles = [r.get('title', '?')[:50] for r in results]
+        print(f"🔱 [GOD] titles generated in {elapsed:.1f}s: {titles}", flush=True)
         return {"posts": results}
     except Exception as e:
+        print(f"❌ [GOD] generate_post_titles_batch FAILED: {e}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate batch titles: {str(e)}"
@@ -222,16 +229,21 @@ class GeneratePostBgRequest(BaseModel):
 )
 async def generate_post_background(request: GeneratePostBgRequest):
     """Generate a single AI background image for a post. Returns base64 PNG."""
+    import time as _time
     try:
         from app.services.ai_background_generator import AIBackgroundGenerator
         import base64
         from io import BytesIO
 
+        print(f"\n🔱 [GOD] generate_post_background: brand={request.brand}, prompt={request.prompt[:60]}...", flush=True)
+        t0 = _time.time()
         generator = AIBackgroundGenerator()
         image = generator.generate_post_background(
             brand_name=request.brand,
             user_prompt=request.prompt,
         )
+        elapsed = _time.time() - t0
+        print(f"🔱 [GOD] image generated in {elapsed:.1f}s for {request.brand} ({image.size[0]}x{image.size[1]})", flush=True)
 
         buf = BytesIO()
         image.save(buf, format="PNG")
@@ -239,6 +251,7 @@ async def generate_post_background(request: GeneratePostBgRequest):
 
         return {"background_data": f"data:image/png;base64,{b64}"}
     except Exception as e:
+        print(f"❌ [GOD] generate_post_background FAILED for {request.brand}: {e}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate background: {str(e)}"
