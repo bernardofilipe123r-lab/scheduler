@@ -473,9 +473,7 @@ class AIBackgroundGenerator:
                 "width": width,
                 "height": height,
                 "steps": 4,  # Flux2Klein default is 4 steps
-                "guidance": 1.0,  # Flux2Klein fixed guidance at 1.0
                 "seed": int(unique_id, 16) % (2**31),
-                "loras": []
             }
             
             print(f"📊 API Request: model={payload['model']}, {width}x{height}, steps={payload['steps']}")
@@ -487,6 +485,10 @@ class AIBackgroundGenerator:
                 json=payload,
                 timeout=120
             )
+            
+            # Log non-200 response bodies for debugging
+            if response.status_code != 200:
+                print(f"❌ API error {response.status_code}: {response.text[:500]}", flush=True)
             
             result = response.json()
             request_id = result.get("request_id") or result.get("data", {}).get("request_id")
