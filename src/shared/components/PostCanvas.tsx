@@ -112,7 +112,8 @@ export function calculateTitleHeight(
   const avgCharWidth = fontSize * 0.48
   const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
 
-  const words = text.split(' ')
+  const upperText = text.toUpperCase()
+  const words = upperText.split(' ')
   let lines = 1
   let currentLine = ''
 
@@ -269,7 +270,7 @@ export function LogoWithLines({
   )
 }
 
-/** Title with word-wrap. */
+/** Title with word-wrap. Always rendered UPPERCASE. */
 export function TitleLayer({
   config,
   x,
@@ -282,7 +283,8 @@ export function TitleLayer({
   paddingX: number
 }) {
   const textWidth = CANVAS_WIDTH - paddingX * 2
-  const words = config.text.split(' ')
+  const upperText = config.text.toUpperCase()
+  const words = upperText.split(' ')
   const lines: string[] = []
   let currentLine = ''
   const avgCharWidth = config.fontSize * 0.48

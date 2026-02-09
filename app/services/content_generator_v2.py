@@ -543,55 +543,75 @@ class ContentGeneratorV2:
             if recent_titles:
                 history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating):\n{chr(10).join('- ' + t for t in recent_titles[-5:])}\n"""
         
-        prompt = f"""You are a viral health content creator specializing in Instagram image posts.
+        prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
 
-Generate a SINGLE powerful health statement title and a matching Instagram caption with a real scientific reference.
+Generate a SINGLE short, engaging, health-focused title and a matching Instagram caption with a real scientific reference.
+
+### TARGET AUDIENCE:
+Women 35+ interested in healthy aging, energy, hormones, and longevity.
 
 ### WHAT MAKES A GREAT POST TITLE:
-- A short, clear health statement about a food, supplement, habit, or lifestyle factor
-- Some titles include specific percentages for extra impact
-- Written to attract attention, spark discussion, and feel slightly controversial or surprising
-- Do NOT lie, but exaggerate slightly to create engagement (comments, shares, saves)
+- A short, clear health statement written in simple, wellness-friendly tone (not overly technical)
+- Focused on one or two main benefits
+- Some titles may include percentages for extra impact
+- Positive, empowering, and slightly exaggerated to create scroll-stop engagement
+- Do NOT lie, but dramatize slightly to spark discussion (comments, shares, saves)
+
+### TOPICS TO COVER (pick one):
+- Hormone balance and menopause support
+- Bone strength and osteoporosis prevention
+- Heart health
+- Brain aging and memory
+- Stress, anxiety, and mood
+- Sleep improvement
+- Weight management and metabolism
+- Gut health and bloating
+- Skin aging and collagen support
+- Immune support and inflammation reduction
 
 ### EXAMPLE POST TITLES (learn the pattern):
-- "Omega-3 may reduce anxiety symptoms by up to 30% and support brain health."
-- "Daily walking can lower depression risk by 25% and improve longevity."
-- "Probiotics may improve gut health by 40% and strengthen immunity."
-- "Meditation can reduce stress levels by 35% and improve sleep quality."
-- "Berries may improve memory performance by around 20% and protect the brain."
-- "Magnesium supports relaxation, better sleep, and nervous system balance."
-- "Vitamin D plays a key role in mood regulation and immune defense."
-- "Green tea contains antioxidants that support focus and heart health."
-- "Turmeric may help reduce inflammation and protect joint function."
-- "Strength training improves metabolism, mood, and overall resilience."
-- "Adequate hydration boosts energy, brain function, and skin health."
-- "Dark chocolate in moderation may support heart health and mood."
-- "Cold exposure may improve circulation and reduce inflammation."
-- "Creatine supports muscle strength and may benefit brain energy."
 - "Vitamin D and magnesium helps reduce depression and brain aging."
+- "Collagen may improve skin elasticity by up to 20% after 8 weeks."
+- "Magnesium supports better sleep and stress relief during midlife."
+- "Walking 30 minutes daily can lower heart disease risk by 35%."
+- "Probiotics may reduce bloating and support gut health after 40."
+- "Omega-3 supports joint flexibility and may reduce inflammation."
+- "Strength training helps preserve bone density during menopause."
+- "Adequate hydration boosts energy, brain function, and skin health."
+- "Ashwagandha may reduce cortisol levels and support hormonal balance."
+- "Green tea antioxidants support metabolism and healthy aging."
 
 ### WHAT TO AVOID:
 - Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
 - Question formats
 - Lists or numbered formats (those are for reels)
-- All-caps screaming style — use sentence case with key words capitalized naturally
+- All-caps screaming style — use sentence case
 - Vague claims without specifics
+- Content that does not resonate with women 35+
 
 ### CAPTION REQUIREMENTS:
 - Write a short Instagram caption that expands on the title with 1-2 sentences
-- MUST include a scientific reference supported by a real published study
+- MUST include a scientific reference supported by a real peer-reviewed study
 - MUST contain a valid DOI (Digital Object Identifier) linking to the research source
 - Keep it concise and credible
 
 {history_context}
 
-{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic. Create a mix of: nutrition, supplements, exercise, sleep, mental health, immunity, brain health, inflammation."}
+{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic for women 35+. Mix: hormones, menopause, bone health, heart, brain aging, stress, sleep, metabolism, gut health, skin, collagen, immunity, inflammation."}
+
+### IMAGE PROMPT REQUIREMENTS:
+- Soft, minimal, calming wellness aesthetic
+- Bright modern kitchen or clean lifestyle setting
+- Neutral tones, gentle morning sunlight
+- High-end lifestyle photography style
+- Fresh, soothing, natural health remedy concept
+- Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 ### OUTPUT FORMAT (JSON only, no markdown):
 {{
     "title": "Your health statement title here.",
     "caption": "Short caption expanding on the claim. Supported by research (DOI: 10.xxxx/xxxxx)",
-    "image_prompt": "A detailed cinematic image prompt that matches the title theme. Visually striking, wellness-focused. No text, no letters, no numbers, no symbols, no logos."
+    "image_prompt": "Soft cinematic close-up description matching the title theme. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere, natural health remedy concept. No text, no letters, no numbers, no symbols, no logos."
 }}
 
 Generate now:"""
@@ -648,20 +668,24 @@ Generate now:"""
         """Fallback titles for posts if AI fails."""
         fallbacks = [
             {
-                "title": "STUDY REVEALS Vitamin D SUPPLEMENTATION Can REDUCE DEPRESSION SYMPTOMS BY 45%",
-                "image_prompt": "A cinematic wellness visualization of golden sunlight rays filtering through a window onto a person in peaceful meditation pose, with subtle vitamin D molecular structures floating in the light. Warm golden and soft orange tones. Studio-quality cinematic lighting, premium wellness mood. No text, no letters, no numbers, no symbols, no logos."
+                "title": "Vitamin D and magnesium helps reduce depression and brain aging.",
+                "caption": "Supported by clinical research on vitamin D supplementation and mood (DOI: 10.1001/jamainternmed.2019.3185)",
+                "image_prompt": "Soft cinematic close-up of vitamin D supplements and magnesium capsules arranged on a clean white stone countertop in a bright modern kitchen. A glass of warm lemon water sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere, natural health remedy concept. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "RESEARCH SHOWS Walking 7,000 STEPS Daily Can EXTEND LIFESPAN BY Up To 10 YEARS",
-                "image_prompt": "A serene nature path winding through a lush green forest with morning mist, a silhouette of a person walking peacefully. Soft green and blue tones with golden morning light. Cinematic depth of field, inspirational wellness mood. No text, no letters, no numbers, no symbols, no logos."
+                "title": "Walking 30 minutes daily can lower heart disease risk by 35%.",
+                "caption": "Supported by research on physical activity and cardiovascular health (DOI: 10.1161/JAHA.119.014126)",
+                "image_prompt": "Soft cinematic shot of a woman's walking shoes on a bright sunlit path through a peaceful park. Morning dew on grass, soft golden light. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "SCIENTISTS CONFIRM Eating BLUEBERRIES Daily Can IMPROVE MEMORY BY 25%",
-                "image_prompt": "A beautiful close-up of fresh, vibrant blueberries with morning dew, arranged artistically with a subtle brain outline overlay in soft blue light. Deep purple and blue tones. Premium food photography style with cinematic lighting. No text, no letters, no numbers, no symbols, no logos."
+                "title": "Collagen may improve skin elasticity by up to 20% after 8 weeks.",
+                "caption": "Supported by research on oral collagen supplementation and skin aging (DOI: 10.3390/nu11102494)",
+                "image_prompt": "Soft cinematic close-up of collagen powder being stirred into a glass of water on a clean marble countertop. Fresh berries and a small plant nearby in gentle morning light. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "NEW STUDY: Just 15 MINUTES Of MEDITATION Daily Can REDUCE ANXIETY BY 40%",
-                "image_prompt": "A peaceful person meditating in a minimalist space with soft light filtering through, surrounded by a subtle calming aura. Soft lavender and white tones. Serene, premium wellness aesthetic with studio lighting. No text, no letters, no numbers, no symbols, no logos."
+                "title": "Magnesium supports better sleep and stress relief during midlife.",
+                "caption": "Supported by clinical research on magnesium and sleep quality (DOI: 10.3390/nu12072001)",
+                "image_prompt": "Soft cinematic close-up of a warm cup of chamomile tea with magnesium supplement on a bedside table. Soft evening light, cozy minimal bedroom setting. Calming wellness aesthetic, neutral tones, high-end lifestyle photography, soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             }
         ]
         
@@ -697,19 +721,20 @@ Given the following title, generate a DETAILED cinematic image prompt suitable f
 "{title}"
 
 ### REQUIREMENTS:
-- The image must visually represent the theme/topic of the title
-- Cinematic, high-quality, premium wellness aesthetic
-- Include specific visual elements, colors, lighting, and mood
+- Soft, minimal, calming wellness aesthetic
+- Bright modern kitchen or clean lifestyle setting
+- Neutral tones, gentle morning sunlight
+- High-end lifestyle photography style
+- Fresh, soothing, natural health remedy concept
 - Must end with "No text, no letters, no numbers, no symbols, no logos."
 - Should be 2-3 sentences long
-- Should be visually striking and scroll-stopping
 
 ### EXAMPLES:
-Title: "STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%"
-Prompt: "A cinematic close-up of vibrant orange slices and vitamin supplements on a clean marble surface with soft morning sunlight streaming through, surrounded by fresh citrus fruits and green herbs. Warm golden and orange tones with premium wellness aesthetic. No text, no letters, no numbers, no symbols, no logos."
+Title: "Daily ginger consumption may reduce muscle pain by up to 25% and accelerate recovery."
+Prompt: "Soft cinematic close-up of fresh ginger root being sliced on a clean white stone countertop in a bright modern kitchen. A glass of warm ginger-infused water with a lemon slice sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere, natural health remedy concept. No text, no letters, no numbers, no symbols, no logos."
 
-Title: "5 SIGNS YOUR BODY IS BEGGING FOR MORE WATER"
-Prompt: "Crystal clear water droplets splashing in ultra slow motion with a glass water bottle surrounded by fresh cucumber slices and mint leaves. Bright, clean blue and green tones with studio-quality cinematic lighting and bokeh effects. No text, no letters, no numbers, no symbols, no logos."
+Title: "Vitamin D and magnesium helps reduce depression and brain aging."
+Prompt: "Soft cinematic close-up of vitamin D and magnesium supplements on a clean white surface beside a fresh orange and a glass of water in a bright modern kitchen. Gentle morning sunlight, minimal calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos."
 
 ### OUTPUT FORMAT (JSON only, no markdown):
 {{
