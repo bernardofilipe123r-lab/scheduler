@@ -441,7 +441,7 @@ class AIBackgroundGenerator:
         prompt = f"{prompt} [ID: {unique_id}]"
         
         print(f"\n{'='*80}")
-        print(f"🎨 POST BACKGROUND GENERATION (HQ - FLUX.2 Klein 4B)")
+        print(f"🎨 POST BACKGROUND GENERATION (HQ - Z-Image-Turbo)")
         print(f"{'='*80}")
         print(f"🏷️  Brand: {brand_name}")
         print(f"📝 Prompt length: {len(prompt)} chars")
@@ -456,12 +456,13 @@ class AIBackgroundGenerator:
         
         try:
             if progress_callback:
-                progress_callback(f"Calling deAPI (FLUX.2 Klein 4B — HQ) for {brand_name}...", 30)
+                progress_callback(f"Calling deAPI (Z-Image-Turbo — HQ) for {brand_name}...", 30)
             
             api_start = time.time()
             
-            # FLUX.2 Klein 4B BF16 uses 16px steps, supports up to 1536px
-            # Post dimensions: 1080x1350 — both divisible by 16 ✓
+            # Z-Image-Turbo INT8: 16px steps, up to 2048px, 1-50 steps
+            # Higher quality than Flux1schnell, better prompt adherence
+            # Post dimensions: 1080x1350 — round to nearest 16px
             width = ((POST_WIDTH + 15) // 16) * 16   # 1080 → 1088
             height = ((POST_HEIGHT + 15) // 16) * 16  # 1350 → 1360
             
@@ -475,10 +476,10 @@ class AIBackgroundGenerator:
             
             payload = {
                 "prompt": prompt,
-                "model": "Flux2Klein4B_BF16",  # Higher quality model
+                "model": "ZImageTurbo_INT8",  # Higher quality than Flux1schnell
                 "width": width,
                 "height": height,
-                "steps": 4,  # Flux2Klein default is 4 steps
+                "steps": 8,  # More steps = better quality (supports 1-50)
                 "seed": int(unique_id, 16) % (2**31),
             }
             
