@@ -476,6 +476,7 @@ class JobManager:
         """
         Process a single brand for a POST job.
         Only generates the AI background image — composite rendering happens client-side.
+        Uses per-brand content stored in brand_outputs (title, ai_prompt).
         """
         import sys
         print(f"\n📸 process_post_brand() — {brand}", flush=True)
@@ -483,6 +484,10 @@ class JobManager:
         job = self.get_job(job_id)
         if not job:
             return {"success": False, "error": f"Job not found: {job_id}"}
+
+        # Get per-brand content from brand_outputs
+        brand_data = (job.brand_outputs or {}).get(brand, {})
+        brand_ai_prompt = brand_data.get("ai_prompt") or job.ai_prompt or job.title
 
         self.update_brand_output(job_id, brand, {
             "status": "generating",
@@ -499,8 +504,8 @@ class JobManager:
 
             reel_id = f"{job_id}_{brand}"
 
-            # Generate AI background
-            ai_prompt = job.ai_prompt or job.title
+            # Generate AI background using per-brand prompt
+            ai_prompt = brand_ai_prompt
             generator = AIBackgroundGenerator()
             print(f"   Prompt: {ai_prompt[:80]}...", flush=True)
 
@@ -582,29 +587,39 @@ class JobManager:
         
         # ── POST variant: only generate backgrounds ──────────────────
         if job.variant == "post":
-            print(f"📸 POST variant — generating backgrounds only", flush=True)
+            print(f"📸 POST variant — generating unique posts per brand", flush=True)
             results = {}
             total_brands = len(job.brands)
             try:
-                # Auto-generate image prompt if missing
-                if not job.ai_prompt:
-                    try:
-                        from app.services.content_generator_v2 import ContentGenerator
-                        cg = ContentGenerator()
-                        generated_prompt = cg.generate_image_prompt(job.title)
-                        if generated_prompt:
-                            job.ai_prompt = generated_prompt
-                            self.db.commit()
-                            print(f"   ✓ Auto-generated image prompt: {generated_prompt[:60]}...", flush=True)
-                    except Exception as e:
-                        print(f"   ⚠️ Could not auto-generate prompt: {e}", flush=True)
+                # Generate N unique posts (one per brand) in a single AI call
+                from app.services.content_generator_v2 import ContentGenerator
+                cg = ContentGenerator()
 
+                topic_hint = job.ai_prompt or None
+                print(f"   🧠 Generating {total_brands} unique posts...", flush=True)
+                self.update_job_status(job_id, "generating", "Generating unique content for each brand...", 5)
+
+                batch_posts = cg.generate_post_titles_batch(total_brands, topic_hint)
+                print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
+
+                # Store unique content per brand in brand_outputs
+                for i, brand in enumerate(job.brands):
+                    post_data = batch_posts[i] if i < len(batch_posts) else cg._fallback_post_title()
+                    self.update_brand_output(job_id, brand, {
+                        "title": post_data.get("title", job.title),
+                        "caption": post_data.get("caption", ""),
+                        "ai_prompt": post_data.get("image_prompt", ""),
+                        "status": "pending",
+                    })
+                    print(f"   📝 {brand}: {post_data.get('title', '?')[:60]}...", flush=True)
+
+                # Now generate images per brand using their unique prompts
                 for i, brand in enumerate(job.brands):
                     job = self.get_job(job_id)
                     if job.status == "cancelled":
                         return {"success": False, "error": "Job was cancelled", "results": results}
-                    progress = int((i / total_brands) * 100)
-                    self.update_job_status(job_id, "generating", f"Generating {brand}...", progress)
+                    progress = int(((i + 1) / (total_brands + 1)) * 100)
+                    self.update_job_status(job_id, "generating", f"Generating image for {brand}...", progress)
                     result = self.process_post_brand(job_id, brand)
                     results[brand] = result
 

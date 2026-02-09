@@ -28,6 +28,8 @@ export interface BrandOutput {
   progress_message?: string
   progress_percent?: number
   background_data?: string  // base64 data URL for post background
+  title?: string            // Per-brand unique title (posts)
+  ai_prompt?: string        // Per-brand image prompt (posts)
 }
 
 // Job entity

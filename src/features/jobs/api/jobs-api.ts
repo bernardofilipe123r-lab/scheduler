@@ -1,4 +1,4 @@
-import { get, post, put, del } from '@/shared/api'
+import { get, post, put, del, patch } from '@/shared/api'
 import type { Job, BrandName } from '@/shared/types'
 
 // Response types from the backend
@@ -101,5 +101,16 @@ export const jobsApi = {
       scheduled_time: scheduledTime 
     })
     return transformJob(job)
+  },
+
+  updateBrandContent: async (id: string, brand: BrandName, data: { title?: string; caption?: string }) => {
+    return patch<{ success: boolean }>(`/jobs/${id}/brand/${brand}/content`, data)
+  },
+
+  regenerateBrandImage: async (id: string, brand: BrandName, aiPrompt?: string) => {
+    return post<{ status: string; job_id: string; brand: string }>(
+      `/jobs/${id}/brand/${brand}/regenerate-image`,
+      aiPrompt ? { ai_prompt: aiPrompt } : {}
+    )
   },
 }

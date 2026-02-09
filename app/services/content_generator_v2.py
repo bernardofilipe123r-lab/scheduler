@@ -703,6 +703,159 @@ Generate now:"""
         return fallback
 
     # ============================================================
+    # BATCH POST GENERATION (unique post per brand)
+    # ============================================================
+
+    def generate_post_titles_batch(self, count: int, topic_hint: str = None) -> List[Dict]:
+        """
+        Generate N completely unique posts in a single AI call.
+        Each post has a different topic, title, caption, and image prompt.
+        Used so each brand gets a completely different post.
+
+        Args:
+            count: Number of unique posts to generate
+            topic_hint: Optional hint to guide topic selection
+
+        Returns:
+            List of dicts, each with 'title', 'caption', 'image_prompt', 'is_fallback'
+        """
+        if not self.api_key or count <= 0:
+            return [self._fallback_post_title() for _ in range(max(count, 1))]
+
+        # Get recent titles to avoid repetition
+        recent = self._get_recent_outputs()
+        history_context = ""
+        if recent:
+            recent_titles = [r.get("title", "") for r in recent if r.get("title")]
+            if recent_titles:
+                history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating):\n{chr(10).join('- ' + t for t in recent_titles[-8:])}\n"""
+
+        prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
+
+Generate EXACTLY {count} COMPLETELY DIFFERENT health-focused posts. Each post MUST cover a DIFFERENT topic category.
+
+### TARGET AUDIENCE:
+Women 35+ interested in healthy aging, energy, hormones, and longevity.
+
+### CRITICAL RULE:
+Each of the {count} posts MUST be about a DIFFERENT topic. Do NOT repeat similar themes.
+Pick {count} DIFFERENT categories from this list (one per post):
+1. Superfoods and healing ingredients (turmeric, ginger, berries, honey, cinnamon)
+2. Teas and warm drinks (green tea, chamomile, matcha, golden milk)
+3. Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics)
+4. Sleep rituals and evening routines
+5. Morning wellness routines (lemon water, journaling, light stretching)
+6. Skin health, collagen, and anti-aging nutrition
+7. Gut health, digestion, and bloating relief
+8. Hormone balance and menopause support through nutrition
+9. Stress relief and mood-boosting foods/habits
+10. Hydration and detox drinks
+11. Brain health and memory-supporting nutrients
+12. Heart-healthy foods and natural remedies
+
+### WHAT MAKES A GREAT POST TITLE:
+- A short, clear health statement written in simple, wellness-friendly tone
+- Focused on one or two main benefits
+- Some titles may include percentages for extra impact
+- Positive, empowering, and slightly exaggerated to create scroll-stop engagement
+- Do NOT lie, but dramatize slightly to spark discussion
+
+### WHAT TO AVOID:
+- Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
+- Question formats or lists
+- All-caps screaming style — use sentence case
+- Intense exercise or gym/strength training topics
+
+### CAPTION REQUIREMENTS:
+- 1-2 sentences expanding on the title
+- MUST include a real DOI (Digital Object Identifier) linking to research
+
+### IMAGE PROMPT REQUIREMENTS:
+- Soft, minimal, calming wellness aesthetic
+- Each image prompt MUST be visually DIFFERENT (different setting, different ingredients)
+- Neutral tones, gentle morning sunlight
+- High-end lifestyle photography style
+- Must end with: "No text, no letters, no numbers, no symbols, no logos."
+
+{history_context}
+
+{"Topic hint: " + topic_hint if topic_hint else ""}
+
+### OUTPUT FORMAT (JSON array, no markdown):
+[
+  {{
+    "title": "First health statement title.",
+    "caption": "Short caption with DOI reference (DOI: 10.xxxx/xxxxx)",
+    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
+  }},
+  {{
+    "title": "Second completely different health statement.",
+    "caption": "Different caption with different DOI reference (DOI: 10.xxxx/xxxxx)",
+    "image_prompt": "Completely different setting and subject. No text, no letters, no numbers, no symbols, no logos."
+  }}
+]
+
+Generate exactly {count} posts now:"""
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.95,
+                    "max_tokens": 2000
+                },
+                timeout=60
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                content_text = data["choices"][0]["message"]["content"].strip()
+
+                # Clean up markdown if present
+                if content_text.startswith("```"):
+                    content_text = content_text.split("```")[1]
+                    if content_text.startswith("json"):
+                        content_text = content_text[4:]
+                    content_text = content_text.strip()
+
+                try:
+                    results = json.loads(content_text)
+                    if isinstance(results, list) and len(results) >= count:
+                        for r in results:
+                            r["is_fallback"] = False
+                            self._add_to_history({"title": r.get("title", "")})
+                        return results[:count]
+                    elif isinstance(results, list) and len(results) > 0:
+                        # Got fewer than requested — pad with fallbacks
+                        for r in results:
+                            r["is_fallback"] = False
+                            self._add_to_history({"title": r.get("title", "")})
+                        while len(results) < count:
+                            results.append(self._fallback_post_title())
+                        return results
+                    else:
+                        print(f"⚠️ Unexpected batch response format", flush=True)
+                        return [self._fallback_post_title() for _ in range(count)]
+                except json.JSONDecodeError as e:
+                    print(f"⚠️ JSON parse error in batch post generation: {e}", flush=True)
+                    return [self._fallback_post_title() for _ in range(count)]
+            else:
+                print(f"⚠️ DeepSeek API error: {response.status_code}", flush=True)
+                return [self._fallback_post_title() for _ in range(count)]
+
+        except Exception as e:
+            print(f"⚠️ Batch post generation error: {e}", flush=True)
+            return [self._fallback_post_title() for _ in range(count)]
+
+    # ============================================================
     # IMAGE PROMPT GENERATION (standalone, from title only)
     # ============================================================
 

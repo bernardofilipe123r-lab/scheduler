@@ -131,3 +131,33 @@ export function useUpdateBrandStatus() {
     },
   })
 }
+
+export function useUpdateBrandContent() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, brand, data }: {
+      id: string
+      brand: BrandName
+      data: { title?: string; caption?: string }
+    }) => jobsApi.updateBrandContent(id, brand, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
+    },
+  })
+}
+
+export function useRegenerateBrandImage() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, brand, aiPrompt }: {
+      id: string
+      brand: BrandName
+      aiPrompt?: string
+    }) => jobsApi.regenerateBrandImage(id, brand, aiPrompt),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
+    },
+  })
+}

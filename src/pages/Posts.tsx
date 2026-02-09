@@ -148,10 +148,6 @@ export function PostsPage() {
 
   // ── Manual submit ──────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      toast.error('Enter a title')
-      return
-    }
     if (selectedBrands.length === 0) {
       toast.error('Select at least one brand')
       return
@@ -159,11 +155,11 @@ export function PostsPage() {
     setIsCreating(true)
     try {
       const job = await createJob.mutateAsync({
-        title: title.trim(),
+        title: title.trim() || 'Auto-generated posts',
         content_lines: [],
         brands: selectedBrands,
         variant: 'post',
-        ai_prompt: aiPrompt.trim() || undefined,
+        ai_prompt: aiPrompt.trim() || title.trim() || undefined,
         cta_type: 'none',
       })
       toast.success('Post job created!')
@@ -192,9 +188,9 @@ export function PostsPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Create Post</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Create Posts</h1>
         <p className="text-gray-500 text-sm mt-1">
-          Generate AI background images for all brands and schedule posts.
+          Each brand gets a unique post with different topic, title, and image.
         </p>
       </div>
 
@@ -204,13 +200,16 @@ export function PostsPage() {
           {/* Title */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Post Title
+              Topic Hint
+              <span className="text-xs font-normal text-gray-400 ml-1">
+                (optional — AI picks topics if empty)
+              </span>
             </label>
             <textarea
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              rows={3}
-              placeholder="Enter your post title..."
+              rows={2}
+              placeholder="e.g. focus on teas and sleep rituals"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <button
@@ -444,7 +443,7 @@ export function PostsPage() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isCreating || !title.trim() || selectedBrands.length === 0}
+                disabled={isCreating || selectedBrands.length === 0}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 font-medium disabled:opacity-50"
               >
                 {isCreating ? (
@@ -456,7 +455,7 @@ export function PostsPage() {
               </button>
             </div>
             <p className="text-xs text-gray-400 text-center">
-              💡 <strong>Auto Generate</strong> fills title & prompt — then review and click <strong>Generate Posts</strong>
+              💡 Click <strong>Generate Posts</strong> directly — each brand gets a unique title & image automatically
             </p>
           </div>
         </div>

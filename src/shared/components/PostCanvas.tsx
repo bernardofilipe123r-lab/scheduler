@@ -347,6 +347,7 @@ interface PostCanvasProps {
   backgroundImage: string | null
   settings: GeneralSettings
   scale?: number
+  logoUrl?: string | null
   stageRef?: (node: Konva.Stage | null) => void
 }
 
@@ -360,6 +361,7 @@ export function PostCanvas({
   backgroundImage,
   settings,
   scale = GRID_PREVIEW_SCALE,
+  logoUrl = null,
   stageRef,
 }: PostCanvasProps) {
   const gl = settings.layout
@@ -394,7 +396,7 @@ export function PostCanvas({
         )}
         <GradientOverlay />
         <LogoWithLines
-          logoUrl={null}
+          logoUrl={logoUrl || null}
           y={ly}
           barWidth={settings.barWidth}
           titleWidth={CANVAS_WIDTH - gl.titlePaddingX * 2}

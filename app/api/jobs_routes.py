@@ -638,3 +638,102 @@ async def update_brand_status(job_id: str, brand: str, request: BrandStatusUpdat
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update brand status: {str(e)}"
         )
+
+
+# ── Per-brand content update (title, caption) ────────────────────────
+
+class BrandContentUpdate(BaseModel):
+    """Update a brand's title and/or caption."""
+    title: Optional[str] = None
+    caption: Optional[str] = None
+
+
+@router.patch(
+    "/{job_id}/brand/{brand}/content",
+    summary="Update a brand's title and/or caption"
+)
+async def update_brand_content(job_id: str, brand: str, request: BrandContentUpdate):
+    """Update the per-brand title and/or caption stored in brand_outputs."""
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            job = manager.get_job(job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+            if brand not in job.brands:
+                raise HTTPException(status_code=400, detail=f"Brand '{brand}' not in job")
+
+            updates: Dict[str, Any] = {}
+            if request.title is not None:
+                updates["title"] = request.title
+            if request.caption is not None:
+                updates["caption"] = request.caption
+
+            if updates:
+                manager.update_brand_output(job_id, brand, updates)
+
+            return {
+                "success": True,
+                "job_id": job_id,
+                "brand": brand,
+                "message": f"Brand content updated",
+                "updates": updates,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Per-brand image regeneration ─────────────────────────────────────
+
+class BrandImageRegenRequest(BaseModel):
+    """Regenerate a single brand's background image."""
+    ai_prompt: Optional[str] = None  # Custom prompt override; if None uses stored prompt
+
+
+@router.post(
+    "/{job_id}/brand/{brand}/regenerate-image",
+    summary="Regenerate a single brand's background image"
+)
+async def regenerate_brand_image(
+    job_id: str,
+    brand: str,
+    request: Optional[BrandImageRegenRequest] = None,
+    background_tasks: BackgroundTasks = None,
+):
+    """
+    Regenerate only the background image for one brand.
+    Optionally supply a custom AI prompt; otherwise the stored per-brand prompt is used.
+    """
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            job = manager.get_job(job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+            if brand not in job.brands:
+                raise HTTPException(status_code=400, detail=f"Brand '{brand}' not in job")
+
+            # If custom prompt provided, store it
+            if request and request.ai_prompt:
+                manager.update_brand_output(job_id, brand, {"ai_prompt": request.ai_prompt})
+
+            manager.update_brand_output(job_id, brand, {"status": "queued"})
+
+        def regen_async():
+            with get_db_session() as db2:
+                mgr = JobManager(db2)
+                mgr.process_post_brand(job_id, brand)
+
+        if background_tasks:
+            background_tasks.add_task(regen_async)
+            return {"status": "queued", "job_id": job_id, "brand": brand}
+        else:
+            regen_async()
+            return {"status": "completed", "job_id": job_id, "brand": brand}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
