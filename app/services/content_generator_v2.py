@@ -545,38 +545,53 @@ class ContentGeneratorV2:
         
         prompt = f"""You are a viral health content creator specializing in Instagram image posts.
 
-Generate a SINGLE powerful statement-based title for a viral Instagram POST (not a reel).
+Generate a SINGLE powerful health statement title and a matching Instagram caption with a real scientific reference.
 
 ### WHAT MAKES A GREAT POST TITLE:
-- Statement of fact with specific data (percentages, timeframes, studies)
-- Reads like a health publication headline
-- Contains actionable or surprising information
-- Makes reader want to share immediately
+- A short, clear health statement about a food, supplement, habit, or lifestyle factor
+- Some titles include specific percentages for extra impact
+- Written to attract attention, spark discussion, and feel slightly controversial or surprising
+- Do NOT lie, but exaggerate slightly to create engagement (comments, shares, saves)
 
 ### EXAMPLE POST TITLES (learn the pattern):
-- "STUDY REVEALS Vitamin C SUPPLEMENTATION CAN REDUCE STRESS & CORTISOL BY 40%"
-- "RESEARCH SHOWS Taking COLD SHOWERS For 2 WEEKS Can BOOST IMMUNE FUNCTION BY 29%"  
-- "SCIENTISTS CONFIRM Walking 10 MINUTES After MEALS Can LOWER BLOOD SUGAR BY 22%"
-- "NEW STUDY: Eating FERMENTED FOODS Daily Can REDUCE ANXIETY SYMPTOMS BY 35%"
-- "DOCTORS RECOMMEND This 5-MINUTE MORNING ROUTINE To BOOST METABOLISM All Day"
-- "HARVARD STUDY: People Who NAP Have 37% LOWER RISK Of Heart Disease"
-- "SLEEP EXPERTS REVEAL: Sleeping On Your LEFT SIDE IMPROVES DIGESTION By 40%"
-- "SHOCKING STUDY: Just 3 MINUTES Of DEEP BREATHING Can LOWER BLOOD PRESSURE Instantly"
+- "Omega-3 may reduce anxiety symptoms by up to 30% and support brain health."
+- "Daily walking can lower depression risk by 25% and improve longevity."
+- "Probiotics may improve gut health by 40% and strengthen immunity."
+- "Meditation can reduce stress levels by 35% and improve sleep quality."
+- "Berries may improve memory performance by around 20% and protect the brain."
+- "Magnesium supports relaxation, better sleep, and nervous system balance."
+- "Vitamin D plays a key role in mood regulation and immune defense."
+- "Green tea contains antioxidants that support focus and heart health."
+- "Turmeric may help reduce inflammation and protect joint function."
+- "Strength training improves metabolism, mood, and overall resilience."
+- "Adequate hydration boosts energy, brain function, and skin health."
+- "Dark chocolate in moderation may support heart health and mood."
+- "Cold exposure may improve circulation and reduce inflammation."
+- "Creatine supports muscle strength and may benefit brain energy."
+- "Vitamin D and magnesium helps reduce depression and brain aging."
 
 ### WHAT TO AVOID:
 - Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
 - Question formats
 - Lists or numbered formats (those are for reels)
+- All-caps screaming style — use sentence case with key words capitalized naturally
 - Vague claims without specifics
+
+### CAPTION REQUIREMENTS:
+- Write a short Instagram caption that expands on the title with 1-2 sentences
+- MUST include a scientific reference supported by a real published study
+- MUST contain a valid DOI (Digital Object Identifier) linking to the research source
+- Keep it concise and credible
 
 {history_context}
 
-{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic."}
+{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic. Create a mix of: nutrition, supplements, exercise, sleep, mental health, immunity, brain health, inflammation."}
 
 ### OUTPUT FORMAT (JSON only, no markdown):
 {{
-    "title": "YOUR STATEMENT-BASED TITLE IN ALL CAPS",
-    "image_prompt": "A detailed cinematic image prompt for DALL-E that matches the title theme. Should be visually striking, wellness-focused, and include 'No text, no letters, no numbers, no symbols, no logos.' at the end"
+    "title": "Your health statement title here.",
+    "caption": "Short caption expanding on the claim. Supported by research (DOI: 10.xxxx/xxxxx)",
+    "image_prompt": "A detailed cinematic image prompt that matches the title theme. Visually striking, wellness-focused. No text, no letters, no numbers, no symbols, no logos."
 }}
 
 Generate now:"""

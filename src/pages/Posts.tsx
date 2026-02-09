@@ -74,7 +74,7 @@ export function PostsPage() {
   const handleGenerateTitle = async () => {
     setIsGeneratingTitle(true)
     try {
-      const resp = await fetch('/reels/auto-generate-content', {
+      const resp = await fetch('/reels/generate-post-title', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -117,13 +117,12 @@ export function PostsPage() {
     }
   }
 
-  // ── Auto: generate title + prompt + create job ─────────────────────
+  // ── Auto: generate title + prompt (user creates job manually) ────
   const handleAutoGenerate = async () => {
-    setIsCreating(true)
+    setIsGeneratingTitle(true)
     try {
-      // 1) Auto-generate viral content (title + content + image prompt)
-      toast.loading('Generating viral content...', { id: 'auto' })
-      const resp = await fetch('/reels/auto-generate-content', {
+      toast.loading('Generating post content...', { id: 'auto' })
+      const resp = await fetch('/reels/generate-post-title', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -133,28 +132,17 @@ export function PostsPage() {
         throw new Error(err.detail || 'Failed to generate content')
       }
       const data = await resp.json()
-      const generatedTitle = data.title
-      const generatedPrompt = data.image_prompt || ''
-      if (!generatedTitle) throw new Error('No title generated')
-      setTitle(generatedTitle)
-      setAiPrompt(generatedPrompt)
-
-      // 2) Create job
-      toast.loading('Creating job...', { id: 'auto' })
-      const job = await createJob.mutateAsync({
-        title: generatedTitle,
-        content_lines: [],
-        brands: selectedBrands,
-        variant: 'post',
-        ai_prompt: generatedPrompt,
-        cta_type: 'none',
+      if (!data.title) throw new Error('No title generated')
+      setTitle(data.title)
+      if (data.image_prompt) setAiPrompt(data.image_prompt)
+      toast.success('Title & prompt ready! Review and click Generate Posts.', {
+        id: 'auto',
+        duration: 5000,
       })
-      toast.success('Post job created!', { id: 'auto' })
-      navigate(`/job/${job.id}`)
     } catch (err: any) {
       toast.error(err?.message || 'Auto generate failed', { id: 'auto' })
     } finally {
-      setIsCreating(false)
+      setIsGeneratingTitle(false)
     }
   }
 
@@ -440,31 +428,36 @@ export function PostsPage() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={handleAutoGenerate}
-              disabled={isCreating || selectedBrands.length === 0}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-primary-600 text-white rounded-xl hover:from-purple-700 hover:to-primary-700 font-medium disabled:opacity-50"
-            >
-              {isCreating ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Wand2 className="w-5 h-5" />
-              )}
-              Auto Generate
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isCreating || !title.trim() || selectedBrands.length === 0}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 font-medium disabled:opacity-50"
-            >
-              {isCreating ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <FileImage className="w-5 h-5" />
-              )}
-              Generate Posts
-            </button>
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              <button
+                onClick={handleAutoGenerate}
+                disabled={isCreating || isGeneratingTitle || selectedBrands.length === 0}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-primary-600 text-white rounded-xl hover:from-purple-700 hover:to-primary-700 font-medium disabled:opacity-50"
+              >
+                {isGeneratingTitle ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Wand2 className="w-5 h-5" />
+                )}
+                Auto Generate
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isCreating || !title.trim() || selectedBrands.length === 0}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 font-medium disabled:opacity-50"
+              >
+                {isCreating ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <FileImage className="w-5 h-5" />
+                )}
+                Generate Posts
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 text-center">
+              💡 <strong>Auto Generate</strong> fills title & prompt — then review and click <strong>Generate Posts</strong>
+            </p>
           </div>
         </div>
 
