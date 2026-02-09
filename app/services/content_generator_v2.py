@@ -599,10 +599,18 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 - Anything that feels intimidating or requires major lifestyle changes
 
 ### CAPTION REQUIREMENTS:
-- Write a short Instagram caption that expands on the title with 1-2 sentences
-- MUST include a scientific reference supported by a real peer-reviewed study
-- MUST contain a valid DOI (Digital Object Identifier) linking to the research source
-- Keep it concise and credible
+Write a full Instagram caption (4-5 paragraphs) that:
+- Paragraph 1: Hook — expand on the title with a surprising or counterintuitive angle
+- Paragraph 2-3: Explain the science/mechanism in accessible, wellness-friendly language. Be specific about what happens in the body (metabolism, organs, brain chemistry, skin, energy, etc.)
+- Paragraph 4: Summarize the takeaway — what the reader can expect if they take action
+- After the paragraphs, add a "Source:" section with a REAL, EXISTING academic reference:
+  Author(s). (Year). Title. Journal, Volume(Issue), Pages.
+  DOI: 10.xxxx/xxxxx
+  THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org. Use well-known published studies related to the topic.
+- End with a disclaimer block:
+  ⚠️ Disclaimer:
+  This content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.
+- Separate each section with a blank line for readability
 
 {history_context}
 
@@ -619,7 +627,7 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 ### OUTPUT FORMAT (JSON only, no markdown):
 {{
     "title": "Your health statement title here.",
-    "caption": "Short caption expanding on the claim. Supported by research (DOI: 10.xxxx/xxxxx)",
+    "caption": "Hook paragraph.\\n\\nExplanation paragraphs...\\n\\nTakeaway.\\n\\nSource:\\nAuthor, A. (Year). Title. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
     "image_prompt": "Soft cinematic close-up description matching the title theme. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere, natural health remedy concept. No text, no letters, no numbers, no symbols, no logos."
 }}
 
@@ -638,7 +646,7 @@ Generate now:"""
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.9,
-                    "max_tokens": 500
+                    "max_tokens": 2000
                 },
                 timeout=30
             )
@@ -678,22 +686,22 @@ Generate now:"""
         fallbacks = [
             {
                 "title": "Vitamin D and magnesium helps reduce depression and brain aging.",
-                "caption": "Supported by clinical research on vitamin D supplementation and mood (DOI: 10.1001/jamainternmed.2019.3185)",
+                "caption": "Most people take vitamin D for bone health, but its role in brain function and mood regulation is far more significant than commonly understood. Vitamin D receptors are found throughout the brain, including regions involved in emotional processing and memory.\n\nWhen levels drop below optimal, your nervous system becomes more vulnerable to inflammation and oxidative stress — both key drivers of depressive symptoms and accelerated cognitive decline. Magnesium amplifies this effect because it's required to convert vitamin D into its active form.\n\nTogether, these two nutrients support serotonin production, reduce neuroinflammation, and help maintain synaptic plasticity — the brain's ability to form new connections and adapt.\n\nConsistent supplementation can lead to noticeable improvements in mood stability, mental clarity, and long-term brain resilience.\n\nSource:\nSarris, J., Murphy, J., Mischoulon, D., et al. (2016). Adjunctive Nutraceuticals for Depression: A Systematic Review and Meta-Analyses. American Journal of Psychiatry, 173(6), 575–587.\nDOI: 10.1176/appi.ajp.2016.15091228\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of vitamin D supplements and magnesium capsules arranged on a clean white stone countertop in a bright modern kitchen. A glass of warm lemon water sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
                 "title": "A cup of chamomile tea before bed may improve sleep quality by 30%.",
-                "caption": "Supported by research on chamomile extract and sleep improvement (DOI: 10.1016/j.jep.2017.03.044)",
+                "caption": "Chamomile is one of the most studied herbal remedies for sleep, and the results are more impressive than most people realize. The key compound — apigenin — binds to specific receptors in the brain that reduce anxiety and initiate sedation naturally.\n\nDrinking chamomile tea 30–60 minutes before bed helps lower cortisol levels, calm the nervous system, and promote the transition into deeper sleep stages. Unlike synthetic sleep aids, chamomile doesn't suppress REM sleep or create dependency.\n\nOver time, consistent use has been shown to improve overall sleep quality scores by up to 30%, with participants reporting fewer nighttime awakenings and feeling more rested upon waking.\n\nA simple nightly ritual that costs almost nothing can fundamentally change how well you rest and recover.\n\nSource:\nSrivastava, J. K., Shankar, E., & Gupta, S. (2010). Chamomile: A herbal medicine of the past with bright future. Molecular Medicine Reports, 3(6), 895–901.\nDOI: 10.3892/mmr.2010.377\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of a steaming cup of chamomile tea on a wooden bedside table with dried chamomile flowers scattered around. Warm evening light, cozy minimal setting. Calming wellness aesthetic, neutral tones, high-end lifestyle photography, soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
                 "title": "Collagen may improve skin elasticity by up to 20% after 8 weeks.",
-                "caption": "Supported by research on oral collagen supplementation and skin aging (DOI: 10.3390/nu11102494)",
+                "caption": "As we age, collagen production drops by roughly 1% per year after 25. This gradual loss is what drives wrinkles, sagging, and that loss of firmness that becomes more noticeable in your 30s and beyond.\n\nOral collagen peptides work differently from topical creams — they're absorbed into the bloodstream and stimulate your body's own collagen-producing cells (fibroblasts) to increase production from within. This means the effects are systemic, not just surface-level.\n\nClinical trials show that after 8 weeks of daily supplementation, skin elasticity can improve by up to 20%, with visible reductions in fine lines and improved hydration levels across the dermis.\n\nThe key is consistency. Daily intake of hydrolyzed collagen peptides gives your body the building blocks it needs to repair and rebuild skin structure at a cellular level.\n\nSource:\nBolke, L., Schlippe, G., Gerß, J., & Voss, W. (2019). A Collagen Supplement Improves Skin Hydration, Elasticity, Roughness, and Density: Results of a Randomized, Placebo-Controlled, Blind Study. Nutrients, 11(10), 2494.\nDOI: 10.3390/nu11102494\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of collagen powder being stirred into a glass of water on a clean marble countertop. Fresh berries and a small plant nearby in gentle morning light. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
                 "title": "Adding turmeric to your meals may lower joint pain and inflammation.",
-                "caption": "Supported by research on curcumin supplementation and inflammatory markers (DOI: 10.1016/j.jfda.2014.01.005)",
+                "caption": "Turmeric's active compound — curcumin — is one of the most researched natural anti-inflammatories in modern nutrition science. It works by inhibiting NF-κB, a molecule that triggers inflammatory gene expression in nearly every cell of the body.\n\nChronic low-grade inflammation is linked to joint stiffness, fatigue, skin issues, and accelerated aging. By incorporating turmeric into daily meals — especially paired with black pepper (which increases absorption by 2000%) — you can meaningfully reduce systemic inflammatory markers.\n\nStudies show that curcumin supplementation can match the effectiveness of some over-the-counter anti-inflammatory drugs for joint pain, without the gastrointestinal side effects.\n\nWhether added to soups, smoothies, or golden milk, consistent turmeric intake supports long-term joint health and overall inflammatory balance.\n\nSource:\nHewlings, S. J., & Kalman, D. S. (2017). Curcumin: A Review of Its Effects on Human Health. Foods, 6(10), 92.\nDOI: 10.3390/foods6100092\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
                 "image_prompt": "Soft cinematic close-up of golden turmeric powder on a small ceramic spoon beside a warm glass of golden milk on a clean white countertop. Gentle morning sunlight, a cinnamon stick and fresh turmeric root nearby. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos."
             }
         ]
@@ -767,8 +775,18 @@ Pick {count} DIFFERENT categories from this list (one per post):
 - Intense exercise or gym/strength training topics
 
 ### CAPTION REQUIREMENTS:
-- 1-2 sentences expanding on the title
-- MUST include a real DOI (Digital Object Identifier) linking to research
+Write a full Instagram caption (4-5 paragraphs) that:
+- Paragraph 1: Hook — expand on the title with a surprising or counterintuitive angle
+- Paragraph 2-3: Explain the science/mechanism in accessible, wellness-friendly language. Be specific about what happens in the body (metabolism, organs, brain chemistry, skin, energy, etc.)
+- Paragraph 4: Summarize the takeaway — what the reader can expect if they take action
+- After the paragraphs, add a "Source:" section with a REAL, EXISTING academic reference in this format:
+  Author(s). (Year). Title. Journal, Volume(Issue), Pages.
+  DOI: 10.xxxx/xxxxx
+  THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org. Use well-known published studies. The study must be related to the topic (e.g. if the post is about berries and brain health, cite a study about berry consumption and cognitive function).
+- End with a disclaimer block:
+  ⚠️ Disclaimer:
+  This content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.
+- Separate each section with a blank line for readability
 
 ### IMAGE PROMPT REQUIREMENTS:
 - Soft, minimal, calming wellness aesthetic
@@ -785,12 +803,12 @@ Pick {count} DIFFERENT categories from this list (one per post):
 [
   {{
     "title": "First health statement title.",
-    "caption": "Short caption with DOI reference (DOI: 10.xxxx/xxxxx)",
+    "caption": "Hook paragraph expanding on the title with a surprising angle.\\n\\nExplanation paragraph about what happens in the body — metabolism, organs, brain chemistry, etc.\\n\\nMore detail about the mechanism and benefits. Be specific and educational.\\n\\nTakeaway paragraph — what the reader can expect.\\n\\nSource:\\nAuthor, A. B., & Author, C. D. (Year). Study title. Journal Name, Volume(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
     "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
   }},
   {{
     "title": "Second completely different health statement.",
-    "caption": "Different caption with different DOI reference (DOI: 10.xxxx/xxxxx)",
+    "caption": "Different hook paragraph...\\n\\nDifferent explanation...\\n\\nMore detail...\\n\\nTakeaway...\\n\\nSource:\\nDifferent Author. (Year). Different study. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
     "image_prompt": "Completely different setting and subject. No text, no letters, no numbers, no symbols, no logos."
   }}
 ]
@@ -810,9 +828,9 @@ Generate exactly {count} posts now:"""
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.95,
-                    "max_tokens": 2000
+                    "max_tokens": 6000
                 },
-                timeout=60
+                timeout=90
             )
 
             if response.status_code == 200:

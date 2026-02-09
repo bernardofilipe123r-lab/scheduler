@@ -1051,6 +1051,25 @@ async def get_scheduled_posts(user_id: Optional[str] = None):
         formatted_schedules = []
         for schedule in schedules:
             metadata = schedule.get("metadata", {})
+            
+            # Convert filesystem paths to URL paths
+            raw_thumb = metadata.get("thumbnail_path")
+            thumb_url = None
+            if raw_thumb:
+                # Extract '/output/...' portion from full filesystem path
+                if "/output/" in raw_thumb:
+                    thumb_url = "/output/" + raw_thumb.split("/output/", 1)[1]
+                else:
+                    thumb_url = raw_thumb  # Already a relative URL
+            
+            raw_video = metadata.get("video_path")
+            video_url = None
+            if raw_video:
+                if "/output/" in raw_video:
+                    video_url = "/output/" + raw_video.split("/output/", 1)[1]
+                else:
+                    video_url = raw_video
+            
             formatted_schedules.append({
                 "schedule_id": schedule.get("schedule_id"),
                 "reel_id": schedule.get("reel_id"),
@@ -1067,8 +1086,8 @@ async def get_scheduled_posts(user_id: Optional[str] = None):
                     "brand": metadata.get("brand"),
                     "variant": metadata.get("variant"),
                     "platforms": metadata.get("platforms"),
-                    "video_path": metadata.get("video_path"),
-                    "thumbnail_path": metadata.get("thumbnail_path"),
+                    "video_path": video_url,
+                    "thumbnail_path": thumb_url,
                     "post_ids": metadata.get("post_ids"),
                     "publish_results": metadata.get("publish_results"),
                 }
@@ -1486,6 +1505,7 @@ async def get_all_next_slots():
 class SchedulePostImageRequest(BaseModel):
     brand: str
     title: str
+    caption: str = ""  # Full caption text for Instagram
     image_data: str  # base64 PNG (may include data:image/png;base64, prefix)
     schedule_time: str  # ISO datetime string
 
@@ -1533,7 +1553,7 @@ async def schedule_post_image(request: SchedulePostImageRequest):
             scheduled_time=schedule_dt,
             video_path=None,
             thumbnail_path=image_path,
-            caption=request.title,
+            caption=request.caption or request.title,
             platforms=["instagram", "facebook"],
             user_name="Web Interface User",
             brand=request.brand,

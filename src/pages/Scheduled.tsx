@@ -970,9 +970,12 @@ export function ScheduledPage() {
               {selectedPost.title}
             </h3>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className={selectedPost.metadata?.variant === 'post' ? '' : 'grid grid-cols-2 gap-4'}>
               {selectedPost.thumbnail_path && (
-                <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
+                <div className={clsx(
+                  'bg-gray-100 rounded-lg overflow-hidden',
+                  selectedPost.metadata?.variant === 'post' ? 'aspect-[4/5] max-w-[280px]' : 'aspect-[9/16]'
+                )}>
                   <img
                     src={selectedPost.thumbnail_path}
                     alt="Thumbnail"
