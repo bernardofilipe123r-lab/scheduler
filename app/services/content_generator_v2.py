@@ -558,28 +558,35 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 - Do NOT lie, but dramatize slightly to spark discussion (comments, shares, saves)
 
 ### TOPICS TO COVER (pick one):
-- Hormone balance and menopause support
-- Bone strength and osteoporosis prevention
-- Heart health
-- Brain aging and memory
-- Stress, anxiety, and mood
-- Sleep improvement
-- Weight management and metabolism
-- Gut health and bloating
-- Skin aging and collagen support
-- Immune support and inflammation reduction
+- Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)
+- Teas and warm drinks (green tea, chamomile, matcha, golden milk, herbal infusions)
+- Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics, ashwagandha)
+- Sleep rituals and evening routines
+- Morning wellness routines (lemon water, journaling, light stretching)
+- Skin health, collagen, and anti-aging nutrition
+- Gut health, digestion, and bloating relief
+- Hormone balance and menopause support through nutrition
+- Stress relief and mood-boosting foods/habits
+- Hydration and detox drinks
+- Brain health and memory-supporting nutrients
+- Heart-healthy foods and natural remedies
 
 ### EXAMPLE POST TITLES (learn the pattern):
 - "Vitamin D and magnesium helps reduce depression and brain aging."
 - "Collagen may improve skin elasticity by up to 20% after 8 weeks."
 - "Magnesium supports better sleep and stress relief during midlife."
-- "Walking 30 minutes daily can lower heart disease risk by 35%."
+- "A cup of chamomile tea before bed may improve sleep quality by 30%."
 - "Probiotics may reduce bloating and support gut health after 40."
-- "Omega-3 supports joint flexibility and may reduce inflammation."
-- "Strength training helps preserve bone density during menopause."
-- "Adequate hydration boosts energy, brain function, and skin health."
+- "Omega-3 from salmon and walnuts may reduce inflammation by 25%."
+- "Adding turmeric to your meals may lower joint pain and inflammation."
+- "Drinking warm lemon water each morning supports digestion and energy."
 - "Ashwagandha may reduce cortisol levels and support hormonal balance."
 - "Green tea antioxidants support metabolism and healthy aging."
+- "Eating berries daily may slow brain aging and boost memory."
+- "A spoonful of honey and cinnamon may support immune health."
+- "Dark chocolate in moderation may improve mood and heart health."
+- "Bone broth contains collagen that supports skin and joint health."
+- "Flaxseed may help balance estrogen levels during menopause."
 
 ### WHAT TO AVOID:
 - Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
@@ -588,6 +595,8 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 - All-caps screaming style — use sentence case
 - Vague claims without specifics
 - Content that does not resonate with women 35+
+- Intense exercise or gym/strength training topics — keep it soft, consumable, and lifestyle-oriented
+- Anything that feels intimidating or requires major lifestyle changes
 
 ### CAPTION REQUIREMENTS:
 - Write a short Instagram caption that expands on the title with 1-2 sentences
@@ -597,7 +606,7 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 
 {history_context}
 
-{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic for women 35+. Mix: hormones, menopause, bone health, heart, brain aging, stress, sleep, metabolism, gut health, skin, collagen, immunity, inflammation."}
+{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic for women 35+. Focus on: foods, superfoods, teas, warm drinks, supplements, vitamins, collagen, sleep rituals, morning routines, skin nutrition, gut health, bloating, hormone-balancing foods, mood-boosting nutrients, hydration, detox, brain-healthy foods, heart-healthy ingredients."}
 
 ### IMAGE PROMPT REQUIREMENTS:
 - Soft, minimal, calming wellness aesthetic
@@ -670,12 +679,12 @@ Generate now:"""
             {
                 "title": "Vitamin D and magnesium helps reduce depression and brain aging.",
                 "caption": "Supported by clinical research on vitamin D supplementation and mood (DOI: 10.1001/jamainternmed.2019.3185)",
-                "image_prompt": "Soft cinematic close-up of vitamin D supplements and magnesium capsules arranged on a clean white stone countertop in a bright modern kitchen. A glass of warm lemon water sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere, natural health remedy concept. No text, no letters, no numbers, no symbols, no logos."
+                "image_prompt": "Soft cinematic close-up of vitamin D supplements and magnesium capsules arranged on a clean white stone countertop in a bright modern kitchen. A glass of warm lemon water sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "Walking 30 minutes daily can lower heart disease risk by 35%.",
-                "caption": "Supported by research on physical activity and cardiovascular health (DOI: 10.1161/JAHA.119.014126)",
-                "image_prompt": "Soft cinematic shot of a woman's walking shoes on a bright sunlit path through a peaceful park. Morning dew on grass, soft golden light. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
+                "title": "A cup of chamomile tea before bed may improve sleep quality by 30%.",
+                "caption": "Supported by research on chamomile extract and sleep improvement (DOI: 10.1016/j.jep.2017.03.044)",
+                "image_prompt": "Soft cinematic close-up of a steaming cup of chamomile tea on a wooden bedside table with dried chamomile flowers scattered around. Warm evening light, cozy minimal setting. Calming wellness aesthetic, neutral tones, high-end lifestyle photography, soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
                 "title": "Collagen may improve skin elasticity by up to 20% after 8 weeks.",
@@ -683,9 +692,9 @@ Generate now:"""
                 "image_prompt": "Soft cinematic close-up of collagen powder being stirred into a glass of water on a clean marble countertop. Fresh berries and a small plant nearby in gentle morning light. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
             },
             {
-                "title": "Magnesium supports better sleep and stress relief during midlife.",
-                "caption": "Supported by clinical research on magnesium and sleep quality (DOI: 10.3390/nu12072001)",
-                "image_prompt": "Soft cinematic close-up of a warm cup of chamomile tea with magnesium supplement on a bedside table. Soft evening light, cozy minimal bedroom setting. Calming wellness aesthetic, neutral tones, high-end lifestyle photography, soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
+                "title": "Adding turmeric to your meals may lower joint pain and inflammation.",
+                "caption": "Supported by research on curcumin supplementation and inflammatory markers (DOI: 10.1016/j.jfda.2014.01.005)",
+                "image_prompt": "Soft cinematic close-up of golden turmeric powder on a small ceramic spoon beside a warm glass of golden milk on a clean white countertop. Gentle morning sunlight, a cinnamon stick and fresh turmeric root nearby. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos."
             }
         ]
         
