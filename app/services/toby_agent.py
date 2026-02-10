@@ -309,25 +309,25 @@ class TobyAgent:
 
         # 2. External trending content
         try:
-            from app.services.trend_scouf"get_trending_for_toby(min_likes=200, limit=15, content_type={content_type}) — querying TrendingContent DB", "📡", "api")
+            from app.services.trend_scout import get_trend_scout
+            scout = get_trend_scout()
+            toby_log("API: TrendScout", f"get_trending_for_toby(min_likes=200, limit=15, content_type={content_type}) — querying TrendingContent DB", "📡", "api")
             intel["trending"] = scout.get_trending_for_toby(min_likes=200, limit=15, content_type=content_type)
-            toby_log("Data: Trending", f"Found {len(intel['trending'])} trending pieces for {type_label}endingContent DB", "📡", "api")
-            intel["trending"] = scout.get_trending_for_toby(min_likes=200, limit=15)
-            toby_log("Data: Trending", f"Found {len(intel['trending'])} trending pieces available for adaptation", "📊", "data")
+            toby_log("Data: Trending", f"Found {len(intel['trending'])} trending pieces for {type_label} available for adaptation", "📊", "data")
         except Exception as e:
             toby_log("Error: Trends", f"Failed to fetch trending data: {e}", "❌", "detail")
             intel["trending"] = []
 
-        # 3. Content history & topic gapsf"Checking {type_label} content history, cooldowns, and topic availability", "📡", "api")
+        # 3. Content history & topic gaps
+        try:
+            toby_log("API: ContentTracker", f"Checking {type_label} content history, cooldowns, and topic availability", "📡", "api")
             intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=30)
             intel["topics_on_cooldown"] = [
                 t for t in TOPIC_BUCKETS
                 if t not in self.tracker.get_available_topics(content_type)
             ]
             intel["available_topics"] = self.tracker.get_available_topics(content_type)
-            intel["content_stats"] = self.tracker.get_stats(content_type
-            intel["available_topics"] = self.tracker.get_available_topics("reel")
-            intel["content_stats"] = self.tracker.get_stats("reel")
+            intel["content_stats"] = self.tracker.get_stats(content_type)
             toby_log("Data: Content history", f"{len(intel['recent_titles'])} recent titles, {len(intel['topics_on_cooldown'])} topics on cooldown, {len(intel['available_topics'])} available", "📊", "data")
             if intel["topics_on_cooldown"]:
                 toby_log("Data: Cooldowns", f"Topics on cooldown: {', '.join(intel['topics_on_cooldown'])}", "📊", "data")
