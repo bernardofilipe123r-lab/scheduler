@@ -8,6 +8,7 @@
  * Always running. No pause/resume. Auto-starts every deployment.
  */
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Bot,
   Play,
@@ -65,6 +66,7 @@ interface Proposal {
   source_account: string | null
   quality_score: number | null
   reviewed_at: string | null
+  reviewer_notes: string | null
   accepted_job_id: string | null
   created_at: string
 }
@@ -272,6 +274,8 @@ function timeAgo(iso: string): string {
 // ═══════════════════════════════════════════════════════════════
 
 export function MaestroPage() {
+  const navigate = useNavigate()
+
   // ── State ──
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [maestroStatus, setMaestroStatus] = useState<MaestroStatus | null>(null)
@@ -350,11 +354,18 @@ export function MaestroPage() {
     setAcceptingId(proposalId)
     try {
       const result = await post<any>(`/api/maestro/proposals/${proposalId}/accept`)
-      if (result.status === 'accepted') {
-        toast.success(`Accepted: ${result.title || proposalId}`)
+      if (result.status === 'accepted' && result.job_id) {
+        toast.success(
+          `Job ${result.job_id} created — generating for ${result.brands?.length || 5} brands`,
+          { duration: 5000 }
+        )
         await Promise.all([fetchProposals(), fetchStatus()])
+        // Navigate to the job detail page so user can track progress
+        navigate(`/jobs/${result.job_id}`)
+      } else if (result.error) {
+        toast.error(result.error)
       } else {
-        toast.error(result.error || 'Accept failed')
+        toast.error('Accept failed — no job created')
       }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to accept')
@@ -938,10 +949,31 @@ function ProposalCard({
             </div>
           )}
 
+          {p.status === 'accepted' && p.accepted_job_id && (
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <a
+                href={`/jobs/${p.accepted_job_id}`}
+                onClick={(e) => { e.stopPropagation() }}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                View Job {p.accepted_job_id}
+              </a>
+              <span className="text-xs text-gray-400">Accepted {p.reviewed_at ? timeAgo(p.reviewed_at) : ''}</span>
+            </div>
+          )}
+
           {p.status === 'rejected' && p.reviewed_at && (
-            <div className="flex items-center gap-2 text-xs text-gray-400 pt-1">
-              <MessageSquare className="w-3.5 h-3.5" />
-              Rejected {timeAgo(p.reviewed_at)}
+            <div className="space-y-1 pt-1">
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <MessageSquare className="w-3.5 h-3.5" />
+                Rejected {timeAgo(p.reviewed_at)}
+              </div>
+              {p.reviewer_notes && (
+                <div className="text-xs text-red-500 italic pl-5">
+                  &ldquo;{p.reviewer_notes}&rdquo;
+                </div>
+              )}
             </div>
           )}
         </div>

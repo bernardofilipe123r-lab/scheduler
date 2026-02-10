@@ -16,7 +16,7 @@ Endpoints:
 """
 
 from typing import Optional
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, BackgroundTasks
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/maestro", tags=["maestro"])
@@ -147,16 +147,122 @@ async def get_proposal(proposal_id: str):
 
 
 @router.post("/proposals/{proposal_id}/accept")
-async def accept_proposal(proposal_id: str):
+async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     """
-    Accept a proposal — works for proposals from either agent.
-    """
-    from app.services.toby_agent import get_toby_agent
+    Accept a proposal — creates a generation job for ALL brands and processes in background.
 
-    # TobyAgent's accept_proposal works for any proposal in the shared table
-    agent = get_toby_agent()
-    result = agent.accept_proposal(proposal_id)
-    return result
+    Flow:
+      1. Mark proposal as accepted
+      2. Create a GenerationJob with all 5 brands
+      3. Fire background processing (same as /jobs/create)
+      4. Store job_id on the proposal
+      5. Return job_id so frontend can navigate to the job page
+    """
+    from app.db_connection import SessionLocal, get_db_session
+    from app.models import TobyProposal
+    from app.services.job_manager import JobManager
+    from datetime import datetime
+
+    ALL_BRANDS = [
+        "healthycollege", "vitalitycollege", "longevitycollege",
+        "holisticcollege", "wellbeingcollege",
+    ]
+
+    db = SessionLocal()
+    try:
+        proposal = (
+            db.query(TobyProposal)
+            .filter(TobyProposal.proposal_id == proposal_id)
+            .first()
+        )
+        if not proposal:
+            return {"error": f"Proposal {proposal_id} not found"}
+
+        if proposal.status != "pending":
+            return {"error": f"Proposal {proposal_id} is already {proposal.status}"}
+
+        # Determine variant based on content_type
+        is_post = proposal.content_type == "post"
+        variant = "post" if is_post else "dark"
+
+        # Mark accepted
+        proposal.status = "accepted"
+        proposal.reviewed_at = datetime.utcnow()
+        db.commit()
+
+        # Record in content tracker
+        try:
+            from app.services.toby_agent import get_toby_agent
+            agent = get_toby_agent()
+            agent.tracker.record(
+                title=proposal.title,
+                content_type=proposal.content_type,
+                quality_score=proposal.quality_score,
+            )
+        except Exception:
+            pass  # Non-critical
+
+    finally:
+        db.close()
+
+    # Create generation job
+    with get_db_session() as job_db:
+        manager = JobManager(job_db)
+        job = manager.create_job(
+            user_id=proposal_id,  # Track which proposal created this job
+            title=proposal.title,
+            content_lines=proposal.content_lines or [],
+            brands=ALL_BRANDS,
+            variant=variant,
+            ai_prompt=proposal.image_prompt,
+            cta_type="follow_tips",
+            platforms=["instagram", "facebook", "youtube"],
+        )
+        job_id = job.job_id
+
+    # Store job_id on proposal
+    db2 = SessionLocal()
+    try:
+        p = db2.query(TobyProposal).filter(TobyProposal.proposal_id == proposal_id).first()
+        if p:
+            p.accepted_job_id = job_id
+            db2.commit()
+    finally:
+        db2.close()
+
+    # Fire background processing (same as /jobs/create does)
+    def _process_job(jid: str):
+        import traceback, sys
+        print(f"\n{'='*60}", flush=True)
+        print(f"🎼 MAESTRO: Processing accepted proposal {proposal_id}", flush=True)
+        print(f"   Job ID: {jid}", flush=True)
+        print(f"{'='*60}", flush=True)
+        try:
+            with get_db_session() as pdb:
+                m = JobManager(pdb)
+                m.process_job(jid)
+            print(f"✅ MAESTRO: Job {jid} completed for proposal {proposal_id}", flush=True)
+        except Exception as e:
+            print(f"❌ MAESTRO: Job {jid} failed: {e}", flush=True)
+            traceback.print_exc()
+            try:
+                with get_db_session() as edb:
+                    m = JobManager(edb)
+                    m.update_job_status(jid, "failed", error_message=str(e))
+            except Exception:
+                pass
+
+    background_tasks.add_task(_process_job, job_id)
+
+    return {
+        "status": "accepted",
+        "proposal_id": proposal_id,
+        "job_id": job_id,
+        "title": proposal.title,
+        "content_type": proposal.content_type,
+        "brands": ALL_BRANDS,
+        "message": f"Job {job_id} created — generating for {len(ALL_BRANDS)} brands",
+    }
 
 
 @router.post("/proposals/{proposal_id}/reject")
