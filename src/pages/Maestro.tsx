@@ -764,7 +764,7 @@ export function MaestroPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
             label="Today"
-            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${maestroStatus?.daily_config?.reels_per_brand ?? 6}`}
+            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${maestroStatus?.daily_config?.jobs_per_day ?? 30}`}
             icon={Clock}
             color="purple"
           />
