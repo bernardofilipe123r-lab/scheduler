@@ -797,9 +797,11 @@ def auto_schedule_job(job_id: str):
       2. Create a ScheduledReel entry
       3. The publishing daemon handles the rest
     """
+    import copy
     from app.db_connection import get_db_session
     from app.services.job_manager import JobManager
     from app.services.db_scheduler import DatabaseSchedulerService
+    from sqlalchemy.orm.attributes import flag_modified
 
     with get_db_session() as db:
         manager = JobManager(db)
@@ -816,8 +818,9 @@ def auto_schedule_job(job_id: str):
         variant = job.variant or "dark"
         scheduler = DatabaseSchedulerService()
         scheduled_count = 0
+        brand_outputs = copy.deepcopy(job.brand_outputs or {})
 
-        for brand, output in (job.brand_outputs or {}).items():
+        for brand, output in brand_outputs.items():
             if output.get("status") != "completed":
                 continue
 
@@ -850,12 +853,8 @@ def auto_schedule_job(job_id: str):
                 )
 
                 # Mark brand output as scheduled so it's not re-scheduled
-                brand_outputs = dict(job.brand_outputs or {})
-                if brand in brand_outputs:
-                    brand_outputs[brand]["status"] = "scheduled"
-                    brand_outputs[brand]["scheduled_time"] = slot.isoformat()
-                    job.brand_outputs = brand_outputs
-                    db.commit()
+                brand_outputs[brand]["status"] = "scheduled"
+                brand_outputs[brand]["scheduled_time"] = slot.isoformat()
 
                 scheduled_count += 1
                 print(
@@ -864,6 +863,12 @@ def auto_schedule_job(job_id: str):
                 )
             except Exception as e:
                 print(f"[AUTO-SCHEDULE] Failed to schedule {brand}: {e}", flush=True)
+
+        # Persist all brand_outputs changes at once
+        if scheduled_count > 0:
+            job.brand_outputs = brand_outputs
+            flag_modified(job, "brand_outputs")
+            db.commit()
 
         print(f"[AUTO-SCHEDULE] Job {job_id}: {scheduled_count}/{len(job.brand_outputs or {})} brands scheduled", flush=True)
 
@@ -878,9 +883,11 @@ def schedule_all_ready_reels() -> int:
 
     Returns the number of brand-reels scheduled.
     """
+    import copy
     from app.db_connection import SessionLocal
     from app.models import GenerationJob
     from app.services.db_scheduler import DatabaseSchedulerService
+    from sqlalchemy.orm.attributes import flag_modified
 
     total_scheduled = 0
     db = SessionLocal()
@@ -900,7 +907,7 @@ def schedule_all_ready_reels() -> int:
 
         for job in completed_jobs:
             variant = job.variant or "dark"
-            brand_outputs = dict(job.brand_outputs or {})
+            brand_outputs = copy.deepcopy(job.brand_outputs or {})
             job_changed = False
 
             for brand, output in brand_outputs.items():
@@ -954,6 +961,7 @@ def schedule_all_ready_reels() -> int:
 
             if job_changed:
                 job.brand_outputs = brand_outputs
+                flag_modified(job, "brand_outputs")
                 db.commit()
 
     except Exception as e:

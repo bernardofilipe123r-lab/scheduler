@@ -747,7 +747,7 @@ export function MaestroPage() {
               <span className="flex items-center gap-1.5">
                 <Sun className="w-3 h-3" />
                 <Moon className="w-3 h-3" />
-                {maestroStatus.daily_config?.total_reels_per_day ?? 6} reels/day &middot; 3 dark + 3 light &middot; 5 brands
+                {maestroStatus.daily_config?.total_reels_per_day ?? 6} unique reels &middot; each in dark + light &middot; 5 brands
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3" />
@@ -763,7 +763,7 @@ export function MaestroPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
             label="Today"
-            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/15`}
+            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${(maestroStatus?.daily_config?.proposals_per_agent ?? 3) * 2}`}
             icon={Clock}
             color="purple"
           />
