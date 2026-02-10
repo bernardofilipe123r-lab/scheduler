@@ -69,7 +69,7 @@ It runs a network of health & wellness brands. Each with its own voice. Its own 
         └──────────┘   └──────────┘    └──────────┘
               │                │                │
               ▼                ▼                ▼
-        ×5 brands        ×5 brands       ×5 brands
+        ×∞ brands        ×∞ brands       ×∞ brands
 ```
 
 <br>
@@ -100,7 +100,7 @@ DOUBLE DOWN → amplifies what went viral
 TRENDING    → adapts what the internet is talking about
 ```
 
-He thinks every 2 hours. Observes every 6. Scouts trends every 4. Generates up to 10 proposals per day — each with reasoning you can read, question, or override.
+He thinks every 45 minutes. Observes every 3 hours. Scouts trends every 4. Generates up to 15 proposals per day — each with reasoning you can read, question, or override.
 
 He never sleeps.
 
@@ -126,17 +126,22 @@ Content fingerprinting prevents repetition. 3-day topic cooldowns per brand. Tra
 
 ## The Brands
 
-Five identities. One pipeline. Zero overlap.
+Same problems. Different faces. Infinite scale.
+
+Every brand tackles the same health & wellness topics — nutrition, mental health, physical fitness, anti-aging, mind-body wellness, energy — but each one presents them under a completely independent identity. Different name. Different colors. Different voice. Same pipeline.
+
+The architecture supports an **unlimited number of brands**. Adding one takes minutes.
 
 ```
-◉ Healthy College     @thehealthycollege      health & nutrition
-◉ Vitality College    @thevitalitycollege     energy & movement
-◉ Longevity College   @thelongevitycollege    anti-aging & lifespan
-◉ Holistic College    @theholisticcollege     mind-body wellness
-◉ Wellbeing College   @thewellbeingcollege    mental health & self-care
+◉ Healthy College     @thehealthycollege
+◉ Vitality College    @thevitalitycollege
+◉ Longevity College   @thelongevitycollege
+◉ Holistic College    @theholisticcollege
+◉ Wellbeing College   @thewellbeingcollege
+  ...and counting
 ```
 
-Each brand gets a unique variation of every piece of content — reordered, reworded, retopicized — in a single AI call. Longevity gets the original. The rest get transformations that feel native to their voice.
+Each brand gets a unique variation of every piece of content — reordered, reworded, retopicized — in a single AI call. No two brands ever publish identical content, no matter how many are connected.
 
 <br>
 
@@ -148,7 +153,7 @@ Each brand gets a unique variation of every piece of content — reordered, rewo
 3. AI Generation          DeepSeek → title, lines, image prompt, caption
 4. Quality Scoring        5-dimension gate (reject / regen / pass)
 5. Anti-Repetition        fingerprint + cooldown + history check
-6. Brand Differentiation  1 piece → 5 unique variations
+6. Brand Differentiation  1 piece → ∞ unique variations
 7. Image Rendering        Pillow → branded 1080×1920 with text layout
 8. Video Production       FFmpeg → MP4 with background music
 9. Caption Building       AI paragraph + CTA + hashtags
@@ -162,12 +167,13 @@ Each brand gets a unique variation of every piece of content — reordered, rewo
 ## Numbers
 
 ```
-Brands managed           5
+Brands managed           ∞  (currently 5, scales infinitely)
 Platforms                 3  (Instagram · Facebook · YouTube)
 Content pipeline stages   10
 Quality dimensions        5
 Viral patterns trained    59  (1M+ views each)
 Toby strategies           4
+Toby proposals/day        15
 Token reduction vs v1     ~80%
 Polling interval          60s
 Analytics refresh         12h

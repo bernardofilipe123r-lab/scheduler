@@ -258,17 +258,19 @@ function generatePDF() {
     <!-- Executive Summary -->
     <h2>Executive Summary</h2>
     <p>
-      Healveth is a full-stack, AI-powered social media content automation platform designed to operate 
-      a network of health &amp; wellness brands at scale. The platform manages the complete content lifecycle: 
-      from AI-driven content ideation based on viral pattern analysis, through automated image and video 
-      generation with brand-specific visual identities, to scheduled multi-platform publishing across 
-      Instagram Reels, Facebook Reels, and YouTube Shorts.
+      Healveth is a full-stack, AI-powered social media content automation platform built to operate 
+      an <strong>unlimited number</strong> of health &amp; wellness brands at scale. The platform manages the complete 
+      content lifecycle: from AI-driven content ideation based on viral pattern analysis, through automated 
+      image and video generation with brand-specific visual identities, to scheduled multi-platform 
+      publishing across Instagram Reels, Facebook Reels, and YouTube Shorts.
     </p>
     <p>
-      Currently powering <strong>5 active brands</strong> (Healthy College, Vitality College, Longevity College, 
-      Holistic College, and Wellbeing College), the platform generates unique, differentiated content for each 
-      brand from a single content pipeline — ensuring no two brands ever post identical content while 
-      maintaining consistent quality and viral potential.
+      The architecture is designed for infinite scalability — every brand tackles the same core health &amp; wellness 
+      topics (nutrition, mental health, physical fitness, anti-aging, mind-body wellness, energy) but presents 
+      them under a completely independent identity with its own voice, visual style, and audience. Currently 
+      operating 5 brands, the platform generates unique, differentiated content for each from a single 
+      pipeline — ensuring no two brands ever post identical content while maintaining consistent quality 
+      and viral potential.
     </p>
 
     <!-- Platform Architecture -->
@@ -351,33 +353,49 @@ function generatePDF() {
       <li><strong>TRENDING</strong> — Adapts external viral content to the brand's health/wellness niche</li>
     </ul>
     <p>
-      Toby generates up to 10 content proposals daily, each with full reasoning explanations. The daemon 
+      Toby generates up to 15 content proposals daily, each with full reasoning explanations. The daemon 
       cycles continuously: metrics collection → trend scanning → proposal generation, with thinking cycles 
-      every 2 hours, observation cycles every 6 hours, and trend scouting every 4 hours.
+      every 45 minutes, observation cycles every 3 hours, and trend scouting every 4 hours.
     </p>
 
     <!-- Multi-Brand System -->
-    <h2>Multi-Brand Ecosystem</h2>
+    <h2>Scalable Multi-Brand Ecosystem</h2>
     <p>
-      The platform manages 5 active health &amp; wellness brands, each with completely independent visual identities, 
-      social media accounts, and API credentials:
+      The platform is architected to support an <strong>unlimited number of brands</strong> — each with completely 
+      independent visual identities, social media accounts, and API credentials. Every brand covers the same 
+      core health &amp; wellness topics (nutrition, mental health, physical fitness, anti-aging, mind-body wellness, 
+      energy) but presents them under a distinct face, voice, and audience strategy. Adding a new brand is as 
+      simple as configuring credentials, colors, and templates — the content pipeline scales automatically.
     </p>
+    <h3>Currently Active</h3>
     <table class="tech-table">
       <thead>
-        <tr><th>Brand</th><th>Instagram Handle</th><th>Focus</th></tr>
+        <tr><th>Brand</th><th>Instagram Handle</th></tr>
       </thead>
       <tbody>
-        <tr><td>Healthy College</td><td>@thehealthycollege</td><td>General health &amp; nutrition</td></tr>
-        <tr><td>Vitality College</td><td>@thevitalitycollege</td><td>Energy &amp; active lifestyle</td></tr>
-        <tr><td>Longevity College</td><td>@thelongevitycollege</td><td>Anti-aging &amp; lifespan</td></tr>
-        <tr><td>Holistic College</td><td>@theholisticcollege</td><td>Mind-body wellness</td></tr>
-        <tr><td>Wellbeing College</td><td>@thewellbeingcollege</td><td>Mental health &amp; self-care</td></tr>
+        <tr><td>Healthy College</td><td>@thehealthycollege</td></tr>
+        <tr><td>Vitality College</td><td>@thevitalitycollege</td></tr>
+        <tr><td>Longevity College</td><td>@thelongevitycollege</td></tr>
+        <tr><td>Holistic College</td><td>@theholisticcollege</td></tr>
+        <tr><td>Wellbeing College</td><td>@thewellbeingcollege</td></tr>
       </tbody>
     </table>
+    <h3>Shared Topic Coverage</h3>
+    <p>All brands address the same wellness domains — presented through each brand's unique lens:</p>
+    <div class="pipeline">
+      <span class="pipeline-step">Nutrition</span>
+      <span class="pipeline-step">Mental Health</span>
+      <span class="pipeline-step">Physical Fitness</span>
+      <span class="pipeline-step">Anti-Aging</span>
+      <span class="pipeline-step">Mind-Body Wellness</span>
+      <span class="pipeline-step">Energy &amp; Vitality</span>
+      <span class="pipeline-step">Self-Care</span>
+    </div>
     <p>
-      Content differentiation ensures each brand receives a unique variation of every piece of content. 
-      Longevity College receives the baseline; other brands get complete reordering, synonym replacement, 
-      and 1–2 topic swaps — all generated in a single AI call for efficiency.
+      Content differentiation ensures each brand receives a unique variation of every piece of content — 
+      complete reordering, synonym replacement, and topic swaps — all generated in a single AI call. 
+      The system is designed so that no two brands ever publish identical content, regardless of how 
+      many brands are connected.
     </p>
 
     <!-- Publishing & Distribution -->
@@ -397,7 +415,7 @@ function generatePDF() {
       </div>
       <div class="card">
         <div class="card-title">Multi-Account Orchestration</div>
-        <div class="card-text">Simultaneous publishing across all 5+ brand accounts on Instagram, Facebook, and YouTube — with per-brand credential management and failure isolation.</div>
+        <div class="card-text">Simultaneous publishing across an unlimited number of brand accounts on Instagram, Facebook, and YouTube — with per-brand credential management and failure isolation.</div>
       </div>
     </div>
 
@@ -654,15 +672,15 @@ export function AboutPage() {
           </h2>
           <p className="text-primary-100 text-lg max-w-3xl leading-relaxed">
             Healveth manages the entire lifecycle of short-form video content — from AI-driven ideation 
-            to multi-platform publishing. Powering 5 health &amp; wellness brands across Instagram, Facebook, 
-            and YouTube with fully autonomous content generation and strategic optimization.
+            to multi-platform publishing. Built to power an unlimited number of health &amp; wellness brands across 
+            Instagram, Facebook, and YouTube with fully autonomous content generation and strategic optimization.
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
             {[
               { icon: Bot, label: 'AI Content Strategist' },
               { icon: Film, label: 'Auto Video Generation' },
               { icon: Globe, label: 'Multi-Platform Publishing' },
-              { icon: Layers, label: '5 Brands, 1 Pipeline' },
+              { icon: Layers, label: '∞ Brands, 1 Pipeline' },
               { icon: BarChart3, label: 'Performance Intelligence' },
             ].map((item) => (
               <span
@@ -687,10 +705,11 @@ export function AboutPage() {
           Instagram Reels, Facebook Reels, and YouTube Shorts.
         </p>
         <p className="text-gray-600 leading-relaxed">
-          Currently powering <strong className="text-gray-900">5 active brands</strong> — Healthy College, Vitality College, 
-          Longevity College, Holistic College, and Wellbeing College — the platform generates unique, 
-          differentiated content for each brand from a single content pipeline, ensuring no two brands 
-          ever post identical content while maintaining consistent quality and viral potential.
+          Built for <strong className="text-gray-900">infinite scalability</strong>, every brand covers the same core health &amp; wellness 
+          topics — nutrition, mental health, physical fitness, anti-aging, mind-body wellness, and energy — but presents 
+          them under a completely independent identity with its own voice, colors, and audience. Currently operating 
+          5 brands, the platform generates unique, differentiated content for each from a single pipeline, ensuring 
+          no two brands ever post identical content regardless of how many are connected.
         </p>
       </Section>
 
@@ -773,7 +792,7 @@ export function AboutPage() {
           Toby is a first-of-its-kind autonomous AI agent that operates as a dedicated content strategist.
           Running as a background daemon, Toby continuously analyzes performance data, scans trending
           topics, and generates content proposals — without human intervention. Toby generates up to
-          10 content proposals daily, each with full reasoning explanations.
+          15 content proposals daily, each with full reasoning explanations.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FeatureCard
@@ -799,40 +818,64 @@ export function AboutPage() {
         </div>
         <div className="mt-4 bg-primary-50 rounded-lg p-4 border border-primary-100">
           <p className="text-sm text-primary-800">
-            <strong>Daemon Schedule:</strong> Thinking cycles every 2 hours &bull; Observation cycles every 6 hours &bull; Trend scouting every 4 hours
+            <strong>Daemon Schedule:</strong> Thinking cycles every 45 min &bull; Observation cycles every 3 hours &bull; Trend scouting every 4 hours
           </p>
         </div>
       </Section>
 
       {/* Multi-Brand System */}
-      <Section icon={Layers} title="Multi-Brand Ecosystem">
+      <Section icon={Layers} title="Scalable Multi-Brand Ecosystem">
         <p className="text-gray-600 text-sm mb-4">
-          5 active health &amp; wellness brands, each with independent visual identities, social accounts, and 
-          API credentials. Content differentiation ensures no two brands ever post identical content.
+          Architected to support an <strong className="text-gray-900">unlimited number of brands</strong>. Each brand covers the same 
+          core health &amp; wellness topics but presents them under a completely independent identity — its own face, 
+          voice, colors, and audience. Adding a new brand requires only credentials, colors, and templates.
         </p>
-        <div className="overflow-x-auto mb-4">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b-2 border-gray-200">
-                <th className="text-left py-2.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
-                <th className="text-left py-2.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Instagram</th>
-                <th className="text-left py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Focus Area</th>
-              </tr>
-            </thead>
-            <tbody>
-              <BrandRow name="Healthy College" handle="@thehealthycollege" color="#004f00" focus="General health & nutrition" />
-              <BrandRow name="Vitality College" handle="@thevitalitycollege" color="#028f7a" focus="Energy & active lifestyle" />
-              <BrandRow name="Longevity College" handle="@thelongevitycollege" color="#019dc8" focus="Anti-aging & lifespan" />
-              <BrandRow name="Holistic College" handle="@theholisticcollege" color="#f0836e" focus="Mind-body wellness" />
-              <BrandRow name="Wellbeing College" handle="@thewellbeingcollege" color="#7e57c2" focus="Mental health & self-care" />
-            </tbody>
-          </table>
+
+        {/* Shared Topics */}
+        <div className="mb-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Shared Topic Coverage</h3>
+          <p className="text-xs text-gray-500 mb-3">All brands address the same wellness domains — presented through each brand's unique lens:</p>
+          <div className="flex flex-wrap gap-2">
+            {['Nutrition', 'Mental Health', 'Physical Fitness', 'Anti-Aging', 'Mind-Body Wellness', 'Energy & Vitality', 'Self-Care'].map(
+              (topic) => (
+                <span
+                  key={topic}
+                  className="px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium border border-primary-100"
+                >
+                  {topic}
+                </span>
+              ),
+            )}
+          </div>
         </div>
+
+        {/* Current Brands */}
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Currently Active</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-2.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
+                  <th className="text-left py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Instagram</th>
+                </tr>
+              </thead>
+              <tbody>
+                <BrandRow name="Healthy College" handle="@thehealthycollege" color="#004f00" focus="" />
+                <BrandRow name="Vitality College" handle="@thevitalitycollege" color="#028f7a" focus="" />
+                <BrandRow name="Longevity College" handle="@thelongevitycollege" color="#019dc8" focus="" />
+                <BrandRow name="Holistic College" handle="@theholisticcollege" color="#f0836e" focus="" />
+                <BrandRow name="Wellbeing College" handle="@thewellbeingcollege" color="#7e57c2" focus="" />
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
           <p className="text-sm text-gray-600">
-            <strong className="text-gray-900">Content Differentiation:</strong> Longevity College receives the baseline content; 
-            other brands receive AI-generated variations with complete reordering, synonym replacement, and 1–2 topic 
-            swaps — all produced in a single API call for efficiency.
+            <strong className="text-gray-900">Content Differentiation:</strong> Each brand receives AI-generated 
+            variations of every piece of content — complete reordering, synonym replacement, and topic swaps — 
+            all in a single API call. No two brands ever publish identical content, regardless of how many are connected.
           </p>
         </div>
       </Section>
@@ -858,7 +901,7 @@ export function AboutPage() {
           <FeatureCard
             icon={Globe}
             title="Multi-Account Orchestration"
-            description="Simultaneous publishing across 5+ brand accounts on all platforms with per-brand credential management and failure isolation."
+            description="Simultaneous publishing across an unlimited number of brand accounts on all platforms with per-brand credential management and failure isolation."
           />
         </div>
       </Section>
