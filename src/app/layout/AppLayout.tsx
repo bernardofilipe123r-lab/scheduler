@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2 } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -14,7 +14,7 @@ export function AppLayout() {
   const { user, logout } = useAuth()
   
   // Check if current route is a settings page
-  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands' || location.pathname === '/settings'
+  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands' || location.pathname === '/settings' || location.pathname === '/prompts'
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -178,6 +178,20 @@ export function AppLayout() {
                     >
                       <Sliders className="w-4 h-4" />
                       App Settings
+                    </NavLink>
+                    <NavLink
+                      to="/prompts"
+                      onClick={() => setSettingsOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-600'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      Image Prompts
                     </NavLink>
                     <div className="border-t border-gray-100 my-1" />
                     <a
