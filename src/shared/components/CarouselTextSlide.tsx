@@ -175,8 +175,14 @@ export function CarouselTextSlide({
           {/* Brand logo — circular theme logo if available, else colored circle with initial */}
           {brandLogoImg ? (
             <Group
+              clipX={0}
+              clipY={0}
+              clipWidth={LOGO_SIZE}
+              clipHeight={LOGO_SIZE}
               clipFunc={(ctx: any) => {
+                ctx.beginPath()
                 ctx.arc(LOGO_SIZE / 2, LOGO_SIZE / 2, LOGO_SIZE / 2, 0, Math.PI * 2, false)
+                ctx.closePath()
               }}
             >
               <KonvaImage
@@ -285,26 +291,26 @@ export function CarouselTextSlide({
             />
           )}
 
-          {/* SAVE text + icon — right-aligned, icon immediately after text */}
+          {/* SAVE icon + text — right-aligned, icon on left of text */}
+          {saveImg && (
+            <KonvaImage
+              image={saveImg}
+              x={CANVAS_WIDTH - PAD_X - 130}
+              y={-1}
+              width={ICON_SIZE - 2}
+              height={ICON_SIZE - 2}
+            />
+          )}
           <Text
             text="SAVE"
             fontSize={24}
             fontFamily="Inter, Arial, sans-serif"
             fontStyle="bold"
             fill={TEXT_COLOR}
-            x={CANVAS_WIDTH - PAD_X - 120}
+            x={CANVAS_WIDTH - PAD_X - 98}
             y={2}
             letterSpacing={2}
           />
-          {saveImg && (
-            <KonvaImage
-              image={saveImg}
-              x={CANVAS_WIDTH - PAD_X - 32}
-              y={-1}
-              width={ICON_SIZE - 2}
-              height={ICON_SIZE - 2}
-            />
-          )}
         </Group>
       </Layer>
     </Stage>
