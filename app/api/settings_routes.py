@@ -313,6 +313,7 @@ async def list_settings(
     # Build enriched settings with source info and effective values
     enriched_settings = []
     grouped: Dict[str, List[Dict]] = {}
+    needs_commit = False
     
     for setting in settings:
         data = setting.to_dict(include_sensitive=True)
@@ -321,8 +322,15 @@ async def list_settings(
         db_value = setting.value
         env_value = _get_env_value(setting.key)
         
+        # Fix corrupted REDACTED values in DB (from old frontend bug)
+        if db_value == "***REDACTED***":
+            setting.value = None
+            db_value = None
+            needs_commit = True
+        
         if db_value:
             data["source"] = "database"
+            data["value"] = db_value  # Always show real value
             data["has_env_var"] = bool(env_value)
         elif env_value:
             data["source"] = "environment"
@@ -330,6 +338,7 @@ async def list_settings(
             data["has_env_var"] = True
         else:
             data["source"] = "default"
+            data["value"] = ""
             data["has_env_var"] = False
         
         data["env_var_name"] = _get_env_key(setting.key)
@@ -340,6 +349,10 @@ async def list_settings(
         if cat not in grouped:
             grouped[cat] = []
         grouped[cat].append(data)
+    
+    # Commit any REDACTED value fixes
+    if needs_commit:
+        db.commit()
     
     return {
         "settings": enriched_settings,
