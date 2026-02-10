@@ -1205,6 +1205,31 @@ async def delete_scheduled_post(schedule_id: str, user_id: Optional[str] = None)
         )
 
 
+@router.delete("/scheduled/bulk/from-date")
+async def delete_scheduled_from_date(from_date: str):
+    """Delete all scheduled reels from a given date onwards (inclusive).
+    from_date format: YYYY-MM-DD"""
+    from app.db_connection import SessionLocal
+    from app.models import ScheduledReel
+    from datetime import datetime
+
+    db = SessionLocal()
+    try:
+        cutoff = datetime.fromisoformat(from_date)
+        count = (
+            db.query(ScheduledReel)
+            .filter(ScheduledReel.scheduled_time >= cutoff)
+            .delete()
+        )
+        db.commit()
+        return {"status": "deleted", "deleted": count, "from_date": from_date}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "error": str(e)}
+    finally:
+        db.close()
+
+
 @router.post("/scheduled/{schedule_id}/retry")
 async def retry_failed_post(schedule_id: str):
     """

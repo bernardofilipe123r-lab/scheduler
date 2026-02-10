@@ -473,6 +473,44 @@ async def delete_job(job_id: str):
         )
 
 
+@router.delete(
+    "/bulk/by-status",
+    summary="Delete all jobs matching a status"
+)
+async def delete_jobs_by_status(job_status: str = "completed"):
+    """Delete all jobs matching a given status (completed, failed, etc.).
+    Also deletes the corresponding scheduled_reels entries."""
+    from app.db_connection import SessionLocal
+    from app.models import GenerationJob, ScheduledReel
+
+    db = SessionLocal()
+    try:
+        # Find matching jobs
+        jobs = db.query(GenerationJob).filter(GenerationJob.status.in_([job_status, "failed"])).all()
+        if not jobs:
+            return {"status": "ok", "deleted": 0}
+
+        deleted_count = 0
+        for job in jobs:
+            # Delete associated scheduled reels
+            brand_outputs = job.brand_outputs or {}
+            for brand, output in brand_outputs.items():
+                reel_id = output.get("reel_id")
+                if reel_id:
+                    db.query(ScheduledReel).filter(ScheduledReel.reel_id == reel_id).delete()
+            # Delete the job
+            db.delete(job)
+            deleted_count += 1
+
+        db.commit()
+        return {"status": "deleted", "deleted": deleted_count}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "error": str(e)}
+    finally:
+        db.close()
+
+
 @router.post(
     "/{job_id}/cancel",
     summary="Cancel a running job"

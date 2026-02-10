@@ -209,6 +209,17 @@ async def get_feedback():
     import json
     from app.services.maestro import _db_get
 
+
+@router.post("/reset-daily-run")
+async def reset_daily_run():
+    """Reset today's daily burst limit so it can be triggered again."""
+    from app.services.maestro import _db_set
+    # Set last_daily_run to yesterday so the burst check passes
+    from datetime import datetime, timedelta
+    yesterday = (datetime.utcnow() - timedelta(days=1)).isoformat()
+    _db_set("last_daily_run", yesterday)
+    return {"status": "reset", "message": "Daily burst limit reset. You can now trigger a burst."}
+
     raw = _db_get("last_feedback_data", "")
     if not raw:
         return {"feedback": None, "message": "No feedback data yet — runs every 6h after reels are published 48-72h"}

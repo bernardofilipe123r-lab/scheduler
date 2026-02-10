@@ -18,7 +18,7 @@ import {
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
-import { useJobs, useDeleteJob, useRegenerateJob } from '@/features/jobs'
+import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus } from '@/features/jobs'
 import { BrandBadge } from '@/features/brands'
 import { StatusBadge, FullPageLoader, Modal } from '@/shared/components'
 import type { Job, Variant, BrandName } from '@/shared/types'
@@ -30,6 +30,7 @@ export function HistoryPage() {
   const { data: jobs = [], isLoading, error } = useJobs()
   const deleteJob = useDeleteJob()
   const regenerateJob = useRegenerateJob()
+  const deleteByStatus = useDeleteJobsByStatus()
   
   const jobsArray = Array.isArray(jobs) ? jobs : []
   
@@ -315,15 +316,39 @@ export function HistoryPage() {
       
       {/* Section Header */}
       {viewFilter !== 'all' && (
-        <div className="flex items-center gap-3">
-          <div className={clsx(
-            'w-2 h-8 rounded-full',
-            stats.find(s => s.key === viewFilter)?.color || 'bg-gray-400'
-          )} />
-          <h2 className="text-lg font-semibold text-gray-900">
-            {stats.find(s => s.key === viewFilter)?.label || 'Jobs'}
-          </h2>
-          <span className="text-gray-500">({filteredJobs.length})</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={clsx(
+              'w-2 h-8 rounded-full',
+              stats.find(s => s.key === viewFilter)?.color || 'bg-gray-400'
+            )} />
+            <h2 className="text-lg font-semibold text-gray-900">
+              {stats.find(s => s.key === viewFilter)?.label || 'Jobs'}
+            </h2>
+            <span className="text-gray-500">({filteredJobs.length})</span>
+          </div>
+          {viewFilter === 'to-schedule' && filteredJobs.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Delete all ${filteredJobs.length} ready-to-schedule jobs and their scheduled reels?`)) return
+                try {
+                  const result = await deleteByStatus.mutateAsync('completed')
+                  toast.success(`Deleted ${result.deleted} jobs`)
+                } catch {
+                  toast.error('Failed to delete jobs')
+                }
+              }}
+              disabled={deleteByStatus.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {deleteByStatus.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Delete All ({filteredJobs.length})
+            </button>
+          )}
         </div>
       )}
       
