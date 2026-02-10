@@ -67,6 +67,17 @@ export function useDeleteScheduled() {
   })
 }
 
+export function useDeleteScheduledForDay() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: schedulingApi.deleteScheduledForDay,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.scheduled() })
+    },
+  })
+}
+
 export function useRetryFailed() {
   const queryClient = useQueryClient()
   

@@ -36,7 +36,7 @@ import {
   subWeeks,
   parseISO
 } from 'date-fns'
-import { useScheduledPosts, useDeleteScheduled, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
+import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, ALL_BRANDS } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
@@ -85,6 +85,7 @@ export function ScheduledPage() {
   const navigate = useNavigate()
   const { data: posts = [], isLoading } = useScheduledPosts()
   const deleteScheduled = useDeleteScheduled()
+  const deleteScheduledForDay = useDeleteScheduledForDay()
   const retryFailed = useRetryFailed()
   const reschedule = useReschedule()
   const publishNow = usePublishNow()
@@ -814,6 +815,34 @@ export function ScheduledPage() {
       >
         {selectedDay && (
           <div className="space-y-3">
+            {/* Delete All Posts for this day */}
+            {getPostsForDay(selectedDay).length > 0 && (
+              <div className="flex justify-end">
+                <button
+                  onClick={async () => {
+                    const dayStr = format(selectedDay, 'yyyy-MM-dd')
+                    const count = getPostsForDay(selectedDay).length
+                    if (!confirm(`Delete all ${count} posts for ${format(selectedDay, 'MMMM d, yyyy')}?`)) return
+                    try {
+                      await deleteScheduledForDay.mutateAsync(dayStr)
+                      toast.success(`Deleted all posts for ${format(selectedDay, 'MMM d')}`)
+                      setSelectedDay(null)
+                    } catch {
+                      toast.error('Failed to delete posts')
+                    }
+                  }}
+                  disabled={deleteScheduledForDay.isPending}
+                  className="btn btn-danger text-sm"
+                >
+                  {deleteScheduledForDay.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Delete All Posts
+                </button>
+              </div>
+            )}
             {getPostsForDay(selectedDay).map(post => (
               <div
                 key={post.id}

@@ -98,6 +98,9 @@ export const schedulingApi = {
   
   deleteScheduled: (id: string) =>
     del<{ success: boolean }>(`/reels/scheduled/${id}`),
+
+  deleteScheduledForDay: (date: string) =>
+    del<{ status: string; deleted: number; date: string }>(`/reels/scheduled/bulk/day/${date}`),
   
   retryFailed: (id: string) =>
     post<{ success: boolean }>(`/reels/scheduled/${id}/retry`),
