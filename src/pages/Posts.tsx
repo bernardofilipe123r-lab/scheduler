@@ -188,7 +188,7 @@ export function PostsPage() {
   const previewBrand = selectedBrands[0] || 'healthycollege'
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-[1600px] mx-auto space-y-4">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Create Posts</h1>
@@ -197,304 +197,308 @@ export function PostsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Form */}
-        <div className="space-y-5">
-          {/* Title */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Topic Hint
-              <span className="text-xs font-normal text-gray-400 ml-1">
-                (optional — AI picks topics if empty)
-              </span>
-            </label>
-            <textarea
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              rows={2}
-              placeholder="e.g. focus on teas and sleep rituals"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-            <button
-              onClick={handleGenerateTitle}
-              disabled={isGeneratingTitle}
-              className="mt-2 flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
-            >
-              {isGeneratingTitle ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Wand2 className="w-3 h-3" />
-              )}
-              Generate Title
-            </button>
-          </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] lg:grid-cols-[1fr_auto] gap-5">
+        {/* Col 1: Inputs */}
+        <div className="space-y-4 min-w-0">
+          {/* Topic Hint + AI Image Prompt side by side on desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Topic Hint */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                Topic Hint
+                <span className="text-xs font-normal text-gray-400 ml-1">
+                  (optional — AI picks topics if empty)
+                </span>
+              </label>
+              <textarea
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                rows={3}
+                placeholder="e.g. focus on teas and sleep rituals"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              />
+              <button
+                onClick={handleGenerateTitle}
+                disabled={isGeneratingTitle}
+                className="mt-2 flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
+              >
+                {isGeneratingTitle ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Wand2 className="w-3 h-3" />
+                )}
+                Generate Title
+              </button>
+            </div>
 
-          {/* AI Image Prompt */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              AI Image Prompt
-              <span className="text-xs font-normal text-gray-400 ml-1">
-                (auto-generated if empty)
-              </span>
-            </label>
-            <textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              rows={3}
-              placeholder="Describe the background image..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-            <button
-              onClick={handleGeneratePrompt}
-              disabled={isGeneratingPrompt || !title.trim()}
-              className="mt-2 flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
-            >
-              {isGeneratingPrompt ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Wand2 className="w-3 h-3" />
-              )}
-              Generate Prompt
-            </button>
-          </div>
-
-          {/* Brands */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <label className="block text-sm font-semibold text-gray-900 mb-3">
-              Brands
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {ALL_BRANDS.map((brand) => {
-                const config = BRAND_CONFIGS[brand]
-                const selected = selectedBrands.includes(brand)
-                return (
-                  <button
-                    key={brand}
-                    onClick={() => toggleBrand(brand)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
-                      selected
-                        ? 'border-primary-300 bg-primary-50 text-primary-700'
-                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: config?.color || '#999' }}
-                    />
-                    {config?.name || brand}
-                    {selected && <Check className="w-3 h-3" />}
-                  </button>
-                )
-              })}
+            {/* AI Image Prompt */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                AI Image Prompt
+                <span className="text-xs font-normal text-gray-400 ml-1">
+                  (auto-generated if empty)
+                </span>
+              </label>
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={3}
+                placeholder="Describe the background image..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              />
+              <button
+                onClick={handleGeneratePrompt}
+                disabled={isGeneratingPrompt || !title.trim()}
+                className="mt-2 flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
+              >
+                {isGeneratingPrompt ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Wand2 className="w-3 h-3" />
+                )}
+                Generate Prompt
+              </button>
             </div>
           </div>
 
-          {/* Layout Settings (collapsible) */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <button
-              onClick={() => setShowSettings((prev) => !prev)}
-              className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-primary-600 transition-colors text-sm"
-            >
-              <Settings2 className="w-4 h-4" />
-              Layout Settings
-              <ChevronDown
-                className={`w-4 h-4 ml-auto transition-transform ${
-                  showSettings ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
+          {/* Brands + Settings side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Brands */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <label className="block text-sm font-semibold text-gray-900 mb-3">
+                Brands
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ALL_BRANDS.map((brand) => {
+                  const config = BRAND_CONFIGS[brand]
+                  const selected = selectedBrands.includes(brand)
+                  return (
+                    <button
+                      key={brand}
+                      onClick={() => toggleBrand(brand)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
+                        selected
+                          ? 'border-primary-300 bg-primary-50 text-primary-700'
+                          : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: config?.color || '#999' }}
+                      />
+                      {config?.name || brand}
+                      {selected && <Check className="w-3 h-3" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
-            {showSettings && (
-              <div className="mt-4 space-y-3">
-                <div>
-                  <label className="text-xs text-gray-500">
-                    Font Size: {settings.fontSize}px
-                  </label>
-                  <input
-                    type="range"
-                    min={40}
-                    max={90}
-                    value={settings.fontSize}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        fontSize: Number(e.target.value),
-                      }))
-                    }
-                    className="w-full accent-primary-500"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+            {/* Layout Settings (collapsible) */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <button
+                onClick={() => setShowSettings((prev) => !prev)}
+                className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-primary-600 transition-colors text-sm"
+              >
+                <Settings2 className="w-4 h-4" />
+                Layout Settings
+                <ChevronDown
+                  className={`w-4 h-4 ml-auto transition-transform ${
+                    showSettings ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {showSettings && (
+                <div className="mt-4 space-y-3">
                   <div>
                     <label className="text-xs text-gray-500">
-                      Caption Bottom: {settings.layout.readCaptionBottom}px
+                      Font Size: {settings.fontSize}px
                     </label>
                     <input
                       type="range"
-                      min={20}
-                      max={80}
-                      value={settings.layout.readCaptionBottom}
+                      min={40}
+                      max={90}
+                      value={settings.fontSize}
                       onChange={(e) =>
-                        updateLayout({
-                          readCaptionBottom: Number(e.target.value),
-                        })
+                        setSettings((prev) => ({
+                          ...prev,
+                          fontSize: Number(e.target.value),
+                        }))
                       }
                       className="w-full accent-primary-500"
                     />
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500">
-                      Title Gap: {settings.layout.titleGap}px
-                    </label>
-                    <input
-                      type="range"
-                      min={10}
-                      max={300}
-                      value={settings.layout.titleGap}
-                      onChange={(e) =>
-                        updateLayout({ titleGap: Number(e.target.value) })
-                      }
-                      className="w-full accent-primary-500"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Caption Bottom: {settings.layout.readCaptionBottom}px
+                      </label>
+                      <input
+                        type="range"
+                        min={20}
+                        max={80}
+                        value={settings.layout.readCaptionBottom}
+                        onChange={(e) =>
+                          updateLayout({
+                            readCaptionBottom: Number(e.target.value),
+                          })
+                        }
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Title Gap: {settings.layout.titleGap}px
+                      </label>
+                      <input
+                        type="range"
+                        min={10}
+                        max={300}
+                        value={settings.layout.titleGap}
+                        onChange={(e) =>
+                          updateLayout({ titleGap: Number(e.target.value) })
+                        }
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Logo Gap: {settings.layout.logoGap}px
+                      </label>
+                      <input
+                        type="range"
+                        min={20}
+                        max={60}
+                        value={settings.layout.logoGap}
+                        onChange={(e) =>
+                          updateLayout({ logoGap: Number(e.target.value) })
+                        }
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Horizontal Padding: {settings.layout.titlePaddingX}px
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={200}
+                        value={settings.layout.titlePaddingX}
+                        onChange={(e) =>
+                          updateLayout({ titlePaddingX: Number(e.target.value) })
+                        }
+                        className="w-full accent-primary-500"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">
-                      Logo Gap: {settings.layout.logoGap}px
-                    </label>
-                    <input
-                      type="range"
-                      min={20}
-                      max={60}
-                      value={settings.layout.logoGap}
-                      onChange={(e) =>
-                        updateLayout({ logoGap: Number(e.target.value) })
-                      }
-                      className="w-full accent-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">
-                      Horizontal Padding: {settings.layout.titlePaddingX}px
+                      Bar Width:{' '}
+                      {settings.barWidth === 0
+                        ? 'Auto'
+                        : `${settings.barWidth}px`}
                     </label>
                     <input
                       type="range"
                       min={0}
-                      max={200}
-                      value={settings.layout.titlePaddingX}
+                      max={400}
+                      value={settings.barWidth}
                       onChange={(e) =>
-                        updateLayout({ titlePaddingX: Number(e.target.value) })
+                        setSettings((prev) => ({
+                          ...prev,
+                          barWidth: Number(e.target.value),
+                        }))
                       }
                       className="w-full accent-primary-500"
                     />
                   </div>
+                  <div className="pt-2 border-t border-gray-100">
+                    <label className="text-xs text-gray-500">
+                      Posts Per Day: {settings.postsPerDay ?? 6}
+                    </label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={12}
+                      value={settings.postsPerDay ?? 6}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          postsPerDay: Number(e.target.value),
+                        }))
+                      }
+                      className="w-full accent-primary-500"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Controls how many posts per day per brand (interleaved with reels)
+                    </p>
+                  </div>
+                  <div className="flex gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={handleSaveSettings}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600"
+                    >
+                      <Save className="w-3 h-3" />
+                      Save
+                    </button>
+                    <button
+                      onClick={handleResetSettings}
+                      className="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500">
-                    Bar Width:{' '}
-                    {settings.barWidth === 0
-                      ? 'Auto'
-                      : `${settings.barWidth}px`}
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={400}
-                    value={settings.barWidth}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        barWidth: Number(e.target.value),
-                      }))
-                    }
-                    className="w-full accent-primary-500"
-                  />
-                </div>
-                <div className="pt-2 border-t border-gray-100">
-                  <label className="text-xs text-gray-500">
-                    Posts Per Day: {settings.postsPerDay ?? 6}
-                  </label>
-                  <input
-                    type="range"
-                    min={1}
-                    max={12}
-                    value={settings.postsPerDay ?? 6}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        postsPerDay: Number(e.target.value),
-                      }))
-                    }
-                    className="w-full accent-primary-500"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    Controls how many posts per day per brand (interleaved with reels)
-                  </p>
-                </div>
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
-                  <button
-                    onClick={handleSaveSettings}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600"
-                  >
-                    <Save className="w-3 h-3" />
-                    Save
-                  </button>
-                  <button
-                    onClick={handleResetSettings}
-                    className="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    Reset
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="space-y-2">
-            <div className="flex gap-3">
-              <button
-                onClick={handleAutoGenerate}
-                disabled={isCreating || isGeneratingTitle || selectedBrands.length === 0}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-primary-600 text-white rounded-xl hover:from-purple-700 hover:to-primary-700 font-medium disabled:opacity-50"
-              >
-                {isGeneratingTitle ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Wand2 className="w-5 h-5" />
-                )}
-                Auto Generate
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isCreating || selectedBrands.length === 0 || !title.trim()}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 font-medium disabled:opacity-50"
-                title={!title.trim() ? 'Enter a topic hint first' : ''}
-              >
-                {isCreating ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <FileImage className="w-5 h-5" />
-                )}
-                Generate Posts
-              </button>
-            </div>
+          {/* Action buttons — horizontal row */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleAutoGenerate}
+              disabled={isCreating || isGeneratingTitle || selectedBrands.length === 0}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-primary-600 text-white rounded-xl hover:from-purple-700 hover:to-primary-700 font-medium disabled:opacity-50"
+            >
+              {isGeneratingTitle ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              Auto Generate
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isCreating || selectedBrands.length === 0 || !title.trim()}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 font-medium disabled:opacity-50"
+              title={!title.trim() ? 'Enter a topic hint first' : ''}
+            >
+              {isCreating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileImage className="w-4 h-4" />
+              )}
+              Generate Posts
+            </button>
             <button
               onClick={() => setShowGodMode(true)}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:via-yellow-600 hover:to-amber-700 font-bold shadow-lg shadow-amber-200/50 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:via-yellow-600 hover:to-amber-700 font-bold shadow-lg shadow-amber-200/50 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
-              <Zap className="w-5 h-5" />
+              <Zap className="w-4 h-4" />
               God Automation 🔱
             </button>
-            <p className="text-xs text-gray-400 text-center">
+            <p className="text-xs text-gray-400">
               💡 <strong>Generate Posts</strong> needs a topic hint · <strong>God Automation</strong> does everything automatically
             </p>
           </div>
         </div>
 
         {/* Right: Preview */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Preview</h3>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 self-start">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">Preview</h3>
           <p className="text-xs text-gray-400 mb-3">
             Layout preview · backgrounds generated after job creation
           </p>
