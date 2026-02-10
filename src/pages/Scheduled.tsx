@@ -103,6 +103,7 @@ export function ScheduledPage() {
   const [contentTypeFilter, setContentTypeFilter] = useState<ContentTypeFilter>('all')
   const [selectedDayForMissing, setSelectedDayForMissing] = useState<Date | null>(null)
   const [isCleaning, setIsCleaning] = useState(false)
+  const [isCleaningReels, setIsCleaningReels] = useState(false)
   
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate)
@@ -273,6 +274,27 @@ export function ScheduledPage() {
     }
   }
   
+  const handleCleanReelSlots = async () => {
+    setIsCleaningReels(true)
+    toast.loading('Cleaning reel schedule slots...', { id: 'clean-reels' })
+    try {
+      const resp = await fetch('/reels/scheduled/clean-reel-slots', { method: 'POST' })
+      if (!resp.ok) throw new Error('Failed')
+      const data = await resp.json()
+      if (data.total_fixed === 0) {
+        toast.success('All reels are on correct slots!', { id: 'clean-reels' })
+      } else {
+        toast.success(data.message, { id: 'clean-reels', duration: 5000 })
+      }
+      // Refresh the posts list
+      window.location.reload()
+    } catch {
+      toast.error('Failed to clean reel slots', { id: 'clean-reels' })
+    } finally {
+      setIsCleaningReels(false)
+    }
+  }
+
   const openRescheduleModal = (post: ScheduledPost) => {
     // Pre-fill with current scheduled time
     const currentTime = parseISO(post.scheduled_time)
@@ -339,6 +361,15 @@ export function ScheduledPage() {
         </div>
         
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleCleanReelSlots}
+            disabled={isCleaningReels}
+            className="btn btn-secondary text-sm"
+            title="Fix reels on wrong slots or collisions: ensures every reel sits on its correct brand time slot"
+          >
+            {isCleaningReels ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+            Reel Scheduler Cleaner
+          </button>
           <button
             onClick={handleCleanPostSlots}
             disabled={isCleaning}

@@ -1716,6 +1716,251 @@ async def get_occupied_post_slots():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/scheduled/clean-reel-slots")
+async def clean_reel_slots():
+    """
+    Reel Scheduler Cleaner: ensures every scheduled reel sits on its correct
+    brand slot (brand offset + base 4-hour pattern, alternating light/dark).
+    
+    Two fixes:
+    1. Reels on WRONG slots (hour doesn't match brand's valid reel hours) → move to next valid slot
+    2. COLLISIONS (multiple reels at same brand+time) → keep first, move extras to next valid slot
+    """
+    try:
+        from datetime import timedelta, datetime as dt
+
+        BRAND_REEL_OFFSETS = {
+            "holisticcollege": 0,
+            "healthycollege": 1,
+            "vitalitycollege": 2,
+            "longevitycollege": 3,
+            "wellbeingcollege": 4,
+        }
+
+        # Base slot pattern (every 4 hours, alternating L/D)
+        BASE_SLOTS = [
+            (0, "light"),   # 12 AM
+            (4, "dark"),    # 4 AM
+            (8, "light"),   # 8 AM
+            (12, "dark"),   # 12 PM
+            (16, "light"),  # 4 PM
+            (20, "dark"),   # 8 PM
+        ]
+
+        def get_reel_slots_for_brand(brand: str) -> list[tuple[int, str]]:
+            """Return list of (hour, variant) for valid reel slots for a brand."""
+            offset = BRAND_REEL_OFFSETS.get(brand, 0)
+            return [((hour + offset) % 24, variant) for hour, variant in BASE_SLOTS]
+
+        def get_valid_hours_for_brand(brand: str) -> set[int]:
+            """Return set of valid hours for a brand's reel slots."""
+            return {h for h, _ in get_reel_slots_for_brand(brand)}
+
+        def get_expected_variant(brand: str, hour: int) -> str:
+            """Given a brand and hour, return the expected variant (light/dark)."""
+            for h, v in get_reel_slots_for_brand(brand):
+                if h == hour:
+                    return v
+            return "light"  # fallback
+
+        def find_next_valid_reel_slot(brand: str, variant: str, after: dt, occupied: set[str]) -> dt:
+            """Find next unoccupied valid reel slot for brand+variant after given time."""
+            slots = get_reel_slots_for_brand(brand)
+            matching_hours = [h for h, v in slots if v == variant]
+            if not matching_hours:
+                matching_hours = [h for h, _ in slots]  # fallback to all
+
+            current_day = after.replace(hour=0, minute=0, second=0, microsecond=0)
+            for day_off in range(365):
+                check_date = current_day + timedelta(days=day_off)
+                for h in matching_hours:
+                    candidate = check_date.replace(hour=h, minute=0, second=0, microsecond=0)
+                    if candidate <= after:
+                        continue
+                    key = candidate.strftime("%Y-%m-%d %H:%M")
+                    if key not in occupied:
+                        return candidate
+            # Fallback
+            tomorrow = after + timedelta(days=1)
+            return tomorrow.replace(hour=matching_hours[0], minute=0, second=0, microsecond=0)
+
+        all_scheduled = scheduler_service.get_all_scheduled()
+
+        # Collect only reel-type scheduled entries (variant != 'post')
+        reels: list[dict] = []
+        for schedule in all_scheduled:
+            metadata = schedule.get("metadata", {})
+            variant = metadata.get("variant", "light")
+            if variant == "post":
+                continue
+            status = schedule.get("status", "")
+            if status not in ("scheduled", "publishing"):
+                continue
+            reels.append(schedule)
+
+        # Track all occupied slots per brand
+        brand_occupied: dict[str, set[str]] = {}
+        for reel in reels:
+            metadata = reel.get("metadata", {})
+            brand = metadata.get("brand", "unknown").lower()
+            sched_time = reel.get("scheduled_time")
+            if not sched_time:
+                continue
+            if hasattr(sched_time, 'strftime'):
+                time_key = sched_time.strftime("%Y-%m-%d %H:%M")
+            else:
+                time_key = str(sched_time)[:16]
+            if brand not in brand_occupied:
+                brand_occupied[brand] = set()
+            brand_occupied[brand].add(time_key)
+
+        wrong_slot_fixed = 0
+        collision_fixed = 0
+        already_correct = 0
+        details: list[str] = []
+
+        # PASS 1: Fix reels on WRONG slots (wrong hour for brand)
+        reels_to_keep: list[dict] = []
+        for reel in reels:
+            metadata = reel.get("metadata", {})
+            brand = metadata.get("brand", "unknown").lower()
+            variant = metadata.get("variant", "light")
+            sched_time = reel.get("scheduled_time")
+            schedule_id = reel.get("id") or reel.get("schedule_id")
+            if not sched_time or not schedule_id:
+                reels_to_keep.append(reel)
+                continue
+
+            if not hasattr(sched_time, 'hour'):
+                sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
+                if sched_time.tzinfo is not None:
+                    sched_time = sched_time.replace(tzinfo=None)
+
+            valid_hours = get_valid_hours_for_brand(brand)
+            hour = sched_time.hour
+
+            if hour not in valid_hours or sched_time.minute != 0:
+                # Wrong slot! Reschedule to next correct slot
+                # Remove old slot from occupied
+                old_key = sched_time.strftime("%Y-%m-%d %H:%M")
+                if brand in brand_occupied:
+                    brand_occupied[brand].discard(old_key)
+
+                new_time = find_next_valid_reel_slot(
+                    brand, variant, sched_time,
+                    brand_occupied.get(brand, set())
+                )
+                new_key = new_time.strftime("%Y-%m-%d %H:%M")
+                if brand not in brand_occupied:
+                    brand_occupied[brand] = set()
+                brand_occupied[brand].add(new_key)
+
+                try:
+                    scheduler_service.reschedule(schedule_id, new_time)
+                    wrong_slot_fixed += 1
+                    details.append(f"Wrong slot: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
+                    print(f"   🔧 Wrong slot: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
+                    # Update reel's time for pass 2
+                    reel["scheduled_time"] = new_time
+                except Exception as e:
+                    print(f"   ❌ Failed to reschedule {schedule_id}: {e}")
+            else:
+                # Check variant matches expected for this hour
+                expected_variant = get_expected_variant(brand, hour)
+                if variant != expected_variant and variant in ("light", "dark"):
+                    old_key = sched_time.strftime("%Y-%m-%d %H:%M")
+                    if brand in brand_occupied:
+                        brand_occupied[brand].discard(old_key)
+                    new_time = find_next_valid_reel_slot(
+                        brand, variant, sched_time,
+                        brand_occupied.get(brand, set())
+                    )
+                    new_key = new_time.strftime("%Y-%m-%d %H:%M")
+                    if brand not in brand_occupied:
+                        brand_occupied[brand] = set()
+                    brand_occupied[brand].add(new_key)
+                    try:
+                        scheduler_service.reschedule(schedule_id, new_time)
+                        wrong_slot_fixed += 1
+                        details.append(f"Wrong variant: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
+                        print(f"   🔧 Wrong variant: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
+                        reel["scheduled_time"] = new_time
+                    except Exception as e:
+                        print(f"   ❌ Failed to reschedule {schedule_id}: {e}")
+
+            reels_to_keep.append(reel)
+
+        # PASS 2: Fix COLLISIONS (multiple reels at same brand+time)
+        slot_map: dict[str, list[dict]] = {}  # key = "brand|datetime"
+        for reel in reels_to_keep:
+            metadata = reel.get("metadata", {})
+            brand = metadata.get("brand", "unknown").lower()
+            sched_time = reel.get("scheduled_time")
+            if not sched_time:
+                continue
+            if hasattr(sched_time, 'strftime'):
+                time_key = sched_time.strftime("%Y-%m-%d %H:%M")
+            else:
+                time_key = str(sched_time)[:16]
+            slot_key = f"{brand}|{time_key}"
+            if slot_key not in slot_map:
+                slot_map[slot_key] = []
+            slot_map[slot_key].append(reel)
+
+        for slot_key, entries in slot_map.items():
+            if len(entries) <= 1:
+                already_correct += 1
+                continue
+            brand = slot_key.split("|")[0]
+            # Keep the first one, reschedule extras
+            for extra in entries[1:]:
+                schedule_id = extra.get("id") or extra.get("schedule_id")
+                sched_time = extra.get("scheduled_time")
+                metadata = extra.get("metadata", {})
+                variant = metadata.get("variant", "light")
+                if not schedule_id or not sched_time:
+                    continue
+                if not hasattr(sched_time, 'hour'):
+                    sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
+                    if sched_time.tzinfo is not None:
+                        sched_time = sched_time.replace(tzinfo=None)
+
+                new_time = find_next_valid_reel_slot(
+                    brand, variant, sched_time,
+                    brand_occupied.get(brand, set())
+                )
+                new_key = new_time.strftime("%Y-%m-%d %H:%M")
+                if brand not in brand_occupied:
+                    brand_occupied[brand] = set()
+                brand_occupied[brand].add(new_key)
+
+                try:
+                    scheduler_service.reschedule(schedule_id, new_time)
+                    collision_fixed += 1
+                    details.append(f"Collision: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
+                    print(f"   🔧 Collision fix: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
+                except Exception as e:
+                    print(f"   ❌ Failed to reschedule {schedule_id}: {e}")
+
+        total_fixed = wrong_slot_fixed + collision_fixed
+        message = f"Fixed {total_fixed} reel(s): {wrong_slot_fixed} wrong-slot, {collision_fixed} collision(s). {already_correct} already correct."
+        print(f"✅ Reel Scheduler Cleaner: {message}")
+
+        return {
+            "status": "ok",
+            "wrong_slot_fixed": wrong_slot_fixed,
+            "collision_fixed": collision_fixed,
+            "total_fixed": total_fixed,
+            "already_correct": already_correct,
+            "details": details[:50],  # limit detail output
+            "message": message
+        }
+
+    except Exception as e:
+        print(f"❌ Clean reel slots failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/scheduled/clean-post-slots")
 async def clean_post_slots(posts_per_day: int = 6):
     """
