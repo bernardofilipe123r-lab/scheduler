@@ -698,6 +698,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                     <CarouselTextSlide
                       brand={brand}
                       text={slideTexts[currentSlide - 1] || ''}
+                      allSlideTexts={slideTexts}
                       isLastSlide={currentSlide === slideTexts.length}
                       scale={GRID_PREVIEW_SCALE}
                       logoUrl={logoUrl}
@@ -1187,6 +1188,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                   <CarouselTextSlide
                     brand={expandedBrand}
                     text={slideTexts[currentSlide - 1] || ''}
+                    allSlideTexts={slideTexts}
                     isLastSlide={currentSlide === slideTexts.length}
                     scale={FULL_SCALE}
                     logoUrl={logoUrl}

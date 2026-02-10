@@ -1112,6 +1112,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                     <CarouselTextSlide
                       brand={currentPost.brand}
                       text={(currentPost.slideTexts || [])[currentSlide - 1] || ''}
+                      allSlideTexts={currentPost.slideTexts || []}
                       isLastSlide={currentSlide === (currentPost.slideTexts?.length || 0)}
                       scale={REVIEW_SCALE}
                       logoUrl={brandLogos[currentPost.brand] || null}

@@ -2,10 +2,13 @@
  * CarouselTextSlide — renders a beige text-only carousel slide (slides 2-4).
  *
  * Design reference: Neuroglobe-style Instagram text posts
- * - Light beige background (#f5f0eb)
- * - Top-left: brand logo/initial + brand name + @handle
+ * - Light beige background (#f8f5f0)
+ * - Top-left: brand logo (circular) + brand name + @handle
  * - Center: educational text paragraph (black, large readable font)
  * - Bottom bar: SHARE (icon) | SWIPE | SAVE (icon) — no SWIPE on last slide
+ *
+ * Header position is consistent across all slides: it's computed from the
+ * tallest slide text so the brand block never jumps while swiping.
  */
 import { useMemo } from 'react'
 import { Stage, Layer, Rect, Text, Circle, Group, Image as KonvaImage } from 'react-konva'
@@ -40,9 +43,20 @@ const BRAND_COLORS: Record<string, string> = {
   holisticcollege: '#f97316',
 }
 
-const BG_COLOR = '#f5f0eb'
+const BG_COLOR = '#f8f5f0'
 const TEXT_COLOR = '#1a1a1a'
 const SUBTLE_COLOR = '#888888'
+
+// ─── Layout constants (at 1080×1350 canvas resolution) ──────────────
+const PAD_X = 80
+const LOGO_SIZE = 56
+const TEXT_WIDTH = CANVAS_WIDTH - PAD_X * 2
+const BOTTOM_BAR_Y = CANVAS_HEIGHT - 120
+const ICON_SIZE = 30
+const HEADER_BLOCK_H = LOGO_SIZE + 20 // logo row + spacing below
+const HEADER_TEXT_GAP = 30
+const TEXT_FONT_SIZE = 38
+const TEXT_LINE_HEIGHT = 1.55
 
 // ─── Estimate text height for vertical centering ────────────────────
 function estimateTextHeight(
@@ -51,8 +65,7 @@ function estimateTextHeight(
   lineHeight: number,
   maxWidth: number,
 ): number {
-  // Approximate word-wrap line count
-  const avgCharWidth = fontSize * 0.48 // rough for Georgia serif
+  const avgCharWidth = fontSize * 0.48
   const words = text.split(/\s+/)
   let lines = 1
   let lineWidth = 0
@@ -68,11 +81,29 @@ function estimateTextHeight(
   return lines * fontSize * lineHeight
 }
 
+/**
+ * Compute a stable contentY from the tallest slide text.
+ * This ensures the brand header never moves between slides.
+ */
+function computeStableContentY(allTexts: string[]): number {
+  const availableH = BOTTOM_BAR_Y - 40 - 60
+  let maxTotalH = 0
+  for (const t of allTexts) {
+    const textH = estimateTextHeight(t, TEXT_FONT_SIZE, TEXT_LINE_HEIGHT, TEXT_WIDTH)
+    const totalH = HEADER_BLOCK_H + HEADER_TEXT_GAP + textH
+    if (totalH > maxTotalH) maxTotalH = totalH
+  }
+  const centered = 60 + (availableH - maxTotalH) / 2
+  return Math.max(60, Math.min(centered, 280))
+}
+
 // ─── Component ──────────────────────────────────────────────────────
 
 interface CarouselTextSlideProps {
   brand: string
   text: string
+  /** All slide texts (slides 2-4) so we can compute a stable header position */
+  allSlideTexts?: string[]
   isLastSlide: boolean
   scale?: number
   logoUrl?: string | null
@@ -82,6 +113,7 @@ interface CarouselTextSlideProps {
 export function CarouselTextSlide({
   brand,
   text,
+  allSlideTexts,
   isLastSlide,
   scale = 0.3,
   logoUrl,
@@ -98,33 +130,33 @@ export function CarouselTextSlide({
   // Load brand theme logo (if provided)
   const [brandLogoImg] = useImage(logoUrl || '', 'anonymous')
 
-  // Replace placeholder handle in text — handles both {{brandhandle}} and {brandhandle}
+  // Replace placeholder handle in text
   const displayText = text
     .replace(/@\{\{brandhandle\}\}/g, handle)
     .replace(/\{\{brandhandle\}\}/g, handle)
     .replace(/@\{brandhandle\}/g, handle)
     .replace(/\{brandhandle\}/g, handle)
 
-  // Layout constants (at 1080x1350 canvas resolution)
-  const PAD_X = 80
-  const LOGO_SIZE = 56
-  const TEXT_WIDTH = CANVAS_WIDTH - PAD_X * 2
-  const BOTTOM_BAR_Y = CANVAS_HEIGHT - 120
-  const ICON_SIZE = 30
-
-  // Vertically center brand header + text in available space
-  const headerBlockHeight = LOGO_SIZE + 20 // logo + spacing
-  const headerTextGap = 30
-  const textFontSize = 38
-  const textLineHeight = 1.55
-
+  // Compute contentY — stable across all slides when allSlideTexts is provided
   const contentY = useMemo(() => {
-    const textH = estimateTextHeight(displayText, textFontSize, textLineHeight, TEXT_WIDTH)
-    const totalH = headerBlockHeight + headerTextGap + textH
-    const availableH = BOTTOM_BAR_Y - 40 - 60 // between top padding and bottom bar padding
+    if (allSlideTexts && allSlideTexts.length > 0) {
+      // Replace handles in all texts for accurate measurement
+      const cleaned = allSlideTexts.map((t) =>
+        t
+          .replace(/@\{\{brandhandle\}\}/g, handle)
+          .replace(/\{\{brandhandle\}\}/g, handle)
+          .replace(/@\{brandhandle\}/g, handle)
+          .replace(/\{brandhandle\}/g, handle)
+      )
+      return computeStableContentY(cleaned)
+    }
+    // Fallback: single slide centering
+    const textH = estimateTextHeight(displayText, TEXT_FONT_SIZE, TEXT_LINE_HEIGHT, TEXT_WIDTH)
+    const totalH = HEADER_BLOCK_H + HEADER_TEXT_GAP + textH
+    const availableH = BOTTOM_BAR_Y - 40 - 60
     const centered = 60 + (availableH - totalH) / 2
-    return Math.max(60, Math.min(centered, 280)) // clamp reasonable range
-  }, [displayText, TEXT_WIDTH, BOTTOM_BAR_Y, headerBlockHeight])
+    return Math.max(60, Math.min(centered, 280))
+  }, [allSlideTexts, displayText, handle])
 
   return (
     <Stage
@@ -140,15 +172,21 @@ export function CarouselTextSlide({
 
         {/* Brand header: logo + name + handle */}
         <Group x={PAD_X} y={contentY}>
-          {/* Brand logo — use uploaded theme logo if available, else colored circle with initial */}
+          {/* Brand logo — circular theme logo if available, else colored circle with initial */}
           {brandLogoImg ? (
-            <KonvaImage
-              image={brandLogoImg}
-              x={0}
-              y={0}
-              width={LOGO_SIZE}
-              height={LOGO_SIZE}
-            />
+            <Group
+              clipFunc={(ctx: any) => {
+                ctx.arc(LOGO_SIZE / 2, LOGO_SIZE / 2, LOGO_SIZE / 2, 0, Math.PI * 2, false)
+              }}
+            >
+              <KonvaImage
+                image={brandLogoImg}
+                x={0}
+                y={0}
+                width={LOGO_SIZE}
+                height={LOGO_SIZE}
+              />
+            </Group>
           ) : (
             <>
               <Circle
@@ -198,13 +236,13 @@ export function CarouselTextSlide({
         {/* Main text content */}
         <Text
           text={displayText}
-          fontSize={textFontSize}
+          fontSize={TEXT_FONT_SIZE}
           fontFamily="Georgia, 'Times New Roman', serif"
           fill={TEXT_COLOR}
           x={PAD_X}
-          y={contentY + headerBlockHeight + headerTextGap}
+          y={contentY + HEADER_BLOCK_H + HEADER_TEXT_GAP}
           width={TEXT_WIDTH}
-          lineHeight={textLineHeight}
+          lineHeight={TEXT_LINE_HEIGHT}
           wrap="word"
         />
 
