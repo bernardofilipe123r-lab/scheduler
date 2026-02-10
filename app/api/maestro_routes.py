@@ -366,3 +366,65 @@ async def get_trending(
         return {"count": len(trending), "trending": trending}
     except Exception as e:
         return {"error": str(e)}
+
+
+# ── OPTIMIZE NOW ──────────────────────────────────────────────
+
+@router.post("/optimize-now")
+async def optimize_now(background_tasks: BackgroundTasks):
+    """
+    Trigger both Toby and Lexi to generate 10 reel proposals each, immediately.
+
+    Runs in background so the response is instant.
+    Returns immediately with a confirmation — proposals appear in the feed.
+    """
+    from app.services.maestro import maestro_log
+
+    def _run_optimize():
+        import traceback
+
+        maestro_log("maestro", "⚡ Optimize Now", "Triggered — Toby×10 + Lexi×10 reels", "🚀", "action")
+
+        results = {}
+
+        # Toby: 10 reel proposals
+        try:
+            from app.services.toby_agent import get_toby_agent
+            toby = get_toby_agent()
+            maestro_log("maestro", "Optimize Now", "Running Toby × 10 reels...", "🧠", "action")
+            toby_result = toby.run(max_proposals=10, content_type="reel")
+            results["toby"] = {
+                "created": toby_result.get("proposals_created", 0),
+                "strategies": toby_result.get("strategies_used", {}),
+            }
+            maestro_log("maestro", "Optimize Now", f"Toby done — {toby_result.get('proposals_created', 0)} proposals", "✅", "action")
+        except Exception as e:
+            maestro_log("maestro", "Optimize Now Error", f"Toby failed: {e}", "❌", "action")
+            traceback.print_exc()
+            results["toby"] = {"error": str(e)}
+
+        # Lexi: 10 reel proposals
+        try:
+            from app.services.lexi_agent import get_lexi_agent
+            lexi = get_lexi_agent()
+            maestro_log("maestro", "Optimize Now", "Running Lexi × 10 reels...", "📊", "action")
+            lexi_result = lexi.run(max_proposals=10, content_type="reel")
+            results["lexi"] = {
+                "created": lexi_result.get("proposals_created", 0),
+                "strategies": lexi_result.get("strategies_used", {}),
+            }
+            maestro_log("maestro", "Optimize Now", f"Lexi done — {lexi_result.get('proposals_created', 0)} proposals", "✅", "action")
+        except Exception as e:
+            maestro_log("maestro", "Optimize Now Error", f"Lexi failed: {e}", "❌", "action")
+            traceback.print_exc()
+            results["lexi"] = {"error": str(e)}
+
+        total = results.get("toby", {}).get("created", 0) + results.get("lexi", {}).get("created", 0)
+        maestro_log("maestro", "⚡ Optimize Now Complete", f"Total: {total} proposals generated", "🏁", "action")
+
+    background_tasks.add_task(_run_optimize)
+
+    return {
+        "status": "started",
+        "message": "Optimize Now triggered — Toby (10 reels) + Lexi (10 reels) generating in background. Proposals will appear shortly.",
+    }

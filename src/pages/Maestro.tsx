@@ -289,6 +289,7 @@ export function MaestroPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null)
+  const [optimizing, setOptimizing] = useState(false)
   const [activeTab, setActiveTab] = useState<'proposals' | 'activity' | 'insights' | 'trending'>('proposals')
 
   // ── Data fetching ──
@@ -395,6 +396,33 @@ export function MaestroPage() {
     }
   }
 
+  const handleOptimizeNow = async () => {
+    setOptimizing(true)
+    try {
+      const result = await post<any>('/api/maestro/optimize-now')
+      if (result.status === 'started') {
+        toast.success('⚡ Optimize Now triggered — Toby (10) + Lexi (10) generating...', { duration: 6000 })
+        // Poll for new proposals every 15s while they generate
+        const poll = setInterval(async () => {
+          await Promise.all([fetchProposals(), fetchStatus()])
+        }, 15000)
+        // Stop polling after 5 minutes
+        setTimeout(() => {
+          clearInterval(poll)
+          setOptimizing(false)
+          fetchProposals()
+          fetchStatus()
+        }, 300000)
+      } else {
+        toast.error(result.error || 'Failed to start')
+        setOptimizing(false)
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to trigger Optimize Now')
+      setOptimizing(false)
+    }
+  }
+
   const stats = maestroStatus?.proposal_stats ?? null
   const agents = maestroStatus?.agents ?? {}
 
@@ -439,10 +467,26 @@ export function MaestroPage() {
               </div>
             </div>
 
-            {/* No pause/resume — just a working status */}
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/15 rounded-xl border border-white/20 text-sm">
-              <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
-              Autonomous
+            <div className="flex items-center gap-3">
+              {/* Optimize Now button */}
+              <button
+                onClick={handleOptimizeNow}
+                disabled={optimizing}
+                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl border border-white/25 text-sm font-semibold transition-all disabled:opacity-60"
+              >
+                {optimizing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4" />
+                )}
+                {optimizing ? 'Generating...' : 'Optimize Now'}
+              </button>
+
+              {/* Always-on status */}
+              <div className="flex items-center gap-2 px-4 py-2 bg-white/15 rounded-xl border border-white/20 text-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
+                Autonomous
+              </div>
             </div>
           </div>
 
