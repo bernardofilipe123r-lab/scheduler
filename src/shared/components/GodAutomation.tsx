@@ -1065,7 +1065,17 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-2xl overflow-hidden shadow-2xl shadow-black/30">
+                <div className="rounded-2xl overflow-hidden shadow-2xl shadow-black/30 relative">
+                  {/* Scheduling overlay — hides slide cycling flicker during capture */}
+                  {isSchedulingCurrent && (
+                    <div
+                      className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 rounded-2xl backdrop-blur-sm"
+                      style={{ width: CANVAS_WIDTH * REVIEW_SCALE, height: CANVAS_HEIGHT * REVIEW_SCALE }}
+                    >
+                      <div className="w-10 h-10 rounded-full border-[3px] border-green-200 border-t-green-500 animate-spin" />
+                      <p className="text-sm text-white/60 mt-3 font-medium">Scheduling...</p>
+                    </div>
+                  )}
                   {currentSlide === 0 ? (
                     <PostCanvas
                       brand={currentPost.brand}

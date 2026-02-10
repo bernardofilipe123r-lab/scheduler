@@ -154,12 +154,12 @@ export function BackgroundImageLayer({ imageUrl }: { imageUrl: string }) {
   const [image] = useImage(imageUrl, 'anonymous')
   if (!image) return null
   return (
-    <Rect
+    <KonvaImage
+      image={image}
+      x={0}
+      y={0}
       width={CANVAS_WIDTH}
       height={CANVAS_HEIGHT}
-      fillPatternImage={image}
-      fillPatternScaleX={CANVAS_WIDTH / image.width}
-      fillPatternScaleY={CANVAS_HEIGHT / image.height}
     />
   )
 }

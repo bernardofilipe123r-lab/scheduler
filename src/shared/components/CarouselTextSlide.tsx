@@ -5,11 +5,15 @@
  * - Light beige background (#f5f0eb)
  * - Top-left: brand logo/initial + brand name + @handle
  * - Center: educational text paragraph (black, large readable font)
- * - Bottom bar: SHARE ✈️ | SWIPE | SAVE 🔖 (no SWIPE on last slide)
+ * - Bottom bar: SHARE (icon) | SWIPE | SAVE (icon) — no SWIPE on last slide
  */
-import { Stage, Layer, Rect, Text, Circle, Group } from 'react-konva'
+import { useMemo } from 'react'
+import { Stage, Layer, Rect, Text, Circle, Group, Image as KonvaImage } from 'react-konva'
+import useImage from 'use-image'
 import Konva from 'konva'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './PostCanvas'
+import shareIconSrc from '@/assets/icons/share.png'
+import saveIconSrc from '@/assets/icons/save.png'
 
 // ─── Brand handle mapping ───────────────────────────────────────────
 export const BRAND_HANDLES: Record<string, string> = {
@@ -40,6 +44,30 @@ const BG_COLOR = '#f5f0eb'
 const TEXT_COLOR = '#1a1a1a'
 const SUBTLE_COLOR = '#888888'
 
+// ─── Estimate text height for vertical centering ────────────────────
+function estimateTextHeight(
+  text: string,
+  fontSize: number,
+  lineHeight: number,
+  maxWidth: number,
+): number {
+  // Approximate word-wrap line count
+  const avgCharWidth = fontSize * 0.48 // rough for Georgia serif
+  const words = text.split(/\s+/)
+  let lines = 1
+  let lineWidth = 0
+  for (const word of words) {
+    const wordWidth = word.length * avgCharWidth
+    if (lineWidth + wordWidth > maxWidth && lineWidth > 0) {
+      lines++
+      lineWidth = wordWidth + avgCharWidth
+    } else {
+      lineWidth += wordWidth + avgCharWidth
+    }
+  }
+  return lines * fontSize * lineHeight
+}
+
 // ─── Component ──────────────────────────────────────────────────────
 
 interface CarouselTextSlideProps {
@@ -61,16 +89,33 @@ export function CarouselTextSlide({
   const brandName = BRAND_DISPLAY_NAMES[brand] || brand
   const handle = BRAND_HANDLES[brand] || `@the${brand}`
 
+  // Load PNG icons
+  const [shareImg] = useImage(shareIconSrc)
+  const [saveImg] = useImage(saveIconSrc)
+
   // Replace placeholder handle in text
   const displayText = text.replace(/\{\{brandhandle\}\}/g, handle).replace(/@\{\{brandhandle\}\}/g, handle)
 
   // Layout constants (at 1080x1350 canvas resolution)
   const PAD_X = 80
-  const HEADER_Y = 220
   const LOGO_SIZE = 56
-  const TEXT_START_Y = 320
   const TEXT_WIDTH = CANVAS_WIDTH - PAD_X * 2
   const BOTTOM_BAR_Y = CANVAS_HEIGHT - 120
+  const ICON_SIZE = 30
+
+  // Vertically center brand header + text in available space
+  const headerBlockHeight = LOGO_SIZE + 20 // logo + spacing
+  const headerTextGap = 30
+  const textFontSize = 38
+  const textLineHeight = 1.55
+
+  const contentY = useMemo(() => {
+    const textH = estimateTextHeight(displayText, textFontSize, textLineHeight, TEXT_WIDTH)
+    const totalH = headerBlockHeight + headerTextGap + textH
+    const availableH = BOTTOM_BAR_Y - 40 - 60 // between top padding and bottom bar padding
+    const centered = 60 + (availableH - totalH) / 2
+    return Math.max(60, Math.min(centered, 280)) // clamp reasonable range
+  }, [displayText, TEXT_WIDTH, BOTTOM_BAR_Y, headerBlockHeight])
 
   return (
     <Stage
@@ -85,7 +130,7 @@ export function CarouselTextSlide({
         <Rect x={0} y={0} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill={BG_COLOR} />
 
         {/* Brand header: circle avatar + name + handle */}
-        <Group x={PAD_X} y={HEADER_Y}>
+        <Group x={PAD_X} y={contentY}>
           {/* Logo circle with initial */}
           <Circle
             x={LOGO_SIZE / 2}
@@ -132,38 +177,38 @@ export function CarouselTextSlide({
         {/* Main text content */}
         <Text
           text={displayText}
-          fontSize={38}
+          fontSize={textFontSize}
           fontFamily="Georgia, 'Times New Roman', serif"
           fill={TEXT_COLOR}
           x={PAD_X}
-          y={TEXT_START_Y}
+          y={contentY + headerBlockHeight + headerTextGap}
           width={TEXT_WIDTH}
-          lineHeight={1.55}
+          lineHeight={textLineHeight}
           wrap="word"
         />
 
-        {/* Bottom bar separator line */}
-        <Rect
-          x={PAD_X}
-          y={BOTTOM_BAR_Y - 20}
-          width={TEXT_WIDTH}
-          height={1}
-          fill="#d4d0cb"
-        />
-
-        {/* Bottom bar: SHARE / SWIPE / SAVE */}
+        {/* Bottom bar: SHARE (icon) / SWIPE / SAVE (icon) — NO separator line */}
         <Group y={BOTTOM_BAR_Y}>
-          {/* SHARE */}
+          {/* SHARE + icon */}
           <Text
-            text="SHARE  ✈"
+            text="SHARE"
             fontSize={24}
             fontFamily="Inter, Arial, sans-serif"
             fontStyle="bold"
             fill={TEXT_COLOR}
             x={PAD_X}
-            y={0}
+            y={2}
             letterSpacing={2}
           />
+          {shareImg && (
+            <KonvaImage
+              image={shareImg}
+              x={PAD_X + 110}
+              y={-2}
+              width={ICON_SIZE}
+              height={ICON_SIZE}
+            />
+          )}
 
           {/* SWIPE (only if not last slide) */}
           {!isLastSlide && (
@@ -174,23 +219,32 @@ export function CarouselTextSlide({
               fontStyle="bold"
               fill={TEXT_COLOR}
               x={0}
-              y={0}
+              y={2}
               width={CANVAS_WIDTH}
               align="center"
               letterSpacing={2}
             />
           )}
 
-          {/* SAVE */}
+          {/* SAVE icon + text */}
+          {saveImg && (
+            <KonvaImage
+              image={saveImg}
+              x={CANVAS_WIDTH - PAD_X - 150}
+              y={-2}
+              width={ICON_SIZE}
+              height={ICON_SIZE}
+            />
+          )}
           <Text
-            text="🔖 SAVE"
+            text="SAVE"
             fontSize={24}
             fontFamily="Inter, Arial, sans-serif"
             fontStyle="bold"
             fill={TEXT_COLOR}
-            x={CANVAS_WIDTH - PAD_X - 150}
-            y={0}
-            width={150}
+            x={CANVAS_WIDTH - PAD_X - 112}
+            y={2}
+            width={112}
             align="right"
             letterSpacing={2}
           />
