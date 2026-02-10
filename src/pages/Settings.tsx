@@ -15,7 +15,10 @@ import {
   EyeOff,
   RefreshCw,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Database,
+  Server,
+  Globe
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSettings, useBulkUpdateSettings, type Setting } from '@/features/settings/api/use-settings'
@@ -27,6 +30,7 @@ const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
   scheduling: Calendar,
   meta: Key,
   youtube: Key,
+  application: Globe,
 }
 
 // Category labels
@@ -36,6 +40,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   scheduling: 'Scheduling',
   meta: 'Meta/Instagram',
   youtube: 'YouTube',
+  application: 'Application',
+}
+
+// Source badges
+const SOURCE_BADGE: Record<string, { label: string; className: string; icon: typeof Database }> = {
+  database: { label: 'DB', className: 'bg-green-100 text-green-700', icon: Database },
+  environment: { label: 'ENV', className: 'bg-blue-100 text-blue-700', icon: Server },
+  default: { label: 'Default', className: 'bg-gray-100 text-gray-500', icon: SettingsIcon },
 }
 
 export function SettingsPage() {
@@ -188,7 +200,11 @@ export function SettingsPage() {
               </div>
               
               <div className="divide-y divide-gray-100">
-                {settings.map((setting: Setting) => (
+                {settings.map((setting: Setting) => {
+                  const sourceBadge = SOURCE_BADGE[setting.source || 'default']
+                  const SourceIcon = sourceBadge?.icon || SettingsIcon
+                  
+                  return (
                   <div key={setting.key} className="px-6 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -201,9 +217,26 @@ export function SettingsPage() {
                               Modified
                             </span>
                           )}
+                          {sourceBadge && (
+                            <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${sourceBadge.className}`}
+                              title={setting.source === 'environment' 
+                                ? `Value from env var: ${setting.env_var_name}` 
+                                : setting.source === 'database'
+                                ? 'Value stored in database'
+                                : 'Using default value'}
+                            >
+                              <SourceIcon className="w-3 h-3" />
+                              {sourceBadge.label}
+                            </span>
+                          )}
                         </div>
                         {setting.description && (
                           <p className="text-sm text-gray-500 mt-1">{setting.description}</p>
+                        )}
+                        {setting.env_var_name && (
+                          <p className="text-xs text-gray-400 mt-0.5 font-mono">
+                            ENV: {setting.env_var_name}
+                          </p>
                         )}
                       </div>
                       
@@ -250,7 +283,8 @@ export function SettingsPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )
@@ -264,10 +298,14 @@ export function SettingsPage() {
           <div>
             <h3 className="font-medium text-blue-900">About Settings</h3>
             <p className="text-sm text-blue-700 mt-1">
-              Settings stored here take precedence over environment variables. 
+              Settings stored here take precedence over environment variables set on Railway.
               If a setting is empty, the system will fall back to the corresponding environment variable.
-              Sensitive values (like API keys) are encrypted at rest.
             </p>
+            <ul className="text-sm text-blue-700 mt-2 space-y-1 list-disc list-inside">
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium"><Database className="w-3 h-3" />DB</span> — Value saved in database (takes priority)</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium"><Server className="w-3 h-3" />ENV</span> — Value from Railway/environment variable (fallback)</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs font-medium">Default</span> — Using built-in default value</li>
+            </ul>
           </div>
         </div>
       </div>

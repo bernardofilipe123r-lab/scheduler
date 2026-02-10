@@ -27,6 +27,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
+# Environment variable name overrides (when the DB key doesn't match the env var name)
+SETTING_ENV_OVERRIDES = {
+    "deapi_api_key": "DEAPI_API_KEY",
+    "deapi_api_key_2": "DEAPI_API_KEY_2",
+    "public_url_base": "PUBLIC_URL_BASE",
+    "youtube_redirect_uri": "YOUTUBE_REDIRECT_URI",
+}
+
+
 # Default settings to seed if none exist
 DEFAULT_SETTINGS = [
     # AI API Keys
@@ -50,6 +59,14 @@ DEFAULT_SETTINGS = [
         "key": "deapi_api_key",
         "value": "",
         "description": "DEAPI key for AI image generation",
+        "category": "ai",
+        "value_type": "string",
+        "sensitive": True
+    },
+    {
+        "key": "deapi_api_key_2",
+        "value": "",
+        "description": "Secondary DEAPI key for AI image generation (fallback)",
         "category": "ai",
         "value_type": "string",
         "sensitive": True
@@ -134,6 +151,24 @@ DEFAULT_SETTINGS = [
         "value_type": "string",
         "sensitive": True
     },
+    {
+        "key": "youtube_redirect_uri",
+        "value": "",
+        "description": "YouTube OAuth Redirect URI",
+        "category": "youtube",
+        "value_type": "string",
+        "sensitive": False
+    },
+    
+    # Application
+    {
+        "key": "public_url_base",
+        "value": "",
+        "description": "Public URL base for serving videos/thumbnails to Meta APIs (Railway URL)",
+        "category": "application",
+        "value_type": "string",
+        "sensitive": False
+    },
 ]
 
 
@@ -165,6 +200,17 @@ class SettingResponse(BaseModel):
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def _get_env_key(key: str) -> str:
+    """Get the environment variable name for a setting key."""
+    return SETTING_ENV_OVERRIDES.get(key, key.upper())
+
+
+def _get_env_value(key: str) -> Optional[str]:
+    """Get the environment variable value for a setting key."""
+    env_key = _get_env_key(key)
+    return os.getenv(env_key)
+
 
 def get_setting_value(db: Session, key: str, default: Any = None) -> Any:
     """
@@ -198,8 +244,7 @@ def get_setting_value(db: Session, key: str, default: Any = None) -> Any:
         return value
     
     # Check environment variable
-    env_key = key.upper()
-    env_value = os.getenv(env_key)
+    env_value = _get_env_value(key)
     if env_value:
         return env_value
     
@@ -219,8 +264,7 @@ def seed_settings_if_needed(db: Session) -> int:
         
         if not existing:
             # Check if there's an env var to use as initial value
-            env_key = setting_data["key"].upper()
-            env_value = os.getenv(env_key)
+            env_value = _get_env_value(setting_data["key"])
             
             setting = AppSettings(
                 key=setting_data["key"],
@@ -256,6 +300,9 @@ async def list_settings(
     Optionally filter by category (ai, content, scheduling, meta, youtube).
     Sensitive values are redacted unless include_sensitive=true.
     """
+    # Seed any new settings that may have been added
+    seed_settings_if_needed(db)
+    
     query = db.query(AppSettings)
     
     if category:
@@ -263,16 +310,39 @@ async def list_settings(
     
     settings = query.order_by(AppSettings.category, AppSettings.key).all()
     
-    # Group by category
+    # Build enriched settings with source info and effective values
+    enriched_settings = []
     grouped: Dict[str, List[Dict]] = {}
+    
     for setting in settings:
+        data = setting.to_dict(include_sensitive=True)
+        
+        # Determine the effective value and its source
+        db_value = setting.value
+        env_value = _get_env_value(setting.key)
+        
+        if db_value:
+            data["source"] = "database"
+            data["has_env_var"] = bool(env_value)
+        elif env_value:
+            data["source"] = "environment"
+            data["value"] = env_value  # Show env var value as effective value
+            data["has_env_var"] = True
+        else:
+            data["source"] = "default"
+            data["has_env_var"] = False
+        
+        data["env_var_name"] = _get_env_key(setting.key)
+        
+        enriched_settings.append(data)
+        
         cat = setting.category or "general"
         if cat not in grouped:
             grouped[cat] = []
-        grouped[cat].append(setting.to_dict())
+        grouped[cat].append(data)
     
     return {
-        "settings": [s.to_dict() for s in settings],
+        "settings": enriched_settings,
         "grouped": grouped,
         "count": len(settings)
     }
@@ -301,7 +371,26 @@ async def get_setting(
     if not setting:
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
     
-    return setting.to_dict()
+    data = setting.to_dict(include_sensitive=True)
+    
+    # Add source info
+    db_value = setting.value
+    env_value = _get_env_value(setting.key)
+    
+    if db_value:
+        data["source"] = "database"
+        data["has_env_var"] = bool(env_value)
+    elif env_value:
+        data["source"] = "environment"
+        data["value"] = env_value
+        data["has_env_var"] = True
+    else:
+        data["source"] = "default"
+        data["has_env_var"] = False
+    
+    data["env_var_name"] = _get_env_key(setting.key)
+    
+    return data
 
 
 @router.put("/{key}")
@@ -317,6 +406,13 @@ async def update_setting(
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
     
     # Validate value type
+    if request.value == "***REDACTED***":
+        return {
+            "success": True,
+            "message": f"Setting '{key}' unchanged (redacted value skipped)",
+            "setting": setting.to_dict(include_sensitive=True)
+        }
+    
     if setting.value_type == "number":
         try:
             float(request.value) if "." in request.value else int(request.value)
@@ -362,6 +458,10 @@ async def bulk_update_settings(
         
         if not setting:
             errors.append(f"Setting '{key}' not found")
+            continue
+        
+        # Skip if value is unchanged REDACTED placeholder
+        if value == "***REDACTED***":
             continue
         
         setting.value = value

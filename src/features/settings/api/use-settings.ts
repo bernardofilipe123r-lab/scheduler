@@ -13,6 +13,9 @@ export interface Setting {
   value_type: 'string' | 'number' | 'boolean' | 'json'
   sensitive: boolean
   updated_at: string | null
+  source?: 'database' | 'environment' | 'default'
+  has_env_var?: boolean
+  env_var_name?: string
 }
 
 export interface SettingsResponse {
