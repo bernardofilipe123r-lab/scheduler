@@ -63,6 +63,26 @@ export function GeneratorPage() {
     })
   }
   
+  // Split a long title into ~equal-length lines
+  const balanceTitle = (text: string): string => {
+    const words = text.trim().split(/\s+/)
+    if (words.length <= 3) return text.trim()
+    const total = text.trim().length
+    const target = total / 2
+    let line1 = ''
+    let bestSplit = 0
+    let bestDiff = Infinity
+    for (let i = 0; i < words.length - 1; i++) {
+      line1 += (i > 0 ? ' ' : '') + words[i]
+      const diff = Math.abs(line1.length - (total - line1.length - 1))
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestSplit = i + 1
+      }
+    }
+    return words.slice(0, bestSplit).join(' ') + '\n' + words.slice(bestSplit).join(' ')
+  }
+
   // Auto-generate viral content using AI
   const handleAutoGenerate = async () => {
     setIsAutoGenerating(true)
@@ -81,7 +101,7 @@ export function GeneratorPage() {
       
       const data = await response.json()
       
-      setTitle(data.title)
+      setTitle(balanceTitle(data.title))
       setContent(data.content_lines.join('\n'))
       
       if (data.image_prompt) {
