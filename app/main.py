@@ -22,6 +22,7 @@ from app.api.auth_routes import router as auth_router
 from app.api.prompts_routes import router as prompts_router
 from app.api.toby_routes import router as toby_router
 from app.api.toby_logs_routes import router as toby_logs_router
+from app.api.maestro_routes import router as maestro_router
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging_middleware import RequestLoggingMiddleware
@@ -90,8 +91,9 @@ app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
-app.include_router(toby_router)  # Toby AI agent (Phase 3)
+app.include_router(toby_router)  # Toby AI agent (Phase 3) — backward compat
 app.include_router(toby_logs_router)  # Toby activity logs at /toby-logs
+app.include_router(maestro_router)  # Maestro orchestrator (Toby + Lexi)
 
 # Mount static files - use absolute path for Railway volume support
 # The output directory is at /app/output when running in Docker
@@ -168,6 +170,11 @@ if FRONTEND_DIR.exists():
     @app.get("/about", tags=["frontend"])
     async def serve_about():
         """Serve React app for about route."""
+        return FileResponse(FRONTEND_DIR / "index.html")
+    
+    @app.get("/maestro", tags=["frontend"])
+    async def serve_maestro():
+        """Serve React app for Maestro orchestrator page."""
         return FileResponse(FRONTEND_DIR / "index.html")
     
     @app.get("/job/{job_id}", tags=["frontend"])
@@ -590,15 +597,15 @@ async def startup_event():
     # Store scheduler for shutdown
     app.state.scheduler = scheduler
     
-    # ── Start Toby Daemon (autonomous AI agent) ──
-    print("🧠 Starting Toby autonomous daemon...", flush=True)
+    # ── Start Maestro (orchestrating Toby + Lexi) ──
+    print("🎼 Starting Maestro orchestrator...", flush=True)
     try:
-        from app.services.toby_daemon import start_toby_daemon
-        toby = start_toby_daemon()
-        app.state.toby_daemon = toby
-        print("✅ Toby daemon active — thinking every 45m, observing every 3h, scouting every 4h", flush=True)
+        from app.services.maestro import start_maestro
+        maestro = start_maestro()
+        app.state.maestro = maestro
+        print("✅ Maestro active — orchestrating Toby (Explorer) + Lexi (Optimizer)", flush=True)
     except Exception as e:
-        print(f"⚠️ Toby daemon failed to start: {e}", flush=True)
+        print(f"⚠️ Maestro failed to start: {e}", flush=True)
     
     print("🎉 Startup complete! App is ready.", flush=True)
 
@@ -621,12 +628,12 @@ async def shutdown_event():
         app.state.scheduler.shutdown()
         print("⏰ Auto-publishing scheduler stopped")
     
-    # Shutdown Toby daemon
-    if hasattr(app.state, 'toby_daemon') and app.state.toby_daemon:
+    # Shutdown Maestro orchestrator
+    if hasattr(app.state, 'maestro') and app.state.maestro:
         try:
-            if app.state.toby_daemon.scheduler:
-                app.state.toby_daemon.scheduler.shutdown()
-            print("🧠 Toby daemon stopped")
+            if app.state.maestro.scheduler:
+                app.state.maestro.scheduler.shutdown()
+            print("🎼 Maestro stopped")
         except Exception:
             pass
 

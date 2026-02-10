@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Bot, Info } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Info, Music } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -122,7 +122,7 @@ export function AppLayout() {
               </NavLink>
               
               <NavLink
-                to="/toby"
+                to="/maestro"
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                     isActive
@@ -131,8 +131,8 @@ export function AppLayout() {
                   }`
                 }
               >
-                <Bot className="w-4 h-4" />
-                Toby
+                <Music className="w-4 h-4" />
+                Maestro
               </NavLink>
               
               {/* Settings Dropdown */}

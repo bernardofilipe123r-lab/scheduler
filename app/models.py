@@ -832,7 +832,10 @@ class TobyProposal(Base):
     # Status: pending | accepted | rejected | expired
     status = Column(String(20), default="pending", nullable=False, index=True)
 
-    # Content type: "reel" (future: "post")
+    # Which agent created this proposal: "toby" or "lexi"
+    agent_name = Column(String(20), default="toby", nullable=False, index=True)
+
+    # Content type: "reel" or "post"
     content_type = Column(String(10), nullable=False, default="reel")
 
     # ── Strategy that produced this proposal ──
@@ -885,6 +888,7 @@ class TobyProposal(Base):
             "id": self.id,
             "proposal_id": self.proposal_id,
             "status": self.status,
+            "agent_name": self.agent_name or "toby",
             "content_type": self.content_type,
             "strategy": self.strategy,
             "reasoning": self.reasoning,

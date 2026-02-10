@@ -466,15 +466,19 @@ def toby_log(action: str, detail: str = "", emoji: str = "🤖", level: str = "d
     """
     Log to Toby's activity feed from anywhere in the codebase.
     
-    Importable by toby_agent.py, trend_scout.py, metrics_collector.py
-    so all Toby-related actions appear in one unified timeline.
+    Now redirects to Maestro's unified activity log so all agent actions
+    appear in one timeline.  Falls back to the legacy daemon if Maestro
+    is not yet initialised (startup race).
     """
     try:
-        daemon = get_toby_daemon()
-        daemon.state.log(action, detail, emoji, level)
+        from app.services.maestro import maestro_log
+        maestro_log("toby", action, detail, emoji, level)
     except Exception:
-        # If daemon not ready yet, just print
-        print(f"   [TOBY-LOG] {action} — {detail}", flush=True)
+        try:
+            daemon = get_toby_daemon()
+            daemon.state.log(action, detail, emoji, level)
+        except Exception:
+            print(f"   [TOBY-LOG] {action} — {detail}", flush=True)
 
 
 def start_toby_daemon():

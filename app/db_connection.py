@@ -63,6 +63,18 @@ def run_migrations():
                 ALTER TABLE toby_proposals ADD COLUMN slide_texts JSON;
             """
         },
+        # Add agent_name column to toby_proposals for Maestro multi-agent support
+        {
+            "name": "Add agent_name column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='agent_name'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN agent_name VARCHAR(20) DEFAULT 'toby' NOT NULL;
+                CREATE INDEX ix_toby_proposals_agent ON toby_proposals(agent_name);
+            """
+        },
     ]
     
     with engine.connect() as conn:
