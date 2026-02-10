@@ -18,10 +18,19 @@ import {
   AlertCircle,
   Database,
   Server,
-  Globe
+  Globe,
+  Lock,
+  Shield
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useSettings, useBulkUpdateSettings, type Setting } from '@/features/settings/api/use-settings'
+import { 
+  useSettings, 
+  useBulkUpdateSettings, 
+  useVerifyAccess, 
+  getSettingsToken, 
+  clearSettingsToken,
+  type Setting 
+} from '@/features/settings/api/use-settings'
 
 // Category icons
 const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
@@ -51,6 +60,79 @@ const SOURCE_BADGE: Record<string, { label: string; className: string; icon: typ
 }
 
 export function SettingsPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getSettingsToken())
+  const [password, setPassword] = useState('')
+  const verifyAccess = useVerifyAccess()
+  
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      await verifyAccess.mutateAsync(password)
+      setIsAuthenticated(true)
+      setPassword('')
+      toast.success('Access granted')
+    } catch {
+      toast.error('Invalid password')
+      setPassword('')
+    }
+  }
+  
+  const handleLogout = () => {
+    clearSettingsToken()
+    setIsAuthenticated(false)
+    toast.success('Logged out of settings')
+  }
+  
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-8">
+            <div className="flex flex-col items-center gap-4 mb-6">
+              <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center">
+                <Shield className="w-8 h-8 text-primary-500" />
+              </div>
+              <div className="text-center">
+                <h1 className="text-2xl font-bold text-gray-900">Settings Access</h1>
+                <p className="text-gray-500 mt-1">Enter the password to manage settings</p>
+              </div>
+            </div>
+            
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password..."
+                  autoFocus
+                  className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-lg"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!password || verifyAccess.isPending}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-lg transition-colors"
+              >
+                {verifyAccess.isPending ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Key className="w-5 h-5" />
+                )}
+                Unlock Settings
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  return <SettingsContent onLogout={handleLogout} />
+}
+
+function SettingsContent({ onLogout }: { onLogout: () => void }) {
   const { data, isLoading, error, refetch } = useSettings()
   const bulkUpdate = useBulkUpdateSettings()
   
@@ -123,6 +205,14 @@ export function SettingsPage() {
   }
   
   if (error) {
+    // If 401, token expired - force re-login
+    const apiErr = error as { status?: number }
+    if (apiErr.status === 401) {
+      clearSettingsToken()
+      onLogout()
+      return null
+    }
+    
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <AlertCircle className="w-12 h-12 text-red-500" />
@@ -154,6 +244,13 @@ export function SettingsPage() {
         </div>
         
         <div className="flex items-center gap-3">
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-2 px-3 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Lock settings"
+          >
+            <Lock className="w-4 h-4" />
+          </button>
           {hasChanges && (
             <button
               onClick={handleReset}

@@ -4,6 +4,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 
+// Session token management
+const TOKEN_KEY = 'settings_access_token'
+
+export function getSettingsToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY)
+}
+
+export function setSettingsToken(token: string) {
+  sessionStorage.setItem(TOKEN_KEY, token)
+}
+
+export function clearSettingsToken() {
+  sessionStorage.removeItem(TOKEN_KEY)
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getSettingsToken()
+  return token ? { 'X-Settings-Token': token } : {}
+}
+
 // Types
 export interface Setting {
   key: string
@@ -33,27 +53,31 @@ export const settingsKeys = {
 }
 
 // API functions
+async function verifyAccess(password: string): Promise<{ success: boolean; token: string }> {
+  return apiClient.post<{ success: boolean; token: string }>('/api/settings/verify-access', { password })
+}
+
 async function fetchSettings(category?: string): Promise<SettingsResponse> {
   const url = category ? `/api/settings?category=${category}` : '/api/settings'
-  return apiClient.get<SettingsResponse>(url)
+  return apiClient.get<SettingsResponse>(url, { headers: authHeaders() })
 }
 
 async function fetchCategories(): Promise<string[]> {
-  const response = await apiClient.get<{ categories: string[] }>('/api/settings/categories')
+  const response = await apiClient.get<{ categories: string[] }>('/api/settings/categories', { headers: authHeaders() })
   return response.categories
 }
 
 async function fetchSetting(key: string): Promise<Setting> {
-  return apiClient.get<Setting>(`/api/settings/${key}`)
+  return apiClient.get<Setting>(`/api/settings/${key}`, { headers: authHeaders() })
 }
 
 async function updateSetting(key: string, value: string): Promise<Setting> {
-  const response = await apiClient.put<{ success: boolean; setting: Setting }>(`/api/settings/${key}`, { value })
+  const response = await apiClient.put<{ success: boolean; setting: Setting }>(`/api/settings/${key}`, { value }, { headers: authHeaders() })
   return response.setting
 }
 
 async function bulkUpdateSettings(settings: Record<string, string>): Promise<{ updated: string[]; errors: string[] }> {
-  return apiClient.post<{ updated: string[]; errors: string[] }>('/api/settings/bulk', { settings })
+  return apiClient.post<{ updated: string[]; errors: string[] }>('/api/settings/bulk', { settings }, { headers: authHeaders() })
 }
 
 // Hooks
@@ -117,6 +141,24 @@ export function useBulkUpdateSettings() {
     mutationFn: bulkUpdateSettings,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: settingsKeys.all })
+    },
+  })
+}
+
+/**
+ * Verify settings access password
+ */
+export function useVerifyAccess() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: verifyAccess,
+    onSuccess: (data) => {
+      setSettingsToken(data.token)
+      queryClient.invalidateQueries({ queryKey: settingsKeys.all })
+    },
+    onError: () => {
+      clearSettingsToken()
     },
   })
 }
