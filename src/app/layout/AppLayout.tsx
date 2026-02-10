@@ -14,7 +14,7 @@ export function AppLayout() {
   const { user, logout } = useAuth()
   
   // Check if current route is a settings page
-  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands' || location.pathname === '/settings' || location.pathname === '/prompts'
+  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands' || location.pathname === '/settings' || location.pathname === '/posts-prompts' || location.pathname === '/reels-prompts' || location.pathname === '/prompts'
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -180,7 +180,7 @@ export function AppLayout() {
                       App Settings
                     </NavLink>
                     <NavLink
-                      to="/prompts"
+                      to="/posts-prompts"
                       onClick={() => setSettingsOpen(false)}
                       className={({ isActive }) =>
                         `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
@@ -191,7 +191,21 @@ export function AppLayout() {
                       }
                     >
                       <Wand2 className="w-4 h-4" />
-                      Image Prompts
+                      Posts Prompts
+                    </NavLink>
+                    <NavLink
+                      to="/reels-prompts"
+                      onClick={() => setSettingsOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-600'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
+                    >
+                      <Film className="w-4 h-4" />
+                      Reels Prompts
                     </NavLink>
                     <div className="border-t border-gray-100 my-1" />
                     <a

@@ -4,6 +4,9 @@
  * Shows every layer of the prompt system, from AI content generation
  * to the final deAPI call. Users can test-generate sample images
  * from any prompt to see exactly what the system produces.
+ *
+ * Accepts a `contentType` prop to filter layers and models for
+ * either posts or reels.
  */
 import { useState, useEffect } from 'react'
 import {
@@ -28,6 +31,8 @@ import { apiClient } from '@/shared/api/client'
 // ============================================================
 // Types
 // ============================================================
+
+export type PromptContentType = 'posts' | 'reels'
 
 interface PromptLayer {
   id: string
@@ -77,11 +82,17 @@ interface FinalPromptPreview {
   steps: number
 }
 
+// Layers to exclude per content type
+const EXCLUDED_LAYERS: Record<PromptContentType, string[]> = {
+  posts: ['reel_base_style'],
+  reels: ['quality_suffix'],
+}
+
 // ============================================================
 // Component
 // ============================================================
 
-export function PromptsPage() {
+export function PromptsPage({ contentType = 'posts' }: { contentType?: PromptContentType }) {
   const [overview, setOverview] = useState<PromptOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -123,7 +134,7 @@ export function PromptsPage() {
 
   const expandAll = () => {
     if (!overview) return
-    setExpandedLayers(new Set(overview.layers.map((l) => l.id)))
+    setExpandedLayers(new Set(filteredLayers.map((l) => l.id)))
   }
 
   const collapseAll = () => setExpandedLayers(new Set())
@@ -195,6 +206,25 @@ export function PromptsPage() {
     }
   }
 
+  // ── Filtered data based on contentType ──
+  const excluded = EXCLUDED_LAYERS[contentType]
+  const filteredLayers = overview?.layers.filter((l) => !excluded.includes(l.id)) ?? []
+  const filteredModels = overview
+    ? Object.fromEntries(
+        Object.entries(overview.models).filter(([key]) => key === contentType)
+      )
+    : {}
+
+  const pageTitle = contentType === 'posts' ? 'Posts Prompts' : 'Reels Prompts'
+  const pipelineSummary =
+    contentType === 'posts'
+      ? 'Title → [DeepSeek AI generates image_prompt] → image_prompt + quality_suffix → [deAPI generates image] → final image used as post background'
+      : 'Title → [DeepSeek AI generates image_prompt] → image_prompt + reel_base_style → [deAPI generates image] → final image used as reel background'
+
+  const modelInfo = overview?.models[contentType]
+  const testModelLabel = modelInfo ? `${modelInfo.name}` : 'AI'
+  const testDimensionsLabel = modelInfo ? modelInfo.dimensions.split(' ')[0] : ''
+
   // ────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────
@@ -223,15 +253,15 @@ export function PromptsPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
           <Layers className="w-7 h-7 text-primary-500" />
-          Image Prompt Pipeline
+          {pageTitle}
         </h1>
         <p className="mt-1 text-gray-500">
-          Full transparency into how image prompts are built and sent to the AI image generator.
+          Full transparency into how {contentType === 'posts' ? 'post' : 'reel'} image prompts are built and sent to the AI image generator.
         </p>
         <div className="mt-3 p-3 bg-primary-50 rounded-lg border border-primary-100">
           <p className="text-sm text-primary-700 font-medium flex items-center gap-2">
             <ArrowRight className="w-4 h-4 flex-shrink-0" />
-            {overview.pipeline_summary}
+            {pipelineSummary}
           </p>
         </div>
       </div>
@@ -252,7 +282,7 @@ export function PromptsPage() {
         </div>
 
         <div className="space-y-3">
-          {overview.layers.map((layer) => {
+          {filteredLayers.map((layer) => {
             const isExpanded = expandedLayers.has(layer.id)
             return (
               <div
@@ -359,7 +389,7 @@ export function PromptsPage() {
           Image Generation Models
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {Object.entries(overview.models).map(([key, model]) => (
+          {Object.entries(filteredModels).map(([key, model]) => (
             <div key={key} className="bg-white rounded-xl border border-gray-200 p-5">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
@@ -409,7 +439,7 @@ export function PromptsPage() {
         </h2>
         <p className="text-sm text-gray-500 mb-4">
           Enter a prompt and generate 2 test images to see exactly what the AI produces. Uses the
-          post model (ZImageTurbo_INT8).
+          {contentType} model ({testModelLabel}).
         </p>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
@@ -567,7 +597,7 @@ export function PromptsPage() {
                   Generating 2 test images... This takes 20-40 seconds.
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Each image uses the ZImageTurbo model at 1088×1360
+                  Each image uses the {testModelLabel} model{testDimensionsLabel ? ` at ${testDimensionsLabel}` : ''}
                 </p>
               </div>
             </div>
