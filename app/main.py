@@ -596,7 +596,7 @@ async def startup_event():
         from app.services.toby_daemon import start_toby_daemon
         toby = start_toby_daemon()
         app.state.toby_daemon = toby
-        print("✅ Toby daemon active — thinking every 2h, observing every 6h, scouting every 4h", flush=True)
+        print("✅ Toby daemon active — thinking every 45m, observing every 3h, scouting every 4h", flush=True)
     except Exception as e:
         print(f"⚠️ Toby daemon failed to start: {e}", flush=True)
     

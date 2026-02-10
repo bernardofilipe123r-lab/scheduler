@@ -36,6 +36,8 @@ import {
   Filter,
   Activity,
   Brain,
+  Zap,
+  Shield,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { get, post } from '@/shared/api/client'
@@ -440,11 +442,23 @@ export function TobyPage() {
             </div>
           )}
 
-          {/* Next cycle */}
-          {daemonStatus?.next_cycle_at && isRunning && (
-            <div className="mt-2 text-xs text-white/50 flex items-center gap-1.5">
-              <Clock className="w-3 h-3" />
-              Next thinking cycle: {timeAgo(daemonStatus.next_cycle_at)}
+          {/* Next cycle + schedule info */}
+          {daemonStatus && isRunning && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-white/50">
+              {daemonStatus.next_cycle_at && (
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" />
+                  Next think: {timeAgo(daemonStatus.next_cycle_at)}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                <Zap className="w-3 h-3" />
+                Think: 45m &middot; Observe: 3h &middot; Scout: 4h
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Shield className="w-3 h-3" />
+                Proposals &amp; data survive deploys — only activity log resets
+              </span>
             </div>
           )}
         </div>

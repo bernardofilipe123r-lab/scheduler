@@ -37,7 +37,7 @@ from app.services.content_tracker import get_content_tracker, TOPIC_BUCKETS
 
 
 # ── Config ──
-MAX_PROPOSALS_PER_DAY = 10
+MAX_PROPOSALS_PER_DAY = 15
 STRATEGY_WEIGHTS = {
     "explore": 0.30,       # 30% — always trying new things
     "iterate": 0.20,       # 20% — fix underperformers

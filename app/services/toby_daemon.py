@@ -124,13 +124,14 @@ def _format_uptime(seconds: float) -> str:
 # ── Daemon Configuration ─────────────────────────────────────
 
 # How often each cycle runs (in minutes)
-THINKING_CYCLE_MINUTES = int(os.getenv("TOBY_CYCLE_MINUTES", "120"))     # Main brain cycle: 2 hours
-METRICS_CYCLE_MINUTES = int(os.getenv("TOBY_METRICS_MINUTES", "360"))    # Metrics: every 6 hours
-SCAN_CYCLE_MINUTES = int(os.getenv("TOBY_SCAN_MINUTES", "240"))          # Trend scan: every 4 hours
+THINKING_CYCLE_MINUTES = int(os.getenv("TOBY_CYCLE_MINUTES", "45"))       # Main brain cycle: every 45 min
+METRICS_CYCLE_MINUTES = int(os.getenv("TOBY_METRICS_MINUTES", "180"))     # Metrics: every 3 hours
+SCAN_CYCLE_MINUTES = int(os.getenv("TOBY_SCAN_MINUTES", "240"))           # Trend scan: every 4 hours (Meta-safe)
 
 # Controls
-MAX_PROPOSALS_PER_CYCLE = 3   # Don't overwhelm — think in small batches
-MIN_PROPOSALS_BEFORE_REST = 2  # If less than 2 remaining today, rest
+MAX_PROPOSALS_PER_CYCLE = 3    # Don't overwhelm — think in small batches
+MAX_PENDING_HARD_STOP = 12     # Won't generate if this many unreviewed
+MAX_PENDING_THROTTLE = 6       # Reduces to 1 per cycle when this many pending
 STARTUP_DELAY_SECONDS = 30     # Wait 30s after app boot before first cycle
 
 
@@ -274,11 +275,12 @@ class TobyDaemon:
             agent = get_toby_agent()
 
             # 1. Check today's quota
+            from app.services.toby_agent import MAX_PROPOSALS_PER_DAY
             today_count = agent._count_proposals_today()
-            remaining = max(0, 10 - today_count)  # MAX_PROPOSALS_PER_DAY
+            remaining = max(0, MAX_PROPOSALS_PER_DAY - today_count)
 
             if remaining == 0:
-                self.state.log("Resting", f"Already made {today_count} proposals today. Will try tomorrow.", "😴")
+                self.state.log("Resting", f"Already made {today_count} proposals today (max {MAX_PROPOSALS_PER_DAY}). Will try tomorrow.", "😴")
                 return
 
             # 2. Check pending proposals — don't flood if user hasn't reviewed
@@ -295,7 +297,7 @@ class TobyDaemon:
             finally:
                 db.close()
 
-            if pending_count >= 8:
+            if pending_count >= MAX_PENDING_HARD_STOP:
                 self.state.log(
                     "Waiting",
                     f"{pending_count} proposals pending review. Won't generate more until user reviews some.",
@@ -307,11 +309,11 @@ class TobyDaemon:
             batch_size = min(MAX_PROPOSALS_PER_CYCLE, remaining)
 
             # If many pending, reduce batch
-            if pending_count >= 5:
+            if pending_count >= MAX_PENDING_THROTTLE:
                 batch_size = min(batch_size, 1)
                 self.state.log("Throttling", f"{pending_count} pending — generating only 1 this cycle", "🎛️")
 
-            self.state.log("Generating", f"Creating {batch_size} proposals (today: {today_count}/{10}, pending: {pending_count})", "⚡")
+            self.state.log("Generating", f"Creating {batch_size} proposals (today: {today_count}/{MAX_PROPOSALS_PER_DAY}, pending: {pending_count})", "⚡")
 
             # 4. Run Toby
             result = agent.run(max_proposals=batch_size)
@@ -325,7 +327,7 @@ class TobyDaemon:
             strategy_str = ", ".join(f"{k}:{v}" for k, v in strategies.items() if v > 0)
             self.state.log(
                 "Generated",
-                f"{created} proposal(s) using [{strategy_str}]. Today total: {result.get('today_total', 0)}/10",
+                f"{created} proposal(s) using [{strategy_str}]. Today total: {result.get('today_total', 0)}/{MAX_PROPOSALS_PER_DAY}",
                 "✨"
             )
 
