@@ -2,11 +2,12 @@
 Maestro — The AI Content Orchestrator (v2).
 
 Maestro runs a DAILY BURST once per day:
-  1. Toby generates 3 unique reel proposals
-  2. Lexi generates 3 unique reel proposals
-  3. Each proposal → 2 jobs (dark + light) × 5 brands = 60 brand-reels/day
-  4. Auto-schedule into the 6 daily slots per brand (3 light + 3 dark)
-  5. Publishing daemon posts at scheduled times
+  1. Toby generates 3 unique reel proposals (all dark mode)
+  2. Lexi generates 3 unique reel proposals (all light mode)
+  3. Each proposal → 5 single-brand jobs = 30 jobs/day
+  4. 6 UNIQUE reels per brand (3 dark + 3 light), NO duplicate content
+  5. Auto-schedule into the 6 daily slots per brand
+  6. Publishing daemon posts at scheduled times
 
 Design:
   - Pause/Resume controlled by user, state persisted in DB
@@ -41,8 +42,10 @@ FEEDBACK_CYCLE_MINUTES = int(os.getenv("MAESTRO_FEEDBACK_MINUTES", "360"))
 STARTUP_DELAY_SECONDS = 30
 
 # Daily burst: 3 proposals per agent = 6 unique reels
-# Each reel → 2 jobs (dark + light) = 12 jobs total
+# Each reel → 5 single-brand jobs = 30 jobs total
+# Toby = dark mode, Lexi = light mode → 15 dark + 15 light
 PROPOSALS_PER_AGENT = 3
+REELS_PER_BRAND = PROPOSALS_PER_AGENT * 2  # 6 unique reels per brand
 
 ALL_BRANDS = [
     "healthycollege", "vitalitycollege", "longevitycollege",
@@ -210,10 +213,11 @@ class MaestroState:
             "recent_activity": self.activity_log[:30],
             "daily_config": {
                 "proposals_per_agent": PROPOSALS_PER_AGENT,
-                "total_reels_per_day": PROPOSALS_PER_AGENT * 2,  # 3 Toby + 3 Lexi
+                "reels_per_brand": REELS_PER_BRAND,  # 6 unique reels per brand
+                "total_reels_per_day": REELS_PER_BRAND * len(ALL_BRANDS),  # 30
                 "variants": ["dark", "light"],
                 "brands": ALL_BRANDS,
-                "jobs_per_day": PROPOSALS_PER_AGENT * 2 * 2,  # × 2 variants
+                "jobs_per_day": REELS_PER_BRAND * len(ALL_BRANDS),  # 30 single-brand jobs
             },
         }
 
@@ -386,9 +390,9 @@ class MaestroDaemon:
 
     def _run_daily_burst(self):
         """
-        Generate 6 unique reels (3 Toby + 3 Lexi).
-        Each reel → 2 jobs (dark + light) × 5 brands.
-        Auto-accept, process, and schedule everything.
+        Generate 6 unique reels (3 Toby dark + 3 Lexi light).
+        Each reel → 5 single-brand jobs.
+        Total: 30 jobs, 15 dark + 15 light, all unique content.
         """
         if not self._daily_burst_lock.acquire(blocking=False):
             self.state.log("maestro", "Burst skipped", "Already running", "⏳")
@@ -401,7 +405,7 @@ class MaestroDaemon:
 
             self.state.log(
                 "maestro", "🌅 Daily Burst Started",
-                f"Generating {PROPOSALS_PER_AGENT} Toby + {PROPOSALS_PER_AGENT} Lexi reels, each in dark + light",
+                f"Generating {PROPOSALS_PER_AGENT} Toby (dark) + {PROPOSALS_PER_AGENT} Lexi (light) = {REELS_PER_BRAND} unique reels × {len(ALL_BRANDS)} brands = {REELS_PER_BRAND * len(ALL_BRANDS)} jobs",
                 "🚀"
             )
 
@@ -450,7 +454,7 @@ class MaestroDaemon:
 
             self.state.log(
                 "maestro", "Proposals ready",
-                f"{len(all_proposals)} unique reels — creating dark + light jobs for 5 brands each",
+                f"{len(all_proposals)} unique reels — creating 1 job per brand = {len(all_proposals) * len(ALL_BRANDS)} total jobs",
                 "⚡"
             )
 
@@ -462,7 +466,7 @@ class MaestroDaemon:
             except Exception as e:
                 self.state.log("maestro", "Pre-burst schedule error", str(e)[:200], "❌")
 
-            # Auto-accept each proposal and create BOTH dark + light jobs
+            # Auto-accept each proposal and create single-brand jobs
             self.state.current_phase = "processing"
             self._auto_accept_and_process(all_proposals)
 
@@ -472,7 +476,7 @@ class MaestroDaemon:
             elapsed = (datetime.utcnow() - burst_start).total_seconds()
             self.state.log(
                 "maestro", "🌅 Daily Burst Complete",
-                f"{len(all_proposals)} reels × 2 variants × 5 brands. Jobs processing in background. Took {elapsed:.0f}s to dispatch.",
+                f"{len(all_proposals)} unique reels × {len(ALL_BRANDS)} brands = {len(all_proposals) * len(ALL_BRANDS)} jobs dispatched. Took {elapsed:.0f}s.",
                 "🏁"
             )
 
@@ -490,9 +494,12 @@ class MaestroDaemon:
         """
         For each proposal:
           1. Mark as accepted in DB
-          2. Create TWO jobs: dark + light (each for all 5 brands)
-          3. Process each job in a background thread
-          4. Auto-schedule on completion
+          2. Determine variant from agent (Toby=dark, Lexi=light)
+          3. Create 5 single-brand jobs (one per brand)
+          4. Process each job in a background thread
+          5. Auto-schedule on completion
+
+        Result: 6 proposals × 5 brands = 30 unique single-brand jobs
         """
         from app.db_connection import SessionLocal, get_db_session
         from app.models import TobyProposal
@@ -504,7 +511,7 @@ class MaestroDaemon:
                 continue
 
             try:
-                # 1. Mark accepted
+                # 1. Mark accepted and read proposal data
                 db = SessionLocal()
                 try:
                     proposal = db.query(TobyProposal).filter(
@@ -524,16 +531,19 @@ class MaestroDaemon:
                 finally:
                     db.close()
 
-                # 2. Create TWO jobs: dark + light
+                # 2. Determine variant: Toby = dark, Lexi = light
+                variant = "dark" if agent_name == "toby" else "light"
+
+                # 3. Create ONE job per brand (single-brand jobs)
                 job_ids = []
-                for variant in ["dark", "light"]:
+                for brand in ALL_BRANDS:
                     with get_db_session() as jdb:
                         manager = JobManager(jdb)
                         job = manager.create_job(
                             user_id=proposal_id,
                             title=title,
                             content_lines=content_lines,
-                            brands=ALL_BRANDS,
+                            brands=[brand],  # Single brand per job
                             variant=variant,
                             ai_prompt=image_prompt,
                             cta_type="follow_tips",
@@ -555,11 +565,11 @@ class MaestroDaemon:
 
                 self.state.log(
                     agent_name, "Auto-accepted",
-                    f"{proposal_id} → Jobs {', '.join(job_ids)} (dark + light × 5 brands)",
+                    f"{proposal_id} → {len(job_ids)} jobs ({variant} × {len(ALL_BRANDS)} brands)",
                     "✅"
                 )
 
-                # 3. Process each job in background thread
+                # 4. Process each job in background thread
                 for jid in job_ids:
                     thread = threading.Thread(
                         target=self._process_and_schedule_job,
