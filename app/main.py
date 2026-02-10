@@ -581,10 +581,21 @@ async def startup_event():
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
     print("✅ Analytics auto-refresh scheduled (every 12 hours)", flush=True)
     print("✅ Log cleanup scheduled (every 24 hours, 7-day retention)", flush=True)
-    print("🎉 Startup complete! App is ready.", flush=True)
     
     # Store scheduler for shutdown
     app.state.scheduler = scheduler
+    
+    # ── Start Toby Daemon (autonomous AI agent) ──
+    print("🧠 Starting Toby autonomous daemon...", flush=True)
+    try:
+        from app.services.toby_daemon import start_toby_daemon
+        toby = start_toby_daemon()
+        app.state.toby_daemon = toby
+        print("✅ Toby daemon active — thinking every 2h, observing every 6h, scouting every 4h", flush=True)
+    except Exception as e:
+        print(f"⚠️ Toby daemon failed to start: {e}", flush=True)
+    
+    print("🎉 Startup complete! App is ready.", flush=True)
 
 
 @app.on_event("shutdown")
@@ -604,6 +615,15 @@ async def shutdown_event():
     if hasattr(app.state, 'scheduler'):
         app.state.scheduler.shutdown()
         print("⏰ Auto-publishing scheduler stopped")
+    
+    # Shutdown Toby daemon
+    if hasattr(app.state, 'toby_daemon') and app.state.toby_daemon:
+        try:
+            if app.state.toby_daemon.scheduler:
+                app.state.toby_daemon.scheduler.shutdown()
+            print("🧠 Toby daemon stopped")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

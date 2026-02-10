@@ -1,29 +1,33 @@
 """
-Toby API routes — Phase 3: AI agent content proposals.
+Toby API routes — Phase 3: Autonomous AI agent.
+
+Toby runs autonomously in the background. User can only:
+  - View his status (running/paused, activity log)
+  - Pause / Resume him
+  - Review proposals (accept/reject)
+  - View insights & trending
 
 Endpoints:
-    POST /api/toby/run              — Trigger Toby to generate proposals
-    GET  /api/toby/proposals        — List proposals (filterable by status)
-    GET  /api/toby/proposals/{id}   — Get a single proposal
+    GET  /api/toby/status             — Daemon status (running, uptime, activity)
+    POST /api/toby/pause              — Pause Toby
+    POST /api/toby/resume             — Resume Toby
+    GET  /api/toby/proposals          — List proposals (filterable by status)
+    GET  /api/toby/proposals/{id}     — Get a single proposal
     POST /api/toby/proposals/{id}/accept  — Accept & trigger brand creation
     POST /api/toby/proposals/{id}/reject  — Reject with optional notes
-    GET  /api/toby/stats            — Toby's performance stats
-    GET  /api/toby/insights         — Performance insights summary
-    POST /api/toby/scan             — Trigger trend scout scan
-    POST /api/toby/collect-metrics  — Trigger metrics collection
+    GET  /api/toby/stats              — Toby's performance stats
+    GET  /api/toby/insights           — Performance insights summary
+    GET  /api/toby/trending           — Trending content discovered by scout
 """
 
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/toby", tags=["toby"])
 
 
 # ── Request / Response schemas ───────────────────────────────
-
-class RunRequest(BaseModel):
-    max_proposals: Optional[int] = None
 
 class RejectRequest(BaseModel):
     notes: Optional[str] = None
@@ -36,22 +40,46 @@ class AcceptResponse(BaseModel):
     image_prompt: Optional[str] = None
 
 
-# ── CORE ENDPOINTS ───────────────────────────────────────────
+# ── DAEMON CONTROL ────────────────────────────────────────────
 
-@router.post("/run")
-async def run_toby(req: RunRequest = RunRequest(), background_tasks: BackgroundTasks = None):
+@router.get("/status")
+async def toby_status():
     """
-    Trigger Toby to generate proposals.
+    Get Toby's daemon status — is he running or paused, uptime,
+    last thought, recent activity log.
+    """
+    from app.services.toby_daemon import get_toby_daemon
 
-    Toby gathers intelligence (our metrics, trending content, topic gaps),
-    then generates up to max_proposals reels using 4 strategies.
-    """
+    daemon = get_toby_daemon()
+    status = daemon.get_status()
+
+    # Also include proposal stats
     from app.services.toby_agent import get_toby_agent
-
     agent = get_toby_agent()
-    result = agent.run(max_proposals=req.max_proposals)
-    return result
+    stats = agent.get_proposal_stats()
 
+    return {**status, "proposal_stats": stats}
+
+
+@router.post("/pause")
+async def pause_toby():
+    """Pause Toby — stops all autonomous cycles but keeps state."""
+    from app.services.toby_daemon import get_toby_daemon
+
+    daemon = get_toby_daemon()
+    return daemon.pause()
+
+
+@router.post("/resume")
+async def resume_toby():
+    """Resume Toby — restarts all autonomous cycles."""
+    from app.services.toby_daemon import get_toby_daemon
+
+    daemon = get_toby_daemon()
+    return daemon.resume()
+
+
+# ── PROPOSALS ─────────────────────────────────────────────────
 
 @router.get("/proposals")
 async def list_proposals(
@@ -138,54 +166,6 @@ async def performance_insights(brand: Optional[str] = None):
             "top_performers": top,
             "underperformers": under,
         }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# ── SCAN & COLLECT ───────────────────────────────────────────
-
-@router.post("/scan")
-async def scan_trends():
-    """
-    Trigger TrendScout to scan hashtags and competitors for trending content.
-
-    Rate limited: max 5 hashtags per scan, 30 unique per 7 days (IG API limit).
-    """
-    try:
-        from app.services.trend_scout import get_trend_scout
-
-        scout = get_trend_scout()
-        hashtag_result = scout.scan_hashtags(max_hashtags=5)
-        competitor_result = scout.scan_competitors()
-
-        return {
-            "hashtags": hashtag_result,
-            "competitors": competitor_result,
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@router.post("/collect-metrics")
-async def collect_metrics(
-    brand: Optional[str] = Query(None, description="Specific brand, or all if empty"),
-    days_back: int = Query(14, ge=1, le=90),
-):
-    """
-    Trigger MetricsCollector to fetch per-post IG metrics.
-
-    Polls our published posts for views, likes, saves, shares, reach.
-    """
-    try:
-        from app.services.metrics_collector import get_metrics_collector
-
-        collector = get_metrics_collector()
-        if brand:
-            result = collector.collect_for_brand(brand, days_back)
-            return {"results": [result]}
-        else:
-            results = collector.collect_all_brands(days_back)
-            return {"results": results}
     except Exception as e:
         return {"error": str(e)}
 

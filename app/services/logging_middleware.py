@@ -44,6 +44,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         '/api/logs',
         '/toby-logs',
         '/api/toby-logs',
+        '/api/toby/status',
         '/health',
         '/favicon.ico',
     }

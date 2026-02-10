@@ -1,15 +1,18 @@
 /**
- * Toby — AI Content Strategist
+ * Toby — Autonomous AI Content Strategist
  *
- * Dedicated page showing Toby's proposals with reasoning,
- * accept/reject flow, performance insights, and trend scanning.
- *
- * Accept triggers God Automation to create brand versions.
+ * Toby runs autonomously in the background, like a human content
+ * strategist always working. The user can only:
+ *   - See his status (running/paused, uptime, last thought)
+ *   - Pause / Resume him
+ *   - Review proposals (accept/reject)
+ *   - View insights & trending
  */
 import { useState, useEffect, useCallback } from 'react'
 import {
   Bot,
   Play,
+  Pause,
   Check,
   X,
   ChevronDown,
@@ -22,8 +25,6 @@ import {
   Eye,
   Heart,
   BarChart3,
-  Zap,
-  Target,
   Lightbulb,
   Repeat2,
   Flame,
@@ -33,6 +34,8 @@ import {
   ExternalLink,
   Info,
   Filter,
+  Activity,
+  Brain,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { get, post } from '@/shared/api/client'
@@ -73,6 +76,35 @@ interface TobyStats {
   rejected: number
   daily_limit: number
   strategies?: Record<string, { total: number; accepted: number; rate: number }>
+}
+
+interface ActivityEntry {
+  time: string
+  action: string
+  detail: string
+  emoji: string
+}
+
+interface TobyDaemonStatus {
+  is_running: boolean
+  is_paused: boolean
+  started_at: string | null
+  paused_at: string | null
+  uptime_seconds: number
+  uptime_human: string
+  last_thought: string | null
+  last_thought_at: string | null
+  last_metrics_at: string | null
+  last_scan_at: string | null
+  last_proposals_at: string | null
+  next_cycle_at: string | null
+  total_cycles: number
+  total_proposals_generated: number
+  total_metrics_collected: number
+  total_trends_found: number
+  errors: number
+  recent_activity: ActivityEntry[]
+  proposal_stats: TobyStats
 }
 
 interface PerformanceSummary {
@@ -167,20 +199,18 @@ function timeAgo(iso: string): string {
 export function TobyPage() {
   // ── State ──
   const [proposals, setProposals] = useState<Proposal[]>([])
-  const [stats, setStats] = useState<TobyStats | null>(null)
+  const [daemonStatus, setDaemonStatus] = useState<TobyDaemonStatus | null>(null)
   const [insights, setInsights] = useState<InsightsResponse | null>(null)
   const [trending, setTrending] = useState<TrendingItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState(false)
-  const [scanning, setScanning] = useState(false)
-  const [collecting, setCollecting] = useState(false)
+  const [toggling, setToggling] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('pending')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [acceptingId, setAcceptingId] = useState<string | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'proposals' | 'insights' | 'trending'>('proposals')
+  const [activeTab, setActiveTab] = useState<'proposals' | 'activity' | 'insights' | 'trending'>('proposals')
 
   // ── Data fetching ──
   const fetchProposals = useCallback(async () => {
@@ -193,12 +223,12 @@ export function TobyPage() {
     }
   }, [statusFilter])
 
-  const fetchStats = useCallback(async () => {
+  const fetchStatus = useCallback(async () => {
     try {
-      const data = await get<TobyStats>('/api/toby/stats')
-      setStats(data)
+      const data = await get<TobyDaemonStatus>('/api/toby/status')
+      setDaemonStatus(data)
     } catch (e: any) {
-      console.error('Failed to fetch stats:', e)
+      console.error('Failed to fetch Toby status:', e)
     }
   }, [])
 
@@ -223,9 +253,17 @@ export function TobyPage() {
   // Initial load
   useEffect(() => {
     setLoading(true)
-    Promise.all([fetchProposals(), fetchStats(), fetchInsights(), fetchTrending()])
+    Promise.all([fetchProposals(), fetchStatus(), fetchInsights(), fetchTrending()])
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-refresh status every 30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchStatus()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [fetchStatus])
 
   // Refetch proposals on filter change
   useEffect(() => {
@@ -233,17 +271,22 @@ export function TobyPage() {
   }, [fetchProposals])
 
   // ── Actions ──
-  const handleRunToby = async () => {
-    setRunning(true)
+  const handleToggle = async () => {
+    if (!daemonStatus) return
+    setToggling(true)
     try {
-      const result = await post<any>('/api/toby/run')
-      const count = result?.proposals_generated ?? result?.generated ?? 0
-      toast.success(`Toby generated ${count} proposal${count !== 1 ? 's' : ''}`)
-      await Promise.all([fetchProposals(), fetchStats()])
+      if (daemonStatus.is_running) {
+        await post<any>('/api/toby/pause')
+        toast.success('Toby paused')
+      } else {
+        await post<any>('/api/toby/resume')
+        toast.success('Toby resumed')
+      }
+      await fetchStatus()
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to run Toby')
+      toast.error(e?.message || 'Failed to toggle Toby')
     } finally {
-      setRunning(false)
+      setToggling(false)
     }
   }
 
@@ -253,7 +296,7 @@ export function TobyPage() {
       const result = await post<any>(`/api/toby/proposals/${proposalId}/accept`)
       if (result.status === 'accepted') {
         toast.success(`Accepted: ${result.title || proposalId}`)
-        await Promise.all([fetchProposals(), fetchStats()])
+        await Promise.all([fetchProposals(), fetchStatus()])
       } else {
         toast.error(result.error || 'Accept failed')
       }
@@ -274,7 +317,7 @@ export function TobyPage() {
         toast.success('Proposal rejected')
         setShowRejectInput(null)
         setRejectNotes('')
-        await Promise.all([fetchProposals(), fetchStats()])
+        await Promise.all([fetchProposals(), fetchStatus()])
       } else {
         toast.error(result.error || 'Reject failed')
       }
@@ -285,42 +328,8 @@ export function TobyPage() {
     }
   }
 
-  const handleScan = async () => {
-    setScanning(true)
-    try {
-      const result = await post<any>('/api/toby/scan')
-      if (result.error) {
-        toast.error(result.error)
-      } else {
-        const hCount = result.hashtags?.discovered ?? 0
-        const cCount = result.competitors?.discovered ?? 0
-        toast.success(`Scanned: ${hCount} from hashtags, ${cCount} from competitors`)
-        await fetchTrending()
-      }
-    } catch (e: any) {
-      toast.error(e?.message || 'Scan failed')
-    } finally {
-      setScanning(false)
-    }
-  }
-
-  const handleCollectMetrics = async () => {
-    setCollecting(true)
-    try {
-      const result = await post<any>('/api/toby/collect-metrics')
-      if (result.error) {
-        toast.error(result.error)
-      } else {
-        const total = (result.results || []).reduce((s: number, r: any) => s + (r?.updated ?? 0), 0)
-        toast.success(`Updated metrics for ${total} posts`)
-        await fetchInsights()
-      }
-    } catch (e: any) {
-      toast.error(e?.message || 'Metrics collection failed')
-    } finally {
-      setCollecting(false)
-    }
-  }
+  const stats = daemonStatus?.proposal_stats || null
+  const isRunning = daemonStatus?.is_running ?? false
 
   // ── Loading state ──
   if (loading) {
@@ -333,47 +342,114 @@ export function TobyPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-            <Bot className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Proposed by Toby</h1>
-            <p className="text-sm text-gray-500">AI content strategist — reels proposals</p>
-          </div>
+      {/* ══════════════════════════════════════════════════════════ */}
+      {/*  TOBY STATUS HEADER                                      */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 rounded-2xl p-6 text-white relative overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-4 right-8 w-32 h-32 rounded-full bg-white/20 blur-2xl" />
+          <div className="absolute bottom-2 left-16 w-24 h-24 rounded-full bg-white/10 blur-xl" />
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleCollectMetrics}
-            disabled={collecting}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {collecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-            Collect Metrics
-          </button>
-          <button
-            onClick={handleScan}
-            disabled={scanning}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
-            Scan Trends
-          </button>
-          <button
-            onClick={handleRunToby}
-            disabled={running || (stats?.today ?? 0) >= (stats?.daily_limit ?? 10)}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-purple-600 rounded-lg hover:from-violet-600 hover:to-purple-700 disabled:opacity-50 shadow-md transition-all"
-          >
-            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            Run Toby
-          </button>
+        <div className="relative z-10">
+          {/* Top row: name + toggle */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20">
+                <Brain className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  Toby
+                  {/* Alive pulse */}
+                  <span className="relative flex items-center">
+                    <span className={`inline-block w-3 h-3 rounded-full ${isRunning ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                    {isRunning && (
+                      <span className="absolute inline-block w-3 h-3 rounded-full bg-green-400 animate-ping" />
+                    )}
+                  </span>
+                </h1>
+                <p className="text-white/70 text-sm">
+                  {isRunning ? 'Autonomous AI content strategist — always thinking' : 'Paused — waiting to resume'}
+                </p>
+              </div>
+            </div>
+
+            {/* Pause / Resume toggle */}
+            <button
+              onClick={handleToggle}
+              disabled={toggling}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg ${
+                isRunning
+                  ? 'bg-white/20 hover:bg-white/30 text-white border border-white/20'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+            >
+              {toggling ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isRunning ? (
+                <Pause className="w-4 h-4" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+              {isRunning ? 'Pause Toby' : 'Resume Toby'}
+            </button>
+          </div>
+
+          {/* Status info row */}
+          {daemonStatus && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <StatusPill
+                label="Uptime"
+                value={daemonStatus.uptime_human || '—'}
+                icon={Clock}
+              />
+              <StatusPill
+                label="Cycles"
+                value={String(daemonStatus.total_cycles)}
+                icon={Activity}
+              />
+              <StatusPill
+                label="Generated"
+                value={String(daemonStatus.total_proposals_generated)}
+                icon={Sparkles}
+              />
+              <StatusPill
+                label="Trends Found"
+                value={String(daemonStatus.total_trends_found)}
+                icon={Flame}
+              />
+              <StatusPill
+                label="Metrics"
+                value={String(daemonStatus.total_metrics_collected)}
+                icon={BarChart3}
+              />
+            </div>
+          )}
+
+          {/* Last thought */}
+          {daemonStatus?.last_thought && (
+            <div className="mt-4 bg-white/10 rounded-xl px-4 py-3 border border-white/10">
+              <div className="flex items-center gap-2 text-white/60 text-xs mb-1">
+                <Brain className="w-3.5 h-3.5" />
+                Last thought {daemonStatus.last_thought_at ? `— ${timeAgo(daemonStatus.last_thought_at)}` : ''}
+              </div>
+              <p className="text-sm text-white/90">{daemonStatus.last_thought}</p>
+            </div>
+          )}
+
+          {/* Next cycle */}
+          {daemonStatus?.next_cycle_at && isRunning && (
+            <div className="mt-2 text-xs text-white/50 flex items-center gap-1.5">
+              <Clock className="w-3 h-3" />
+              Next thinking cycle: {timeAgo(daemonStatus.next_cycle_at)}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── Stats bar ── */}
+      {/* ── Proposal stats bar ── */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="Today" value={`${stats.today}/${stats.daily_limit}`} icon={Clock} color="purple" />
@@ -386,7 +462,7 @@ export function TobyPage() {
 
       {/* ── Tab bar ── */}
       <div className="flex items-center gap-1 border-b border-gray-200">
-        {(['proposals', 'insights', 'trending'] as const).map((tab) => (
+        {(['proposals', 'activity', 'insights', 'trending'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -396,8 +472,9 @@ export function TobyPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            {tab === 'proposals' && 'Proposals'}
-            {tab === 'insights' && 'Performance Insights'}
+            {tab === 'proposals' && `Proposals${stats?.pending ? ` (${stats.pending})` : ''}`}
+            {tab === 'activity' && 'Activity'}
+            {tab === 'insights' && 'Performance'}
             {tab === 'trending' && `Trending (${trending.length})`}
           </button>
         ))}
@@ -430,8 +507,21 @@ export function TobyPage() {
           {proposals.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Bot className="w-16 h-16 mx-auto mb-4 opacity-30" />
-              <p className="text-lg font-medium">No proposals yet</p>
-              <p className="text-sm mt-1">Click "Run Toby" to generate AI content proposals</p>
+              <p className="text-lg font-medium">
+                {isRunning ? 'Toby is thinking...' : 'No proposals yet'}
+              </p>
+              <p className="text-sm mt-1">
+                {isRunning
+                  ? 'New proposals will appear here automatically as Toby generates them'
+                  : 'Resume Toby to start generating proposals'
+                }
+              </p>
+              {isRunning && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-violet-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Working autonomously...</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -464,6 +554,16 @@ export function TobyPage() {
       )}
 
       {/* ════════════════════════════════════════════════════════════ */}
+      {/*  ACTIVITY TAB                                              */}
+      {/* ════════════════════════════════════════════════════════════ */}
+      {activeTab === 'activity' && (
+        <ActivityPanel
+          activity={daemonStatus?.recent_activity || []}
+          onRefresh={fetchStatus}
+        />
+      )}
+
+      {/* ════════════════════════════════════════════════════════════ */}
       {/*  INSIGHTS TAB                                              */}
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'insights' && (
@@ -471,7 +571,7 @@ export function TobyPage() {
           insights={insights}
           stats={stats}
           onRefresh={async () => {
-            await Promise.all([fetchInsights(), fetchStats()])
+            await Promise.all([fetchInsights(), fetchStatus()])
           }}
         />
       )}
@@ -480,12 +580,34 @@ export function TobyPage() {
       {/*  TRENDING TAB                                              */}
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'trending' && (
-        <TrendingPanel
-          items={trending}
-          scanning={scanning}
-          onScan={handleScan}
-        />
+        <TrendingPanel items={trending} />
       )}
+    </div>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATUS PILL (header row)
+// ═══════════════════════════════════════════════════════════════════
+function StatusPill({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string
+  value: string
+  icon: typeof Clock
+}) {
+  return (
+    <div className="bg-white/10 rounded-xl px-3 py-2 border border-white/10">
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4 text-white/60" />
+        <div>
+          <div className="text-sm font-semibold text-white">{value}</div>
+          <div className="text-xs text-white/50">{label}</div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -728,6 +850,93 @@ function ProposalCard({
 
 
 // ═══════════════════════════════════════════════════════════════════
+//  ACTIVITY PANEL — Toby's autonomous activity log
+// ═══════════════════════════════════════════════════════════════════
+function ActivityPanel({
+  activity,
+  onRefresh,
+}: {
+  activity: ActivityEntry[]
+  onRefresh: () => Promise<void>
+}) {
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await onRefresh()
+    setRefreshing(false)
+  }
+
+  const actionColors: Record<string, string> = {
+    Thinking: 'text-violet-600 bg-violet-50',
+    Generating: 'text-blue-600 bg-blue-50',
+    Generated: 'text-green-600 bg-green-50',
+    Observing: 'text-indigo-600 bg-indigo-50',
+    Scouting: 'text-orange-600 bg-orange-50',
+    'Metrics collected': 'text-teal-600 bg-teal-50',
+    'Trends discovered': 'text-red-600 bg-red-50',
+    Resting: 'text-gray-500 bg-gray-50',
+    Waiting: 'text-yellow-600 bg-yellow-50',
+    Throttling: 'text-amber-600 bg-amber-50',
+    Intel: 'text-purple-600 bg-purple-50',
+    'Cycle complete': 'text-green-600 bg-green-50',
+    Error: 'text-red-600 bg-red-50',
+    Started: 'text-green-600 bg-green-50',
+    Resumed: 'text-green-600 bg-green-50',
+    Paused: 'text-yellow-600 bg-yellow-50',
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          Toby's autonomous decisions and actions — updated in real-time
+        </p>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+        >
+          {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          Refresh
+        </button>
+      </div>
+
+      {activity.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <Activity className="w-16 h-16 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">No activity yet</p>
+          <p className="text-sm mt-1">Toby will start logging activity on his first cycle</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {activity.map((entry, i) => {
+            const colorClass = actionColors[entry.action] || 'text-gray-600 bg-gray-50'
+            return (
+              <div key={i} className="flex items-start gap-3 bg-white rounded-lg border border-gray-200 p-3">
+                <span className="text-lg flex-shrink-0 mt-0.5">{entry.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${colorClass}`}>
+                      {entry.action}
+                    </span>
+                    <span className="text-xs text-gray-400">{timeAgo(entry.time)}</span>
+                  </div>
+                  {entry.detail && (
+                    <p className="text-sm text-gray-700">{entry.detail}</p>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
 //  INSIGHTS PANEL
 // ═══════════════════════════════════════════════════════════════════
 function InsightsPanel({
@@ -885,34 +1094,22 @@ function InsightsPanel({
 // ═══════════════════════════════════════════════════════════════════
 function TrendingPanel({
   items,
-  scanning,
-  onScan,
 }: {
   items: TrendingItem[]
-  scanning: boolean
-  onScan: () => void
 }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">
-          External health/wellness content discovered via IG Hashtag Search & Business Discovery APIs
+          Trending content discovered by Toby's autonomous scout — scans every 4 hours
         </p>
-        <button
-          onClick={onScan}
-          disabled={scanning}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-        >
-          {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Scan Now
-        </button>
       </div>
 
       {items.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <Flame className="w-16 h-16 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">No trending content found</p>
-          <p className="text-sm mt-1">Click "Scan Now" to discover viral health/wellness content</p>
+          <p className="text-lg font-medium">No trending content found yet</p>
+          <p className="text-sm mt-1">Toby scans for viral health/wellness content every 4 hours automatically</p>
         </div>
       ) : (
         <div className="grid gap-3">
