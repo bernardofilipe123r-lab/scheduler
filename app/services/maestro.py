@@ -81,8 +81,8 @@ def _db_set(key: str, value: str):
 
 
 def is_paused() -> bool:
-    """Check if Maestro is paused (DB-persisted)."""
-    return _db_get("is_paused", "true") == "true"  # Default: paused until user resumes
+    """Check if Maestro is paused (DB-persisted). Default: paused on first-ever run."""
+    return _db_get("is_paused", "true") == "true"
 
 
 def set_paused(paused: bool):
@@ -353,10 +353,19 @@ class MaestroDaemon:
     def _check_cycle(self):
         """
         Runs every 10 minutes. Checks:
-          1. Is Maestro paused? → skip
-          2. Has the daily burst already run today? → skip
-          3. Otherwise → run the daily burst
+          1. Schedule any ready-to-schedule reels first
+          2. Is Maestro paused? → skip burst
+          3. Has the daily burst already run today? → skip burst
+          4. Otherwise → run the daily burst
         """
+        # Always schedule ready reels, even when paused
+        try:
+            count = schedule_all_ready_reels()
+            if count > 0:
+                self.state.log("maestro", "Auto-scheduled ready reels", f"{count} brand-reels scheduled from completed jobs", "📅")
+        except Exception as e:
+            self.state.log("maestro", "Schedule-ready error", str(e)[:200], "❌")
+
         if is_paused():
             return  # Silent — don't spam logs when paused
 
@@ -444,6 +453,14 @@ class MaestroDaemon:
                 f"{len(all_proposals)} unique reels — creating dark + light jobs for 5 brands each",
                 "⚡"
             )
+
+            # First, schedule any existing ready-to-schedule reels
+            try:
+                ready_count = schedule_all_ready_reels()
+                if ready_count > 0:
+                    self.state.log("maestro", "Pre-burst scheduling", f"Scheduled {ready_count} previously ready brand-reels", "📅")
+            except Exception as e:
+                self.state.log("maestro", "Pre-burst schedule error", str(e)[:200], "❌")
 
             # Auto-accept each proposal and create BOTH dark + light jobs
             self.state.current_phase = "processing"
@@ -831,6 +848,15 @@ def auto_schedule_job(job_id: str):
                     brand=brand,
                     variant=variant,
                 )
+
+                # Mark brand output as scheduled so it's not re-scheduled
+                brand_outputs = dict(job.brand_outputs or {})
+                if brand in brand_outputs:
+                    brand_outputs[brand]["status"] = "scheduled"
+                    brand_outputs[brand]["scheduled_time"] = slot.isoformat()
+                    job.brand_outputs = brand_outputs
+                    db.commit()
+
                 scheduled_count += 1
                 print(
                     f"[AUTO-SCHEDULE] {brand}/{variant} → {slot.strftime('%Y-%m-%d %H:%M')} (reel {reel_id})",
@@ -840,6 +866,104 @@ def auto_schedule_job(job_id: str):
                 print(f"[AUTO-SCHEDULE] Failed to schedule {brand}: {e}", flush=True)
 
         print(f"[AUTO-SCHEDULE] Job {job_id}: {scheduled_count}/{len(job.brand_outputs or {})} brands scheduled", flush=True)
+
+
+def schedule_all_ready_reels() -> int:
+    """
+    Find ALL completed jobs with brand outputs still in 'completed' status
+    and auto-schedule them into the next available slot.
+
+    This catches any reels that were generated but never scheduled
+    (e.g., from before auto-scheduling was added, or from manual accepts).
+
+    Returns the number of brand-reels scheduled.
+    """
+    from app.db_connection import SessionLocal
+    from app.models import GenerationJob
+    from app.services.db_scheduler import DatabaseSchedulerService
+
+    total_scheduled = 0
+    db = SessionLocal()
+    try:
+        # Find all completed jobs
+        completed_jobs = (
+            db.query(GenerationJob)
+            .filter(GenerationJob.status == "completed")
+            .all()
+        )
+
+        if not completed_jobs:
+            return 0
+
+        scheduler = DatabaseSchedulerService(db)
+
+        for job in completed_jobs:
+            variant = job.variant or "dark"
+            brand_outputs = dict(job.brand_outputs or {})
+            job_changed = False
+
+            for brand, output in brand_outputs.items():
+                if output.get("status") != "completed":
+                    continue  # Already scheduled, failed, or still generating
+
+                reel_id = output.get("reel_id")
+                video_path = output.get("video_path")
+                if not reel_id or not video_path:
+                    continue
+
+                # Check if already in scheduled_reels (safety check)
+                from app.models import ScheduledReel
+                existing = (
+                    db.query(ScheduledReel)
+                    .filter(ScheduledReel.reel_id == reel_id)
+                    .first()
+                )
+                if existing:
+                    # Already scheduled — just update brand_output status
+                    brand_outputs[brand]["status"] = "scheduled"
+                    job_changed = True
+                    continue
+
+                try:
+                    slot = scheduler.get_next_available_slot(brand, variant)
+                    scheduler.schedule_reel(
+                        user_id="maestro",
+                        reel_id=reel_id,
+                        scheduled_time=slot,
+                        caption=output.get("caption", ""),
+                        yt_title=output.get("yt_title"),
+                        platforms=job.platforms or ["instagram", "facebook", "youtube"],
+                        video_path=video_path,
+                        thumbnail_path=output.get("thumbnail_path"),
+                        yt_thumbnail_path=output.get("yt_thumbnail_path"),
+                        user_name="Maestro",
+                        brand=brand,
+                        variant=variant,
+                    )
+                    brand_outputs[brand]["status"] = "scheduled"
+                    brand_outputs[brand]["scheduled_time"] = slot.isoformat()
+                    job_changed = True
+                    total_scheduled += 1
+                    print(
+                        f"[READY-SCHEDULE] {brand}/{variant} → {slot.strftime('%Y-%m-%d %H:%M')} (reel {reel_id})",
+                        flush=True,
+                    )
+                except Exception as e:
+                    print(f"[READY-SCHEDULE] Failed {brand}: {e}", flush=True)
+
+            if job_changed:
+                job.brand_outputs = brand_outputs
+                db.commit()
+
+    except Exception as e:
+        print(f"[READY-SCHEDULE] Error: {e}", flush=True)
+    finally:
+        db.close()
+
+    if total_scheduled > 0:
+        print(f"[READY-SCHEDULE] Total: {total_scheduled} brand-reels auto-scheduled", flush=True)
+
+    return total_scheduled
 
 
 # ── Singleton ─────────────────────────────────────────────────

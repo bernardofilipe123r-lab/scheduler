@@ -519,7 +519,7 @@ export function MaestroPage() {
       {/* ══════════════════════════════════════════════════════════ */}
       {/*  MAESTRO STATUS HEADER                                   */}
       {/* ══════════════════════════════════════════════════════════ */}
-      <div className="bg-gradient-to-r from-amber-600 via-orange-500 to-rose-500 rounded-2xl p-6 text-white relative overflow-hidden">
+      <div className={`${isPaused ? 'bg-gradient-to-r from-gray-600 via-gray-500 to-gray-600' : 'bg-gradient-to-r from-amber-600 via-orange-500 to-rose-500'} rounded-2xl p-6 text-white relative overflow-hidden`}>
         {/* Background decoration */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-4 right-8 w-32 h-32 rounded-full bg-white/20 blur-2xl" />
