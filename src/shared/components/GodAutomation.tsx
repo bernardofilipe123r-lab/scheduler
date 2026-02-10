@@ -266,29 +266,6 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     queueRef.current = queue
   }, [queue])
 
-  // Brand logos from theme settings
-  const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
-  useEffect(() => {
-    const fetchLogos = async () => {
-      const logos: Record<string, string> = {}
-      for (const b of brands) {
-        try {
-          const r = await fetch(`/api/brands/${b}/theme`)
-          if (r.ok) {
-            const d = await r.json()
-            if (d.theme?.logo) {
-              const url = `/brand-logos/${d.theme.logo}`
-              const check = await fetch(url, { method: 'HEAD' })
-              if (check.ok) logos[b] = url
-            }
-          }
-        } catch { /* ignore */ }
-      }
-      setBrandLogos(logos)
-    }
-    fetchLogos()
-  }, [brands])
-
   // Reset slide index when reviewing a different post
   useEffect(() => {
     setCurrentSlide(0)
@@ -1114,7 +1091,6 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                       text={(currentPost.slideTexts || [])[currentSlide - 1] || ''}
                       isLastSlide={currentSlide === (currentPost.slideTexts?.length || 0)}
                       scale={REVIEW_SCALE}
-                      logoUrl={brandLogos[currentPost.brand] || null}
                       stageRef={(node: Konva.Stage | null) => { textSlideRef.current = node }}
                     />
                   )}

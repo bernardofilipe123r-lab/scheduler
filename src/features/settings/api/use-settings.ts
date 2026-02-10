@@ -4,26 +4,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 
-// Session token management
-const TOKEN_KEY = 'settings_access_token'
-
-export function getSettingsToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY)
-}
-
-export function setSettingsToken(token: string) {
-  sessionStorage.setItem(TOKEN_KEY, token)
-}
-
-export function clearSettingsToken() {
-  sessionStorage.removeItem(TOKEN_KEY)
-}
-
-function authHeaders(): Record<string, string> {
-  const token = getSettingsToken()
-  return token ? { 'X-Settings-Token': token } : {}
-}
-
 // Types
 export interface Setting {
   key: string
@@ -53,34 +33,66 @@ export const settingsKeys = {
 }
 
 // API functions
-async function verifyAccess(password: string): Promise<{ success: boolean; token: string }> {
-  return apiClient.post<{ success: boolean; token: string }>('/api/settings/verify-access', { password })
-}
-
 async function fetchSettings(category?: string): Promise<SettingsResponse> {
   const url = category ? `/api/settings?category=${category}` : '/api/settings'
-  return apiClient.get<SettingsResponse>(url, { headers: authHeaders() })
+  return apiClient.get<SettingsResponse>(url)
 }
 
 async function fetchCategories(): Promise<string[]> {
-  const response = await apiClient.get<{ categories: string[] }>('/api/settings/categories', { headers: authHeaders() })
+  const response = await apiClient.get<{ categories: string[] }>('/api/settings/categories')
   return response.categories
 }
 
 async function fetchSetting(key: string): Promise<Setting> {
-  return apiClient.get<Setting>(`/api/settings/${key}`, { headers: authHeaders() })
+  return apiClient.get<Setting>(`/api/settings/${key}`)
 }
 
 async function updateSetting(key: string, value: string): Promise<Setting> {
-  const response = await apiClient.put<{ success: boolean; setting: Setting }>(`/api/settings/${key}`, { value }, { headers: authHeaders() })
+  const response = await apiClient.put<{ success: boolean; setting: Setting }>(`/api/settings/${key}`, { value })
   return response.setting
 }
 
 async function bulkUpdateSettings(settings: Record<string, string>): Promise<{ updated: string[]; errors: string[] }> {
-  return apiClient.post<{ updated: string[]; errors: string[] }>('/api/settings/bulk', { settings }, { headers: authHeaders() })
+  return apiClient.post<{ updated: string[]; errors: string[] }>('/api/settings/bulk', { settings })
+}
+
+// ============================================================================
+// Session token helpers (password gate)
+// ============================================================================
+
+const SETTINGS_TOKEN_KEY = 'settings_access_token'
+
+export function getSettingsToken(): string | null {
+  return localStorage.getItem(SETTINGS_TOKEN_KEY)
+}
+
+export function setSettingsToken(token: string) {
+  localStorage.setItem(SETTINGS_TOKEN_KEY, token)
+}
+
+export function clearSettingsToken() {
+  localStorage.removeItem(SETTINGS_TOKEN_KEY)
 }
 
 // Hooks
+
+/**
+ * Verify access password — returns a session token on success
+ */
+export function useVerifyAccess() {
+  return useMutation({
+    mutationFn: async (password: string) => {
+      const response = await apiClient.post<{ success: boolean; token: string }>(
+        '/api/settings/verify-access',
+        { password }
+      )
+      if (response.token) {
+        setSettingsToken(response.token)
+      }
+      return response
+    },
+  })
+}
 
 /**
  * Fetch all settings, optionally filtered by category
@@ -141,24 +153,6 @@ export function useBulkUpdateSettings() {
     mutationFn: bulkUpdateSettings,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: settingsKeys.all })
-    },
-  })
-}
-
-/**
- * Verify settings access password
- */
-export function useVerifyAccess() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: verifyAccess,
-    onSuccess: (data) => {
-      setSettingsToken(data.token)
-      queryClient.invalidateQueries({ queryKey: settingsKeys.all })
-    },
-    onError: () => {
-      clearSettingsToken()
     },
   })
 }

@@ -75,7 +75,6 @@ interface CarouselTextSlideProps {
   text: string
   isLastSlide: boolean
   scale?: number
-  logoUrl?: string | null
   stageRef?: (node: Konva.Stage | null) => void
 }
 
@@ -84,7 +83,6 @@ export function CarouselTextSlide({
   text,
   isLastSlide,
   scale = 0.3,
-  logoUrl,
   stageRef,
 }: CarouselTextSlideProps) {
   const brandColor = BRAND_COLORS[brand] || '#0ea5e9'
@@ -94,8 +92,6 @@ export function CarouselTextSlide({
   // Load PNG icons
   const [shareImg] = useImage(shareIconSrc)
   const [saveImg] = useImage(saveIconSrc)
-  // Load brand logo from theme (if provided)
-  const [brandLogoImg] = useImage(logoUrl || '', 'anonymous')
 
   // Replace placeholder handle in text — handles both {{brandhandle}} and {brandhandle}
   const displayText = text
@@ -139,39 +135,26 @@ export function CarouselTextSlide({
 
         {/* Brand header: circle avatar + name + handle */}
         <Group x={PAD_X} y={contentY}>
-          {/* Logo — use uploaded brand logo if available, else colored circle with initial */}
-          {brandLogoImg ? (
-            <KonvaImage
-              image={brandLogoImg}
-              x={0}
-              y={0}
-              width={LOGO_SIZE}
-              height={LOGO_SIZE}
-              cornerRadius={LOGO_SIZE / 2}
-            />
-          ) : (
-            <>
-              <Circle
-                x={LOGO_SIZE / 2}
-                y={LOGO_SIZE / 2}
-                radius={LOGO_SIZE / 2}
-                fill={brandColor}
-              />
-              <Text
-                text={brandName.charAt(0).toUpperCase()}
-                fontSize={28}
-                fontFamily="Inter, Arial, sans-serif"
-                fontStyle="bold"
-                fill="white"
-                width={LOGO_SIZE}
-                height={LOGO_SIZE}
-                align="center"
-                verticalAlign="middle"
-                x={0}
-                y={0}
-              />
-            </>
-          )}
+          {/* Colored circle with brand initial */}
+          <Circle
+            x={LOGO_SIZE / 2}
+            y={LOGO_SIZE / 2}
+            radius={LOGO_SIZE / 2}
+            fill={brandColor}
+          />
+          <Text
+            text={brandName.charAt(0).toUpperCase()}
+            fontSize={28}
+            fontFamily="Inter, Arial, sans-serif"
+            fontStyle="bold"
+            fill="white"
+            width={LOGO_SIZE}
+            height={LOGO_SIZE}
+            align="center"
+            verticalAlign="middle"
+            x={0}
+            y={0}
+          />
 
           {/* Brand name */}
           <Text
@@ -248,27 +231,25 @@ export function CarouselTextSlide({
           )}
 
           {/* SAVE icon + text */}
-          {saveImg && (
-            <KonvaImage
-              image={saveImg}
-              x={CANVAS_WIDTH - PAD_X - 150}
-              y={-2}
-              width={ICON_SIZE}
-              height={ICON_SIZE}
-            />
-          )}
           <Text
             text="SAVE"
             fontSize={24}
             fontFamily="Inter, Arial, sans-serif"
             fontStyle="bold"
             fill={TEXT_COLOR}
-            x={CANVAS_WIDTH - PAD_X - 112}
+            x={CANVAS_WIDTH - PAD_X - 130}
             y={2}
-            width={112}
-            align="right"
             letterSpacing={2}
           />
+          {saveImg && (
+            <KonvaImage
+              image={saveImg}
+              x={CANVAS_WIDTH - PAD_X - 38}
+              y={-2}
+              width={ICON_SIZE}
+              height={ICON_SIZE}
+            />
+          )}
         </Group>
       </Layer>
     </Stage>

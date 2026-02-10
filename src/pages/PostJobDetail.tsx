@@ -696,7 +696,6 @@ export function PostJobDetail({ job, refetch }: Props) {
                       text={slideTexts[currentSlide - 1] || ''}
                       isLastSlide={currentSlide === slideTexts.length}
                       scale={GRID_PREVIEW_SCALE}
-                      logoUrl={logoUrl}
                       stageRef={(node) => {
                         if (node) textSlideRefs.current.set(brand, node)
                       }}

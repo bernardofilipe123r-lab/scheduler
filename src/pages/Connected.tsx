@@ -18,7 +18,7 @@ import {
   type BrandConnectionStatus,
   type PlatformConnection
 } from '@/features/brands'
-import { FullPageLoader, PasswordGate } from '@/shared/components'
+import { FullPageLoader } from '@/shared/components'
 import type { BrandName } from '@/shared/types'
 
 type Platform = 'instagram' | 'facebook' | 'youtube'
@@ -250,18 +250,6 @@ function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardProps) {
 }
 
 export function ConnectedPage() {
-  return (
-    <PasswordGate
-      title="Connected Accounts"
-      description="Enter the password to manage connected accounts"
-      buttonLabel="Unlock Connections"
-    >
-      <ConnectedContent />
-    </PasswordGate>
-  )
-}
-
-function ConnectedContent() {
   const { data, isLoading, refetch } = useBrandConnections()
   
   // Store logos loaded from backend (keyed by brand id)

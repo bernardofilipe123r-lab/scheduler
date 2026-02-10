@@ -20,7 +20,7 @@ import os
 import json
 from datetime import datetime, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, Query, Depends, HTTPException
+from fastapi import APIRouter, Query, Depends, HTTPException, Cookie, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, or_, and_, cast, String
@@ -30,6 +30,9 @@ from app.models import LogEntry
 from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
 
 router = APIRouter(tags=["logs"])
+
+# Logs password (from env or default)
+LOGS_PASSWORD = os.getenv("LOGS_PASSWORD", "logs12345@")
 
 
 @router.get("/api/logs", summary="Query logs with filtering")
@@ -266,21 +269,115 @@ def clear_logs(
 
 
 @router.get("/logs", response_class=HTMLResponse, summary="Log viewer dashboard")
-def logs_dashboard():
+def logs_dashboard(logs_token: Optional[str] = Cookie(None), pwd: Optional[str] = Query(None)):
     """
     Serve the full-featured log viewer dashboard.
-    
-    This is a self-contained HTML page with:  
-    - Real-time log streaming with auto-refresh
-    - Advanced filtering (level, category, search, date, request_id)
-    - Color-coded log levels
-    - Expandable JSON details
-    - Request correlation tracking
-    - Deployment awareness
-    - Export functionality
-    - Dark theme for easy reading
+    Protected by a simple password.
+    Access via: /logs?pwd=<password> (sets cookie for future visits)
     """
-    return HTMLResponse(content=LOGS_HTML)
+    expected = os.getenv("LOGS_PASSWORD", LOGS_PASSWORD)
+    
+    # Check cookie or query param
+    if pwd == expected:
+        # Valid password in query — set cookie and serve page
+        response = HTMLResponse(content=LOGS_HTML)
+        response.set_cookie("logs_token", expected, max_age=60*60*24*30, httponly=True, samesite="lax")
+        return response
+    
+    if logs_token == expected:
+        # Valid cookie — serve page
+        return HTMLResponse(content=LOGS_HTML)
+    
+    # Not authenticated — show password form
+    return HTMLResponse(content=LOGS_LOGIN_HTML)
+
+
+# =============================================================================
+# LOGS LOGIN PAGE - Simple password gate
+# =============================================================================
+
+LOGS_LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔒 Logs Access</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .icon { font-size: 48px; margin-bottom: 16px; }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        p { color: #8b949e; margin-bottom: 24px; font-size: 14px; }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: #e6edf3;
+            font-size: 16px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+        input:focus { border-color: #58a6ff; }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #2ea043; }
+        .error { color: #f85149; font-size: 13px; margin-top: 12px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">🔍</div>
+        <h1>System Logs</h1>
+        <p>Enter the password to access the logs dashboard</p>
+        <form onsubmit="doLogin(event)">
+            <input type="password" id="pwd" placeholder="Enter password..." autofocus />
+            <button type="submit">Unlock Logs</button>
+        </form>
+        <p class="error" id="error">Invalid password. Try again.</p>
+    </div>
+    <script>
+    function doLogin(e) {
+        e.preventDefault();
+        const pwd = document.getElementById('pwd').value;
+        if (pwd) {
+            window.location.href = '/logs?pwd=' + encodeURIComponent(pwd);
+        }
+    }
+    // Show error if redirected back (URL has no pwd but page loaded = wrong pwd attempt)
+    if (window.location.search.includes('pwd=')) {
+        document.getElementById('error').style.display = 'block';
+    }
+    </script>
+</body>
+</html>"""
 
 
 # =============================================================================

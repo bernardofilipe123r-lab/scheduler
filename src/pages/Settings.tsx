@@ -18,17 +18,14 @@ import {
   AlertCircle,
   Database,
   Server,
-  Globe,
-  Lock
+  Globe
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { 
   useSettings, 
   useBulkUpdateSettings, 
-  clearSettingsToken,
   type Setting 
 } from '@/features/settings/api/use-settings'
-import { PasswordGate } from '@/shared/components'
 
 // Category icons
 const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
@@ -58,18 +55,6 @@ const SOURCE_BADGE: Record<string, { label: string; className: string; icon: typ
 }
 
 export function SettingsPage() {
-  return (
-    <PasswordGate
-      title="Settings Access"
-      description="Enter the password to manage settings"
-      buttonLabel="Unlock Settings"
-    >
-      {(onLogout) => <SettingsContent onLogout={onLogout} />}
-    </PasswordGate>
-  )
-}
-
-function SettingsContent({ onLogout }: { onLogout: () => void }) {
   const { data, isLoading, error, refetch } = useSettings()
   const bulkUpdate = useBulkUpdateSettings()
   
@@ -142,14 +127,6 @@ function SettingsContent({ onLogout }: { onLogout: () => void }) {
   }
   
   if (error) {
-    // If 401, token expired - force re-login
-    const apiErr = error as { status?: number }
-    if (apiErr.status === 401) {
-      clearSettingsToken()
-      onLogout()
-      return null
-    }
-    
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <AlertCircle className="w-12 h-12 text-red-500" />
@@ -181,13 +158,6 @@ function SettingsContent({ onLogout }: { onLogout: () => void }) {
         </div>
         
         <div className="flex items-center gap-3">
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-2 px-3 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Lock settings"
-          >
-            <Lock className="w-4 h-4" />
-          </button>
           {hasChanges && (
             <button
               onClick={handleReset}

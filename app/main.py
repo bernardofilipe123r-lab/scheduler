@@ -18,6 +18,7 @@ from app.api.brands_routes_v2 import router as brands_v2_router  # New database-
 from app.api.settings_routes import router as settings_router
 from app.api.analytics_routes import router as analytics_router
 from app.api.logs_routes import router as logs_router
+from app.api.auth_routes import router as auth_router
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging_middleware import RequestLoggingMiddleware
@@ -84,6 +85,7 @@ app.include_router(brands_v2_router, prefix="/api/v2")  # New database-backed ro
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
+app.include_router(auth_router)  # Authentication endpoints
 
 # Mount static files - use absolute path for Railway volume support
 # The output directory is at /app/output when running in Docker
