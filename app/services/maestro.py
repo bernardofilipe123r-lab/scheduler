@@ -885,10 +885,11 @@ def schedule_all_ready_reels() -> int:
     total_scheduled = 0
     db = SessionLocal()
     try:
-        # Find all completed jobs
+        # Find all completed OR failed jobs (failed jobs may have completed brand outputs
+        # that weren't scheduled due to earlier bugs)
         completed_jobs = (
             db.query(GenerationJob)
-            .filter(GenerationJob.status == "completed")
+            .filter(GenerationJob.status.in_(["completed", "failed"]))
             .all()
         )
 

@@ -42,9 +42,10 @@ import {
   LineChart,
   Sun,
   Moon,
+  Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { get, post } from '@/shared/api/client'
+import { get, post, del } from '@/shared/api/client'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -516,6 +517,21 @@ export function MaestroPage() {
     return lastDate.toDateString() === now.toDateString()
   })()
 
+  const handleClearProposals = async () => {
+    if (!confirm('Clear all proposals? This cannot be undone.')) return
+    try {
+      const result = await del<any>('/api/maestro/proposals/clear')
+      if (result.status === 'cleared') {
+        toast.success(`Cleared ${result.deleted} proposals`)
+        await Promise.all([fetchProposals(), fetchStatus()])
+      } else {
+        toast.error(result.error || 'Failed to clear')
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to clear proposals')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -718,6 +734,16 @@ export function MaestroPage() {
           <StatCard label="Accepted" value={stats.accepted} icon={Check} color="green" />
           <StatCard label="Rejected" value={stats.rejected} icon={X} color="red" />
           <StatCard label="Total" value={stats.total} icon={Bot} color="gray" />
+          {stats.total > 0 && (
+            <button
+              onClick={handleClearProposals}
+              className="flex items-center justify-center gap-2 p-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl text-red-600 text-xs font-medium transition-colors"
+              title="Clear all proposals"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear
+            </button>
+          )}
         </div>
       )}
 

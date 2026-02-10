@@ -376,10 +376,6 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
                 m = JobManager(pdb)
                 m.process_job(jid)
             print(f"✅ MAESTRO: Job {jid} ({var}) completed", flush=True)
-
-            from app.services.maestro import auto_schedule_job
-            auto_schedule_job(jid)
-            print(f"📅 MAESTRO: Job {jid} ({var}) auto-scheduled", flush=True)
         except Exception as e:
             print(f"❌ MAESTRO: Job {jid} ({var}) failed: {e}", flush=True)
             traceback.print_exc()
@@ -389,6 +385,15 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
                     m.update_job_status(jid, "failed", error_message=str(e))
             except Exception:
                 pass
+            return  # Don't try to schedule if generation failed
+
+        # Auto-schedule separately — don't let scheduling errors mark job as failed
+        try:
+            from app.services.maestro import auto_schedule_job
+            auto_schedule_job(jid)
+            print(f"📅 MAESTRO: Job {jid} ({var}) auto-scheduled", flush=True)
+        except Exception as e:
+            print(f"⚠️ MAESTRO: Job {jid} ({var}) auto-schedule failed (job still completed): {e}", flush=True)
 
     for jid, var in zip(job_ids, variants):
         background_tasks.add_task(_process_job, jid, var)
@@ -415,6 +420,25 @@ async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()
     agent = get_toby_agent()
     result = agent.reject_proposal(proposal_id, notes=req.notes)
     return result
+
+
+@router.delete("/proposals/clear")
+async def clear_proposals():
+    """Delete ALL proposals from the database."""
+    from app.db_connection import SessionLocal
+    from app.models import TobyProposal
+
+    db = SessionLocal()
+    try:
+        count = db.query(TobyProposal).count()
+        db.query(TobyProposal).delete()
+        db.commit()
+        return {"status": "cleared", "deleted": count}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "error": str(e)}
+    finally:
+        db.close()
 
 
 # ── STATS ─────────────────────────────────────────────────────
