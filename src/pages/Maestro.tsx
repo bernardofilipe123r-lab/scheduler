@@ -299,6 +299,7 @@ export function MaestroPage() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null)
   const [optimizing, setOptimizing] = useState(false)
+  const [bursting, setBursting] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [activeTab, setActiveTab] = useState<'proposals' | 'activity' | 'insights' | 'trending'>('proposals')
 
@@ -486,10 +487,11 @@ export function MaestroPage() {
   }
 
   const handleTriggerBurst = async () => {
+    setBursting(true)
     try {
       const result = await post<any>('/api/maestro/trigger-burst')
       if (result.status === 'triggered') {
-        toast.success('Daily burst triggered — 6 reels (dark + light) generating for all brands', { duration: 6000 })
+        toast.success('Daily burst triggered — 6 reels per brand (3 dark + 3 light) generating now', { duration: 6000 })
         // Poll for updates
         const poll = setInterval(async () => {
           await Promise.all([fetchProposals(), fetchStatus()])
@@ -498,14 +500,18 @@ export function MaestroPage() {
           clearInterval(poll)
           fetchProposals()
           fetchStatus()
+          setBursting(false)
         }, 300000)
       } else if (result.status === 'already_ran') {
         toast('Daily burst already ran today. Next burst available tomorrow.', { icon: '⏰', duration: 5000 })
+        setBursting(false)
       } else {
         toast.error(result.error || 'Failed to trigger burst')
+        setBursting(false)
       }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to trigger burst')
+      setBursting(false)
     }
   }
 
@@ -577,16 +583,16 @@ export function MaestroPage() {
               {/* Trigger Burst button */}
               <button
                 onClick={handleTriggerBurst}
-                disabled={burstRanToday}
+                disabled={burstRanToday || bursting}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${
-                  burstRanToday
+                  burstRanToday || bursting
                     ? 'bg-white/10 border-white/15 text-white/40 cursor-not-allowed'
                     : 'bg-white/20 hover:bg-white/30 border-white/25'
                 }`}
-                title={burstRanToday ? 'Burst already ran today — available tomorrow' : 'Manually trigger the daily burst'}
+                title={bursting ? 'Burst is running...' : burstRanToday ? 'Burst already ran today — available tomorrow' : 'Manually trigger the daily burst'}
               >
-                <Sparkles className="w-4 h-4" />
-                {burstRanToday ? 'Burst Done Today' : 'Trigger Burst'}
+                {bursting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {bursting ? 'Burst Running...' : burstRanToday ? 'Burst Done Today' : 'Trigger Burst'}
               </button>
 
               {/* Optimize Now button */}
