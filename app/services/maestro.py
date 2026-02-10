@@ -872,10 +872,7 @@ def auto_schedule_job(job_id: str):
                 continue
 
             try:
-                # Schedule for TOMORROW (next day) — burst runs at noon, posts go live next day
-                tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
-                tomorrow_start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
-                slot = scheduler.get_next_available_slot(brand, variant, reference_date=tomorrow_start)
+                slot = scheduler.get_next_available_slot(brand, variant)
 
                 scheduler.schedule_reel(
                     user_id="maestro",
@@ -973,10 +970,7 @@ def schedule_all_ready_reels() -> int:
                     continue
 
                 try:
-                    # Schedule for tomorrow — not today
-                    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
-                    tomorrow_start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
-                    slot = scheduler.get_next_available_slot(brand, variant, reference_date=tomorrow_start)
+                    slot = scheduler.get_next_available_slot(brand, variant)
                     scheduler.schedule_reel(
                         user_id="maestro",
                         reel_id=reel_id,

@@ -748,7 +748,7 @@ export function MaestroPage() {
               <span className="flex items-center gap-1.5">
                 <Sun className="w-3 h-3" />
                 <Moon className="w-3 h-3" />
-                {maestroStatus.daily_config?.total_reels_per_day ?? 30} unique reels/day &middot; {maestroStatus.daily_config?.reels_per_brand ?? 6}/brand &middot; Burst at 12PM Lisbon &middot; Posts next day
+                {maestroStatus.daily_config?.total_reels_per_day ?? 30} unique reels/day &middot; {maestroStatus.daily_config?.reels_per_brand ?? 6}/brand &middot; Burst at 12PM Lisbon &middot; Next available slot
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3" />
@@ -1120,7 +1120,7 @@ function ProposalCard({
             <div>
               <div className="text-xs font-medium text-gray-500 mb-1">Caption</div>
               <p className="text-sm text-gray-600 bg-white rounded-lg p-3 border border-gray-100 whitespace-pre-wrap">
-                {p.caption.replace(/@brandhandle/gi, '@the[brand]college')}
+                {p.caption.replace(/@brandhandle/gi, '@yourbrand')}
               </p>
             </div>
           )}
