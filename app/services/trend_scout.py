@@ -45,7 +45,14 @@ class TrendScout:
     ]
 
     # Competitor/inspiration accounts to monitor (public business accounts)
-    DEFAULT_COMPETITORS: List[str] = []  # Configure via env or DB
+    # These are top health/wellness pages with millions of combined followers
+    DEFAULT_COMPETITORS: List[str] = [
+        "naturamatrix",
+        "holistichealthworld",
+        "manifestableglowup",
+        "mylera_life",
+        "naturalhealinglab",
+    ]
 
     def __init__(self):
         # Use the first available brand token for API calls

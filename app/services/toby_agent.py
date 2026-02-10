@@ -48,25 +48,69 @@ STRATEGY_WEIGHTS = {
 # Avatar and niche guardrails — injected into EVERY Toby prompt
 TOBY_SYSTEM_PROMPT = """You are Toby, an expert AI content strategist for health & wellness Instagram accounts.
 
-AUDIENCE AVATAR:
+AUDIENCE AVATAR (internal strategy only — NEVER mention in content):
 - Women aged 45+
 - Located in the United States, Canada, and United Kingdom
 - Health-conscious, interested in natural remedies, supplements, anti-aging, longevity
 - Engaged on Instagram, prefers short-form educational video content (Reels)
 - Values science-backed information presented accessibly
 
+CRITICAL RULE — NEVER MENTION THE AVATAR DIRECTLY:
+- NEVER write "women over 40", "women 45+", "if you're over 50", "for women", "secrets women should know" etc.
+- The content must appeal UNIVERSALLY to anyone interested in health/wellness
+- Let the TOPIC itself naturally attract the avatar (e.g. collagen, hormones, metabolism after 30, bone density)
+- Instagram's algorithm will target the right audience based on content, not demographic callouts
+- Content-based targeting is KING on Instagram — generic appeal, niche knowledge
+
+OUR REEL TEMPLATE (fixed format, text-only overlays on AI-generated background):
+Each reel consists of 4 components that you must generate:
+
+1) TITLE — The main hook shown on the cover. ALL CAPS. Bold, attention-grabbing, scroll-stopping.
+   Must be useful & attractive. No periods unless two-part statement.
+   Top performer examples:
+   - "METABOLISM SECRETS DOCTORS DON'T SHARE"
+   - "YOUR GUT PRODUCES 90% OF YOUR SEROTONIN"
+   - "CARDIO BURNS CALORIES. STRENGTH TRAINING REBUILDS YOUR METABOLISM."
+   - "ONE DAILY HABIT CAN CHANGE YOUR HEALTH"
+
+2) CONTENT LINES — 6-8 numbered text slides shown over the background image.
+   Each line follows the format: "Topic/claim — Supporting fact or benefit"
+   The LAST line (line 7 or 8) is ALWAYS a CTA: "If you want to learn more about your health, follow this page!"
+   Example content_lines:
+   [
+     "Skipping breakfast - Triggers cellular cleanup mode",
+     "Protein at every meal - Prevents metabolic slowdown",
+     "Caffeine after noon - Slows fat burning 40%",
+     "Spicy food daily — Ignites thermogenesis for hours",
+     "Standing after eating - Doubles calorie burn rate",
+     "Sleeping in cold room - Boosts metabolism overnight",
+     "Cold showers - Activates brown fat instantly",
+     "If you want to learn more about your health, follow this page!"
+   ]
+
+3) IMAGE PROMPT — AI-generated background image.
+   Soft, minimal, calming wellness aesthetic. High-end lifestyle photography.
+   Main subject CENTERED in UPPER area (bottom third covered by text).
+   Must end with: "No text, no letters, no numbers, no symbols, no logos."
+
+4) CAPTION — Full Instagram caption posted below the reel.
+   Structure:
+   - Paragraph 1: Expand on the title with surprising/counterintuitive science
+   - Paragraph 2-3: Explain the mechanism in accessible wellness language
+   - CTA block: "👉🏼 Follow @brandhandle for daily content on..." (system replaces @brandhandle)
+   - Save/share block: "🩵 This post is designed to be saved and revisited..."
+   - Follow block: "💬 If you found this helpful, make sure to follow..."
+   - Disclaimer: "🌱 Content provided for educational purposes..."
+   - Hashtags: 5-8 relevant health/wellness hashtags
+
 CONTENT GUIDELINES:
 - Health & wellness niche ONLY
 - Educational and informational tone
-- Science-backed claims with real research references
+- Science-backed claims with plausible research references
+- 60% validating (things audience suspects are true) + 40% surprising (new revelation)
 - No medical advice or cure claims
-- Visually calming, minimal, lifestyle aesthetic
-- Each reel: 5-7 punchy text slides + a health-focused title
-
-FORMATTING RULES:
-- Title: Sentence case, no period at end, no ALL CAPS, no numbered lists, no em-dashes
-- Content lines: Short, punchy, 1-2 sentences each (5-7 lines)
-- Image prompt: Soft, minimal, calming wellness aesthetic
+- No emojis in title or content_lines (only in caption)
+- No em-dashes or en-dashes in content_lines (use regular dash - )
 
 You think like a human content creator but with data-driven decisions.
 You explain your reasoning clearly so the human reviewer understands your strategy."""
@@ -301,7 +345,7 @@ class TobyAgent:
         if recent_titles:
             avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
 
-        prompt = f"""Generate a new viral Instagram Reel concept about {topic_desc}.
+        prompt = f"""Generate a new viral Instagram Reel about {topic_desc}.
 
 Strategy: EXPLORE — trying a fresh topic/angle that we haven't covered recently.
 Topic bucket: {topic}
@@ -310,16 +354,22 @@ Topic bucket: {topic}
 
 Your task:
 1. Come up with a compelling, science-backed health claim or insight
-2. Create 5-7 punchy text slides for the reel
-3. Write a cinematic image prompt for the background
-4. Explain WHY you chose this specific topic and angle
+2. Create an ALL CAPS title that stops scrolling
+3. Create 6-8 content lines in "Topic/claim - Supporting fact" format (last line = CTA)
+4. Write a cinematic image prompt for the background
+5. Write a full Instagram caption (science-backed, with CTA blocks and hashtags)
+6. Explain WHY you chose this specific topic and angle
+
+REMEMBER: Do NOT mention age, gender, or demographics in the title, content_lines, or caption body.
+Let the topic naturally attract the right audience.
 
 OUTPUT FORMAT (JSON only):
 {{
-    "title": "Health statement title (sentence case, no period, no em-dashes)",
-    "content_lines": ["Slide 1 text", "Slide 2 text", "Slide 3 text", "Slide 4 text", "Slide 5 text"],
-    "image_prompt": "Soft, minimal wellness aesthetic description. No text, no letters, no numbers, no symbols, no logos.",
-    "reasoning": "2-3 sentences explaining why you chose this topic and angle, and why you think it will perform well with women 45+ interested in health."
+    "title": "SCROLL-STOPPING TITLE IN ALL CAPS",
+    "content_lines": ["Fact 1 - Benefit/explanation", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
+    "caption": "Hook paragraph expanding on the title...\n\nScience explanation paragraph...\n\n👉🏼 Follow @brandhandle for daily content on health...\n\n🩵 This post is designed to be saved...\n\n💬 If you found this helpful...\n\n🌱 Content provided for educational purposes...\n\n#health #wellness #naturalhealin",
+    "reasoning": "2-3 sentences explaining why you chose this topic and angle."
 }}"""
 
         return self._call_ai_and_save(prompt, strategy="explore", topic=topic)
@@ -355,15 +405,18 @@ Strategy: ITERATE — improve an underperformer with a better hook, angle, or st
 
 Analyse:
 1. What likely went wrong with the original (weak hook? boring topic? too vague?)
-2. How can we make this topic more engaging for women 45+?
+2. How can we make this topic more engaging and universally appealing?
 3. Create a completely reworked version — same general topic, much better execution
+
+REMEMBER: Do NOT mention age, gender, or demographics anywhere in the content.
 
 OUTPUT FORMAT (JSON only):
 {{
-    "title": "Improved health statement (sentence case, no period, no em-dashes)",
-    "content_lines": ["Slide 1", "Slide 2", "Slide 3", "Slide 4", "Slide 5"],
-    "image_prompt": "Soft, minimal wellness aesthetic. No text, no letters, no numbers, no symbols, no logos.",
-    "reasoning": "2-3 sentences: what went wrong with the original, what you changed and why, and why the new version should perform better."
+    "title": "IMPROVED SCROLL-STOPPING TITLE IN ALL CAPS",
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
+    "caption": "Hook paragraph...\n\nScience explanation...\n\n👉🏼 Follow @brandhandle for daily content...\n\n🩵 Save and share this...\n\n💬 Follow for more...\n\n🌱 Educational purposes...\n\n#hashtags",
+    "reasoning": "What went wrong with the original, what you changed and why."
 }}"""
 
         return self._call_ai_and_save(
@@ -411,13 +464,15 @@ Rules:
 2. Use a DIFFERENT specific claim or insight (not a copy)
 3. Maintain the same emotional tone that made the original successful
 4. Make it feel fresh — the audience shouldn't think "I've seen this before"
+5. Do NOT mention age, gender, or demographics anywhere in the content
 
 OUTPUT FORMAT (JSON only):
 {{
-    "title": "New but similar health statement (sentence case, no period, no em-dashes)",
-    "content_lines": ["Slide 1", "Slide 2", "Slide 3", "Slide 4", "Slide 5"],
-    "image_prompt": "Soft, minimal wellness aesthetic. No text, no letters, no numbers, no symbols, no logos.",
-    "reasoning": "2-3 sentences: what made the original successful, what you kept, what you changed, and why this variation should also perform well."
+    "title": "NEW VARIATION TITLE IN ALL CAPS",
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
+    "caption": "Hook paragraph...\n\nScience explanation...\n\n👉🏼 Follow @brandhandle...\n\n🩵 Save and share...\n\n💬 Follow for more...\n\n🌱 Educational purposes...\n\n#hashtags",
+    "reasoning": "What made the original successful, what you kept and changed."
 }}"""
 
         return self._call_ai_and_save(
@@ -458,17 +513,18 @@ Strategy: TRENDING — adapt external viral content to our brand template.
 
 Rules:
 1. DO NOT copy the content — create an ORIGINAL version inspired by it
-2. Adapt the topic/angle to our avatar (women 45+, US/Canada/UK)
-3. Keep whatever made the original viral (hook style, topic angle, emotional trigger)
-4. Make it science-backed and educational (our brand positioning)
-5. Must be relevant to health, wellness, anti-aging, or natural remedies
+2. Keep whatever made the original viral (hook style, topic angle, emotional trigger)
+3. Make it science-backed and educational (our brand positioning)
+4. Must be relevant to health, wellness, anti-aging, or natural remedies
+5. Do NOT mention age, gender, or demographics — let the topic attract the right audience naturally
 
 OUTPUT FORMAT (JSON only):
 {{
-    "title": "Our adapted health statement (sentence case, no period, no em-dashes)",
-    "content_lines": ["Slide 1", "Slide 2", "Slide 3", "Slide 4", "Slide 5"],
-    "image_prompt": "Soft, minimal wellness aesthetic. No text, no letters, no numbers, no symbols, no logos.",
-    "reasoning": "2-3 sentences: what makes the trending content viral, how you adapted it for our brand, and why it should resonate with our audience."
+    "title": "OUR ADAPTED TITLE IN ALL CAPS",
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
+    "caption": "Hook paragraph...\n\nScience explanation...\n\n👉🏼 Follow @brandhandle...\n\n🩵 Save and share...\n\n💬 Follow for more...\n\n🌱 Educational purposes...\n\n#hashtags",
+    "reasoning": "What makes the trending content viral, how you adapted it."
 }}"""
 
         return self._call_ai_and_save(
@@ -530,6 +586,7 @@ OUTPUT FORMAT (JSON only):
             title = parsed.get("title", "")
             content_lines = parsed.get("content_lines", [])
             image_prompt = parsed.get("image_prompt", "")
+            caption = parsed.get("caption", "")
             reasoning = parsed.get("reasoning", "No reasoning provided")
 
             if not title or not content_lines:
@@ -559,6 +616,7 @@ OUTPUT FORMAT (JSON only):
                     title=title,
                     content_lines=content_lines,
                     image_prompt=image_prompt,
+                    caption=caption or None,
                     topic_bucket=topic_bucket,
                     source_type=source_type,
                     source_ig_media_id=source_ig_media_id,
@@ -697,6 +755,7 @@ OUTPUT FORMAT (JSON only):
                 "title": proposal.title,
                 "content_lines": proposal.content_lines,
                 "image_prompt": proposal.image_prompt,
+                "caption": proposal.caption,
                 "content_type": proposal.content_type,
                 "strategy": proposal.strategy,
             }
@@ -798,14 +857,14 @@ OUTPUT FORMAT (JSON only):
             today_count = self._count_proposals_today()
 
             return {
-                "total_proposals": total,
+                "total": total,
+                "today": today_count,
+                "daily_limit": MAX_PROPOSALS_PER_DAY,
                 "pending": pending,
                 "accepted": accepted,
                 "rejected": rejected,
                 "acceptance_rate": round(accepted / total * 100, 1) if total > 0 else 0,
-                "today_proposals": today_count,
-                "max_per_day": MAX_PROPOSALS_PER_DAY,
-                "strategy_breakdown": strategy_acceptance,
+                "strategies": strategy_acceptance,
             }
         except Exception as e:
             return {"error": str(e)}
