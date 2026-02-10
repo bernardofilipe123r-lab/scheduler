@@ -1,232 +1,215 @@
-# Instagram Reels Automation 🎬
+<div align="center">
 
-Automated Instagram and Facebook Reels generation with AI-powered backgrounds, custom branding, and direct publishing.
-
-## ✨ Features
-
-- 🎨 **Dual Brand Support:** Gym College (dark blue) & Healthy College (green)
-- 🌙 **Light & Dark Modes:** Traditional or AI-generated backgrounds
-- 🤖 **AI Background Generation:** OpenAI DALL-E integration
-- 📱 **Automatic Reels Creation:** Thumbnails + 10-second videos
-- 📤 **Direct Publishing:** Instagram & Facebook with scheduling
-- 💾 **Progress Tracking:** Resume interrupted generations
-- 🔄 **Dual Rotation:** Different text reordering per brand
-
-## 🚀 Quick Start
-
-### 1. Start Services
-```bash
-cd reels-automation
-./start_services.sh
-```
-
-This starts:
-- FastAPI server on http://localhost:8000
-- Public tunnel for Meta API access
-- Automatic `.env` configuration
-
-### 2. Access Web UI
-Open http://localhost:8000 in your browser
-
-### 3. Generate Reels
-- Enter your title and content points
-- Choose variant (Light/Dark)
-- Select brand (Both/Gym College/Healthy College)
-- Click "Generate Reels"
-
-### 4. Publish to Social Media
-- Click "📤 Publish to Instagram/Facebook"
-- Select platforms
-- Set schedule (optional)
-- Publish immediately or schedule for later
-
-## 📋 Requirements
-
-- Python 3.14+
-- Node.js (for localtunnel)
-- OpenAI API key
-- Instagram Business Account
-- Instagram Graph API credentials
-
-## 🔧 Configuration
-
-All settings in `.env`:
-
-```bash
-# OpenAI
-OPENAI_API_KEY=your_key_here
-
-# Instagram
-INSTAGRAM_APP_ID=your_app_id
-INSTAGRAM_APP_SECRET=your_app_secret
-INSTAGRAM_ACCESS_TOKEN=your_access_token
-INSTAGRAM_BUSINESS_ACCOUNT_ID=your_business_account_id
-
-# Public URL (auto-configured)
-PUBLIC_URL_BASE=https://your-tunnel-url.loca.lt
-```
-
-## 📁 Project Structure
+<br>
 
 ```
-reels-automation/
-├── app/                  # Python backend (FastAPI)
-│   ├── api/              # API routes
-│   ├── core/             # Configuration
-│   ├── database/         # Database layer
-│   ├── services/         # Business logic
-│   │   ├── image_generator.py
-│   │   ├── video_generator.py
-│   │   ├── ai_background_generator.py
-│   │   ├── social_publisher.py
-│   │   └── scheduler.py
-│   └── utils/            # Helpers
-├── src/                  # React frontend
-│   ├── app/              # App shell (providers, routes, layout)
-│   ├── features/         # Feature modules (jobs, scheduling, brands)
-│   ├── pages/            # Page components
-│   └── shared/           # Shared components, types, API
-├── dist/                 # Built frontend (production)
-├── output/               # Generated content
-│   ├── videos/
-│   ├── thumbnails/
-│   └── reels/
-└── assets/               # Fonts, logos, templates
+██╗  ██╗███████╗ █████╗ ██╗    ██╗   ██╗███████╗████████╗██╗  ██╗
+██║  ██║██╔════╝██╔══██╗██║    ██║   ██║██╔════╝╚══██╔══╝██║  ██║
+███████║█████╗  ███████║██║    ██║   ██║█████╗     ██║   ███████║
+██╔══██║██╔══╝  ██╔══██║██║    ╚██╗ ██╔╝██╔══╝     ██║   ██╔══██║
+██║  ██║███████╗██║  ██║███████╗╚████╔╝ ███████╗   ██║   ██║  ██║
+╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝ ╚═══╝  ╚══════╝   ╚═╝   ╚═╝  ╚═╝
 ```
 
-## 🎯 Brand Specifications
+**It doesn't just publish content. It thinks.**
 
-### Gym College
-- **Color:** Dark Blue (#00435c)
-- **Font Size:** 39px
-- **Rotation:** Standard order
-- **AI Style:** Ocean depths, icy blue tones
+<br>
 
-### Healthy College
-- **Color:** Dark Green (#006400)
-- **Font Size:** 38px
-- **Rotation:** Shuffled middle lines
-- **AI Style:** Forest greens, emerald tones
+![Python](https://img.shields.io/badge/python-3.14+-00435c?style=flat-square&logo=python&logoColor=white)
+![React](https://img.shields.io/badge/react-18-00435c?style=flat-square&logo=react&logoColor=white)
+![FastAPI](https://img.shields.io/badge/fastapi-latest-00435c?style=flat-square&logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/postgresql-16-00435c?style=flat-square&logo=postgresql&logoColor=white)
+![Railway](https://img.shields.io/badge/railway-deployed-00435c?style=flat-square&logo=railway&logoColor=white)
+![License](https://img.shields.io/badge/license-proprietary-111827?style=flat-square)
 
-## 📤 Publishing
+<br>
 
-### Instagram
-- Two-step process: Create container → Publish
-- Supports Reels format (9:16 vertical)
-- Automatic thumbnail handling
-- Caption support
-
-### Facebook
-- Single-step video upload
-- Auto-surfaces as Reel if vertical
-- Page-based publishing
-
-### Scheduling
-- Immediate publishing
-- Scheduled publishing (date/time)
-- Multi-platform support
-
-## 🛠️ Management Scripts
-
-```bash
-# Start all services
-./start_services.sh
-
-# Stop all services
-./stop_services.sh
-
-# View logs
-tail -f /tmp/fastapi.log      # FastAPI
-cat /tmp/localtunnel.log      # Tunnel
-```
-
-## 📊 API Endpoints
-
-- `POST /reels/generate` - Generate reels
-- `POST /reels/publish` - Publish to social media
-- `GET /reels/status/{reel_id}` - Check status
-- `GET /reels/history` - View history
-- `GET /docs` - API documentation
-
-## 🐛 Troubleshooting
-
-### Services won't start
-```bash
-./stop_services.sh
-./start_services.sh
-```
-
-### Public URL not accessible
-1. Visit URL in browser
-2. Click "Continue" on warning page
-3. Localtunnel will whitelist your IP
-
-### Instagram publish fails
-- Check `.env` credentials
-- Verify PUBLIC_URL_BASE is accessible
-- Ensure videos are publicly reachable
-- Check logs for detailed errors
-
-## 📝 Workflow Example
-
-1. **Generate Reels:**
-   - Title: "5 Best Exercises"
-   - Content: "Squats, Deadlifts, Bench Press, Pull-ups, Lunges"
-   - Variant: Dark (AI background)
-   - Brand: Gym College
-
-2. **Review:**
-   - Preview thumbnail and video
-   - Download if needed
-
-3. **Publish:**
-   - Click publish button
-   - Select Instagram
-   - Set caption: "Transform your workout! 💪"
-   - Choose: Publish immediately
-
-4. **Monitor:**
-   - Check Instagram for posted Reel
-   - View publish status in API response
-
-## 🔐 Security
-
-- API keys in `.env` (not committed)
-- `.gitignore` configured
-- Access tokens refreshed periodically
-- Public tunnel with IP whitelisting
-
-## 📚 Documentation
-
-- [SERVICES_GUIDE.md](SERVICES_GUIDE.md) - Detailed service management
-- [API Docs](http://localhost:8000/docs) - Interactive API documentation
-
-## 🎉 Current Status
-
-✅ **Fully Operational**
-
-- FastAPI server: Running
-- Public tunnel: https://few-lands-find.loca.lt
-- Instagram API: Configured
-- Web UI: Accessible
-- Publishing: Ready
-
-## 💡 Next Steps
-
-1. Test reel generation
-2. Test Instagram publishing
-3. Implement scheduled execution (optional)
-4. Add Facebook credentials (optional)
-5. Setup token refresh automation
-
-## 📞 Support
-
-For issues, check:
-1. Service logs (`/tmp/fastapi.log`)
-2. Tunnel status (`cat /tmp/localtunnel.log`)
-3. `.env` configuration
-4. API credentials validity
+</div>
 
 ---
 
-**Ready to create amazing Reels! 🚀**
+<br>
+
+> *Most platforms schedule posts. This one dreams them into existence.*
+
+<br>
+
+## What is this?
+
+An autonomous content engine. Not a scheduler. Not a template tool. A system that **observes, learns, creates, and publishes** — across multiple brands, multiple platforms, simultaneously — while you sleep.
+
+It runs a network of health & wellness brands. Each with its own voice. Its own colors. Its own audience. And none of them know about each other.
+
+<br>
+
+## The Architecture
+
+```
+                    ┌─────────────────────────────┐
+                    │         TOBY                 │
+                    │    Autonomous AI Strategist   │
+                    │   thinks · observes · scouts  │
+                    └──────────┬──────────────────┘
+                               │
+                    ┌──────────▼──────────────────┐
+                    │     CONTENT PIPELINE          │
+                    │  10 stages · zero human input │
+                    │                               │
+                    │  pattern → prompt → generate  │
+                    │  score → deduplicate → split   │
+                    │  render → produce → caption    │
+                    │  → publish                     │
+                    └──────────┬──────────────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              ▼                ▼                ▼
+        ┌──────────┐   ┌──────────┐    ┌──────────┐
+        │Instagram │   │ Facebook │    │ YouTube  │
+        │  Reels   │   │  Reels   │    │  Shorts  │
+        └──────────┘   └──────────┘    └──────────┘
+              │                │                │
+              ▼                ▼                ▼
+        ×5 brands        ×5 brands       ×5 brands
+```
+
+<br>
+
+## Under the Hood
+
+| | | |
+|:---|:---|:---|
+| **Brain** | DeepSeek AI | Content ideation, captions, differentiation |
+| **Eyes** | deAPI | AI-generated visual backgrounds |
+| **Strategist** | Toby Agent | Autonomous daemon — 4 strategies, 0 supervision |
+| **Engine** | FFmpeg + Pillow | Image rendering → video production |
+| **Spine** | FastAPI + PostgreSQL | REST API, jobs, scheduling, analytics |
+| **Face** | React 18 + TypeScript | Admin dashboard with real-time control |
+| **Reach** | Meta Graph API + YouTube API | Cross-platform publishing at scale |
+| **Home** | Docker + Railway | Cloud-native with persistent volumes |
+
+<br>
+
+## The Agent
+
+His name is **Toby**. He doesn't wait for instructions.
+
+```
+EXPLORE     → finds topics nobody's tried yet
+ITERATE     → fixes what underperformed
+DOUBLE DOWN → amplifies what went viral
+TRENDING    → adapts what the internet is talking about
+```
+
+He thinks every 2 hours. Observes every 6. Scouts trends every 4. Generates up to 10 proposals per day — each with reasoning you can read, question, or override.
+
+He never sleeps.
+
+<br>
+
+## Quality Control
+
+Nothing gets published without passing a 5-dimension scoring engine:
+
+```
+Structure       ████████████████████░░  — is it well-formed?
+Familiarity     ██████████████████░░░░  — does the audience recognize it?
+Novelty         ████████████████░░░░░░  — is it fresh?
+Hook Strength   ██████████████████████  — will they stop scrolling?
+Plausibility    ████████████████████░░  — is it scientifically sound?
+
+≥ 80 → publish    65–79 → regenerate    < 65 → reject
+```
+
+Content fingerprinting prevents repetition. 3-day topic cooldowns per brand. Trained on 59 posts with 1M+ views each — but never copies. It learns the *shape* of virality.
+
+<br>
+
+## The Brands
+
+Five identities. One pipeline. Zero overlap.
+
+```
+◉ Healthy College     @thehealthycollege      health & nutrition
+◉ Vitality College    @thevitalitycollege     energy & movement
+◉ Longevity College   @thelongevitycollege    anti-aging & lifespan
+◉ Holistic College    @theholisticcollege     mind-body wellness
+◉ Wellbeing College   @thewellbeingcollege    mental health & self-care
+```
+
+Each brand gets a unique variation of every piece of content — reordered, reworded, retopicized — in a single AI call. Longevity gets the original. The rest get transformations that feel native to their voice.
+
+<br>
+
+## The Pipeline
+
+```
+1. Pattern Selection      viral archetype + topic bucket + format
+2. Prompt Construction    <500 tokens, cached system context
+3. AI Generation          DeepSeek → title, lines, image prompt, caption
+4. Quality Scoring        5-dimension gate (reject / regen / pass)
+5. Anti-Repetition        fingerprint + cooldown + history check
+6. Brand Differentiation  1 piece → 5 unique variations
+7. Image Rendering        Pillow → branded 1080×1920 with text layout
+8. Video Production       FFmpeg → MP4 with background music
+9. Caption Building       AI paragraph + CTA + hashtags
+10. Publishing            IG + FB + YT → all brands simultaneously
+```
+
+~80% token reduction vs. v1. Three-layer architecture: static patterns → cached prompts → minimal runtime calls.
+
+<br>
+
+## Numbers
+
+```
+Brands managed           5
+Platforms                 3  (Instagram · Facebook · YouTube)
+Content pipeline stages   10
+Quality dimensions        5
+Viral patterns trained    59  (1M+ views each)
+Toby strategies           4
+Token reduction vs v1     ~80%
+Polling interval          60s
+Analytics refresh         12h
+Log retention             7 days
+```
+
+<br>
+
+## Stack
+
+```
+Python 3.14+        FastAPI · SQLAlchemy · APScheduler · Pillow · MoviePy
+React 18            TypeScript · Vite · TailwindCSS · TanStack Query · Recharts
+PostgreSQL          Jobs · Schedules · Analytics · Brands · Content History
+FFmpeg              Image → Video conversion with audio mixing
+Docker              Containerized deployment on Railway
+Meta Graph API      Instagram + Facebook publishing (v21.0)
+YouTube Data API    OAuth 2.0 · Shorts publishing · Quota monitoring
+DeepSeek            Content generation · Captions · Differentiation
+deAPI               AI background generation with FIFO queuing
+```
+
+<br>
+
+---
+
+<div align="center">
+
+<br>
+
+```
+Built by Healveth.
+Not open for contributions.
+Not looking for stars.
+
+It just runs.
+```
+
+<br>
+
+**Proprietary** · Est. 2025
+
+<br>
+
+</div>
