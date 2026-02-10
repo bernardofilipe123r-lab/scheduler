@@ -31,7 +31,6 @@ import {
   Clock,
   AlertCircle,
   MessageSquare,
-  ExternalLink,
   Info,
   Filter,
   Activity,
