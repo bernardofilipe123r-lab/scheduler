@@ -43,6 +43,7 @@ import {
   Sun,
   Moon,
   Trash2,
+  RotateCcw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { get, post, del } from '@/shared/api/client'
@@ -538,6 +539,25 @@ export function MaestroPage() {
     }
   }
 
+  const [resetting, setResetting] = useState(false)
+  const handleResetAll = async () => {
+    if (!confirm('Reset all? This clears all proposals and resets the daily burst limit.')) return
+    setResetting(true)
+    try {
+      // Clear proposals + reset daily run in parallel
+      const [clearResult] = await Promise.all([
+        del<any>('/api/maestro/proposals/clear'),
+        post<any>('/api/maestro/reset-daily-run'),
+      ])
+      toast.success(`Reset complete — cleared ${clearResult.deleted} proposals, burst limit reset`)
+      await Promise.all([fetchProposals(), fetchStatus()])
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to reset')
+    } finally {
+      setResetting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -580,6 +600,17 @@ export function MaestroPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Reset All button */}
+              <button
+                onClick={handleResetAll}
+                disabled={resetting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/30 hover:bg-red-500/50 rounded-xl border border-red-400/30 text-sm font-semibold transition-all disabled:opacity-50"
+                title="Clear all proposals and reset daily burst limit"
+              >
+                {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                Reset All
+              </button>
+
               {/* Trigger Burst button */}
               <button
                 onClick={handleTriggerBurst}
