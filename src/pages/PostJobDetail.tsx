@@ -112,8 +112,33 @@ export function PostJobDetail({ job, refetch }: Props) {
   // Per-brand font size overrides (non-permanent, session only)
   const [brandFontSizes, setBrandFontSizes] = useState<Record<string, number>>({})
 
-  // Brand logos
+  // Brand logos — start with localStorage, then overlay theme logos from server
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>(loadBrandLogos)
+
+  // Fetch theme logos from /brands API on mount (server logos take priority)
+  useEffect(() => {
+    const fetchThemeLogos = async () => {
+      const allBrands = job.brands || []
+      const logos: Record<string, string> = {}
+      for (const brand of allBrands) {
+        try {
+          const r = await fetch(`/api/brands/${brand}/theme`)
+          if (r.ok) {
+            const d = await r.json()
+            if (d.theme?.logo) {
+              const url = `/brand-logos/${d.theme.logo}`
+              const check = await fetch(url, { method: 'HEAD' })
+              if (check.ok) logos[brand] = url
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      if (Object.keys(logos).length > 0) {
+        setBrandLogos(prev => ({ ...logos, ...prev }))
+      }
+    }
+    fetchThemeLogos()
+  }, [job.brands])
 
   // Edit modal state
   const [editingBrand, setEditingBrand] = useState<string | null>(null)
@@ -671,6 +696,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                       text={slideTexts[currentSlide - 1] || ''}
                       isLastSlide={currentSlide === slideTexts.length}
                       scale={GRID_PREVIEW_SCALE}
+                      logoUrl={logoUrl}
                       stageRef={(node) => {
                         if (node) textSlideRefs.current.set(brand, node)
                       }}

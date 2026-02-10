@@ -75,6 +75,7 @@ interface CarouselTextSlideProps {
   text: string
   isLastSlide: boolean
   scale?: number
+  logoUrl?: string | null
   stageRef?: (node: Konva.Stage | null) => void
 }
 
@@ -83,6 +84,7 @@ export function CarouselTextSlide({
   text,
   isLastSlide,
   scale = 0.3,
+  logoUrl,
   stageRef,
 }: CarouselTextSlideProps) {
   const brandColor = BRAND_COLORS[brand] || '#0ea5e9'
@@ -92,9 +94,15 @@ export function CarouselTextSlide({
   // Load PNG icons
   const [shareImg] = useImage(shareIconSrc)
   const [saveImg] = useImage(saveIconSrc)
+  // Load brand logo from theme (if provided)
+  const [brandLogoImg] = useImage(logoUrl || '', 'anonymous')
 
-  // Replace placeholder handle in text
-  const displayText = text.replace(/\{\{brandhandle\}\}/g, handle).replace(/@\{\{brandhandle\}\}/g, handle)
+  // Replace placeholder handle in text — handles both {{brandhandle}} and {brandhandle}
+  const displayText = text
+    .replace(/@\{\{brandhandle\}\}/g, handle)
+    .replace(/\{\{brandhandle\}\}/g, handle)
+    .replace(/@\{brandhandle\}/g, handle)
+    .replace(/\{brandhandle\}/g, handle)
 
   // Layout constants (at 1080x1350 canvas resolution)
   const PAD_X = 80
@@ -131,26 +139,39 @@ export function CarouselTextSlide({
 
         {/* Brand header: circle avatar + name + handle */}
         <Group x={PAD_X} y={contentY}>
-          {/* Logo circle with initial */}
-          <Circle
-            x={LOGO_SIZE / 2}
-            y={LOGO_SIZE / 2}
-            radius={LOGO_SIZE / 2}
-            fill={brandColor}
-          />
-          <Text
-            text={brandName.charAt(0).toUpperCase()}
-            fontSize={28}
-            fontFamily="Inter, Arial, sans-serif"
-            fontStyle="bold"
-            fill="white"
-            width={LOGO_SIZE}
-            height={LOGO_SIZE}
-            align="center"
-            verticalAlign="middle"
-            x={0}
-            y={0}
-          />
+          {/* Logo — use uploaded brand logo if available, else colored circle with initial */}
+          {brandLogoImg ? (
+            <KonvaImage
+              image={brandLogoImg}
+              x={0}
+              y={0}
+              width={LOGO_SIZE}
+              height={LOGO_SIZE}
+              cornerRadius={LOGO_SIZE / 2}
+            />
+          ) : (
+            <>
+              <Circle
+                x={LOGO_SIZE / 2}
+                y={LOGO_SIZE / 2}
+                radius={LOGO_SIZE / 2}
+                fill={brandColor}
+              />
+              <Text
+                text={brandName.charAt(0).toUpperCase()}
+                fontSize={28}
+                fontFamily="Inter, Arial, sans-serif"
+                fontStyle="bold"
+                fill="white"
+                width={LOGO_SIZE}
+                height={LOGO_SIZE}
+                align="center"
+                verticalAlign="middle"
+                x={0}
+                y={0}
+              />
+            </>
+          )}
 
           {/* Brand name */}
           <Text

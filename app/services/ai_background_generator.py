@@ -428,11 +428,15 @@ class AIBackgroundGenerator:
             progress_callback("Preparing HQ image prompt...", 10)
         
         # For posts, we use the user prompt directly (already wellness-styled from AI)
-        # Add a quality-boosting suffix
+        # Add a quality-boosting suffix with composition guidance
         quality_suffix = (
             "Ultra high quality, 8K, sharp focus, professional photography, "
             "soft natural lighting, premium lifestyle aesthetic. "
-            "Photorealistic, detailed textures, beautiful composition."
+            "Photorealistic, detailed textures, beautiful composition. "
+            "CRITICAL COMPOSITION: Subject must be centered in the UPPER HALF of the frame. "
+            "The bottom third of the image should be soft bokeh, clean surface, or subtle gradient — "
+            "NOT the main subject. Portrait orientation, slightly overhead camera angle, "
+            "hero subject positioned in center-upper area of frame."
         )
         
         prompt = user_prompt or "Soft cinematic wellness still life with natural ingredients on white countertop in morning light."

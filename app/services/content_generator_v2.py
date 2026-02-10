@@ -879,6 +879,8 @@ Note: the {{brandhandle}} placeholder will be replaced by the system — just wr
 - Each image prompt MUST be visually DIFFERENT (different setting, different ingredients)
 - Neutral tones, gentle morning sunlight
 - High-end lifestyle photography style
+- CRITICAL COMPOSITION: The main subject (food, ingredients, objects) MUST be positioned in the CENTER and UPPER-CENTER area of the frame (top two-thirds). The BOTTOM THIRD of the image will be covered by text overlay, so NEVER place important content there. Think of it as a portrait-orientation image where the hero subject sits in the middle, with clean negative space below it.
+- Camera angle: slightly overhead / 45-degree top-down perspective preferred to keep subject in upper-center frame
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 {history_context}
