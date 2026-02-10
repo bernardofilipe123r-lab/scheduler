@@ -20,11 +20,24 @@ Design:
 import os
 import threading
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+
+# Lisbon/Portugal timezone — burst at noon local time
+LISBON_TZ = ZoneInfo("Europe/Lisbon")
+
+# Brand Instagram handles (for caption @brandhandle replacement)
+BRAND_HANDLES = {
+    "healthycollege": "@thehealthycollege",
+    "vitalitycollege": "@thevitalitycollege",
+    "longevitycollege": "@thelongevitycollege",
+    "holisticcollege": "@theholisticcollege",
+    "wellbeingcollege": "@thewellbeingcollege",
+}
 
 
 # ── Configuration ─────────────────────────────────────────────
@@ -360,7 +373,8 @@ class MaestroDaemon:
           1. Schedule any ready-to-schedule reels first
           2. Is Maestro paused? → skip burst
           3. Has the daily burst already run today? → skip burst
-          4. Otherwise → run the daily burst
+          4. Is it past 12PM Lisbon time? → run burst
+          5. Otherwise → wait until noon
         """
         # Always schedule ready reels, even when paused
         try:
@@ -373,15 +387,28 @@ class MaestroDaemon:
         if is_paused():
             return  # Silent — don't spam logs when paused
 
-        last_run = get_last_daily_run()
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        # Use Lisbon timezone for daily scheduling
+        now_lisbon = datetime.now(LISBON_TZ)
+        today_lisbon = now_lisbon.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        if last_run and last_run >= today:
-            # Already ran today
-            return
+        last_run = get_last_daily_run()
+        if last_run:
+            # Convert last_run to Lisbon timezone for comparison
+            if last_run.tzinfo is None:
+                last_run_aware = last_run.replace(tzinfo=timezone.utc)
+            else:
+                last_run_aware = last_run
+            last_run_lisbon = last_run_aware.astimezone(LISBON_TZ)
+            if last_run_lisbon >= today_lisbon:
+                # Already ran today (Lisbon time)
+                return
+
+        # Wait until 12PM Lisbon time before bursting
+        if now_lisbon.hour < 12:
+            return  # Not noon yet in Lisbon — wait
 
         # Time to run the daily burst!
-        self.state.log("maestro", "Daily burst triggered", "Starting generation for today", "🌅")
+        self.state.log("maestro", "Daily burst triggered", f"12PM Lisbon ({now_lisbon.strftime('%H:%M %Z')}) — generating for tomorrow", "🌅")
         self._run_daily_burst()
 
     # ──────────────────────────────────────────────────────────
@@ -845,7 +872,10 @@ def auto_schedule_job(job_id: str):
                 continue
 
             try:
-                slot = scheduler.get_next_available_slot(brand, variant)
+                # Schedule for TOMORROW (next day) — burst runs at noon, posts go live next day
+                tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+                tomorrow_start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+                slot = scheduler.get_next_available_slot(brand, variant, reference_date=tomorrow_start)
 
                 scheduler.schedule_reel(
                     user_id="maestro",
@@ -943,7 +973,10 @@ def schedule_all_ready_reels() -> int:
                     continue
 
                 try:
-                    slot = scheduler.get_next_available_slot(brand, variant)
+                    # Schedule for tomorrow — not today
+                    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+                    tomorrow_start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+                    slot = scheduler.get_next_available_slot(brand, variant, reference_date=tomorrow_start)
                     scheduler.schedule_reel(
                         user_id="maestro",
                         reel_id=reel_id,
