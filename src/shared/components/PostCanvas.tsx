@@ -187,28 +187,21 @@ export function GradientOverlay() {
   )
 }
 
-/** Logo bar with horizontal lines. */
+/** Logo bar with horizontal lines — always shows brand abbreviation (HCO, LCO, etc.). */
 export function LogoWithLines({
-  logoUrl,
   y,
   barWidth,
   titleWidth,
   brandName,
 }: {
-  logoUrl: string | null
+  logoUrl?: string | null  // kept for API compat, ignored
   y: number
   barWidth: number
   titleWidth: number
   brandName?: string
 }) {
-  const [image] = useImage(logoUrl || '', 'anonymous')
   const logoGapWidth = 113
-  const logoWidth = image
-    ? Math.min(image.width, logoGapWidth - 20)
-    : logoGapWidth - 20
-  const logoHeight = image
-    ? (logoWidth / image.width) * image.height
-    : 40
+  const logoHeight = 40
 
   const effectiveBarWidth =
     barWidth === 0
@@ -246,18 +239,10 @@ export function LogoWithLines({
         stroke="white"
         strokeWidth={2}
       />
-      {image ? (
-        <KonvaImage
-          image={image}
-          width={logoWidth}
-          height={logoHeight}
-          x={(CANVAS_WIDTH - logoWidth) / 2}
-          y={0}
-        />
-      ) : (
-        <Text
-          text={abbreviation}
-          fontSize={28}
+      {/* Always render brand abbreviation (HCO, LCO, VCO, WCO) */}
+      <Text
+        text={abbreviation}
+        fontSize={28}
           fontFamily="Inter, sans-serif"
           fontStyle="bold"
           fill="white"
@@ -266,7 +251,6 @@ export function LogoWithLines({
           x={(CANVAS_WIDTH - logoGapWidth) / 2}
           y={logoHeight / 2 - 14}
         />
-      )}
     </Group>
   )
 }

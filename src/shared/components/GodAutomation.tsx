@@ -256,6 +256,29 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   const [rejectNote, setRejectNote] = useState('')
   const [currentSlide, setCurrentSlide] = useState(0) // 0 = cover image, 1-3 = text slides
 
+  // Brand theme logos (for carousel text slides)
+  const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const fetchLogos = async () => {
+      const logos: Record<string, string> = {}
+      for (const b of brands) {
+        try {
+          const r = await fetch(`/api/brands/${b}/theme`)
+          if (r.ok) {
+            const d = await r.json()
+            if (d.theme?.logo) {
+              const url = `/brand-logos/${d.theme.logo}`
+              const check = await fetch(url, { method: 'HEAD' })
+              if (check.ok) logos[b] = url
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      if (Object.keys(logos).length > 0) setBrandLogos(logos)
+    }
+    fetchLogos()
+  }, [brands])
+
   // Refs
   const stageRef = useRef<Konva.Stage | null>(null)
   const textSlideRef = useRef<Konva.Stage | null>(null)
@@ -1091,6 +1114,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                       text={(currentPost.slideTexts || [])[currentSlide - 1] || ''}
                       isLastSlide={currentSlide === (currentPost.slideTexts?.length || 0)}
                       scale={REVIEW_SCALE}
+                      logoUrl={brandLogos[currentPost.brand] || null}
                       stageRef={(node: Konva.Stage | null) => { textSlideRef.current = node }}
                     />
                   )}

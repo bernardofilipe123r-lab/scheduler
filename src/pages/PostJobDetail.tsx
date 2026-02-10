@@ -30,6 +30,7 @@ import {
   Upload,
   ImagePlus,
   X,
+  Maximize2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -148,6 +149,9 @@ export function PostJobDetail({ job, refetch }: Props) {
 
   // Expanded captions (track which brands have expanded captions)
   const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(new Set())
+
+  // Full-quality preview modal
+  const [expandedBrand, setExpandedBrand] = useState<string | null>(null)
 
   // Per-brand carousel slide index (0 = cover image, 1+ = text slides)
   const [brandSlideIndex, setBrandSlideIndex] = useState<Record<string, number>>({})
@@ -696,6 +700,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                       text={slideTexts[currentSlide - 1] || ''}
                       isLastSlide={currentSlide === slideTexts.length}
                       scale={GRID_PREVIEW_SCALE}
+                      logoUrl={logoUrl}
                       stageRef={(node) => {
                         if (node) textSlideRefs.current.set(brand, node)
                       }}
@@ -753,6 +758,13 @@ export function PostJobDetail({ job, refetch }: Props) {
                   <span className="text-[10px] text-gray-400 ml-1">
                     {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`}/{totalSlides}
                   </span>
+                  <button
+                    onClick={() => setExpandedBrand(brand)}
+                    className="p-1 rounded-full hover:bg-gray-100 transition-colors ml-auto"
+                    title="Full quality preview"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
                 </div>
               )}
 
@@ -1129,6 +1141,103 @@ export function PostJobDetail({ job, refetch }: Props) {
           </button>
         </div>
       </Modal>
+      {/* Full-quality preview modal */}
+      {expandedBrand && (() => {
+        const output = job.brand_outputs[expandedBrand as BrandName]
+        const bgUrl = output?.thumbnail_path || null
+        const slideTexts = output?.slide_texts || []
+        const brandTitle = getBrandTitle(expandedBrand)
+        const logoUrl = brandLogos[expandedBrand] || null
+        const currentSlide = brandSlideIndex[expandedBrand] || 0
+        const totalSlides = 1 + slideTexts.length
+        const FULL_SCALE = 0.55
+
+        return (
+          <div
+            className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center"
+            onClick={() => setExpandedBrand(null)}
+          >
+            <div
+              className="relative flex flex-col items-center gap-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                onClick={() => setExpandedBrand(null)}
+                className="absolute -top-2 -right-2 z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+
+              {/* Canvas at higher scale */}
+              <div className="rounded-xl overflow-hidden shadow-2xl">
+                {currentSlide === 0 ? (
+                  <PostCanvas
+                    brand={expandedBrand}
+                    title={brandTitle}
+                    backgroundImage={bgUrl}
+                    settings={{
+                      ...settings,
+                      fontSize: getBrandFontSize(expandedBrand),
+                    }}
+                    scale={FULL_SCALE}
+                    logoUrl={logoUrl}
+                  />
+                ) : (
+                  <CarouselTextSlide
+                    brand={expandedBrand}
+                    text={slideTexts[currentSlide - 1] || ''}
+                    isLastSlide={currentSlide === slideTexts.length}
+                    scale={FULL_SCALE}
+                    logoUrl={logoUrl}
+                  />
+                )}
+              </div>
+
+              {/* Navigation */}
+              {slideTexts.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [expandedBrand]: Math.max(0, currentSlide - 1) }))}
+                    disabled={currentSlide === 0}
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-white" />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {Array.from({ length: totalSlides }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [expandedBrand]: i }))}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                          i === currentSlide
+                            ? 'bg-white scale-125'
+                            : 'bg-white/40 hover:bg-white/60'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [expandedBrand]: Math.min(slideTexts.length, currentSlide + 1) }))}
+                    disabled={currentSlide >= slideTexts.length}
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5 text-white" />
+                  </button>
+                  <span className="text-sm text-white/60 ml-2">
+                    {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`} / {totalSlides}
+                  </span>
+                </div>
+              )}
+
+              <p className="text-xs text-white/40">
+                {BRAND_CONFIGS[expandedBrand]?.name || expandedBrand} — Full Quality Preview
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+
     </div>
   )
 }
