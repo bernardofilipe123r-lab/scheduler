@@ -1,18 +1,23 @@
 """
-Maestro API routes — Multi-agent orchestrator.
+Maestro API routes — Multi-agent orchestrator (v2).
 
 Maestro manages Toby (Explorer) and Lexi (Optimizer).
-No pause/resume — Maestro is ALWAYS running.
+Pause/Resume controlled — state persisted in DB across deploys.
 
 Endpoints:
     GET  /api/maestro/status                     — Orchestrator status (both agents)
+    POST /api/maestro/pause                       — Pause Maestro (persisted in DB)
+    POST /api/maestro/resume                      — Resume Maestro (triggers burst if needed)
+    POST /api/maestro/trigger-burst               — Manually trigger daily burst
     GET  /api/maestro/proposals                   — List proposals (filterable by agent, status)
     GET  /api/maestro/proposals/{id}              — Get a single proposal
-    POST /api/maestro/proposals/{id}/accept        — Accept & trigger brand creation
+    POST /api/maestro/proposals/{id}/accept        — Accept & trigger brand creation (dark + light)
     POST /api/maestro/proposals/{id}/reject        — Reject with optional notes
     GET  /api/maestro/stats                        — Stats per agent + global
     GET  /api/maestro/insights                     — Performance insights
     GET  /api/maestro/trending                     — Trending content
+    GET  /api/maestro/feedback                     — Latest agent performance feedback
+    POST /api/maestro/optimize-now                 — Trigger Toby×10 + Lexi×10
 """
 
 from typing import Optional
@@ -93,6 +98,84 @@ async def maestro_status():
     return status
 
 
+# ── PAUSE / RESUME / TRIGGER ─────────────────────────────────
+
+@router.post("/pause")
+async def pause_maestro():
+    """Pause Maestro — stops daily burst generation. State persisted in DB."""
+    from app.services.maestro import set_paused, is_paused, maestro_log
+
+    if is_paused():
+        return {"status": "already_paused", "message": "Maestro is already paused"}
+
+    set_paused(True)
+    maestro_log("maestro", "PAUSED", "User paused Maestro — no more daily bursts until resumed", "⏸️", "action")
+    return {"status": "paused", "message": "Maestro paused. Daily burst generation stopped."}
+
+
+@router.post("/resume")
+async def resume_maestro(background_tasks: BackgroundTasks):
+    """
+    Resume Maestro — re-enables daily burst generation.
+    If the daily burst hasn't run today, triggers it immediately.
+    """
+    from app.services.maestro import set_paused, is_paused, get_last_daily_run, get_maestro, maestro_log
+    from datetime import datetime
+
+    if not is_paused():
+        return {"status": "already_running", "message": "Maestro is already running"}
+
+    set_paused(False)
+    maestro_log("maestro", "RESUMED", "User resumed Maestro — daily burst generation enabled", "▶️", "action")
+
+    # Check if daily burst should run immediately
+    last_run = get_last_daily_run()
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    trigger_now = not last_run or last_run < today
+
+    if trigger_now:
+        maestro_log("maestro", "Resume Trigger", "Daily burst hasn't run today — triggering now", "🌅", "action")
+        maestro = get_maestro()
+        background_tasks.add_task(maestro._run_daily_burst)
+
+    return {
+        "status": "resumed",
+        "message": "Maestro resumed." + (" Daily burst triggered immediately." if trigger_now else " Daily burst already ran today."),
+        "burst_triggered": trigger_now,
+    }
+
+
+@router.post("/trigger-burst")
+async def trigger_burst(background_tasks: BackgroundTasks):
+    """Manually trigger the daily burst (ignores pause state and last-run check)."""
+    from app.services.maestro import get_maestro, maestro_log
+
+    maestro = get_maestro()
+    maestro_log("maestro", "Manual Burst", "User triggered daily burst manually", "🔘", "action")
+    background_tasks.add_task(maestro._run_daily_burst)
+
+    return {
+        "status": "triggered",
+        "message": "Daily burst started in background — 3 Toby + 3 Lexi reels, each in dark + light variants.",
+    }
+
+
+@router.get("/feedback")
+async def get_feedback():
+    """Get latest agent performance feedback data."""
+    import json
+    from app.services.maestro import _db_get
+
+    raw = _db_get("last_feedback_data", "")
+    if not raw:
+        return {"feedback": None, "message": "No feedback data yet — runs every 6h after reels are published 48-72h"}
+
+    try:
+        return {"feedback": json.loads(raw)}
+    except Exception:
+        return {"feedback": None, "error": "Failed to parse feedback data"}
+
+
 # ── PROPOSALS ─────────────────────────────────────────────────
 
 @router.get("/proposals")
@@ -149,14 +232,14 @@ async def get_proposal(proposal_id: str):
 @router.post("/proposals/{proposal_id}/accept")
 async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     """
-    Accept a proposal — creates a generation job for ALL brands and processes in background.
+    Accept a proposal — creates TWO generation jobs (dark + light) for ALL brands.
 
     Flow:
       1. Mark proposal as accepted
-      2. Create a GenerationJob with all 5 brands
-      3. Fire background processing (same as /jobs/create)
-      4. Store job_id on the proposal
-      5. Return job_id so frontend can navigate to the job page
+      2. Create 2 GenerationJobs: dark variant + light variant (all 5 brands each)
+      3. Fire background processing for both
+      4. Auto-schedule on completion
+      5. Return job_ids
     """
     from app.db_connection import SessionLocal, get_db_session
     from app.models import TobyProposal
@@ -181,22 +264,25 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
         if proposal.status != "pending":
             return {"error": f"Proposal {proposal_id} is already {proposal.status}"}
 
-        # Determine variant based on content_type
         is_post = proposal.content_type == "post"
-        variant = "post" if is_post else "dark"
 
         # Mark accepted
         proposal.status = "accepted"
         proposal.reviewed_at = datetime.utcnow()
         db.commit()
 
+        title = proposal.title
+        content_lines = proposal.content_lines or []
+        image_prompt = proposal.image_prompt
+        content_type = proposal.content_type
+
         # Record in content tracker
         try:
             from app.services.toby_agent import get_toby_agent
             agent = get_toby_agent()
             agent.tracker.record(
-                title=proposal.title,
-                content_type=proposal.content_type,
+                title=title,
+                content_type=content_type,
                 quality_score=proposal.quality_score,
             )
         except Exception:
@@ -205,50 +291,54 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     finally:
         db.close()
 
-    # Create generation job
-    with get_db_session() as job_db:
-        manager = JobManager(job_db)
-        job = manager.create_job(
-            user_id=proposal_id,  # Track which proposal created this job
-            title=proposal.title,
-            content_lines=proposal.content_lines or [],
-            brands=ALL_BRANDS,
-            variant=variant,
-            ai_prompt=proposal.image_prompt,
-            cta_type="follow_tips",
-            platforms=["instagram", "facebook", "youtube"],
-        )
-        job_id = job.job_id
+    # For posts, create only one job (post variant)
+    # For reels, create TWO jobs: dark + light
+    variants = ["post"] if is_post else ["dark", "light"]
+    job_ids = []
 
-    # Store job_id on proposal
+    for variant in variants:
+        with get_db_session() as job_db:
+            manager = JobManager(job_db)
+            job = manager.create_job(
+                user_id=proposal_id,
+                title=title,
+                content_lines=content_lines,
+                brands=ALL_BRANDS,
+                variant=variant,
+                ai_prompt=image_prompt,
+                cta_type="follow_tips",
+                platforms=["instagram", "facebook", "youtube"],
+            )
+            job_ids.append(job.job_id)
+
+    # Store first job_id on proposal
     db2 = SessionLocal()
     try:
         p = db2.query(TobyProposal).filter(TobyProposal.proposal_id == proposal_id).first()
         if p:
-            p.accepted_job_id = job_id
+            p.accepted_job_id = job_ids[0]
             db2.commit()
     finally:
         db2.close()
 
-    # Fire background processing + auto-schedule
-    def _process_job(jid: str):
-        import traceback, sys
+    # Fire background processing for each job
+    def _process_job(jid: str, var: str):
+        import traceback
         print(f"\n{'='*60}", flush=True)
-        print(f"🎼 MAESTRO: Processing accepted proposal {proposal_id}", flush=True)
+        print(f"🎼 MAESTRO: Processing {var} variant for proposal {proposal_id}", flush=True)
         print(f"   Job ID: {jid}", flush=True)
         print(f"{'='*60}", flush=True)
         try:
             with get_db_session() as pdb:
                 m = JobManager(pdb)
                 m.process_job(jid)
-            print(f"✅ MAESTRO: Job {jid} completed for proposal {proposal_id}", flush=True)
+            print(f"✅ MAESTRO: Job {jid} ({var}) completed", flush=True)
 
-            # Auto-schedule after completion
             from app.services.maestro import auto_schedule_job
             auto_schedule_job(jid)
-            print(f"📅 MAESTRO: Job {jid} auto-scheduled", flush=True)
+            print(f"📅 MAESTRO: Job {jid} ({var}) auto-scheduled", flush=True)
         except Exception as e:
-            print(f"❌ MAESTRO: Job {jid} failed: {e}", flush=True)
+            print(f"❌ MAESTRO: Job {jid} ({var}) failed: {e}", flush=True)
             traceback.print_exc()
             try:
                 with get_db_session() as edb:
@@ -257,16 +347,20 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
             except Exception:
                 pass
 
-    background_tasks.add_task(_process_job, job_id)
+    for jid, var in zip(job_ids, variants):
+        background_tasks.add_task(_process_job, jid, var)
 
+    variants_str = " + ".join(variants)
     return {
         "status": "accepted",
         "proposal_id": proposal_id,
-        "job_id": job_id,
-        "title": proposal.title,
-        "content_type": proposal.content_type,
+        "job_ids": job_ids,
+        "job_id": job_ids[0],  # backward compat
+        "title": title,
+        "content_type": content_type,
+        "variants": variants,
         "brands": ALL_BRANDS,
-        "message": f"Job {job_id} created — generating for {len(ALL_BRANDS)} brands",
+        "message": f"{len(job_ids)} jobs created ({variants_str}) — generating for {len(ALL_BRANDS)} brands each",
     }
 
 

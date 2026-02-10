@@ -1,24 +1,23 @@
 """
-Maestro — The AI Content Orchestrator.
+Maestro — The AI Content Orchestrator (v2).
 
-Maestro manages two AI agents — Toby (Explorer) and Lexi (Optimizer) —
-running them in a deterministic 4-cycle rotation:
+Maestro runs a DAILY BURST once per day:
+  1. Toby generates 3 unique reel proposals
+  2. Lexi generates 3 unique reel proposals
+  3. Each proposal → 2 jobs (dark + light) × 5 brands = 60 brand-reels/day
+  4. Auto-schedule into the 6 daily slots per brand (3 light + 3 dark)
+  5. Publishing daemon posts at scheduled times
 
-    Cycle 1: Toby  🎬 Reel
-    Cycle 2: Lexi  🎬 Reel
-    Cycle 3: Toby  📄 Post
-    Cycle 4: Lexi  📄 Post
-    (repeat)
-
-Design principles:
-    - ALWAYS auto-starts on deployment. No pause/resume. No manual intervention.
-    - Both agents share the same DB table (TobyProposal) with agent_name column.
-    - Observe & Scout cycles are shared between both agents.
-    - All exceptions are caught and logged — Maestro never stops.
-    - Unified activity log for full transparency.
+Design:
+  - Pause/Resume controlled by user, state persisted in DB
+  - Survives Railway redeploys: reads is_paused + last_daily_run from DB
+  - Daily burst runs ONCE per day (not every 45min)
+  - Feedback loop: checks reel performance 48-72h after publish
+  - Observe & Scout cycles run independently for intelligence gathering
 """
 
 import os
+import threading
 import traceback
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -29,28 +28,85 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 # ── Configuration ─────────────────────────────────────────────
 
-THINKING_CYCLE_MINUTES = int(os.getenv("MAESTRO_CYCLE_MINUTES", os.getenv("TOBY_CYCLE_MINUTES", "45")))
-METRICS_CYCLE_MINUTES = int(os.getenv("MAESTRO_METRICS_MINUTES", os.getenv("TOBY_METRICS_MINUTES", "180")))
-SCAN_CYCLE_MINUTES = int(os.getenv("MAESTRO_SCAN_MINUTES", os.getenv("TOBY_SCAN_MINUTES", "240")))
+# Check cycle: how often to check if daily burst should run
+CHECK_CYCLE_MINUTES = int(os.getenv("MAESTRO_CHECK_MINUTES", "10"))
 
-MAX_PROPOSALS_PER_CYCLE = 3
-MAX_PENDING_HARD_STOP = 100  # Effectively disabled — auto-accept handles it
-MAX_PENDING_THROTTLE = 50    # Effectively disabled — auto-accept handles it
+# Observe & Scout cycles remain the same
+METRICS_CYCLE_MINUTES = int(os.getenv("MAESTRO_METRICS_MINUTES", "180"))
+SCAN_CYCLE_MINUTES = int(os.getenv("MAESTRO_SCAN_MINUTES", "240"))
+
+# Feedback cycle: check performance of reels published 48-72h ago
+FEEDBACK_CYCLE_MINUTES = int(os.getenv("MAESTRO_FEEDBACK_MINUTES", "360"))
+
 STARTUP_DELAY_SECONDS = 30
 
-# Daily limit shared across agents
-DAILY_PROPOSAL_LIMIT = int(os.getenv("MAESTRO_DAILY_LIMIT", "30"))
+# Daily burst: 3 proposals per agent = 6 unique reels
+# Each reel → 2 jobs (dark + light) = 12 jobs total
+PROPOSALS_PER_AGENT = 3
 
-# 4-cycle rotation
-ROTATION = [
-    ("toby", "reel"),   # Phase 0
-    ("lexi", "reel"),   # Phase 1
-    ("toby", "post"),   # Phase 2
-    ("lexi", "post"),   # Phase 3
+ALL_BRANDS = [
+    "healthycollege", "vitalitycollege", "longevitycollege",
+    "holisticcollege", "wellbeingcollege",
 ]
 
 
-# ── Maestro State ─────────────────────────────────────────────
+# ── DB-Persisted State ───────────────────────────────────────
+
+def _db_get(key: str, default: str = "") -> str:
+    """Read a config value from DB (survives redeploys)."""
+    try:
+        from app.db_connection import SessionLocal
+        from app.models import MaestroConfig
+        db = SessionLocal()
+        try:
+            return MaestroConfig.get(db, key, default)
+        finally:
+            db.close()
+    except Exception:
+        return default
+
+
+def _db_set(key: str, value: str):
+    """Write a config value to DB (survives redeploys)."""
+    try:
+        from app.db_connection import SessionLocal
+        from app.models import MaestroConfig
+        db = SessionLocal()
+        try:
+            MaestroConfig.set(db, key, value)
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[MAESTRO] Failed to persist {key}: {e}", flush=True)
+
+
+def is_paused() -> bool:
+    """Check if Maestro is paused (DB-persisted)."""
+    return _db_get("is_paused", "true") == "true"  # Default: paused until user resumes
+
+
+def set_paused(paused: bool):
+    """Set paused state (DB-persisted)."""
+    _db_set("is_paused", "true" if paused else "false")
+
+
+def get_last_daily_run() -> Optional[datetime]:
+    """Get the last time the daily burst ran."""
+    val = _db_get("last_daily_run", "")
+    if val:
+        try:
+            return datetime.fromisoformat(val)
+        except Exception:
+            pass
+    return None
+
+
+def set_last_daily_run(dt: datetime):
+    """Record when the daily burst ran."""
+    _db_set("last_daily_run", dt.isoformat())
+
+
+# ── Maestro State (in-memory, rebuilt on deploy) ──────────────
 
 class AgentState:
     """Per-agent tracking."""
@@ -75,10 +131,9 @@ class AgentState:
 
 
 class MaestroState:
-    """Unified state for the Maestro orchestrator.  Always running."""
+    """In-memory state for the Maestro orchestrator."""
 
     def __init__(self):
-        self.is_running: bool = True  # ALWAYS True — Maestro never pauses
         self.started_at: datetime = datetime.utcnow()
 
         # Agent sub-states
@@ -96,23 +151,17 @@ class MaestroState:
 
         # What's happening right now
         self.current_agent: Optional[str] = None
-        self.current_content_type: Optional[str] = None
-        self.next_cycle_at: Optional[datetime] = None
+        self.current_phase: Optional[str] = None  # "generating", "processing", "scheduling"
 
         # Timestamps
         self.last_metrics_at: Optional[datetime] = None
         self.last_scan_at: Optional[datetime] = None
+        self.last_feedback_at: Optional[datetime] = None
 
         # Activity log — unified for both agents
         self.activity_log: List[Dict] = []
 
     def log(self, agent: str, action: str, detail: str = "", emoji: str = "🤖", level: str = "action"):
-        """
-        Log an activity with agent tag.
-
-        agent: "maestro" | "toby" | "lexi"
-        level: "action" | "detail" | "api" | "data"
-        """
         entry = {
             "time": datetime.utcnow().isoformat(),
             "agent": agent,
@@ -125,7 +174,6 @@ class MaestroState:
         if len(self.activity_log) > 500:
             self.activity_log = self.activity_log[:500]
 
-        # Update agent-level last_thought for high-level actions
         if level == "action" and agent in self.agents:
             self.agents[agent].last_thought = f"{action}: {detail}" if detail else action
             self.agents[agent].last_thought_at = datetime.utcnow()
@@ -136,24 +184,21 @@ class MaestroState:
         print(f"   {prefix} [{tag}] {action} — {detail}", flush=True)
 
     def to_dict(self) -> Dict:
-        """Full Maestro status dict."""
         now = datetime.utcnow()
         uptime = (now - self.started_at).total_seconds() if self.started_at else 0
-
-        # Determine what's coming next
-        phase = self.total_cycles % len(ROTATION)
-        next_agent, next_type = ROTATION[phase]
+        paused = is_paused()
+        last_run = get_last_daily_run()
 
         return {
-            "is_running": True,  # ALWAYS True
+            "is_running": not paused,
+            "is_paused": paused,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "uptime_seconds": int(uptime),
             "uptime_human": _format_uptime(uptime),
             "current_agent": self.current_agent,
-            "current_content_type": self.current_content_type,
-            "next_agent": next_agent,
-            "next_content_type": next_type,
-            "next_cycle_at": self.next_cycle_at.isoformat() if self.next_cycle_at else None,
+            "current_phase": self.current_phase,
+            "last_daily_run": last_run.isoformat() if last_run else None,
+            "last_daily_run_human": _time_ago(last_run) if last_run else "never",
             "total_cycles": self.total_cycles,
             "total_proposals_generated": self.total_proposals_generated,
             "total_metrics_collected": self.total_metrics_collected,
@@ -163,6 +208,13 @@ class MaestroState:
                 name: agent.to_dict() for name, agent in self.agents.items()
             },
             "recent_activity": self.activity_log[:30],
+            "daily_config": {
+                "proposals_per_agent": PROPOSALS_PER_AGENT,
+                "total_reels_per_day": PROPOSALS_PER_AGENT * 2,  # 3 Toby + 3 Lexi
+                "variants": ["dark", "light"],
+                "brands": ALL_BRANDS,
+                "jobs_per_day": PROPOSALS_PER_AGENT * 2 * 2,  # × 2 variants
+            },
         }
 
 
@@ -180,41 +232,48 @@ def _format_uptime(seconds: float) -> str:
     return f"{days}d {hours}h {mins}m"
 
 
+def _time_ago(dt: Optional[datetime]) -> str:
+    if not dt:
+        return "never"
+    diff = (datetime.utcnow() - dt).total_seconds()
+    return _format_uptime(diff) + " ago"
+
+
 # ── The Maestro Daemon ────────────────────────────────────────
 
 class MaestroDaemon:
     """
     The orchestrator — manages Toby and Lexi.
 
-    Three cycles:
-      1. THINK  — 4-phase rotation between agents and content types
-      2. OBSERVE — Collect metrics (shared between agents)
-      3. SCOUT — Scan trends (shared between agents)
-
-    Auto-starts. Never pauses. Catches all errors.
+    Cycles:
+      1. CHECK  (every 10min) — Checks if daily burst should run
+      2. OBSERVE (every 3h)   — Collect metrics
+      3. SCOUT  (every 4h)    — Scan trends
+      4. FEEDBACK (every 6h)  — Check 48-72h post performance
     """
 
     def __init__(self):
         self.state = MaestroState()
         self.scheduler: Optional[BackgroundScheduler] = None
+        self._daily_burst_lock = threading.Lock()
         self.state.log("maestro", "Initializing", "Maestro orchestrator created", "🎼")
 
     def start(self):
-        """Start Maestro — called on every deployment. No manual action needed."""
+        """Start Maestro background jobs. Called on every deployment."""
         self.scheduler = BackgroundScheduler()
 
-        # Think cycle — main brain
+        # Check cycle — checks if daily burst should run
         self.scheduler.add_job(
-            self._think_cycle,
-            trigger=IntervalTrigger(minutes=THINKING_CYCLE_MINUTES),
-            id="maestro_think",
-            name="Maestro Think Cycle",
+            self._check_cycle,
+            trigger=IntervalTrigger(minutes=CHECK_CYCLE_MINUTES),
+            id="maestro_check",
+            name="Maestro Check Cycle",
             next_run_time=datetime.utcnow() + timedelta(seconds=STARTUP_DELAY_SECONDS),
             replace_existing=True,
             max_instances=1,
         )
 
-        # Observe cycle — metrics
+        # Observe cycle — metrics (runs regardless of pause state)
         self.scheduler.add_job(
             self._observe_cycle,
             trigger=IntervalTrigger(minutes=METRICS_CYCLE_MINUTES),
@@ -225,7 +284,7 @@ class MaestroDaemon:
             max_instances=1,
         )
 
-        # Scout cycle — trends
+        # Scout cycle — trends (runs regardless of pause state)
         self.scheduler.add_job(
             self._scout_cycle,
             trigger=IntervalTrigger(minutes=SCAN_CYCLE_MINUTES),
@@ -236,27 +295,30 @@ class MaestroDaemon:
             max_instances=1,
         )
 
-        self.scheduler.start()
-        self.state.is_running = True
-        self.state.started_at = datetime.utcnow()
-        self.state.next_cycle_at = datetime.utcnow() + timedelta(seconds=STARTUP_DELAY_SECONDS)
+        # Feedback cycle — performance check (runs regardless of pause state)
+        self.scheduler.add_job(
+            self._feedback_cycle,
+            trigger=IntervalTrigger(minutes=FEEDBACK_CYCLE_MINUTES),
+            id="maestro_feedback",
+            name="Maestro Feedback Cycle",
+            next_run_time=datetime.utcnow() + timedelta(seconds=STARTUP_DELAY_SECONDS + 300),
+            replace_existing=True,
+            max_instances=1,
+        )
 
+        self.scheduler.start()
+        self.state.started_at = datetime.utcnow()
+
+        paused = is_paused()
+        status_text = "PAUSED (waiting for Resume)" if paused else "RUNNING"
         self.state.log(
             "maestro", "Started",
-            f"Orchestrating Toby + Lexi. Think every {THINKING_CYCLE_MINUTES}m, Observe every {METRICS_CYCLE_MINUTES}m, Scout every {SCAN_CYCLE_MINUTES}m",
+            f"Status: {status_text}. Check every {CHECK_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m",
             "🚀"
         )
 
     def get_status(self) -> Dict:
         """Get full orchestrator status."""
-        if self.scheduler and self.state.is_running:
-            try:
-                job = self.scheduler.get_job("maestro_think")
-                if job and job.next_run_time:
-                    self.state.next_cycle_at = job.next_run_time.replace(tzinfo=None)
-            except Exception:
-                pass
-
         # Refresh today's proposal counts from DB
         try:
             self._refresh_agent_counts()
@@ -285,143 +347,250 @@ class MaestroDaemon:
             db.close()
 
     # ──────────────────────────────────────────────────────────
-    # CYCLE 1: THINK — 4-phase rotation
+    # CYCLE: CHECK — Should we run the daily burst?
     # ──────────────────────────────────────────────────────────
 
-    def _think_cycle(self):
+    def _check_cycle(self):
         """
-        Main brain — rotates between Toby+Lexi and Reel+Post.
-
-        Phase rotation:
-          0: Toby Reel      1: Lexi Reel
-          2: Toby Post       3: Lexi Post
+        Runs every 10 minutes. Checks:
+          1. Is Maestro paused? → skip
+          2. Has the daily burst already run today? → skip
+          3. Otherwise → run the daily burst
         """
-        self.state.total_cycles += 1
-        cycle_start = datetime.utcnow()
+        if is_paused():
+            return  # Silent — don't spam logs when paused
 
-        # Determine which agent + content type this cycle
-        phase = (self.state.total_cycles - 1) % len(ROTATION)
-        agent_name, content_type = ROTATION[phase]
+        last_run = get_last_daily_run()
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
-        self.state.current_agent = agent_name
-        self.state.current_content_type = content_type
+        if last_run and last_run >= today:
+            # Already ran today
+            return
 
-        ct_label = "📄 Post" if content_type == "post" else "🎬 Reel"
-        agent_label = "🧠 Toby" if agent_name == "toby" else "📊 Lexi"
+        # Time to run the daily burst!
+        self.state.log("maestro", "Daily burst triggered", "Starting generation for today", "🌅")
+        self._run_daily_burst()
 
-        self.state.log(
-            "maestro", "Thinking",
-            f"Cycle #{self.state.total_cycles} — {agent_label} {ct_label} (phase {phase + 1}/4)",
-            "💭"
-        )
+    # ──────────────────────────────────────────────────────────
+    # DAILY BURST — The main event
+    # ──────────────────────────────────────────────────────────
+
+    def _run_daily_burst(self):
+        """
+        Generate 6 unique reels (3 Toby + 3 Lexi).
+        Each reel → 2 jobs (dark + light) × 5 brands.
+        Auto-accept, process, and schedule everything.
+        """
+        if not self._daily_burst_lock.acquire(blocking=False):
+            self.state.log("maestro", "Burst skipped", "Already running", "⏳")
+            return
 
         try:
-            # 1. Global quota check
-            from app.db_connection import SessionLocal
-            from app.models import TobyProposal
-
-            db = SessionLocal()
-            try:
-                today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-                today_total = db.query(TobyProposal).filter(TobyProposal.created_at >= today).count()
-                pending_count = db.query(TobyProposal).filter(TobyProposal.status == "pending").count()
-            finally:
-                db.close()
-
-            remaining = max(0, DAILY_PROPOSAL_LIMIT - today_total)
-
-            if remaining == 0:
-                self.state.log(
-                    "maestro", "Resting",
-                    f"Daily limit reached ({today_total}/{DAILY_PROPOSAL_LIMIT}). Will try tomorrow.",
-                    "😴"
-                )
-                self.state.current_agent = None
-                self.state.current_content_type = None
-                return
-
-            if pending_count >= MAX_PENDING_HARD_STOP:
-                self.state.log(
-                    "maestro", "Waiting",
-                    f"{pending_count} proposals pending review. Won't generate more until user reviews.",
-                    "⏳"
-                )
-                self.state.current_agent = None
-                self.state.current_content_type = None
-                return
-
-            # 2. Calculate batch size
-            batch_size = min(MAX_PROPOSALS_PER_CYCLE, remaining)
-            if pending_count >= MAX_PENDING_THROTTLE:
-                batch_size = min(batch_size, 1)
-                self.state.log(
-                    "maestro", "Throttling",
-                    f"{pending_count} pending — generating only 1 this cycle",
-                    "🎛️", "detail"
-                )
+            self.state.total_cycles += 1
+            self.state.current_phase = "generating"
+            burst_start = datetime.utcnow()
 
             self.state.log(
-                "maestro", "Dispatching",
-                f"{agent_label} generating {batch_size} {ct_label}(s) — today: {today_total}/{DAILY_PROPOSAL_LIMIT}, pending: {pending_count}",
+                "maestro", "🌅 Daily Burst Started",
+                f"Generating {PROPOSALS_PER_AGENT} Toby + {PROPOSALS_PER_AGENT} Lexi reels, each in dark + light",
+                "🚀"
+            )
+
+            all_proposals = []
+
+            # Toby generates 3 reel proposals
+            try:
+                self.state.current_agent = "toby"
+                from app.services.toby_agent import get_toby_agent
+                toby = get_toby_agent()
+                self.state.log("toby", "Generating", f"{PROPOSALS_PER_AGENT} reel proposals...", "🧠")
+                toby_result = toby.run(max_proposals=PROPOSALS_PER_AGENT, content_type="reel")
+                toby_proposals = toby_result.get("proposals", [])
+                all_proposals.extend(toby_proposals)
+                self.state.agents["toby"].total_proposals += len(toby_proposals)
+                self.state.log("toby", "Done", f"{len(toby_proposals)} proposals created", "✅")
+            except Exception as e:
+                self.state.errors += 1
+                self.state.agents["toby"].errors += 1
+                self.state.log("toby", "Error", f"Generation failed: {str(e)[:200]}", "❌")
+                traceback.print_exc()
+
+            # Lexi generates 3 reel proposals
+            try:
+                self.state.current_agent = "lexi"
+                from app.services.lexi_agent import get_lexi_agent
+                lexi = get_lexi_agent()
+                self.state.log("lexi", "Generating", f"{PROPOSALS_PER_AGENT} reel proposals...", "📊")
+                lexi_result = lexi.run(max_proposals=PROPOSALS_PER_AGENT, content_type="reel")
+                lexi_proposals = lexi_result.get("proposals", [])
+                all_proposals.extend(lexi_proposals)
+                self.state.agents["lexi"].total_proposals += len(lexi_proposals)
+                self.state.log("lexi", "Done", f"{len(lexi_proposals)} proposals created", "✅")
+            except Exception as e:
+                self.state.errors += 1
+                self.state.agents["lexi"].errors += 1
+                self.state.log("lexi", "Error", f"Generation failed: {str(e)[:200]}", "❌")
+                traceback.print_exc()
+
+            self.state.total_proposals_generated += len(all_proposals)
+
+            if not all_proposals:
+                self.state.log("maestro", "Burst empty", "No proposals generated", "⚠️")
+                set_last_daily_run(datetime.utcnow())
+                return
+
+            self.state.log(
+                "maestro", "Proposals ready",
+                f"{len(all_proposals)} unique reels — creating dark + light jobs for 5 brands each",
                 "⚡"
             )
 
-            # 3. Get agent and run
-            if agent_name == "toby":
-                from app.services.toby_agent import get_toby_agent
-                agent = get_toby_agent()
-            else:
-                from app.services.lexi_agent import get_lexi_agent
-                agent = get_lexi_agent()
+            # Auto-accept each proposal and create BOTH dark + light jobs
+            self.state.current_phase = "processing"
+            self._auto_accept_and_process(all_proposals)
 
-            result = agent.run(max_proposals=batch_size, content_type=content_type)
-            created = result.get("proposals_created", 0)
+            # Record daily run
+            set_last_daily_run(datetime.utcnow())
 
-            # 4. Update stats
-            self.state.total_proposals_generated += created
-            self.state.agents[agent_name].total_proposals += created
-
-            strategies = result.get("strategies_used", {})
-            strategy_str = ", ".join(f"{k}:{v}" for k, v in strategies.items() if v > 0)
-
+            elapsed = (datetime.utcnow() - burst_start).total_seconds()
             self.state.log(
-                agent_name, "Generated",
-                f"{created} {ct_label}(s) [{strategy_str}]. Today total: {result.get('today_total', 0)}",
-                "✨"
+                "maestro", "🌅 Daily Burst Complete",
+                f"{len(all_proposals)} reels × 2 variants × 5 brands. Jobs processing in background. Took {elapsed:.0f}s to dispatch.",
+                "🏁"
             )
-
-            # Log intel summary
-            intel = result.get("intel_summary", {})
-            if intel:
-                self.state.log(
-                    agent_name, "Intel",
-                    f"Top: {intel.get('top_performers', 0)}, Under: {intel.get('underperformers', 0)}, "
-                    f"Trending: {intel.get('trending_available', 0)}, Cooldown: {len(intel.get('topics_on_cooldown', []))}",
-                    "📊", "detail"
-                )
-
-            # 5. AUTO-ACCEPT — immediately accept all new proposals and create jobs
-            proposals = result.get("proposals", [])
-            if proposals:
-                self._auto_accept_proposals(proposals, agent_name, content_type)
 
         except Exception as e:
             self.state.errors += 1
-            self.state.agents[agent_name].errors += 1
-            self.state.log(agent_name, "Error", f"Think cycle failed: {str(e)[:200]}", "❌")
+            self.state.log("maestro", "Burst error", f"{str(e)[:200]}", "❌")
+            traceback.print_exc()
+            set_last_daily_run(datetime.utcnow())  # Don't retry forever on error
+        finally:
+            self.state.current_agent = None
+            self.state.current_phase = None
+            self._daily_burst_lock.release()
+
+    def _auto_accept_and_process(self, proposals: List[Dict]):
+        """
+        For each proposal:
+          1. Mark as accepted in DB
+          2. Create TWO jobs: dark + light (each for all 5 brands)
+          3. Process each job in a background thread
+          4. Auto-schedule on completion
+        """
+        from app.db_connection import SessionLocal, get_db_session
+        from app.models import TobyProposal
+        from app.services.job_manager import JobManager
+
+        for p_dict in proposals:
+            proposal_id = p_dict.get("proposal_id")
+            if not proposal_id:
+                continue
+
+            try:
+                # 1. Mark accepted
+                db = SessionLocal()
+                try:
+                    proposal = db.query(TobyProposal).filter(
+                        TobyProposal.proposal_id == proposal_id
+                    ).first()
+                    if not proposal or proposal.status != "pending":
+                        continue
+
+                    proposal.status = "accepted"
+                    proposal.reviewed_at = datetime.utcnow()
+                    db.commit()
+
+                    title = proposal.title
+                    content_lines = proposal.content_lines or []
+                    image_prompt = proposal.image_prompt
+                    agent_name = proposal.agent_name or "toby"
+                finally:
+                    db.close()
+
+                # 2. Create TWO jobs: dark + light
+                job_ids = []
+                for variant in ["dark", "light"]:
+                    with get_db_session() as jdb:
+                        manager = JobManager(jdb)
+                        job = manager.create_job(
+                            user_id=proposal_id,
+                            title=title,
+                            content_lines=content_lines,
+                            brands=ALL_BRANDS,
+                            variant=variant,
+                            ai_prompt=image_prompt,
+                            cta_type="follow_tips",
+                            platforms=["instagram", "facebook", "youtube"],
+                        )
+                        job_ids.append(job.job_id)
+
+                # Store first job_id on proposal (for reference)
+                db2 = SessionLocal()
+                try:
+                    p = db2.query(TobyProposal).filter(
+                        TobyProposal.proposal_id == proposal_id
+                    ).first()
+                    if p:
+                        p.accepted_job_id = job_ids[0]
+                        db2.commit()
+                finally:
+                    db2.close()
+
+                self.state.log(
+                    agent_name, "Auto-accepted",
+                    f"{proposal_id} → Jobs {', '.join(job_ids)} (dark + light × 5 brands)",
+                    "✅"
+                )
+
+                # 3. Process each job in background thread
+                for jid in job_ids:
+                    thread = threading.Thread(
+                        target=self._process_and_schedule_job,
+                        args=(jid, proposal_id, agent_name),
+                        daemon=True,
+                    )
+                    thread.start()
+
+            except Exception as e:
+                self.state.log(
+                    "maestro", "Auto-accept error",
+                    f"{proposal_id}: {str(e)[:200]}",
+                    "❌"
+                )
+                traceback.print_exc()
+
+    def _process_and_schedule_job(self, job_id: str, proposal_id: str, agent_name: str):
+        """Process a job and auto-schedule on completion. Runs in a thread."""
+        try:
+            from app.db_connection import get_db_session
+            from app.services.job_manager import JobManager
+
+            with get_db_session() as pdb:
+                m = JobManager(pdb)
+                m.process_job(job_id)
+
+            # Auto-schedule
+            auto_schedule_job(job_id)
+
+            self.state.log(
+                agent_name, "Job complete + scheduled",
+                f"Job {job_id} (from {proposal_id})",
+                "📅"
+            )
+        except Exception as e:
+            self.state.log(
+                "maestro", "Job error",
+                f"{job_id}: {str(e)[:200]}",
+                "❌"
+            )
             traceback.print_exc()
 
-        elapsed = (datetime.utcnow() - cycle_start).total_seconds()
-        self.state.log("maestro", "Cycle complete", f"Took {elapsed:.1f}s", "✅", "detail")
-        self.state.current_agent = None
-        self.state.current_content_type = None
-
     # ──────────────────────────────────────────────────────────
-    # CYCLE 2: OBSERVE — Shared metrics collection
+    # CYCLE: OBSERVE — Shared metrics collection
     # ──────────────────────────────────────────────────────────
 
     def _observe_cycle(self):
-        """Collect performance metrics — shared across agents."""
+        """Collect performance metrics — runs even when paused."""
         self.state.log("maestro", "Observing", "Collecting performance metrics from IG...", "👀")
 
         try:
@@ -443,8 +612,8 @@ class MaestroDaemon:
 
             self.state.log(
                 "maestro", "Metrics collected",
-                f"Updated {total_updated} posts. {f'({total_errors} errors)' if total_errors else ''} [{brands_str}]",
-                "📈"
+                f"{total_updated} posts updated across brands. {total_errors} errors. [{brands_str}]",
+                "📊"
             )
 
         except Exception as e:
@@ -452,41 +621,31 @@ class MaestroDaemon:
             self.state.log("maestro", "Error", f"Observe cycle failed: {str(e)[:200]}", "❌")
 
     # ──────────────────────────────────────────────────────────
-    # CYCLE 3: SCOUT — Shared trend scanning
+    # CYCLE: SCOUT — Trend scanning
     # ──────────────────────────────────────────────────────────
 
     def _scout_cycle(self):
-        """Scan for trending content — shared across agents."""
-        self.state.log("maestro", "Scouting", "Scanning for trending health/wellness content...", "🔍")
+        """Scan for trending content — runs even when paused."""
+        self.state.log("maestro", "Scouting", "Scanning trends for reels + posts...", "🔭")
 
         try:
             from app.services.trend_scout import get_trend_scout
 
             scout = get_trend_scout()
 
-            # Reel hashtags (max 3 to respect rate limits)
-            hashtag_result = scout.scan_hashtags(max_hashtags=3)
-            h_new = hashtag_result.get("new_stored", 0) if isinstance(hashtag_result, dict) else 0
+            h_result = scout.scan_hashtags(max_hashtags=3)
+            h_new = h_result.get("new_stored", 0) if isinstance(h_result, dict) else 0
 
-            # Reel competitors
-            competitor_result = scout.scan_competitors()
-            c_new = competitor_result.get("new_stored", 0) if isinstance(competitor_result, dict) else 0
+            c_result = scout.scan_competitors()
+            c_new = c_result.get("new_stored", 0) if isinstance(c_result, dict) else 0
 
-            # Post hashtags
-            post_h_result = scout.scan_post_hashtags(max_hashtags=3)
-            ph_new = post_h_result.get("new_stored", 0) if isinstance(post_h_result, dict) else 0
-
-            # Post competitors (8 per run, rotates through 32)
-            post_c_result = scout.scan_post_competitors(max_accounts=8)
-            pc_new = post_c_result.get("new_stored", 0) if isinstance(post_c_result, dict) else 0
-
-            total_found = h_new + c_new + ph_new + pc_new
+            total_found = h_new + c_new
             self.state.total_trends_found += total_found
             self.state.last_scan_at = datetime.utcnow()
 
             self.state.log(
                 "maestro", "Trends discovered",
-                f"Found {total_found} new — Reels: {h_new} hashtags + {c_new} competitors | Posts: {ph_new} hashtags + {pc_new} competitors",
+                f"Found {total_found} new — {h_new} hashtags + {c_new} competitors",
                 "🔥"
             )
 
@@ -495,126 +654,119 @@ class MaestroDaemon:
             self.state.log("maestro", "Error", f"Scout cycle failed: {str(e)[:200]}", "❌")
 
     # ──────────────────────────────────────────────────────────
-    # AUTO-ACCEPT — proposals automatically become jobs
+    # CYCLE: FEEDBACK — Performance attribution (48-72h)
     # ──────────────────────────────────────────────────────────
 
-    def _auto_accept_proposals(self, proposals: List[Dict], agent_name: str, content_type: str):
+    def _feedback_cycle(self):
         """
-        Auto-accept proposals immediately after generation.
-
-        For each proposal:
-          1. Mark as accepted in DB
-          2. Create a GenerationJob for ALL 5 brands
-          3. Process job in background thread (generates content)
-          4. Auto-schedule after completion
+        Check performance of reels published 48-72h ago.
+        Attribute results back to Toby or Lexi.
         """
-        import threading
-        from app.db_connection import SessionLocal, get_db_session
-        from app.models import TobyProposal
-        from app.services.job_manager import JobManager
+        self.state.log("maestro", "Feedback", "Checking 48-72h post performance...", "📈")
 
-        ALL_BRANDS = [
-            "healthycollege", "vitalitycollege", "longevitycollege",
-            "holisticcollege", "wellbeingcollege",
-        ]
+        try:
+            from app.db_connection import SessionLocal
+            from app.models import TobyProposal, ScheduledReel, GenerationJob
 
-        for p_dict in proposals:
-            proposal_id = p_dict.get("proposal_id")
-            if not proposal_id:
-                continue
-
+            db = SessionLocal()
             try:
-                # 1. Mark accepted in DB
-                db = SessionLocal()
-                try:
-                    proposal = db.query(TobyProposal).filter(
-                        TobyProposal.proposal_id == proposal_id
-                    ).first()
-                    if not proposal or proposal.status != "pending":
+                now = datetime.utcnow()
+                window_start = now - timedelta(hours=72)
+                window_end = now - timedelta(hours=48)
+
+                # Find reels published in the 48-72h window
+                published = db.query(ScheduledReel).filter(
+                    ScheduledReel.status == "published",
+                    ScheduledReel.published_at >= window_start,
+                    ScheduledReel.published_at <= window_end,
+                ).all()
+
+                if not published:
+                    self.state.log("maestro", "Feedback", "No reels in 48-72h window to evaluate", "📊", "detail")
+                    self.state.last_feedback_at = now
+                    return
+
+                toby_count = 0
+                lexi_count = 0
+                toby_views = 0
+                lexi_views = 0
+
+                for sched in published:
+                    reel_id = sched.reel_id
+                    if not reel_id:
                         continue
 
-                    proposal.status = "accepted"
-                    proposal.reviewed_at = datetime.utcnow()
-                    db.commit()
+                    # reel_id format: {job_id}_{brand}
+                    parts = reel_id.rsplit("_", 1)
+                    if len(parts) < 2:
+                        continue
+                    job_id = parts[0]
 
-                    title = proposal.title
-                    content_lines = proposal.content_lines or []
-                    image_prompt = proposal.image_prompt
-                    p_content_type = proposal.content_type or content_type
-                finally:
-                    db.close()
+                    job = db.query(GenerationJob).filter_by(job_id=job_id).first()
+                    if not job:
+                        continue
 
-                # 2. Create job
-                variant = "post" if p_content_type == "post" else "dark"
-                with get_db_session() as jdb:
-                    manager = JobManager(jdb)
-                    job = manager.create_job(
-                        user_id=proposal_id,
-                        title=title,
-                        content_lines=content_lines,
-                        brands=ALL_BRANDS,
-                        variant=variant,
-                        ai_prompt=image_prompt,
-                        cta_type="follow_tips",
-                        platforms=["instagram", "facebook", "youtube"],
-                    )
-                    job_id = job.job_id
+                    # job.user_id stores the proposal_id
+                    proposal_id = job.user_id
+                    proposal = db.query(TobyProposal).filter_by(proposal_id=proposal_id).first()
+                    if not proposal:
+                        continue
 
-                # 3. Store job_id on proposal
-                db2 = SessionLocal()
-                try:
-                    p = db2.query(TobyProposal).filter(
-                        TobyProposal.proposal_id == proposal_id
-                    ).first()
-                    if p:
-                        p.accepted_job_id = job_id
-                        db2.commit()
-                finally:
-                    db2.close()
+                    agent = proposal.agent_name or "toby"
+
+                    # Get view count from extra_data if metrics collection has run
+                    extra = sched.extra_data or {}
+                    views = extra.get("views", 0) or 0
+
+                    if agent == "toby":
+                        toby_count += 1
+                        toby_views += views
+                    else:
+                        lexi_count += 1
+                        lexi_views += views
+
+                toby_avg_views = round(toby_views / toby_count) if toby_count else 0
+                lexi_avg_views = round(lexi_views / lexi_count) if lexi_count else 0
 
                 self.state.log(
-                    agent_name, "Auto-accepted",
-                    f"{proposal_id} → Job {job_id} (5 brands)",
-                    "✅"
+                    "maestro", "Feedback Results",
+                    f"Toby: {toby_count} reels, {toby_views} total views (avg {toby_avg_views}) | "
+                    f"Lexi: {lexi_count} reels, {lexi_views} total views (avg {lexi_avg_views})",
+                    "📈"
                 )
 
-                # 4. Process job in separate thread (non-blocking)
-                def _process_and_schedule(jid: str, pid: str):
-                    try:
-                        with get_db_session() as pdb:
-                            m = JobManager(pdb)
-                            m.process_job(jid)
+                # Store latest feedback data in DB for frontend
+                import json
+                feedback_data = {
+                    "timestamp": now.isoformat(),
+                    "window": f"{window_start.isoformat()} to {window_end.isoformat()}",
+                    "toby": {"count": toby_count, "total_views": toby_views, "avg_views": toby_avg_views},
+                    "lexi": {"count": lexi_count, "total_views": lexi_views, "avg_views": lexi_avg_views},
+                }
+                _db_set("last_feedback_data", json.dumps(feedback_data))
 
-                        # After job completes → auto-schedule
-                        auto_schedule_job(jid)
+                self.state.last_feedback_at = now
 
-                        self.state.log(
-                            "maestro", "Auto-scheduled",
-                            f"Job {jid} (from {pid}) → content generated & scheduled",
-                            "📅"
-                        )
-                    except Exception as e:
-                        self.state.log(
-                            "maestro", "Auto-process error",
-                            f"Job {jid}: {str(e)[:200]}",
-                            "❌"
-                        )
-                        traceback.print_exc()
+            finally:
+                db.close()
 
-                thread = threading.Thread(
-                    target=_process_and_schedule,
-                    args=(job_id, proposal_id),
-                    daemon=True,
-                )
-                thread.start()
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "Error", f"Feedback cycle failed: {str(e)[:200]}", "❌")
 
-            except Exception as e:
-                self.state.log(
-                    agent_name, "Auto-accept error",
-                    f"{proposal_id}: {str(e)[:200]}",
-                    "❌"
-                )
-                traceback.print_exc()
+    # ──────────────────────────────────────────────────────────
+    # Manual trigger
+    # ──────────────────────────────────────────────────────────
+
+    def trigger_burst_now(self):
+        """Manually trigger the daily burst. Ignores pause state."""
+        self.state.log("maestro", "Manual burst", "Triggered by user", "🔘")
+
+        # Reset last_daily_run so the check cycle picks it up
+        # Or just run it directly
+        thread = threading.Thread(target=self._run_daily_burst, daemon=True)
+        thread.start()
+        return {"status": "triggered", "message": "Daily burst started in background"}
 
 
 # ── Auto-Schedule Helper ──────────────────────────────────────
@@ -623,7 +775,7 @@ def auto_schedule_job(job_id: str):
     """
     Auto-schedule all brand outputs from a completed job.
 
-    For each brand:
+    For each brand with completed output:
       1. Find the next available scheduling slot
       2. Create a ScheduledReel entry
       3. The publishing daemon handles the rest
@@ -681,7 +833,7 @@ def auto_schedule_job(job_id: str):
                 )
                 scheduled_count += 1
                 print(
-                    f"[AUTO-SCHEDULE] {brand} → {slot.strftime('%Y-%m-%d %H:%M')} (reel {reel_id})",
+                    f"[AUTO-SCHEDULE] {brand}/{variant} → {slot.strftime('%Y-%m-%d %H:%M')} (reel {reel_id})",
                     flush=True,
                 )
             except Exception as e:
@@ -709,13 +861,6 @@ def maestro_log(agent: str, action: str, detail: str = "", emoji: str = "🤖", 
 
     Import this in toby_agent.py, lexi_agent.py, trend_scout.py, metrics_collector.py
     to have all actions in one timeline.
-
-    Args:
-        agent: "maestro" | "toby" | "lexi"
-        action: High-level action name
-        detail: Details string
-        emoji: Emoji for display
-        level: "action" | "detail" | "api" | "data"
     """
     try:
         m = get_maestro()
@@ -729,7 +874,9 @@ def start_maestro() -> MaestroDaemon:
     maestro = get_maestro()
     if maestro.scheduler is None or not maestro.scheduler.running:
         maestro.start()
-        print("🎼 Maestro started — orchestrating Toby + Lexi (autonomous mode)", flush=True)
+        paused = is_paused()
+        status = "PAUSED" if paused else "RUNNING"
+        print(f"🎼 Maestro started — Status: {status}", flush=True)
     else:
         print("🎼 Maestro already running", flush=True)
     return maestro

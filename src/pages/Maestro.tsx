@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Bot,
   Play,
+  Pause,
   Check,
   X,
   ChevronDown,
@@ -39,6 +40,8 @@ import {
   Target,
   FlaskConical,
   LineChart,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { get, post } from '@/shared/api/client'
@@ -112,14 +115,14 @@ interface ActivityEntry {
 
 interface MaestroStatus {
   is_running: boolean
+  is_paused: boolean
   started_at: string | null
   uptime_seconds: number
   uptime_human: string
   current_agent: string | null
-  current_content_type: string | null
-  next_agent: string | null
-  next_content_type: string | null
-  next_cycle_at: string | null
+  current_phase: string | null
+  last_daily_run: string | null
+  last_daily_run_human: string
   total_cycles: number
   total_proposals_generated: number
   total_metrics_collected: number
@@ -128,6 +131,13 @@ interface MaestroStatus {
   agents: Record<string, AgentState>
   recent_activity: ActivityEntry[]
   proposal_stats: ProposalStats
+  daily_config?: {
+    proposals_per_agent: number
+    total_reels_per_day: number
+    variants: string[]
+    brands: string[]
+    jobs_per_day: number
+  }
 }
 
 interface PerformanceSummary {
@@ -288,6 +298,7 @@ export function MaestroPage() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null)
   const [optimizing, setOptimizing] = useState(false)
+  const [toggling, setToggling] = useState(false)
   const [activeTab, setActiveTab] = useState<'proposals' | 'activity' | 'insights' | 'trending'>('proposals')
 
   // ── Data fetching ──
@@ -354,8 +365,9 @@ export function MaestroPage() {
     try {
       const result = await post<any>(`/api/maestro/proposals/${proposalId}/accept`)
       if (result.status === 'accepted' && result.job_id) {
+        const variants = result.variants?.join(' + ') || 'dark + light'
         toast.success(
-          `Job ${result.job_id} created — generating for ${result.brands?.length || 5} brands`,
+          `${result.job_ids?.length || 1} jobs created (${variants}) — generating for ${result.brands?.length || 5} brands`,
           { duration: 5000 }
         )
         await Promise.all([fetchProposals(), fetchStatus()])
@@ -447,6 +459,52 @@ export function MaestroPage() {
 
   const stats = maestroStatus?.proposal_stats ?? null
   const agents = maestroStatus?.agents ?? {}
+  const isPaused = maestroStatus?.is_paused ?? true
+
+  const handleTogglePause = async () => {
+    setToggling(true)
+    try {
+      const endpoint = isPaused ? '/api/maestro/resume' : '/api/maestro/pause'
+      const result = await post<any>(endpoint)
+      if (result.status === 'resumed' || result.status === 'paused' || result.status === 'already_running' || result.status === 'already_paused') {
+        toast.success(
+          isPaused
+            ? `Maestro resumed${result.burst_triggered ? ' — daily burst triggered!' : ''}`
+            : 'Maestro paused — no more daily bursts until resumed',
+          { duration: 5000 }
+        )
+        await fetchStatus()
+      } else {
+        toast.error(result.error || 'Toggle failed')
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to toggle Maestro')
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  const handleTriggerBurst = async () => {
+    try {
+      const result = await post<any>('/api/maestro/trigger-burst')
+      if (result.status === 'triggered') {
+        toast.success('Daily burst triggered — 6 reels (dark + light) generating for all brands', { duration: 6000 })
+        // Poll for updates
+        const poll = setInterval(async () => {
+          await Promise.all([fetchProposals(), fetchStatus()])
+        }, 15000)
+        setTimeout(() => {
+          clearInterval(poll)
+          fetchProposals()
+          fetchStatus()
+        }, 300000)
+      } else {
+        toast.error(result.error || 'Failed to trigger burst')
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to trigger burst')
+    }
+  }
 
   if (loading) {
     return (
@@ -479,17 +537,27 @@ export function MaestroPage() {
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                   Maestro
                   <span className="relative flex items-center">
-                    <span className="inline-block w-3 h-3 rounded-full bg-green-400" />
-                    <span className="absolute inline-block w-3 h-3 rounded-full bg-green-400 animate-ping" />
+                    <span className={`inline-block w-3 h-3 rounded-full ${isPaused ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                    {!isPaused && <span className="absolute inline-block w-3 h-3 rounded-full bg-green-400 animate-ping" />}
                   </span>
                 </h1>
                 <p className="text-white/70 text-sm">
-                  Always active — orchestrating Toby &amp; Lexi
+                  {isPaused ? 'Paused — press Resume to enable daily bursts' : 'Running — daily burst orchestrating Toby & Lexi'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Trigger Burst button */}
+              <button
+                onClick={handleTriggerBurst}
+                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl border border-white/25 text-sm font-semibold transition-all"
+                title="Manually trigger the daily burst (ignores pause & last-run)"
+              >
+                <Sparkles className="w-4 h-4" />
+                Trigger Burst
+              </button>
+
               {/* Optimize Now button */}
               <button
                 onClick={handleOptimizeNow}
@@ -504,11 +572,25 @@ export function MaestroPage() {
                 {optimizing ? 'Generating...' : 'Optimize Now'}
               </button>
 
-              {/* Always-on status */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-white/15 rounded-xl border border-white/20 text-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
-                Autonomous
-              </div>
+              {/* Pause/Resume toggle */}
+              <button
+                onClick={handleTogglePause}
+                disabled={toggling}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl border text-sm font-bold transition-all ${
+                  isPaused
+                    ? 'bg-green-500/80 hover:bg-green-500 border-green-400/50 text-white'
+                    : 'bg-red-500/80 hover:bg-red-500 border-red-400/50 text-white'
+                } disabled:opacity-60`}
+              >
+                {toggling ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isPaused ? (
+                  <Play className="w-4 h-4" />
+                ) : (
+                  <Pause className="w-4 h-4" />
+                )}
+                {toggling ? '...' : isPaused ? 'Resume' : 'Pause'}
+              </button>
             </div>
           </div>
 
@@ -584,19 +666,24 @@ export function MaestroPage() {
           {/* Schedule info */}
           {maestroStatus && (
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-white/50">
-              {maestroStatus.next_cycle_at && (
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-3 h-3" />
-                  Next: {AGENT_META[maestroStatus.next_agent || 'toby']?.label} {maestroStatus.next_content_type === 'post' ? '📄' : '🎬'} — {timeAgo(maestroStatus.next_cycle_at)}
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3" />
+                Last burst: {maestroStatus.last_daily_run_human || 'never'}
+              </span>
+              {maestroStatus.current_phase && (
+                <span className="flex items-center gap-1.5 text-white/80 font-medium">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {maestroStatus.current_phase === 'generating' ? 'Generating proposals...' : 'Processing jobs...'}
                 </span>
               )}
               <span className="flex items-center gap-1.5">
-                <Zap className="w-3 h-3" />
-                Think: 45m &middot; Observe: 3h &middot; Scout: 4h
+                <Sun className="w-3 h-3" />
+                <Moon className="w-3 h-3" />
+                {maestroStatus.daily_config?.total_reels_per_day ?? 6} reels/day &middot; 3 dark + 3 light &middot; 5 brands
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3" />
-                Auto-starts every deployment — no manual action needed
+                State persisted in DB — survives deploys
               </span>
             </div>
           )}

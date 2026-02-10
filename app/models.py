@@ -968,3 +968,31 @@ class TrendingContent(Base):
             "used_for_proposal": self.used_for_proposal,
             "discovered_at": self.discovered_at.isoformat() if self.discovered_at else None,
         }
+
+
+class MaestroConfig(Base):
+    """
+    Persistent Maestro state — survives Railway redeploys.
+
+    Stores key-value pairs: is_paused, last_daily_run, etc.
+    """
+    __tablename__ = "maestro_config"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False, default="")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @staticmethod
+    def get(db, key: str, default: str = "") -> str:
+        row = db.query(MaestroConfig).filter_by(key=key).first()
+        return row.value if row else default
+
+    @staticmethod
+    def set(db, key: str, value: str):
+        row = db.query(MaestroConfig).filter_by(key=key).first()
+        if row:
+            row.value = value
+            row.updated_at = datetime.utcnow()
+        else:
+            db.add(MaestroConfig(key=key, value=value, updated_at=datetime.utcnow()))
+        db.commit()
