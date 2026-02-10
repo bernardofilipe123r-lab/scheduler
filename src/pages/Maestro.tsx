@@ -1120,7 +1120,7 @@ function ProposalCard({
             <div>
               <div className="text-xs font-medium text-gray-500 mb-1">Caption</div>
               <p className="text-sm text-gray-600 bg-white rounded-lg p-3 border border-gray-100 whitespace-pre-wrap">
-                {p.caption.replace(/@brandhandle/gi, '@thehealthycollege')}
+                {p.caption.replace(/@brandhandle/gi, '@the[brand]college')}
               </p>
             </div>
           )}
