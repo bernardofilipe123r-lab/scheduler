@@ -230,7 +230,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     finally:
         db2.close()
 
-    # Fire background processing (same as /jobs/create does)
+    # Fire background processing + auto-schedule
     def _process_job(jid: str):
         import traceback, sys
         print(f"\n{'='*60}", flush=True)
@@ -242,6 +242,11 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
                 m = JobManager(pdb)
                 m.process_job(jid)
             print(f"✅ MAESTRO: Job {jid} completed for proposal {proposal_id}", flush=True)
+
+            # Auto-schedule after completion
+            from app.services.maestro import auto_schedule_job
+            auto_schedule_job(jid)
+            print(f"📅 MAESTRO: Job {jid} auto-scheduled", flush=True)
         except Exception as e:
             print(f"❌ MAESTRO: Job {jid} failed: {e}", flush=True)
             traceback.print_exc()

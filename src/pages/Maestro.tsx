@@ -8,7 +8,6 @@
  * Always running. No pause/resume. Auto-starts every deployment.
  */
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Bot,
   Play,
@@ -274,7 +273,6 @@ function timeAgo(iso: string): string {
 // ═══════════════════════════════════════════════════════════════
 
 export function MaestroPage() {
-  const navigate = useNavigate()
 
   // ── State ──
   const [proposals, setProposals] = useState<Proposal[]>([])
@@ -361,8 +359,6 @@ export function MaestroPage() {
           { duration: 5000 }
         )
         await Promise.all([fetchProposals(), fetchStatus()])
-        // Navigate to the job detail page so user can track progress
-        navigate(`/jobs/${result.job_id}`)
       } else if (result.error) {
         toast.error(result.error)
       } else {
@@ -373,6 +369,32 @@ export function MaestroPage() {
     } finally {
       setAcceptingId(null)
     }
+  }
+
+  const handleAcceptAll = async () => {
+    const pending = proposals.filter((p) => p.status === 'pending')
+    if (pending.length === 0) {
+      toast('No pending proposals to accept')
+      return
+    }
+    setAcceptingId('__all__')
+    let accepted = 0
+    let failed = 0
+    for (const p of pending) {
+      try {
+        const result = await post<any>(`/api/maestro/proposals/${p.proposal_id}/accept`)
+        if (result.status === 'accepted') {
+          accepted++
+        } else {
+          failed++
+        }
+      } catch {
+        failed++
+      }
+    }
+    toast.success(`Accepted ${accepted} proposals${failed > 0 ? ` (${failed} failed)` : ''} — jobs creating for all brands`, { duration: 6000 })
+    await Promise.all([fetchProposals(), fetchStatus()])
+    setAcceptingId(null)
   }
 
   const handleReject = async (proposalId: string) => {
@@ -664,6 +686,24 @@ export function MaestroPage() {
                 )
               })}
             </div>
+
+            {/* Accept All button — only shown when there are pending proposals */}
+            {proposals.some((p) => p.status === 'pending') && statusFilter === 'pending' && (
+              <div className="ml-auto">
+                <button
+                  onClick={handleAcceptAll}
+                  disabled={acceptingId === '__all__'}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors"
+                >
+                  {acceptingId === '__all__' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Accept All ({proposals.filter((p) => p.status === 'pending').length})
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Proposal cards */}

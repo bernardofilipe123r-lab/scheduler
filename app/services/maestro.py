@@ -34,12 +34,12 @@ METRICS_CYCLE_MINUTES = int(os.getenv("MAESTRO_METRICS_MINUTES", os.getenv("TOBY
 SCAN_CYCLE_MINUTES = int(os.getenv("MAESTRO_SCAN_MINUTES", os.getenv("TOBY_SCAN_MINUTES", "240")))
 
 MAX_PROPOSALS_PER_CYCLE = 3
-MAX_PENDING_HARD_STOP = 12
-MAX_PENDING_THROTTLE = 6
+MAX_PENDING_HARD_STOP = 100  # Effectively disabled — auto-accept handles it
+MAX_PENDING_THROTTLE = 50    # Effectively disabled — auto-accept handles it
 STARTUP_DELAY_SECONDS = 30
 
 # Daily limit shared across agents
-DAILY_PROPOSAL_LIMIT = int(os.getenv("MAESTRO_DAILY_LIMIT", "15"))
+DAILY_PROPOSAL_LIMIT = int(os.getenv("MAESTRO_DAILY_LIMIT", "30"))
 
 # 4-cycle rotation
 ROTATION = [
@@ -400,6 +400,11 @@ class MaestroDaemon:
                     "📊", "detail"
                 )
 
+            # 5. AUTO-ACCEPT — immediately accept all new proposals and create jobs
+            proposals = result.get("proposals", [])
+            if proposals:
+                self._auto_accept_proposals(proposals, agent_name, content_type)
+
         except Exception as e:
             self.state.errors += 1
             self.state.agents[agent_name].errors += 1
@@ -488,6 +493,201 @@ class MaestroDaemon:
         except Exception as e:
             self.state.errors += 1
             self.state.log("maestro", "Error", f"Scout cycle failed: {str(e)[:200]}", "❌")
+
+    # ──────────────────────────────────────────────────────────
+    # AUTO-ACCEPT — proposals automatically become jobs
+    # ──────────────────────────────────────────────────────────
+
+    def _auto_accept_proposals(self, proposals: List[Dict], agent_name: str, content_type: str):
+        """
+        Auto-accept proposals immediately after generation.
+
+        For each proposal:
+          1. Mark as accepted in DB
+          2. Create a GenerationJob for ALL 5 brands
+          3. Process job in background thread (generates content)
+          4. Auto-schedule after completion
+        """
+        import threading
+        from app.db_connection import SessionLocal, get_db_session
+        from app.models import TobyProposal
+        from app.services.job_manager import JobManager
+
+        ALL_BRANDS = [
+            "healthycollege", "vitalitycollege", "longevitycollege",
+            "holisticcollege", "wellbeingcollege",
+        ]
+
+        for p_dict in proposals:
+            proposal_id = p_dict.get("proposal_id")
+            if not proposal_id:
+                continue
+
+            try:
+                # 1. Mark accepted in DB
+                db = SessionLocal()
+                try:
+                    proposal = db.query(TobyProposal).filter(
+                        TobyProposal.proposal_id == proposal_id
+                    ).first()
+                    if not proposal or proposal.status != "pending":
+                        continue
+
+                    proposal.status = "accepted"
+                    proposal.reviewed_at = datetime.utcnow()
+                    db.commit()
+
+                    title = proposal.title
+                    content_lines = proposal.content_lines or []
+                    image_prompt = proposal.image_prompt
+                    p_content_type = proposal.content_type or content_type
+                finally:
+                    db.close()
+
+                # 2. Create job
+                variant = "post" if p_content_type == "post" else "dark"
+                with get_db_session() as jdb:
+                    manager = JobManager(jdb)
+                    job = manager.create_job(
+                        user_id=proposal_id,
+                        title=title,
+                        content_lines=content_lines,
+                        brands=ALL_BRANDS,
+                        variant=variant,
+                        ai_prompt=image_prompt,
+                        cta_type="follow_tips",
+                        platforms=["instagram", "facebook", "youtube"],
+                    )
+                    job_id = job.job_id
+
+                # 3. Store job_id on proposal
+                db2 = SessionLocal()
+                try:
+                    p = db2.query(TobyProposal).filter(
+                        TobyProposal.proposal_id == proposal_id
+                    ).first()
+                    if p:
+                        p.accepted_job_id = job_id
+                        db2.commit()
+                finally:
+                    db2.close()
+
+                self.state.log(
+                    agent_name, "Auto-accepted",
+                    f"{proposal_id} → Job {job_id} (5 brands)",
+                    "✅"
+                )
+
+                # 4. Process job in separate thread (non-blocking)
+                def _process_and_schedule(jid: str, pid: str):
+                    try:
+                        with get_db_session() as pdb:
+                            m = JobManager(pdb)
+                            m.process_job(jid)
+
+                        # After job completes → auto-schedule
+                        auto_schedule_job(jid)
+
+                        self.state.log(
+                            "maestro", "Auto-scheduled",
+                            f"Job {jid} (from {pid}) → content generated & scheduled",
+                            "📅"
+                        )
+                    except Exception as e:
+                        self.state.log(
+                            "maestro", "Auto-process error",
+                            f"Job {jid}: {str(e)[:200]}",
+                            "❌"
+                        )
+                        traceback.print_exc()
+
+                thread = threading.Thread(
+                    target=_process_and_schedule,
+                    args=(job_id, proposal_id),
+                    daemon=True,
+                )
+                thread.start()
+
+            except Exception as e:
+                self.state.log(
+                    agent_name, "Auto-accept error",
+                    f"{proposal_id}: {str(e)[:200]}",
+                    "❌"
+                )
+                traceback.print_exc()
+
+
+# ── Auto-Schedule Helper ──────────────────────────────────────
+
+def auto_schedule_job(job_id: str):
+    """
+    Auto-schedule all brand outputs from a completed job.
+
+    For each brand:
+      1. Find the next available scheduling slot
+      2. Create a ScheduledReel entry
+      3. The publishing daemon handles the rest
+    """
+    from app.db_connection import get_db_session
+    from app.services.job_manager import JobManager
+    from app.services.db_scheduler import DatabaseSchedulerService
+
+    with get_db_session() as db:
+        manager = JobManager(db)
+        job = manager.get_job(job_id)
+
+        if not job:
+            print(f"[AUTO-SCHEDULE] Job {job_id} not found", flush=True)
+            return
+
+        if job.status not in ("completed",):
+            print(f"[AUTO-SCHEDULE] Job {job_id} not completed (status={job.status}), skipping", flush=True)
+            return
+
+        variant = job.variant or "dark"
+        scheduler = DatabaseSchedulerService(db)
+        scheduled_count = 0
+
+        for brand, output in (job.brand_outputs or {}).items():
+            if output.get("status") != "completed":
+                continue
+
+            reel_id = output.get("reel_id")
+            video_path = output.get("video_path")
+            thumbnail_path = output.get("thumbnail_path")
+            yt_thumbnail_path = output.get("yt_thumbnail_path")
+            caption = output.get("caption", "")
+            yt_title = output.get("yt_title")
+
+            if not reel_id or not video_path:
+                continue
+
+            try:
+                slot = scheduler.get_next_available_slot(brand, variant)
+
+                scheduler.schedule_reel(
+                    user_id="maestro",
+                    reel_id=reel_id,
+                    scheduled_time=slot,
+                    caption=caption,
+                    yt_title=yt_title,
+                    platforms=job.platforms or ["instagram", "facebook", "youtube"],
+                    video_path=video_path,
+                    thumbnail_path=thumbnail_path,
+                    yt_thumbnail_path=yt_thumbnail_path,
+                    user_name="Maestro",
+                    brand=brand,
+                    variant=variant,
+                )
+                scheduled_count += 1
+                print(
+                    f"[AUTO-SCHEDULE] {brand} → {slot.strftime('%Y-%m-%d %H:%M')} (reel {reel_id})",
+                    flush=True,
+                )
+            except Exception as e:
+                print(f"[AUTO-SCHEDULE] Failed to schedule {brand}: {e}", flush=True)
+
+        print(f"[AUTO-SCHEDULE] Job {job_id}: {scheduled_count}/{len(job.brand_outputs or {})} brands scheduled", flush=True)
 
 
 # ── Singleton ─────────────────────────────────────────────────
