@@ -444,36 +444,6 @@ async def list_jobs(
 
 
 @router.delete(
-    "/{job_id}",
-    summary="Delete a job"
-)
-async def delete_job(job_id: str):
-    """Delete a job and optionally its associated files."""
-    try:
-        with get_db_session() as db:
-            manager = JobManager(db)
-            
-            if not manager.delete_job(job_id):
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Job not found: {job_id}"
-                )
-            
-            return {
-                "status": "deleted",
-                "job_id": job_id
-            }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete job: {str(e)}"
-        )
-
-
-@router.delete(
     "/bulk/by-status",
     summary="Delete all jobs matching a status"
 )
@@ -509,6 +479,36 @@ async def delete_jobs_by_status(job_status: str = "completed"):
         return {"status": "error", "error": str(e)}
     finally:
         db.close()
+
+
+@router.delete(
+    "/{job_id}",
+    summary="Delete a job"
+)
+async def delete_job(job_id: str):
+    """Delete a job and optionally its associated files."""
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            
+            if not manager.delete_job(job_id):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Job not found: {job_id}"
+                )
+            
+            return {
+                "status": "deleted",
+                "job_id": job_id
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete job: {str(e)}"
+        )
 
 
 @router.post(
