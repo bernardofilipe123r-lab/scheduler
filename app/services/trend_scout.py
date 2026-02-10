@@ -108,7 +108,10 @@ class TrendScout:
             return []
 
         try:
+            from app.services.toby_daemon import toby_log
+
             # Step 1: Get hashtag ID
+            toby_log("API: IG Hashtag Search", f"GET /{self._ig_user_id}/ig_hashtag_search?q={hashtag}", "🌐", "api")
             search_resp = requests.get(
                 f"{self.BASE_URL}/{self._ig_user_id}/ig_hashtag_search",
                 params={
@@ -119,16 +122,19 @@ class TrendScout:
             )
 
             if search_resp.status_code != 200:
-                print(f"⚠️ Hashtag search error for #{hashtag}: {search_resp.status_code}", flush=True)
+                toby_log("API Error: Hashtag Search", f"HTTP {search_resp.status_code} for #{hashtag}", "❌", "api")
                 return []
 
             hashtag_data = search_resp.json().get("data", [])
             if not hashtag_data:
+                toby_log("Data: Hashtag", f"No hashtag_id found for #{hashtag}", "📊", "data")
                 return []
 
             hashtag_id = hashtag_data[0]["id"]
+            toby_log("API Response: Hashtag", f"HTTP 200 — #{hashtag} → hashtag_id={hashtag_id}", "✅", "api")
 
             # Step 2: Get top media
+            toby_log("API: IG Top Media", f"GET /{hashtag_id}/top_media?user_id=...&limit={limit}", "🌐", "api")
             media_resp = requests.get(
                 f"{self.BASE_URL}/{hashtag_id}/top_media",
                 params={
@@ -141,10 +147,11 @@ class TrendScout:
             )
 
             if media_resp.status_code != 200:
-                print(f"⚠️ Top media error for #{hashtag}: {media_resp.status_code}", flush=True)
+                toby_log("API Error: Top Media", f"HTTP {media_resp.status_code} for #{hashtag}", "❌", "api")
                 return []
 
             media_items = media_resp.json().get("data", [])
+            toby_log("API Response: Top Media", f"HTTP 200 — {len(media_items)} media items for #{hashtag}", "✅", "api")
             results = []
             for item in media_items:
                 results.append({
@@ -179,6 +186,9 @@ class TrendScout:
             return []
 
         try:
+            from app.services.toby_daemon import toby_log
+            toby_log("API: IG Business Discovery", f"GET /{self._ig_user_id}?fields=business_discovery...username({username})&limit={limit}", "🌐", "api")
+
             resp = requests.get(
                 f"{self.BASE_URL}/{self._ig_user_id}",
                 params={
@@ -189,12 +199,13 @@ class TrendScout:
             )
 
             if resp.status_code != 200:
-                print(f"⚠️ Business discovery error for @{username}: {resp.status_code}", flush=True)
+                toby_log("API Error: Business Discovery", f"HTTP {resp.status_code} for @{username}", "❌", "api")
                 return []
 
             bd = resp.json().get("business_discovery", {})
             media_data = bd.get("media", {}).get("data", [])
             source_username = bd.get("username", username)
+            toby_log("API Response: Business Discovery", f"HTTP 200 — @{source_username}: {len(media_data)} media items", "✅", "api")
 
             results = []
             for item in media_data:
@@ -253,6 +264,9 @@ class TrendScout:
             random.shuffle(candidates)
             to_scan = candidates[:max_hashtags]
 
+            from app.services.toby_daemon import toby_log
+            toby_log("Hashtag scan", f"Scanning {len(to_scan)} hashtags: {', '.join('#' + h for h in to_scan)} (skipping {len(scanned)} recently scanned)", "🔍", "detail")
+
             total_found = 0
             total_new = 0
 
@@ -304,6 +318,7 @@ class TrendScout:
                 time.sleep(1)  # Rate limit respect
 
             db.commit()
+            toby_log("Hashtag scan complete", f"{len(to_scan)} hashtags → {total_found} media found, {total_new} new stored in DB", "📊", "data")
             return {
                 "hashtags_scanned": len(to_scan),
                 "media_found": total_found,
@@ -311,7 +326,8 @@ class TrendScout:
             }
         except Exception as e:
             db.rollback()
-            print(f"⚠️ TrendScout.scan_hashtags error: {e}", flush=True)
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Hashtag scan", f"scan_hashtags failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()
@@ -325,6 +341,9 @@ class TrendScout:
 
         db = SessionLocal()
         try:
+            from app.services.toby_daemon import toby_log
+            toby_log("Competitor scan", f"Scanning {len(self.competitors)} competitors: {', '.join('@' + c for c in self.competitors)}", "🔍", "detail")
+
             total_new = 0
             for username in self.competitors:
                 items = self.discover_competitor(username, limit=10)
@@ -368,13 +387,15 @@ class TrendScout:
                 time.sleep(1)
 
             db.commit()
+            toby_log("Competitor scan complete", f"{len(self.competitors)} competitors scanned, {total_new} new posts stored in DB", "📊", "data")
             return {
                 "competitors_scanned": len(self.competitors),
                 "new_stored": total_new,
             }
         except Exception as e:
             db.rollback()
-            print(f"⚠️ TrendScout.scan_competitors error: {e}", flush=True)
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Competitor scan", f"scan_competitors failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()

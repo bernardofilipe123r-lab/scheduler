@@ -49,22 +49,35 @@ class TobyState:
         # Activity log (last N actions)
         self.activity_log: list = []
 
-    def log(self, action: str, detail: str = "", emoji: str = "🤖"):
-        """Log an activity."""
+    def log(self, action: str, detail: str = "", emoji: str = "🤖", level: str = "action"):
+        """
+        Log an activity.
+        
+        Levels:
+          action  — high-level decision (Thinking, Generating, Generated)
+          detail  — sub-step (strategy choice, source picked)
+          api     — external API call (DeepSeek, IG Graph API)
+          data    — data summary (intel gathered, counts)
+        """
         entry = {
             "time": datetime.utcnow().isoformat(),
             "action": action,
             "detail": detail,
             "emoji": emoji,
+            "level": level,
         }
         self.activity_log.insert(0, entry)
-        # Keep last 100 entries
-        if len(self.activity_log) > 100:
-            self.activity_log = self.activity_log[:100]
+        # Keep last 500 entries for rich history
+        if len(self.activity_log) > 500:
+            self.activity_log = self.activity_log[:500]
 
-        self.last_thought = f"{action}: {detail}" if detail else action
-        self.last_thought_at = datetime.utcnow()
-        print(f"   {emoji} [TOBY] {action} — {detail}", flush=True)
+        # Only update "last thought" for high-level actions
+        if level == "action":
+            self.last_thought = f"{action}: {detail}" if detail else action
+            self.last_thought_at = datetime.utcnow()
+        
+        prefix = {"action": "🤖", "detail": "  ├─", "api": "  🌐", "data": "  📊"}.get(level, "  ")
+        print(f"   {prefix} [TOBY] {action} — {detail}", flush=True)
 
     def to_dict(self) -> Dict:
         """Get full status as dict."""
@@ -432,6 +445,21 @@ def get_toby_daemon() -> TobyDaemon:
     if _daemon is None:
         _daemon = TobyDaemon()
     return _daemon
+
+
+def toby_log(action: str, detail: str = "", emoji: str = "🤖", level: str = "detail"):
+    """
+    Log to Toby's activity feed from anywhere in the codebase.
+    
+    Importable by toby_agent.py, trend_scout.py, metrics_collector.py
+    so all Toby-related actions appear in one unified timeline.
+    """
+    try:
+        daemon = get_toby_daemon()
+        daemon.state.log(action, detail, emoji, level)
+    except Exception:
+        # If daemon not ready yet, just print
+        print(f"   [TOBY-LOG] {action} — {detail}", flush=True)
 
 
 def start_toby_daemon():

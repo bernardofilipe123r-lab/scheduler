@@ -83,6 +83,7 @@ interface ActivityEntry {
   action: string
   detail: string
   emoji: string
+  level?: 'action' | 'detail' | 'api' | 'data'
 }
 
 interface TobyDaemonStatus {
@@ -850,8 +851,10 @@ function ProposalCard({
 
 
 // ═══════════════════════════════════════════════════════════════════
-//  ACTIVITY PANEL — Toby's autonomous activity log
+//  ACTIVITY PANEL — Toby's full transparency activity log
 // ═══════════════════════════════════════════════════════════════════
+type ActivityFilter = 'all' | 'actions' | 'api' | 'data'
+
 function ActivityPanel({
   activity,
   onRefresh,
@@ -860,6 +863,8 @@ function ActivityPanel({
   onRefresh: () => Promise<void>
 }) {
   const [refreshing, setRefreshing] = useState(false)
+  const [filter, setFilter] = useState<ActivityFilter>('all')
+  const [expanded, setExpanded] = useState(true)
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -879,6 +884,7 @@ function ActivityPanel({
     Waiting: 'text-yellow-600 bg-yellow-50',
     Throttling: 'text-amber-600 bg-amber-50',
     Intel: 'text-purple-600 bg-purple-50',
+    Planning: 'text-indigo-600 bg-indigo-50',
     'Cycle complete': 'text-green-600 bg-green-50',
     Error: 'text-red-600 bg-red-50',
     Started: 'text-green-600 bg-green-50',
@@ -886,11 +892,27 @@ function ActivityPanel({
     Paused: 'text-yellow-600 bg-yellow-50',
   }
 
+  // Filter entries by level
+  const filtered = activity.filter((e) => {
+    if (filter === 'all') return true
+    if (filter === 'actions') return !e.level || e.level === 'action'
+    if (filter === 'api') return e.level === 'api'
+    if (filter === 'data') return e.level === 'data'
+    return true
+  })
+
+  const filterButtons: { key: ActivityFilter; label: string; icon: string; count: number }[] = [
+    { key: 'all', label: 'All', icon: '📋', count: activity.length },
+    { key: 'actions', label: 'Actions', icon: '🤖', count: activity.filter((e) => !e.level || e.level === 'action').length },
+    { key: 'api', label: 'API Calls', icon: '🌐', count: activity.filter((e) => e.level === 'api').length },
+    { key: 'data', label: 'Data', icon: '📊', count: activity.filter((e) => e.level === 'data').length },
+  ]
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">
-          Toby's autonomous decisions and actions — updated in real-time
+          Full transparency — every API call, decision, and data point
         </p>
         <button
           onClick={handleRefresh}
@@ -902,28 +924,125 @@ function ActivityPanel({
         </button>
       </div>
 
-      {activity.length === 0 ? (
+      {/* Filter buttons */}
+      <div className="flex gap-2">
+        {filterButtons.map((fb) => (
+          <button
+            key={fb.key}
+            onClick={() => setFilter(fb.key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+              filter === fb.key
+                ? 'bg-gray-900 text-white border-gray-900'
+                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <span>{fb.icon}</span>
+            {fb.label}
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              filter === fb.key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {fb.count}
+            </span>
+          </button>
+        ))}
+
+        <div className="flex-1" />
+
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+        >
+          {expanded ? 'Compact' : 'Expanded'}
+        </button>
+      </div>
+
+      {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <Activity className="w-16 h-16 mx-auto mb-4 opacity-30" />
           <p className="text-lg font-medium">No activity yet</p>
           <p className="text-sm mt-1">Toby will start logging activity on his first cycle</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {activity.map((entry, i) => {
+        <div className="space-y-1">
+          {filtered.map((entry, i) => {
+            const level = entry.level || 'action'
             const colorClass = actionColors[entry.action] || 'text-gray-600 bg-gray-50'
-            return (
-              <div key={i} className="flex items-start gap-3 bg-white rounded-lg border border-gray-200 p-3">
-                <span className="text-lg flex-shrink-0 mt-0.5">{entry.emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${colorClass}`}>
-                      {entry.action}
-                    </span>
-                    <span className="text-xs text-gray-400">{timeAgo(entry.time)}</span>
+
+            // ACTION level — full width, bold, distinct card
+            if (level === 'action') {
+              return (
+                <div key={i} className="flex items-start gap-3 bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+                  <span className="text-lg flex-shrink-0 mt-0.5">{entry.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${colorClass}`}>
+                        {entry.action}
+                      </span>
+                      <span className="text-xs text-gray-400">{timeAgo(entry.time)}</span>
+                    </div>
+                    {entry.detail && expanded && (
+                      <p className="text-sm text-gray-700 font-medium">{entry.detail}</p>
+                    )}
                   </div>
-                  {entry.detail && (
-                    <p className="text-sm text-gray-700">{entry.detail}</p>
+                </div>
+              )
+            }
+
+            // API level — indented, green/red accent bar
+            if (level === 'api') {
+              const isError = entry.action.includes('Error') || entry.emoji === '❌'
+              const isResponse = entry.action.includes('Response') || entry.emoji === '✅'
+              const barColor = isError ? 'border-l-red-400' : isResponse ? 'border-l-green-400' : 'border-l-blue-400'
+              const bgColor = isError ? 'bg-red-50/50' : isResponse ? 'bg-green-50/30' : 'bg-blue-50/30'
+
+              return (
+                <div key={i} className={`flex items-start gap-2.5 ml-6 border-l-2 ${barColor} ${bgColor} rounded-r-lg p-2 pl-3`}>
+                  <span className="text-sm flex-shrink-0">{entry.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 rounded">
+                        API
+                      </span>
+                      <span className="text-xs font-medium text-gray-600">{entry.action}</span>
+                      <span className="text-[11px] text-gray-400">{timeAgo(entry.time)}</span>
+                    </div>
+                    {entry.detail && expanded && (
+                      <p className="text-xs text-gray-600 mt-0.5 font-mono break-all">{entry.detail}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            }
+
+            // DATA level — compact stats row
+            if (level === 'data') {
+              return (
+                <div key={i} className="flex items-start gap-2.5 ml-6 border-l-2 border-l-amber-300 bg-amber-50/30 rounded-r-lg p-2 pl-3">
+                  <span className="text-sm flex-shrink-0">{entry.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 rounded">
+                        DATA
+                      </span>
+                      <span className="text-xs text-gray-700 font-medium">{entry.detail || entry.action}</span>
+                      <span className="text-[11px] text-gray-400 ml-auto">{timeAgo(entry.time)}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+
+            // DETAIL level — indented with gray accent
+            return (
+              <div key={i} className="flex items-start gap-2.5 ml-6 border-l-2 border-l-gray-200 bg-gray-50/50 rounded-r-lg p-2 pl-3">
+                <span className="text-sm flex-shrink-0">{entry.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500">{entry.action}</span>
+                    <span className="text-[11px] text-gray-400">{timeAgo(entry.time)}</span>
+                  </div>
+                  {entry.detail && expanded && (
+                    <p className="text-xs text-gray-600 mt-0.5">{entry.detail}</p>
                   )}
                 </div>
               </div>

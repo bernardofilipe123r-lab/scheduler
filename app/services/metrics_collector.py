@@ -99,8 +99,11 @@ class MetricsCollector:
         }
 
         try:
+            from app.services.toby_daemon import toby_log
+
             # 1. Basic fields (likes, comments)
             basic_url = f"{self.BASE_URL}/{ig_media_id}"
+            toby_log("API: IG Media", f"GET /{ig_media_id}?fields=like_count,comments_count,timestamp,media_type", "🌐", "api")
             basic_resp = requests.get(basic_url, params={
                 "fields": "like_count,comments_count,timestamp,media_type",
                 "access_token": access_token,
@@ -110,12 +113,14 @@ class MetricsCollector:
                 data = basic_resp.json()
                 metrics["likes"] = data.get("like_count", 0)
                 metrics["comments"] = data.get("comments_count", 0)
+                toby_log("API Response: Media", f"HTTP 200 — {metrics['likes']} likes, {metrics['comments']} comments", "✅", "api")
             else:
-                print(f"⚠️ Basic metrics error for {ig_media_id}: {basic_resp.status_code}", flush=True)
+                toby_log("API Error: Media", f"HTTP {basic_resp.status_code} for media {ig_media_id}", "❌", "api")
                 return None
 
             # 2. Insights (plays, reach, saved, shares)
             insights_url = f"{self.BASE_URL}/{ig_media_id}/insights"
+            toby_log("API: IG Insights", f"GET /{ig_media_id}/insights?metric=plays,reach,saved,shares", "🌐", "api")
             insights_resp = requests.get(insights_url, params={
                 "metric": "plays,reach,saved,shares",
                 "access_token": access_token,
@@ -137,7 +142,9 @@ class MetricsCollector:
                         metrics["saves"] = value
                     elif name == "shares":
                         metrics["shares"] = value
+                toby_log("API Response: Insights", f"HTTP 200 — {metrics['views']} views, {metrics['reach']} reach, {metrics['saves']} saves, {metrics['shares']} shares", "✅", "api")
             else:
+                toby_log("API Fallback: Insights", f"HTTP {insights_resp.status_code} for full insights — trying individual metrics", "⚠️", "api")
                 # Fallback: try plays only (some media types don't support all metrics)
                 fallback_resp = requests.get(insights_url, params={
                     "metric": "plays",
@@ -161,11 +168,13 @@ class MetricsCollector:
                         if item.get("name") == "reach":
                             values = item.get("values", [{}])
                             metrics["reach"] = values[0].get("value", 0) if values else 0
+                toby_log("API Fallback Result", f"Partial metrics: {metrics['views']} views, {metrics['reach']} reach", "📊", "api")
 
             return metrics
 
         except Exception as e:
-            print(f"⚠️ MetricsCollector.fetch_media_metrics error for {ig_media_id}: {e}", flush=True)
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Metrics API", f"fetch_media_metrics failed for {ig_media_id}: {e}", "❌", "api")
             return None
 
     # ──────────────────────────────────────────────────────────
@@ -245,6 +254,9 @@ class MetricsCollector:
 
         db = SessionLocal()
         try:
+            from app.services.toby_daemon import toby_log
+            toby_log("Metrics: Brand", f"Collecting metrics for {brand} (last {days_back} days)", "📊", "detail")
+
             cutoff = datetime.utcnow() - timedelta(days=days_back)
             published = (
                 db.query(ScheduledReel)
@@ -255,6 +267,7 @@ class MetricsCollector:
                 )
                 .all()
             )
+            toby_log("Data: Published posts", f"{len(published)} published posts found for {brand}", "📊", "data")
 
             updated = 0
             errors = 0
@@ -357,24 +370,32 @@ class MetricsCollector:
 
             # Update percentile ranks
             self._update_percentile_ranks(db, brand)
+            toby_log("Metrics: Done", f"{brand}: {updated} posts updated, {errors} errors", "📊", "data")
 
             return {"brand": brand, "updated": updated, "errors": errors}
 
         except Exception as e:
             db.rollback()
-            print(f"⚠️ MetricsCollector.collect_for_brand error: {e}", flush=True)
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Metrics", f"collect_for_brand failed for {brand}: {e}", "❌", "detail")
             return {"error": str(e), "updated": 0}
         finally:
             db.close()
 
     def collect_all_brands(self, days_back: int = 14) -> List[Dict]:
         """Collect metrics for all brands."""
+        from app.services.toby_daemon import toby_log
+        toby_log("Metrics collection", f"Starting metrics collection for {len(self._brand_tokens) - (1 if 'default' in self._brand_tokens else 0)} brands", "📊", "detail")
+
         results = []
         for brand in self._brand_tokens:
             if brand == "default":
                 continue
             result = self.collect_for_brand(brand, days_back)
             results.append(result)
+
+        total_updated = sum(r.get("updated", 0) for r in results)
+        toby_log("Metrics complete", f"All brands done — {total_updated} total post metrics updated", "📊", "data")
         return results
 
     def _update_percentile_ranks(self, db, brand: str):

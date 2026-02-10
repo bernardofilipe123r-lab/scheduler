@@ -165,6 +165,11 @@ if FRONTEND_DIR.exists():
         """Serve React app for test route."""
         return FileResponse(FRONTEND_DIR / "index.html")
     
+    @app.get("/about", tags=["frontend"])
+    async def serve_about():
+        """Serve React app for about route."""
+        return FileResponse(FRONTEND_DIR / "index.html")
+    
     @app.get("/job/{job_id}", tags=["frontend"])
     async def serve_job_detail(job_id: str):
         """Serve React app for job detail route."""

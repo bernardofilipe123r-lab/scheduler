@@ -137,7 +137,10 @@ class TobyAgent:
 
         Returns summary of what Toby did.
         """
+        from app.services.toby_daemon import toby_log
+
         if not self.api_key:
+            toby_log("Error", "No DEEPSEEK_API_KEY configured — cannot generate proposals", "❌", "action")
             return {"error": "No DEEPSEEK_API_KEY configured", "proposals": []}
 
         if max_proposals is None:
@@ -147,10 +150,13 @@ class TobyAgent:
         today_count = self._count_proposals_today()
         remaining = max(0, max_proposals - today_count)
         if remaining == 0:
+            toby_log("Quota reached", f"Already made {today_count} proposals today (max {max_proposals})", "😴", "action")
             return {
                 "message": f"Toby already made {today_count} proposals today (max {max_proposals})",
                 "proposals": [],
             }
+
+        toby_log("Planning", f"Today: {today_count}/{max_proposals} proposals. Room for {remaining} more.", "🎯", "detail")
 
         # Gather intelligence
         intel = self._gather_intelligence()
@@ -167,7 +173,7 @@ class TobyAgent:
                     if proposal:
                         proposals.append(proposal)
                 except Exception as e:
-                    print(f"⚠️ Toby proposal generation error ({strategy}): {e}", flush=True)
+                    toby_log("Error", f"Proposal generation failed ({strategy}): {e}", "❌", "detail")
 
         return {
             "proposals_created": len(proposals),
@@ -189,17 +195,31 @@ class TobyAgent:
 
     def _gather_intelligence(self) -> Dict:
         """Gather all data Toby needs to make decisions."""
+        from app.services.toby_daemon import toby_log
+
         intel: Dict[str, Any] = {}
+        toby_log("Gathering intelligence", "Pulling data from all sources...", "🔎", "detail")
 
         # 1. Our performance data
         try:
             from app.services.metrics_collector import get_metrics_collector
             collector = get_metrics_collector()
+
+            toby_log("API: MetricsCollector", "get_top_performers(reel, limit=10) — querying PostPerformance DB", "📡", "api")
             intel["top_performers"] = collector.get_top_performers("reel", limit=10)
+            toby_log("Data: Top performers", f"Found {len(intel['top_performers'])} top-performing reels", "📊", "data")
+
+            toby_log("API: MetricsCollector", "get_underperformers(reel, limit=10) — querying PostPerformance DB", "📡", "api")
             intel["underperformers"] = collector.get_underperformers("reel", limit=10)
+            toby_log("Data: Underperformers", f"Found {len(intel['underperformers'])} underperforming reels", "📊", "data")
+
+            toby_log("API: MetricsCollector", "get_performance_summary() — aggregating all metrics", "📡", "api")
             intel["performance_summary"] = collector.get_performance_summary()
+            summary = intel["performance_summary"]
+            tracked = summary.get("total_tracked", 0)
+            toby_log("Data: Performance summary", f"{tracked} posts tracked, avg score: {summary.get('avg_performance_score', 0)}, avg views: {summary.get('avg_views', 0)}", "📊", "data")
         except Exception as e:
-            print(f"⚠️ Toby intel — metrics error: {e}", flush=True)
+            toby_log("Error: Metrics", f"Failed to fetch performance data: {e}", "❌", "detail")
             intel["top_performers"] = []
             intel["underperformers"] = []
             intel["performance_summary"] = {}
@@ -208,13 +228,16 @@ class TobyAgent:
         try:
             from app.services.trend_scout import get_trend_scout
             scout = get_trend_scout()
+            toby_log("API: TrendScout", "get_trending_for_toby(min_likes=200, limit=15) — querying TrendingContent DB", "📡", "api")
             intel["trending"] = scout.get_trending_for_toby(min_likes=200, limit=15)
+            toby_log("Data: Trending", f"Found {len(intel['trending'])} trending pieces available for adaptation", "📊", "data")
         except Exception as e:
-            print(f"⚠️ Toby intel — trends error: {e}", flush=True)
+            toby_log("Error: Trends", f"Failed to fetch trending data: {e}", "❌", "detail")
             intel["trending"] = []
 
         # 3. Content history & topic gaps
         try:
+            toby_log("API: ContentTracker", "Checking content history, cooldowns, and topic availability", "📡", "api")
             intel["recent_titles"] = self.tracker.get_recent_titles("reel", limit=30)
             intel["topics_on_cooldown"] = [
                 t for t in TOPIC_BUCKETS
@@ -222,8 +245,11 @@ class TobyAgent:
             ]
             intel["available_topics"] = self.tracker.get_available_topics("reel")
             intel["content_stats"] = self.tracker.get_stats("reel")
+            toby_log("Data: Content history", f"{len(intel['recent_titles'])} recent titles, {len(intel['topics_on_cooldown'])} topics on cooldown, {len(intel['available_topics'])} available", "📊", "data")
+            if intel["topics_on_cooldown"]:
+                toby_log("Data: Cooldowns", f"Topics on cooldown: {', '.join(intel['topics_on_cooldown'])}", "📊", "data")
         except Exception as e:
-            print(f"⚠️ Toby intel — tracker error: {e}", flush=True)
+            toby_log("Error: Content tracker", f"Failed to check content history: {e}", "❌", "detail")
             intel["recent_titles"] = []
             intel["topics_on_cooldown"] = []
             intel["available_topics"] = list(TOPIC_BUCKETS)
@@ -247,22 +273,31 @@ class TobyAgent:
 
         Adapts weights based on available data.
         """
+        from app.services.toby_daemon import toby_log
+
         weights = dict(STRATEGY_WEIGHTS)
+        adjustments = []
 
         # If no performance data yet, shift to explore + trending
         if not intel.get("top_performers"):
             weights["double_down"] = 0.0
             weights["explore"] += 0.15
             weights["trending"] += 0.15
+            adjustments.append("No top performers → disabled double_down, boosted explore+trending")
 
         if not intel.get("underperformers"):
             weights["iterate"] = 0.0
             weights["explore"] += 0.10
             weights["trending"] += 0.10
+            adjustments.append("No underperformers → disabled iterate, boosted explore+trending")
 
         if not intel.get("trending"):
             weights["trending"] = 0.0
             weights["explore"] += 0.20
+            adjustments.append("No trending data → disabled trending, boosted explore")
+
+        if not adjustments:
+            adjustments.append("All data available — using default weights")
 
         # Normalise
         total = sum(weights.values())
@@ -288,6 +323,15 @@ class TobyAgent:
                     diff += 1
                     if diff == 0:
                         break
+
+        # Log the strategy decision
+        for adj in adjustments:
+            toby_log("Strategy adjustment", adj, "🎛️", "detail")
+        
+        active = {s: c for s, c in plan.items() if c > 0}
+        plan_str = ", ".join(f"{s}: {c}" for s, c in active.items())
+        weight_str = ", ".join(f"{s}: {w:.0%}" for s, w in weights.items() if w > 0)
+        toby_log("Strategy plan", f"Generating {count} proposals → [{plan_str}] (weights: {weight_str})", "🗺️", "detail")
 
         return plan
 
@@ -318,10 +362,13 @@ class TobyAgent:
         Pick a topic that hasn't been covered recently and generate
         fresh content within the health/wellness niche.
         """
+        from app.services.toby_daemon import toby_log
+
         available = intel.get("available_topics", list(TOPIC_BUCKETS))
         recent_titles = intel.get("recent_titles", [])
 
         topic = random.choice(available) if available else "general"
+        toby_log("Explore", f"Selected topic: '{topic}' (from {len(available)} available topics)", "💡", "detail")
 
         topic_descriptions = {
             "superfoods": "superfoods and nutrient-dense foods",
@@ -382,8 +429,11 @@ OUTPUT FORMAT (JSON only):
 
         Analyse what went wrong, propose a better version.
         """
+        from app.services.toby_daemon import toby_log
+
         underperformers = intel.get("underperformers", [])
         if not underperformers:
+            toby_log("Iterate → Explore", "No underperformers found, falling back to explore strategy", "🔄", "detail")
             return self._strategy_explore(intel)
 
         # Pick a random underperformer
@@ -392,6 +442,8 @@ OUTPUT FORMAT (JSON only):
         source_score = source.get("performance_score", 0)
         source_views = source.get("views", 0)
         source_saves = source.get("saves", 0)
+
+        toby_log("Iterate", f"Improving underperformer: '{source_title[:60]}' (score: {source_score}, views: {source_views})", "🔄", "detail")
 
         prompt = f"""This reel underperformed. Analyse why and create a better version.
 
@@ -437,8 +489,11 @@ OUTPUT FORMAT (JSON only):
 
         Take a high-performing reel and create something similar but fresh.
         """
+        from app.services.toby_daemon import toby_log
+
         top = intel.get("top_performers", [])
         if not top:
+            toby_log("Double Down → Explore", "No top performers found, falling back to explore strategy", "📈", "detail")
             return self._strategy_explore(intel)
 
         source = random.choice(top[:5])  # Pick from top 5
@@ -447,6 +502,8 @@ OUTPUT FORMAT (JSON only):
         source_views = source.get("views", 0)
         source_saves = source.get("saves", 0)
         source_topic = source.get("topic_bucket", "general")
+
+        toby_log("Double Down", f"Creating variation of winner: '{source_title[:60]}' (score: {source_score}, views: {source_views})", "📈", "detail")
 
         prompt = f"""This reel performed exceptionally well. Create a similar variation.
 
@@ -494,14 +551,19 @@ OUTPUT FORMAT (JSON only):
         Take a trending reel from the niche and create our own version
         adapted to our brand template and avatar.
         """
+        from app.services.toby_daemon import toby_log
+
         trending = intel.get("trending", [])
         if not trending:
+            toby_log("Trending → Explore", "No trending content available, falling back to explore strategy", "🔥", "detail")
             return self._strategy_explore(intel)
 
         source = random.choice(trending[:10])
         source_caption = source.get("caption", "")[:500]
         source_likes = source.get("like_count", 0)
         source_account = source.get("source_account", "unknown")
+
+        toby_log("Trending", f"Adapting viral content from @{source_account} ({source_likes} likes)", "🔥", "detail")
 
         prompt = f"""This reel is currently going viral in the health niche. Adapt it for our brand.
 
@@ -553,7 +615,13 @@ OUTPUT FORMAT (JSON only):
         source_account: str = None,
     ) -> Optional[TobyProposal]:
         """Call DeepSeek and save the proposal to DB."""
+        from app.services.toby_daemon import toby_log
+
         try:
+            prompt_preview = prompt[:120].replace("\n", " ")
+            toby_log("API: DeepSeek", f"POST /v1/chat/completions — model=deepseek-chat, strategy={strategy}, topic={topic or 'auto'}", "🌐", "api")
+            toby_log("Prompt sent", f"'{prompt_preview}...' (temp=0.9, max_tokens=1500)", "📝", "detail")
+
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers={
@@ -573,14 +641,19 @@ OUTPUT FORMAT (JSON only):
             )
 
             if response.status_code != 200:
-                print(f"⚠️ Toby DeepSeek error: {response.status_code}", flush=True)
+                toby_log("API Error: DeepSeek", f"HTTP {response.status_code} — {response.text[:200]}", "❌", "api")
                 return None
 
             content_text = response.json()["choices"][0]["message"]["content"].strip()
+            tokens_used = response.json().get("usage", {})
+            prompt_tokens = tokens_used.get("prompt_tokens", "?")
+            completion_tokens = tokens_used.get("completion_tokens", "?")
+            toby_log("API Response: DeepSeek", f"HTTP 200 OK — {prompt_tokens} prompt tokens, {completion_tokens} completion tokens", "✅", "api")
 
             # Parse JSON from response
             parsed = self._parse_json(content_text)
             if not parsed:
+                toby_log("Parse Error", f"Failed to parse JSON from DeepSeek response ({len(content_text)} chars)", "❌", "detail")
                 return None
 
             title = parsed.get("title", "")
@@ -590,8 +663,10 @@ OUTPUT FORMAT (JSON only):
             reasoning = parsed.get("reasoning", "No reasoning provided")
 
             if not title or not content_lines:
-                print("⚠️ Toby: missing title or content_lines in response", flush=True)
+                toby_log("Validation Error", f"Missing title or content_lines in DeepSeek response", "❌", "detail")
                 return None
+
+            toby_log("Parsed proposal", f"Title: '{title[:60]}' | {len(content_lines)} content lines | caption: {len(caption)} chars", "📋", "detail")
 
             # Classify topic
             topic_bucket = topic or ContentHistory.classify_topic_bucket(title)
@@ -629,6 +704,7 @@ OUTPUT FORMAT (JSON only):
                 db.commit()
                 db.refresh(proposal)
 
+                toby_log("Saved to DB", f"Proposal {proposal_id} saved — strategy={strategy}, topic={topic_bucket}, quality={quality.score}", "💾", "detail")
                 print(f"🤖 Toby proposed [{strategy}] → '{title[:60]}...' ({proposal_id})", flush=True)
 
                 # Mark trending source as used
@@ -644,7 +720,8 @@ OUTPUT FORMAT (JSON only):
                 db.close()
 
         except Exception as e:
-            print(f"⚠️ Toby._call_ai_and_save error: {e}", flush=True)
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: AI call", f"_call_ai_and_save failed: {str(e)[:200]}", "❌", "api")
             return None
 
     def _parse_json(self, text: str) -> Optional[Dict]:
