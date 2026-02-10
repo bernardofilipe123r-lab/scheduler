@@ -48,6 +48,13 @@ from app.core.quality_scorer import (
     QualityScore
 )
 
+# Phase 2: Anti-Repetition & Quality Engine
+from app.services.content_tracker import (
+    get_content_tracker,
+    check_post_quality,
+    TOPIC_BUCKETS as TRACKER_TOPIC_BUCKETS,
+)
+
 # Original viral ideas (for rare example injection only)
 from app.core.viral_ideas import get_random_ideas, VIRAL_IDEAS
 
@@ -71,6 +78,7 @@ class ContentGeneratorV2:
         # Get singleton instances
         self.pattern_selector = get_pattern_selector()
         self.quality_scorer = get_quality_scorer()
+        self.content_tracker = get_content_tracker()
         
         # Configuration
         self.max_regeneration_attempts = 3
@@ -94,7 +102,7 @@ class ContentGeneratorV2:
         if not self.api_key:
             print("⚠️ Warning: DEEPSEEK_API_KEY not found for content generation")
         else:
-            print("✅ Content Generator V2 initialized (3-layer architecture)")
+            print("✅ Content Generator V2 initialized (3-layer architecture + Phase 2 tracker)")
     
     # ============================================================
     # CTA OPTIONS (same as V1)
@@ -154,9 +162,21 @@ class ContentGeneratorV2:
         content, quality_score = self._generate_with_quality_loop(selection)
         
         if content:
-            # Track for anti-repetition
+            # Track for anti-repetition (in-memory)
             self._add_to_history(content)
             self.quality_scorer.add_to_history(content)
+            
+            # Track in persistent DB via Phase 2 tracker
+            title = content.get("title", "")
+            if title:
+                self.content_tracker.record(
+                    title=title,
+                    content_type="reel",
+                    image_prompt=content.get("image_prompt", ""),
+                    caption="",
+                    quality_score=content.get("quality_score", 0),
+                    brand=getattr(self, '_current_brand', None)
+                )
             
             # Update stats
             self._update_stats(quality_score, regenerated=False)
@@ -190,11 +210,16 @@ class ContentGeneratorV2:
             
             # Build appropriate prompt
             if attempt == 1:
-                # First attempt: normal runtime prompt
+                # First attempt: use tracker DB history for avoidance
+                tracker_titles = self.content_tracker.get_recent_titles("reel", limit=10)
+                tracker_topics = self.content_tracker.get_recent_topic_buckets("reel", limit=5)
+                # Merge with in-memory for maximum coverage
+                all_titles = list(dict.fromkeys(tracker_titles + self._recent_titles))
+                all_topics = list(dict.fromkeys(tracker_topics + self._recent_topics))
                 prompt = build_runtime_prompt_with_history(
                     selection,
-                    self._recent_titles,
-                    self._recent_topics
+                    all_titles,
+                    all_topics
                 )
             elif attempt == 2 and best_content:
                 # Second attempt: correction prompt
@@ -517,39 +542,12 @@ class ContentGeneratorV2:
         return random.choice(options) if options else None
 
     def _get_recent_post_titles_from_db(self, limit: int = 25) -> List[str]:
-        """Fetch recent post titles from the database to avoid repetition."""
-        try:
-            from app.database.db import SessionLocal
-            from app.models import Job
-            from sqlalchemy import desc
-
-            db = SessionLocal()
-            try:
-                recent_jobs = (
-                    db.query(Job)
-                    .filter(Job.variant == "post")
-                    .order_by(desc(Job.created_at))
-                    .limit(limit)
-                    .all()
-                )
-                titles = []
-                for j in recent_jobs:
-                    # Extract per-brand titles from brand_outputs JSON
-                    if j.brand_outputs and isinstance(j.brand_outputs, dict):
-                        for brand_key, brand_data in j.brand_outputs.items():
-                            if isinstance(brand_data, dict):
-                                t = brand_data.get("title", "")
-                                if t and t not in titles:
-                                    titles.append(t)
-                    # Also check job-level title
-                    if j.title and j.title not in titles:
-                        titles.append(j.title)
-                return titles[:limit]
-            finally:
-                db.close()
-        except Exception as e:
-            print(f"⚠️ Could not fetch recent post titles from DB: {e}", flush=True)
-            return []
+        """Fetch recent post titles from the database.
+        
+        Now delegates to ContentTracker which reads from content_history
+        table + legacy generation_jobs for backward compat.
+        """
+        return self.content_tracker.get_recent_titles("post", limit)
 
     # ============================================================
     # POST TITLE GENERATION (for Instagram image posts, NOT reels)
@@ -571,38 +569,29 @@ class ContentGeneratorV2:
         if not self.api_key:
             return self._fallback_post_title()
         
-        # Get recent titles to avoid repetition (from DB + in-memory _recent_titles)
-        db_titles = self._get_recent_post_titles_from_db(25)
-        history_context = ""
-        all_recent = list(db_titles)
-        # Include in-memory recent titles (written by _add_to_history)
-        for t in self._recent_titles:
-            if t and t not in all_recent:
-                all_recent.append(t)
-        if all_recent:
-            history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
+        # Phase 2: Use ContentTracker for persistent anti-repetition
+        history_context = self.content_tracker.build_history_context("post")
         
-        # Pick a random topic bucket to force variety between calls
-        all_topics = [
-            "Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)",
-            "Teas and warm drinks (green tea, chamomile, matcha, golden milk, herbal infusions)",
-            "Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics, ashwagandha)",
-            "Sleep rituals and evening routines",
-            "Morning wellness routines (lemon water, journaling, light stretching)",
-            "Skin health, collagen, and anti-aging nutrition",
-            "Gut health, digestion, and bloating relief",
-            "Hormone balance and menopause support through nutrition",
-            "Stress relief and mood-boosting foods/habits",
-            "Hydration and detox drinks",
-            "Brain health and memory-supporting nutrients",
-            "Heart-healthy foods and natural remedies",
-        ]
-        # Avoid recently used topics
-        available_topics = [t for t in all_topics if not any(
-            rt.lower() in t.lower() or t.lower() in rt.lower()
-            for rt in self._recent_topics[-5:]
-        )] or all_topics
-        forced_topic = random.choice(available_topics)
+        # Pick topic using DB-backed cooldown rotation
+        topic_bucket = self.content_tracker.pick_topic("post", topic_hint)
+        
+        # Map topic bucket to descriptive topic string for the prompt
+        topic_descriptions = {
+            "superfoods": "Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)",
+            "teas_drinks": "Teas and warm drinks (green tea, chamomile, matcha, golden milk, herbal infusions)",
+            "supplements": "Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics, ashwagandha)",
+            "sleep": "Sleep rituals and evening routines",
+            "morning_routines": "Morning wellness routines (lemon water, journaling, light stretching)",
+            "skin_antiaging": "Skin health, collagen, and anti-aging nutrition",
+            "gut_health": "Gut health, digestion, and bloating relief",
+            "hormones": "Hormone balance and menopause support through nutrition",
+            "stress_mood": "Stress relief and mood-boosting foods/habits",
+            "hydration_detox": "Hydration and detox drinks",
+            "brain_memory": "Brain health and memory-supporting nutrients",
+            "heart_health": "Heart-healthy foods and natural remedies",
+            "general": "Any relevant health/wellness topic for women 35+",
+        }
+        forced_topic = topic_hint if topic_hint else topic_descriptions.get(topic_bucket, topic_descriptions["general"])
         
         prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
 
@@ -735,9 +724,36 @@ Generate now:"""
                     if result.get("title"):
                         result["title"] = result["title"].rstrip(".")
                     
-                    # Add to history (title + topic for anti-repetition)
+                    title = result.get("title", "")
+                    caption = result.get("caption", "")
+                    
+                    # Phase 2: Quality gate check
+                    quality = check_post_quality(title, caption)
+                    result["quality_score"] = quality.score
+                    result["quality_issues"] = quality.issues
+                    
+                    if not quality.passed:
+                        print(f"⚠️ Post quality gate FAILED ({quality.score:.0f}): {quality.issues}", flush=True)
+                        # Still return it but mark it — don't waste the API call
+                        result["quality_warning"] = True
+                    
+                    # Phase 2: Duplicate check
+                    if title and self.content_tracker.is_duplicate(title, "post"):
+                        print(f"⚠️ Duplicate detected: '{title[:60]}...' — returning anyway (marked)", flush=True)
+                        result["is_duplicate"] = True
+                    
+                    # Phase 2: Record in persistent content_history
+                    self.content_tracker.record(
+                        title=title,
+                        content_type="post",
+                        caption=caption,
+                        image_prompt=result.get("image_prompt"),
+                        quality_score=quality.score,
+                    )
+                    
+                    # Also keep in-memory for backward compat
                     self._add_to_history({
-                        "title": result.get("title", ""),
+                        "title": title,
                         "topic_category": topic_hint or forced_topic
                     })
                     
@@ -805,16 +821,8 @@ Generate now:"""
         if not self.api_key or count <= 0:
             return [self._fallback_post_title() for _ in range(max(count, 1))]
 
-        # Get recent titles to avoid repetition (from DB + in-memory _recent_titles)
-        db_titles = self._get_recent_post_titles_from_db(25)
-        history_context = ""
-        all_recent = list(db_titles)
-        # Include in-memory recent titles (written by _add_to_history)
-        for t in self._recent_titles:
-            if t and t not in all_recent:
-                all_recent.append(t)
-        if all_recent:
-            history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
+        # Phase 2: Use ContentTracker for persistent anti-repetition
+        history_context = self.content_tracker.build_history_context("post")
 
         prompt = build_post_content_prompt(
             count=count,
@@ -858,7 +866,19 @@ Generate now:"""
                             r["is_fallback"] = False
                             if r.get("title"):
                                 r["title"] = r["title"].rstrip(".")
-                            self._add_to_history({"title": r.get("title", "")})
+                            title = r.get("title", "")
+                            # Phase 2: Quality gate + record
+                            quality = check_post_quality(title, r.get("caption", ""))
+                            r["quality_score"] = quality.score
+                            r["quality_issues"] = quality.issues
+                            self.content_tracker.record(
+                                title=title,
+                                content_type="post",
+                                caption=r.get("caption"),
+                                image_prompt=r.get("image_prompt"),
+                                quality_score=quality.score,
+                            )
+                            self._add_to_history({"title": title})
                         return results[:count]
                     elif isinstance(results, list) and len(results) > 0:
                         # Got fewer than requested — pad with fallbacks
@@ -866,7 +886,18 @@ Generate now:"""
                             r["is_fallback"] = False
                             if r.get("title"):
                                 r["title"] = r["title"].rstrip(".")
-                            self._add_to_history({"title": r.get("title", "")})
+                            title = r.get("title", "")
+                            quality = check_post_quality(title, r.get("caption", ""))
+                            r["quality_score"] = quality.score
+                            r["quality_issues"] = quality.issues
+                            self.content_tracker.record(
+                                title=title,
+                                content_type="post",
+                                caption=r.get("caption"),
+                                image_prompt=r.get("image_prompt"),
+                                quality_score=quality.score,
+                            )
+                            self._add_to_history({"title": title})
                         while len(results) < count:
                             results.append(self._fallback_post_title())
                         return results

@@ -1,8 +1,9 @@
 """
 Database models for PostgreSQL storage.
 """
+import hashlib
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Text, Boolean, Integer, JSON
+from sqlalchemy import Column, String, DateTime, Text, Boolean, Integer, JSON, Float, Index
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -534,4 +535,182 @@ class AppSettings(Base):
             "value_type": self.value_type,
             "sensitive": self.sensitive,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+# ============================================================
+# CONTENT HISTORY — Phase 2: Anti-Repetition & Quality Engine
+# ============================================================
+
+class ContentHistory(Base):
+    """
+    Persistent record of every piece of generated content.
+
+    Replaces fragile in-memory lists (_recent_titles, _recent_topics)
+    that were lost on every server restart.
+
+    Used for:
+    - Content fingerprinting: detect near-duplicate titles via keyword hash
+    - Topic rotation: enforce cooldown periods per topic bucket
+    - Per-brand memory: each brand tracks its own history
+    - Quality feedback loop: store quality scores for future analysis
+    """
+    __tablename__ = "content_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Content type: "post" or "reel"
+    content_type = Column(String(10), nullable=False, index=True)
+
+    # The generated title
+    title = Column(Text, nullable=False)
+
+    # Normalised keyword fingerprint for similarity detection.
+    # Built from sorted, lowercased, deduplicated keywords extracted
+    # from the title. Two titles with the same fingerprint are
+    # semantically too close.
+    keyword_hash = Column(String(64), nullable=False, index=True)
+
+    # The raw sorted keywords string before hashing (human-readable)
+    keywords = Column(Text, nullable=True)
+
+    # Which high-level topic bucket this belongs to
+    # (e.g., "supplements", "teas", "gut_health", "sleep", …)
+    topic_bucket = Column(String(50), nullable=False, index=True)
+
+    # Brand this was generated for (nullable = shared/unassigned)
+    brand = Column(String(50), nullable=True, index=True)
+
+    # Quality score assigned by the quality gate (0-100)
+    quality_score = Column(Float, nullable=True)
+
+    # Whether this content was actually used (published or saved to a job)
+    was_used = Column(Boolean, default=True, nullable=False)
+
+    # Optional: the image prompt generated alongside the content
+    image_prompt = Column(Text, nullable=True)
+
+    # Optional: caption text
+    caption = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+
+    # Composite indexes for common queries
+    __table_args__ = (
+        Index("ix_content_history_type_topic", "content_type", "topic_bucket"),
+        Index("ix_content_history_type_brand", "content_type", "brand"),
+        Index("ix_content_history_type_created", "content_type", "created_at"),
+    )
+
+    @staticmethod
+    def compute_keyword_hash(title: str) -> str:
+        """
+        Deterministic fingerprint from a title.
+
+        1. Lowercase & strip punctuation
+        2. Remove common stop-words
+        3. Sort remaining words
+        4. SHA-256 first 16 hex chars
+        """
+        import re
+        stop_words = {
+            "a", "an", "the", "and", "or", "but", "is", "are", "was",
+            "were", "be", "been", "being", "in", "on", "at", "to", "for",
+            "of", "with", "by", "from", "up", "about", "into", "through",
+            "during", "before", "after", "above", "below", "between",
+            "your", "you", "it", "its", "this", "that", "these", "those",
+            "my", "our", "their", "his", "her", "can", "may", "will",
+            "could", "should", "would", "do", "does", "did", "has", "have",
+            "had", "no", "not", "than", "then", "so", "if", "how", "what",
+            "which", "who", "whom", "when", "where", "why",
+        }
+        words = re.sub(r"[^a-z0-9\s]", "", title.lower()).split()
+        keywords = sorted(set(w for w in words if w not in stop_words and len(w) > 2))
+        keyword_str = " ".join(keywords)
+        h = hashlib.sha256(keyword_str.encode()).hexdigest()[:16]
+        return h
+
+    @staticmethod
+    def extract_keywords(title: str) -> str:
+        """Return the sorted keywords string (before hashing)."""
+        import re
+        stop_words = {
+            "a", "an", "the", "and", "or", "but", "is", "are", "was",
+            "were", "be", "been", "being", "in", "on", "at", "to", "for",
+            "of", "with", "by", "from", "up", "about", "into", "through",
+            "during", "before", "after", "above", "below", "between",
+            "your", "you", "it", "its", "this", "that", "these", "those",
+            "my", "our", "their", "his", "her", "can", "may", "will",
+            "could", "should", "would", "do", "does", "did", "has", "have",
+            "had", "no", "not", "than", "then", "so", "if", "how", "what",
+            "which", "who", "whom", "when", "where", "why",
+        }
+        words = re.sub(r"[^a-z0-9\s]", "", title.lower()).split()
+        keywords = sorted(set(w for w in words if w not in stop_words and len(w) > 2))
+        return " ".join(keywords)
+
+    @staticmethod
+    def classify_topic_bucket(title: str) -> str:
+        """
+        Classify a title into one of ~12 predefined topic buckets.
+
+        Uses keyword matching (fast, no AI call needed).
+        Returns the bucket name string.
+        """
+        title_lower = title.lower()
+
+        buckets = {
+            "superfoods": ["turmeric", "ginger", "berries", "berry", "honey", "cinnamon",
+                           "superfood", "avocado", "quinoa", "chia", "seed", "dark chocolate",
+                           "chocolate", "broccoli", "spinach", "kale", "almond", "walnut",
+                           "flaxseed", "oat"],
+            "teas_drinks": ["tea", "chamomile", "matcha", "golden milk", "herbal",
+                            "infusion", "drink", "coffee", "lemon water", "water"],
+            "supplements": ["collagen", "magnesium", "vitamin", "omega", "probiotic",
+                            "ashwagandha", "supplement", "zinc", "iron", "calcium",
+                            "b12", "folate", "biotin", "coq10"],
+            "sleep": ["sleep", "insomnia", "melatonin", "rest", "bedtime", "circadian",
+                      "nap", "pillow", "evening routine", "night"],
+            "morning_routines": ["morning", "sunrise", "journaling", "stretching",
+                                 "lemon water", "wake", "routine"],
+            "skin_antiaging": ["skin", "collagen", "wrinkle", "elasticity", "anti-aging",
+                               "aging", "glow", "complexion", "retinol", "hyaluronic"],
+            "gut_health": ["gut", "digestion", "bloating", "microbiome", "probiotic",
+                           "prebiotic", "fiber", "ferment", "yogurt", "kefir"],
+            "hormones": ["hormone", "estrogen", "cortisol", "menopause", "thyroid",
+                         "insulin", "testosterone", "progesterone", "pcos", "adrenal"],
+            "stress_mood": ["stress", "mood", "anxiety", "cortisol", "serotonin",
+                            "dopamine", "meditation", "mindfulness", "calm", "relax"],
+            "hydration_detox": ["hydration", "detox", "water", "electrolyte", "fluid",
+                                "cleanse", "flush", "toxin"],
+            "brain_memory": ["brain", "memory", "cognitive", "focus", "concentration",
+                             "neuro", "mental", "alzheimer", "dementia"],
+            "heart_health": ["heart", "cardio", "cholesterol", "blood pressure",
+                             "circulation", "artery", "vascular", "inflammation"],
+        }
+
+        # Score each bucket by keyword matches
+        best_bucket = "general"
+        best_score = 0
+        for bucket, keywords in buckets.items():
+            score = sum(1 for kw in keywords if kw in title_lower)
+            if score > best_score:
+                best_score = score
+                best_bucket = bucket
+
+        return best_bucket
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "content_type": self.content_type,
+            "title": self.title,
+            "keyword_hash": self.keyword_hash,
+            "keywords": self.keywords,
+            "topic_bucket": self.topic_bucket,
+            "brand": self.brand,
+            "quality_score": self.quality_score,
+            "was_used": self.was_used,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
