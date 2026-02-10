@@ -68,7 +68,6 @@ export function GeneratorPage() {
     const words = text.trim().split(/\s+/)
     if (words.length <= 3) return text.trim()
     const total = text.trim().length
-    const target = total / 2
     let line1 = ''
     let bestSplit = 0
     let bestDiff = Infinity

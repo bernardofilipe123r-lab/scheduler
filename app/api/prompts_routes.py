@@ -2,11 +2,16 @@
 Prompts overview API — exposes all prompt layers for transparency.
 
 Provides endpoints to:
-- View the full prompt pipeline (content → image prompt → deAPI prompt)
+- View the full prompt pipeline (content -> image prompt -> deAPI prompt)
 - Test-generate sample images from a prompt
+- Preview final assembled prompts
+
+100% DYNAMIC: All data is imported from prompt_templates.py (single source of truth).
+No hardcoded prompts in this file.
 """
 import base64
 import time
+import uuid
 from io import BytesIO
 from typing import Optional, List
 from pydantic import BaseModel
@@ -42,122 +47,43 @@ class TestGenerateRequest(BaseModel):
 
 
 # ============================================================
-# GET /api/prompts/overview — full prompt pipeline
+# GET /api/prompts/overview — full prompt pipeline (100% dynamic)
 # ============================================================
 
 @router.get("/overview", summary="Get the full prompt pipeline overview")
 async def get_prompt_overview():
     """
-    Returns all prompt layers used in image generation,
+    Returns all prompt layers used in content and image generation,
     organized by stage in the pipeline.
+    All data is imported from prompt_templates.py — the single source of truth.
     """
     from app.core.prompt_templates import (
-        SYSTEM_PROMPT,
         IMAGE_PROMPT_SUFFIX,
         IMAGE_PROMPT_GUIDELINES,
+        IMAGE_PROMPT_SYSTEM,
+        POST_QUALITY_SUFFIX,
+        REEL_BASE_STYLE,
+        BRAND_PALETTES,
+        IMAGE_MODELS,
+        FALLBACK_PROMPTS,
+        CAROUSEL_SLIDE_EXAMPLES,
+        get_post_content_prompt_for_display,
     )
 
-    # --- Layer 1: Content generation (DeepSeek) ---
-    content_gen_prompt = """You are a visual prompt engineer specializing in wellness and health imagery for Instagram.
-
-Given a title, generate a DETAILED cinematic image prompt suitable for AI image generation (DALL-E / Flux).
-
-### REQUIREMENTS:
-- Soft, minimal, calming wellness aesthetic
-- Bright modern kitchen or clean lifestyle setting
-- Neutral tones, gentle morning sunlight
-- High-end lifestyle photography style
-- Fresh, soothing, natural health remedy concept
-- Must end with "No text, no letters, no numbers, no symbols, no logos."
-- Should be 2-3 sentences long
-
-### EXAMPLES:
-Title: "Daily ginger consumption may reduce muscle pain by up to 25%"
-→ "Soft cinematic close-up of fresh ginger root being sliced on a clean white stone countertop in a bright modern kitchen. A glass of warm ginger-infused water with a lemon slice sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos."
-
-Title: "Vitamin D and magnesium helps reduce depression and brain aging."
-→ "Soft cinematic close-up of vitamin D and magnesium supplements on a clean white surface beside a fresh orange and a glass of water in a bright modern kitchen. Gentle morning sunlight, minimal calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos.\""""
-
-    # --- Layer 2: Quality suffix (added to every image prompt) ---
-    quality_suffix = (
-        "Ultra high quality, 8K, sharp focus, professional photography, "
-        "soft natural lighting, premium lifestyle aesthetic. "
-        "Photorealistic, detailed textures, beautiful composition. "
-        "CRITICAL COMPOSITION: Subject must be centered in the UPPER HALF of the frame. "
-        "The bottom third of the image should be soft bokeh, clean surface, or subtle gradient — "
-        "NOT the main subject. Portrait orientation, slightly overhead camera angle, "
-        "hero subject positioned in center-upper area of frame."
-    )
-
-    # --- Layer 3: Reel-specific base style ---
-    reel_base_style = (
-        "BRIGHT, COLORFUL, VIBRANT still-life composition with SUNLIT atmosphere. "
-        "Dense, full-frame layout filling every inch with objects. "
-        "Shallow water ripples, water droplets, moisture, and dewy surfaces. "
-        "Soft bokeh light orbs floating in the background. "
-        "Morning sunlight streaming in with lens flares and light rays. "
-        "BRIGHT PASTEL background tones - NO DARK OR BLACK AREAS. "
-        "Polished, glossy, shiny surfaces catching light. "
-        "Magazine-quality product photography style with enhanced saturation."
-    )
-
-    # --- Brand palettes ---
-    brand_palettes = {
-        "healthycollege": {
-            "name": "Fresh Green",
-            "primary": "#4CAF50",
-            "accent": "#81C784",
-            "color_description": "fresh lime green, vibrant leaf green, bright spring green, with soft yellow sunlight and white highlights",
-        },
-        "longevitycollege": {
-            "name": "Radiant Azure",
-            "primary": "#00BCD4",
-            "accent": "#80DEEA",
-            "color_description": "radiant azure, bright sky blue, luminous cyan, electric light blue, with white glow and warm sunlight touches",
-        },
-        "vitalitycollege": {
-            "name": "Bright Turquoise",
-            "primary": "#26C6DA",
-            "accent": "#4DD0E1",
-            "color_description": "bright turquoise, sparkling teal, vibrant aquamarine, with white shimmer and golden sunlight accents",
-        },
-        "wellbeingcollege": {
-            "name": "Vibrant Blue",
-            "primary": "#2196F3",
-            "accent": "#64B5F6",
-            "color_description": "bright sky blue, vibrant azure, luminous cyan, sparkling light blue, with soft white and golden sunlight accents",
-        },
-        "holisticcollege": {
-            "name": "Vibrant Blue",
-            "primary": "#2196F3",
-            "accent": "#64B5F6",
-            "color_description": "bright sky blue, vibrant azure, luminous cyan, sparkling light blue, with soft white and golden sunlight accents",
-        },
-    }
-
-    # --- Models ---
-    models = {
-        "posts": {
-            "name": "ZImageTurbo_INT8",
-            "dimensions": "1088×1360 (rounded from 1080×1350)",
-            "steps": 8,
-            "description": "Higher quality model for posts. Better prompt adherence and fidelity.",
-        },
-        "reels": {
-            "name": "Flux1schnell",
-            "dimensions": "1152×1920 (rounded from 1080×1920)",
-            "steps": 4,
-            "description": "Fast model for reel backgrounds. Cheaper per image.",
-        },
-    }
-
-    # --- Assemble layers ---
+    # --- Assemble layers (all from prompt_templates.py) ---
     layers = [
         {
+            "id": "post_content_prompt",
+            "name": "0. Post Content Generation (DeepSeek)",
+            "description": "The full prompt sent to DeepSeek AI to generate post titles, captions, carousel slide texts, and image prompts. This is the master prompt that controls all content output.",
+            "content": get_post_content_prompt_for_display(),
+            "type": "ai_generation",
+        },
+        {
             "id": "content_ai",
-            "name": "1. AI Content Generation (DeepSeek)",
-            "description": "DeepSeek generates the image_prompt alongside the title and content lines. This is the creative prompt that describes what the image should look like.",
-            "content": content_gen_prompt,
+            "name": "1. Image Prompt Generation (DeepSeek)",
+            "description": "When generating standalone image prompts from a title, this system prompt guides DeepSeek to create cinematic, wellness-themed image descriptions.",
+            "content": IMAGE_PROMPT_SYSTEM.strip(),
             "type": "ai_generation",
         },
         {
@@ -178,37 +104,37 @@ Title: "Vitamin D and magnesium helps reduce depression and brain aging."
             "id": "quality_suffix",
             "name": "4. Quality & Composition Suffix (Posts)",
             "description": "Appended to the final prompt when sending to deAPI for post images. Controls quality and composition (subject in upper half, bottom third clean for text overlay).",
-            "content": quality_suffix,
+            "content": POST_QUALITY_SUFFIX,
             "type": "suffix",
         },
         {
             "id": "reel_base_style",
             "name": "5. Reel Base Style (Reels only)",
             "description": "The base visual style for reel backgrounds. Creates bright, colorful still-life compositions with water effects and sunlight.",
-            "content": reel_base_style,
+            "content": REEL_BASE_STYLE,
             "type": "template",
         },
     ]
 
-    # --- Fallback prompts ---
-    fallback_prompts = {
-        "vitamin/supplement": "A cinematic arrangement of colorful vitamin supplements and fresh fruits on a clean surface with warm golden sunlight. Premium wellness aesthetic with soft bokeh background.",
-        "sleep/rest": "A serene bedroom scene with soft morning light filtering through white curtains, cozy bedding and calming lavender tones. Premium minimalist wellness aesthetic.",
-        "exercise/fitness": "A scenic nature path through a lush green forest with golden morning sunlight streaming through the trees. Fresh, vibrant greens with cinematic depth of field.",
-        "food/diet": "A beautiful overhead shot of colorful fresh fruits, vegetables and superfoods arranged on a clean marble surface. Bright, vibrant colors with premium food photography lighting.",
-        "meditation/mental": "A peaceful person in meditation pose surrounded by soft natural light and minimalist zen elements. Calming lavender and white tones with premium wellness aesthetic.",
-        "water/hydration": "Crystal clear water droplets and a glass bottle surrounded by fresh cucumber and mint on a bright clean surface. Fresh blue and green tones with studio lighting.",
-        "generic (default)": "A cinematic wellness scene with fresh green elements, soft golden sunlight, and premium health-focused objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting.",
-    }
+    # --- Carousel examples section ---
+    carousel_examples = []
+    for ex in CAROUSEL_SLIDE_EXAMPLES:
+        carousel_examples.append({
+            "topic": ex["topic"],
+            "title": ex["title"],
+            "slides": ex["slides"],
+        })
 
     return {
         "layers": layers,
-        "brand_palettes": brand_palettes,
-        "models": models,
-        "fallback_prompts": fallback_prompts,
+        "brand_palettes": BRAND_PALETTES,
+        "models": IMAGE_MODELS,
+        "fallback_prompts": FALLBACK_PROMPTS,
+        "carousel_examples": carousel_examples,
+        "carousel_examples_count": len(carousel_examples),
         "pipeline_summary": (
-            "Title → [DeepSeek AI generates image_prompt] → "
-            "image_prompt + quality_suffix → [deAPI generates image] → "
+            "Title -> [DeepSeek AI generates title, captions, slide texts, image_prompt] -> "
+            "image_prompt + quality_suffix -> [deAPI generates image] -> "
             "final image used as post/reel background"
         ),
     }
@@ -251,9 +177,9 @@ async def test_generate_images(request: TestGenerateRequest):
                 "generation_time": round(elapsed, 1),
                 "prompt_used": request.prompt,
             })
-            print(f"✅ Test image {i+1}/{request.count} generated in {elapsed:.1f}s", flush=True)
+            print(f"[OK] Test image {i+1}/{request.count} generated in {elapsed:.1f}s", flush=True)
         except Exception as e:
-            print(f"❌ Test image {i+1} failed: {e}", flush=True)
+            print(f"[FAIL] Test image {i+1} failed: {e}", flush=True)
             results.append({
                 "index": i + 1,
                 "error": str(e),
@@ -275,29 +201,21 @@ async def build_final_prompt(request: TestGenerateRequest):
     after all suffixes and quality modifiers are applied.
     Does NOT generate an image — just shows the assembled prompt.
     """
-    import uuid
-
-    quality_suffix = (
-        "Ultra high quality, 8K, sharp focus, professional photography, "
-        "soft natural lighting, premium lifestyle aesthetic. "
-        "Photorealistic, detailed textures, beautiful composition. "
-        "CRITICAL COMPOSITION: Subject must be centered in the UPPER HALF of the frame. "
-        "The bottom third of the image should be soft bokeh, clean surface, or subtle gradient — "
-        "NOT the main subject. Portrait orientation, slightly overhead camera angle, "
-        "hero subject positioned in center-upper area of frame."
-    )
+    from app.core.prompt_templates import POST_QUALITY_SUFFIX, IMAGE_MODELS
 
     user_prompt = request.prompt or "Soft cinematic wellness still life with natural ingredients on white countertop in morning light."
-    final_prompt = f"{user_prompt} {quality_suffix}"
+    final_prompt = f"{user_prompt} {POST_QUALITY_SUFFIX}"
     unique_id = str(uuid.uuid4())[:8]
     final_prompt_with_id = f"{final_prompt} [ID: {unique_id}]"
 
+    model_info = IMAGE_MODELS.get("posts", {})
+
     return {
         "user_prompt": request.prompt,
-        "quality_suffix": quality_suffix,
+        "quality_suffix": POST_QUALITY_SUFFIX,
         "final_prompt": final_prompt_with_id,
         "total_chars": len(final_prompt_with_id),
-        "model": "ZImageTurbo_INT8",
-        "dimensions": "1088×1360",
-        "steps": 8,
+        "model": model_info.get("name", "ZImageTurbo_INT8"),
+        "dimensions": model_info.get("dimensions", "1088x1360").split(" ")[0],
+        "steps": model_info.get("steps", 8),
     }

@@ -24,6 +24,7 @@ import {
   Eye,
   Wand2,
   ArrowRight,
+  BookOpen,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { apiClient } from '@/shared/api/client'
@@ -70,6 +71,14 @@ interface PromptOverview {
   models: Record<string, ModelInfo>
   fallback_prompts: Record<string, string>
   pipeline_summary: string
+  carousel_examples?: CarouselExample[]
+  carousel_examples_count?: number
+}
+
+interface CarouselExample {
+  topic: string
+  title: string
+  slides: string[]
 }
 
 interface FinalPromptPreview {
@@ -85,7 +94,7 @@ interface FinalPromptPreview {
 // Layers to exclude per content type
 const EXCLUDED_LAYERS: Record<PromptContentType, string[]> = {
   posts: ['reel_base_style'],
-  reels: ['quality_suffix'],
+  reels: ['quality_suffix', 'post_content_prompt'],
 }
 
 // ============================================================
@@ -430,6 +439,68 @@ export function PromptsPage({ contentType = 'posts' }: { contentType?: PromptCon
           </div>
         </div>
       </section>
+
+      {/* ── Carousel Slide Examples (posts only) ── */}
+      {contentType === 'posts' && overview.carousel_examples && overview.carousel_examples.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-2">
+            <BookOpen className="w-5 h-5 text-primary-500" />
+            Carousel Slide Examples ({overview.carousel_examples_count || overview.carousel_examples.length} examples)
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">
+            These examples are injected into the AI prompt as few-shot references to teach tone, depth, and structure for carousel text slides.
+          </p>
+          <div className="space-y-4">
+            {overview.carousel_examples.map((ex, idx) => (
+              <div key={idx} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <button
+                  onClick={() => toggleLayer(`example-${idx}`)}
+                  className="w-full flex items-center gap-3 px-5 py-4 text-left"
+                >
+                  {expandedLayers.has(`example-${idx}`) ? (
+                    <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900 text-sm">
+                        Example {idx + 1}: {ex.topic}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-primary-50 text-primary-700">
+                        {ex.slides.length} slides
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{ex.title}</p>
+                  </div>
+                </button>
+
+                {expandedLayers.has(`example-${idx}`) && (
+                  <div className="px-5 pb-4 border-t border-gray-100 space-y-3">
+                    {/* Title (Slide 1) */}
+                    <div className="mt-3">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Slide 1 (Title)</span>
+                      <div className="mt-1 bg-gray-50 rounded-lg p-3">
+                        <p className="text-sm font-semibold text-gray-900 leading-relaxed">{ex.title}</p>
+                      </div>
+                    </div>
+
+                    {/* Slide texts */}
+                    {ex.slides.map((slide, sIdx) => (
+                      <div key={sIdx}>
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Slide {sIdx + 2}</span>
+                        <div className="mt-1 bg-gray-50 rounded-lg p-3">
+                          <p className="text-sm text-gray-700 leading-relaxed">{slide}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Test Image Generation ── */}
       <section className="border-t border-gray-200 pt-8">
