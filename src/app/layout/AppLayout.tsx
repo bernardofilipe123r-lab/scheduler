@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 
 export function AppLayout() {
@@ -166,6 +166,17 @@ export function AppLayout() {
                       <Sliders className="w-4 h-4" />
                       App Settings
                     </NavLink>
+                    <div className="border-t border-gray-100 my-1" />
+                    <a
+                      href="/logs"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setSettingsOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <ScrollText className="w-4 h-4" />
+                      System Logs
+                    </a>
                   </div>
                 )}
               </div>
