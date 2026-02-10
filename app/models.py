@@ -848,6 +848,7 @@ class TobyProposal(Base):
     # ── Generated content ──
     title = Column(Text, nullable=False)
     content_lines = Column(JSON, nullable=True)   # List of reel text lines
+    slide_texts = Column(JSON, nullable=True)      # List of carousel slide paragraphs (posts only)
     image_prompt = Column(Text, nullable=True)
     caption = Column(Text, nullable=True)
 
@@ -889,6 +890,7 @@ class TobyProposal(Base):
             "reasoning": self.reasoning,
             "title": self.title,
             "content_lines": self.content_lines,
+            "slide_texts": self.slide_texts,
             "image_prompt": self.image_prompt,
             "caption": self.caption,
             "topic_bucket": self.topic_bucket,

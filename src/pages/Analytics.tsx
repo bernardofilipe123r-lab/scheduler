@@ -16,6 +16,7 @@ import {
   Instagram,
   Facebook,
   Youtube,
+  X,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -244,20 +245,45 @@ function BrandCard({ brand }: { brand: BrandMetrics }) {
 
 // ─── Refresh overlay ────────────────────────────────────────────────
 
-function RefreshOverlay({ elapsedSeconds }: { elapsedSeconds: number }) {
-  const mins = Math.floor(elapsedSeconds / 60)
-  const secs = elapsedSeconds % 60
+// ~12s per brand × 3 platforms; 5 brands = ~60s typical
+const ESTIMATED_TOTAL_SECONDS = 60
+
+function RefreshOverlay({
+  elapsedSeconds,
+  onCancel,
+}: {
+  elapsedSeconds: number
+  onCancel: () => void
+}) {
+  const remaining = Math.max(0, ESTIMATED_TOTAL_SECONDS - elapsedSeconds)
+  const remainingMins = Math.floor(remaining / 60)
+  const remainingSecs = remaining % 60
+
+  const estimateLabel =
+    remaining === 0
+      ? 'Almost done…'
+      : remainingMins > 0
+        ? `~${remainingMins}m ${remainingSecs}s remaining`
+        : `~${remainingSecs}s remaining`
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
-      <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
+      <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl relative">
         <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-900 mb-1">Refreshing Analytics</h3>
         <p className="text-sm text-gray-500 mb-3">
           Fetching data from Instagram, Facebook &amp; YouTube…
         </p>
-        <p className="text-xs text-gray-400 font-mono">
-          {mins > 0 ? `${mins}m ` : ''}{secs}s
+        <p className="text-xs text-gray-400 font-mono mb-4">
+          {estimateLabel}
         </p>
+        <button
+          onClick={onCancel}
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          <X className="w-4 h-4" />
+          Cancel
+        </button>
       </div>
     </div>
   )
@@ -509,7 +535,16 @@ export function AnalyticsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {refreshMutation.isPending && <RefreshOverlay elapsedSeconds={elapsedSeconds} />}
+      {refreshMutation.isPending && (
+        <RefreshOverlay
+          elapsedSeconds={elapsedSeconds}
+          onCancel={() => {
+            // AbortController not available on mutateAsync; hide overlay
+            // The request finishes in the background but user is unblocked
+            refreshMutation.reset()
+          }}
+        />
+      )}
 
       <div
         className={`max-w-7xl mx-auto px-6 py-8 transition-all duration-300 ${

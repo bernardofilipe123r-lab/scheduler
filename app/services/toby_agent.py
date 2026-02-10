@@ -1,10 +1,10 @@
 """
-Toby Agent — Phase 3: Autonomous AI Content Strategist.
+Toby Agent v2.0 — Autonomous AI Content Strategist (Reels + Posts).
 
 Toby analyses our IG performance data, external trends, and content
-gaps in the health/wellness niche to propose reels (and later posts).
+gaps in the health/wellness niche to propose both reels AND carousel posts.
 
-Four strategies:
+Four strategies (applied to both content types):
     1. EXPLORE    — try new topics/angles within the niche
     2. ITERATE    — tweak an underperformer with better hooks/angles
     3. DOUBLE_DOWN — create a variation of our own winning content
@@ -15,8 +15,10 @@ Guardrails (never overridden):
     - Avatar: women 45+, US/Canada/UK
     - Educational, science-backed tone
     - No medical claims, always include disclaimer
+    - Posts require real DOI references
+    - Reels use "Topic - Fact" slides, Posts use paragraph slides
 
-Toby proposes up to MAX_PROPOSALS_PER_DAY (10) reels per day.
+Toby alternates between reels and posts each cycle.
 Each proposal includes a reasoning explanation of WHY Toby chose it.
 User reviews on the Toby page and accepts or rejects.
 Accept triggers God Automation to create versions for all brands.
@@ -115,6 +117,80 @@ CONTENT GUIDELINES:
 You think like a human content creator but with data-driven decisions.
 You explain your reasoning clearly so the human reviewer understands your strategy."""
 
+# ── POST (Carousel) System Prompt ──
+TOBY_POST_SYSTEM_PROMPT = """You are Toby, an expert AI content strategist for health & wellness Instagram accounts.
+You specialise in creating Instagram carousel POSTS — educational, science-backed, study-referenced content.
+
+AUDIENCE AVATAR (internal strategy only — NEVER mention in content):
+- Women aged 45+
+- Located in the United States, Canada, and United Kingdom
+- Health-conscious, interested in natural remedies, supplements, anti-aging, longevity
+- Engaged on Instagram, prefers carousel posts with educational depth
+- Values science-backed information with real study references
+
+CRITICAL RULE — NEVER MENTION THE AVATAR DIRECTLY:
+- NEVER write "women over 40", "women 45+", "if you're over 50", "for women" etc.
+- The content must appeal UNIVERSALLY to anyone interested in health/wellness
+- Let the TOPIC itself naturally attract the avatar
+- Content-based targeting is KING on Instagram
+
+OUR POST TEMPLATE (fixed format — cover slide + 3-4 text carousel slides):
+
+1) TITLE — The main hook on the cover slide. ALL CAPS. Bold, statement-based.
+   Must be a clear health statement, not a list ("5 SIGNS..." is reel-style, not post-style).
+   Top performer examples:
+   - "YOUR SKIN LOSES 1% OF ITS COLLAGEN EVERY YEAR AFTER AGE 30. BUT YOU CAN SLOW THAT DOWN."
+   - "CHRONIC STRESS DOESN'T JUST FEEL BAD. IT LITERALLY AGES YOUR CELLS FASTER."
+   - "95% OF AMERICAN WOMEN DON'T EAT ENOUGH FIBER. HERE'S WHY THAT MATTERS."
+   - "IF YOU'RE EXHAUSTED BUT YOUR SLEEP IS FINE, CHECK YOUR IRON LEVELS."
+   - "CURIOSITY IS THE BRAIN'S ANTIDOTE TO FEAR. BEING CURIOUS REPLACES AVOIDANCE CIRCUITS WITH EXPLORATION CIRCUITS"
+   - "WHEN YOU FOCUS ON THE GOOD IN YOUR LIFE, YOUR BRAIN LITERALLY REWIRES ITSELF TO LOOK FOR MORE GOOD"
+
+2) SLIDE TEXTS — 3-4 paragraph slides (carousel slides 2, 3, 4, optionally 5):
+   Each slide is a standalone paragraph (3-6 sentences) in calm, authoritative, educational tone.
+   - Slide 1: Core scientific explanation (what happens in the body)
+   - Slide 2: Deeper mechanism / why it matters / practical context
+   - Slide 3: Practical advice, actionable takeaways, specific recommendations
+   - Slide 4 (optional): Closing takeaway + CTA ("Follow @brandhandle to learn more about your health.")
+   NO em-dashes or en-dashes. Use commas, periods, or regular hyphens.
+
+3) IMAGE PROMPT — AI-generated cover image (1080x1350 portrait).
+   Soft, minimal, calming wellness aesthetic. Main subject in CENTER/UPPER area.
+   Must end with: "No text, no letters, no numbers, no symbols, no logos."
+
+4) CAPTION — Full Instagram caption with REAL study reference:
+   - Paragraph 1: Hook expanding on the title
+   - Paragraphs 2-3: Science explanation in accessible wellness language
+   - Paragraph 4: Takeaway
+   - Source block with REAL DOI:
+     Source: Author(s). (Year). Title. Journal, Volume(Issue), Pages.
+     DOI: 10.xxxx/xxxxx
+     THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org.
+   - Disclaimer block:
+     This content is intended for educational and informational purposes only and should not be considered medical advice.
+     It is not designed to diagnose, treat, cure, or prevent any medical condition.
+     Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes.
+   - Hashtags: 5-8 relevant health/wellness hashtags
+
+CONTENT GUIDELINES:
+- Health & wellness niche ONLY
+- Educational, calm, authoritative tone
+- Every post MUST reference a real scientific study with valid DOI
+- 60% validating + 40% surprising content mix
+- No medical advice or cure claims
+- No emojis in title or slide_texts (only in caption)
+- No em-dashes or en-dashes in title or slide_texts (use commas or periods)
+- Topics from these buckets:
+  * Superfoods, healing ingredients * Teas, herbal drinks * Supplements, vitamins
+  * Sleep, circadian health * Morning routines * Skin, anti-aging nutrition
+  * Gut health, digestion * Hormone balance * Stress, mood, mental wellness
+  * Hydration, detox * Brain health, memory * Heart health * Strength training
+  * Blood sugar, metabolism * Cortisol management * Walking, low-impact movement
+  * Electrolytes * Fiber, digestive health * Neuroplasticity * Longevity science
+
+You think like a human content creator but with data-driven decisions.
+You explain your reasoning clearly so the human reviewer understands your strategy."""
+
 
 class TobyAgent:
     """
@@ -131,9 +207,13 @@ class TobyAgent:
     # MAIN: RUN TOBY
     # ──────────────────────────────────────────────────────────
 
-    def run(self, max_proposals: int = None) -> Dict:
+    def run(self, max_proposals: int = None, content_type: str = "reel") -> Dict:
         """
         Main entry point: Toby analyses data and generates proposals.
+
+        Args:
+            max_proposals: Max proposals to generate this run
+            content_type: "reel" or "post" — determines template and system prompt
 
         Returns summary of what Toby did.
         """
@@ -156,7 +236,8 @@ class TobyAgent:
                 "proposals": [],
             }
 
-        toby_log("Planning", f"Today: {today_count}/{max_proposals} proposals. Room for {remaining} more.", "🎯", "detail")
+        ct_label = "📄 POST" if content_type == "post" else "🎬 REEL"
+        toby_log("Planning", f"{ct_label} — Today: {today_count}/{max_proposals} proposals. Room for {remaining} more.", "🎯", "detail")
 
         # Gather intelligence
         intel = self._gather_intelligence()
@@ -169,7 +250,7 @@ class TobyAgent:
         for strategy, count in strategy_plan.items():
             for _ in range(count):
                 try:
-                    proposal = self._generate_proposal(strategy, intel)
+                    proposal = self._generate_proposal(strategy, intel, content_type=content_type)
                     if proposal:
                         proposals.append(proposal)
                 except Exception as e:
@@ -339,19 +420,33 @@ class TobyAgent:
     # PROPOSAL GENERATION
     # ──────────────────────────────────────────────────────────
 
-    def _generate_proposal(self, strategy: str, intel: Dict) -> Optional[TobyProposal]:
+    def _generate_proposal(self, strategy: str, intel: Dict, content_type: str = "reel") -> Optional[TobyProposal]:
         """Generate a single proposal using the given strategy."""
 
-        if strategy == "explore":
-            return self._strategy_explore(intel)
-        elif strategy == "iterate":
-            return self._strategy_iterate(intel)
-        elif strategy == "double_down":
-            return self._strategy_double_down(intel)
-        elif strategy == "trending":
-            return self._strategy_trending(intel)
+        if content_type == "post":
+            # Route to post-specific methods
+            if strategy == "explore":
+                return self._strategy_post_explore(intel)
+            elif strategy == "iterate":
+                return self._strategy_post_explore(intel)  # Posts don't iterate yet
+            elif strategy == "double_down":
+                return self._strategy_post_explore(intel)  # Posts don't double_down yet
+            elif strategy == "trending":
+                return self._strategy_post_trending(intel)
+            else:
+                return self._strategy_post_explore(intel)
         else:
-            return self._strategy_explore(intel)
+            # Reel methods (existing)
+            if strategy == "explore":
+                return self._strategy_explore(intel)
+            elif strategy == "iterate":
+                return self._strategy_iterate(intel)
+            elif strategy == "double_down":
+                return self._strategy_double_down(intel)
+            elif strategy == "trending":
+                return self._strategy_trending(intel)
+            else:
+                return self._strategy_explore(intel)
 
     # ── EXPLORE ──────────────────────────────────────────────
 
@@ -593,6 +688,140 @@ OUTPUT FORMAT (JSON only):
             prompt,
             strategy="trending",
             topic=None,
+            source_type="trending_hashtag" if source.get("discovery_method") == "hashtag_search" else "competitor",
+            source_ig_media_id=source.get("ig_media_id"),
+            source_title=source_caption[:100] if source_caption else None,
+            source_account=source_account,
+        )
+
+    # ══════════════════════════════════════════════════════════
+    # POST (CAROUSEL) STRATEGIES
+    # ══════════════════════════════════════════════════════════
+
+    def _post_output_format(self) -> str:
+        """Shared JSON output format for all post strategies."""
+        return """OUTPUT FORMAT (JSON only):
+{
+    "title": "STATEMENT-BASED TITLE IN ALL CAPS",
+    "slide_texts": [
+        "Slide 2: Core scientific explanation paragraph (3-6 sentences). What happens in the body.",
+        "Slide 3: Deeper mechanism, why it matters, practical context (3-6 sentences).",
+        "Slide 4: Practical advice, actionable takeaways (3-6 sentences). End with: Follow @brandhandle to learn more about your health."
+    ],
+    "image_prompt": "Soft, minimal wellness aesthetic. 1080x1350 portrait. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\nPractical takeaway...\\n\\nSource:\\nAuthor(s). (Year). Title. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\nDisclaimer:\\nThis content is intended for educational and informational purposes only...\\n\\n#health #wellness #longevity",
+    "reasoning": "2-3 sentences explaining why you chose this topic and angle."
+}"""
+
+    def _strategy_post_explore(self, intel: Dict) -> Optional[TobyProposal]:
+        """
+        POST EXPLORE strategy: create a new educational carousel post.
+
+        Picks a topic, finds a science-backed angle, generates
+        carousel slides with DOI reference.
+        """
+        from app.services.toby_daemon import toby_log
+
+        available = intel.get("available_topics", list(TOPIC_BUCKETS))
+        recent_titles = intel.get("recent_titles", [])
+
+        topic = random.choice(available) if available else "general"
+        toby_log("Post Explore", f"Selected topic: '{topic}' (from {len(available)} available topics)", "📄", "detail")
+
+        topic_descriptions = {
+            "superfoods": "superfoods, nutrient-dense foods, and healing ingredients",
+            "teas_drinks": "healthy teas, herbal drinks, matcha, golden milk",
+            "supplements": "vitamins, minerals, collagen, magnesium, omega-3, probiotics",
+            "sleep": "sleep quality, circadian rhythm, melatonin, recovery",
+            "morning_routines": "morning wellness routines and daily habits",
+            "skin_antiaging": "skin health, collagen, anti-aging nutrition",
+            "gut_health": "gut microbiome, digestion, prebiotics, fiber",
+            "hormones": "hormonal balance, cortisol, thyroid, stress hormones",
+            "stress_mood": "stress management, neuroplasticity, mood regulation",
+            "hydration_detox": "hydration, cellular water, electrolytes",
+            "brain_memory": "brain health, neuroplasticity, cognitive function, memory",
+            "heart_health": "cardiovascular wellness, blood pressure, circulation",
+            "general": "general health and longevity science",
+        }
+
+        topic_desc = topic_descriptions.get(topic, topic)
+
+        avoidance = ""
+        if recent_titles:
+            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
+
+        prompt = f"""Generate a new educational Instagram CAROUSEL POST about {topic_desc}.
+
+Strategy: EXPLORE — a fresh, science-backed topic for a carousel post with 3-4 educational slides.
+Topic bucket: {topic}
+
+{avoidance}
+
+Your task:
+1. Find a compelling, science-backed health insight supported by a REAL published study
+2. Create an ALL CAPS statement title (NOT a list like "5 SIGNS..." — that's reel-style)
+3. Write 3-4 slide paragraphs (3-6 sentences each): science → mechanism → practical advice
+4. Write a cover image prompt (1080x1350 portrait format)
+5. Write an Instagram caption with a REAL DOI reference from a verifiable study
+6. Explain WHY you chose this topic
+
+REMEMBER: Do NOT mention age, gender, or demographics. Universal appeal, science-first.
+
+{self._post_output_format()}"""
+
+        return self._call_ai_and_save(prompt, strategy="explore", topic=topic, content_type="post")
+
+    def _strategy_post_trending(self, intel: Dict) -> Optional[TobyProposal]:
+        """
+        POST TRENDING strategy: adapt viral carousel/image content.
+
+        Takes trending content (especially CAROUSEL_ALBUM and IMAGE types)
+        and creates an educational carousel post version.
+        """
+        from app.services.toby_daemon import toby_log
+
+        trending = intel.get("trending", [])
+
+        # Prefer carousel and image content for post adaptation
+        post_trending = [t for t in trending if t.get("media_type") in ("CAROUSEL_ALBUM", "IMAGE")]
+        if not post_trending:
+            post_trending = trending  # Fallback to all trending
+
+        if not post_trending:
+            toby_log("Post Trending → Explore", "No trending content available, falling back to post explore", "🔥", "detail")
+            return self._strategy_post_explore(intel)
+
+        source = random.choice(post_trending[:10])
+        source_caption = source.get("caption", "")[:500]
+        source_likes = source.get("like_count", 0)
+        source_account = source.get("source_account", "unknown")
+        source_type_str = source.get("media_type", "unknown")
+
+        toby_log("Post Trending", f"Adapting {source_type_str} from @{source_account} ({source_likes} likes) into carousel post", "🔥", "detail")
+
+        prompt = f"""This content is trending in the health/wellness niche. Adapt it into an educational CAROUSEL POST for our brand.
+
+TRENDING CONTENT (from @{source_account}, type: {source_type_str}):
+- Caption: "{source_caption}"
+- Likes: {source_likes}
+
+Strategy: TRENDING → POST — adapt this viral content into a science-backed carousel post.
+
+Rules:
+1. DO NOT copy — create an ORIGINAL educational version inspired by the topic/angle
+2. Keep whatever made it viral (the hook, the angle, the emotional trigger)
+3. Make it deeper and more educational — our posts are science-heavy with real DOIs
+4. Write 3-4 paragraph slides explaining the science behind the topic
+5. Include a REAL DOI from a verifiable study related to this topic
+6. Do NOT mention age, gender, or demographics
+
+{self._post_output_format()}"""
+
+        return self._call_ai_and_save(
+            prompt,
+            strategy="trending",
+            topic=None,
+            content_type="post",
             source_type="trending_hashtag" if source.get("discovery_method") == "hashtag_search" else "competitor",
             source_ig_media_id=source.get("ig_media_id"),
             source_title=source_caption[:100] if source_caption else None,
