@@ -82,7 +82,7 @@ def check_post_quality(title: str, caption: str = "") -> PostQualityResult:
 
     # ── Title checks ──────────────────────────────────────────────
     if not title or len(title.strip()) < 10:
-        result.fail("Title too short (< 10 chars)", 30)
+        result.fail("Title too short (< 10 chars)", 50)  # Hard fail
         return result
 
     # Should not end with a period
