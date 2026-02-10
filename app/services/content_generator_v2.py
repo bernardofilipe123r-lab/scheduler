@@ -753,6 +753,9 @@ Generate now:"""
         
         fallback = random.choice(fallbacks)
         fallback["is_fallback"] = True
+        # Add empty slide_texts for fallback (carousel will skip text slides)
+        if "slide_texts" not in fallback:
+            fallback["slide_texts"] = []
         return fallback
 
     # ============================================================
@@ -861,6 +864,16 @@ Write a full Instagram caption (4-5 paragraphs) that:
   This content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.
 - Separate each section with a blank line for readability
 
+### CAROUSEL SLIDE TEXTS (CRITICAL — this is for Instagram carousel slides 2-4):
+Generate EXACTLY 3 slide texts for each post. These appear as text-only slides (like a tweet/text screenshot) after the main image slide.
+Each slide text should be:
+- A standalone paragraph (3-6 sentences) that reads well on its own
+- Written in a calm, authoritative, educational tone (NOT salesy)
+- Slide 1 text: The core scientific explanation (what happens in the body)
+- Slide 2 text: Deeper mechanism / why it matters / practical context
+- Slide 3 text: Takeaway + call-to-action paragraph. MUST end with a new paragraph: "Follow @{{brandhandle}} to learn more about your {{topic_word}}." where topic_word is one relevant word like "health", "brain", "body", "longevity", "energy", "skin", "sleep", "nutrition" etc. matching the post's subject.
+Note: the {{brandhandle}} placeholder will be replaced by the system — just write it as shown.
+
 ### IMAGE PROMPT REQUIREMENTS:
 - Soft, minimal, calming wellness aesthetic
 - Each image prompt MUST be visually DIFFERENT (different setting, different ingredients)
@@ -877,11 +890,21 @@ Write a full Instagram caption (4-5 paragraphs) that:
   {{
     "title": "First health statement title.",
     "caption": "Hook paragraph expanding on the title with a surprising angle.\\n\\nExplanation paragraph about what happens in the body — metabolism, organs, brain chemistry, etc.\\n\\nMore detail about the mechanism and benefits. Be specific and educational.\\n\\nTakeaway paragraph — what the reader can expect.\\n\\nSource:\\nAuthor, A. B., & Author, C. D. (Year). Study title. Journal Name, Volume(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
+    "slide_texts": [
+      "First slide paragraph explaining the core science. What happens in the body when you do X. Be specific about mechanisms, organs, chemistry. 3-6 sentences.",
+      "Second slide going deeper. Why this matters for women 35+. Practical context, how this connects to daily life and long-term health. 3-6 sentences.",
+      "Third slide with takeaway and action. What to expect and how to start. End with a new paragraph:\\n\\nFollow @{{brandhandle}} to learn more about your health."
+    ],
     "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
   }},
   {{
     "title": "Second completely different health statement.",
     "caption": "Different hook paragraph...\\n\\nDifferent explanation...\\n\\nMore detail...\\n\\nTakeaway...\\n\\nSource:\\nDifferent Author. (Year). Different study. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
+    "slide_texts": [
+      "Different core science explanation for the second topic. 3-6 sentences.",
+      "Different deeper mechanism paragraph. 3-6 sentences.",
+      "Different takeaway paragraph. End with:\\n\\nFollow @{{brandhandle}} to learn more about your brain."
+    ],
     "image_prompt": "Completely different setting and subject. No text, no letters, no numbers, no symbols, no logos."
   }}
 ]
@@ -901,7 +924,7 @@ Generate exactly {count} posts now:"""
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.95,
-                    "max_tokens": 6000
+                    "max_tokens": 8000
                 },
                 timeout=90
             )

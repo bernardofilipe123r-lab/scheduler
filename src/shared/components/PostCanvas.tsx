@@ -323,11 +323,11 @@ export function TitleLayer({
   )
 }
 
-/** "Read Caption" label. */
-export function ReadCaption({ y }: { y: number }) {
+/** Bottom label — "Swipe" for carousel or "Read Caption" fallback. */
+export function ReadCaption({ y, label }: { y: number; label?: string }) {
   return (
     <Text
-      text="Read Caption"
+      text={label || 'Swipe'}
       fontSize={24}
       fontFamily="Inter, sans-serif"
       fill="white"

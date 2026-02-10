@@ -42,6 +42,7 @@ import {
   ImageOff,
   MessageSquareX,
   ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -50,6 +51,7 @@ import {
   PostCanvas,
 } from '@/shared/components/PostCanvas'
 import type { GeneralSettings } from '@/shared/components/PostCanvas'
+import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import type { BrandName } from '@/shared/types'
 import { getBrandLabel, getBrandColor } from '@/features/brands'
 
@@ -79,6 +81,7 @@ interface GodPost {
   round: number
   title: string
   caption: string
+  slideTexts: string[]
   aiPrompt: string
   backgroundUrl: string | null
   scheduledTime: string | null
@@ -132,6 +135,7 @@ function buildQueue(brands: BrandName[], rounds: number): GodPost[] {
         round: r,
         title: '',
         caption: '',
+        slideTexts: [],
         aiPrompt: '',
         backgroundUrl: null,
         scheduledTime: null,
@@ -250,15 +254,22 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   const [fontSizeOverride, setFontSizeOverride] = useState<number | null>(null)
   const [showRejectMenu, setShowRejectMenu] = useState<false | 'main' | 'image_sub'>(false)
   const [rejectNote, setRejectNote] = useState('')
+  const [currentSlide, setCurrentSlide] = useState(0) // 0 = cover image, 1-3 = text slides
 
   // Refs
   const stageRef = useRef<Konva.Stage | null>(null)
+  const textSlideRef = useRef<Konva.Stage | null>(null)
   const occupiedRef = useRef<Record<string, string[]>>({})
   const unlockedRef = useRef<Set<number>>(new Set())
   const queueRef = useRef<GodPost[]>([])
   useEffect(() => {
     queueRef.current = queue
   }, [queue])
+
+  // Reset slide index when reviewing a different post
+  useEffect(() => {
+    setCurrentSlide(0)
+  }, [reviewIndex])
 
   // Resume session
   const [resumeSession, setResumeSession] = useState<GodSession | null>(null)
@@ -398,6 +409,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
               ...next[idx],
               title: c.title || '',
               caption: c.caption || '',
+              slideTexts: c.slide_texts || [],
               aiPrompt: c.image_prompt || '',
               status: 'pending_image',
             }
@@ -445,7 +457,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
 
     // 1. Generate 5 titles
     console.log(`[GOD] Generating first ${firstCount} titles...`)
-    let firstPosts: Array<{ title: string; caption: string; image_prompt: string }>
+    let firstPosts: Array<{ title: string; caption: string; image_prompt: string; slide_texts?: string[] }>
     try {
       const contentResp = await fetch('/reels/generate-post-titles-batch', {
         method: 'POST',
@@ -470,6 +482,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
         ...updatedQ[i],
         title: firstPosts[i].title || '',
         caption: firstPosts[i].caption || '',
+        slideTexts: firstPosts[i].slide_texts || [],
         aiPrompt: firstPosts[i].image_prompt || '',
         status: 'pending_image' as GodPostStatus,
       }
@@ -534,6 +547,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                 ...next[idx],
                 title: contentPosts[j].title || '',
                 caption: contentPosts[j].caption || '',
+                slideTexts: contentPosts[j].slide_texts || [],
                 aiPrompt: contentPosts[j].image_prompt || '',
                 status: 'pending_image',
               }
@@ -619,6 +633,10 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   // ── Schedule a single post ─────────────────────────────────────────
   const schedulePost = useCallback(
     async (post: GodPost, idx: number): Promise<boolean> => {
+      // Ensure we're on slide 0 (cover) for the primary image capture
+      setCurrentSlide(0)
+      await new Promise((r) => setTimeout(r, 100))
+
       if (!stageRef.current) {
         toast.error('Canvas not ready — try again')
         return false
@@ -632,10 +650,29 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
       })
 
       try {
-        const imageData = stageRef.current.toDataURL({
+        // Capture cover image (slide 0)
+        const coverImage = stageRef.current.toDataURL({
           pixelRatio: 1 / REVIEW_SCALE,
           mimeType: 'image/png',
         })
+
+        // Capture text slide images by cycling through them
+        const slideImages: string[] = []
+        const slideCount = post.slideTexts?.length || 0
+        for (let s = 0; s < slideCount; s++) {
+          setCurrentSlide(s + 1)
+          await new Promise((r) => setTimeout(r, 150)) // wait for render
+          if (textSlideRef.current) {
+            slideImages.push(
+              textSlideRef.current.toDataURL({
+                pixelRatio: 1 / REVIEW_SCALE,
+                mimeType: 'image/png',
+              }),
+            )
+          }
+        }
+        // Reset back to cover
+        setCurrentSlide(0)
 
         const slot = getNextSlotForBrand(post.brand, occupiedRef.current, settings.postsPerDay ?? DEFAULT_POSTS_PER_DAY)
 
@@ -646,7 +683,9 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
             brand: post.brand,
             title: post.title,
             caption: post.caption,
-            image_data: imageData,
+            image_data: coverImage,
+            carousel_images: slideImages,
+            slide_texts: post.slideTexts || [],
             schedule_time: slot.toISOString(),
           }),
         })
@@ -749,6 +788,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     unlockNextForBrand(idx)
     setFontSizeOverride(null)
     setEditingTitle(false)
+    setCurrentSlide(0)
 
     const next = findNextReviewable(idx, queueRef.current)
     if (next === null) {
@@ -800,6 +840,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
 
     setShowRejectMenu(false)
     setRejectNote('')
+    setCurrentSlide(0)
 
     // If bad image only, just retry image (keep the same title)
     if (category === 'bad_image') {
@@ -1009,8 +1050,8 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
               )}
             </div>
 
-            {/* Center: Canvas */}
-            <div className="shrink-0">
+            {/* Center: Canvas with carousel navigation */}
+            <div className="shrink-0 flex flex-col items-center gap-3">
               {isCurrentGenerating ? (
                 <div
                   className="flex flex-col items-center justify-center bg-white/5 rounded-2xl border border-white/10"
@@ -1025,14 +1066,60 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                 </div>
               ) : (
                 <div className="rounded-2xl overflow-hidden shadow-2xl shadow-black/30">
-                  <PostCanvas
-                    brand={currentPost.brand}
-                    title={displayTitle || 'GENERATING...'}
-                    backgroundImage={currentPost.backgroundUrl}
-                    settings={{ ...settings, fontSize: displayFontSize }}
-                    scale={REVIEW_SCALE}
-                    stageRef={(node: Konva.Stage | null) => { stageRef.current = node }}
-                  />
+                  {currentSlide === 0 ? (
+                    <PostCanvas
+                      brand={currentPost.brand}
+                      title={displayTitle || 'GENERATING...'}
+                      backgroundImage={currentPost.backgroundUrl}
+                      settings={{ ...settings, fontSize: displayFontSize }}
+                      scale={REVIEW_SCALE}
+                      stageRef={(node: Konva.Stage | null) => { stageRef.current = node }}
+                    />
+                  ) : (
+                    <CarouselTextSlide
+                      brand={currentPost.brand}
+                      text={(currentPost.slideTexts || [])[currentSlide - 1] || ''}
+                      isLastSlide={currentSlide === (currentPost.slideTexts?.length || 0)}
+                      scale={REVIEW_SCALE}
+                      stageRef={(node: Konva.Stage | null) => { textSlideRef.current = node }}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Carousel slide navigation */}
+              {!isCurrentGenerating && (currentPost.slideTexts?.length || 0) > 0 && (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setCurrentSlide((s) => Math.max(0, s - 1))}
+                    disabled={currentSlide === 0}
+                    className="p-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-white/70" />
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: 1 + (currentPost.slideTexts?.length || 0) }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentSlide(i)}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                          i === currentSlide
+                            ? 'bg-amber-400 scale-125'
+                            : 'bg-white/20 hover:bg-white/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentSlide((s) => Math.min((currentPost.slideTexts?.length || 0), s + 1))}
+                    disabled={currentSlide >= (currentPost.slideTexts?.length || 0)}
+                    className="p-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4 text-white/70" />
+                  </button>
+                  <span className="text-xs text-white/30 ml-1">
+                    {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`} / {1 + (currentPost.slideTexts?.length || 0)}
+                  </span>
                 </div>
               )}
             </div>

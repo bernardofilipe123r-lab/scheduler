@@ -1578,7 +1578,9 @@ class SchedulePostImageRequest(BaseModel):
     brand: str
     title: str
     caption: str = ""  # Full caption text for Instagram
-    image_data: str  # base64 PNG (may include data:image/png;base64, prefix)
+    image_data: str  # base64 PNG (may include data:image/png;base64, prefix) — cover slide
+    carousel_images: list[str] = []  # base64 PNG images for carousel text slides (slides 2-4)
+    slide_texts: list[str] = []  # text content for each carousel slide
     schedule_time: str  # ISO datetime string
 
 @router.post("/schedule-post-image")
@@ -1611,7 +1613,22 @@ async def schedule_post_image(request: SchedulePostImageRequest):
         
         image_bytes = base64.b64decode(image_b64)
         image_path.write_bytes(image_bytes)
-        print(f"   💾 Saved image: {image_path} ({len(image_bytes)} bytes)")
+        print(f"   💾 Saved cover image: {image_path} ({len(image_bytes)} bytes)")
+        
+        # Save carousel text slide images (if any)
+        carousel_paths = []
+        for slide_i, slide_b64 in enumerate(request.carousel_images):
+            slide_path = posts_dir / f"{post_id}_slide{slide_i + 1}.png"
+            s_b64 = slide_b64
+            if ',' in s_b64:
+                s_b64 = s_b64.split(',', 1)[1]
+            slide_bytes = base64.b64decode(s_b64)
+            slide_path.write_bytes(slide_bytes)
+            carousel_paths.append(str(slide_path))
+            print(f"   💾 Saved slide {slide_i + 1}: {slide_path} ({len(slide_bytes)} bytes)")
+        
+        total_slides = 1 + len(carousel_paths)
+        print(f"   📄 Total carousel slides: {total_slides}")
         
         # Parse schedule time
         schedule_dt = datetime.fromisoformat(request.schedule_time.replace('Z', '+00:00'))
@@ -1629,8 +1646,19 @@ async def schedule_post_image(request: SchedulePostImageRequest):
             platforms=["instagram", "facebook"],
             user_name="Web Interface User",
             brand=request.brand,
-            variant="post"
+            variant="carousel" if carousel_paths else "post"
         )
+        
+        # Store carousel metadata alongside the schedule
+        if carousel_paths:
+            carousel_meta_path = posts_dir / f"{post_id}_carousel.json"
+            import json as json_mod
+            carousel_meta_path.write_text(json_mod.dumps({
+                "cover": str(image_path),
+                "slides": carousel_paths,
+                "slide_texts": request.slide_texts,
+                "total_slides": total_slides,
+            }, indent=2))
         
         print(f"   ✅ Scheduled successfully! ID: {result.get('schedule_id')}")
         print(f"{'='*80}\n")
