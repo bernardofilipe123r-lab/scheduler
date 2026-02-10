@@ -51,7 +51,18 @@ def run_migrations():
             "migration_sql": """
                 ALTER TABLE generation_jobs ADD COLUMN platforms JSON;
             """
-        }
+        },
+        # Add slide_texts column to toby_proposals for carousel post support
+        {
+            "name": "Add slide_texts column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='slide_texts'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN slide_texts JSON;
+            """
+        },
     ]
     
     with engine.connect() as conn:

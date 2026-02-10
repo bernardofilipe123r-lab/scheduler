@@ -240,7 +240,7 @@ class TobyAgent:
         toby_log("Planning", f"{ct_label} — Today: {today_count}/{max_proposals} proposals. Room for {remaining} more.", "🎯", "detail")
 
         # Gather intelligence
-        intel = self._gather_intelligence()
+        intel = self._gather_intelligence(content_type=content_type)
 
         # Decide strategy mix for this run
         strategy_plan = self._plan_strategies(remaining, intel)
@@ -274,12 +274,14 @@ class TobyAgent:
     # INTELLIGENCE GATHERING
     # ──────────────────────────────────────────────────────────
 
-    def _gather_intelligence(self) -> Dict:
+    def _gather_intelligence(self, content_type: str = "reel") -> Dict:
         """Gather all data Toby needs to make decisions."""
         from app.services.toby_daemon import toby_log
 
         intel: Dict[str, Any] = {}
-        toby_log("Gathering intelligence", "Pulling data from all sources...", "🔎", "detail")
+        is_post = content_type == "post"
+        type_label = "📄 Post" if is_post else "🎬 Reel"
+        toby_log("Gathering intelligence", f"Pulling data for {type_label} proposals...", "🔎", "detail")
 
         # 1. Our performance data
         try:
@@ -307,23 +309,23 @@ class TobyAgent:
 
         # 2. External trending content
         try:
-            from app.services.trend_scout import get_trend_scout
-            scout = get_trend_scout()
-            toby_log("API: TrendScout", "get_trending_for_toby(min_likes=200, limit=15) — querying TrendingContent DB", "📡", "api")
+            from app.services.trend_scouf"get_trending_for_toby(min_likes=200, limit=15, content_type={content_type}) — querying TrendingContent DB", "📡", "api")
+            intel["trending"] = scout.get_trending_for_toby(min_likes=200, limit=15, content_type=content_type)
+            toby_log("Data: Trending", f"Found {len(intel['trending'])} trending pieces for {type_label}endingContent DB", "📡", "api")
             intel["trending"] = scout.get_trending_for_toby(min_likes=200, limit=15)
             toby_log("Data: Trending", f"Found {len(intel['trending'])} trending pieces available for adaptation", "📊", "data")
         except Exception as e:
             toby_log("Error: Trends", f"Failed to fetch trending data: {e}", "❌", "detail")
             intel["trending"] = []
 
-        # 3. Content history & topic gaps
-        try:
-            toby_log("API: ContentTracker", "Checking content history, cooldowns, and topic availability", "📡", "api")
-            intel["recent_titles"] = self.tracker.get_recent_titles("reel", limit=30)
+        # 3. Content history & topic gapsf"Checking {type_label} content history, cooldowns, and topic availability", "📡", "api")
+            intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=30)
             intel["topics_on_cooldown"] = [
                 t for t in TOPIC_BUCKETS
-                if t not in self.tracker.get_available_topics("reel")
+                if t not in self.tracker.get_available_topics(content_type)
             ]
+            intel["available_topics"] = self.tracker.get_available_topics(content_type)
+            intel["content_stats"] = self.tracker.get_stats(content_type
             intel["available_topics"] = self.tracker.get_available_topics("reel")
             intel["content_stats"] = self.tracker.get_stats("reel")
             toby_log("Data: Content history", f"{len(intel['recent_titles'])} recent titles, {len(intel['topics_on_cooldown'])} topics on cooldown, {len(intel['available_topics'])} available", "📊", "data")
@@ -837,19 +839,25 @@ Rules:
         prompt: str,
         strategy: str,
         topic: str = None,
+        content_type: str = "reel",
         source_type: str = None,
         source_ig_media_id: str = None,
         source_title: str = None,
         source_performance_score: float = None,
         source_account: str = None,
     ) -> Optional[TobyProposal]:
-        """Call DeepSeek and save the proposal to DB."""
+        """Call DeepSeek and save the proposal to DB. Supports reel and post content types."""
         from app.services.toby_daemon import toby_log
+
+        is_post = content_type == "post"
+        type_label = "📄 Post" if is_post else "🎬 Reel"
+        system_prompt = TOBY_POST_SYSTEM_PROMPT if is_post else TOBY_SYSTEM_PROMPT
+        max_tokens = 2500 if is_post else 1500  # Posts need more tokens for slide paragraphs + DOI
 
         try:
             prompt_preview = prompt[:120].replace("\n", " ")
-            toby_log("API: DeepSeek", f"POST /v1/chat/completions — model=deepseek-chat, strategy={strategy}, topic={topic or 'auto'}", "🌐", "api")
-            toby_log("Prompt sent", f"'{prompt_preview}...' (temp=0.9, max_tokens=1500)", "📝", "detail")
+            toby_log("API: DeepSeek", f"POST /v1/chat/completions — model=deepseek-chat, type={type_label}, strategy={strategy}, topic={topic or 'auto'}", "🌐", "api")
+            toby_log("Prompt sent", f"'{prompt_preview}...' (temp=0.9, max_tokens={max_tokens})", "📝", "detail")
 
             response = requests.post(
                 f"{self.base_url}/chat/completions",
@@ -860,11 +868,11 @@ Rules:
                 json={
                     "model": "deepseek-chat",
                     "messages": [
-                        {"role": "system", "content": TOBY_SYSTEM_PROMPT},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.9,
-                    "max_tokens": 1500,
+                    "max_tokens": max_tokens,
                 },
                 timeout=60,
             )
@@ -886,16 +894,25 @@ Rules:
                 return None
 
             title = parsed.get("title", "")
-            content_lines = parsed.get("content_lines", [])
             image_prompt = parsed.get("image_prompt", "")
             caption = parsed.get("caption", "")
             reasoning = parsed.get("reasoning", "No reasoning provided")
 
-            if not title or not content_lines:
-                toby_log("Validation Error", f"Missing title or content_lines in DeepSeek response", "❌", "detail")
-                return None
-
-            toby_log("Parsed proposal", f"Title: '{title[:60]}' | {len(content_lines)} content lines | caption: {len(caption)} chars", "📋", "detail")
+            # Parse content based on type
+            if is_post:
+                slide_texts = parsed.get("slide_texts", [])
+                content_lines = []  # Posts don't use content_lines
+                if not title or not slide_texts:
+                    toby_log("Validation Error", f"Missing title or slide_texts in DeepSeek post response", "❌", "detail")
+                    return None
+                toby_log("Parsed post proposal", f"Title: '{title[:60]}' | {len(slide_texts)} slides | caption: {len(caption)} chars", "📋", "detail")
+            else:
+                content_lines = parsed.get("content_lines", [])
+                slide_texts = None  # Reels don't use slide_texts
+                if not title or not content_lines:
+                    toby_log("Validation Error", f"Missing title or content_lines in DeepSeek reel response", "❌", "detail")
+                    return None
+                toby_log("Parsed reel proposal", f"Title: '{title[:60]}' | {len(content_lines)} content lines | caption: {len(caption)} chars", "📋", "detail")
 
             # Classify topic
             topic_bucket = topic or ContentHistory.classify_topic_bucket(title)
@@ -914,11 +931,12 @@ Rules:
                 proposal = TobyProposal(
                     proposal_id=proposal_id,
                     status="pending",
-                    content_type="reel",
+                    content_type=content_type,
                     strategy=strategy,
                     reasoning=reasoning,
                     title=title,
-                    content_lines=content_lines,
+                    content_lines=content_lines if content_lines else None,
+                    slide_texts=slide_texts if slide_texts else None,
                     image_prompt=image_prompt,
                     caption=caption or None,
                     topic_bucket=topic_bucket,
@@ -933,8 +951,8 @@ Rules:
                 db.commit()
                 db.refresh(proposal)
 
-                toby_log("Saved to DB", f"Proposal {proposal_id} saved — strategy={strategy}, topic={topic_bucket}, quality={quality.score}", "💾", "detail")
-                print(f"🤖 Toby proposed [{strategy}] → '{title[:60]}...' ({proposal_id})", flush=True)
+                toby_log("Saved to DB", f"{type_label} proposal {proposal_id} saved — strategy={strategy}, topic={topic_bucket}, quality={quality.score}", "💾", "detail")
+                print(f"🤖 Toby proposed [{strategy}/{content_type}] → '{title[:60]}...' ({proposal_id})", flush=True)
 
                 # Mark trending source as used
                 if source_type in ("trending_hashtag", "competitor") and source_ig_media_id:
@@ -1060,6 +1078,7 @@ Rules:
                 "proposal_id": proposal_id,
                 "title": proposal.title,
                 "content_lines": proposal.content_lines,
+                "slide_texts": proposal.slide_texts,
                 "image_prompt": proposal.image_prompt,
                 "caption": proposal.caption,
                 "content_type": proposal.content_type,

@@ -52,6 +52,7 @@ interface Proposal {
   reasoning: string
   title: string
   content_lines: string[] | null
+  slide_texts: string[] | null
   image_prompt: string | null
   caption: string | null
   topic_bucket: string | null
@@ -704,6 +705,11 @@ function ProposalCard({
           {strategy.label}
         </div>
 
+        {/* Content type badge */}
+        <span className={`px-2 py-0.5 text-xs font-medium rounded ${p.content_type === 'post' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-purple-50 text-purple-600 border border-purple-200'}`}>
+          {p.content_type === 'post' ? '📄 Post' : '🎬 Reel'}
+        </span>
+
         {/* Title */}
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-900 truncate">{p.title}</h3>
@@ -740,7 +746,7 @@ function ProposalCard({
             </p>
           </div>
 
-          {/* Content preview */}
+          {/* Content preview — Reel lines */}
           {p.content_lines && p.content_lines.length > 0 && (
             <div>
               <div className="text-xs font-medium text-gray-500 mb-1">Content Lines</div>
@@ -751,6 +757,21 @@ function ProposalCard({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Content preview — Post slides */}
+          {p.slide_texts && p.slide_texts.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-blue-600 mb-1">📄 Carousel Slides</div>
+              <div className="space-y-2">
+                {p.slide_texts.map((text, i) => (
+                  <div key={i} className="bg-white rounded-lg p-3 border border-blue-100">
+                    <div className="text-xs font-semibold text-blue-500 mb-1">Slide {i + 2}</div>
+                    <p className="text-sm text-gray-700 leading-relaxed">{text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -777,7 +798,6 @@ function ProposalCard({
           {/* Source context (for non-explore strategies) */}
           {p.source_title && (
             <div className="flex items-start gap-2 bg-white rounded-lg p-3 border border-gray-100">
-              <ExternalLink className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
               <div>
                 <div className="text-xs font-medium text-gray-500">
                   {p.source_type === 'own_content' ? 'Based on our content' :
@@ -797,7 +817,6 @@ function ProposalCard({
             {p.topic_bucket && (
               <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-500">{p.topic_bucket}</span>
             )}
-            <span>{p.content_type}</span>
           </div>
 
           {/* Actions for pending proposals */}

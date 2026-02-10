@@ -54,27 +54,88 @@ class TrendScout:
         "naturalhealinglab",
     ]
 
+    # Post-focused competitor/inspiration accounts (carousel & educational content)
+    # Broader health/wellness/fitness/longevity niche for post ideas
+    DEFAULT_POST_COMPETITORS: List[str] = [
+        "neurolab._",
+        "healvex",
+        "thefarmacyreal",
+        "seedoilscout",
+        "demicstory",
+        "naturethecure",
+        "trillionairehealth",
+        "fitt_empires",
+        "bioganancias",
+        "neuroglobe",
+        "eatinghealthyfeed",
+        "mental.aspect",
+        "healf",
+        "longevityxlab",
+        "laviahealthshop",
+        "musclemorph_",
+        "gym.legends",
+        "dr.longevity",
+        "betterme",
+        "trainedbynaiser",
+        "sportpump",
+        "foodlty",
+        "fitnesstipsdaily",
+        "mentalmentevisionario",
+        "fitphysiqueofficial",
+        "doutorbarakat",
+        "mindset.therapy",
+        "thuthlyrical",
+        "drericberg",
+        "consciousnesstruth",
+        "science",
+        "fitnessforallus",
+    ]
+
+    # Post-specific hashtags (carousel/educational content discovery)
+    DEFAULT_POST_HASHTAGS = [
+        "healthscience", "nutritionscience", "evidencebasedhealth",
+        "longevityscience", "biohacking", "healthfacts",
+        "nutritiontips", "wellnessjourney", "brainhealth",
+        "guthealth", "hormonehealth", "antiaging",
+    ]
+
     def __init__(self):
         # Use the first available brand token for API calls
         self._access_token = None
         self._ig_user_id = None
         self._load_credentials()
 
-        # Load competitor list from env
+        # Load reel competitor list from env
         comp_env = os.getenv("TOBY_COMPETITOR_ACCOUNTS", "")
         if comp_env:
             self.competitors = [c.strip() for c in comp_env.split(",") if c.strip()]
         else:
             self.competitors = list(self.DEFAULT_COMPETITORS)
 
-        # Custom hashtags from env
+        # Load post competitor list from env
+        post_comp_env = os.getenv("TOBY_POST_COMPETITOR_ACCOUNTS", "")
+        if post_comp_env:
+            self.post_competitors = [c.strip() for c in post_comp_env.split(",") if c.strip()]
+        else:
+            self.post_competitors = list(self.DEFAULT_POST_COMPETITORS)
+
+        # Custom reel hashtags from env
         hashtag_env = os.getenv("TOBY_HASHTAGS", "")
         if hashtag_env:
             self.hashtags = [h.strip().lstrip("#") for h in hashtag_env.split(",") if h.strip()]
         else:
             self.hashtags = list(self.DEFAULT_HASHTAGS)
 
-        print(f"✅ TrendScout initialized (hashtags={len(self.hashtags)}, competitors={len(self.competitors)})", flush=True)
+        # Custom post hashtags from env
+        post_hashtag_env = os.getenv("TOBY_POST_HASHTAGS", "")
+        if post_hashtag_env:
+            self.post_hashtags = [h.strip().lstrip("#") for h in post_hashtag_env.split(",") if h.strip()]
+        else:
+            self.post_hashtags = list(self.DEFAULT_POST_HASHTAGS)
+
+        total_comp = len(self.competitors) + len(self.post_competitors)
+        total_hash = len(self.hashtags) + len(self.post_hashtags)
+        print(f"✅ TrendScout initialized (reel competitors={len(self.competitors)}, post competitors={len(self.post_competitors)}, hashtags={total_hash})", flush=True)
 
     def _load_credentials(self):
         """Load an IG access token to use for API calls."""
@@ -400,6 +461,202 @@ class TrendScout:
         finally:
             db.close()
 
+    def scan_post_competitors(self, max_accounts: int = 8) -> Dict:
+        """
+        Scan post-focused competitor accounts (rotate through the 32-account list).
+
+        Only scans max_accounts per run to stay within API rate limits.
+        Picks accounts not recently scanned.
+        """
+        import random
+        from app.db_connection import SessionLocal
+
+        if not self.post_competitors:
+            return {"competitors_scanned": 0, "new_stored": 0}
+
+        db = SessionLocal()
+        try:
+            from app.services.toby_daemon import toby_log
+
+            # Find accounts not recently scanned (last 24h)
+            recently_scanned = set()
+            try:
+                cutoff = datetime.utcnow() - timedelta(days=1)
+                recent = (
+                    db.query(TrendingContent.source_account)
+                    .filter(
+                        TrendingContent.discovery_method == "business_discovery",
+                        TrendingContent.discovered_at >= cutoff,
+                        TrendingContent.source_account.in_(self.post_competitors),
+                    )
+                    .distinct()
+                    .all()
+                )
+                recently_scanned = {r.source_account for r in recent if r.source_account}
+            except Exception:
+                pass
+
+            candidates = [c for c in self.post_competitors if c not in recently_scanned]
+            if not candidates:
+                candidates = list(self.post_competitors)
+
+            random.shuffle(candidates)
+            to_scan = candidates[:max_accounts]
+
+            toby_log("Post competitor scan", f"Scanning {len(to_scan)}/{len(self.post_competitors)} post competitors: {', '.join('@' + c for c in to_scan)}", "🔍", "detail")
+
+            total_new = 0
+            for username in to_scan:
+                items = self.discover_competitor(username, limit=10)
+                for item in items:
+                    exists = (
+                        db.query(TrendingContent.id)
+                        .filter(TrendingContent.ig_media_id == item["ig_media_id"])
+                        .first()
+                    )
+                    if exists:
+                        continue
+
+                    caption = item.get("caption", "") or ""
+                    hashtags_found = [
+                        w.lstrip("#").lower()
+                        for w in caption.split()
+                        if w.startswith("#")
+                    ]
+
+                    ts = None
+                    if item.get("timestamp"):
+                        try:
+                            ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            pass
+
+                    entry = TrendingContent(
+                        ig_media_id=item["ig_media_id"],
+                        source_account=username,
+                        caption=caption[:5000],
+                        media_type=item.get("media_type"),
+                        hashtags=hashtags_found[:30],
+                        like_count=item.get("like_count", 0),
+                        comments_count=item.get("comments_count", 0),
+                        discovery_method="business_discovery",
+                        media_timestamp=ts,
+                    )
+                    db.add(entry)
+                    total_new += 1
+
+                time.sleep(1)
+
+            db.commit()
+            toby_log("Post competitor scan complete", f"{len(to_scan)} post competitors scanned, {total_new} new items stored", "📊", "data")
+            return {
+                "competitors_scanned": len(to_scan),
+                "new_stored": total_new,
+            }
+        except Exception as e:
+            db.rollback()
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Post competitor scan", f"scan_post_competitors failed: {e}", "❌", "detail")
+            return {"error": str(e)}
+        finally:
+            db.close()
+
+    def scan_post_hashtags(self, max_hashtags: int = 4) -> Dict:
+        """Scan post-specific hashtags for carousel/educational content."""
+        import random
+        from app.db_connection import SessionLocal
+
+        db = SessionLocal()
+        try:
+            # Pick post hashtags not recently scanned
+            scanned = set()
+            try:
+                cutoff = datetime.utcnow() - timedelta(days=1)
+                recent = (
+                    db.query(TrendingContent.discovery_hashtag)
+                    .filter(
+                        TrendingContent.discovery_method == "hashtag_search",
+                        TrendingContent.discovered_at >= cutoff,
+                    )
+                    .distinct()
+                    .all()
+                )
+                scanned = {r.discovery_hashtag for r in recent if r.discovery_hashtag}
+            except Exception:
+                pass
+
+            candidates = [h for h in self.post_hashtags if h not in scanned]
+            if not candidates:
+                candidates = list(self.post_hashtags)
+
+            random.shuffle(candidates)
+            to_scan = candidates[:max_hashtags]
+
+            from app.services.toby_daemon import toby_log
+            toby_log("Post hashtag scan", f"Scanning {len(to_scan)} post hashtags: {', '.join('#' + h for h in to_scan)}", "🔍", "detail")
+
+            total_found = 0
+            total_new = 0
+
+            for hashtag in to_scan:
+                items = self.search_hashtag(hashtag, limit=15)
+                total_found += len(items)
+
+                for item in items:
+                    exists = (
+                        db.query(TrendingContent.id)
+                        .filter(TrendingContent.ig_media_id == item["ig_media_id"])
+                        .first()
+                    )
+                    if exists:
+                        continue
+
+                    caption = item.get("caption", "") or ""
+                    hashtags_found = [
+                        w.lstrip("#").lower()
+                        for w in caption.split()
+                        if w.startswith("#")
+                    ]
+
+                    ts = None
+                    if item.get("timestamp"):
+                        try:
+                            ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            pass
+
+                    entry = TrendingContent(
+                        ig_media_id=item["ig_media_id"],
+                        source_account=item.get("source_account"),
+                        caption=caption[:5000],
+                        media_type=item.get("media_type"),
+                        hashtags=hashtags_found[:30],
+                        like_count=item.get("like_count", 0),
+                        comments_count=item.get("comments_count", 0),
+                        discovery_method="hashtag_search",
+                        discovery_hashtag=hashtag,
+                        media_timestamp=ts,
+                    )
+                    db.add(entry)
+                    total_new += 1
+
+                time.sleep(1)
+
+            db.commit()
+            toby_log("Post hashtag scan complete", f"{len(to_scan)} hashtags → {total_found} media found, {total_new} new stored", "📊", "data")
+            return {
+                "hashtags_scanned": len(to_scan),
+                "media_found": total_found,
+                "new_stored": total_new,
+            }
+        except Exception as e:
+            db.rollback()
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Post hashtag scan", f"scan_post_hashtags failed: {e}", "❌", "detail")
+            return {"error": str(e)}
+        finally:
+            db.close()
+
     # ──────────────────────────────────────────────────────────
     # GET TRENDING FOR TOBY
     # ──────────────────────────────────────────────────────────
@@ -409,9 +666,13 @@ class TrendScout:
         min_likes: int = 500,
         limit: int = 20,
         unused_only: bool = True,
+        content_type: str = None,
     ) -> List[Dict]:
         """
         Get high-engagement trending content that Toby hasn't used yet.
+
+        Args:
+            content_type: Optional filter — "reel" (VIDEO only), "post" (CAROUSEL_ALBUM, IMAGE), or None (all)
 
         Returns items sorted by engagement (like_count + comments_count desc).
         """
@@ -426,6 +687,12 @@ class TrendScout:
             )
             if unused_only:
                 query = query.filter(TrendingContent.used_for_proposal == False)
+
+            # Filter by media type based on content_type
+            if content_type == "reel":
+                query = query.filter(TrendingContent.media_type == "VIDEO")
+            elif content_type == "post":
+                query = query.filter(TrendingContent.media_type.in_(["CAROUSEL_ALBUM", "IMAGE"]))
 
             trending = (
                 query

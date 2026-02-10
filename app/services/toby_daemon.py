@@ -315,8 +315,13 @@ class TobyDaemon:
 
             self.state.log("Generating", f"Creating {batch_size} proposals (today: {today_count}/{MAX_PROPOSALS_PER_DAY}, pending: {pending_count})", "⚡")
 
-            # 4. Run Toby
-            result = agent.run(max_proposals=batch_size)
+            # 4. Alternate content type: odd cycles → reels, even cycles → posts
+            content_type = "post" if self.state.total_cycles % 2 == 0 else "reel"
+            type_label = "📄 Post" if content_type == "post" else "🎬 Reel"
+            self.state.log("Content type", f"{type_label} cycle (cycle #{self.state.total_cycles})", "🔄", "detail")
+
+            # 5. Run Toby
+            result = agent.run(max_proposals=batch_size, content_type=content_type)
             created = result.get("proposals_created", 0)
 
             self.state.total_proposals_generated += created
@@ -413,21 +418,29 @@ class TobyDaemon:
 
             scout = get_trend_scout()
 
-            # Scan hashtags (max 5 to respect rate limits)
+            # Scan reel hashtags (max 3 to respect rate limits)
             hashtag_result = scout.scan_hashtags(max_hashtags=3)
-            h_discovered = hashtag_result.get("discovered", 0) if isinstance(hashtag_result, dict) else 0
+            h_new = hashtag_result.get("new_stored", 0) if isinstance(hashtag_result, dict) else 0
 
-            # Scan competitors
+            # Scan reel competitors
             competitor_result = scout.scan_competitors()
-            c_discovered = competitor_result.get("discovered", 0) if isinstance(competitor_result, dict) else 0
+            c_new = competitor_result.get("new_stored", 0) if isinstance(competitor_result, dict) else 0
 
-            total_found = h_discovered + c_discovered
+            # Scan post hashtags
+            post_h_result = scout.scan_post_hashtags(max_hashtags=3)
+            ph_new = post_h_result.get("new_stored", 0) if isinstance(post_h_result, dict) else 0
+
+            # Scan post competitors (rotates through 32 accounts, 8 per run)
+            post_c_result = scout.scan_post_competitors(max_accounts=8)
+            pc_new = post_c_result.get("new_stored", 0) if isinstance(post_c_result, dict) else 0
+
+            total_found = h_new + c_new + ph_new + pc_new
             self.state.total_trends_found += total_found
             self.state.last_scan_at = datetime.utcnow()
 
             self.state.log(
                 "Trends discovered",
-                f"Found {total_found} trending pieces ({h_discovered} from hashtags, {c_discovered} from competitors)",
+                f"Found {total_found} new items — Reels: {h_new} hashtags + {c_new} competitors | Posts: {ph_new} hashtags + {pc_new} competitors",
                 "🔥"
             )
 
