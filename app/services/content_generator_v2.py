@@ -38,7 +38,8 @@ from app.core.prompt_templates import (
     build_runtime_prompt_with_history,
     build_correction_prompt,
     build_prompt_with_example,
-    build_style_anchor
+    build_style_anchor,
+    build_post_content_prompt,
 )
 
 # Quality Scoring
@@ -791,127 +792,11 @@ Generate now:"""
         if all_recent:
             history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
 
-        prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
-
-Generate EXACTLY {count} COMPLETELY DIFFERENT health-focused posts. Each post MUST cover a DIFFERENT topic category.
-
-### TARGET AUDIENCE:
-Women 35+ interested in healthy aging, energy, hormones, and longevity.
-
-### CRITICAL RULE:
-Each of the {count} posts MUST be about a DIFFERENT topic. Do NOT repeat similar themes.
-Pick {count} DIFFERENT categories from this list (one per post):
-1. Superfoods and healing ingredients (turmeric, ginger, berries, honey, cinnamon)
-2. Teas and warm drinks (green tea, chamomile, matcha, golden milk)
-3. Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics)
-4. Sleep rituals and evening routines
-5. Morning wellness routines (lemon water, journaling, light stretching)
-6. Skin health, collagen, and anti-aging nutrition
-7. Gut health, digestion, and bloating relief
-8. Hormone balance and menopause support through nutrition
-9. Stress relief and mood-boosting foods/habits
-10. Hydration and detox drinks
-11. Brain health and memory-supporting nutrients
-12. Heart-healthy foods and natural remedies
-
-### WHAT MAKES A GREAT POST TITLE:
-- A short, clear health statement written in simple, wellness-friendly tone
-- Focused on one or two main benefits
-- Positive, empowering, and slightly exaggerated to create scroll-stop engagement
-- Do NOT lie, but dramatize slightly to spark discussion
-- Do NOT end the title with a period (.) — end cleanly without punctuation or with a question mark only
-
-### TITLE STYLE VARIETY (CRITICAL — mix these across the batch):
-You MUST use a MIX of these 3 title styles. Never generate all titles in the same style!
-
-**Style A — Direct with percentage/data** (~40% of titles):
-Examples:
-- "Study shows sleeping in a cold room helps burn fat and slow aging by 40%"
-- "Eating berries daily can improve memory and focus by 25%"
-- "Walking 20 minutes after meals reduces blood sugar spikes by 30%"
-
-**Style B — Direct statement without data** (~30% of titles):
-Examples:
-- "Sleeping in a cold room helps burn fat and slow aging"
-- "One tablespoon of olive oil before bed can transform your skin overnight"
-- "Magnesium before sleep helps your muscles recover faster than any supplement"
-
-**Style C — Curiosity / intrigue hook** (~30% of titles):
-Examples:
-- "What happens to your body when you drink warm lemon water every morning"
-- "The reason most women over 40 feel tired has nothing to do with sleep"
-- "This ancient spice does more for your brain than most supplements combined"
-
-For {count} posts, distribute the styles. Example for 10 posts: ~4 Style A, ~3 Style B, ~3 Style C.
-
-### WHAT TO AVOID:
-- Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
-- Question formats or lists
-- All-caps screaming style — use sentence case
-- Intense exercise or gym/strength training topics
-
-### CAPTION REQUIREMENTS:
-Write a full Instagram caption (4-5 paragraphs) that:
-- Paragraph 1: Hook — expand on the title with a surprising or counterintuitive angle
-- Paragraph 2-3: Explain the science/mechanism in accessible, wellness-friendly language. Be specific about what happens in the body (metabolism, organs, brain chemistry, skin, energy, etc.)
-- Paragraph 4: Summarize the takeaway — what the reader can expect if they take action
-- After the paragraphs, add a "Source:" section with a REAL, EXISTING academic reference in this format:
-  Author(s). (Year). Title. Journal, Volume(Issue), Pages.
-  DOI: 10.xxxx/xxxxx
-  THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org. Use well-known published studies. The study must be related to the topic (e.g. if the post is about berries and brain health, cite a study about berry consumption and cognitive function).
-- End with a disclaimer block:
-  ⚠️ Disclaimer:
-  This content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.
-- Separate each section with a blank line for readability
-
-### CAROUSEL SLIDE TEXTS (CRITICAL — this is for Instagram carousel slides 2-4):
-Generate EXACTLY 3 slide texts for each post. These appear as text-only slides (like a tweet/text screenshot) after the main image slide.
-Each slide text should be:
-- A standalone paragraph (3-6 sentences) that reads well on its own
-- Written in a calm, authoritative, educational tone (NOT salesy)
-- Slide 1 text: The core scientific explanation (what happens in the body)
-- Slide 2 text: Deeper mechanism / why it matters / practical context
-- Slide 3 text: Takeaway + call-to-action paragraph. MUST end with a new paragraph: "Follow @{{brandhandle}} to learn more about your {{topic_word}}." where topic_word is one relevant word like "health", "brain", "body", "longevity", "energy", "skin", "sleep", "nutrition" etc. matching the post's subject.
-Note: the {{brandhandle}} placeholder will be replaced by the system — just write it as shown.
-
-### IMAGE PROMPT REQUIREMENTS:
-- Soft, minimal, calming wellness aesthetic
-- Each image prompt MUST be visually DIFFERENT (different setting, different ingredients)
-- Neutral tones, gentle morning sunlight
-- High-end lifestyle photography style
-- CRITICAL COMPOSITION: The main subject (food, ingredients, objects) MUST be positioned in the CENTER and UPPER-CENTER area of the frame (top two-thirds). The BOTTOM THIRD of the image will be covered by text overlay, so NEVER place important content there. Think of it as a portrait-orientation image where the hero subject sits in the middle, with clean negative space below it.
-- Camera angle: slightly overhead / 45-degree top-down perspective preferred to keep subject in upper-center frame
-- Must end with: "No text, no letters, no numbers, no symbols, no logos."
-
-{history_context}
-
-{"Topic hint: " + topic_hint if topic_hint else ""}
-
-### OUTPUT FORMAT (JSON array, no markdown):
-[
-  {{
-    "title": "First health statement title.",
-    "caption": "Hook paragraph expanding on the title with a surprising angle.\\n\\nExplanation paragraph about what happens in the body — metabolism, organs, brain chemistry, etc.\\n\\nMore detail about the mechanism and benefits. Be specific and educational.\\n\\nTakeaway paragraph — what the reader can expect.\\n\\nSource:\\nAuthor, A. B., & Author, C. D. (Year). Study title. Journal Name, Volume(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
-    "slide_texts": [
-      "First slide paragraph explaining the core science. What happens in the body when you do X. Be specific about mechanisms, organs, chemistry. 3-6 sentences.",
-      "Second slide going deeper. Why this matters for women 35+. Practical context, how this connects to daily life and long-term health. 3-6 sentences.",
-      "Third slide with takeaway and action. What to expect and how to start. End with a new paragraph:\\n\\nFollow @{{brandhandle}} to learn more about your health."
-    ],
-    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
-  }},
-  {{
-    "title": "Second completely different health statement.",
-    "caption": "Different hook paragraph...\\n\\nDifferent explanation...\\n\\nMore detail...\\n\\nTakeaway...\\n\\nSource:\\nDifferent Author. (Year). Different study. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
-    "slide_texts": [
-      "Different core science explanation for the second topic. 3-6 sentences.",
-      "Different deeper mechanism paragraph. 3-6 sentences.",
-      "Different takeaway paragraph. End with:\\n\\nFollow @{{brandhandle}} to learn more about your brain."
-    ],
-    "image_prompt": "Completely different setting and subject. No text, no letters, no numbers, no symbols, no logos."
-  }}
-]
-
-Generate exactly {count} posts now:"""
+        prompt = build_post_content_prompt(
+            count=count,
+            history_context=history_context,
+            topic_hint=topic_hint,
+        )
 
         try:
             response = requests.post(
