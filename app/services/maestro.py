@@ -814,7 +814,7 @@ def auto_schedule_job(job_id: str):
             return
 
         variant = job.variant or "dark"
-        scheduler = DatabaseSchedulerService(db)
+        scheduler = DatabaseSchedulerService()
         scheduled_count = 0
 
         for brand, output in (job.brand_outputs or {}).items():
@@ -895,7 +895,7 @@ def schedule_all_ready_reels() -> int:
         if not completed_jobs:
             return 0
 
-        scheduler = DatabaseSchedulerService(db)
+        scheduler = DatabaseSchedulerService()
 
         for job in completed_jobs:
             variant = job.variant or "dark"

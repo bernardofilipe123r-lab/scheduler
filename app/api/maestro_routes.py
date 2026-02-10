@@ -168,9 +168,20 @@ async def resume_maestro(background_tasks: BackgroundTasks):
 
 @router.post("/trigger-burst")
 async def trigger_burst(background_tasks: BackgroundTasks):
-    """Manually trigger the daily burst (ignores pause state and last-run check).
+    """Manually trigger the daily burst. Blocked if already ran today.
     Also schedules any ready-to-schedule reels first."""
-    from app.services.maestro import get_maestro, maestro_log, schedule_all_ready_reels
+    from app.services.maestro import get_maestro, maestro_log, schedule_all_ready_reels, get_last_daily_run
+    from datetime import datetime
+
+    # Check if burst already ran today
+    last_run = get_last_daily_run()
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    if last_run and last_run >= today:
+        return {
+            "status": "already_ran",
+            "message": "Daily burst already ran today. Next burst available tomorrow.",
+            "last_run": last_run.isoformat(),
+        }
 
     # Schedule any ready reels first
     ready_scheduled = 0

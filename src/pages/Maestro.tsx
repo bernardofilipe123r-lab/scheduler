@@ -498,6 +498,8 @@ export function MaestroPage() {
           fetchProposals()
           fetchStatus()
         }, 300000)
+      } else if (result.status === 'already_ran') {
+        toast('Daily burst already ran today. Next burst available tomorrow.', { icon: '⏰', duration: 5000 })
       } else {
         toast.error(result.error || 'Failed to trigger burst')
       }
@@ -505,6 +507,14 @@ export function MaestroPage() {
       toast.error(e?.message || 'Failed to trigger burst')
     }
   }
+
+  const burstRanToday = (() => {
+    const lastRun = maestroStatus?.last_daily_run
+    if (!lastRun) return false
+    const lastDate = new Date(lastRun)
+    const now = new Date()
+    return lastDate.toDateString() === now.toDateString()
+  })()
 
   if (loading) {
     return (
@@ -551,11 +561,16 @@ export function MaestroPage() {
               {/* Trigger Burst button */}
               <button
                 onClick={handleTriggerBurst}
-                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl border border-white/25 text-sm font-semibold transition-all"
-                title="Manually trigger the daily burst (ignores pause & last-run)"
+                disabled={burstRanToday}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${
+                  burstRanToday
+                    ? 'bg-white/10 border-white/15 text-white/40 cursor-not-allowed'
+                    : 'bg-white/20 hover:bg-white/30 border-white/25'
+                }`}
+                title={burstRanToday ? 'Burst already ran today — available tomorrow' : 'Manually trigger the daily burst'}
               >
                 <Sparkles className="w-4 h-4" />
-                Trigger Burst
+                {burstRanToday ? 'Burst Done Today' : 'Trigger Burst'}
               </button>
 
               {/* Optimize Now button */}
