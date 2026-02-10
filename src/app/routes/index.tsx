@@ -14,6 +14,7 @@ import { AnalyticsPage } from '@/pages/Analytics'
 import { SettingsPage } from '@/pages/Settings'
 import { PostsPromptsPage } from '@/pages/PostsPrompts'
 import { ReelsPromptsPage } from '@/pages/ReelsPrompts'
+import { TobyPage } from '@/pages/Toby'
 import { Loader2 } from 'lucide-react'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -69,6 +70,7 @@ export function AppRoutes() {
         <Route path="prompts" element={<PostsPromptsPage />} />
         <Route path="posts-prompts" element={<PostsPromptsPage />} />
         <Route path="reels-prompts" element={<ReelsPromptsPage />} />
+        <Route path="toby" element={<TobyPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>

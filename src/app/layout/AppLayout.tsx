@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2 } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Bot } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -119,6 +119,20 @@ export function AppLayout() {
               >
                 <BarChart3 className="w-4 h-4" />
                 Analytics
+              </NavLink>
+              
+              <NavLink
+                to="/toby"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-600'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`
+                }
+              >
+                <Bot className="w-4 h-4" />
+                Toby
               </NavLink>
               
               {/* Settings Dropdown */}
