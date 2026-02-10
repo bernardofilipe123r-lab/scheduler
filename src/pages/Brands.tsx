@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import { useBrandsList, useBrandConnections, type BrandConnectionStatus } from '@/features/brands'
 import { useBrands, useCreateBrand, useUpdateBrand, type CreateBrandInput, type BrandColors } from '@/features/brands/api/use-brands'
-import { FullPageLoader, Modal } from '@/shared/components'
+import { FullPageLoader, Modal, PasswordGate } from '@/shared/components'
 
 interface BrandInfo {
   id: string
@@ -1396,6 +1396,18 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
 }
 
 export function BrandsPage() {
+  return (
+    <PasswordGate
+      title="Brands Access"
+      description="Enter the password to manage brands"
+      buttonLabel="Unlock Brands"
+    >
+      <BrandsContent />
+    </PasswordGate>
+  )
+}
+
+function BrandsContent() {
   const { data: brandsData, isLoading: brandsLoading } = useBrandsList()
   const { data: connectionsData, isLoading: connectionsLoading } = useBrandConnections()
   
