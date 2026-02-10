@@ -42,6 +42,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     SKIP_PATHS = {
         '/logs',
         '/api/logs',
+        '/toby-logs',
+        '/api/toby-logs',
         '/health',
         '/favicon.ico',
     }
