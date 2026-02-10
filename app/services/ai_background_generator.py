@@ -15,12 +15,15 @@ from PIL import Image
 from app.core.constants import REEL_WIDTH, REEL_HEIGHT, POST_WIDTH, POST_HEIGHT
 
 
-# Global lock to ensure only one DEAPI request at a time (FIFO queue)
-_deapi_lock = threading.Lock()
-_deapi_queue_position = 0
-_deapi_current_position = 0
+# Global semaphore to ensure only one DEAPI request at a time
+# Using a Semaphore instead of a custom FIFO queue to prevent deadlocks
+_deapi_semaphore = threading.Semaphore(1)
 _deapi_request_count = 0  # Track total requests for debugging
 _deapi_last_request_time = None  # Track timing
+_deapi_lock = threading.Lock()  # Only for protecting counters, NOT for queuing
+
+# Queue acquisition timeout — prevents permanent deadlock
+QUEUE_TIMEOUT = 90  # 1.5 minutes max wait for queue position
 
 # Retry configuration for 429 errors
 MAX_RETRIES = 5
@@ -41,27 +44,24 @@ class AIBackgroundGenerator:
         self.base_url = "https://api.deapi.ai/api/v1/client"
     
     def _acquire_queue_position(self):
-        """Get a position in the FIFO queue and wait for our turn."""
-        global _deapi_queue_position, _deapi_current_position
-        
-        with _deapi_lock:
-            my_position = _deapi_queue_position
-            _deapi_queue_position += 1
-        
-        # Wait for our turn
-        while True:
-            with _deapi_lock:
-                if _deapi_current_position == my_position:
-                    break
-            time.sleep(0.5)  # Poll every 500ms
-        
-        return my_position
+        """Acquire the semaphore to make a DEAPI request. Times out after QUEUE_TIMEOUT seconds."""
+        acquired = _deapi_semaphore.acquire(timeout=QUEUE_TIMEOUT)
+        if not acquired:
+            print(f"⚠️  DEAPI queue timeout after {QUEUE_TIMEOUT}s — forcing through (previous request likely deadlocked)", flush=True)
+            # Force-reset the semaphore to recover from deadlock
+            try:
+                _deapi_semaphore.release()
+            except ValueError:
+                pass  # Already released
+            _deapi_semaphore.acquire(timeout=10)
+        return 0  # Position no longer tracked
     
     def _release_queue_position(self):
-        """Release our position and let the next request proceed."""
-        global _deapi_current_position
-        with _deapi_lock:
-            _deapi_current_position += 1
+        """Release the semaphore so the next request can proceed."""
+        try:
+            _deapi_semaphore.release()
+        except ValueError:
+            pass  # Already released — safe to ignore
     
     def _request_with_retry(self, method: str, url: str, headers: dict, **kwargs) -> requests.Response:
         """
@@ -248,7 +248,7 @@ class AIBackgroundGenerator:
         
         # FIFO Queue: Wait for our turn to call DEAPI
         queue_pos = self._acquire_queue_position()
-        print(f"🔒 Acquired DEAPI queue position: {queue_pos}")
+        print(f"🔒 Acquired DEAPI queue position", flush=True)
         
         try:
             if progress_callback:
@@ -376,9 +376,14 @@ class AIBackgroundGenerator:
                     print(f"✅ Successfully generated {REEL_WIDTH}x{REEL_HEIGHT} background for {brand_name}")
                     print(f"⏱️  Total time: {total_duration:.1f}s (API: {api_duration:.1f}s, Download: {download_duration:.1f}s)")
                     
-                    # Release queue position before returning
-                    self._release_queue_position()
-                    print(f"🔓 Released DEAPI queue position: {queue_pos}")
+                    total_duration = time.time() - start_time
+                    
+                    if progress_callback:
+                        progress_callback(f"Background generated in {total_duration:.1f}s total", 100)
+                    
+                    print(f"✅ Successfully generated {REEL_WIDTH}x{REEL_HEIGHT} background for {brand_name}")
+                    print(f"⏱️  Total time: {total_duration:.1f}s (API: {api_duration:.1f}s, Download: {download_duration:.1f}s)")
+                    
                     return image
                 
                 elif status == "failed":
@@ -396,17 +401,14 @@ class AIBackgroundGenerator:
             raise RuntimeError(f"Generation timed out after {max_attempts} attempts (~{max_attempts * 2}s). The deAPI server may be overloaded. Try again or use a shorter prompt.")
             
         except requests.exceptions.Timeout as e:
-            self._release_queue_position()
-            print(f"🔓 Released DEAPI queue position: {queue_pos} (timeout error)")
             raise RuntimeError(f"Network timeout connecting to deAPI: {str(e)}. Check your internet connection.")
         except requests.exceptions.RequestException as e:
-            self._release_queue_position()
-            print(f"🔓 Released DEAPI queue position: {queue_pos} (request error)")
             raise RuntimeError(f"Network error with deAPI: {str(e)}")
         except Exception as e:
-            self._release_queue_position()
-            print(f"🔓 Released DEAPI queue position: {queue_pos} (general error)")
             raise RuntimeError(f"Failed to generate AI background: {str(e)}")
+        finally:
+            self._release_queue_position()
+            print(f"🔓 Released DEAPI queue position", flush=True)
 
     def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None) -> Image.Image:
         """
@@ -452,7 +454,7 @@ class AIBackgroundGenerator:
             progress_callback("Waiting in queue for deAPI...", 25)
         
         queue_pos = self._acquire_queue_position()
-        print(f"🔒 Acquired DEAPI queue position: {queue_pos}")
+        print(f"🔒 Acquired DEAPI queue position", flush=True)
         
         try:
             if progress_callback:
@@ -552,7 +554,6 @@ class AIBackgroundGenerator:
                     print(f"✅ HQ post background: {POST_WIDTH}x{POST_HEIGHT} for {brand_name}")
                     print(f"⏱️  Total: {total_duration:.1f}s (API: {api_duration:.1f}s)")
                     
-                    self._release_queue_position()
                     return image
                 
                 elif status == "failed":
@@ -570,11 +571,11 @@ class AIBackgroundGenerator:
             raise RuntimeError(f"HQ generation timed out after {max_attempts * 2}s")
             
         except requests.exceptions.Timeout as e:
-            self._release_queue_position()
             raise RuntimeError(f"Network timeout: {str(e)}")
         except requests.exceptions.RequestException as e:
-            self._release_queue_position()
             raise RuntimeError(f"Network error: {str(e)}")
         except Exception as e:
-            self._release_queue_position()
             raise RuntimeError(f"Failed to generate HQ post background: {str(e)}")
+        finally:
+            self._release_queue_position()
+            print(f"🔓 Released DEAPI queue position", flush=True)

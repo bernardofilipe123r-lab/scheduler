@@ -10,10 +10,12 @@ Settings are stored in the database and can be updated via the UI.
 """
 import os
 import json
+import hashlib
+import secrets
 import logging
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,13 @@ logger = logging.getLogger(__name__)
 
 # Create router for settings endpoints
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+# Default password for settings access
+DEFAULT_SETTINGS_PASSWORD = "https://scheduler-production-29d5.up.railway.app"
+
+# In-memory store for valid session tokens (cleared on restart)
+_valid_tokens: Dict[str, bool] = {}
 
 
 # Environment variable name overrides (when the DB key doesn't match the env var name)
@@ -169,6 +178,14 @@ DEFAULT_SETTINGS = [
         "value_type": "string",
         "sensitive": False
     },
+    {
+        "key": "settings_access_password",
+        "value": "",
+        "description": "Password required to access the Settings page (leave empty to use default)",
+        "category": "security",
+        "value_type": "string",
+        "sensitive": True
+    },
 ]
 
 
@@ -186,6 +203,11 @@ class BulkUpdateSettingsRequest(BaseModel):
     settings: Dict[str, str]  # key -> value
 
 
+class VerifyAccessRequest(BaseModel):
+    """Request to verify settings access password."""
+    password: str
+
+
 class SettingResponse(BaseModel):
     """Response for a single setting."""
     key: str
@@ -200,6 +222,27 @@ class SettingResponse(BaseModel):
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def _get_settings_password(db: Session) -> str:
+    """Get the current settings access password."""
+    setting = db.query(AppSettings).filter(AppSettings.key == "settings_access_password").first()
+    if setting and setting.value and setting.value != "***REDACTED***":
+        return setting.value
+    return os.getenv("SETTINGS_ACCESS_PASSWORD", DEFAULT_SETTINGS_PASSWORD)
+
+
+def _verify_settings_token(
+    x_settings_token: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> bool:
+    """Dependency to verify settings access token on protected endpoints."""
+    if not x_settings_token or x_settings_token not in _valid_tokens:
+        raise HTTPException(
+            status_code=401,
+            detail="Settings access denied. Please enter the password."
+        )
+    return True
+
 
 def _get_env_key(key: str) -> str:
     """Get the environment variable name for a setting key."""
@@ -289,10 +332,37 @@ def seed_settings_if_needed(db: Session) -> int:
 # ENDPOINTS
 # ============================================================================
 
+@router.post("/verify-access")
+async def verify_access(
+    request: VerifyAccessRequest,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Verify the settings access password and return a session token.
+    """
+    # Seed settings first so password setting exists
+    seed_settings_if_needed(db)
+    
+    correct_password = _get_settings_password(db)
+    
+    if request.password != correct_password:
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    # Generate a session token
+    token = secrets.token_urlsafe(32)
+    _valid_tokens[token] = True
+    
+    return {
+        "success": True,
+        "token": token
+    }
+
+
 @router.get("")
 async def list_settings(
     category: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_verify_settings_token)
 ) -> Dict[str, Any]:
     """
     Get all settings.
@@ -362,7 +432,10 @@ async def list_settings(
 
 
 @router.get("/categories")
-async def get_categories(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def get_categories(
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_verify_settings_token)
+) -> Dict[str, Any]:
     """Get list of all setting categories."""
     from sqlalchemy import distinct
     
@@ -376,7 +449,8 @@ async def get_categories(db: Session = Depends(get_db)) -> Dict[str, Any]:
 @router.get("/{key}")
 async def get_setting(
     key: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_verify_settings_token)
 ) -> Dict[str, Any]:
     """Get a single setting by key."""
     setting = db.query(AppSettings).filter(AppSettings.key == key).first()
@@ -410,7 +484,8 @@ async def get_setting(
 async def update_setting(
     key: str,
     request: UpdateSettingRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_verify_settings_token)
 ) -> Dict[str, Any]:
     """Update a single setting."""
     setting = db.query(AppSettings).filter(AppSettings.key == key).first()
@@ -456,7 +531,8 @@ async def update_setting(
 @router.post("/bulk")
 async def bulk_update_settings(
     request: BulkUpdateSettingsRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_verify_settings_token)
 ) -> Dict[str, Any]:
     """
     Update multiple settings at once.
@@ -493,7 +569,10 @@ async def bulk_update_settings(
 
 
 @router.post("/seed")
-async def seed_settings(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def seed_settings(
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_verify_settings_token)
+) -> Dict[str, Any]:
     """
     Seed default settings if they don't exist.
     
@@ -519,7 +598,8 @@ async def seed_settings(db: Session = Depends(get_db)) -> Dict[str, Any]:
 @router.delete("/{key}")
 async def delete_setting(
     key: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: bool = Depends(_verify_settings_token)
 ) -> Dict[str, Any]:
     """
     Delete a setting (reset to no value).
