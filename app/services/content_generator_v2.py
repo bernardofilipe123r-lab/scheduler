@@ -571,18 +571,38 @@ class ContentGeneratorV2:
         if not self.api_key:
             return self._fallback_post_title()
         
-        # Get recent titles to avoid repetition (from DB + in-memory)
+        # Get recent titles to avoid repetition (from DB + in-memory _recent_titles)
         db_titles = self._get_recent_post_titles_from_db(25)
-        recent = self._get_recent_outputs()
         history_context = ""
         all_recent = list(db_titles)
-        if recent:
-            for r in recent:
-                t = r.get("title", "")
-                if t and t not in all_recent:
-                    all_recent.append(t)
+        # Include in-memory recent titles (written by _add_to_history)
+        for t in self._recent_titles:
+            if t and t not in all_recent:
+                all_recent.append(t)
         if all_recent:
             history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
+        
+        # Pick a random topic bucket to force variety between calls
+        all_topics = [
+            "Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)",
+            "Teas and warm drinks (green tea, chamomile, matcha, golden milk, herbal infusions)",
+            "Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics, ashwagandha)",
+            "Sleep rituals and evening routines",
+            "Morning wellness routines (lemon water, journaling, light stretching)",
+            "Skin health, collagen, and anti-aging nutrition",
+            "Gut health, digestion, and bloating relief",
+            "Hormone balance and menopause support through nutrition",
+            "Stress relief and mood-boosting foods/habits",
+            "Hydration and detox drinks",
+            "Brain health and memory-supporting nutrients",
+            "Heart-healthy foods and natural remedies",
+        ]
+        # Avoid recently used topics
+        available_topics = [t for t in all_topics if not any(
+            rt.lower() in t.lower() or t.lower() in rt.lower()
+            for rt in self._recent_topics[-5:]
+        )] or all_topics
+        forced_topic = random.choice(available_topics)
         
         prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
 
@@ -599,7 +619,10 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 - Do NOT lie, but dramatize slightly to spark discussion (comments, shares, saves)
 - Do NOT end the title with a period (.)  — end cleanly without punctuation or with a question mark only
 
-### TOPICS TO COVER (pick one):
+### TOPIC FOR THIS POST (mandatory — write about this topic):
+{topic_hint if topic_hint else forced_topic}
+
+### OTHER VALID TOPICS (for reference only):
 - Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)
 - Teas and warm drinks (green tea, chamomile, matcha, golden milk, herbal infusions)
 - Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics, ashwagandha)
@@ -656,7 +679,7 @@ Write a full Instagram caption (4-5 paragraphs) that:
 
 {history_context}
 
-{"Topic hint: " + topic_hint if topic_hint else "Generate on any relevant health/wellness topic for women 35+. Focus on: foods, superfoods, teas, warm drinks, supplements, vitamins, collagen, sleep rituals, morning routines, skin nutrition, gut health, bloating, hormone-balancing foods, mood-boosting nutrients, hydration, detox, brain-healthy foods, heart-healthy ingredients."}
+IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title from the PREVIOUSLY GENERATED list.
 
 ### IMAGE PROMPT REQUIREMENTS:
 - Soft, minimal, calming wellness aesthetic
@@ -687,7 +710,7 @@ Generate now:"""
                     "messages": [
                         {"role": "user", "content": prompt}
                     ],
-                    "temperature": 0.9,
+                    "temperature": 1.0,
                     "max_tokens": 2000
                 },
                 timeout=30
@@ -712,8 +735,11 @@ Generate now:"""
                     if result.get("title"):
                         result["title"] = result["title"].rstrip(".")
                     
-                    # Add to history
-                    self._add_to_history({"title": result.get("title", "")})
+                    # Add to history (title + topic for anti-repetition)
+                    self._add_to_history({
+                        "title": result.get("title", ""),
+                        "topic_category": topic_hint or forced_topic
+                    })
                     
                     return result
                 except json.JSONDecodeError as e:
@@ -779,16 +805,14 @@ Generate now:"""
         if not self.api_key or count <= 0:
             return [self._fallback_post_title() for _ in range(max(count, 1))]
 
-        # Get recent titles to avoid repetition (from DB + in-memory)
+        # Get recent titles to avoid repetition (from DB + in-memory _recent_titles)
         db_titles = self._get_recent_post_titles_from_db(25)
-        recent = self._get_recent_outputs()
         history_context = ""
         all_recent = list(db_titles)
-        if recent:
-            for r in recent:
-                t = r.get("title", "")
-                if t and t not in all_recent:
-                    all_recent.append(t)
+        # Include in-memory recent titles (written by _add_to_history)
+        for t in self._recent_titles:
+            if t and t not in all_recent:
+                all_recent.append(t)
         if all_recent:
             history_context = f"""\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{chr(10).join('- ' + t for t in all_recent[-25:])}\n"""
 
