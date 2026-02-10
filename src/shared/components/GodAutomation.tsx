@@ -225,6 +225,14 @@ function formatSlot(dt: Date): string {
 export function GodAutomation({ brands, settings, onClose }: Props) {
   const NUM_BRANDS = brands.length
 
+  // Lock body scroll while overlay is open
+  useEffect(() => {
+    const html = document.documentElement
+    const prev = html.style.overflow
+    html.style.overflow = 'hidden'
+    return () => { html.style.overflow = prev }
+  }, [])
+
   // ── Core state ─────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('batch_select')
   const [batchSize, setBatchSize] = useState(4)
@@ -430,12 +438,12 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     setPreGenStartTime(Date.now())
     await fetchOccupiedSlots()
 
-    const FIRST_BATCH = 2 // Only generate 2 posts before review starts
+    const FIRST_BATCH = 5 // Generate 5 posts before review starts
     const firstCount = Math.min(FIRST_BATCH, q.length)
     setPreGenProgress(10)
     setPreGenStep('titles')
 
-    // 1. Generate just 2 titles — fast
+    // 1. Generate 5 titles
     console.log(`[GOD] Generating first ${firstCount} titles...`)
     let firstPosts: Array<{ title: string; caption: string; image_prompt: string }>
     try {
@@ -468,15 +476,17 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
     }
     setQueue(updatedQ)
     queueRef.current = updatedQ
-    setPreGenProgress(40)
+    setPreGenProgress(30)
     setPreGenStep('images')
 
-    // 2. Generate 2 images in parallel — fast
+    // 2. Generate 5 images in parallel
     console.log(`[GOD] Generating first ${firstCount} images...`)
+    let imgDone = 0
     await Promise.all(
       Array.from({ length: firstCount }, (_, i) =>
         generateImageForPost(i).then(() => {
-          setPreGenProgress((prev) => Math.min(95, prev + 25))
+          imgDone++
+          setPreGenProgress(30 + Math.round((imgDone / firstCount) * 65))
         }),
       ),
     )
@@ -845,7 +855,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
   //  RENDER
   // ═══════════════════════════════════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex flex-col overflow-hidden" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-white/5 shrink-0">
         <div className="flex items-center gap-3">
@@ -901,7 +911,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
           <PreGenProgress
             progress={preGenProgress}
             activeGens={activeGens}
-            totalPosts={2}
+            totalPosts={5}
             step={preGenStep}
             startTime={preGenStartTime}
           />
@@ -951,7 +961,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                         <textarea
                           value={rejectNote}
                           onChange={(e) => setRejectNote(e.target.value)}
-                          placeholder="Optional note..."
+                          placeholder="Optional note (details)..."
                           rows={2}
                           className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 placeholder:text-white/30 resize-none focus:outline-none focus:border-white/20"
                         />
@@ -988,7 +998,7 @@ export function GodAutomation({ brands, settings, onClose }: Props) {
                         <textarea
                           value={rejectNote}
                           onChange={(e) => setRejectNote(e.target.value)}
-                          placeholder="Optional note..."
+                          placeholder="Optional note (details)..."
                           rows={2}
                           className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 placeholder:text-white/30 resize-none focus:outline-none focus:border-white/20"
                         />
@@ -1306,7 +1316,7 @@ function PreGenProgress({
     step === 'slots'
       ? 'Checking schedule slots...'
       : step === 'titles'
-        ? 'Generating 2 titles...'
+        ? `Generating ${totalPosts} titles...`
         : `Generating ${totalPosts} images...`
 
   // ETA calculation
@@ -1359,7 +1369,7 @@ function PreGenProgress({
       </div>
       <h2 className="text-xl font-bold text-gray-900 mb-1">Preparing first posts</h2>
       <p className="text-gray-500 text-sm mb-3">
-        Just {totalPosts} posts to start — rest generates while you swipe
+        Just {totalPosts} posts to start — rest generates while you review
       </p>
       <div className="flex flex-col items-center gap-1.5 text-xs text-gray-400">
         <span className="flex items-center gap-1.5">
