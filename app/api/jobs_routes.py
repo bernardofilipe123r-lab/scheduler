@@ -646,6 +646,7 @@ class BrandContentUpdate(BaseModel):
     """Update a brand's title and/or caption."""
     title: Optional[str] = None
     caption: Optional[str] = None
+    slide_texts: Optional[list[str]] = None
 
 
 @router.patch(
@@ -668,6 +669,8 @@ async def update_brand_content(job_id: str, brand: str, request: BrandContentUpd
                 updates["title"] = request.title
             if request.caption is not None:
                 updates["caption"] = request.caption
+            if request.slide_texts is not None:
+                updates["slide_texts"] = request.slide_texts
 
             if updates:
                 manager.update_brand_output(job_id, brand, updates)

@@ -103,7 +103,7 @@ export const jobsApi = {
     return transformJob(job)
   },
 
-  updateBrandContent: async (id: string, brand: BrandName, data: { title?: string; caption?: string }) => {
+  updateBrandContent: async (id: string, brand: BrandName, data: { title?: string; caption?: string; slide_texts?: string[] }) => {
     return patch<{ success: boolean }>(`/jobs/${id}/brand/${brand}/content`, data)
   },
 

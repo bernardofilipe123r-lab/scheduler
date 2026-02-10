@@ -139,7 +139,7 @@ export function useUpdateBrandContent() {
     mutationFn: ({ id, brand, data }: {
       id: string
       brand: BrandName
-      data: { title?: string; caption?: string }
+      data: { title?: string; caption?: string; slide_texts?: string[] }
     }) => jobsApi.updateBrandContent(id, brand, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })

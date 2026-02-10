@@ -30,6 +30,7 @@ export interface BrandOutput {
   background_data?: string  // base64 data URL for post background
   title?: string            // Per-brand unique title (posts)
   ai_prompt?: string        // Per-brand image prompt (posts)
+  slide_texts?: string[]    // Carousel text slide content (posts)
 }
 
 // Job entity

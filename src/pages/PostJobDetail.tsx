@@ -20,6 +20,8 @@ import {
   Settings2,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Save,
   RotateCcw,
   Pencil,
@@ -53,6 +55,7 @@ import {
   saveGeneralSettings as persistSettings,
   PostCanvas,
 } from '@/shared/components/PostCanvas'
+import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
 import type { Job, BrandName, BrandOutput } from '@/shared/types'
 
@@ -121,8 +124,15 @@ export function PostJobDetail({ job, refetch }: Props) {
   // Expanded captions (track which brands have expanded captions)
   const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(new Set())
 
+  // Per-brand carousel slide index (0 = cover image, 1+ = text slides)
+  const [brandSlideIndex, setBrandSlideIndex] = useState<Record<string, number>>({})
+
+  // Slide text editing in edit modal
+  const [editSlideTexts, setEditSlideTexts] = useState<string[]>([])
+
   // Stage refs for export (one per brand)
   const stageRefs = useRef<Map<string, Konva.Stage>>(new Map())
+  const textSlideRefs = useRef<Map<string, Konva.Stage>>(new Map())
 
   const updateLayout = (updates: Partial<LayoutConfig>) => {
     setSettings((prev) => ({
@@ -170,6 +180,7 @@ export function PostJobDetail({ job, refetch }: Props) {
     setEditTitle(output?.title || job.title || '')
     setEditCaption(output?.caption || '')
     setEditPrompt(output?.ai_prompt || '')
+    setEditSlideTexts([...(output?.slide_texts || [])])
     setEditingBrand(brand)
   }, [job])
 
@@ -179,7 +190,11 @@ export function PostJobDetail({ job, refetch }: Props) {
       await updateBrandContent.mutateAsync({
         id: job.id,
         brand: editingBrand as BrandName,
-        data: { title: editTitle, caption: editCaption },
+        data: {
+          title: editTitle,
+          caption: editCaption,
+          slide_texts: editSlideTexts,
+        },
       })
       toast.success('Content updated!')
       refetch()
@@ -309,6 +324,12 @@ export function PostJobDetail({ job, refetch }: Props) {
       }
 
       for (const brand of job.brands) {
+        const output = job.brand_outputs[brand as BrandName]
+
+        // Ensure we're on cover slide for primary capture
+        setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+        await new Promise((r) => setTimeout(r, 100))
+
         const stage = stageRefs.current.get(brand)
         if (!stage) { failed++; continue }
 
@@ -316,8 +337,24 @@ export function PostJobDetail({ job, refetch }: Props) {
           pixelRatio: 1 / GRID_PREVIEW_SCALE,
           mimeType: 'image/png',
         })
+
+        // Capture carousel text slides
+        const slideTexts = output?.slide_texts || []
+        const carouselImages: string[] = []
+        for (let s = 0; s < slideTexts.length; s++) {
+          setBrandSlideIndex((prev) => ({ ...prev, [brand]: s + 1 }))
+          await new Promise((r) => setTimeout(r, 150))
+          const textStage = textSlideRefs.current.get(brand)
+          if (textStage) {
+            carouselImages.push(
+              textStage.toDataURL({ pixelRatio: 1 / GRID_PREVIEW_SCALE, mimeType: 'image/png' })
+            )
+          }
+        }
+        // Reset back to cover
+        setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+
         const offset = POST_BRAND_OFFSETS[brand] || 0
-        const output = job.brand_outputs[brand as BrandName]
         const brandTitle = output?.title || job.title
 
         // 2) Find next free slot: base hours 0 (12AM) and 12 (12PM), with collision avoidance
@@ -353,6 +390,8 @@ export function PostJobDetail({ job, refetch }: Props) {
               title: brandTitle,
               caption: output?.caption || '',
               image_data: imageData,
+              carousel_images: carouselImages,
+              slide_texts: slideTexts,
               schedule_time: scheduleTime.toISOString(),
             }),
           })
@@ -526,6 +565,9 @@ export function PostJobDetail({ job, refetch }: Props) {
           const brandTitle = getBrandTitle(brand)
           const brandCaption = output?.caption || ''
           const logoUrl = brandLogos[brand] || null
+          const slideTexts = output?.slide_texts || []
+          const totalSlides = 1 + slideTexts.length
+          const currentSlide = brandSlideIndex[brand] || 0
 
           return (
             <div
@@ -605,23 +647,35 @@ export function PostJobDetail({ job, refetch }: Props) {
                 </p>
               )}
 
-              {/* Canvas */}
+              {/* Canvas with carousel navigation */}
               <div className="rounded-lg overflow-hidden border border-gray-100">
                 {status === 'completed' || status === 'scheduled' ? (
-                  <PostCanvas
-                    brand={brand}
-                    title={brandTitle}
-                    backgroundImage={bgUrl}
-                    settings={{
-                      ...settings,
-                      fontSize: getBrandFontSize(brand),
-                    }}
-                    scale={GRID_PREVIEW_SCALE}
-                    logoUrl={logoUrl}
-                    stageRef={(node) => {
-                      if (node) stageRefs.current.set(brand, node)
-                    }}
-                  />
+                  currentSlide === 0 ? (
+                    <PostCanvas
+                      brand={brand}
+                      title={brandTitle}
+                      backgroundImage={bgUrl}
+                      settings={{
+                        ...settings,
+                        fontSize: getBrandFontSize(brand),
+                      }}
+                      scale={GRID_PREVIEW_SCALE}
+                      logoUrl={logoUrl}
+                      stageRef={(node) => {
+                        if (node) stageRefs.current.set(brand, node)
+                      }}
+                    />
+                  ) : (
+                    <CarouselTextSlide
+                      brand={brand}
+                      text={slideTexts[currentSlide - 1] || ''}
+                      isLastSlide={currentSlide === slideTexts.length}
+                      scale={GRID_PREVIEW_SCALE}
+                      stageRef={(node) => {
+                        if (node) textSlideRefs.current.set(brand, node)
+                      }}
+                    />
+                  )
                 ) : (
                   <div
                     style={{
@@ -640,6 +694,42 @@ export function PostJobDetail({ job, refetch }: Props) {
                   </div>
                 )}
               </div>
+
+              {/* Carousel slide navigation */}
+              {(status === 'completed' || status === 'scheduled') && slideTexts.length > 0 && (
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <button
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: Math.max(0, currentSlide - 1) }))}
+                    disabled={currentSlide === 0}
+                    className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalSlides }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: i }))}
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${
+                          i === currentSlide
+                            ? 'bg-blue-500 scale-125'
+                            : 'bg-gray-300 hover:bg-gray-400'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: Math.min(slideTexts.length, currentSlide + 1) }))}
+                    disabled={currentSlide >= slideTexts.length}
+                    className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                  <span className="text-[10px] text-gray-400 ml-1">
+                    {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`}/{totalSlides}
+                  </span>
+                </div>
+              )}
 
               {/* Caption preview */}
               {brandCaption && (status === 'completed' || status === 'scheduled') && (
@@ -862,7 +952,36 @@ export function PostJobDetail({ job, refetch }: Props) {
               />
             </div>
 
-            {/* Save title/caption */}
+            {/* Carousel Slide Texts */}
+            {editSlideTexts.length > 0 && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Carousel Slides ({editSlideTexts.length})
+                </label>
+                <div className="space-y-3">
+                  {editSlideTexts.map((text, idx) => (
+                    <div key={idx}>
+                      <label className="text-xs text-gray-500 block mb-1">
+                        Slide {idx + 1} {idx === editSlideTexts.length - 1 ? '(CTA)' : ''}
+                      </label>
+                      <textarea
+                        value={text}
+                        onChange={(e) => {
+                          const updated = [...editSlideTexts]
+                          updated[idx] = e.target.value
+                          setEditSlideTexts(updated)
+                        }}
+                        rows={4}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-y leading-relaxed"
+                        placeholder={`Slide ${idx + 1} text...`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Save title/caption/slides */}
             <button
               onClick={saveEditBrand}
               disabled={updateBrandContent.isPending}
@@ -873,7 +992,7 @@ export function PostJobDetail({ job, refetch }: Props) {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              Save Title & Caption
+              Save Content
             </button>
 
             <hr className="border-gray-200" />

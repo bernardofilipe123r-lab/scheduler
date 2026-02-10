@@ -609,6 +609,7 @@ class JobManager:
                         "title": post_data.get("title", job.title),
                         "caption": post_data.get("caption", ""),
                         "ai_prompt": post_data.get("image_prompt", ""),
+                        "slide_texts": post_data.get("slide_texts", []),
                         "status": "pending",
                     })
                     print(f"   📝 {brand}: {post_data.get('title', '?')[:60]}...", flush=True)
