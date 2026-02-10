@@ -17,7 +17,10 @@ from app.api.brands_routes import router as brands_router  # Legacy routes
 from app.api.brands_routes_v2 import router as brands_v2_router  # New database-backed routes
 from app.api.settings_routes import router as settings_router
 from app.api.analytics_routes import router as analytics_router
+from app.api.logs_routes import router as logs_router
 from app.services.db_scheduler import DatabaseSchedulerService
+from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
+from app.services.logging_middleware import RequestLoggingMiddleware
 from app.db_connection import init_db
 
 # Load environment variables from .env file
@@ -69,6 +72,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add request logging middleware (captures ALL HTTP requests/responses with full detail)
+app.add_middleware(RequestLoggingMiddleware)
+
 # Include API routers
 app.include_router(reels_router)
 app.include_router(jobs_router)
@@ -77,6 +83,7 @@ app.include_router(brands_router, prefix="/api")  # Legacy routes for backward c
 app.include_router(brands_v2_router, prefix="/api/v2")  # New database-backed routes
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
+app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 
 # Mount static files - use absolute path for Railway volume support
 # The output directory is at /app/output when running in Docker
@@ -173,11 +180,27 @@ async def health_check():
 async def startup_event():
     """Run startup tasks."""
     import sys
+    
+    # Initialize persistent logging service FIRST (captures everything from here on)
+    logging_service = get_logging_service()
+    logging_service.log_system_event(
+        'startup', 
+        f'Application starting - Deployment: {DEPLOYMENT_ID}',
+        details={
+            'python_version': sys.version,
+            'port': os.getenv('PORT', 'not set'),
+            'deployment_id': DEPLOYMENT_ID,
+            'database_url': 'set' if os.getenv('DATABASE_URL') else 'NOT SET',
+        }
+    )
+    
     print("🚀 Starting Instagram Reels Automation API...", flush=True)
     print(f"📍 Python: {sys.version}", flush=True)
     print(f"📍 PORT: {os.getenv('PORT', 'not set')}", flush=True)
+    print(f"📍 Deployment: {DEPLOYMENT_ID}", flush=True)
     print("📝 Documentation available at: /docs", flush=True)
     print("🔍 Health check available at: /health", flush=True)
+    print("📋 Logs dashboard available at: /logs", flush=True)
     
     # Initialize database
     print("💾 Initializing database...", flush=True)
@@ -532,10 +555,24 @@ async def startup_event():
     # Also run analytics refresh once on startup (after a short delay)
     scheduler.add_job(refresh_analytics, 'date', run_date=datetime.now(), id='analytics_startup')
     
+    # Auto-cleanup old logs every 24 hours (keep 7 days of logs)
+    def cleanup_old_logs():
+        """Cleanup logs older than 7 days to prevent unbounded DB growth."""
+        try:
+            log_svc = get_logging_service()
+            deleted = log_svc.cleanup_old_logs(retention_days=7)
+            if deleted > 0:
+                print(f"🧹 Cleaned up {deleted} old log entries", flush=True)
+        except Exception as e:
+            print(f"⚠️ Log cleanup failed: {e}", flush=True)
+    
+    scheduler.add_job(cleanup_old_logs, 'interval', hours=24, id='log_cleanup')
+    
     scheduler.start()
     
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
     print("✅ Analytics auto-refresh scheduled (every 12 hours)", flush=True)
+    print("✅ Log cleanup scheduled (every 24 hours, 7-day retention)", flush=True)
     print("🎉 Startup complete! App is ready.", flush=True)
     
     # Store scheduler for shutdown
@@ -546,6 +583,14 @@ async def startup_event():
 async def shutdown_event():
     """Run shutdown tasks."""
     print("👋 Shutting down Instagram Reels Automation API...")
+    
+    # Log shutdown event
+    try:
+        logging_service = get_logging_service()
+        logging_service.log_system_event('shutdown', 'Application shutting down')
+        logging_service.shutdown()
+    except Exception:
+        pass
     
     # Shutdown scheduler
     if hasattr(app.state, 'scheduler'):
