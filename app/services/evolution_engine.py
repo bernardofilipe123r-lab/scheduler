@@ -2,20 +2,25 @@
 Evolution Engine — The brain that makes AI agents learn, adapt, and compete.
 
 Phase 2+3: Per-agent performance attribution + learning loop.
+Phase 4: Weekly natural selection — death/rebirth/gene pool.
 
 Components:
   - FeedbackEngine: Attributes published content performance back to agents,
     calculates survival scores, identifies best/worst strategies.
   - AdaptationEngine: Mutates agent DNA (strategy weights, temperature) based
     on performance data. Conservative mutations: ±5% weight, ±0.03 temperature.
+  - SelectionEngine: Weekly natural selection — ranks agents, retires failures,
+    spawns replacements from gene pool with crossover mutations.
   - Survival score formula:
       views(40%) + engagement_rate(30%) + consistency(20%) + examiner_avg(10%)
 
 Called from Maestro's _feedback_cycle() every 6 hours.
+Weekly selection from _evolution_cycle() every Sunday 2 AM.
 """
 
 import json
 import logging
+import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from statistics import mean, stdev
@@ -32,6 +37,37 @@ MIN_WEIGHT = 0.05                # No strategy can drop below 5%
 MUTATION_CONFIDENCE_THRESHOLD = 0.70  # Only mutate if confidence >= 70%
 MIN_POSTS_FOR_MUTATION = 3       # Need at least 3 published posts to learn from
 STRATEGY_DOMINANCE_RATIO = 1.5   # Best must be 50%+ better than worst to shift
+
+
+# ── Cool Agent Names ──────────────────────────────────────────
+# Memorable, mythological/tech-inspired names instead of "Agent_hash"
+AGENT_NAMES = [
+    "Atlas", "Nova", "Cipher", "Orion", "Vex", "Flux", "Nyx",
+    "Zephyr", "Echo", "Blaze", "Helix", "Raven", "Pulse", "Storm",
+    "Drift", "Ember", "Phantom", "Axiom", "Prism", "Titan",
+    "Volt", "Frost", "Apex", "Vector", "Hex", "Pixel", "Quasar",
+    "Nebula", "Onyx", "Specter", "Cortex", "Enigma", "Zenith",
+    "Havoc", "Wren", "Sable", "Lux", "Nimbus", "Surge", "Wraith",
+]
+
+
+def pick_agent_name() -> str:
+    """Pick a unique cool name not already used by an active agent."""
+    from app.db_connection import SessionLocal
+    from app.models import AIAgent
+
+    db = SessionLocal()
+    try:
+        existing = {a.display_name for a in db.query(AIAgent).filter(AIAgent.active == True).all()}
+        available = [n for n in AGENT_NAMES if n not in existing]
+        if available:
+            return random.choice(available)
+        # All names taken — generate numbered variant
+        base = random.choice(AGENT_NAMES)
+        suffix = random.randint(2, 99)
+        return f"{base}-{suffix}"
+    finally:
+        db.close()
 
 
 class FeedbackEngine:
@@ -815,18 +851,15 @@ class SelectionEngine:
             inheritance_source = None
             logger.info("🧬 Spawning with random DNA (genetic diversity)")
 
-        # Generate new unique agent_id
-        import hashlib
-        timestamp = datetime.utcnow().strftime("%m%d%H%M")
-        hash_suffix = hashlib.md5(f"{brand_id}{timestamp}".encode()).hexdigest()[:4]
-        new_agent_id = f"agent_{hash_suffix}"
-        new_name = f"Agent-{hash_suffix.upper()}"
-        prefix = new_name.upper()[:6].replace("-", "")
+        # Generate new unique agent identity with a cool name
+        cool_name = pick_agent_name()
+        new_agent_id = cool_name.lower().replace("-", "_")
+        prefix = cool_name.upper()[:6].replace("-", "")
 
         # Create the new agent
         new_agent = AIAgent(
             agent_id=new_agent_id,
-            display_name=new_name,
+            display_name=cool_name,
             personality=personality,
             temperature=temperature,
             variant=variant,
@@ -868,11 +901,11 @@ class SelectionEngine:
             survival_score_at=0.0,
         ))
 
-        logger.info(f"🐣 New agent born: {new_agent_id} for {brand_id} (replacing {dead_agent.agent_id})")
+        logger.info(f"🐣 New agent born: {cool_name} ({new_agent_id}) for {brand_id} (replacing {dead_agent.agent_id})")
 
         return {
             "agent_id": new_agent_id,
-            "display_name": new_name,
+            "display_name": cool_name,
             "brand": brand_id,
             "replaced": dead_agent.agent_id,
             "inherited_from": inheritance_source,

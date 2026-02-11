@@ -335,10 +335,10 @@ class BrandManager:
         # 🧬 Auto-provision an AI agent for this brand with randomized DNA
         try:
             from app.services.generic_agent import create_agent_for_brand
+            from app.services.evolution_engine import pick_agent_name
             import random
-            # Derive agent name from brand display_name (e.g. "The Healthy College" → "Healthy")
-            words = brand_data["display_name"].replace("The ", "").split()
-            agent_name = words[0] if words else brand_data["id"][:8].title()
+            # Pick a cool unique name instead of deriving from brand
+            agent_name = pick_agent_name()
             archetype = random.choice(_AGENT_ARCHETYPES)
             personality = f"{archetype} Specialized for {brand_data['display_name']}."
             agent = create_agent_for_brand(

@@ -16,6 +16,7 @@ import { PostsPromptsPage } from '@/pages/PostsPrompts'
 import { ReelsPromptsPage } from '@/pages/ReelsPrompts'
 import { TobyPage } from '@/pages/Toby'
 import { MaestroPage } from '@/pages/Maestro'
+import { AITeamPage } from '@/pages/AITeam'
 import { AboutPage } from '@/pages/About'
 import { Loader2 } from 'lucide-react'
 
@@ -74,6 +75,7 @@ export function AppRoutes() {
         <Route path="reels-prompts" element={<ReelsPromptsPage />} />
         <Route path="toby" element={<TobyPage />} />
         <Route path="maestro" element={<MaestroPage />} />
+        <Route path="ai-team" element={<AITeamPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>

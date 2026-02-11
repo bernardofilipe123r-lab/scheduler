@@ -1,0 +1,765 @@
+import { useState, useEffect, useCallback } from 'react'
+import { get, post } from '@/shared/api/client'
+import {
+  Dna, Trophy, Skull, Sparkles, Zap, Shield, AlertTriangle, ChevronDown,
+  ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
+  Heart, Activity, Loader2, RefreshCw, Crown,
+  Flame, Target, Swords
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+
+// ── Types ──
+
+interface AgentStats7d {
+  posts: number
+  views: number
+  engagement_rate: number
+  best_strategy: string | null
+}
+
+interface Agent {
+  agent_id: string
+  display_name: string
+  personality: string
+  temperature: number
+  variant: string
+  proposal_prefix: string
+  strategy_names: string[]
+  strategy_weights: Record<string, number>
+  risk_tolerance: string
+  proposals_per_brand: number
+  content_types: string[]
+  active: boolean
+  is_builtin: boolean
+  created_for_brand: string | null
+  survival_score: number
+  lifetime_views: number
+  lifetime_proposals: number
+  lifetime_accepted: number
+  generation: number
+  mutation_count: number
+  parent_agent_id: string | null
+  last_mutation_at: string | null
+  created_at: string | null
+  updated_at: string | null
+  tier: 'thriving' | 'surviving' | 'struggling'
+  stats_7d: AgentStats7d
+}
+
+interface PerformanceSnapshot {
+  id: number
+  agent_id: string
+  period: string
+  published_count: number
+  total_views: number
+  avg_views: number
+  total_likes: number
+  total_comments: number
+  avg_engagement_rate: number
+  strategy_breakdown: Record<string, { count: number; avg_views: number; total_views: number }> | null
+  best_strategy: string | null
+  worst_strategy: string | null
+  avg_examiner_score: number | null
+  survival_score: number
+  created_at: string | null
+}
+
+interface EvolutionEvent {
+  id: number
+  agent_id: string
+  mutation_type: string
+  description: string
+  old_value: any
+  new_value: any
+  trigger: string
+  confidence: number | null
+  survival_score_at: number | null
+  created_at: string | null
+}
+
+interface GenePoolEntry {
+  id: number
+  source_agent_id: string
+  source_agent_name: string
+  personality: string
+  temperature: number
+  variant: string
+  strategy_names: string[]
+  strategy_weights: Record<string, number>
+  risk_tolerance: string
+  survival_score: number
+  lifetime_views: number
+  generation: number
+  reason: string
+  times_inherited: number
+  created_at: string | null
+}
+
+// ── Helpers ──
+
+const TIER_CONFIG = {
+  thriving: { color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: Crown, label: 'Thriving' },
+  surviving: { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', icon: Shield, label: 'Surviving' },
+  struggling: { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: AlertTriangle, label: 'Struggling' },
+}
+
+const MUTATION_ICONS: Record<string, typeof Dna> = {
+  weight_shift: TrendingUp,
+  temperature: Flame,
+  death: Skull,
+  spawn: Sparkles,
+  manual_mutation: FlaskConical,
+}
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return n.toString()
+}
+
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return 'never'
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
+function survivalBar(score: number) {
+  const pct = Math.min(100, Math.max(0, score))
+  let color = 'bg-emerald-500'
+  if (pct < 30) color = 'bg-red-500'
+  else if (pct < 60) color = 'bg-amber-500'
+  return (
+    <div className="flex items-center gap-2 w-full">
+      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-sm font-bold tabular-nums w-8 text-right">{Math.round(pct)}</span>
+    </div>
+  )
+}
+
+function StrategyWeights({ weights }: { weights: Record<string, number> }) {
+  const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1])
+  const maxW = sorted[0]?.[1] || 1
+  return (
+    <div className="space-y-1">
+      {sorted.map(([name, w]) => (
+        <div key={name} className="flex items-center gap-2 text-xs">
+          <span className="w-20 text-gray-600 uppercase font-mono truncate">{name}</span>
+          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-400 rounded-full"
+              style={{ width: `${(w / maxW) * 100}%` }}
+            />
+          </div>
+          <span className="w-10 text-right text-gray-500 tabular-nums">{(w * 100).toFixed(0)}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+
+// ── Main Page ──
+
+export function AITeamPage() {
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [events, setEvents] = useState<EvolutionEvent[]>([])
+  const [genePool, setGenePool] = useState<GenePoolEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
+  const [agentPerf, setAgentPerf] = useState<Record<string, PerformanceSnapshot[]>>({})
+  const [agentLearnings, setAgentLearnings] = useState<Record<string, EvolutionEvent[]>>({})
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'timeline' | 'gene-pool'>('leaderboard')
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  const fetchAgents = useCallback(async () => {
+    try {
+      const data = await get<{ agents: Agent[] }>('/api/agents?include_inactive=true')
+      setAgents(data.agents || [])
+    } catch (e) { console.error('Failed to fetch agents', e) }
+  }, [])
+
+  const fetchEvents = useCallback(async () => {
+    try {
+      const data = await get<{ events: EvolutionEvent[] }>('/api/agents/evolution-events/timeline')
+      setEvents(data.events || [])
+    } catch (e) { console.error('Failed to fetch events', e) }
+  }, [])
+
+  const fetchGenePool = useCallback(async () => {
+    try {
+      const data = await get<{ entries: GenePoolEntry[] }>('/api/agents/gene-pool/entries')
+      setGenePool(data.entries || [])
+    } catch (e) { console.error('Failed to fetch gene pool', e) }
+  }, [])
+
+  const refreshAll = useCallback(async () => {
+    setLoading(true)
+    await Promise.all([fetchAgents(), fetchEvents(), fetchGenePool()])
+    setLoading(false)
+  }, [fetchAgents, fetchEvents, fetchGenePool])
+
+  useEffect(() => { refreshAll() }, [refreshAll])
+  useEffect(() => {
+    const interval = setInterval(fetchAgents, 30000)
+    return () => clearInterval(interval)
+  }, [fetchAgents])
+
+  const toggleExpand = async (agentId: string) => {
+    if (expandedAgent === agentId) {
+      setExpandedAgent(null)
+      return
+    }
+    setExpandedAgent(agentId)
+    // Fetch details if not cached
+    if (!agentPerf[agentId]) {
+      try {
+        const [perfData, learnData] = await Promise.all([
+          get<{ snapshots: PerformanceSnapshot[] }>(`/api/agents/${agentId}/performance`),
+          get<{ learnings: EvolutionEvent[] }>(`/api/agents/${agentId}/learnings`),
+        ])
+        setAgentPerf(prev => ({ ...prev, [agentId]: perfData.snapshots || [] }))
+        setAgentLearnings(prev => ({ ...prev, [agentId]: learnData.learnings || [] }))
+      } catch (e) { console.error('Failed to fetch agent details', e) }
+    }
+  }
+
+  const handleMutate = async (agentId: string) => {
+    setActionLoading(agentId + '-mutate')
+    try {
+      await post(`/api/agents/${agentId}/mutate`, {})
+      toast.success('DNA re-rolled!')
+      await fetchAgents()
+      // Refresh details if expanded
+      if (expandedAgent === agentId) {
+        const learnData = await get<{ learnings: EvolutionEvent[] }>(`/api/agents/${agentId}/learnings`)
+        setAgentLearnings(prev => ({ ...prev, [agentId]: learnData.learnings || [] }))
+      }
+    } catch (e) { toast.error('Mutation failed') }
+    setActionLoading(null)
+  }
+
+  const handleClone = async (agentId: string) => {
+    setActionLoading(agentId + '-clone')
+    try {
+      await post(`/api/agents/${agentId}/clone`, {})
+      toast.success('Agent cloned!')
+      await fetchAgents()
+    } catch (e) { toast.error('Clone failed') }
+    setActionLoading(null)
+  }
+
+  const handleRetire = async (agentId: string, name: string) => {
+    if (!confirm(`Retire ${name}? Their DNA will be archived to the gene pool.`)) return
+    setActionLoading(agentId + '-retire')
+    try {
+      await post(`/api/agents/${agentId}/retire`, {})
+      toast.success(`${name} retired. DNA archived.`)
+      await Promise.all([fetchAgents(), fetchEvents(), fetchGenePool()])
+    } catch (e: any) {
+      toast.error(e?.message || 'Retirement failed')
+    }
+    setActionLoading(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    )
+  }
+
+  const activeAgents = agents.filter(a => a.active)
+  const retiredAgents = agents.filter(a => !a.active)
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <Dna className="w-8 h-8 text-indigo-600" />
+            AI Team
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {activeAgents.length} active agents competing • Generation {Math.max(...activeAgents.map(a => a.generation || 1), 1)} • {genePool.length} DNA archived
+          </p>
+        </div>
+        <button
+          onClick={refreshAll}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
+      </div>
+
+      {/* Stats Banner */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <StatCard icon={Swords} label="Active Agents" value={activeAgents.length} color="indigo" />
+        <StatCard icon={Trophy} label="Avg Survival" value={Math.round(activeAgents.reduce((s, a) => s + (a.survival_score || 0), 0) / Math.max(activeAgents.length, 1))} suffix="/100" color="emerald" />
+        <StatCard icon={Eye} label="Total Views" value={formatNumber(activeAgents.reduce((s, a) => s + (a.lifetime_views || 0), 0))} color="blue" />
+        <StatCard icon={FlaskConical} label="Total Mutations" value={activeAgents.reduce((s, a) => s + (a.mutation_count || 0), 0)} color="purple" />
+        <StatCard icon={Dna} label="Gene Pool" value={genePool.length} suffix=" DNA" color="pink" />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {[
+          { key: 'leaderboard' as const, label: 'Leaderboard', icon: Trophy },
+          { key: 'timeline' as const, label: 'Evolution Timeline', icon: Activity },
+          { key: 'gene-pool' as const, label: 'Gene Pool', icon: Dna },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'leaderboard' && (
+        <div className="space-y-3">
+          {activeAgents.map((agent, idx) => (
+            <AgentCard
+              key={agent.agent_id}
+              agent={agent}
+              rank={idx + 1}
+              expanded={expandedAgent === agent.agent_id}
+              onToggle={() => toggleExpand(agent.agent_id)}
+              perfHistory={agentPerf[agent.agent_id] || []}
+              learnings={agentLearnings[agent.agent_id] || []}
+              onMutate={() => handleMutate(agent.agent_id)}
+              onClone={() => handleClone(agent.agent_id)}
+              onRetire={() => handleRetire(agent.agent_id, agent.display_name)}
+              actionLoading={actionLoading}
+            />
+          ))}
+
+          {retiredAgents.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold text-gray-400 mb-3 flex items-center gap-2">
+                <Skull className="w-5 h-5" />
+                Retired ({retiredAgents.length})
+              </h3>
+              {retiredAgents.map(agent => (
+                <div key={agent.agent_id} className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-2 opacity-60">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-gray-400">{agent.display_name}</span>
+                      <span className="text-xs text-gray-400">Gen {agent.generation || 1}</span>
+                      {agent.created_for_brand && (
+                        <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">{agent.created_for_brand}</span>
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-400">Score: {Math.round(agent.survival_score || 0)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'timeline' && <EvolutionTimeline events={events} />}
+      {activeTab === 'gene-pool' && <GenePoolView entries={genePool} />}
+    </div>
+  )
+}
+
+
+// ── Sub-components ──
+
+function StatCard({ icon: Icon, label, value, suffix, color }: { icon: any; label: string; value: string | number; suffix?: string; color: string }) {
+  const colorMap: Record<string, string> = {
+    indigo: 'text-indigo-600 bg-indigo-50',
+    emerald: 'text-emerald-600 bg-emerald-50',
+    blue: 'text-blue-600 bg-blue-50',
+    purple: 'text-purple-600 bg-purple-50',
+    pink: 'text-pink-600 bg-pink-50',
+  }
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-3 flex items-center gap-3">
+      <div className={`p-2 rounded-lg ${colorMap[color]}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-lg font-bold text-gray-900">{value}{suffix || ''}</p>
+      </div>
+    </div>
+  )
+}
+
+
+function AgentCard({
+  agent, rank, expanded, onToggle, perfHistory, learnings, onMutate, onClone, onRetire, actionLoading
+}: {
+  agent: Agent
+  rank: number
+  expanded: boolean
+  onToggle: () => void
+  perfHistory: PerformanceSnapshot[]
+  learnings: EvolutionEvent[]
+  onMutate: () => void
+  onClone: () => void
+  onRetire: () => void
+  actionLoading: string | null
+}) {
+  const tier = TIER_CONFIG[agent.tier]
+  const TierIcon = tier.icon
+
+  return (
+    <div className={`bg-white rounded-xl border-2 ${tier.border} overflow-hidden transition-shadow hover:shadow-md`}>
+      {/* Main row */}
+      <button onClick={onToggle} className="w-full text-left p-4 flex items-center gap-4">
+        {/* Rank */}
+        <div className="flex-shrink-0 w-8 text-center">
+          {rank <= 3 ? (
+            <span className="text-xl">{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</span>
+          ) : (
+            <span className="text-lg font-bold text-gray-400">#{rank}</span>
+          )}
+        </div>
+
+        {/* Name + tier */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-gray-900">{agent.display_name}</span>
+            {agent.is_builtin && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">CORE</span>
+            )}
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tier.bg} ${tier.color} flex items-center gap-1`}>
+              <TierIcon className="w-3 h-3" />
+              {tier.label}
+            </span>
+            <span className="text-xs text-gray-400">Gen {agent.generation || 1}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+            {agent.created_for_brand && <span className="bg-gray-100 px-2 py-0.5 rounded">{agent.created_for_brand}</span>}
+            <span className="flex items-center gap-1">
+              <Flame className="w-3 h-3" />
+              {agent.temperature}
+            </span>
+            <span className="flex items-center gap-1">
+              <Target className="w-3 h-3" />
+              {agent.risk_tolerance}
+            </span>
+            {agent.stats_7d.posts > 0 && (
+              <>
+                <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{formatNumber(agent.stats_7d.views)}</span>
+                <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{(agent.stats_7d.engagement_rate * 100).toFixed(1)}%</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Survival score */}
+        <div className="w-32 flex-shrink-0">
+          {survivalBar(agent.survival_score)}
+        </div>
+
+        {/* Expand toggle */}
+        {expanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* DNA */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Dna className="w-4 h-4 text-indigo-500" /> DNA Profile
+              </h4>
+              <StrategyWeights weights={agent.strategy_weights} />
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-gray-50 rounded p-2">
+                  <span className="text-gray-500">Temperature</span>
+                  <p className="font-bold text-gray-900">{agent.temperature}</p>
+                </div>
+                <div className="bg-gray-50 rounded p-2">
+                  <span className="text-gray-500">Variant</span>
+                  <p className="font-bold text-gray-900">{agent.variant}</p>
+                </div>
+                <div className="bg-gray-50 rounded p-2">
+                  <span className="text-gray-500">Risk</span>
+                  <p className="font-bold text-gray-900 capitalize">{agent.risk_tolerance}</p>
+                </div>
+                <div className="bg-gray-50 rounded p-2">
+                  <span className="text-gray-500">Mutations</span>
+                  <p className="font-bold text-gray-900">{agent.mutation_count || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Lifetime stats */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-500" /> Lifetime Stats
+              </h4>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Total Views</span>
+                  <span className="font-bold">{formatNumber(agent.lifetime_views || 0)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Proposals Created</span>
+                  <span className="font-bold">{agent.lifetime_proposals || 0}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Proposals Accepted</span>
+                  <span className="font-bold">{agent.lifetime_accepted || 0}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Accept Rate</span>
+                  <span className="font-bold">
+                    {agent.lifetime_proposals ? `${((agent.lifetime_accepted / agent.lifetime_proposals) * 100).toFixed(0)}%` : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Created</span>
+                  <span className="font-mono text-xs">{agent.created_at ? new Date(agent.created_at).toLocaleDateString() : '—'}</span>
+                </div>
+                {agent.parent_agent_id && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Parent</span>
+                    <span className="font-mono text-xs">{agent.parent_agent_id}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Survival History (mini chart) */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-500" /> Survival History
+              </h4>
+              {perfHistory.length > 0 ? (
+                <MiniChart data={perfHistory.map(p => p.survival_score)} />
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-4">No performance data yet</p>
+              )}
+              {perfHistory.length > 0 && (
+                <div className="mt-2 text-xs text-gray-500 text-center">
+                  {perfHistory.length} snapshots • Latest: {Math.round(perfHistory[perfHistory.length - 1]?.survival_score || 0)}/100
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent learnings */}
+          {learnings.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <FlaskConical className="w-4 h-4 text-purple-500" /> Recent Evolution
+              </h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {learnings.slice(0, 8).map(l => {
+                  const Icon = MUTATION_ICONS[l.mutation_type] || Zap
+                  return (
+                    <div key={l.id} className="flex items-start gap-2 text-sm">
+                      <Icon className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-700">{l.description}</span>
+                        <span className="text-xs text-gray-400 ml-2">{timeAgo(l.created_at)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onMutate}
+              disabled={!!actionLoading}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
+            >
+              {actionLoading === agent.agent_id + '-mutate' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
+              Force Mutate
+            </button>
+            <button
+              onClick={onClone}
+              disabled={!!actionLoading}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              {actionLoading === agent.agent_id + '-clone' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+              Clone DNA
+            </button>
+            {!agent.is_builtin && (
+              <button
+                onClick={onRetire}
+                disabled={!!actionLoading}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+              >
+                {actionLoading === agent.agent_id + '-retire' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Skull className="w-4 h-4" />}
+                Retire
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+function MiniChart({ data }: { data: number[] }) {
+  if (data.length < 2) return <p className="text-sm text-gray-400 text-center py-4">Need 2+ data points</p>
+  const max = Math.max(...data, 1)
+  const min = Math.min(...data)
+  const range = max - min || 1
+  const h = 60
+  const w = 200
+  const step = w / (data.length - 1)
+
+  const points = data.map((v, i) => `${i * step},${h - ((v - min) / range) * h}`).join(' ')
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h + 4}`} className="w-full" preserveAspectRatio="none">
+      <polyline
+        fill="none"
+        stroke="#6366f1"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+      {data.map((v, i) => (
+        <circle
+          key={i}
+          cx={i * step}
+          cy={h - ((v - min) / range) * h}
+          r="2.5"
+          fill={v >= 60 ? '#10b981' : v >= 30 ? '#f59e0b' : '#ef4444'}
+        />
+      ))}
+    </svg>
+  )
+}
+
+
+function EvolutionTimeline({ events }: { events: EvolutionEvent[] }) {
+  if (events.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <Activity className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500 text-lg">No evolution events yet</p>
+        <p className="text-gray-400 text-sm mt-1">Events will appear after the first feedback cycle</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="space-y-1">
+        {events.map(event => {
+          const Icon = MUTATION_ICONS[event.mutation_type] || Zap
+          const typeColors: Record<string, string> = {
+            death: 'text-red-600 bg-red-50',
+            spawn: 'text-emerald-600 bg-emerald-50',
+            weight_shift: 'text-indigo-600 bg-indigo-50',
+            temperature: 'text-amber-600 bg-amber-50',
+            manual_mutation: 'text-purple-600 bg-purple-50',
+          }
+          const colorClass = typeColors[event.mutation_type] || 'text-gray-600 bg-gray-50'
+
+          return (
+            <div key={event.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+              <div className={`p-1.5 rounded-lg flex-shrink-0 ${colorClass}`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-gray-900">{event.agent_id}</span>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{event.mutation_type}</span>
+                  <span className="text-xs text-gray-400">{event.trigger}</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-0.5">{event.description}</p>
+                {event.survival_score_at !== null && (
+                  <span className="text-xs text-gray-400 mt-1">Survival at time: {Math.round(event.survival_score_at)}/100</span>
+                )}
+              </div>
+              <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{timeAgo(event.created_at)}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
+function GenePoolView({ entries }: { entries: GenePoolEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <Dna className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500 text-lg">Gene pool is empty</p>
+        <p className="text-gray-400 text-sm mt-1">DNA gets archived when agents are retired or perform well</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {entries.map(entry => (
+        <div key={entry.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Dna className="w-4 h-4 text-indigo-500" />
+              <span className="font-bold text-gray-900">{entry.source_agent_name}</span>
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              entry.reason === 'top_performer' ? 'bg-emerald-50 text-emerald-700'
+              : entry.reason === 'retirement' ? 'bg-red-50 text-red-700'
+              : 'bg-gray-100 text-gray-600'
+            }`}>
+              {entry.reason === 'top_performer' ? '🏆 Top Performer' : entry.reason === 'retirement' ? '💀 Retired' : entry.reason}
+            </span>
+          </div>
+
+          <StrategyWeights weights={entry.strategy_weights} />
+
+          <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+            <div className="text-center p-1 bg-gray-50 rounded">
+              <p className="text-gray-500">Survival</p>
+              <p className="font-bold">{Math.round(entry.survival_score)}</p>
+            </div>
+            <div className="text-center p-1 bg-gray-50 rounded">
+              <p className="text-gray-500">Gen</p>
+              <p className="font-bold">{entry.generation}</p>
+            </div>
+            <div className="text-center p-1 bg-gray-50 rounded">
+              <p className="text-gray-500">Inherited</p>
+              <p className="font-bold">{entry.times_inherited}×</p>
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+            <span>Temp: {entry.temperature} • {entry.variant} • {entry.risk_tolerance}</span>
+            <span>{timeAgo(entry.created_at)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
