@@ -694,6 +694,16 @@ class DatabaseSchedulerService:
             print(f"   📺 [YT DEBUG] yt_thumbnail_path from metadata: {yt_thumbnail_path}", flush=True)
             if yt_thumbnail_path:
                 yt_thumbnail_path = Path(yt_thumbnail_path)
+                # Resolve relative paths (e.g., /output/thumbnails/...) to absolute (e.g., /app/output/...)
+                if not yt_thumbnail_path.is_absolute() or not yt_thumbnail_path.exists():
+                    resolved = Path("/app") / yt_thumbnail_path.as_posix().lstrip('/')
+                    if resolved.exists():
+                        yt_thumbnail_path = resolved
+                if not yt_thumbnail_path.exists():
+                    # Also try without /app prefix (local dev)
+                    local_path = Path(yt_thumbnail_path.as_posix().lstrip('/'))
+                    if local_path.exists():
+                        yt_thumbnail_path = local_path
                 if not yt_thumbnail_path.exists():
                     print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}", flush=True)
                     yt_thumbnail_path = thumbnail_path
@@ -790,17 +800,31 @@ class DatabaseSchedulerService:
                 print(f"   📺 [YT PUBLISH] Using fallback title from caption: {title}", flush=True)
             
             # Upload as a Short
-            thumbnail_exists = thumbnail_path.exists() if hasattr(thumbnail_path, 'exists') else False
+            # Resolve thumbnail path to absolute (handle /output/... → /app/output/...)
+            thumb_resolved = thumbnail_path
+            if hasattr(thumbnail_path, 'exists'):
+                if not thumbnail_path.exists():
+                    # Try with /app prefix
+                    resolved = Path("/app") / thumbnail_path.as_posix().lstrip('/')
+                    if resolved.exists():
+                        thumb_resolved = resolved
+                    else:
+                        # Try local dev path
+                        local = Path(thumbnail_path.as_posix().lstrip('/'))
+                        if local.exists():
+                            thumb_resolved = local
+            
+            thumbnail_exists = thumb_resolved.exists() if hasattr(thumb_resolved, 'exists') else False
             print(f"   📺 [YT PUBLISH] Calling upload_youtube_short()...", flush=True)
             print(f"      video_path={video_path}", flush=True)
             print(f"      title={title}", flush=True)
-            print(f"      thumbnail_path={thumbnail_path} (exists: {thumbnail_exists})", flush=True)
+            print(f"      thumbnail_path={thumb_resolved} (exists: {thumbnail_exists})", flush=True)
             
             result = yt_publisher.upload_youtube_short(
                 video_path=str(video_path),
                 title=title,
                 description=caption,
-                thumbnail_path=str(thumbnail_path) if thumbnail_exists else None
+                thumbnail_path=str(thumb_resolved) if thumbnail_exists else None
             )
             
             print(f"   📺 [YT PUBLISH] upload_youtube_short result: {result}", flush=True)

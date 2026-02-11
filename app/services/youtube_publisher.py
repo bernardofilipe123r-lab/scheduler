@@ -471,9 +471,18 @@ class YouTubePublisher:
             # Step 3: Upload custom thumbnail if provided
             if thumbnail_path and Path(thumbnail_path).exists():
                 print(f"   📤 [YT UPLOAD] Step 3: Setting custom thumbnail...", flush=True)
-                self._set_thumbnail(video_id, thumbnail_path, access_token)
+                # Wait for YouTube to process the video before setting thumbnail
+                # YouTube often rejects thumbnails on freshly uploaded videos
+                print(f"   ⏳ [YT UPLOAD] Waiting 15s for YouTube to process video before thumbnail...", flush=True)
+                time.sleep(15)
+                thumb_success = self._set_thumbnail(video_id, thumbnail_path, access_token)
+                if not thumb_success:
+                    # Retry once more after additional wait
+                    print(f"   🔄 [YT UPLOAD] Thumbnail failed, retrying in 20s...", flush=True)
+                    time.sleep(20)
+                    self._set_thumbnail(video_id, thumbnail_path, access_token)
             else:
-                print(f"   ℹ️ [YT UPLOAD] No custom thumbnail to upload", flush=True)
+                print(f"   ℹ️ [YT UPLOAD] No custom thumbnail to upload (path={thumbnail_path}, exists={Path(thumbnail_path).exists() if thumbnail_path else False})", flush=True)
             
             return {
                 "success": True,
