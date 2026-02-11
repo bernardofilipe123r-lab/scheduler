@@ -470,3 +470,412 @@ def get_agent_lessons(agent_id: str, limit: int = 5) -> str:
         return ""
     finally:
         db.close()
+
+
+# ──────────────────────────────────────────────────────────────
+# Phase 4: NATURAL SELECTION — Weekly survival of the fittest
+# ──────────────────────────────────────────────────────────────
+
+# Selection constants
+DEATH_THRESHOLD = 30.0              # Survival score below which agent can die
+CONSECUTIVE_LOW_WEEKS = 2           # Must be struggling for this many consecutive feedback cycles (2-week equivalent)
+GENE_POOL_INHERIT_CHANCE = 0.80     # 80% chance to inherit from gene pool
+MIN_ACTIVE_AGENTS = 2              # Never kill below this many active agents
+MIN_CYCLES_BEFORE_ELIGIBLE = 4     # Agent must have at least 4 feedback cycles before eligible for death
+
+
+class SelectionEngine:
+    """
+    Weekly Natural Selection — survival of the fittest.
+
+    Runs every Sunday at 2 AM (via Maestro scheduler):
+    1. Rank all active agents by survival_score
+    2. Top 40%: "thriving" — celebrated, no changes
+    3. Middle 40%: "surviving" — standard mutations continue via feedback cycle
+    4. Bottom 20%: "struggling" — retired if survival_score < 30 for consecutive cycles
+    5. Retired agents → DNA saved to gene_pool → new agent spawned
+    6. New agents: 80% inherit from gene pool (crossover), 20% random DNA
+
+    Safety rails:
+    - Built-in agents (toby, lexi) can NEVER be killed
+    - Must have at least MIN_ACTIVE_AGENTS alive at all times
+    - New agents need MIN_CYCLES_BEFORE_ELIGIBLE feedback cycles before being death-eligible
+    - Only non-builtin agents can die
+    """
+
+    def run_weekly_selection(self) -> Dict:
+        """
+        Execute weekly natural selection across all active agents.
+
+        Returns summary dict with thriving/surviving/struggling lists,
+        deaths, births, and gene pool entries.
+        """
+        from app.db_connection import SessionLocal
+        from app.models import AIAgent, AgentPerformance, AgentLearning, GenePool
+
+        db = SessionLocal()
+        try:
+            # 1. Load all active agents
+            agents = db.query(AIAgent).filter(AIAgent.active == True).all()
+            if not agents:
+                logger.info("🧬 Selection: No active agents found")
+                return {"error": "no_agents"}
+
+            # 2. Rank by survival_score (descending)
+            ranked = sorted(agents, key=lambda a: (a.survival_score or 0), reverse=True)
+            total = len(ranked)
+
+            # Calculate tier boundaries
+            top_cutoff = max(1, int(total * 0.4))     # Top 40%
+            mid_cutoff = max(top_cutoff + 1, int(total * 0.8))  # Middle 40%
+
+            thriving = ranked[:top_cutoff]
+            surviving = ranked[top_cutoff:mid_cutoff]
+            struggling = ranked[mid_cutoff:]
+
+            logger.info(f"🏆 Selection: {total} agents — {len(thriving)} thriving, "
+                       f"{len(surviving)} surviving, {len(struggling)} struggling")
+
+            # 3. Process each tier
+            result = {
+                "total_agents": total,
+                "thriving": [],
+                "surviving": [],
+                "struggling": [],
+                "deaths": [],
+                "births": [],
+                "gene_pool_entries": 0,
+            }
+
+            # ── Thriving: archive their DNA as "top_performer" (if not already) ──
+            for agent in thriving:
+                result["thriving"].append({
+                    "agent_id": agent.agent_id,
+                    "survival_score": agent.survival_score or 0,
+                })
+                # Archive top performers to gene pool (once per high score)
+                existing_archive = db.query(GenePool).filter(
+                    GenePool.source_agent_id == agent.agent_id,
+                    GenePool.reason == "top_performer",
+                ).first()
+                if not existing_archive and (agent.survival_score or 0) > 50:
+                    self._archive_dna(db, agent, reason="top_performer")
+                    result["gene_pool_entries"] += 1
+
+            # ── Surviving: log status, no special action ──
+            for agent in surviving:
+                result["surviving"].append({
+                    "agent_id": agent.agent_id,
+                    "survival_score": agent.survival_score or 0,
+                })
+
+            # ── Struggling: check death eligibility ──
+            active_non_builtin = [a for a in agents if not a.is_builtin]
+            active_count = len(agents)
+
+            for agent in struggling:
+                agent_info = {
+                    "agent_id": agent.agent_id,
+                    "survival_score": agent.survival_score or 0,
+                    "eligible_for_death": False,
+                    "died": False,
+                }
+
+                # Safety: never kill built-in agents
+                if agent.is_builtin:
+                    agent_info["protected"] = "builtin"
+                    result["struggling"].append(agent_info)
+                    continue
+
+                # Safety: keep minimum active agents
+                if active_count <= MIN_ACTIVE_AGENTS:
+                    agent_info["protected"] = "min_agents"
+                    result["struggling"].append(agent_info)
+                    continue
+
+                # Check death eligibility
+                eligible, reason = self._check_death_eligibility(db, agent)
+                agent_info["eligible_for_death"] = eligible
+                agent_info["eligibility_reason"] = reason
+
+                if eligible:
+                    # DEATH: archive DNA → retire → spawn replacement
+                    logger.info(f"💀 {agent.agent_id}: DEATH — {reason}")
+
+                    # Archive DNA before killing
+                    self._archive_dna(db, agent, reason="retirement")
+                    result["gene_pool_entries"] += 1
+
+                    # Retire the agent
+                    old_score = agent.survival_score or 0
+                    agent.active = False
+                    agent_info["died"] = True
+                    result["deaths"].append({
+                        "agent_id": agent.agent_id,
+                        "survival_score": old_score,
+                        "generation": agent.generation or 1,
+                        "reason": reason,
+                    })
+
+                    # Log death to AgentLearning
+                    db.add(AgentLearning(
+                        agent_id=agent.agent_id,
+                        mutation_type="death",
+                        description=f"Retired by natural selection. {reason}",
+                        old_value={"survival_score": old_score, "generation": agent.generation or 1},
+                        new_value={"active": False},
+                        trigger="weekly_evolution",
+                        confidence=1.0,
+                        survival_score_at=old_score,
+                    ))
+
+                    active_count -= 1
+
+                    # Spawn replacement
+                    birth_info = self._spawn_replacement(db, agent)
+                    if birth_info:
+                        result["births"].append(birth_info)
+                        active_count += 1
+
+                result["struggling"].append(agent_info)
+
+            db.commit()
+
+            # Summary log
+            logger.info(
+                f"🧬 Weekly selection complete: "
+                f"{len(result['deaths'])} deaths, {len(result['births'])} births, "
+                f"{result['gene_pool_entries']} DNA archived"
+            )
+
+            return result
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ SelectionEngine error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": str(e)}
+        finally:
+            db.close()
+
+    def _check_death_eligibility(self, db, agent) -> tuple:
+        """
+        Check if an agent is eligible for death.
+
+        Returns (eligible: bool, reason: str).
+
+        Death criteria:
+        - survival_score < DEATH_THRESHOLD
+        - Last N performance snapshots ALL below threshold (sustained failure)
+        - Has at least MIN_CYCLES_BEFORE_ELIGIBLE feedback cycles (give newborns a chance)
+        """
+        from app.models import AgentPerformance
+        from sqlalchemy import desc
+
+        # Count total feedback cycles for this agent
+        total_cycles = db.query(AgentPerformance).filter(
+            AgentPerformance.agent_id == agent.agent_id,
+        ).count()
+
+        if total_cycles < MIN_CYCLES_BEFORE_ELIGIBLE:
+            return False, f"Too young: only {total_cycles}/{MIN_CYCLES_BEFORE_ELIGIBLE} feedback cycles"
+
+        # Current score must be below threshold
+        current_score = agent.survival_score or 0
+        if current_score >= DEATH_THRESHOLD:
+            return False, f"Score {current_score} >= threshold {DEATH_THRESHOLD}"
+
+        # Check last CONSECUTIVE_LOW_WEEKS snapshots — all must be below threshold
+        recent_perfs = (
+            db.query(AgentPerformance)
+            .filter(AgentPerformance.agent_id == agent.agent_id)
+            .order_by(desc(AgentPerformance.created_at))
+            .limit(CONSECUTIVE_LOW_WEEKS * 4)  # ~4 feedback cycles per week (every 6h) × 2 weeks = 8
+            .all()
+        )
+
+        if len(recent_perfs) < CONSECUTIVE_LOW_WEEKS * 2:  # Need at least a week's worth
+            return False, f"Not enough history: {len(recent_perfs)} snapshots"
+
+        # All recent snapshots must be below threshold
+        all_below = all(
+            (p.survival_score or 0) < DEATH_THRESHOLD
+            for p in recent_perfs
+        )
+
+        if not all_below:
+            return False, f"Had survival > {DEATH_THRESHOLD} in recent history"
+
+        return True, (
+            f"Survival score {current_score} < {DEATH_THRESHOLD} "
+            f"for {len(recent_perfs)} consecutive cycles"
+        )
+
+    def _archive_dna(self, db, agent, reason: str = "retirement"):
+        """Save an agent's current DNA to the gene pool before retirement."""
+        from app.models import GenePool
+
+        entry = GenePool(
+            source_agent_id=agent.agent_id,
+            source_agent_name=agent.display_name,
+            personality=agent.personality,
+            temperature=agent.temperature,
+            variant=agent.variant,
+            strategy_names=agent.strategy_names,
+            strategy_weights=agent.strategy_weights,
+            risk_tolerance=agent.risk_tolerance,
+            survival_score=agent.survival_score or 0,
+            lifetime_views=agent.lifetime_views or 0,
+            generation=agent.generation or 1,
+            reason=reason,
+        )
+        db.add(entry)
+        logger.info(f"🧬 Archived DNA: {agent.agent_id} (reason={reason}, score={agent.survival_score})")
+
+    def _spawn_replacement(self, db, dead_agent) -> Optional[Dict]:
+        """
+        Spawn a new agent to replace a retired one.
+
+        80% chance: inherit from gene pool (crossover of best DNA)
+        20% chance: fully random DNA (genetic diversity)
+
+        The new agent inherits the dead agent's brand linkage.
+        """
+        import json
+        import random
+        from app.models import AIAgent, AgentLearning, GenePool
+
+        brand_id = dead_agent.created_for_brand or "unknown"
+
+        # Decide: inherit or random?
+        use_gene_pool = random.random() < GENE_POOL_INHERIT_CHANCE
+
+        if use_gene_pool:
+            # Pick from gene pool — prefer top performers, avoid the dead agent's own DNA
+            pool_entries = (
+                db.query(GenePool)
+                .filter(GenePool.source_agent_id != dead_agent.agent_id)
+                .order_by(GenePool.survival_score.desc())
+                .limit(5)
+                .all()
+            )
+
+            if pool_entries:
+                # Weighted random from top 5 (higher score = higher chance)
+                weights = [(p.survival_score or 1) for p in pool_entries]
+                parent_dna = random.choices(pool_entries, weights=weights, k=1)[0]
+
+                # Crossover: inherit parent's DNA with small mutations
+                temperature = parent_dna.temperature + round(random.uniform(-0.05, 0.05), 2)
+                temperature = max(MIN_TEMPERATURE, min(MAX_TEMPERATURE, temperature))
+                variant = parent_dna.variant
+                risk = parent_dna.risk_tolerance
+
+                try:
+                    strategies = json.loads(parent_dna.strategy_names)
+                except Exception:
+                    strategies = ["explore", "iterate", "double_down", "trending"]
+                try:
+                    weights_dict = json.loads(parent_dna.strategy_weights)
+                except Exception:
+                    weights_dict = {"explore": 0.25, "iterate": 0.25, "double_down": 0.25, "trending": 0.25}
+
+                # Small weight jitter (±3% per strategy)
+                for s in weights_dict:
+                    jitter = round(random.uniform(-0.03, 0.03), 3)
+                    weights_dict[s] = max(MIN_WEIGHT, weights_dict[s] + jitter)
+                # Re-normalize
+                total_w = sum(weights_dict.values())
+                weights_dict = {k: round(v / total_w, 3) for k, v in weights_dict.items()}
+
+                # Pick personality from archetypes (fresh start)
+                from app.services.brand_manager import _AGENT_ARCHETYPES
+                personality = f"{random.choice(_AGENT_ARCHETYPES)} Specialized for {brand_id}."
+
+                inheritance_source = parent_dna.source_agent_id
+                parent_dna.times_inherited = (parent_dna.times_inherited or 0) + 1
+
+                logger.info(f"🧬 Spawning from gene pool: inheriting from {inheritance_source} (score={parent_dna.survival_score})")
+            else:
+                # No gene pool entries available — fall back to random
+                use_gene_pool = False
+
+        if not use_gene_pool:
+            # Fully random DNA
+            from app.services.generic_agent import _randomize_dna
+            dna = _randomize_dna()
+            temperature = dna["temperature"]
+            variant = dna["variant"]
+            risk = dna["risk_tolerance"]
+            strategies = dna["strategies"]
+            weights_dict = dna["strategy_weights"]
+            from app.services.brand_manager import _AGENT_ARCHETYPES
+            personality = f"{random.choice(_AGENT_ARCHETYPES)} Specialized for {brand_id}."
+            inheritance_source = None
+            logger.info("🧬 Spawning with random DNA (genetic diversity)")
+
+        # Generate new unique agent_id
+        import hashlib
+        timestamp = datetime.utcnow().strftime("%m%d%H%M")
+        hash_suffix = hashlib.md5(f"{brand_id}{timestamp}".encode()).hexdigest()[:4]
+        new_agent_id = f"agent_{hash_suffix}"
+        new_name = f"Agent-{hash_suffix.upper()}"
+        prefix = new_name.upper()[:6].replace("-", "")
+
+        # Create the new agent
+        new_agent = AIAgent(
+            agent_id=new_agent_id,
+            display_name=new_name,
+            personality=personality,
+            temperature=temperature,
+            variant=variant,
+            proposal_prefix=prefix,
+            strategy_names=json.dumps(strategies),
+            strategy_weights=json.dumps(weights_dict),
+            risk_tolerance=risk,
+            proposals_per_brand=3,
+            content_types=json.dumps(["reel", "post"]),
+            active=True,
+            is_builtin=False,
+            created_for_brand=brand_id,
+            generation=1,
+            parent_agent_id=inheritance_source or dead_agent.agent_id,
+        )
+        db.add(new_agent)
+
+        # Log birth
+        birth_desc = (
+            f"Born to replace {dead_agent.agent_id}. "
+            f"{'Inherited from ' + inheritance_source if inheritance_source else 'Random DNA'}. "
+            f"temp={temperature}, strategies={strategies}"
+        )
+        db.add(AgentLearning(
+            agent_id=new_agent_id,
+            mutation_type="spawn",
+            description=birth_desc,
+            old_value=None,
+            new_value={
+                "temperature": temperature,
+                "variant": variant,
+                "strategies": strategies,
+                "weights": weights_dict,
+                "risk": risk,
+                "inherited_from": inheritance_source,
+            },
+            trigger="weekly_evolution",
+            confidence=1.0,
+            survival_score_at=0.0,
+        ))
+
+        logger.info(f"🐣 New agent born: {new_agent_id} for {brand_id} (replacing {dead_agent.agent_id})")
+
+        return {
+            "agent_id": new_agent_id,
+            "display_name": new_name,
+            "brand": brand_id,
+            "replaced": dead_agent.agent_id,
+            "inherited_from": inheritance_source,
+            "temperature": temperature,
+            "strategies": strategies,
+        }

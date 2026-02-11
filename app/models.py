@@ -1240,3 +1240,73 @@ class AgentLearning(Base):
             "survival_score_at": self.survival_score_at,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# ============================================================
+# GENE POOL — DNA archive for inheritance / rebirth
+# ============================================================
+
+class GenePool(Base):
+    """
+    DNA archive — snapshot of an agent's config saved before retirement
+    or when an agent is a top performer.
+
+    New agents have 80% chance of inheriting from the gene pool,
+    20% chance of fully random DNA — preserving proven strategies
+    while maintaining genetic diversity.
+    """
+    __tablename__ = "gene_pool"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_agent_id = Column(String(50), nullable=False, index=True)     # Origin agent
+    source_agent_name = Column(String(100), nullable=False)
+
+    # DNA snapshot
+    personality = Column(Text, nullable=True)
+    temperature = Column(Float, nullable=False)
+    variant = Column(String(20), nullable=False)
+    strategy_names = Column(Text, nullable=False)    # JSON list
+    strategy_weights = Column(Text, nullable=False)  # JSON dict
+    risk_tolerance = Column(String(20), nullable=False)
+
+    # Performance at time of archiving
+    survival_score = Column(Float, default=0.0)
+    lifetime_views = Column(Integer, default=0)
+    generation = Column(Integer, default=1)
+
+    # Why archived
+    reason = Column(String(30), nullable=False)  # "retirement" | "top_performer" | "manual"
+
+    # Usage tracking
+    times_inherited = Column(Integer, default=0)  # How many new agents inherited from this
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def to_dict(self):
+        import json
+        try:
+            strats = json.loads(self.strategy_names)
+        except Exception:
+            strats = []
+        try:
+            weights = json.loads(self.strategy_weights)
+        except Exception:
+            weights = {}
+        return {
+            "id": self.id,
+            "source_agent_id": self.source_agent_id,
+            "source_agent_name": self.source_agent_name,
+            "personality": (self.personality or "")[:200],
+            "temperature": self.temperature,
+            "variant": self.variant,
+            "strategy_names": strats,
+            "strategy_weights": weights,
+            "risk_tolerance": self.risk_tolerance,
+            "survival_score": self.survival_score,
+            "lifetime_views": self.lifetime_views,
+            "generation": self.generation,
+            "reason": self.reason,
+            "times_inherited": self.times_inherited,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

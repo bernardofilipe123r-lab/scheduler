@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 # Lisbon/Portugal timezone — burst at noon local time
 LISBON_TZ = ZoneInfo("Europe/Lisbon")
@@ -57,6 +58,10 @@ FEEDBACK_CYCLE_MINUTES = int(os.getenv("MAESTRO_FEEDBACK_MINUTES", "360"))
 # Healing cycle: scan for failed jobs, retry, notify
 HEALING_CYCLE_MINUTES = int(os.getenv("MAESTRO_HEALING_MINUTES", "15"))
 MAX_AUTO_RETRIES = int(os.getenv("MAESTRO_MAX_AUTO_RETRIES", "2"))  # Max retries per job
+
+# Evolution cycle: weekly natural selection (default: Sunday at 2 AM Lisbon time)
+EVOLUTION_DAY = os.getenv("MAESTRO_EVOLUTION_DAY", "sun")  # Day of week
+EVOLUTION_HOUR = int(os.getenv("MAESTRO_EVOLUTION_HOUR", "2"))  # Hour (0-23)
 
 # Job timeout: if a job is stuck in "generating" or "pending" for longer than this, mark it failed
 JOB_TIMEOUT_MINUTES = int(os.getenv("MAESTRO_JOB_TIMEOUT_MINUTES", "30"))
@@ -219,6 +224,7 @@ class MaestroState:
         self.last_scan_at: Optional[datetime] = None
         self.last_feedback_at: Optional[datetime] = None
         self.last_healing_at: Optional[datetime] = None
+        self.last_evolution_at: Optional[datetime] = None
 
         # Healing stats
         self.total_healed: int = 0          # Jobs successfully retried
@@ -344,6 +350,11 @@ class MaestroState:
                 "total_healing_failures": self.total_healing_failures,
                 "recent_notifications": self.healing_notifications[:20],
             },
+            "evolution": {
+                "last_evolution_at": self.last_evolution_at.isoformat() if self.last_evolution_at else None,
+                "last_evolution_human": _time_ago(self.last_evolution_at) if self.last_evolution_at else "never",
+                "schedule": f"{EVOLUTION_DAY} @ {EVOLUTION_HOUR}:00",
+            },
             "recent_activity": self.activity_log[:30],
             "daily_config": self._get_daily_config(),
         }
@@ -382,6 +393,7 @@ class MaestroDaemon:
       3. OBSERVE (every 3h)    — Collect metrics
       4. SCOUT   (every 4h)    — Scan trends
       5. FEEDBACK (every 6h)   — Check 48-72h post performance
+      6. EVOLUTION (weekly)    — Natural selection: retire weak agents, spawn new ones
     """
 
     def __init__(self):
@@ -449,6 +461,21 @@ class MaestroDaemon:
             max_instances=1,
         )
 
+        # Evolution cycle — weekly natural selection (Sunday 2 AM Lisbon)
+        self.scheduler.add_job(
+            self._evolution_cycle,
+            trigger=CronTrigger(
+                day_of_week=EVOLUTION_DAY,
+                hour=EVOLUTION_HOUR,
+                minute=0,
+                timezone=LISBON_TZ,
+            ),
+            id="maestro_evolution",
+            name="Maestro Evolution Cycle",
+            replace_existing=True,
+            max_instances=1,
+        )
+
         self.scheduler.start()
         self.state.started_at = datetime.utcnow()
 
@@ -456,7 +483,7 @@ class MaestroDaemon:
         status_text = "PAUSED (waiting for Resume)" if paused else "RUNNING"
         self.state.log(
             "maestro", "Started",
-            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m",
+            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m, Evolution {EVOLUTION_DAY}@{EVOLUTION_HOUR}:00",
             "🚀"
         )
 
@@ -1298,6 +1325,93 @@ class MaestroDaemon:
         except Exception as e:
             self.state.errors += 1
             self.state.log("maestro", "Error", f"Feedback cycle failed: {str(e)[:200]}", "❌")
+            import traceback
+            traceback.print_exc()
+
+    # ──────────────────────────────────────────────────────────
+    # CYCLE: EVOLUTION — Weekly natural selection (Sunday 2 AM)
+    # ──────────────────────────────────────────────────────────
+
+    def _evolution_cycle(self):
+        """
+        Weekly natural selection — survival of the fittest.
+
+        1. Rank all active agents by survival_score
+        2. Top 40%: thriving (DNA archived to gene pool)
+        3. Middle 40%: surviving (standard mutations continue)
+        4. Bottom 20%: struggling → retire if below threshold for 2+ weeks → spawn replacement
+        5. New agents inherit from gene pool (80%) or random DNA (20%)
+        6. Refresh agent cache so Maestro picks up newborns
+        """
+        self.state.log("maestro", "🧬 EVOLUTION", "Running weekly natural selection...", "🧬")
+
+        try:
+            from app.services.evolution_engine import SelectionEngine
+
+            engine = SelectionEngine()
+            result = engine.run_weekly_selection()
+
+            if "error" in result:
+                self.state.log("maestro", "Evolution", f"Selection skipped: {result['error']}", "⚠️", "detail")
+                return
+
+            # Log results
+            deaths = result.get("deaths", [])
+            births = result.get("births", [])
+            thriving = result.get("thriving", [])
+
+            # Thriving agents
+            if thriving:
+                top_names = ", ".join(f"{a['agent_id']}({a['survival_score']:.0f})" for a in thriving)
+                self.state.log("maestro", "🏆 Thriving", top_names, "🏆")
+
+            # Deaths
+            for d in deaths:
+                self.state.log(
+                    "maestro", "💀 Agent Death",
+                    f"{d['agent_id']} retired (score={d['survival_score']:.0f}, gen={d['generation']}, reason={d['reason'][:100]})",
+                    "💀"
+                )
+
+            # Births
+            for b in births:
+                inherited = f"inherited from {b['inherited_from']}" if b.get("inherited_from") else "random DNA"
+                self.state.log(
+                    "maestro", "🐣 Agent Born",
+                    f"{b['agent_id']} for {b['brand']} (replacing {b['replaced']}, {inherited}, temp={b['temperature']})",
+                    "🐣"
+                )
+
+            # Summary
+            self.state.log(
+                "maestro", "🧬 Selection Complete",
+                f"{result['total_agents']} agents: {len(thriving)} thriving, "
+                f"{len(result.get('surviving', []))} surviving, "
+                f"{len(result.get('struggling', []))} struggling | "
+                f"{len(deaths)} deaths, {len(births)} births, "
+                f"{result.get('gene_pool_entries', 0)} DNA archived",
+                "🧬"
+            )
+
+            # Refresh agent cache + Maestro agent states for newborns
+            if births:
+                from app.services.generic_agent import refresh_agent_cache
+                refresh_agent_cache()
+                self.state._init_agent_states()
+
+            # Store evolution data for frontend
+            import json
+            evolution_data = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "result": result,
+            }
+            _db_set("last_evolution_data", json.dumps(evolution_data, default=str))
+
+            self.state.last_evolution_at = datetime.utcnow()
+
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "Error", f"Evolution cycle failed: {str(e)[:200]}", "❌")
             import traceback
             traceback.print_exc()
 

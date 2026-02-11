@@ -318,6 +318,36 @@ def run_migrations():
                 CREATE INDEX ix_agent_learning_agent_time ON agent_learning(agent_id, created_at);
             """
         },
+        # ── Phase 4: Gene Pool table (DNA archive for inheritance) ──
+        {
+            "name": "Create gene_pool table",
+            "check_sql": """
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_name='gene_pool'
+            """,
+            "migration_sql": """
+                CREATE TABLE gene_pool (
+                    id SERIAL PRIMARY KEY,
+                    source_agent_id VARCHAR(50) NOT NULL,
+                    source_agent_name VARCHAR(100) NOT NULL,
+                    personality TEXT,
+                    temperature FLOAT NOT NULL,
+                    variant VARCHAR(20) NOT NULL,
+                    strategy_names TEXT NOT NULL,
+                    strategy_weights TEXT NOT NULL,
+                    risk_tolerance VARCHAR(20) NOT NULL,
+                    survival_score FLOAT DEFAULT 0.0,
+                    lifetime_views INTEGER DEFAULT 0,
+                    generation INTEGER DEFAULT 1,
+                    reason VARCHAR(30) NOT NULL,
+                    times_inherited INTEGER DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX ix_gene_pool_source ON gene_pool(source_agent_id);
+                CREATE INDEX ix_gene_pool_created ON gene_pool(created_at);
+                CREATE INDEX ix_gene_pool_reason ON gene_pool(reason);
+            """
+        },
     ]
     
     with engine.connect() as conn:
