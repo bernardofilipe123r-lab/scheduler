@@ -48,7 +48,7 @@ async def maestro_status():
 
     # Include proposal stats (global + per-agent)
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import TobyProposal, AIAgent
     from sqlalchemy import func
     from datetime import datetime
 
@@ -62,9 +62,15 @@ async def maestro_status():
         accepted = db.query(TobyProposal).filter(TobyProposal.status == "accepted").count()
         rejected = db.query(TobyProposal).filter(TobyProposal.status == "rejected").count()
 
-        # Per-agent stats
+        # Per-agent stats — dynamic, all active agents
         agent_stats = {}
-        for agent_name in ["toby", "lexi"]:
+        agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True).all()]
+        # Always include toby/lexi even if inactive (backwards compat)
+        for fallback in ["toby", "lexi"]:
+            if fallback not in agent_ids:
+                agent_ids.append(fallback)
+
+        for agent_name in agent_ids:
             a_total = db.query(TobyProposal).filter(TobyProposal.agent_name == agent_name).count()
             a_pending = db.query(TobyProposal).filter(
                 TobyProposal.agent_name == agent_name, TobyProposal.status == "pending"

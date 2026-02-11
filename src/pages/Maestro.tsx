@@ -1,11 +1,12 @@
 /**
  * Maestro — AI Content Orchestrator
  *
- * Maestro manages two AI agents:
- *   - Toby (Explorer) — creative risk-taker, finds novel content
- *   - Lexi (Optimizer) — data-driven, optimises proven patterns
+ * Manages N AI agents dynamically (loaded from DB).
+ * Number of agents == number of brands.
+ * Each agent generates content for EVERY brand (not just its birth brand).
  *
- * Always running. No pause/resume. Auto-starts every deployment.
+ * Agent cards, filters, and stats are all dynamic — no hardcoded names.
+ * Always running. Auto-starts every deployment.
  */
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -145,6 +146,9 @@ interface MaestroStatus {
     posts_per_brand?: number
     variants?: string[]
     brands?: string[]
+    agents?: { id: string; name: string; variant: string; proposals_per_brand: number }[]
+    total_agents?: number
+    total_brands?: number
     jobs_per_day: number
   }
 }
@@ -254,23 +258,44 @@ const STATUS_COLORS: Record<string, string> = {
   expired: 'bg-gray-100 text-gray-600',
 }
 
-const AGENT_META: Record<string, { label: string; color: string; bg: string; icon: typeof Brain; gradient: string; role: string }> = {
-  toby: {
-    label: 'Toby',
-    color: 'text-amber-600',
-    bg: 'bg-amber-50 border-amber-300',
-    icon: Brain,
-    gradient: 'from-amber-500 to-orange-500',
-    role: 'Explorer',
-  },
-  lexi: {
-    label: 'Lexi',
-    color: 'text-violet-600',
-    bg: 'bg-violet-50 border-violet-300',
-    icon: LineChart,
-    gradient: 'from-violet-500 to-purple-500',
-    role: 'Optimizer',
-  },
+// Agent visual meta — generated dynamically from API data.
+// Rotates through a pool of colors/icons so every agent looks distinct.
+const AGENT_GRADIENTS = [
+  'from-amber-500 to-orange-500',
+  'from-violet-500 to-purple-500',
+  'from-cyan-500 to-blue-500',
+  'from-emerald-500 to-teal-500',
+  'from-rose-500 to-pink-500',
+  'from-indigo-500 to-sky-500',
+  'from-lime-500 to-green-500',
+  'from-fuchsia-500 to-purple-500',
+]
+const AGENT_COLORS = [
+  { color: 'text-amber-600', bg: 'bg-amber-50 border-amber-300', pill: 'bg-amber-500' },
+  { color: 'text-violet-600', bg: 'bg-violet-50 border-violet-300', pill: 'bg-violet-500' },
+  { color: 'text-cyan-600', bg: 'bg-cyan-50 border-cyan-300', pill: 'bg-cyan-500' },
+  { color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-300', pill: 'bg-emerald-500' },
+  { color: 'text-rose-600', bg: 'bg-rose-50 border-rose-300', pill: 'bg-rose-500' },
+  { color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-300', pill: 'bg-indigo-500' },
+  { color: 'text-lime-600', bg: 'bg-lime-50 border-lime-300', pill: 'bg-lime-500' },
+  { color: 'text-fuchsia-600', bg: 'bg-fuchsia-50 border-fuchsia-300', pill: 'bg-fuchsia-500' },
+]
+const AGENT_ICONS = [Brain, LineChart, Zap, Target, Flame, FlaskConical, Lightbulb, Activity]
+
+function getAgentMeta(agentId: string, index?: number) {
+  // Stable color assignment: known agents get fixed indices, rest hash by name
+  const KNOWN_ORDER: Record<string, number> = { toby: 0, lexi: 1 }
+  const i = index ?? KNOWN_ORDER[agentId] ??
+    (agentId.split('').reduce((h, c) => h + c.charCodeAt(0), 0) % AGENT_GRADIENTS.length)
+  const idx = i % AGENT_GRADIENTS.length
+  const name = agentId.charAt(0).toUpperCase() + agentId.slice(1)
+  return {
+    label: name,
+    ...AGENT_COLORS[idx],
+    icon: AGENT_ICONS[idx],
+    gradient: AGENT_GRADIENTS[idx],
+    role: '',
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -470,6 +495,8 @@ export function MaestroPage() {
   const stats = maestroStatus?.proposal_stats ?? null
   const agents = maestroStatus?.agents ?? {}
   const isPaused = maestroStatus?.is_paused ?? true
+  // Dynamic agent IDs — driven by API, no hardcoded list
+  const agentIds = Object.keys(agents).filter(id => id !== 'maestro')
 
   const handleTogglePause = async () => {
     setToggling(true)
@@ -501,7 +528,7 @@ export function MaestroPage() {
     try {
       const result = await post<any>('/api/maestro/trigger-burst')
       if (result.status === 'triggered') {
-        toast.success('Daily burst triggered — 60 proposals (30 reels + 30 posts) generating now', { duration: 6000 })
+        toast.success(`Daily burst triggered — ${maestroStatus?.daily_config?.total_proposals ?? '?'} proposals generating now`, { duration: 6000 })
         // Poll for updates
         const poll = setInterval(async () => {
           await Promise.all([fetchProposals(), fetchStatus()])
@@ -603,7 +630,7 @@ export function MaestroPage() {
                   </span>
                 </h1>
                 <p className="text-white/70 text-sm">
-                  {isPaused ? 'Paused — press Resume to enable daily bursts' : 'Running — daily burst orchestrating Toby & Lexi'}
+                  {isPaused ? 'Paused — press Resume to enable daily bursts' : `Running — daily burst orchestrating ${agentIds.length} AI agents`}
                 </p>
               </div>
             </div>
@@ -671,11 +698,11 @@ export function MaestroPage() {
             </div>
           </div>
 
-          {/* Agent cards — side by side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            {(['toby', 'lexi'] as const).map((agName) => {
+          {/* Agent cards — dynamic grid */}
+          <div className={`grid grid-cols-1 ${agentIds.length === 2 ? 'md:grid-cols-2' : agentIds.length >= 3 ? 'md:grid-cols-3' : ''} gap-3 mb-4`}>
+            {agentIds.map((agName, idx) => {
               const ag = agents[agName]
-              const meta = AGENT_META[agName]
+              const meta = getAgentMeta(agName, idx)
               const isActive = maestroStatus?.current_agent === agName
               const AgIcon = meta.icon
 
@@ -772,7 +799,7 @@ export function MaestroPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
             label="Proposals"
-            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${maestroStatus?.daily_config?.total_proposals ?? 60}`}
+            value={`${Object.values(stats.agents ?? {}).reduce((sum, a) => sum + (a?.today ?? 0), 0)}/${maestroStatus?.daily_config?.total_proposals ?? 60}`}
             icon={Clock}
             color="purple"
           />
@@ -841,21 +868,19 @@ export function MaestroPage() {
             {/* Agent filter */}
             <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
               <span className="text-xs text-gray-400">Agent:</span>
-              {['all', 'toby', 'lexi'].map((a) => {
-                const agMeta = a !== 'all' ? AGENT_META[a] : null
+              {['all', ...agentIds].map((a) => {
+                const meta = a !== 'all' ? getAgentMeta(a, agentIds.indexOf(a)) : null
                 return (
                   <button
                     key={a}
                     onClick={() => setAgentFilter(a)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
                       agentFilter === a
-                        ? a === 'toby' ? 'bg-amber-100 text-amber-700'
-                          : a === 'lexi' ? 'bg-violet-100 text-violet-700'
-                          : 'bg-orange-100 text-orange-700'
+                        ? meta ? `${meta.bg.split(' ')[0]} ${meta.color}` : 'bg-orange-100 text-orange-700'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {a === 'all' ? 'All' : agMeta?.label}
+                    {a === 'all' ? 'All' : meta?.label}
                   </button>
                 )
               })}
@@ -886,11 +911,11 @@ export function MaestroPage() {
               <Music className="w-16 h-16 mx-auto mb-4 opacity-30" />
               <p className="text-lg font-medium">
                 {agentFilter !== 'all'
-                  ? `No ${agentFilter === 'toby' ? 'Toby' : 'Lexi'} proposals with this filter`
+                  ? `No ${agentFilter.charAt(0).toUpperCase() + agentFilter.slice(1)} proposals with this filter`
                   : 'Maestro is warming up...'}
               </p>
               <p className="text-sm mt-1">
-                Proposals will appear here automatically as Toby and Lexi generate them
+                Proposals will appear here automatically as agents generate them
               </p>
               <div className="mt-4 flex items-center justify-center gap-2 text-orange-400">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1027,7 +1052,7 @@ function ProposalCard({
 }) {
   const strategy = STRATEGY_META[p.strategy] || STRATEGY_META.explore
   const StrategyIcon = strategy.icon
-  const agentMeta = AGENT_META[p.agent_name] || AGENT_META.toby
+  const agentMeta = getAgentMeta(p.agent_name)
 
   return (
     <div className={`bg-white rounded-xl border ${p.status === 'pending' ? 'border-gray-200 shadow-sm' : 'border-gray-100'} overflow-hidden transition-shadow hover:shadow-md`}>
@@ -1262,7 +1287,7 @@ function ProposalCard({
 // ═══════════════════════════════════════════════════════════════════
 
 type ActivityFilter = 'all' | 'actions' | 'api' | 'data'
-type AgentActivityFilter = 'all' | 'maestro' | 'toby' | 'lexi'
+type AgentActivityFilter = string  // dynamic: 'all' | any agent_id
 
 function MaestroActivityPanel({
   activity, onRefresh,
@@ -1273,6 +1298,14 @@ function MaestroActivityPanel({
   const [filter, setFilter] = useState<ActivityFilter>('all')
   const [agentActivityFilter, setAgentActivityFilter] = useState<AgentActivityFilter>('all')
   const [expanded, setExpanded] = useState(true)
+
+  // Derive unique agent names from activity entries
+  const uniqueAgents = Array.from(new Set(activity.map(e => e.agent))).sort((a, b) => {
+    // maestro first, then alphabetical
+    if (a === 'maestro') return -1
+    if (b === 'maestro') return 1
+    return a.localeCompare(b)
+  })
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -1322,17 +1355,17 @@ function MaestroActivityPanel({
   ]
 
   const agentBadge = (agent: string) => {
-    const meta = AGENT_META[agent]
-    if (meta) {
+    if (agent === 'maestro') {
       return (
-        <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${meta.bg} ${meta.color} uppercase`}>
-          {meta.label}
+        <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-50 border-orange-200 text-orange-600 uppercase border">
+          Maestro
         </span>
       )
     }
+    const meta = getAgentMeta(agent)
     return (
-      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-50 border-orange-200 text-orange-600 uppercase border">
-        Maestro
+      <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${meta.bg} ${meta.color} uppercase`}>
+        {meta.label}
       </span>
     )
   }
@@ -1372,16 +1405,15 @@ function MaestroActivityPanel({
 
         <div className="w-px h-6 bg-gray-200 mx-1" />
 
-        {(['all', 'maestro', 'toby', 'lexi'] as const).map((a) => (
+        {['all', ...uniqueAgents].map((a) => (
           <button
             key={a}
             onClick={() => setAgentActivityFilter(a)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
               agentActivityFilter === a
-                ? a === 'toby' ? 'bg-amber-500 text-white border-amber-500'
-                  : a === 'lexi' ? 'bg-violet-500 text-white border-violet-500'
-                  : a === 'maestro' ? 'bg-orange-500 text-white border-orange-500'
-                  : 'bg-gray-900 text-white border-gray-900'
+                ? a === 'maestro' ? 'bg-orange-500 text-white border-orange-500'
+                  : a === 'all' ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-blue-500 text-white border-blue-500'
                 : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
             }`}
           >
@@ -1567,9 +1599,9 @@ function InsightsPanel({
       {stats?.agents && (
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Agent Competition</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${Object.keys(stats.agents).length <= 2 ? 'grid-cols-2' : Object.keys(stats.agents).length <= 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
             {Object.entries(stats.agents).map(([name, ag]) => {
-              const meta = AGENT_META[name] || AGENT_META.toby
+              const meta = getAgentMeta(name)
               const AgIcon = meta.icon
               return (
                 <div key={name} className="border border-gray-100 rounded-xl p-4">
