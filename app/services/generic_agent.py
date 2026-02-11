@@ -1043,7 +1043,7 @@ def _ensure_agents_for_all_brands(db=None):
         for brand_id, brand_display in uncovered:
             try:
                 from app.services.evolution_engine import pick_agent_name
-                agent_name = pick_agent_name(db=db)
+                agent_name = pick_agent_name()
                 archetype = random.choice(archetypes)
                 personality = f"{archetype} Specialized for {brand_display or brand_id}."
 
