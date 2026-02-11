@@ -56,6 +56,12 @@ FEEDBACK_CYCLE_MINUTES = int(os.getenv("MAESTRO_FEEDBACK_MINUTES", "360"))
 
 STARTUP_DELAY_SECONDS = 30
 
+# ── Concurrency Control ───────────────────────────────────────
+# Limit concurrent FFmpeg/generation processes to avoid "Resource temporarily unavailable"
+MAX_CONCURRENT_JOBS = int(os.getenv("MAESTRO_MAX_CONCURRENT_JOBS", "3"))
+JOB_STAGGER_DELAY = int(os.getenv("MAESTRO_JOB_STAGGER_SECONDS", "8"))  # seconds between job launches
+_job_semaphore = threading.Semaphore(MAX_CONCURRENT_JOBS)
+
 # Daily burst: 30 unique proposals = 5 brands × 6 per brand (3 dark + 3 light)
 # Each proposal is for ONE specific brand with the correct @handle
 # Toby = dark mode (3 per brand = 15 total)
@@ -616,13 +622,17 @@ class MaestroDaemon:
                 # Track total jobs dispatched
                 self.state.total_jobs_dispatched += 1
 
-                # 4. Process job in background thread
+                # 4. Process job in background thread (with stagger delay to avoid resource exhaustion)
+                import time as _time
                 thread = threading.Thread(
                     target=self._process_and_schedule_job,
                     args=(job_id, proposal_id, agent_name),
                     daemon=True,
                 )
                 thread.start()
+
+                # Stagger: wait before launching next job to avoid FFmpeg resource exhaustion
+                _time.sleep(JOB_STAGGER_DELAY)
 
             except Exception as e:
                 self.state.log(
@@ -633,8 +643,20 @@ class MaestroDaemon:
                 traceback.print_exc()
 
     def _process_and_schedule_job(self, job_id: str, proposal_id: str, agent_name: str):
-        """Process a job and auto-schedule on completion. Runs in a thread."""
+        """Process a job and auto-schedule on completion. Runs in a thread.
+        
+        Uses a semaphore to limit concurrent FFmpeg processes — Railway containers
+        have limited resources and 30 simultaneous ffmpeg subprocesses cause
+        'Resource temporarily unavailable' errors.
+        """
+        _job_semaphore.acquire()
         try:
+            self.state.log(
+                agent_name, "Job started",
+                f"Processing {job_id} (from {proposal_id}) — slot acquired",
+                "⚙️", "detail"
+            )
+
             from app.db_connection import get_db_session
             from app.services.job_manager import JobManager
 
@@ -657,6 +679,8 @@ class MaestroDaemon:
                 "❌"
             )
             traceback.print_exc()
+        finally:
+            _job_semaphore.release()
 
     # ──────────────────────────────────────────────────────────
     # CYCLE: OBSERVE — Shared metrics collection
@@ -890,6 +914,17 @@ def auto_schedule_job(job_id: str):
             if not reel_id or not video_path:
                 continue
 
+            # Verify files actually exist before scheduling (prevents "Video not found" errors)
+            from pathlib import Path as _Path
+            video_abs = _Path(video_path.lstrip('/'))
+            thumbnail_abs = _Path(thumbnail_path.lstrip('/')) if thumbnail_path else None
+            if not video_abs.exists():
+                print(f"[AUTO-SCHEDULE] ⚠️ Video file missing for {brand}: {video_abs} — skipping", flush=True)
+                continue
+            if thumbnail_abs and not thumbnail_abs.exists():
+                print(f"[AUTO-SCHEDULE] ⚠️ Thumbnail missing for {brand}: {thumbnail_abs} — skipping", flush=True)
+                continue
+
             try:
                 slot = scheduler.get_next_available_slot(brand, variant)
 
@@ -973,6 +1008,13 @@ def schedule_all_ready_reels() -> int:
                 reel_id = output.get("reel_id")
                 video_path = output.get("video_path")
                 if not reel_id or not video_path:
+                    continue
+
+                # Verify video file actually exists before scheduling
+                from pathlib import Path as _Path
+                video_abs = _Path(video_path.lstrip('/'))
+                if not video_abs.exists():
+                    print(f"[READY-SCHEDULE] ⚠️ Video missing for {brand}: {video_abs} — skipping", flush=True)
                     continue
 
                 # Check if already in scheduled_reels (safety check)

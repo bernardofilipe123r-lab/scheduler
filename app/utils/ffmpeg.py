@@ -82,25 +82,34 @@ def create_video_from_image(
     # Output file
     cmd.append(str(output_path))
     
-    try:
-        # Run FFmpeg command
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        
-        if not output_path.exists():
-            raise RuntimeError("FFmpeg completed but output file was not created")
-        
-        return True
-        
-    except subprocess.CalledProcessError as e:
-        error_msg = f"FFmpeg error: {e.stderr}"
-        raise RuntimeError(error_msg)
-    except Exception as e:
-        raise RuntimeError(f"Failed to create video: {str(e)}")
+    # Retry with backoff — "Resource temporarily unavailable" errors are transient
+    import time as _time
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Run FFmpeg command
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            if not output_path.exists():
+                raise RuntimeError("FFmpeg completed but output file was not created")
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            error_msg = f"FFmpeg error: {e.stderr}"
+            if "Resource temporarily unavailable" in error_msg and attempt < max_retries - 1:
+                wait = (attempt + 1) * 5  # 5s, 10s
+                print(f"⚠️ FFmpeg resource busy, retrying in {wait}s (attempt {attempt + 1}/{max_retries})...", flush=True)
+                _time.sleep(wait)
+                continue
+            raise RuntimeError(f"Failed to generate video: {error_msg}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to create video: {str(e)}")
 
 
 def verify_ffmpeg_installation() -> bool:

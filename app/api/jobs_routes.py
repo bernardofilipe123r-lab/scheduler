@@ -44,9 +44,10 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 def process_job_async(job_id: str):
-    """Background task to process a job."""
+    """Background task to process a job (with concurrency control)."""
     import traceback
     import sys
+    from app.services.maestro import _job_semaphore
     
     # Force flush ALL print statements
     print(f"\n{'='*60}", flush=True)
@@ -56,6 +57,7 @@ def process_job_async(job_id: str):
     print(f"{'='*60}", flush=True)
     sys.stdout.flush()
     
+    _job_semaphore.acquire()
     try:
         print(f"📂 Opening database session...", flush=True)
         with get_db_session() as db:
@@ -98,6 +100,8 @@ def process_job_async(job_id: str):
         except Exception as update_error:
             print(f"   ❌ Failed to update job status: {update_error}", flush=True)
         sys.stdout.flush()
+    finally:
+        _job_semaphore.release()
 
 
 @router.post(
