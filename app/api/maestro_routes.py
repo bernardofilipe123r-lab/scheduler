@@ -789,9 +789,8 @@ def get_examiner_stats(days: int = 7):
             return {
                 "composite": round(sum(p.examiner_score or 0 for p in proposals) / len(proposals), 2),
                 "avatar_fit": round(sum(p.examiner_avatar_fit or 0 for p in proposals) / len(proposals), 2),
-                "content_quality": round(sum(p.examiner_content_quality or 0 for p in proposals) / len(proposals), 2),
                 "engagement": round(sum(p.examiner_engagement or 0 for p in proposals) / len(proposals), 2),
-                "brand_align": round(sum(p.examiner_brand_align or 0 for p in proposals) / len(proposals), 2),
+                "content_quality": round(sum(p.examiner_content_quality or 0 for p in proposals) / len(proposals), 2),
             }
 
         # Rejection reasons

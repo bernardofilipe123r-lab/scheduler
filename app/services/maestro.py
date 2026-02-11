@@ -830,9 +830,8 @@ class MaestroDaemon:
             # Save examiner scores regardless of pass/fail
             proposal.examiner_score = composite
             proposal.examiner_avatar_fit = scores.get("avatar_fit")
-            proposal.examiner_content_quality = scores.get("content_quality")
             proposal.examiner_engagement = scores.get("engagement_potential")
-            proposal.examiner_brand_align = scores.get("brand_alignment")
+            proposal.examiner_content_quality = scores.get("content_quality")
             proposal.examiner_verdict = verdict
             proposal.examiner_reason = reason
             proposal.examiner_red_flags = red_flags

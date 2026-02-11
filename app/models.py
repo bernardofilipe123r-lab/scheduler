@@ -878,7 +878,6 @@ class TobyProposal(Base):
     examiner_avatar_fit = Column(Float, nullable=True)    # Avatar relevance (0-10)
     examiner_content_quality = Column(Float, nullable=True)  # Content value (0-10)
     examiner_engagement = Column(Float, nullable=True)    # Engagement potential (0-10)
-    examiner_brand_align = Column(Float, nullable=True)   # Brand alignment (0-10)
     examiner_verdict = Column(String(20), nullable=True)  # accept | reject
     examiner_reason = Column(Text, nullable=True)         # 1-2 sentence explanation
     examiner_red_flags = Column(JSON, nullable=True)      # List of detected red flags
@@ -922,9 +921,8 @@ class TobyProposal(Base):
             "examiner_score": self.examiner_score,
             "examiner_scores": {
                 "avatar_fit": self.examiner_avatar_fit,
-                "content_quality": self.examiner_content_quality,
                 "engagement_potential": self.examiner_engagement,
-                "brand_alignment": self.examiner_brand_align,
+                "content_quality": self.examiner_content_quality,
             } if self.examiner_score is not None else None,
             "examiner_verdict": self.examiner_verdict,
             "examiner_reason": self.examiner_reason,

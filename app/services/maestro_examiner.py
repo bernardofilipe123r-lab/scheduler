@@ -25,26 +25,20 @@ import traceback
 from typing import Dict, Optional, Tuple
 
 # ── Scoring weights ───────────────────────────────────────────
+# 3 dimensions only — all brands share the same niche (health/wellness
+# for women 45+), just different colors, so "brand alignment" is N/A.
 SCORING_WEIGHTS = {
     "avatar_fit":          0.35,   # Is this realistic/relevant for women 45+?
+    "engagement_potential": 0.35,  # Hooks, virality, shareability — our #1 goal
     "content_quality":     0.30,   # Sound advice, actionable, educational?
-    "engagement_potential": 0.20,  # Hooks, curiosity, shareability?
-    "brand_alignment":     0.15,   # Matches health/wellness brand tone?
 }
 
 ACCEPT_THRESHOLD = 6.0     # >= this → accept
 HARD_REJECT_THRESHOLD = 4.5  # < this → hard reject (not even gray zone)
 
-# ── Brand niche descriptions (for brand_alignment scoring) ────
-BRAND_NICHES = {
-    "healthycollege":   "Daily health habits, practical wellness tips, nutrition fundamentals, healthy lifestyle foundations",
-    "vitalitycollege":  "Energy, vitality, active aging, physical wellness, movement for longevity",
-    "longevitycollege": "Anti-aging science, longevity research, biohacking for health span, cellular health",
-    "holisticcollege":  "Mind-body connection, holistic wellness, meditation, stress management, integrative health",
-    "wellbeingcollege": "Mental health, emotional wellness, self-care routines, mindfulness, inner peace",
-}
-
-DEFAULT_NICHE = "Health, wellness, and daily habits for women 45+ seeking to improve their quality of life"
+# All brands share the same niche — health/wellness for women 45+
+# (just different color palettes). No per-brand niche scoring needed.
+AVATAR_DESCRIPTION = "Women aged 45+ in the United States focused on health, daily habits, mental health, wellness, nutrition, and aging gracefully"
 
 # ── Red flags that should trigger low scores ──────────────────
 RED_FLAGS = [
@@ -73,8 +67,6 @@ def _build_examiner_prompt(
 ) -> str:
     """Build the DeepSeek prompt for proposal examination."""
 
-    brand_niche = BRAND_NICHES.get(brand, DEFAULT_NICHE)
-
     # Build content preview
     if content_type == "post" and slide_texts:
         content_preview = "\n".join(f"  Slide {i+1}: {s}" for i, s in enumerate(slide_texts[:6]))
@@ -93,15 +85,9 @@ def _build_examiner_prompt(
 
     prompt = f"""You are MAESTRO, the final content examiner for a network of health and wellness Instagram brands.
 
-TARGET AVATAR: Women aged 45+ in the United States who care about:
-- Daily health habits and routines
-- Mental health and emotional wellness
-- Nutrition and holistic health
-- Longevity and aging gracefully
-- Self-care and mindfulness
-- Practical, achievable wellness tips
+TARGET AVATAR: {AVATAR_DESCRIPTION}
+They care about: daily habits, routines, mental health, emotional wellness, nutrition, holistic health, longevity, aging gracefully, self-care, mindfulness, practical achievable tips.
 
-BRAND: {brand} — Focus: {brand_niche}
 CONTENT TYPE: {content_type} ({"carousel image post" if content_type == "post" else "short-form video reel"})
 AGENT: {agent_name} | STRATEGY: {strategy}
 {source_context}
@@ -113,7 +99,7 @@ Content:
 
 Agent reasoning: {reasoning}
 
-YOUR TASK: Score this proposal on 4 dimensions (0-10 each).
+YOUR TASK: Score this proposal on 3 dimensions (0-10 each).
 
 SCORING CRITERIA:
 
@@ -123,39 +109,37 @@ SCORING CRITERIA:
    - Would a 48-year-old woman in the US find this relevant to her daily life?
    - Score LOW if: content assumes youth, extreme fitness, or male-oriented interests
 
-2. CONTENT_QUALITY (weight: 30%):
+2. ENGAGEMENT_POTENTIAL (weight: 35%) — THIS IS CRITICAL:
+   - Does it have a strong hook that stops the scroll and creates curiosity?
+   - Is it shareable? Would someone tag a friend, save it, or share to stories?
+   - Does it have emotional resonance, a surprising insight, or a "wow I didn't know that" factor?
+   - Does it use proven viral patterns (lists, myths debunked, "stop doing this", before/after, secrets)?
+   - Would this content make someone comment or engage?
+   - Going VIRAL is our #1 goal — score this dimension generously for strong hooks and shareability
+   - But empty virality with zero substance is still bad (that's what content_quality catches)
+
+3. CONTENT_QUALITY (weight: 30%):
    - Is the advice sound, evidence-informed, and actionable?
    - Does it educate or provide genuine value (not just clickbait)?
    - Is the information accurate and responsible?
-   - Score LOW if: vague platitudes, dangerous advice, or pure shock value
-
-3. ENGAGEMENT_POTENTIAL (weight: 20%):
-   - Does it have a good hook that creates curiosity?
-   - Is it shareable? Would someone tag a friend or save it?
-   - Does it have emotional resonance or a surprising insight?
-   - IMPORTANT: Viral doesn't automatically mean good. A well-crafted tip about morning routines is better than a trendy but irrelevant viral format.
-   - Score fairly — don't penalize quiet wisdom, don't reward empty virality
-
-4. BRAND_ALIGNMENT (weight: 15%):
-   - Does this fit the brand's specific niche: {brand_niche}?
-   - Is the tone appropriate (empowering, warm, educational — not aggressive or preachy)?
-   - Would this feel natural on a health/wellness Instagram page?
+   - Is the tone empowering, warm, educational — not aggressive or preachy?
+   - Score LOW if: vague platitudes, dangerous advice, or pure shock value with no substance
 
 RED FLAGS (any of these should significantly lower scores):
 {red_flags_text}
 
 SMART EVALUATION PHILOSOPHY:
-- Just because content went viral does NOT make it good for our audience
+- Just because content went viral does NOT make it good for our audience — it must fit the avatar
 - Just because content is NOT viral does NOT make it bad — proven wellness advice with a fresh angle is gold
-- The best content mixes PROVEN value with ENGAGING presentation
+- The best content mixes PROVEN value with ENGAGING viral-ready presentation
+- A strong hook + solid advice = perfect content. Accept it.
 - Err on the side of accepting good-enough content — we need volume, not perfection
 
 Respond with ONLY valid JSON, no markdown:
 {{
   "avatar_fit": <0-10>,
-  "content_quality": <0-10>,
   "engagement_potential": <0-10>,
-  "brand_alignment": <0-10>,
+  "content_quality": <0-10>,
   "verdict": "<accept|reject>",
   "reason": "<1-2 sentence explanation of your decision>",
   "red_flags_found": ["<list any red flags detected, or empty list>"]
@@ -246,18 +230,16 @@ def examine_proposal(
 
         scores_data = json.loads(json_text)
 
-        # Extract scores
+        # Extract scores (3 dimensions — no brand_alignment)
         avatar_fit = float(scores_data.get("avatar_fit", 5))
-        content_quality = float(scores_data.get("content_quality", 5))
         engagement_potential = float(scores_data.get("engagement_potential", 5))
-        brand_alignment = float(scores_data.get("brand_alignment", 5))
+        content_quality = float(scores_data.get("content_quality", 5))
 
         # Clamp to 0-10
         scores = {
             "avatar_fit": max(0, min(10, avatar_fit)),
-            "content_quality": max(0, min(10, content_quality)),
             "engagement_potential": max(0, min(10, engagement_potential)),
-            "brand_alignment": max(0, min(10, brand_alignment)),
+            "content_quality": max(0, min(10, content_quality)),
         }
 
         # Calculate weighted composite
@@ -313,9 +295,8 @@ def _auto_pass(reason: str) -> Dict:
         "composite_score": 7.0,
         "scores": {
             "avatar_fit": 7.0,
-            "content_quality": 7.0,
             "engagement_potential": 7.0,
-            "brand_alignment": 7.0,
+            "content_quality": 7.0,
         },
         "verdict": "accept",
         "reason": f"Auto-passed: {reason}",
