@@ -18,9 +18,12 @@ Endpoints:
     GET  /api/maestro/trending                     — Trending content
     GET  /api/maestro/feedback                     — Latest agent performance feedback
     POST /api/maestro/optimize-now                 — Trigger Toby×10 + Lexi×10
+    GET  /api/maestro/examiner/stats               — Examiner quality gate statistics
+    GET  /api/maestro/examiner/rejected            — Recently rejected proposals with details
 """
 
 from typing import Optional
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Query, BackgroundTasks
 from pydantic import BaseModel
 
@@ -742,6 +745,147 @@ async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks):
             "job_id": job_id,
             "retry_number": retry_count + 1,
             "message": f"Job {job_id} queued for retry #{retry_count + 1}" if success else "Retry failed to start",
+        }
+    finally:
+        db.close()
+
+
+# ── Examiner Stats ────────────────────────────────────────────
+
+@router.get("/examiner/stats")
+def get_examiner_stats(days: int = 7):
+    """
+    Examiner quality gate statistics: acceptance rate, avg scores,
+    top rejection reasons, score distributions.
+    """
+    from app.db_connection import SessionLocal
+    from app.models import TobyProposal
+    from sqlalchemy import func
+
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        # All examined proposals (have examiner_score)
+        examined = (
+            db.query(TobyProposal)
+            .filter(
+                TobyProposal.examiner_score.isnot(None),
+                TobyProposal.created_at >= cutoff,
+            )
+            .all()
+        )
+
+        if not examined:
+            return {"period_days": days, "total_examined": 0, "message": "No examined proposals found"}
+
+        accepted = [p for p in examined if p.examiner_verdict == "accept"]
+        rejected = [p for p in examined if p.examiner_verdict == "reject"]
+
+        # Average scores
+        def avg_scores(proposals):
+            if not proposals:
+                return None
+            return {
+                "composite": round(sum(p.examiner_score or 0 for p in proposals) / len(proposals), 2),
+                "avatar_fit": round(sum(p.examiner_avatar_fit or 0 for p in proposals) / len(proposals), 2),
+                "content_quality": round(sum(p.examiner_content_quality or 0 for p in proposals) / len(proposals), 2),
+                "engagement": round(sum(p.examiner_engagement or 0 for p in proposals) / len(proposals), 2),
+                "brand_align": round(sum(p.examiner_brand_align or 0 for p in proposals) / len(proposals), 2),
+            }
+
+        # Rejection reasons
+        rejection_reasons = []
+        for p in rejected:
+            if p.examiner_reason:
+                rejection_reasons.append({
+                    "proposal_id": p.proposal_id,
+                    "brand": p.brand,
+                    "content_type": p.content_type,
+                    "score": p.examiner_score,
+                    "reason": p.examiner_reason,
+                    "red_flags": p.examiner_red_flags or [],
+                    "title": p.title[:80] if p.title else None,
+                })
+
+        # Per-agent breakdown
+        agent_stats = {}
+        for p in examined:
+            agent = p.agent_name or "unknown"
+            if agent not in agent_stats:
+                agent_stats[agent] = {"examined": 0, "accepted": 0, "rejected": 0, "scores": []}
+            agent_stats[agent]["examined"] += 1
+            agent_stats[agent]["scores"].append(p.examiner_score or 0)
+            if p.examiner_verdict == "accept":
+                agent_stats[agent]["accepted"] += 1
+            else:
+                agent_stats[agent]["rejected"] += 1
+
+        for agent, stats in agent_stats.items():
+            stats["avg_score"] = round(sum(stats["scores"]) / len(stats["scores"]), 2) if stats["scores"] else 0
+            stats["acceptance_rate"] = round(stats["accepted"] / stats["examined"] * 100, 1) if stats["examined"] else 0
+            del stats["scores"]
+
+        # Per-brand breakdown
+        brand_stats = {}
+        for p in examined:
+            b = p.brand or "unknown"
+            if b not in brand_stats:
+                brand_stats[b] = {"examined": 0, "accepted": 0, "rejected": 0}
+            brand_stats[b]["examined"] += 1
+            if p.examiner_verdict == "accept":
+                brand_stats[b]["accepted"] += 1
+            else:
+                brand_stats[b]["rejected"] += 1
+
+        return {
+            "period_days": days,
+            "total_examined": len(examined),
+            "total_accepted": len(accepted),
+            "total_rejected": len(rejected),
+            "acceptance_rate": round(len(accepted) / len(examined) * 100, 1) if examined else 0,
+            "avg_scores_accepted": avg_scores(accepted),
+            "avg_scores_rejected": avg_scores(rejected),
+            "avg_scores_all": avg_scores(examined),
+            "per_agent": agent_stats,
+            "per_brand": brand_stats,
+            "recent_rejections": sorted(rejection_reasons, key=lambda x: x.get("score", 0))[:20],
+        }
+    finally:
+        db.close()
+
+
+@router.get("/examiner/rejected")
+def get_rejected_proposals(
+    limit: int = 50,
+    brand: str = None,
+    content_type: str = None,
+):
+    """List recently rejected proposals with examiner details."""
+    from app.db_connection import SessionLocal
+    from app.models import TobyProposal
+
+    db = SessionLocal()
+    try:
+        query = (
+            db.query(TobyProposal)
+            .filter(TobyProposal.examiner_verdict == "reject")
+        )
+
+        if brand:
+            query = query.filter(TobyProposal.brand == brand)
+        if content_type:
+            query = query.filter(TobyProposal.content_type == content_type)
+
+        proposals = (
+            query.order_by(TobyProposal.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "count": len(proposals),
+            "proposals": [p.to_dict() for p in proposals],
         }
     finally:
         db.close()

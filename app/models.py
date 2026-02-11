@@ -873,6 +873,16 @@ class TobyProposal(Base):
     # ── Quality metadata ──
     quality_score = Column(Float, nullable=True)  # Phase 2 quality gate score
 
+    # ── Maestro Examiner scores ──
+    examiner_score = Column(Float, nullable=True)         # Weighted composite (0-10)
+    examiner_avatar_fit = Column(Float, nullable=True)    # Avatar relevance (0-10)
+    examiner_content_quality = Column(Float, nullable=True)  # Content value (0-10)
+    examiner_engagement = Column(Float, nullable=True)    # Engagement potential (0-10)
+    examiner_brand_align = Column(Float, nullable=True)   # Brand alignment (0-10)
+    examiner_verdict = Column(String(20), nullable=True)  # accept | reject
+    examiner_reason = Column(Text, nullable=True)         # 1-2 sentence explanation
+    examiner_red_flags = Column(JSON, nullable=True)      # List of detected red flags
+
     # ── Review metadata ──
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     reviewer_notes = Column(Text, nullable=True)
@@ -909,6 +919,16 @@ class TobyProposal(Base):
             "source_performance_score": self.source_performance_score,
             "source_account": self.source_account,
             "quality_score": self.quality_score,
+            "examiner_score": self.examiner_score,
+            "examiner_scores": {
+                "avatar_fit": self.examiner_avatar_fit,
+                "content_quality": self.examiner_content_quality,
+                "engagement_potential": self.examiner_engagement,
+                "brand_alignment": self.examiner_brand_align,
+            } if self.examiner_score is not None else None,
+            "examiner_verdict": self.examiner_verdict,
+            "examiner_reason": self.examiner_reason,
+            "examiner_red_flags": self.examiner_red_flags,
             "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
             "accepted_job_id": self.accepted_job_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
