@@ -258,21 +258,35 @@ class MaestroState:
             from app.services.generic_agent import get_all_active_agents
             agents = get_all_active_agents()
             brands = _get_all_brands()
-            total = sum(a.proposals_per_brand for a in agents) * len(brands)
+            reels_total = sum(a.proposals_per_brand for a in agents) * len(brands)
+            posts_total = reels_total  # Same agents generate posts too (Phase 2)
+            total = reels_total + posts_total
             return {
                 "agents": [{"id": a.agent_id, "name": a.display_name, "variant": a.variant,
                             "proposals_per_brand": a.proposals_per_brand} for a in agents],
                 "brands": brands,
                 "total_agents": len(agents),
                 "total_brands": len(brands),
-                "total_proposals_per_burst": total,
-                "total_reels_per_day": total,
+                "total_proposals": total,
+                "total_reels": reels_total,
+                "total_posts": posts_total,
+                "reels_per_brand": reels_total // max(len(brands), 1),
+                "posts_per_brand": posts_total // max(len(brands), 1),
                 "jobs_per_day": total,
             }
         except Exception:
+            n_brands = len(ALL_BRANDS)
+            reels = PROPOSALS_PER_BRAND_PER_AGENT * 2 * n_brands  # 2 legacy agents
+            posts = reels
             return {
                 "proposals_per_brand_per_agent": PROPOSALS_PER_BRAND_PER_AGENT,
                 "brands": ALL_BRANDS,
+                "total_proposals": reels + posts,
+                "total_reels": reels,
+                "total_posts": posts,
+                "reels_per_brand": reels // n_brands,
+                "posts_per_brand": posts // n_brands,
+                "jobs_per_day": reels + posts,
                 "fallback": True,
             }
 

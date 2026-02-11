@@ -137,12 +137,14 @@ interface MaestroStatus {
   recent_activity: ActivityEntry[]
   proposal_stats: ProposalStats
   daily_config?: {
-    proposals_per_brand_per_agent: number
+    proposals_per_brand_per_agent?: number
     total_proposals: number
-    reels_per_brand: number
-    total_reels_per_day: number
-    variants: string[]
-    brands: string[]
+    total_reels?: number
+    total_posts?: number
+    reels_per_brand?: number
+    posts_per_brand?: number
+    variants?: string[]
+    brands?: string[]
     jobs_per_day: number
   }
 }
@@ -499,7 +501,7 @@ export function MaestroPage() {
     try {
       const result = await post<any>('/api/maestro/trigger-burst')
       if (result.status === 'triggered') {
-        toast.success('Daily burst triggered — 30 unique reels (6 per brand, each with its own content) generating now', { duration: 6000 })
+        toast.success('Daily burst triggered — 60 proposals (30 reels + 30 posts) generating now', { duration: 6000 })
         // Poll for updates
         const poll = setInterval(async () => {
           await Promise.all([fetchProposals(), fetchStatus()])
@@ -754,7 +756,7 @@ export function MaestroPage() {
               <span className="flex items-center gap-1.5">
                 <Sun className="w-3 h-3" />
                 <Moon className="w-3 h-3" />
-                {maestroStatus.daily_config?.total_reels_per_day ?? 30} unique reels/day &middot; {maestroStatus.daily_config?.reels_per_brand ?? 6}/brand &middot; Burst at 12PM Lisbon &middot; Next available slot
+                {maestroStatus.daily_config?.total_proposals ?? 60} proposals/day ({maestroStatus.daily_config?.total_reels ?? 30} reels + {maestroStatus.daily_config?.total_posts ?? 30} posts) &middot; Burst at 12PM Lisbon
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3" />
@@ -770,7 +772,7 @@ export function MaestroPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
             label="Proposals"
-            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${maestroStatus?.daily_config?.total_proposals ?? 30}`}
+            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${maestroStatus?.daily_config?.total_proposals ?? 60}`}
             icon={Clock}
             color="purple"
           />
