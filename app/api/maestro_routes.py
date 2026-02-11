@@ -584,7 +584,8 @@ async def get_trending(
 @router.post("/optimize-now")
 async def optimize_now(background_tasks: BackgroundTasks):
     """
-    Trigger both Toby and Lexi to generate 10 reel proposals each, immediately.
+    Trigger both Toby and Lexi to generate proposals immediately.
+    5 reels + 5 posts per agent = 20 total proposals.
 
     Runs in background so the response is instant.
     Returns immediately with a confirmation — proposals appear in the feed.
@@ -594,50 +595,42 @@ async def optimize_now(background_tasks: BackgroundTasks):
     def _run_optimize():
         import traceback
 
-        maestro_log("maestro", "⚡ Optimize Now", "Triggered — Toby×10 + Lexi×10 reels", "🚀", "action")
+        maestro_log("maestro", "⚡ Optimize Now", "Triggered — Toby×5 reels + 5 posts, Lexi×5 reels + 5 posts", "🚀", "action")
 
         results = {}
 
-        # Toby: 10 reel proposals
-        try:
-            from app.services.toby_agent import get_toby_agent
-            toby = get_toby_agent()
-            maestro_log("maestro", "Optimize Now", "Running Toby × 10 reels...", "🧠", "action")
-            toby_result = toby.run(max_proposals=10, content_type="reel")
-            results["toby"] = {
-                "created": toby_result.get("proposals_created", 0),
-                "strategies": toby_result.get("strategies_used", {}),
-            }
-            maestro_log("maestro", "Optimize Now", f"Toby done — {toby_result.get('proposals_created', 0)} proposals", "✅", "action")
-        except Exception as e:
-            maestro_log("maestro", "Optimize Now Error", f"Toby failed: {e}", "❌", "action")
-            traceback.print_exc()
-            results["toby"] = {"error": str(e)}
+        for agent_name, agent_label, agent_emoji in [("toby", "Toby", "🧠"), ("lexi", "Lexi", "📊")]:
+            agent_results = {"reels": 0, "posts": 0, "errors": []}
 
-        # Lexi: 10 reel proposals
-        try:
-            from app.services.lexi_agent import get_lexi_agent
-            lexi = get_lexi_agent()
-            maestro_log("maestro", "Optimize Now", "Running Lexi × 10 reels...", "📊", "action")
-            lexi_result = lexi.run(max_proposals=10, content_type="reel")
-            results["lexi"] = {
-                "created": lexi_result.get("proposals_created", 0),
-                "strategies": lexi_result.get("strategies_used", {}),
-            }
-            maestro_log("maestro", "Optimize Now", f"Lexi done — {lexi_result.get('proposals_created', 0)} proposals", "✅", "action")
-        except Exception as e:
-            maestro_log("maestro", "Optimize Now Error", f"Lexi failed: {e}", "❌", "action")
-            traceback.print_exc()
-            results["lexi"] = {"error": str(e)}
+            for content_type, ct_count in [("reel", 5), ("post", 5)]:
+                try:
+                    if agent_name == "toby":
+                        from app.services.toby_agent import get_toby_agent
+                        agent = get_toby_agent()
+                    else:
+                        from app.services.lexi_agent import get_lexi_agent
+                        agent = get_lexi_agent()
 
-        total = results.get("toby", {}).get("created", 0) + results.get("lexi", {}).get("created", 0)
-        maestro_log("maestro", "⚡ Optimize Now Complete", f"Total: {total} proposals generated", "🏁", "action")
+                    maestro_log("maestro", "Optimize Now", f"Running {agent_label} × {ct_count} {content_type}s...", agent_emoji, "action")
+                    result = agent.run(max_proposals=ct_count, content_type=content_type)
+                    created = result.get("proposals_created", 0)
+                    agent_results[f"{content_type}s"] = created
+                    maestro_log("maestro", "Optimize Now", f"{agent_label} done — {created} {content_type} proposals", "✅", "action")
+                except Exception as e:
+                    maestro_log("maestro", "Optimize Now Error", f"{agent_label} {content_type}s failed: {e}", "❌", "action")
+                    traceback.print_exc()
+                    agent_results["errors"].append(f"{content_type}: {str(e)[:100]}")
+
+            results[agent_name] = agent_results
+
+        total = sum(r.get("reels", 0) + r.get("posts", 0) for r in results.values())
+        maestro_log("maestro", "⚡ Optimize Now Complete", f"Total: {total} proposals (reels + posts)", "🏁", "action")
 
     background_tasks.add_task(_run_optimize)
 
     return {
         "status": "started",
-        "message": "Optimize Now triggered — Toby (10 reels) + Lexi (10 reels) generating in background. Proposals will appear shortly.",
+        "message": "Optimize Now triggered — Toby (5 reels + 5 posts) + Lexi (5 reels + 5 posts) generating in background.",
     }
 
 

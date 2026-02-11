@@ -445,7 +445,7 @@ export function MaestroPage() {
     try {
       const result = await post<any>('/api/maestro/optimize-now')
       if (result.status === 'started') {
-        toast.success('⚡ Optimize Now triggered — Toby (10) + Lexi (10) generating...', { duration: 6000 })
+        toast.success('⚡ Optimize Now — generating 5 reels + 5 posts per agent (20 total)...', { duration: 6000 })
         // Poll for new proposals every 15s while they generate
         const poll = setInterval(async () => {
           await Promise.all([fetchProposals(), fetchStatus()])
