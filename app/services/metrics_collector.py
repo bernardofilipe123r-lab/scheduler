@@ -261,7 +261,7 @@ class MetricsCollector:
             published = (
                 db.query(ScheduledReel)
                 .filter(
-                    ScheduledReel.brand == brand,
+                    ScheduledReel.user_id == brand,
                     ScheduledReel.status.in_(["published", "partial"]),
                     ScheduledReel.published_at >= cutoff,
                 )

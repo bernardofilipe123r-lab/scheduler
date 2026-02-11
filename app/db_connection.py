@@ -261,6 +261,36 @@ def run_migrations():
                 ALTER TABLE ai_agents ADD COLUMN parent_agent_id VARCHAR(50);
             """
         },
+        {
+            "name": "Add is_builtin column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='is_builtin'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN is_builtin BOOLEAN DEFAULT false;
+            """
+        },
+        {
+            "name": "Add created_for_brand column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='created_for_brand'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN created_for_brand VARCHAR(100);
+            """
+        },
+        {
+            "name": "Add content_types column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='content_types'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN content_types TEXT DEFAULT '["reel"]';
+            """
+        },
         # ── AI Evolution Engine: agent_performance table ──
         {
             "name": "Create agent_performance table",
