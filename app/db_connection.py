@@ -98,6 +98,88 @@ def run_migrations():
                 ALTER TABLE toby_proposals ADD COLUMN variant VARCHAR(10);
             """
         },
+        # Add content_type column to toby_proposals
+        {
+            "name": "Add content_type column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='content_type'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN content_type VARCHAR(10) DEFAULT 'reel' NOT NULL;
+            """
+        },
+        # ── Maestro Examiner scoring columns ──
+        {
+            "name": "Add examiner_score column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='examiner_score'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN examiner_score FLOAT;
+            """
+        },
+        {
+            "name": "Add examiner_avatar_fit column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='examiner_avatar_fit'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN examiner_avatar_fit FLOAT;
+            """
+        },
+        {
+            "name": "Add examiner_content_quality column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='examiner_content_quality'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN examiner_content_quality FLOAT;
+            """
+        },
+        {
+            "name": "Add examiner_engagement column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='examiner_engagement'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN examiner_engagement FLOAT;
+            """
+        },
+        {
+            "name": "Add examiner_verdict column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='examiner_verdict'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN examiner_verdict VARCHAR(20);
+            """
+        },
+        {
+            "name": "Add examiner_reason column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='examiner_reason'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN examiner_reason TEXT;
+            """
+        },
+        {
+            "name": "Add examiner_red_flags column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='examiner_red_flags'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN examiner_red_flags JSON;
+            """
+        },
     ]
     
     with engine.connect() as conn:

@@ -112,12 +112,13 @@ def _db_get(key: str, default: str = "") -> str:
             return MaestroConfig.get(db, key, default)
         finally:
             db.close()
-    except Exception:
+    except Exception as e:
+        print(f"[MAESTRO] _db_get({key}) failed, using default '{default}': {e}", flush=True)
         return default
 
 
-def _db_set(key: str, value: str):
-    """Write a config value to DB (survives redeploys)."""
+def _db_set(key: str, value: str) -> bool:
+    """Write a config value to DB (survives redeploys). Returns True if persisted."""
     try:
         from app.db_connection import SessionLocal
         from app.models import MaestroConfig
@@ -126,8 +127,10 @@ def _db_set(key: str, value: str):
             MaestroConfig.set(db, key, value)
         finally:
             db.close()
+        return True
     except Exception as e:
         print(f"[MAESTRO] Failed to persist {key}: {e}", flush=True)
+        return False
 
 
 def is_paused() -> bool:
@@ -135,9 +138,18 @@ def is_paused() -> bool:
     return _db_get("is_paused", "true") == "true"
 
 
-def set_paused(paused: bool):
-    """Set paused state (DB-persisted)."""
-    _db_set("is_paused", "true" if paused else "false")
+def set_paused(paused: bool) -> bool:
+    """Set paused state (DB-persisted). Returns True if successfully persisted."""
+    value = "true" if paused else "false"
+    if not _db_set("is_paused", value):
+        print(f"[MAESTRO] CRITICAL: set_paused({paused}) failed to persist!", flush=True)
+        return False
+    # Verify the write by reading back
+    actual = _db_get("is_paused", "")
+    if actual != value:
+        print(f"[MAESTRO] CRITICAL: set_paused({paused}) verify failed! Wrote '{value}' but read back '{actual}'", flush=True)
+        return False
+    return True
 
 
 def get_last_daily_run() -> Optional[datetime]:

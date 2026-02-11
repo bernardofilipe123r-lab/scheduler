@@ -474,7 +474,9 @@ export function MaestroPage() {
     try {
       const endpoint = isPaused ? '/api/maestro/resume' : '/api/maestro/pause'
       const result = await post<any>(endpoint)
-      if (result.status === 'resumed' || result.status === 'paused' || result.status === 'already_running' || result.status === 'already_paused') {
+      if (result.status === 'error') {
+        toast.error(result.message || 'Failed to persist state — check DB connection')
+      } else if (result.status === 'resumed' || result.status === 'paused' || result.status === 'already_running' || result.status === 'already_paused') {
         toast.success(
           isPaused
             ? `Maestro resumed${result.burst_triggered ? ' — daily burst triggered!' : ''}`

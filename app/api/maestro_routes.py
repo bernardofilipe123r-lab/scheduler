@@ -95,6 +95,12 @@ async def maestro_status():
             "rejected": rejected,
             "agents": agent_stats,
         }
+    except Exception as e:
+        print(f"[MAESTRO-STATUS] DB query failed (proposals may not have new columns yet): {e}", flush=True)
+        status["proposal_stats"] = {
+            "total": 0, "pending": 0, "accepted": 0, "rejected": 0,
+            "agents": {}, "db_error": str(e)[:200],
+        }
     finally:
         db.close()
 
@@ -111,7 +117,12 @@ async def pause_maestro():
     if is_paused():
         return {"status": "already_paused", "message": "Maestro is already paused"}
 
-    set_paused(True)
+    persisted = set_paused(True)
+    if not persisted:
+        return {
+            "status": "error",
+            "message": "Failed to persist pause state to database. Check DB connection.",
+        }
     maestro_log("maestro", "PAUSED", "User paused Maestro — no more daily bursts until resumed", "⏸️", "action")
     return {"status": "paused", "message": "Maestro paused. Daily burst generation stopped."}
 
@@ -131,7 +142,12 @@ async def resume_maestro(background_tasks: BackgroundTasks):
     if not is_paused():
         return {"status": "already_running", "message": "Maestro is already running"}
 
-    set_paused(False)
+    persisted = set_paused(False)
+    if not persisted:
+        return {
+            "status": "error",
+            "message": "Failed to persist resume state to database. Check DB connection.",
+        }
     maestro_log("maestro", "RESUMED", "User resumed Maestro — daily burst generation enabled", "▶️", "action")
 
     # First: schedule any completed reels that are sitting in "Ready"
@@ -212,6 +228,15 @@ async def get_feedback():
     import json
     from app.services.maestro import _db_get
 
+    raw = _db_get("last_feedback_data", "")
+    if not raw:
+        return {"feedback": None, "message": "No feedback data yet — runs every 6h after reels are published 48-72h"}
+
+    try:
+        return {"feedback": json.loads(raw)}
+    except Exception:
+        return {"feedback": None, "error": "Failed to parse feedback data"}
+
 
 @router.post("/reset-daily-run")
 async def reset_daily_run():
@@ -222,15 +247,6 @@ async def reset_daily_run():
     yesterday = (datetime.utcnow() - timedelta(days=1)).isoformat()
     _db_set("last_daily_run", yesterday)
     return {"status": "reset", "message": "Daily burst limit reset. You can now trigger a burst."}
-
-    raw = _db_get("last_feedback_data", "")
-    if not raw:
-        return {"feedback": None, "message": "No feedback data yet — runs every 6h after reels are published 48-72h"}
-
-    try:
-        return {"feedback": json.loads(raw)}
-    except Exception:
-        return {"feedback": None, "error": "Failed to parse feedback data"}
 
 
 # ── PROPOSALS ─────────────────────────────────────────────────
