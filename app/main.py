@@ -21,7 +21,7 @@ from app.api.logs_routes import router as logs_router
 from app.api.auth_routes import router as auth_router
 from app.api.prompts_routes import router as prompts_router
 from app.api.toby_routes import router as toby_router
-from app.api.toby_logs_routes import router as toby_logs_router
+from app.api.ai_logs_routes import router as ai_logs_router
 from app.api.maestro_routes import router as maestro_router
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
@@ -92,7 +92,7 @@ app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(toby_router)  # Toby AI agent (Phase 3) — backward compat
-app.include_router(toby_logs_router)  # Toby activity logs at /toby-logs
+app.include_router(ai_logs_router)  # AI logs at /ai-logs, /toby-logs, /lexi-logs, /maestro-logs, /ai-about
 app.include_router(maestro_router)  # Maestro orchestrator (Toby + Lexi)
 
 # Mount static files - use absolute path for Railway volume support
