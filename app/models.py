@@ -1002,3 +1002,83 @@ class MaestroConfig(Base):
         else:
             db.add(MaestroConfig(key=key, value=value, updated_at=datetime.utcnow()))
         db.commit()
+
+
+class AIAgent(Base):
+    """
+    Dynamic AI agent — each agent works across ALL brands.
+
+    Number of agents always matches number of brands.
+    When a brand is created, a new agent is auto-provisioned.
+    """
+    __tablename__ = "ai_agents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(String(50), unique=True, nullable=False, index=True)  # e.g. "toby", "lexi", "marco"
+    display_name = Column(String(100), nullable=False)  # User-defined name
+    personality = Column(Text, nullable=False, default="")  # System prompt personality description
+    temperature = Column(Float, nullable=False, default=0.85)  # DeepSeek temperature
+    variant = Column(String(20), nullable=False, default="dark")  # dark / light / auto
+    proposal_prefix = Column(String(20), nullable=False, default="AI")  # e.g. "TOBY", "LEXI", "MARCO"
+
+    # Strategy config — JSON
+    strategy_names = Column(Text, nullable=False, default='["explore","iterate","double_down","trending"]')
+    strategy_weights = Column(Text, nullable=False, default='{"explore":0.30,"iterate":0.20,"double_down":0.30,"trending":0.20}')
+
+    # Behaviour tuning
+    risk_tolerance = Column(String(20), nullable=False, default="medium")  # low, medium, high
+    proposals_per_brand = Column(Integer, nullable=False, default=3)
+    content_types = Column(Text, nullable=False, default='["reel"]')  # ["reel"], ["post"], ["reel","post"]
+
+    # Status
+    active = Column(Boolean, nullable=False, default=True)
+    is_builtin = Column(Boolean, nullable=False, default=False)  # True for Toby/Lexi (cannot delete)
+
+    # Linked brand (the brand that caused this agent's creation)
+    created_for_brand = Column(String(100), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def get_strategies(self) -> list:
+        import json
+        try:
+            return json.loads(self.strategy_names)
+        except Exception:
+            return ["explore", "iterate", "double_down", "trending"]
+
+    def get_strategy_weights(self) -> dict:
+        import json
+        try:
+            return json.loads(self.strategy_weights)
+        except Exception:
+            return {"explore": 0.30, "iterate": 0.20, "double_down": 0.30, "trending": 0.20}
+
+    def get_content_types(self) -> list:
+        import json
+        try:
+            return json.loads(self.content_types)
+        except Exception:
+            return ["reel"]
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "agent_id": self.agent_id,
+            "display_name": self.display_name,
+            "personality": self.personality[:200] if self.personality else "",
+            "temperature": self.temperature,
+            "variant": self.variant,
+            "proposal_prefix": self.proposal_prefix,
+            "strategy_names": self.get_strategies(),
+            "strategy_weights": self.get_strategy_weights(),
+            "risk_tolerance": self.risk_tolerance,
+            "proposals_per_brand": self.proposals_per_brand,
+            "content_types": self.get_content_types(),
+            "active": self.active,
+            "is_builtin": self.is_builtin,
+            "created_for_brand": self.created_for_brand,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

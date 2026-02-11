@@ -62,13 +62,30 @@ MAX_CONCURRENT_JOBS = int(os.getenv("MAESTRO_MAX_CONCURRENT_JOBS", "3"))
 JOB_STAGGER_DELAY = int(os.getenv("MAESTRO_JOB_STAGGER_SECONDS", "8"))  # seconds between job launches
 _job_semaphore = threading.Semaphore(MAX_CONCURRENT_JOBS)
 
-# Daily burst: 30 unique proposals = 5 brands × 6 per brand (3 dark + 3 light)
+# Daily burst: dynamic — N agents × M brands × proposals_per_brand
 # Each proposal is for ONE specific brand with the correct @handle
-# Toby = dark mode (3 per brand = 15 total)
-# Lexi = light mode (3 per brand = 15 total)
-PROPOSALS_PER_BRAND_PER_AGENT = 3  # Each agent generates 3 proposals per brand
-TOTAL_PROPOSALS = PROPOSALS_PER_BRAND_PER_AGENT * 2 * 5  # 30
-REELS_PER_BRAND = PROPOSALS_PER_BRAND_PER_AGENT * 2  # 6 unique reels per brand
+# Number of agents equals number of brands (automatically)
+PROPOSALS_PER_BRAND_PER_AGENT = 3  # Default — overridden by agent DB config
+
+def _get_all_brands() -> List[str]:
+    """Load brand IDs from DB (dynamic, not hardcoded)."""
+    try:
+        from app.db_connection import SessionLocal
+        from app.models import Brand
+        db = SessionLocal()
+        try:
+            brands = db.query(Brand.id).filter(Brand.active == True).all()
+            return [b[0] for b in brands] if brands else [
+                "healthycollege", "vitalitycollege", "longevitycollege",
+                "holisticcollege", "wellbeingcollege",
+            ]
+        finally:
+            db.close()
+    except Exception:
+        return [
+            "healthycollege", "vitalitycollege", "longevitycollege",
+            "holisticcollege", "wellbeingcollege",
+        ]
 
 ALL_BRANDS = [
     "healthycollege", "vitalitycollege", "longevitycollege",
@@ -162,11 +179,9 @@ class MaestroState:
     def __init__(self):
         self.started_at: datetime = datetime.utcnow()
 
-        # Agent sub-states
-        self.agents: Dict[str, AgentState] = {
-            "toby": AgentState("toby"),
-            "lexi": AgentState("lexi"),
-        }
+        # Agent sub-states (dynamic — loaded from DB, falls back to toby+lexi)
+        self.agents: Dict[str, AgentState] = {}
+        self._init_agent_states()
 
         # Cycle stats
         self.total_cycles: int = 0
@@ -185,8 +200,56 @@ class MaestroState:
         self.last_scan_at: Optional[datetime] = None
         self.last_feedback_at: Optional[datetime] = None
 
-        # Activity log — unified for both agents
+        # Activity log — unified for all agents
         self.activity_log: List[Dict] = []
+
+    def _init_agent_states(self):
+        """Load agent names from DB and create AgentState for each."""
+        try:
+            from app.db_connection import SessionLocal
+            from app.models import AIAgent as AIAgentModel
+            db = SessionLocal()
+            try:
+                agents = db.query(AIAgentModel).filter(AIAgentModel.active == True).all()
+                for a in agents:
+                    self.agents[a.agent_id] = AgentState(a.agent_id)
+            finally:
+                db.close()
+        except Exception:
+            pass
+        # Ensure at least toby + lexi exist
+        for name in ["toby", "lexi"]:
+            if name not in self.agents:
+                self.agents[name] = AgentState(name)
+
+    def ensure_agent_state(self, agent_id: str):
+        """Lazily create an AgentState if a new agent appears."""
+        if agent_id not in self.agents:
+            self.agents[agent_id] = AgentState(agent_id)
+
+    def _get_daily_config(self) -> Dict:
+        """Build daily config dict dynamically from DB agents + brands."""
+        try:
+            from app.services.generic_agent import get_all_active_agents
+            agents = get_all_active_agents()
+            brands = _get_all_brands()
+            total = sum(a.proposals_per_brand for a in agents) * len(brands)
+            return {
+                "agents": [{"id": a.agent_id, "name": a.display_name, "variant": a.variant,
+                            "proposals_per_brand": a.proposals_per_brand} for a in agents],
+                "brands": brands,
+                "total_agents": len(agents),
+                "total_brands": len(brands),
+                "total_proposals_per_burst": total,
+                "total_reels_per_day": total,
+                "jobs_per_day": total,
+            }
+        except Exception:
+            return {
+                "proposals_per_brand_per_agent": PROPOSALS_PER_BRAND_PER_AGENT,
+                "brands": ALL_BRANDS,
+                "fallback": True,
+            }
 
     def log(self, agent: str, action: str, detail: str = "", emoji: str = "🤖", level: str = "action"):
         entry = {
@@ -236,15 +299,7 @@ class MaestroState:
                 name: agent.to_dict() for name, agent in self.agents.items()
             },
             "recent_activity": self.activity_log[:30],
-            "daily_config": {
-                "proposals_per_brand_per_agent": PROPOSALS_PER_BRAND_PER_AGENT,
-                "total_proposals": TOTAL_PROPOSALS,
-                "reels_per_brand": REELS_PER_BRAND,  # 6 unique reels per brand
-                "total_reels_per_day": TOTAL_PROPOSALS,  # 30 — each proposal = 1 reel
-                "variants": ["dark", "light"],
-                "brands": ALL_BRANDS,
-                "jobs_per_day": TOTAL_PROPOSALS,  # 30 — 1 job per proposal
-            },
+            "daily_config": self._get_daily_config(),
         }
 
 
@@ -358,14 +413,14 @@ class MaestroDaemon:
         return self.state.to_dict()
 
     def _refresh_agent_counts(self):
-        """Refresh per-agent today's proposal counts from DB."""
+        """Refresh per-agent today's proposal counts from DB (dynamic)."""
         from app.db_connection import SessionLocal
         from app.models import TobyProposal
 
         db = SessionLocal()
         try:
             today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            for agent_name in ["toby", "lexi"]:
+            for agent_name in list(self.state.agents.keys()):
                 count = (
                     db.query(TobyProposal)
                     .filter(TobyProposal.agent_name == agent_name)
@@ -430,9 +485,12 @@ class MaestroDaemon:
 
     def _run_daily_burst(self):
         """
-        Generate 30 UNIQUE proposals — each assigned to a specific brand.
-        5 brands × 3 Toby (dark) + 3 Lexi (light) = 30 unique reels.
+        Generate proposals using ALL active agents across ALL brands.
+        N agents × M brands × proposals_per_brand = total proposals.
         Each proposal = 1 job = 1 reel. NO content duplication across brands.
+
+        Agents are loaded dynamically from the ai_agents DB table.
+        Falls back to legacy Toby + Lexi if GenericAgent system fails.
         """
         if not self._daily_burst_lock.acquire(blocking=False):
             self.state.log("maestro", "Burst skipped", "Already running", "⏳")
@@ -443,51 +501,106 @@ class MaestroDaemon:
             self.state.current_phase = "generating"
             burst_start = datetime.utcnow()
 
-            self.state.log(
-                "maestro", "🌅 Daily Burst Started",
-                f"Generating {TOTAL_PROPOSALS} UNIQUE proposals — {PROPOSALS_PER_BRAND_PER_AGENT} Toby (dark) + {PROPOSALS_PER_BRAND_PER_AGENT} Lexi (light) per brand × {len(ALL_BRANDS)} brands",
-                "🚀"
-            )
+            # Load dynamic agents from DB
+            try:
+                from app.services.generic_agent import get_all_active_agents
+                active_agents = get_all_active_agents()
+            except Exception as e:
+                self.state.log("maestro", "Agent load error", f"Falling back to legacy: {e}", "⚠️")
+                active_agents = []
+
+            # Load dynamic brand list
+            brands = _get_all_brands()
+
+            if active_agents:
+                total_expected = sum(a.proposals_per_brand for a in active_agents) * len(brands)
+                agent_names = ", ".join(a.display_name for a in active_agents)
+                self.state.log(
+                    "maestro", "🌅 Daily Burst Started",
+                    f"~{total_expected} proposals — {len(active_agents)} agents ({agent_names}) × {len(brands)} brands",
+                    "🚀"
+                )
+            else:
+                self.state.log(
+                    "maestro", "🌅 Daily Burst Started (legacy)",
+                    f"Using legacy Toby + Lexi — {len(brands)} brands",
+                    "🚀"
+                )
 
             all_proposals = []
 
-            # Generate proposals per brand — each brand gets unique content
-            for brand in ALL_BRANDS:
-                brand_handle = BRAND_HANDLES.get(brand, brand)
+            if active_agents:
+                # ── Dynamic agents path ──
+                for brand in brands:
+                    for agent in active_agents:
+                        try:
+                            self.state.current_agent = agent.agent_id
+                            self.state.ensure_agent_state(agent.agent_id)
+                            ppb = agent.proposals_per_brand
+                            self.state.log(
+                                agent.agent_id, "Generating",
+                                f"{ppb} {agent.variant} reels for {brand}",
+                                "🧠"
+                            )
+                            result = agent.run(
+                                max_proposals=ppb,
+                                content_type="reel",
+                                brand=brand,
+                            )
+                            agent_proposals = result.get("proposals", [])
+                            all_proposals.extend(agent_proposals)
+                            self.state.agents[agent.agent_id].total_proposals += len(agent_proposals)
+                            self.state.log(
+                                agent.agent_id, f"Done ({brand})",
+                                f"{len(agent_proposals)} proposals",
+                                "✅"
+                            )
+                        except Exception as e:
+                            self.state.errors += 1
+                            if agent.agent_id in self.state.agents:
+                                self.state.agents[agent.agent_id].errors += 1
+                            self.state.log(
+                                agent.agent_id, "Error",
+                                f"Generation failed for {brand}: {str(e)[:200]}",
+                                "❌"
+                            )
+                            traceback.print_exc()
+            else:
+                # ── Legacy fallback (Toby + Lexi hardcoded) ──
+                for brand in brands:
+                    brand_handle = BRAND_HANDLES.get(brand, brand)
 
-                # Toby generates 3 dark-mode proposals for this brand
-                try:
-                    self.state.current_agent = "toby"
-                    from app.services.toby_agent import get_toby_agent
-                    toby = get_toby_agent()
-                    self.state.log("toby", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} dark reels for {brand} ({brand_handle})", "🧠")
-                    toby_result = toby.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
-                    toby_proposals = toby_result.get("proposals", [])
-                    all_proposals.extend(toby_proposals)
-                    self.state.agents["toby"].total_proposals += len(toby_proposals)
-                    self.state.log("toby", f"Done ({brand})", f"{len(toby_proposals)} dark proposals", "✅")
-                except Exception as e:
-                    self.state.errors += 1
-                    self.state.agents["toby"].errors += 1
-                    self.state.log("toby", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
-                    traceback.print_exc()
+                    try:
+                        self.state.current_agent = "toby"
+                        from app.services.toby_agent import get_toby_agent
+                        toby = get_toby_agent()
+                        self.state.log("toby", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} dark reels for {brand} ({brand_handle})", "🧠")
+                        toby_result = toby.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
+                        toby_proposals = toby_result.get("proposals", [])
+                        all_proposals.extend(toby_proposals)
+                        self.state.agents["toby"].total_proposals += len(toby_proposals)
+                        self.state.log("toby", f"Done ({brand})", f"{len(toby_proposals)} dark proposals", "✅")
+                    except Exception as e:
+                        self.state.errors += 1
+                        self.state.agents["toby"].errors += 1
+                        self.state.log("toby", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
+                        traceback.print_exc()
 
-                # Lexi generates 3 light-mode proposals for this brand
-                try:
-                    self.state.current_agent = "lexi"
-                    from app.services.lexi_agent import get_lexi_agent
-                    lexi = get_lexi_agent()
-                    self.state.log("lexi", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} light reels for {brand} ({brand_handle})", "📊")
-                    lexi_result = lexi.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
-                    lexi_proposals = lexi_result.get("proposals", [])
-                    all_proposals.extend(lexi_proposals)
-                    self.state.agents["lexi"].total_proposals += len(lexi_proposals)
-                    self.state.log("lexi", f"Done ({brand})", f"{len(lexi_proposals)} light proposals", "✅")
-                except Exception as e:
-                    self.state.errors += 1
-                    self.state.agents["lexi"].errors += 1
-                    self.state.log("lexi", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
-                    traceback.print_exc()
+                    try:
+                        self.state.current_agent = "lexi"
+                        from app.services.lexi_agent import get_lexi_agent
+                        lexi = get_lexi_agent()
+                        self.state.log("lexi", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} light reels for {brand} ({brand_handle})", "📊")
+                        lexi_result = lexi.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
+                        lexi_proposals = lexi_result.get("proposals", [])
+                        all_proposals.extend(lexi_proposals)
+                        self.state.agents["lexi"].total_proposals += len(lexi_proposals)
+                        self.state.log("lexi", f"Done ({brand})", f"{len(lexi_proposals)} light proposals", "✅")
+                    except Exception as e:
+                        self.state.errors += 1
+                        self.state.agents["lexi"].errors += 1
+                        self.state.log("lexi", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
+                        traceback.print_exc()
 
             self.state.total_proposals_generated += len(all_proposals)
 

@@ -23,6 +23,7 @@ from app.api.prompts_routes import router as prompts_router
 from app.api.toby_routes import router as toby_router
 from app.api.ai_logs_routes import router as ai_logs_router
 from app.api.maestro_routes import router as maestro_router
+from app.api.agents_routes import router as agents_router
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging_middleware import RequestLoggingMiddleware
@@ -94,6 +95,7 @@ app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(toby_router)  # Toby AI agent (Phase 3) — backward compat
 app.include_router(ai_logs_router)  # AI logs at /ai-logs, /toby-logs, /lexi-logs, /maestro-logs, /ai-about
 app.include_router(maestro_router)  # Maestro orchestrator (Toby + Lexi)
+app.include_router(agents_router)  # Dynamic AI agents CRUD at /api/agents
 
 # Mount static files - use absolute path for Railway volume support
 # The output directory is at /app/output when running in Docker
@@ -248,6 +250,10 @@ async def startup_event():
                 print(f"   ⚙️ Seeded {settings_seeded} default settings", flush=True)
             else:
                 print(f"   ⚙️ Settings already exist", flush=True)
+
+            # Seed builtin AI agents (Toby + Lexi)
+            from app.services.generic_agent import seed_builtin_agents
+            seed_builtin_agents()
         finally:
             db.close()
         
