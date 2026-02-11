@@ -1202,13 +1202,21 @@ class MaestroDaemon:
             except Exception as pe:
                 self.state.log("maestro", "Post competitor scan error", str(pe)[:150], "⚠️", "detail")
 
-            total_found = h_new + c_new + ph_new + pc_new
+            # ── Own account scanning (self-awareness) ──
+            own_new = 0
+            try:
+                own_result = scout.scan_own_accounts()
+                own_new = own_result.get("new_stored", 0) if isinstance(own_result, dict) else 0
+            except Exception as oe:
+                self.state.log("maestro", "Own account scan error", str(oe)[:150], "⚠️", "detail")
+
+            total_found = h_new + c_new + ph_new + pc_new + own_new
             self.state.total_trends_found += total_found
             self.state.last_scan_at = datetime.utcnow()
 
             self.state.log(
                 "maestro", "Trends discovered",
-                f"Found {total_found} new — Reels: {h_new} hashtags + {c_new} competitors | Posts: {ph_new} hashtags + {pc_new} competitors",
+                f"Found {total_found} new — Reels: {h_new} hashtags + {c_new} competitors | Posts: {ph_new} hashtags + {pc_new} competitors | Own: {own_new}",
                 "🔥"
             )
 

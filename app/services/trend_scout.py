@@ -666,6 +666,146 @@ class TrendScout:
     # GET TRENDING FOR TOBY
     # ──────────────────────────────────────────────────────────
 
+    def scan_own_accounts(self) -> Dict:
+        """
+        Scan our own brand Instagram accounts to learn what OUR audience responds to.
+
+        Pulls brand handles dynamically from the DB, so it auto-scales with new brands.
+        Tags entries with discovery_method='own_account' so agents can distinguish
+        own-audience data from competitor data.
+        """
+        from app.db_connection import SessionLocal
+
+        db = SessionLocal()
+        try:
+            from app.services.toby_daemon import toby_log
+
+            # Dynamically load own handles from brands table
+            try:
+                from app.models import Brand
+                brands = db.query(Brand).filter(Brand.active == True).all()
+                own_handles = []
+                for b in brands:
+                    handle = b.instagram_handle
+                    if handle:
+                        # Strip @ and URL prefixes
+                        handle = handle.strip().lstrip("@")
+                        if "/" in handle:
+                            handle = handle.rsplit("/", 1)[-1]
+                        if handle:
+                            own_handles.append(handle)
+            except Exception:
+                # Fallback hardcoded list
+                own_handles = [
+                    "thehealthycollege", "theholisticcollege",
+                    "thelongevitycollege", "thewellbeingcollege",
+                    "thevitalitycollege",
+                ]
+
+            if not own_handles:
+                return {"own_accounts_scanned": 0, "new_stored": 0}
+
+            toby_log("Own account scan",
+                     f"Scanning {len(own_handles)} own accounts: {', '.join('@' + h for h in own_handles)}",
+                     "🪞", "detail")
+
+            total_new = 0
+            for handle in own_handles:
+                items = self.discover_competitor(handle, limit=10)
+                for item in items:
+                    exists = (
+                        db.query(TrendingContent.id)
+                        .filter(TrendingContent.ig_media_id == item["ig_media_id"])
+                        .first()
+                    )
+                    if exists:
+                        continue
+
+                    caption = item.get("caption", "") or ""
+                    hashtags_found = [
+                        w.lstrip("#").lower()
+                        for w in caption.split()
+                        if w.startswith("#")
+                    ]
+
+                    ts = None
+                    if item.get("timestamp"):
+                        try:
+                            ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            pass
+
+                    entry = TrendingContent(
+                        ig_media_id=item["ig_media_id"],
+                        source_account=handle,
+                        caption=caption[:5000],
+                        media_type=item.get("media_type"),
+                        hashtags=hashtags_found[:30],
+                        like_count=item.get("like_count", 0),
+                        comments_count=item.get("comments_count", 0),
+                        discovery_method="own_account",
+                        media_timestamp=ts,
+                    )
+                    db.add(entry)
+                    total_new += 1
+
+                time.sleep(1)
+
+            db.commit()
+            toby_log("Own account scan complete",
+                     f"{len(own_handles)} own accounts scanned, {total_new} new posts stored",
+                     "🪞", "data")
+            return {
+                "own_accounts_scanned": len(own_handles),
+                "new_stored": total_new,
+            }
+        except Exception as e:
+            db.rollback()
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Own account scan", f"scan_own_accounts failed: {e}", "❌", "detail")
+            return {"error": str(e)}
+        finally:
+            db.close()
+
+    def get_own_account_top_performers(
+        self,
+        min_likes: int = 50,
+        limit: int = 10,
+        content_type: str = None,
+    ) -> List[Dict]:
+        """
+        Get top-performing content from OUR OWN accounts.
+
+        Returns items sorted by engagement, filtered by content_type.
+        Used by _gather_intelligence() to show agents what works with our audience.
+        """
+        from app.db_connection import SessionLocal
+        from sqlalchemy import desc
+
+        db = SessionLocal()
+        try:
+            query = (
+                db.query(TrendingContent)
+                .filter(
+                    TrendingContent.discovery_method == "own_account",
+                    TrendingContent.like_count >= min_likes,
+                )
+            )
+            if content_type == "reel":
+                query = query.filter(TrendingContent.media_type == "VIDEO")
+            elif content_type == "post":
+                query = query.filter(TrendingContent.media_type.in_(["CAROUSEL_ALBUM", "IMAGE"]))
+
+            items = (
+                query
+                .order_by(desc(TrendingContent.like_count + TrendingContent.comments_count))
+                .limit(limit)
+                .all()
+            )
+            return [t.to_dict() for t in items]
+        finally:
+            db.close()
+
     def get_trending_for_toby(
         self,
         min_likes: int = 500,

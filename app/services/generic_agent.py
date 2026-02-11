@@ -316,6 +316,15 @@ class GenericAgent:
         except Exception:
             intel["trending"] = []
 
+        # 2b. Own account top performers (self-awareness)
+        try:
+            from app.services.trend_scout import get_trend_scout
+            scout = get_trend_scout()
+            own_top = scout.get_own_account_top_performers(min_likes=50, limit=10, content_type=content_type)
+            intel["own_top_performers"] = own_top
+        except Exception:
+            intel["own_top_performers"] = []
+
         # 3. Content history (brand-aware)
         try:
             intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=60, brand=brand)
@@ -437,6 +446,20 @@ class GenericAgent:
         topic_desc = TOPIC_DESCRIPTIONS.get(topic, topic)
 
         avoidance = intel.get("brand_avoidance", "")
+
+        # 🪞 Inject own-account audience insights into context
+        own_top = intel.get("own_top_performers", [])
+        if own_top:
+            own_lines = []
+            for item in own_top[:5]:
+                caption_preview = (item.get("caption", "") or "")[:100]
+                own_lines.append(f"  - @{item.get('source_account', '?')}: {item.get('like_count', 0)} likes | \"{caption_preview}...\"")
+            own_block = "\n".join(own_lines)
+            avoidance += f"""
+
+YOUR AUDIENCE'S TOP PERFORMERS (content from OUR accounts that resonated):
+{own_block}
+Learn from what YOUR audience engages with. Use similar angles, tones, or topics that proved popular above."""
 
         # Strategy-specific prompt building
         if strategy in ("explore", "analyze"):
@@ -918,6 +941,39 @@ def seed_builtin_agents():
         db.close()
 
 
+# ── All available strategies that agents can be born with ──
+_ALL_STRATEGIES = ["explore", "iterate", "double_down", "trending", "analyze", "refine", "systematic", "compound"]
+
+
+def _randomize_dna() -> Dict:
+    """
+    Generate random agent DNA — temperature, variant, strategies, weights, risk.
+    Used when auto-spawning agents for new brands.
+    """
+    import random as _rng
+    temp = round(_rng.uniform(0.70, 0.95), 2)
+    variant = _rng.choice(["dark", "light"])
+    risk = _rng.choice(["low", "medium", "high"])
+    # Pick 4-5 random strategies from the pool
+    n_strategies = _rng.randint(4, 5)
+    strategies = _rng.sample(_ALL_STRATEGIES, min(n_strategies, len(_ALL_STRATEGIES)))
+    # Random weights that sum to 1.0
+    raw_weights = [_rng.random() for _ in strategies]
+    total = sum(raw_weights)
+    weights = {s: round(w / total, 2) for s, w in zip(strategies, raw_weights)}
+    # Fix rounding to exactly 1.0
+    diff = round(1.0 - sum(weights.values()), 2)
+    if diff != 0:
+        weights[strategies[0]] = round(weights[strategies[0]] + diff, 2)
+    return {
+        "temperature": temp,
+        "variant": variant,
+        "risk_tolerance": risk,
+        "strategies": strategies,
+        "strategy_weights": weights,
+    }
+
+
 def create_agent_for_brand(
     brand_id: str,
     agent_name: str,
@@ -926,11 +982,15 @@ def create_agent_for_brand(
     variant: str = "dark",
     strategies: List[str] = None,
     strategy_weights: Dict[str, float] = None,
+    randomize: bool = False,
 ) -> AIAgent:
     """
     Auto-provision a new AI agent when a brand is created.
 
-    Called from the brand creation endpoint.
+    When randomize=True, ignores temperature/variant/strategies/strategy_weights
+    and generates random DNA instead — making every agent unique at birth.
+
+    Called from brand_manager.create_brand().
     Returns the created AIAgent model.
     """
     import json as _json
@@ -938,6 +998,17 @@ def create_agent_for_brand(
 
     agent_id = agent_name.lower().replace(" ", "_")
     prefix = agent_name.upper()[:6]
+
+    # 🧬 Randomize DNA if requested
+    if randomize:
+        dna = _randomize_dna()
+        temperature = dna["temperature"]
+        variant = dna["variant"]
+        strategies = dna["strategies"]
+        strategy_weights = dna["strategy_weights"]
+        risk_tolerance = dna["risk_tolerance"]
+    else:
+        risk_tolerance = "medium"
 
     if strategies is None:
         strategies = ["explore", "iterate", "double_down", "trending"]
@@ -961,9 +1032,9 @@ def create_agent_for_brand(
             proposal_prefix=prefix,
             strategy_names=_json.dumps(strategies),
             strategy_weights=_json.dumps(strategy_weights),
-            risk_tolerance="medium",
+            risk_tolerance=risk_tolerance,
             proposals_per_brand=3,
-            content_types=_json.dumps(["reel"]),
+            content_types=_json.dumps(["reel", "post"]),
             active=True,
             is_builtin=False,
             created_for_brand=brand_id,
@@ -975,7 +1046,8 @@ def create_agent_for_brand(
         # Clear cache so it picks up the new agent
         refresh_agent_cache()
 
-        _agent_log(agent_id, "Created", f"New AI agent '{agent_name}' provisioned for brand {brand_id}", "🎉", "action")
+        dna_str = f"temp={temperature}, variant={variant}, strategies={strategies}"
+        _agent_log(agent_id, "Created", f"🧬 Agent '{agent_name}' for {brand_id} — DNA: {dna_str}", "🎉", "action")
         return agent
     except Exception as e:
         db.rollback()
