@@ -180,6 +180,144 @@ def run_migrations():
                 ALTER TABLE toby_proposals ADD COLUMN examiner_red_flags JSON;
             """
         },
+        # ── AI Evolution Engine: AIAgent evolution columns ──
+        {
+            "name": "Add survival_score column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='survival_score'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN survival_score FLOAT DEFAULT 0.0;
+            """
+        },
+        {
+            "name": "Add lifetime_views column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='lifetime_views'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN lifetime_views INTEGER DEFAULT 0;
+            """
+        },
+        {
+            "name": "Add lifetime_proposals column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='lifetime_proposals'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN lifetime_proposals INTEGER DEFAULT 0;
+            """
+        },
+        {
+            "name": "Add lifetime_accepted column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='lifetime_accepted'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN lifetime_accepted INTEGER DEFAULT 0;
+            """
+        },
+        {
+            "name": "Add generation column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='generation'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN generation INTEGER DEFAULT 1;
+            """
+        },
+        {
+            "name": "Add last_mutation_at column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='last_mutation_at'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN last_mutation_at TIMESTAMP;
+            """
+        },
+        {
+            "name": "Add mutation_count column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='mutation_count'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN mutation_count INTEGER DEFAULT 0;
+            """
+        },
+        {
+            "name": "Add parent_agent_id column to ai_agents",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='ai_agents' AND column_name='parent_agent_id'
+            """,
+            "migration_sql": """
+                ALTER TABLE ai_agents ADD COLUMN parent_agent_id VARCHAR(50);
+            """
+        },
+        # ── AI Evolution Engine: agent_performance table ──
+        {
+            "name": "Create agent_performance table",
+            "check_sql": """
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_name='agent_performance'
+            """,
+            "migration_sql": """
+                CREATE TABLE agent_performance (
+                    id SERIAL PRIMARY KEY,
+                    agent_id VARCHAR(50) NOT NULL,
+                    period VARCHAR(20) NOT NULL DEFAULT 'feedback',
+                    total_proposals INTEGER DEFAULT 0,
+                    accepted_proposals INTEGER DEFAULT 0,
+                    published_count INTEGER DEFAULT 0,
+                    total_views INTEGER DEFAULT 0,
+                    avg_views FLOAT DEFAULT 0.0,
+                    total_likes INTEGER DEFAULT 0,
+                    total_comments INTEGER DEFAULT 0,
+                    avg_engagement_rate FLOAT DEFAULT 0.0,
+                    strategy_breakdown JSON,
+                    best_strategy VARCHAR(30),
+                    worst_strategy VARCHAR(30),
+                    avg_examiner_score FLOAT,
+                    survival_score FLOAT DEFAULT 0.0,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX ix_agent_perf_agent_id ON agent_performance(agent_id);
+                CREATE INDEX ix_agent_perf_created ON agent_performance(created_at);
+                CREATE INDEX ix_agent_perf_agent_period ON agent_performance(agent_id, period, created_at);
+            """
+        },
+        # ── AI Evolution Engine: agent_learning table ──
+        {
+            "name": "Create agent_learning table",
+            "check_sql": """
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_name='agent_learning'
+            """,
+            "migration_sql": """
+                CREATE TABLE agent_learning (
+                    id SERIAL PRIMARY KEY,
+                    agent_id VARCHAR(50) NOT NULL,
+                    mutation_type VARCHAR(30) NOT NULL,
+                    description TEXT NOT NULL,
+                    old_value JSON,
+                    new_value JSON,
+                    trigger VARCHAR(30) NOT NULL DEFAULT 'feedback',
+                    confidence FLOAT,
+                    survival_score_at FLOAT,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX ix_agent_learning_agent_id ON agent_learning(agent_id);
+                CREATE INDEX ix_agent_learning_created ON agent_learning(created_at);
+                CREATE INDEX ix_agent_learning_agent_time ON agent_learning(agent_id, created_at);
+            """
+        },
     ]
     
     with engine.connect() as conn:

@@ -1055,6 +1055,16 @@ class AIAgent(Base):
     # Linked brand (the brand that caused this agent's creation)
     created_for_brand = Column(String(100), nullable=True)
 
+    # ── Evolution tracking ──
+    survival_score = Column(Float, nullable=True, default=0.0)       # 0-100 composite fitness
+    lifetime_views = Column(Integer, nullable=True, default=0)       # Total views across all content
+    lifetime_proposals = Column(Integer, nullable=True, default=0)   # Total proposals generated
+    lifetime_accepted = Column(Integer, nullable=True, default=0)    # Total proposals accepted
+    generation = Column(Integer, nullable=True, default=1)           # Evolution generation (increments on mutation)
+    last_mutation_at = Column(DateTime, nullable=True)               # When DNA was last mutated
+    mutation_count = Column(Integer, nullable=True, default=0)       # Total mutations applied
+    parent_agent_id = Column(String(50), nullable=True)              # If spawned from another agent's DNA
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -1097,6 +1107,136 @@ class AIAgent(Base):
             "active": self.active,
             "is_builtin": self.is_builtin,
             "created_for_brand": self.created_for_brand,
+            "survival_score": self.survival_score or 0.0,
+            "lifetime_views": self.lifetime_views or 0,
+            "lifetime_proposals": self.lifetime_proposals or 0,
+            "lifetime_accepted": self.lifetime_accepted or 0,
+            "generation": self.generation or 1,
+            "mutation_count": self.mutation_count or 0,
+            "parent_agent_id": self.parent_agent_id,
+            "last_mutation_at": self.last_mutation_at.isoformat() if self.last_mutation_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+# ============================================================
+# AGENT PERFORMANCE — per-agent stats snapshots
+# ============================================================
+
+class AgentPerformance(Base):
+    """
+    Periodic performance snapshot for an AI agent.
+
+    Captured every feedback cycle (6h). Tracks per-agent views,
+    engagement, best/worst strategies, and survival score over time.
+    """
+    __tablename__ = "agent_performance"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(String(50), nullable=False, index=True)  # FK to ai_agents.agent_id
+    period = Column(String(20), nullable=False, default="feedback")  # "feedback" | "daily" | "weekly"
+
+    # Content attribution
+    total_proposals = Column(Integer, default=0)       # Proposals in this period
+    accepted_proposals = Column(Integer, default=0)    # Accepted proposals
+    published_count = Column(Integer, default=0)       # Published items with metrics
+
+    # Performance metrics
+    total_views = Column(Integer, default=0)
+    avg_views = Column(Float, default=0.0)
+    total_likes = Column(Integer, default=0)
+    total_comments = Column(Integer, default=0)
+    avg_engagement_rate = Column(Float, default=0.0)   # (likes+comments+saves) / reach
+
+    # Strategy breakdown (JSON: {"explore": {"count": 3, "avg_views": 5000}, ...})
+    strategy_breakdown = Column(JSON, nullable=True)
+    best_strategy = Column(String(30), nullable=True)  # Strategy with highest avg views
+    worst_strategy = Column(String(30), nullable=True)  # Strategy with lowest avg views
+
+    # Quality
+    avg_examiner_score = Column(Float, nullable=True)  # Average examiner score
+
+    # Computed fitness
+    survival_score = Column(Float, default=0.0)        # Composite score for this period
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("ix_agent_perf_agent_period", "agent_id", "period", "created_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "agent_id": self.agent_id,
+            "period": self.period,
+            "total_proposals": self.total_proposals,
+            "accepted_proposals": self.accepted_proposals,
+            "published_count": self.published_count,
+            "total_views": self.total_views,
+            "avg_views": self.avg_views,
+            "total_likes": self.total_likes,
+            "total_comments": self.total_comments,
+            "avg_engagement_rate": self.avg_engagement_rate,
+            "strategy_breakdown": self.strategy_breakdown,
+            "best_strategy": self.best_strategy,
+            "worst_strategy": self.worst_strategy,
+            "avg_examiner_score": self.avg_examiner_score,
+            "survival_score": self.survival_score,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ============================================================
+# AGENT LEARNING — mutation log (every DNA change recorded)
+# ============================================================
+
+class AgentLearning(Base):
+    """
+    Records every mutation/adaptation applied to an agent's DNA.
+
+    This is the evolution audit trail — every weight shift, temperature
+    change, strategy swap, and personality tweak is logged here.
+    """
+    __tablename__ = "agent_learning"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(String(50), nullable=False, index=True)
+
+    # What changed
+    mutation_type = Column(String(30), nullable=False)  # "weight_shift" | "temperature" | "strategy_swap" | "personality" | "death" | "spawn"
+    description = Column(Text, nullable=False)          # Human-readable description
+
+    # Before/after snapshots (JSON)
+    old_value = Column(JSON, nullable=True)  # e.g. {"explore": 0.30, "iterate": 0.25}
+    new_value = Column(JSON, nullable=True)  # e.g. {"explore": 0.35, "iterate": 0.20}
+
+    # What triggered this mutation
+    trigger = Column(String(30), nullable=False, default="feedback")  # "feedback" | "weekly_evolution" | "manual" | "spawn"
+    confidence = Column(Float, nullable=True)  # How confident the system was (0-1)
+
+    # Performance at time of mutation
+    survival_score_at = Column(Float, nullable=True)
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("ix_agent_learning_agent_time", "agent_id", "created_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "agent_id": self.agent_id,
+            "mutation_type": self.mutation_type,
+            "description": self.description,
+            "old_value": self.old_value,
+            "new_value": self.new_value,
+            "trigger": self.trigger,
+            "confidence": self.confidence,
+            "survival_score_at": self.survival_score_at,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

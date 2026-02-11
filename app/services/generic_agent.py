@@ -325,6 +325,13 @@ class GenericAgent:
         except Exception:
             intel["own_top_performers"] = []
 
+        # 2c. Per-agent evolution lessons (what has this agent learned?)
+        try:
+            from app.services.evolution_engine import get_agent_lessons
+            intel["agent_lessons"] = get_agent_lessons(self.agent_id, limit=5)
+        except Exception:
+            intel["agent_lessons"] = ""
+
         # 3. Content history (brand-aware)
         try:
             intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=60, brand=brand)
@@ -460,6 +467,15 @@ class GenericAgent:
 YOUR AUDIENCE'S TOP PERFORMERS (content from OUR accounts that resonated):
 {own_block}
 Learn from what YOUR audience engages with. Use similar angles, tones, or topics that proved popular above."""
+
+        # 🧬 Inject evolution lessons (what this agent has learned from past performance)
+        lessons = intel.get("agent_lessons", "")
+        if lessons:
+            avoidance += f"""
+
+YOUR EVOLUTION HISTORY (what you've learned from past performance):
+{lessons}
+Apply these learnings — double down on what works, avoid what doesn't."""
 
         # Strategy-specific prompt building
         if strategy in ("explore", "analyze"):

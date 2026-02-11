@@ -1230,100 +1230,76 @@ class MaestroDaemon:
 
     def _feedback_cycle(self):
         """
-        Check performance of reels published 48-72h ago.
-        Attribute results back to Toby or Lexi.
+        Performance attribution + agent learning loop.
+
+        1. FeedbackEngine: attributes published content (48-72h) back to agents
+        2. Calculates per-agent survival scores with strategy breakdowns
+        3. AdaptationEngine: mutates agent DNA (weights, temperature) based on results
+        4. Logs all mutations to AgentLearning for audit trail
         """
-        self.state.log("maestro", "Feedback", "Checking 48-72h post performance...", "📈")
+        self.state.log("maestro", "Feedback", "Running performance attribution + learning loop...", "📈")
 
         try:
-            from app.db_connection import SessionLocal
-            from app.models import TobyProposal, ScheduledReel, GenerationJob
+            from app.services.evolution_engine import FeedbackEngine, AdaptationEngine
 
-            db = SessionLocal()
-            try:
-                now = datetime.utcnow()
-                window_start = now - timedelta(hours=72)
-                window_end = now - timedelta(hours=48)
+            # Phase 2: Attribution
+            feedback = FeedbackEngine()
+            results = feedback.run()
 
-                # Find reels published in the 48-72h window
-                published = db.query(ScheduledReel).filter(
-                    ScheduledReel.status == "published",
-                    ScheduledReel.published_at >= window_start,
-                    ScheduledReel.published_at <= window_end,
-                ).all()
+            if not results:
+                self.state.log("maestro", "Feedback", "No published items in 48-72h window to evaluate", "📊", "detail")
+                self.state.last_feedback_at = datetime.utcnow()
+                return
 
-                if not published:
-                    self.state.log("maestro", "Feedback", "No reels in 48-72h window to evaluate", "📊", "detail")
-                    self.state.last_feedback_at = now
-                    return
-
-                toby_count = 0
-                lexi_count = 0
-                toby_views = 0
-                lexi_views = 0
-
-                for sched in published:
-                    reel_id = sched.reel_id
-                    if not reel_id:
-                        continue
-
-                    # reel_id format: {job_id}_{brand}
-                    parts = reel_id.rsplit("_", 1)
-                    if len(parts) < 2:
-                        continue
-                    job_id = parts[0]
-
-                    job = db.query(GenerationJob).filter_by(job_id=job_id).first()
-                    if not job:
-                        continue
-
-                    # job.user_id stores the proposal_id
-                    proposal_id = job.user_id
-                    proposal = db.query(TobyProposal).filter_by(proposal_id=proposal_id).first()
-                    if not proposal:
-                        continue
-
-                    agent = proposal.agent_name or "toby"
-
-                    # Get view count from extra_data if metrics collection has run
-                    extra = sched.extra_data or {}
-                    views = extra.get("views", 0) or 0
-
-                    if agent == "toby":
-                        toby_count += 1
-                        toby_views += views
-                    else:
-                        lexi_count += 1
-                        lexi_views += views
-
-                toby_avg_views = round(toby_views / toby_count) if toby_count else 0
-                lexi_avg_views = round(lexi_views / lexi_count) if lexi_count else 0
-
-                self.state.log(
-                    "maestro", "Feedback Results",
-                    f"Toby: {toby_count} reels, {toby_views} total views (avg {toby_avg_views}) | "
-                    f"Lexi: {lexi_count} reels, {lexi_views} total views (avg {lexi_avg_views})",
-                    "📈"
+            # Log results summary
+            summary_parts = []
+            for agent_id, data in results.items():
+                summary_parts.append(
+                    f"{agent_id}: {data['published_count']} posts, "
+                    f"{data['total_views']} views, "
+                    f"survival={data['survival_score']}"
                 )
+            self.state.log(
+                "maestro", "Feedback Results",
+                " | ".join(summary_parts),
+                "📈"
+            )
 
-                # Store latest feedback data in DB for frontend
-                import json
-                feedback_data = {
-                    "timestamp": now.isoformat(),
-                    "window": f"{window_start.isoformat()} to {window_end.isoformat()}",
-                    "toby": {"count": toby_count, "total_views": toby_views, "avg_views": toby_avg_views},
-                    "lexi": {"count": lexi_count, "total_views": lexi_views, "avg_views": lexi_avg_views},
-                }
-                _db_set("last_feedback_data", json.dumps(feedback_data))
+            # Phase 3: Adaptation (mutate DNA based on performance)
+            adaptation = AdaptationEngine()
+            mutations = adaptation.adapt(results)
 
-                self.state.last_feedback_at = now
+            # Log mutations
+            total_mutations = sum(len(m) for m in mutations.values())
+            if total_mutations > 0:
+                mutation_parts = []
+                for agent_id, mlist in mutations.items():
+                    if mlist:
+                        mutation_parts.append(f"{agent_id}: {len(mlist)} mutations")
+                self.state.log(
+                    "maestro", "🧬 Evolution",
+                    f"{total_mutations} total mutations applied — {', '.join(mutation_parts)}",
+                    "🧬"
+                )
+            else:
+                self.state.log("maestro", "Evolution", "No mutations triggered this cycle (insufficient data or confidence)", "🧬", "detail")
 
-            finally:
-                db.close()
+            # Store feedback data for frontend
+            import json
+            feedback_data = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "agents": results,
+                "mutations_applied": total_mutations,
+            }
+            _db_set("last_feedback_data", json.dumps(feedback_data, default=str))
+
+            self.state.last_feedback_at = datetime.utcnow()
 
         except Exception as e:
             self.state.errors += 1
             self.state.log("maestro", "Error", f"Feedback cycle failed: {str(e)[:200]}", "❌")
+            import traceback
+            traceback.print_exc()
 
     # ──────────────────────────────────────────────────────────
     # CYCLE: HEALING — Self-healing & smart retry
