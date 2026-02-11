@@ -518,8 +518,12 @@ class MaestroDaemon:
     def _run_daily_burst(self):
         """
         Generate proposals using ALL active agents across ALL brands.
-        N agents × M brands × proposals_per_brand = total proposals.
-        Each proposal = 1 job = 1 reel. NO content duplication across brands.
+        N agents × M brands × proposals_per_brand × 2 (reel + post) = total proposals.
+        Each proposal = 1 job = 1 reel OR 1 post. NO content duplication across brands.
+
+        Phase 1: Generate REEL proposals (6 per brand = 30 total)
+        Phase 2: Generate POST proposals (6 per brand = 30 total)
+        Total: ~60 unique proposals/jobs per burst.
 
         Agents are loaded dynamically from the ai_agents DB table.
         Falls back to legacy Toby + Lexi if GenericAgent system fails.
@@ -563,6 +567,8 @@ class MaestroDaemon:
 
             if active_agents:
                 # ── Dynamic agents path ──
+                # Phase 1: REEL proposals
+                self.state.log("maestro", "Phase 1: Reels", f"Generating reel proposals for {len(brands)} brands...", "🎬")
                 for brand in brands:
                     for agent in active_agents:
                         try:
@@ -584,7 +590,7 @@ class MaestroDaemon:
                             self.state.agents[agent.agent_id].total_proposals += len(agent_proposals)
                             self.state.log(
                                 agent.agent_id, f"Done ({brand})",
-                                f"{len(agent_proposals)} proposals",
+                                f"{len(agent_proposals)} reel proposals",
                                 "✅"
                             )
                         except Exception as e:
@@ -593,15 +599,58 @@ class MaestroDaemon:
                                 self.state.agents[agent.agent_id].errors += 1
                             self.state.log(
                                 agent.agent_id, "Error",
-                                f"Generation failed for {brand}: {str(e)[:200]}",
+                                f"Reel generation failed for {brand}: {str(e)[:200]}",
                                 "❌"
                             )
                             traceback.print_exc()
+
+                reel_count = len(all_proposals)
+
+                # Phase 2: POST proposals (same agents, same brands, same count)
+                self.state.log("maestro", "Phase 2: Posts", f"Generating post proposals for {len(brands)} brands...", "📄")
+                for brand in brands:
+                    for agent in active_agents:
+                        try:
+                            self.state.current_agent = agent.agent_id
+                            ppb = agent.proposals_per_brand
+                            self.state.log(
+                                agent.agent_id, "Generating",
+                                f"{ppb} posts for {brand}",
+                                "📄"
+                            )
+                            result = agent.run(
+                                max_proposals=ppb,
+                                content_type="post",
+                                brand=brand,
+                            )
+                            agent_proposals = result.get("proposals", [])
+                            all_proposals.extend(agent_proposals)
+                            self.state.agents[agent.agent_id].total_proposals += len(agent_proposals)
+                            self.state.log(
+                                agent.agent_id, f"Done ({brand})",
+                                f"{len(agent_proposals)} post proposals",
+                                "✅"
+                            )
+                        except Exception as e:
+                            self.state.errors += 1
+                            if agent.agent_id in self.state.agents:
+                                self.state.agents[agent.agent_id].errors += 1
+                            self.state.log(
+                                agent.agent_id, "Error",
+                                f"Post generation failed for {brand}: {str(e)[:200]}",
+                                "❌"
+                            )
+                            traceback.print_exc()
+
+                post_count = len(all_proposals) - reel_count
+                self.state.log("maestro", "Both phases done", f"{reel_count} reels + {post_count} posts = {len(all_proposals)} total", "📊")
+
             else:
                 # ── Legacy fallback (Toby + Lexi hardcoded) ──
                 for brand in brands:
                     brand_handle = BRAND_HANDLES.get(brand, brand)
 
+                    # Reels
                     try:
                         self.state.current_agent = "toby"
                         from app.services.toby_agent import get_toby_agent
@@ -632,6 +681,31 @@ class MaestroDaemon:
                         self.state.errors += 1
                         self.state.agents["lexi"].errors += 1
                         self.state.log("lexi", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
+                        traceback.print_exc()
+
+                    # Posts (legacy: both agents generate posts too)
+                    try:
+                        self.state.current_agent = "toby"
+                        toby = get_toby_agent()
+                        self.state.log("toby", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} posts for {brand}", "📄")
+                        toby_post_result = toby.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="post", brand=brand)
+                        toby_post_proposals = toby_post_result.get("proposals", [])
+                        all_proposals.extend(toby_post_proposals)
+                        self.state.agents["toby"].total_proposals += len(toby_post_proposals)
+                    except Exception as e:
+                        self.state.errors += 1
+                        traceback.print_exc()
+
+                    try:
+                        self.state.current_agent = "lexi"
+                        lexi = get_lexi_agent()
+                        self.state.log("lexi", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} posts for {brand}", "📄")
+                        lexi_post_result = lexi.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="post", brand=brand)
+                        lexi_post_proposals = lexi_post_result.get("proposals", [])
+                        all_proposals.extend(lexi_post_proposals)
+                        self.state.agents["lexi"].total_proposals += len(lexi_post_proposals)
+                    except Exception as e:
+                        self.state.errors += 1
                         traceback.print_exc()
 
             self.state.total_proposals_generated += len(all_proposals)
@@ -715,15 +789,27 @@ class MaestroDaemon:
 
                     title = proposal.title
                     content_lines = proposal.content_lines or []
+                    slide_texts = proposal.slide_texts  # JSON list for posts (carousel slides)
                     image_prompt = proposal.image_prompt
                     agent_name = proposal.agent_name or "toby"
                     proposal_brand = proposal.brand
                     proposal_variant = proposal.variant
+                    proposal_content_type = getattr(proposal, 'content_type', None) or "reel"
                 finally:
                     db.close()
 
-                # 2. Determine variant from proposal (Toby=dark, Lexi=light)
-                variant = proposal_variant or ("dark" if agent_name == "toby" else "light")
+                # 2. Determine variant & platforms based on content type
+                is_post = (proposal_content_type == "post")
+
+                if is_post:
+                    # Posts always use variant="post" (not dark/light)
+                    variant = "post"
+                    platforms = ["instagram", "facebook"]  # No YouTube for posts
+                else:
+                    # Reels use agent variant (Toby=dark, Lexi=light)
+                    variant = proposal_variant or ("dark" if agent_name == "toby" else "light")
+                    platforms = ["instagram", "facebook", "youtube"]
+
                 brand = proposal_brand
 
                 if not brand:
@@ -734,16 +820,20 @@ class MaestroDaemon:
                 # 3. Create ONE job for this specific brand (1 proposal = 1 job)
                 with get_db_session() as jdb:
                     manager = JobManager(jdb)
-                    job = manager.create_job(
+
+                    # Build job kwargs — posts pass slide_texts, reels pass content_lines
+                    job_kwargs = dict(
                         user_id=proposal_id,
                         title=title,
-                        content_lines=content_lines,
+                        content_lines=slide_texts if is_post and slide_texts else content_lines,
                         brands=[brand],  # Single brand — from proposal
                         variant=variant,
                         ai_prompt=image_prompt,
                         cta_type="follow_tips",
-                        platforms=["instagram", "facebook", "youtube"],
+                        platforms=platforms,
                     )
+
+                    job = manager.create_job(**job_kwargs)
                     job_id = job.job_id
 
                 # Store job_id on proposal (for reference)
@@ -760,7 +850,7 @@ class MaestroDaemon:
 
                 self.state.log(
                     agent_name, "Auto-accepted",
-                    f"{proposal_id} → 1 job ({variant} × {brand})",
+                    f"{proposal_id} → 1 {'post' if is_post else 'reel'} job ({variant} × {brand})",
                     "✅"
                 )
 
@@ -867,7 +957,7 @@ class MaestroDaemon:
     # ──────────────────────────────────────────────────────────
 
     def _scout_cycle(self):
-        """Scan for trending content — runs even when paused."""
+        """Scan for trending content — reels AND posts. Runs even when paused."""
         self.state.log("maestro", "Scouting", "Scanning trends for reels + posts...", "🔭")
 
         try:
@@ -875,19 +965,35 @@ class MaestroDaemon:
 
             scout = get_trend_scout()
 
+            # ── Reel scouting ──
             h_result = scout.scan_hashtags(max_hashtags=3)
             h_new = h_result.get("new_stored", 0) if isinstance(h_result, dict) else 0
 
             c_result = scout.scan_competitors()
             c_new = c_result.get("new_stored", 0) if isinstance(c_result, dict) else 0
 
-            total_found = h_new + c_new
+            # ── Post scouting (carousel/image content) ──
+            ph_new = 0
+            pc_new = 0
+            try:
+                ph_result = scout.scan_post_hashtags(max_hashtags=3)
+                ph_new = ph_result.get("new_stored", 0) if isinstance(ph_result, dict) else 0
+            except Exception as pe:
+                self.state.log("maestro", "Post hashtag scan error", str(pe)[:150], "⚠️", "detail")
+
+            try:
+                pc_result = scout.scan_post_competitors()
+                pc_new = pc_result.get("new_stored", 0) if isinstance(pc_result, dict) else 0
+            except Exception as pe:
+                self.state.log("maestro", "Post competitor scan error", str(pe)[:150], "⚠️", "detail")
+
+            total_found = h_new + c_new + ph_new + pc_new
             self.state.total_trends_found += total_found
             self.state.last_scan_at = datetime.utcnow()
 
             self.state.log(
                 "maestro", "Trends discovered",
-                f"Found {total_found} new — {h_new} hashtags + {c_new} competitors",
+                f"Found {total_found} new — Reels: {h_new} hashtags + {c_new} competitors | Posts: {ph_new} hashtags + {pc_new} competitors",
                 "🔥"
             )
 
@@ -1395,6 +1501,7 @@ def auto_schedule_job(job_id: str):
             return
 
         variant = job.variant or "dark"
+        is_post = (variant == "post")
         scheduler = DatabaseSchedulerService()
         scheduled_count = 0
         brand_outputs = copy.deepcopy(job.brand_outputs or {})
@@ -1410,33 +1517,52 @@ def auto_schedule_job(job_id: str):
             caption = output.get("caption", "")
             yt_title = output.get("yt_title")
 
-            if not reel_id or not video_path:
-                continue
+            if is_post:
+                # Posts only need reel_id + thumbnail_path (no video)
+                if not reel_id:
+                    continue
+                # Verify thumbnail exists
+                from pathlib import Path as _Path
+                if thumbnail_path:
+                    thumb_abs = _Path(thumbnail_path.lstrip('/'))
+                    if not thumb_abs.exists():
+                        print(f"[AUTO-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
+                        continue
+            else:
+                # Reels need reel_id + video_path
+                if not reel_id or not video_path:
+                    continue
 
-            # Verify files actually exist before scheduling (prevents "Video not found" errors)
-            from pathlib import Path as _Path
-            video_abs = _Path(video_path.lstrip('/'))
-            thumbnail_abs = _Path(thumbnail_path.lstrip('/')) if thumbnail_path else None
-            if not video_abs.exists():
-                print(f"[AUTO-SCHEDULE] ⚠️ Video file missing for {brand}: {video_abs} — skipping", flush=True)
-                continue
-            if thumbnail_abs and not thumbnail_abs.exists():
-                print(f"[AUTO-SCHEDULE] ⚠️ Thumbnail missing for {brand}: {thumbnail_abs} — skipping", flush=True)
-                continue
+                # Verify files actually exist before scheduling (prevents "Video not found" errors)
+                from pathlib import Path as _Path
+                video_abs = _Path(video_path.lstrip('/'))
+                thumbnail_abs = _Path(thumbnail_path.lstrip('/')) if thumbnail_path else None
+                if not video_abs.exists():
+                    print(f"[AUTO-SCHEDULE] ⚠️ Video file missing for {brand}: {video_abs} — skipping", flush=True)
+                    continue
+                if thumbnail_abs and not thumbnail_abs.exists():
+                    print(f"[AUTO-SCHEDULE] ⚠️ Thumbnail missing for {brand}: {thumbnail_abs} — skipping", flush=True)
+                    continue
 
             try:
-                slot = scheduler.get_next_available_slot(brand, variant)
+                # Use post-specific slots for posts
+                if is_post:
+                    slot = scheduler.get_next_available_post_slot(brand)
+                    sched_platforms = job.platforms or ["instagram", "facebook"]
+                else:
+                    slot = scheduler.get_next_available_slot(brand, variant)
+                    sched_platforms = job.platforms or ["instagram", "facebook", "youtube"]
 
                 scheduler.schedule_reel(
                     user_id="maestro",
                     reel_id=reel_id,
                     scheduled_time=slot,
                     caption=caption,
-                    yt_title=yt_title,
-                    platforms=job.platforms or ["instagram", "facebook", "youtube"],
+                    yt_title=yt_title if not is_post else None,
+                    platforms=sched_platforms,
                     video_path=video_path,
                     thumbnail_path=thumbnail_path,
-                    yt_thumbnail_path=yt_thumbnail_path,
+                    yt_thumbnail_path=yt_thumbnail_path if not is_post else None,
                     user_name="Maestro",
                     brand=brand,
                     variant=variant,
@@ -1447,8 +1573,9 @@ def auto_schedule_job(job_id: str):
                 brand_outputs[brand]["scheduled_time"] = slot.isoformat()
 
                 scheduled_count += 1
+                content_label = "post" if is_post else "reel"
                 print(
-                    f"[AUTO-SCHEDULE] {brand}/{variant} → {slot.strftime('%Y-%m-%d %H:%M')} (reel {reel_id})",
+                    f"[AUTO-SCHEDULE] {brand}/{variant} → {slot.strftime('%Y-%m-%d %H:%M')} ({content_label} {reel_id})",
                     flush=True,
                 )
             except Exception as e:
@@ -1499,6 +1626,7 @@ def schedule_all_ready_reels() -> int:
             variant = job.variant or "dark"
             brand_outputs = copy.deepcopy(job.brand_outputs or {})
             job_changed = False
+            is_post = (variant == "post")
 
             for brand, output in brand_outputs.items():
                 if output.get("status") != "completed":
@@ -1506,15 +1634,28 @@ def schedule_all_ready_reels() -> int:
 
                 reel_id = output.get("reel_id")
                 video_path = output.get("video_path")
-                if not reel_id or not video_path:
-                    continue
+                thumbnail_path = output.get("thumbnail_path")
 
-                # Verify video file actually exists before scheduling
-                from pathlib import Path as _Path
-                video_abs = _Path(video_path.lstrip('/'))
-                if not video_abs.exists():
-                    print(f"[READY-SCHEDULE] ⚠️ Video missing for {brand}: {video_abs} — skipping", flush=True)
-                    continue
+                if is_post:
+                    # Posts only need reel_id (image-based, no video)
+                    if not reel_id:
+                        continue
+                    if thumbnail_path:
+                        from pathlib import Path as _Path
+                        thumb_abs = _Path(thumbnail_path.lstrip('/'))
+                        if not thumb_abs.exists():
+                            print(f"[READY-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
+                            continue
+                else:
+                    # Reels need reel_id + video_path
+                    if not reel_id or not video_path:
+                        continue
+                    # Verify video file actually exists before scheduling
+                    from pathlib import Path as _Path
+                    video_abs = _Path(video_path.lstrip('/'))
+                    if not video_abs.exists():
+                        print(f"[READY-SCHEDULE] ⚠️ Video missing for {brand}: {video_abs} — skipping", flush=True)
+                        continue
 
                 # Check if already in scheduled_reels (safety check)
                 from app.models import ScheduledReel
@@ -1530,17 +1671,23 @@ def schedule_all_ready_reels() -> int:
                     continue
 
                 try:
-                    slot = scheduler.get_next_available_slot(brand, variant)
+                    if is_post:
+                        slot = scheduler.get_next_available_post_slot(brand)
+                        sched_platforms = job.platforms or ["instagram", "facebook"]
+                    else:
+                        slot = scheduler.get_next_available_slot(brand, variant)
+                        sched_platforms = job.platforms or ["instagram", "facebook", "youtube"]
+
                     scheduler.schedule_reel(
                         user_id="maestro",
                         reel_id=reel_id,
                         scheduled_time=slot,
                         caption=output.get("caption", ""),
-                        yt_title=output.get("yt_title"),
-                        platforms=job.platforms or ["instagram", "facebook", "youtube"],
+                        yt_title=output.get("yt_title") if not is_post else None,
+                        platforms=sched_platforms,
                         video_path=video_path,
                         thumbnail_path=output.get("thumbnail_path"),
-                        yt_thumbnail_path=output.get("yt_thumbnail_path"),
+                        yt_thumbnail_path=output.get("yt_thumbnail_path") if not is_post else None,
                         user_name="Maestro",
                         brand=brand,
                         variant=variant,
@@ -1549,8 +1696,9 @@ def schedule_all_ready_reels() -> int:
                     brand_outputs[brand]["scheduled_time"] = slot.isoformat()
                     job_changed = True
                     total_scheduled += 1
+                    content_label = "post" if is_post else "reel"
                     print(
-                        f"[READY-SCHEDULE] {brand}/{variant} → {slot.strftime('%Y-%m-%d %H:%M')} (reel {reel_id})",
+                        f"[READY-SCHEDULE] {brand}/{variant} → {slot.strftime('%Y-%m-%d %H:%M')} ({content_label} {reel_id})",
                         flush=True,
                     )
                 except Exception as e:

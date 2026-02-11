@@ -55,40 +55,45 @@ class TrendScout:
     ]
 
     # Post-focused competitor/inspiration accounts (carousel & educational content)
-    # Broader health/wellness/fitness/longevity niche for post ideas
+    # Avatar-aligned: women 45+, health, daily habits, mental health, wellness, longevity
     DEFAULT_POST_COMPETITORS: List[str] = [
-        "neurolab._",
-        "healvex",
-        "thefarmacyreal",
-        "seedoilscout",
-        "demicstory",
-        "naturethecure",
-        "trillionairehealth",
-        "fitt_empires",
-        "bioganancias",
-        "neuroglobe",
-        "eatinghealthyfeed",
-        "mental.aspect",
-        "healf",
-        "longevityxlab",
-        "laviahealthshop",
-        "musclemorph_",
-        "gym.legends",
-        "dr.longevity",
-        "betterme",
-        "trainedbynaiser",
-        "sportpump",
-        "foodlty",
-        "fitnesstipsdaily",
-        "mentalmentevisionario",
-        "fitphysiqueofficial",
-        "doutorbarakat",
-        "mindset.therapy",
-        "thuthlyrical",
-        "drericberg",
-        "consciousnesstruth",
-        "science",
-        "fitnessforallus",
+        # === Health & Wellness (women 45+ focused) ===
+        "drericberg",              # Dr. Eric Berg — health tips, huge following
+        "doutorbarakat",           # Dr. Barakat — holistic health, lifestyle
+        "consciousnesstruth",      # Consciousness & spiritual wellness
+        "mindset.therapy",         # Mental health & mindset
+        "mental.aspect",           # Mental wellness & daily habits
+        "healf",                   # Holistic health & self-care
+        # === Nutrition & Natural Health ===
+        "thefarmacyreal",          # Natural remedies, plant-based healing
+        "seedoilscout",            # Seed oil awareness, clean eating
+        "eatinghealthyfeed",       # Healthy eating tips & nutrition
+        "foodlty",                 # Food & healthy lifestyle
+        "naturethecure",           # Natural cures & wellness
+        # === Longevity & Anti-Aging ===
+        "longevityxlab",           # Longevity science & tips
+        "dr.longevity",            # Anti-aging & longevity
+        "trillionairehealth",      # High-end health & longevity
+        "healvex",                 # Healing & wellness
+        # === Neuroscience & Brain Health ===
+        "neurolab._",              # Neuroscience & brain health
+        "neuroglobe",              # Brain science & mental clarity
+        # === Lifestyle & Habits ===
+        "demicstory",              # Personal health stories
+        "betterme",                # Self-improvement & health
+        "science",                 # Science-backed health
+        "thuthlyrical",            # Wellness wisdom
+        "manifestableglowup",     # Glow-up & self-care
+        # === Wellness Brands & Supplements ===
+        "laviahealthshop",         # Health products & tips
+        "bioganancias",            # Bio-health & supplements
+        # === Women's Health Specific ===
+        "mentalmentevisionario",   # Mental health & vision
+        "fitnessforallus",         # Accessible fitness for all ages
+        "naturamatrix",            # Natural health matrix
+        "holistichealthworld",     # Holistic health community
+        "mylera_life",             # Lifestyle & wellness
+        "naturalhealinglab",       # Natural healing approaches
     ]
 
     # Post-specific hashtags (carousel/educational content discovery)

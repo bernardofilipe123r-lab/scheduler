@@ -1088,3 +1088,94 @@ class DatabaseSchedulerService:
                     occupied.append(schedule.scheduled_time)
             
             return sorted(occupied)
+    def get_next_available_post_slot(
+        self,
+        brand: str,
+        reference_date: Optional[datetime] = None
+    ) -> datetime:
+        """
+        Get the next available scheduling slot for a POST (image/carousel) for a brand.
+
+        POST SCHEDULING RULES:
+        ======================
+        Posts use a separate time grid from reels, offset by +2 hours:
+        - Reels: 0, 4, 8, 12, 16, 20  (every 4h)
+        - Posts:  2, 6, 10, 14, 18, 22 (every 4h, shifted +2h)
+
+        This creates a natural alternation: reel → post → reel → post every 2 hours.
+        Brands use the same 1-hour stagger offsets as reels.
+
+        Example (Holistic College, offset 0):
+          Reels: 0:00, 4:00, 8:00, 12:00, 16:00, 20:00
+          Posts:  2:00, 6:00, 10:00, 14:00, 18:00, 22:00
+
+        Example (Healthy College, offset 1):
+          Reels: 1:00, 5:00, 9:00, 13:00, 17:00, 21:00
+          Posts:  3:00, 7:00, 11:00, 15:00, 19:00, 23:00
+        """
+        from datetime import timedelta
+
+        # Same brand offsets as reels
+        BRAND_OFFSETS = {
+            "holisticcollege": 0,
+            "healthycollege": 1,
+            "vitalitycollege": 2,
+            "longevitycollege": 3,
+            "wellbeingcollege": 4,
+            "gymcollege": 0,
+        }
+
+        # Post base slots: every 4 hours, shifted +2h from reels
+        BASE_POST_SLOTS = [2, 6, 10, 14, 18, 22]
+
+        brand_lower = brand.lower()
+        offset = BRAND_OFFSETS.get(brand_lower, 0)
+
+        # Apply brand offset and wrap around 24h
+        brand_post_slots = sorted([(hour + offset) % 24 for hour in BASE_POST_SLOTS])
+
+        # Starting reference
+        start_date = datetime(2026, 1, 16, tzinfo=timezone.utc)
+        now = reference_date or datetime.now(timezone.utc)
+        base_date = max(start_date, now)
+
+        # Get all scheduled posts for this brand with variant="post"
+        with get_db_session() as db:
+            schedules = db.query(ScheduledReel).filter(
+                and_(
+                    ScheduledReel.status.in_(["scheduled", "publishing"]),
+                    ScheduledReel.scheduled_time >= start_date
+                )
+            ).all()
+
+            occupied_slots = set()
+            for schedule in schedules:
+                metadata = schedule.extra_data or {}
+                schedule_brand = metadata.get("brand", "").lower()
+                schedule_variant = metadata.get("variant", "")
+
+                if schedule_brand == brand_lower and schedule_variant == "post":
+                    ts = schedule.scheduled_time
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    occupied_slots.add(ts.timestamp())
+
+        # Find next available slot
+        current_day = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        for day_offset in range(365):
+            check_date = current_day + timedelta(days=day_offset)
+
+            for hour in brand_post_slots:
+                candidate = check_date.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+                if candidate <= now:
+                    continue
+
+                if candidate.timestamp() not in occupied_slots:
+                    print(f"📅 Found next POST slot for {brand}: {candidate.isoformat()}")
+                    return candidate
+
+        # Fallback
+        tomorrow = now + timedelta(days=1)
+        return tomorrow.replace(hour=brand_post_slots[0], minute=0, second=0, microsecond=0)
