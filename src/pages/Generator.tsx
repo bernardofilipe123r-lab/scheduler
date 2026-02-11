@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
-import { ALL_BRANDS, BRAND_CONFIG } from '@/features/brands'
+import { useDynamicBrands } from '@/features/brands'
 import type { BrandName, Variant } from '@/shared/types'
 
 const CTA_TYPES = [
@@ -23,12 +23,22 @@ type Platform = typeof PLATFORMS[number]['id']
 export function GeneratorPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
+  const { brands: dynamicBrands, brandIds } = useDynamicBrands()
   
   // Form state
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([...ALL_BRANDS])
+  const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
+  const [brandsInitialized, setBrandsInitialized] = useState(false)
   const [variant, setVariant] = useState<Variant>('light')
+  
+  // Auto-select all brands when they load
+  useEffect(() => {
+    if (!brandsInitialized && brandIds.length > 0) {
+      setSelectedBrands([...brandIds])
+      setBrandsInitialized(true)
+    }
+  }, [brandIds, brandsInitialized])
   const [aiPrompt, setAiPrompt] = useState('')
   const [ctaType, setCtaType] = useState('follow_tips')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
@@ -290,23 +300,20 @@ export function GeneratorPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">Brands</label>
             <div className="grid grid-cols-2 gap-3">
-              {ALL_BRANDS.map(brandId => {
-                const brand = BRAND_CONFIG[brandId]
-                return (
+              {dynamicBrands.map(brand => (
                   <label 
-                    key={brandId} 
+                    key={brand.id} 
                     className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
                   >
                     <input 
                       type="checkbox" 
-                      checked={selectedBrands.includes(brandId)}
-                      onChange={() => toggleBrand(brandId)}
+                      checked={selectedBrands.includes(brand.id)}
+                      onChange={() => toggleBrand(brand.id)}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     /> 
                     <span className="ml-3 text-sm font-medium text-gray-900">{brand.label}</span>
                   </label>
-                )
-              })}
+              ))}
             </div>
             <p className="text-xs text-gray-500 mt-2">Each brand has its own independent schedule</p>
           </div>

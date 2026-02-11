@@ -256,22 +256,22 @@ export function useReactivateBrand() {
 // Helper functions for backward compatibility
 
 /**
- * Get brand label from a brand object
+ * Get brand label from a Brand object
  */
-export function getBrandLabel(brand: Brand): string {
+export function getBrandObjectLabel(brand: Brand): string {
   return brand.display_name || brand.id
 }
 
 /**
- * Get primary color from a brand object
+ * Get primary color from a Brand object
  */
-export function getBrandColor(brand: Brand): string {
+export function getBrandObjectColor(brand: Brand): string {
   return brand.colors?.primary || '#666666'
 }
 
 /**
- * Get short name (abbreviation) from a brand object
+ * Get short name (abbreviation) from a Brand object
  */
-export function getBrandShortName(brand: Brand): string {
+export function getBrandObjectShortName(brand: Brand): string {
   return brand.short_name || brand.id.substring(0, 3).toUpperCase()
 }

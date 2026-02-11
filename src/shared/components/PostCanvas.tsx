@@ -95,12 +95,32 @@ export const BRAND_CONFIGS: Record<
   },
 }
 
+/**
+ * Get brand config with dynamic fallback for unknown brands.
+ */
+export function getBrandConfig(brandId: string) {
+  if (BRAND_CONFIGS[brandId]) return BRAND_CONFIGS[brandId]
+  // Generate sensible defaults for unknown (new) brands
+  const label = brandId.replace(/college$/i, ' College').replace(/^\w/, c => c.toUpperCase())
+  return { name: label, color: '#6b7280', colorName: 'gray', accentColor: '#4b5563' }
+}
+
 const BRAND_ABBREVIATIONS: Record<string, string> = {
   healthycollege: 'HCO',
   holisticcollege: 'HCO',
   longevitycollege: 'LCO',
   vitalitycollege: 'VCO',
   wellbeingcollege: 'WCO',
+}
+
+/**
+ * Get brand abbreviation with dynamic fallback.
+ */
+export function getBrandAbbreviation(brandId: string): string {
+  if (BRAND_ABBREVIATIONS[brandId]) return BRAND_ABBREVIATIONS[brandId]
+  // Generate abbreviation from brand ID: take first letter of each word + 'O'
+  const parts = brandId.replace(/college$/i, '').split(/(?=[A-Z])/)
+  return (parts[0]?.charAt(0)?.toUpperCase() || 'X') + 'CO'
 }
 
 // ─── Helper: calculate title height ─────────────────────────────────
@@ -214,7 +234,7 @@ export function LogoWithLines({
   const rightLineEnd = rightLineStart + effectiveBarWidth
 
   const abbreviation = brandName
-    ? BRAND_ABBREVIATIONS[brandName] || 'LOGO'
+    ? getBrandAbbreviation(brandName)
     : 'LOGO'
 
   return (

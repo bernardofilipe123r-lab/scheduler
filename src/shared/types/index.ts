@@ -2,8 +2,9 @@
  * Core type definitions for the application
  */
 
-// Brand types
-export type BrandName = 'healthycollege' | 'vitalitycollege' | 'longevitycollege' | 'holisticcollege' | 'wellbeingcollege'
+// Brand types — dynamic: any brand ID string from the database
+// Known brands kept as a type hint, but accepts any string for new brands
+export type BrandName = string
 
 // Status types
 export type JobStatus = 'pending' | 'generating' | 'completed' | 'failed' | 'cancelled'

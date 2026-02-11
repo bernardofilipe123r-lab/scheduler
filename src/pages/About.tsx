@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useDynamicBrands } from '@/features/brands'
 import {
   Info,
   FileDown,
@@ -620,6 +621,7 @@ function BrandRow({
 
 export function AboutPage() {
   const [pdfLoading, setPdfLoading] = useState(false)
+  const { brands: dynamicBrands } = useDynamicBrands()
 
   const handleExportPDF = () => {
     setPdfLoading(true)
@@ -707,8 +709,8 @@ export function AboutPage() {
         <p className="text-gray-600 leading-relaxed">
           Built for <strong className="text-gray-900">infinite scalability</strong>, every brand covers the same core health &amp; wellness 
           topics — nutrition, mental health, physical fitness, anti-aging, mind-body wellness, and energy — but presents 
-          them under a completely independent identity with its own voice, colors, and audience. Currently operating 
-          5 brands, the platform generates unique, differentiated content for each from a single pipeline, ensuring 
+          them under a completely independent identity with its own voice, colors, and audience. Currently operating {' '}
+          {dynamicBrands.length} brands, the platform generates unique, differentiated content for each from a single pipeline, ensuring 
           no two brands ever post identical content regardless of how many are connected.
         </p>
       </Section>
@@ -861,11 +863,15 @@ export function AboutPage() {
                 </tr>
               </thead>
               <tbody>
-                <BrandRow name="Healthy College" handle="@thehealthycollege" color="#004f00" focus="" />
-                <BrandRow name="Vitality College" handle="@thevitalitycollege" color="#028f7a" focus="" />
-                <BrandRow name="Longevity College" handle="@thelongevitycollege" color="#019dc8" focus="" />
-                <BrandRow name="Holistic College" handle="@theholisticcollege" color="#f0836e" focus="" />
-                <BrandRow name="Wellbeing College" handle="@thewellbeingcollege" color="#7e57c2" focus="" />
+                {dynamicBrands.map(brand => (
+                  <BrandRow 
+                    key={brand.id}
+                    name={brand.label} 
+                    handle={`@the${brand.id}`} 
+                    color={brand.color} 
+                    focus="" 
+                  />
+                ))}
               </tbody>
             </table>
           </div>

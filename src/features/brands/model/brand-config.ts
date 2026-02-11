@@ -8,7 +8,11 @@ export interface BrandConfig {
   textClass: string
 }
 
-export const BRAND_CONFIG: Record<BrandName, BrandConfig> = {
+/**
+ * Static fallback brand configs — used when DB brands haven't loaded yet.
+ * New brands added via the UI will be fetched dynamically from /api/v2/brands.
+ */
+export const BRAND_CONFIG: Record<string, BrandConfig> = {
   healthycollege: {
     id: 'healthycollege',
     label: 'Healthy College',
@@ -46,10 +50,29 @@ export const BRAND_CONFIG: Record<BrandName, BrandConfig> = {
   },
 }
 
-export const ALL_BRANDS: BrandName[] = ['healthycollege', 'vitalitycollege', 'longevitycollege', 'holisticcollege', 'wellbeingcollege']
+/**
+ * Static fallback list — use useBrands() or useDynamicBrands() for dynamic data.
+ */
+export const ALL_BRANDS: string[] = ['healthycollege', 'vitalitycollege', 'longevitycollege', 'holisticcollege', 'wellbeingcollege']
+
+/**
+ * Register a brand from DB data into the runtime config cache.
+ * Called by the dynamic brands provider when brands load from API.
+ */
+export function registerBrand(id: string, label: string, color: string): void {
+  if (!BRAND_CONFIG[id]) {
+    BRAND_CONFIG[id] = {
+      id,
+      label,
+      color,
+      bgClass: `bg-[${color}]`,
+      textClass: 'text-white',
+    }
+  }
+}
 
 export function getBrandLabel(brand: BrandName): string {
-  return BRAND_CONFIG[brand]?.label || brand
+  return BRAND_CONFIG[brand]?.label || brand.replace(/college$/i, ' College').replace(/^\w/, c => c.toUpperCase())
 }
 
 export function getBrandColor(brand: BrandName): string {

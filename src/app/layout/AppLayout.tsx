@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Info, Music } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Info, Music, Bot, BookOpen } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -14,7 +14,7 @@ export function AppLayout() {
   const { user, logout } = useAuth()
   
   // Check if current route is a settings page
-  const isSettingsRoute = location.pathname === '/connected' || location.pathname === '/brands' || location.pathname === '/settings' || location.pathname === '/posts-prompts' || location.pathname === '/reels-prompts' || location.pathname === '/prompts' || location.pathname === '/about'
+  const isSettingsRoute = ['/connected', '/brands', '/settings', '/posts-prompts', '/reels-prompts', '/prompts', '/about'].includes(location.pathname)
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -236,6 +236,26 @@ export function AppLayout() {
                       About Healveth
                     </NavLink>
                     <div className="border-t border-gray-100 my-1" />
+                    <a
+                      href="/ai-logs"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setSettingsOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Bot className="w-4 h-4" />
+                      AI Logs
+                    </a>
+                    <a
+                      href="/ai-about"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setSettingsOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      AI Architecture
+                    </a>
                     <a
                       href="/logs"
                       target="_blank"

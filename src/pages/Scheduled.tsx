@@ -37,7 +37,7 @@ import {
   parseISO
 } from 'date-fns'
 import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
-import { BrandBadge, getBrandColor, getBrandLabel, ALL_BRANDS } from '@/features/brands'
+import { BrandBadge, getBrandColor, getBrandLabel, useDynamicBrands } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 
@@ -45,13 +45,7 @@ import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 // Each brand has 6 slots per day: 3 light and 3 dark
 // Pattern: Every 4 hours, alternating L/D/L/D/L/D
 // Each brand is offset by N hours from 12:00 AM
-const BRAND_OFFSETS: Record<BrandName, number> = {
-  healthycollege: 0,    // Starts at 12:00 AM
-  longevitycollege: 1,  // Starts at 1:00 AM
-  wellbeingcollege: 2,  // Starts at 2:00 AM
-  vitalitycollege: 3,   // Starts at 3:00 AM
-  holisticcollege: 4,   // Starts at 4:00 AM
-}
+// Offsets now come from the DB via useDynamicBrands()
 
 // Platform type for filtering
 type PlatformFilter = 'all' | 'instagram' | 'facebook' | 'youtube'
@@ -66,8 +60,8 @@ const BASE_SLOTS: Array<{ hour: number; variant: Variant }> = [
   { hour: 20, variant: 'dark' },   // 8 PM
 ]
 
-function getBrandSlots(brand: BrandName): Array<{ hour: number; variant: Variant }> {
-  const offset = BRAND_OFFSETS[brand] || 0
+function getBrandSlots(brand: BrandName, brandOffsets: Record<string, number>): Array<{ hour: number; variant: Variant }> {
+  const offset = brandOffsets[brand] || 0
   return BASE_SLOTS.map(slot => ({
     hour: (slot.hour + offset) % 24,
     variant: slot.variant
@@ -89,6 +83,14 @@ export function ScheduledPage() {
   const retryFailed = useRetryFailed()
   const reschedule = useReschedule()
   const publishNow = usePublishNow()
+  const { brands: dynamicBrands } = useDynamicBrands()
+  
+  // Build brand offsets dynamically from DB schedule_offset
+  const brandOffsets = useMemo(() => {
+    const offsets: Record<string, number> = {}
+    dynamicBrands.forEach(b => { offsets[b.id] = b.scheduleOffset })
+    return offsets
+  }, [dynamicBrands])
   
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
@@ -147,7 +149,7 @@ export function ScheduledPage() {
   const analyzeSlots = useMemo(() => {
     if (!brandFilter) return null
     
-    const brandSlots = getBrandSlots(brandFilter)
+    const brandSlots = getBrandSlots(brandFilter, brandOffsets)
     const lightSlots = brandSlots.filter(s => s.variant === 'light').map(s => s.hour)
     const darkSlots = brandSlots.filter(s => s.variant === 'dark').map(s => s.hour)
     
@@ -190,7 +192,7 @@ export function ScheduledPage() {
         darkSlots
       }
     }
-  }, [brandFilter, postsByDate])
+  }, [brandFilter, postsByDate, brandOffsets])
   
   const getPostsForDay = (date: Date) => {
     const dateKey = format(date, 'yyyy-MM-dd')
@@ -438,19 +440,19 @@ export function ScheduledPage() {
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
           <p className="text-sm text-gray-500">Total</p>
         </div>
-        {ALL_BRANDS.map(brand => (
+        {dynamicBrands.map(brand => (
           <div 
-            key={brand}
+            key={brand.id}
             className="card p-4 text-center"
-            style={{ borderLeftColor: getBrandColor(brand), borderLeftWidth: '3px' }}
+            style={{ borderLeftColor: brand.color, borderLeftWidth: '3px' }}
           >
-            <p className="text-2xl font-bold text-gray-900">{stats.byBrand[brand] || 0}</p>
-            <p className="text-sm text-gray-500">{getBrandLabel(brand).split(' ')[0]}</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.byBrand[brand.id] || 0}</p>
+            <p className="text-sm text-gray-500">{brand.shortName}</p>
           </div>
         ))}
       </div>
@@ -487,23 +489,23 @@ export function ScheduledPage() {
               <span className="text-sm font-medium text-gray-700">Slot Tracker:</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {ALL_BRANDS.map(brand => (
+              {dynamicBrands.map(brand => (
                 <button
-                  key={brand}
-                  onClick={() => setBrandFilter(brandFilter === brand ? null : brand)}
+                  key={brand.id}
+                  onClick={() => setBrandFilter(brandFilter === brand.id ? null : brand.id)}
                   className={clsx(
                     'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
-                    brandFilter === brand
+                    brandFilter === brand.id
                       ? 'ring-2 ring-offset-1'
                       : 'opacity-60 hover:opacity-100'
                   )}
                   style={{ 
-                    backgroundColor: `${getBrandColor(brand)}20`,
-                    color: getBrandColor(brand),
-                    ...(brandFilter === brand && { ringColor: getBrandColor(brand) })
+                    backgroundColor: `${brand.color}20`,
+                    color: brand.color,
+                    ...(brandFilter === brand.id && { ringColor: brand.color })
                   }}
                 >
-                  {getBrandLabel(brand).split(' ')[0]}
+                  {brand.shortName}
                 </button>
               ))}
               {brandFilter && (

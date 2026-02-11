@@ -42,13 +42,12 @@ import {
   useUpdateBrandContent,
   useRegenerateBrandImage,
 } from '@/features/jobs'
-import { getBrandLabel, getBrandColor } from '@/features/brands'
 import { StatusBadge, Modal } from '@/shared/components'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   GRID_PREVIEW_SCALE,
-  BRAND_CONFIGS,
+  getBrandConfig,
   DEFAULT_GENERAL_SETTINGS,
   SETTINGS_STORAGE_KEY,
   POST_BRAND_OFFSETS,
@@ -608,12 +607,11 @@ export function PostJobDetail({ job, refetch }: Props) {
                 <div
                   className="w-3 h-3 rounded-full flex-shrink-0"
                   style={{
-                    backgroundColor:
-                      BRAND_CONFIGS[brand]?.color || getBrandColor(brand as BrandName),
+                    backgroundColor: getBrandConfig(brand).color,
                   }}
                 />
                 <span className="text-sm font-medium text-gray-900 truncate">
-                  {BRAND_CONFIGS[brand]?.name || getBrandLabel(brand as BrandName)}
+                  {getBrandConfig(brand).name}
                 </span>
                 <span className="ml-auto flex items-center gap-1">
                   {(status === 'completed' || status === 'scheduled') && (
@@ -965,7 +963,7 @@ export function PostJobDetail({ job, refetch }: Props) {
         <Modal
           isOpen={!!editingBrand}
           onClose={() => setEditingBrand(null)}
-          title={`Edit — ${BRAND_CONFIGS[editingBrand]?.name || getBrandLabel(editingBrand as BrandName)}`}
+          title={`Edit — ${editingBrand ? getBrandConfig(editingBrand).name : ''}`}
         >
           <div className="space-y-4">
             {/* Title */}
@@ -1233,7 +1231,7 @@ export function PostJobDetail({ job, refetch }: Props) {
               )}
 
               <p className="text-xs text-white/40">
-                {BRAND_CONFIGS[expandedBrand]?.name || expandedBrand} — Full Quality Preview
+                {getBrandConfig(expandedBrand).name} — Full Quality Preview
               </p>
             </div>
           </div>
