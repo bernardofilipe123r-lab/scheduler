@@ -161,6 +161,7 @@ class MaestroState:
         # Cycle stats
         self.total_cycles: int = 0
         self.total_proposals_generated: int = 0
+        self.total_jobs_dispatched: int = 0
         self.total_metrics_collected: int = 0
         self.total_trends_found: int = 0
         self.errors: int = 0
@@ -217,6 +218,7 @@ class MaestroState:
             "last_daily_run_human": _time_ago(last_run) if last_run else "never",
             "total_cycles": self.total_cycles,
             "total_proposals_generated": self.total_proposals_generated,
+            "total_jobs_dispatched": self.total_jobs_dispatched,
             "total_metrics_collected": self.total_metrics_collected,
             "total_trends_found": self.total_trends_found,
             "errors": self.errors,
@@ -595,6 +597,9 @@ class MaestroDaemon:
                     f"{proposal_id} → {len(job_ids)} jobs ({variant} × {len(ALL_BRANDS)} brands)",
                     "✅"
                 )
+
+                # Track total jobs dispatched
+                self.state.total_jobs_dispatched += len(job_ids)
 
                 # 4. Process each job in background thread
                 for jid in job_ids:

@@ -127,6 +127,7 @@ interface MaestroStatus {
   last_daily_run_human: string
   total_cycles: number
   total_proposals_generated: number
+  total_jobs_dispatched: number
   total_metrics_collected: number
   total_trends_found: number
   errors: number
@@ -726,7 +727,7 @@ export function MaestroPage() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <StatusPill label="Uptime" value={maestroStatus.uptime_human || '—'} icon={Clock} />
               <StatusPill label="Cycles" value={String(maestroStatus.total_cycles)} icon={Activity} />
-              <StatusPill label="Generated" value={String(maestroStatus.total_proposals_generated)} icon={Sparkles} />
+              <StatusPill label="Jobs" value={String(maestroStatus.total_jobs_dispatched ?? 0)} icon={Sparkles} />
               <StatusPill label="Trends" value={String(maestroStatus.total_trends_found)} icon={Flame} />
               <StatusPill label="Metrics" value={String(maestroStatus.total_metrics_collected)} icon={BarChart3} />
             </div>
@@ -763,8 +764,8 @@ export function MaestroPage() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
-            label="Today"
-            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${maestroStatus?.daily_config?.jobs_per_day ?? 30}`}
+            label="Proposals"
+            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${(maestroStatus?.daily_config?.proposals_per_agent ?? 3) * 2}`}
             icon={Clock}
             color="purple"
           />
