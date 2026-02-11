@@ -236,19 +236,25 @@ class TobyAgent:
         if max_proposals is None:
             max_proposals = MAX_PROPOSALS_PER_DAY
 
-        # Check how many proposals Toby already made today
+        # When called with a specific brand (from Maestro), skip daily quota check
+        # — Maestro manages the overall budget. max_proposals = how many THIS call.
         today_count = self._count_proposals_today()
-        remaining = max(0, max_proposals - today_count)
-        if remaining == 0:
-            toby_log("Quota reached", f"Already made {today_count} proposals today (max {max_proposals})", "😴", "action")
-            return {
-                "message": f"Toby already made {today_count} proposals today (max {max_proposals})",
-                "proposals": [],
-            }
+        if brand:
+            # Per-brand call from Maestro: generate exactly max_proposals
+            remaining = max_proposals
+        else:
+            # Standalone call: enforce daily cap
+            remaining = max(0, max_proposals - today_count)
+            if remaining == 0:
+                toby_log("Quota reached", f"Already made {today_count} proposals today (max {max_proposals})", "😴", "action")
+                return {
+                    "message": f"Toby already made {today_count} proposals today (max {max_proposals})",
+                    "proposals": [],
+                }
 
         brand_label = f" for {brand}" if brand else ""
         ct_label = "📄 POST" if content_type == "post" else "🎬 REEL"
-        toby_log("Planning", f"{ct_label}{brand_label} — Today: {today_count}/{max_proposals} proposals. Room for {remaining} more.", "🎯", "detail")
+        toby_log("Planning", f"{ct_label}{brand_label} — Today: {today_count} total. Generating {remaining} proposals.", "🎯", "detail")
 
         # Gather intelligence
         intel = self._gather_intelligence(content_type=content_type)
@@ -1051,7 +1057,7 @@ Rules:
             db.close()
 
     def _count_proposals_today(self) -> int:
-        """Count proposals created today."""
+        """Count Toby proposals created today."""
         from app.db_connection import SessionLocal
 
         db = SessionLocal()
@@ -1059,6 +1065,7 @@ Rules:
             today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             count = (
                 db.query(TobyProposal)
+                .filter(TobyProposal.agent_name == "toby")
                 .filter(TobyProposal.created_at >= today_start)
                 .count()
             )

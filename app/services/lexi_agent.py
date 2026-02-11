@@ -185,15 +185,22 @@ class LexiAgent:
         if max_proposals is None:
             max_proposals = MAX_PROPOSALS_PER_DAY
 
+        # When called with a specific brand (from Maestro), skip daily quota check
+        # — Maestro manages the overall budget. max_proposals = how many THIS call.
         today_count = self._count_proposals_today()
-        remaining = max(0, max_proposals - today_count)
-        if remaining == 0:
-            maestro_log("lexi", "Quota reached", f"Already made {today_count} proposals today", "😴", "action")
-            return {"message": f"Quota reached ({today_count})", "proposals": []}
+        if brand:
+            # Per-brand call from Maestro: generate exactly max_proposals
+            remaining = max_proposals
+        else:
+            # Standalone call: enforce daily cap
+            remaining = max(0, max_proposals - today_count)
+            if remaining == 0:
+                maestro_log("lexi", "Quota reached", f"Already made {today_count} proposals today", "😴", "action")
+                return {"message": f"Quota reached ({today_count})", "proposals": []}
 
         brand_label = f" for {brand}" if brand else ""
         ct_label = "📄 POST" if content_type == "post" else "🎬 REEL"
-        maestro_log("lexi", "Planning", f"{ct_label}{brand_label} — Today: {today_count}/{max_proposals}, room for {remaining}", "🎯", "detail")
+        maestro_log("lexi", "Planning", f"{ct_label}{brand_label} — Today: {today_count} total. Generating {remaining} proposals.", "🎯", "detail")
 
         intel = self._gather_intelligence(content_type=content_type)
         strategy_plan = self._plan_strategies(remaining, intel)
