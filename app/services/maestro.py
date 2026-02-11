@@ -54,6 +54,10 @@ SCAN_CYCLE_MINUTES = int(os.getenv("MAESTRO_SCAN_MINUTES", "240"))
 # Feedback cycle: check performance of reels published 48-72h ago
 FEEDBACK_CYCLE_MINUTES = int(os.getenv("MAESTRO_FEEDBACK_MINUTES", "360"))
 
+# Healing cycle: scan for failed jobs, retry, notify
+HEALING_CYCLE_MINUTES = int(os.getenv("MAESTRO_HEALING_MINUTES", "15"))
+MAX_AUTO_RETRIES = int(os.getenv("MAESTRO_MAX_AUTO_RETRIES", "2"))  # Max retries per job
+
 STARTUP_DELAY_SECONDS = 30
 
 # ── Concurrency Control ───────────────────────────────────────
@@ -199,6 +203,12 @@ class MaestroState:
         self.last_metrics_at: Optional[datetime] = None
         self.last_scan_at: Optional[datetime] = None
         self.last_feedback_at: Optional[datetime] = None
+        self.last_healing_at: Optional[datetime] = None
+
+        # Healing stats
+        self.total_healed: int = 0          # Jobs successfully retried
+        self.total_healing_failures: int = 0 # Jobs that failed even after retry
+        self.healing_notifications: List[Dict] = []  # Creator notifications
 
         # Activity log — unified for all agents
         self.activity_log: List[Dict] = []
@@ -298,6 +308,13 @@ class MaestroState:
             "agents": {
                 name: agent.to_dict() for name, agent in self.agents.items()
             },
+            "healing": {
+                "last_healing_at": self.last_healing_at.isoformat() if self.last_healing_at else None,
+                "last_healing_human": _time_ago(self.last_healing_at) if self.last_healing_at else "never",
+                "total_healed": self.total_healed,
+                "total_healing_failures": self.total_healing_failures,
+                "recent_notifications": self.healing_notifications[:20],
+            },
             "recent_activity": self.activity_log[:30],
             "daily_config": self._get_daily_config(),
         }
@@ -328,13 +345,14 @@ def _time_ago(dt: Optional[datetime]) -> str:
 
 class MaestroDaemon:
     """
-    The orchestrator — manages Toby and Lexi.
+    The orchestrator — manages all AI agents.
 
     Cycles:
-      1. CHECK  (every 10min) — Checks if daily burst should run
-      2. OBSERVE (every 3h)   — Collect metrics
-      3. SCOUT  (every 4h)    — Scan trends
-      4. FEEDBACK (every 6h)  — Check 48-72h post performance
+      1. CHECK   (every 10min) — Checks if daily burst should run
+      2. HEALING (every 15min) — Scans for failed jobs, auto-retries, notifies creator
+      3. OBSERVE (every 3h)    — Collect metrics
+      4. SCOUT   (every 4h)    — Scan trends
+      5. FEEDBACK (every 6h)   — Check 48-72h post performance
     """
 
     def __init__(self):
@@ -391,6 +409,17 @@ class MaestroDaemon:
             max_instances=1,
         )
 
+        # Healing cycle — scan for failed jobs, auto-retry, notify creator
+        self.scheduler.add_job(
+            self._healing_cycle,
+            trigger=IntervalTrigger(minutes=HEALING_CYCLE_MINUTES),
+            id="maestro_healing",
+            name="Maestro Healing Cycle",
+            next_run_time=datetime.utcnow() + timedelta(seconds=STARTUP_DELAY_SECONDS + 180),
+            replace_existing=True,
+            max_instances=1,
+        )
+
         self.scheduler.start()
         self.state.started_at = datetime.utcnow()
 
@@ -398,7 +427,7 @@ class MaestroDaemon:
         status_text = "PAUSED (waiting for Resume)" if paused else "RUNNING"
         self.state.log(
             "maestro", "Started",
-            f"Status: {status_text}. Check every {CHECK_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m",
+            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m",
             "🚀"
         )
 
@@ -963,6 +992,279 @@ class MaestroDaemon:
         except Exception as e:
             self.state.errors += 1
             self.state.log("maestro", "Error", f"Feedback cycle failed: {str(e)[:200]}", "❌")
+
+    # ──────────────────────────────────────────────────────────
+    # CYCLE: HEALING — Self-healing & smart retry
+    # ──────────────────────────────────────────────────────────
+
+    def _healing_cycle(self):
+        """
+        Smart self-healing cycle — runs every 15 minutes.
+
+        1. SCAN   — Find all failed jobs created by Maestro (last 24h)
+        2. DIAGNOSE — Classify failure type (FFmpeg, API, resource, content)
+        3. RETRY  — Auto-retry retryable failures (up to MAX_AUTO_RETRIES)
+        4. NOTIFY — Log non-retryable failures as creator notifications
+        5. CLEANUP — Mark permanently-failed proposals for review
+        """
+        self.state.log("maestro", "🩺 Healing Scan", "Scanning for failed jobs...", "🔍")
+
+        try:
+            from app.db_connection import SessionLocal
+            from app.models import GenerationJob, TobyProposal
+
+            db = SessionLocal()
+            try:
+                now = datetime.utcnow()
+                lookback = now - timedelta(hours=24)
+
+                # ── 1. SCAN: Find Maestro-created failed jobs (last 24h) ──
+                # Maestro jobs have user_id = proposal_id (like "TOBY-xxxx" or "LEXI-xxxx" or agent prefix)
+                failed_jobs = (
+                    db.query(GenerationJob)
+                    .filter(
+                        GenerationJob.status == "failed",
+                        GenerationJob.created_at >= lookback,
+                    )
+                    .order_by(GenerationJob.created_at.desc())
+                    .all()
+                )
+
+                if not failed_jobs:
+                    self.state.log("maestro", "🩺 Healing", "No failed jobs found — all clear ✅", "💚", "detail")
+                    self.state.last_healing_at = now
+                    return
+
+                # Filter to Maestro-created jobs (those with a linked proposal)
+                maestro_failures = []
+                other_failures = []
+                for job in failed_jobs:
+                    proposal = (
+                        db.query(TobyProposal)
+                        .filter(TobyProposal.accepted_job_id == job.job_id)
+                        .first()
+                    )
+                    if proposal:
+                        maestro_failures.append((job, proposal))
+                    else:
+                        # Also check if user_id looks like a proposal ID
+                        if job.user_id and any(
+                            job.user_id.upper().startswith(p)
+                            for p in ["TOBY-", "LEXI-", "PROP-"]
+                        ):
+                            maestro_failures.append((job, None))
+                        else:
+                            other_failures.append(job)
+
+                self.state.log(
+                    "maestro", "🩺 Failed Jobs Found",
+                    f"{len(maestro_failures)} Maestro-created, {len(other_failures)} manual — analyzing...",
+                    "🔎"
+                )
+
+                retried = 0
+                permanently_failed = 0
+                notifications = []
+
+                for job, proposal in maestro_failures:
+                    # ── 2. DIAGNOSE: Classify the failure ──
+                    diagnosis = self._diagnose_failure(job)
+
+                    # ── 3. RETRY or NOTIFY ──
+                    retry_count = self._get_retry_count(job, db)
+
+                    if diagnosis["retryable"] and retry_count < MAX_AUTO_RETRIES:
+                        # Auto-retry the job
+                        success = self._retry_failed_job(job, proposal, retry_count, db)
+                        if success:
+                            retried += 1
+                            self.state.total_healed += 1
+                            self.state.log(
+                                "maestro", "🩺 Auto-Retry",
+                                f"{job.job_id} ({diagnosis['category']}) — retry #{retry_count + 1}",
+                                "🔄"
+                            )
+                        else:
+                            permanently_failed += 1
+                    else:
+                        # ── 4. NOTIFY: Non-retryable or max retries exceeded ──
+                        permanently_failed += 1
+                        self.state.total_healing_failures += 1
+
+                        reason = diagnosis["category"]
+                        if retry_count >= MAX_AUTO_RETRIES:
+                            reason = f"{reason} (max {MAX_AUTO_RETRIES} retries exhausted)"
+
+                        notification = {
+                            "time": now.isoformat(),
+                            "job_id": job.job_id,
+                            "brand": (job.brands or ["unknown"])[0],
+                            "title": (job.title or "")[:80],
+                            "category": diagnosis["category"],
+                            "reason": reason,
+                            "error_snippet": (job.error_message or "")[:300],
+                            "retry_count": retry_count,
+                            "action": diagnosis["suggested_action"],
+                        }
+                        notifications.append(notification)
+
+                        self.state.log(
+                            "maestro", "🩺 Permanent Failure",
+                            f"{job.job_id} — {reason}: {diagnosis['suggested_action']}",
+                            "🚨"
+                        )
+
+                # Store notifications
+                if notifications:
+                    self.state.healing_notifications = (
+                        notifications + self.state.healing_notifications
+                    )[:50]  # Keep last 50
+
+                # Summary
+                self.state.log(
+                    "maestro", "🩺 Healing Complete",
+                    f"Retried: {retried}, Permanent failures: {permanently_failed}, "
+                    f"Total healed lifetime: {self.state.total_healed}",
+                    "🏥"
+                )
+
+                self.state.last_healing_at = now
+
+            finally:
+                db.close()
+
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "🩺 Healing Error", f"{str(e)[:200]}", "❌")
+            traceback.print_exc()
+
+    def _diagnose_failure(self, job) -> Dict:
+        """
+        Classify a job failure into a category with retry recommendation.
+
+        Categories:
+          - ffmpeg_encoder:  libx264/encoder errors → RETRYABLE
+          - ffmpeg_resource: resource unavailable → RETRYABLE
+          - ffmpeg_memory:   memory allocation → RETRYABLE (with delay)
+          - api_error:       DeepSeek/Meta API failures → RETRYABLE
+          - content_error:   bad content/prompt data → NOT retryable
+          - file_not_found:  missing assets → NOT retryable
+          - unknown:         unclassifiable → RETRYABLE (once)
+        """
+        error = (job.error_message or "").lower()
+
+        # FFmpeg encoder issues (the main problem we're fixing)
+        if "error while opening encoder" in error or "incorrect parameters" in error:
+            return {
+                "category": "ffmpeg_encoder",
+                "retryable": True,
+                "suggested_action": "FFmpeg encoder init failed — will retry with updated pipeline",
+            }
+
+        if "resource temporarily unavailable" in error:
+            return {
+                "category": "ffmpeg_resource",
+                "retryable": True,
+                "suggested_action": "System resources exhausted — retrying with stagger",
+            }
+
+        if "cannot allocate memory" in error or "generic error in an external library" in error:
+            return {
+                "category": "ffmpeg_memory",
+                "retryable": True,
+                "suggested_action": "Memory pressure — retrying with thread limit",
+            }
+
+        if "ffmpeg" in error or "video" in error:
+            return {
+                "category": "ffmpeg_other",
+                "retryable": True,
+                "suggested_action": "FFmpeg failure — retrying with updated parameters",
+            }
+
+        # API errors
+        if any(k in error for k in ["api", "timeout", "connection", "rate limit", "503", "502", "429"]):
+            return {
+                "category": "api_error",
+                "retryable": True,
+                "suggested_action": "External API error — transient, will retry",
+            }
+
+        # Content issues
+        if any(k in error for k in ["content_lines", "empty", "no content", "validation"]):
+            return {
+                "category": "content_error",
+                "retryable": False,
+                "suggested_action": "Content data invalid — needs manual review of proposal",
+            }
+
+        # File issues
+        if any(k in error for k in ["file not found", "no such file", "filenotfounderror"]):
+            return {
+                "category": "file_not_found",
+                "retryable": False,
+                "suggested_action": "Required file missing — check assets/templates",
+            }
+
+        # Unknown
+        return {
+            "category": "unknown",
+            "retryable": True,
+            "suggested_action": "Unknown failure — attempting one retry",
+        }
+
+    def _get_retry_count(self, job, db) -> int:
+        """
+        Get how many times this job has been retried.
+        Uses a convention: retried jobs have error_message containing "[RETRY #N]".
+        """
+        error = job.error_message or ""
+        import re
+        match = re.search(r'\[RETRY #(\d+)\]', error)
+        if match:
+            return int(match.group(1))
+        # If it failed but no retry marker, this is the original failure (retry_count=0)
+        return 0
+
+    def _retry_failed_job(self, job, proposal, current_retry: int, db) -> bool:
+        """
+        Retry a failed job by resetting it to pending and re-processing.
+
+        Returns True if retry was initiated, False if it failed to start.
+        """
+        try:
+            # Mark the old error with retry count for tracking
+            old_error = job.error_message or ""
+            job.error_message = f"[RETRY #{current_retry + 1}] Previous: {old_error[:500]}"
+            job.status = "pending"
+            job.current_step = f"Queued for retry #{current_retry + 1} by Maestro Healer"
+            job.progress_percent = 0
+            db.commit()
+
+            # Process in background thread with stagger delay
+            import time as _time
+            agent_name = "maestro"
+            if proposal:
+                agent_name = proposal.agent_name or "maestro"
+            proposal_id = proposal.proposal_id if proposal else job.user_id or "manual"
+
+            thread = threading.Thread(
+                target=self._process_and_schedule_job,
+                args=(job.job_id, proposal_id, agent_name),
+                daemon=True,
+            )
+            # Stagger to avoid resource contention
+            _time.sleep(JOB_STAGGER_DELAY)
+            thread.start()
+
+            return True
+        except Exception as e:
+            self.state.log(
+                "maestro", "🩺 Retry Failed",
+                f"Could not retry {job.job_id}: {str(e)[:200]}",
+                "❌"
+            )
+            return False
 
     # ──────────────────────────────────────────────────────────
     # Manual trigger

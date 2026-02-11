@@ -620,3 +620,128 @@ async def optimize_now(background_tasks: BackgroundTasks):
         "status": "started",
         "message": "Optimize Now triggered — Toby (10 reels) + Lexi (10 reels) generating in background. Proposals will appear shortly.",
     }
+
+
+# ── HEALING: Smart self-repair ────────────────────────────────
+
+@router.get("/healing")
+async def maestro_healing_status():
+    """
+    Get healing status — failed jobs, retry history, notifications.
+    """
+    from app.services.maestro import get_maestro
+    from app.db_connection import SessionLocal
+    from app.models import GenerationJob, TobyProposal
+    from datetime import datetime, timedelta
+
+    maestro = get_maestro()
+    status = maestro.state.to_dict()
+
+    # Get current failed jobs
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        lookback = now - timedelta(hours=24)
+
+        failed_jobs = (
+            db.query(GenerationJob)
+            .filter(
+                GenerationJob.status == "failed",
+                GenerationJob.created_at >= lookback,
+            )
+            .order_by(GenerationJob.created_at.desc())
+            .all()
+        )
+
+        failed_details = []
+        for job in failed_jobs:
+            proposal = (
+                db.query(TobyProposal)
+                .filter(TobyProposal.accepted_job_id == job.job_id)
+                .first()
+            )
+            is_maestro = proposal is not None or (
+                job.user_id and any(
+                    job.user_id.upper().startswith(p)
+                    for p in ["TOBY-", "LEXI-", "PROP-"]
+                )
+            )
+            diagnosis = maestro._diagnose_failure(job)
+
+            failed_details.append({
+                "job_id": job.job_id,
+                "brand": (job.brands or ["unknown"])[0],
+                "variant": job.variant,
+                "title": (job.title or "")[:100],
+                "error_snippet": (job.error_message or "")[:300],
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "is_maestro_created": is_maestro,
+                "agent": proposal.agent_name if proposal else None,
+                "diagnosis": diagnosis,
+                "retry_count": maestro._get_retry_count(job, db),
+            })
+
+    finally:
+        db.close()
+
+    return {
+        "healing": status.get("healing", {}),
+        "failed_jobs_24h": failed_details,
+        "total_failed": len(failed_details),
+        "maestro_created_failures": sum(1 for f in failed_details if f["is_maestro_created"]),
+    }
+
+
+@router.post("/trigger-healing")
+async def trigger_healing(background_tasks: BackgroundTasks):
+    """Manually trigger the healing cycle — scan, diagnose, retry failed jobs."""
+    from app.services.maestro import get_maestro
+
+    maestro = get_maestro()
+
+    def _run_healing():
+        maestro._healing_cycle()
+
+    background_tasks.add_task(_run_healing)
+
+    return {
+        "status": "started",
+        "message": "Healing cycle triggered — scanning for failed jobs, analyzing, and auto-retrying.",
+    }
+
+
+@router.post("/retry-job/{job_id}")
+async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks):
+    """Manually retry a specific failed job."""
+    from app.services.maestro import get_maestro
+    from app.db_connection import SessionLocal
+    from app.models import GenerationJob, TobyProposal
+
+    maestro = get_maestro()
+
+    db = SessionLocal()
+    try:
+        job = db.query(GenerationJob).filter_by(job_id=job_id).first()
+        if not job:
+            return {"success": False, "error": f"Job {job_id} not found"}
+
+        if job.status != "failed":
+            return {"success": False, "error": f"Job {job_id} is not failed (status={job.status})"}
+
+        proposal = (
+            db.query(TobyProposal)
+            .filter(TobyProposal.accepted_job_id == job.job_id)
+            .first()
+        )
+
+        retry_count = maestro._get_retry_count(job, db)
+        success = maestro._retry_failed_job(job, proposal, retry_count, db)
+
+        return {
+            "success": success,
+            "job_id": job_id,
+            "retry_number": retry_count + 1,
+            "message": f"Job {job_id} queued for retry #{retry_count + 1}" if success else "Retry failed to start",
+        }
+    finally:
+        db.close()

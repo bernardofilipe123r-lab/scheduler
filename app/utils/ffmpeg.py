@@ -12,6 +12,14 @@ from app.core.constants import (
     MUSIC_FADE_DURATION,
 )
 
+# Transient errors that should be retried
+_RETRYABLE_ERRORS = [
+    "Resource temporarily unavailable",
+    "Error while opening encoder",
+    "Cannot allocate memory",
+    "Generic error in an external library",
+]
+
 
 def create_video_from_image(
     image_path: Path,
@@ -23,18 +31,9 @@ def create_video_from_image(
     """
     Create an MP4 video from a static image with optional background music.
     
-    Args:
-        image_path: Path to the input image
-        output_path: Path to save the output video
-        duration: Video duration in seconds
-        music_path: Optional path to background music file
-        music_start_time: Start time in seconds for the music track
-        
-    Returns:
-        True if successful, False otherwise
-        
-    Raises:
-        RuntimeError: If FFmpeg command fails
+    Uses filter_complex to handle both video format conversion (rgb24→yuv420p)
+    and audio processing in one graph. Thread-limited and retryable for
+    resource-constrained environments (Railway).
     """
     if not image_path.exists():
         raise FileNotFoundError(f"Image file not found: {image_path}")
@@ -42,52 +41,60 @@ def create_video_from_image(
     # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Base FFmpeg command for creating video from static image
+    # Build FFmpeg command with filter_complex for reliable pixel format conversion
     cmd = [
         "ffmpeg",
-        "-y",  # Overwrite output file if it exists
-        "-loop", "1",  # Loop the image
-        "-i", str(image_path),  # Input image
-        "-t", str(duration),  # Duration
+        "-y",                    # Overwrite output
+        "-loop", "1",            # Loop the image
+        "-i", str(image_path),   # Input image
     ]
     
-    # Add audio if music is provided
     if music_path and music_path.exists():
+        # With audio: build a combined filter_complex for video + audio
         cmd.extend([
-            "-ss", str(music_start_time),  # Start position in music
-            "-t", str(duration),  # Limit audio duration
-            "-i", str(music_path),  # Input audio
+            "-ss", str(music_start_time),
+            "-t", str(duration),
+            "-i", str(music_path),
             "-filter_complex",
+            # Convert video to yuv420p in the filter graph (fixes rgb24 encoder errors)
+            # AND process audio (volume + fade) in the same graph
+            f"[0:v]format=pix_fmts={VIDEO_PIXEL_FORMAT}[vid];"
             f"[1:a]volume=-14dB,afade=t=out:st={duration - MUSIC_FADE_DURATION}:d={MUSIC_FADE_DURATION}[audio]",
-            "-map", "0:v",  # Map video from first input
-            "-map", "[audio]",  # Map processed audio
+            "-map", "[vid]",
+            "-map", "[audio]",
+        ])
+    else:
+        # No audio: simple video filter for format conversion
+        cmd.extend([
+            "-vf", f"format=pix_fmts={VIDEO_PIXEL_FORMAT}",
         ])
     
     # Video encoding settings
     cmd.extend([
-        "-c:v", VIDEO_CODEC,  # Video codec
-        "-preset", VIDEO_PRESET,  # Encoding preset
-        "-pix_fmt", VIDEO_PIXEL_FORMAT,  # Pixel format
-        "-r", "30",  # Frame rate
-        "-shortest",  # Finish encoding when the shortest input stream ends
+        "-c:v", VIDEO_CODEC,
+        "-preset", VIDEO_PRESET,
+        "-crf", "23",            # Explicit quality (prevents encoder init failures)
+        "-r", "30",
+        "-threads", "1",         # Single-thread: prevents resource exhaustion on Railway
+        "-t", str(duration),
+        "-shortest",
     ])
     
-    # Audio encoding settings (if audio is present)
+    # Audio encoding (if audio present)
     if music_path and music_path.exists():
         cmd.extend([
-            "-c:a", "aac",  # Audio codec
-            "-b:a", "192k",  # Audio bitrate
+            "-c:a", "aac",
+            "-b:a", "192k",
         ])
     
-    # Output file
     cmd.append(str(output_path))
     
-    # Retry with backoff — "Resource temporarily unavailable" errors are transient
+    # Retry with backoff — transient resource and encoder errors
     import time as _time
     max_retries = 3
+    last_error = None
     for attempt in range(max_retries):
         try:
-            # Run FFmpeg command
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -101,13 +108,29 @@ def create_video_from_image(
             return True
             
         except subprocess.CalledProcessError as e:
-            error_msg = f"FFmpeg error: {e.stderr}"
-            if "Resource temporarily unavailable" in error_msg and attempt < max_retries - 1:
-                wait = (attempt + 1) * 5  # 5s, 10s
-                print(f"⚠️ FFmpeg resource busy, retrying in {wait}s (attempt {attempt + 1}/{max_retries})...", flush=True)
+            error_msg = e.stderr or str(e)
+            last_error = error_msg
+            
+            # Check if this is a retryable error
+            is_retryable = any(err in error_msg for err in _RETRYABLE_ERRORS)
+            
+            if is_retryable and attempt < max_retries - 1:
+                wait = (attempt + 1) * 8  # 8s, 16s
+                print(
+                    f"⚠️ FFmpeg error (attempt {attempt + 1}/{max_retries}), "
+                    f"retrying in {wait}s: {error_msg[:200]}",
+                    flush=True
+                )
                 _time.sleep(wait)
+                # Clean up partial output before retry
+                if output_path.exists():
+                    try:
+                        output_path.unlink()
+                    except Exception:
+                        pass
                 continue
-            raise RuntimeError(f"Failed to generate video: {error_msg}")
+            
+            raise RuntimeError(f"Failed to generate video: FFmpeg error: {error_msg}")
         except Exception as e:
             raise RuntimeError(f"Failed to create video: {str(e)}")
 
