@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.database.db import get_db
+from app.db_connection import get_db
 from app.models import AIAgent
 
 router = APIRouter(prefix="/api/agents", tags=["ai-agents"])
