@@ -1,14 +1,26 @@
 """
 Maestro — The AI Content Orchestrator (v2).
 
+┌──────────────────────────────────────────────────────────────────────┐
+│  ARCHITECTURE RULE — Agent ↔ Brand relationship:                     │
+│                                                                      │
+│  • Number of AI agents MUST equal number of brands (5 brands =       │
+│    5 agents). Each agent is "born from" one brand (created_for_brand) │
+│    but that's just for tracking lineage + evolution.                  │
+│                                                                      │
+│  • Every agent generates content for EVERY brand in the daily burst. │
+│    The 1:1 mapping is organisational, not a content restriction.      │
+│                                                                      │
+│  • Enforced by: seed_builtin_agents() on startup,                    │
+│    _ensure_agents_for_all_brands() in healing cycle (every 15min),   │
+│    auto-provision on brand creation (brand_manager.py).               │
+└──────────────────────────────────────────────────────────────────────┘
+
 Maestro runs a DAILY BURST once per day:
-  1. For each of 5 brands, Toby generates 3 unique dark-mode proposals
-  2. For each of 5 brands, Lexi generates 3 unique light-mode proposals
-  3. Total: 30 UNIQUE proposals, each assigned to ONE specific brand
-  4. Each proposal → 1 job = 1 reel (NO content duplication across brands)
-  5. 6 unique reels per brand (3 dark + 3 light)
-  6. Auto-schedule into the 6 daily slots per brand
-  7. Publishing daemon posts at scheduled times
+  1. ALL active agents × ALL brands × proposals_per_brand × 2 (reel+post)
+  2. Each proposal → 1 job = 1 reel OR 1 post (NO content duplication)
+  3. Auto-schedule into daily slots per brand
+  4. Publishing daemon posts at scheduled times
 
 Design:
   - Pause/Resume controlled by user, state persisted in DB
@@ -17,6 +29,7 @@ Design:
   - Feedback loop: checks reel performance 48-72h after publish
   - Observe & Scout cycles run independently for intelligence gathering
   - Brand @handle baked into caption at generation time (not replaced later)
+  - Population guard in healing cycle auto-spawns agents for new brands
 """
 
 import os
@@ -1715,6 +1728,26 @@ class MaestroDaemon:
             self.state.errors += 1
             self.state.log("maestro", "🩺 Healing Error", f"{str(e)[:200]}", "❌")
             traceback.print_exc()
+
+        # ── POPULATION GUARD: ensure agents == brands ──
+        # RULE: Number of agents must equal number of brands.
+        # Each agent is born from one brand but generates content for ALL brands.
+        # If a brand was added before the evolution engine, it has no agent — fix it.
+        try:
+            from app.services.generic_agent import _ensure_agents_for_all_brands
+            spawned = _ensure_agents_for_all_brands()
+            if spawned:
+                names = ", ".join(a.display_name for a in spawned)
+                self.state.log(
+                    "maestro", "🧬 Population Guard",
+                    f"Auto-spawned {len(spawned)} new agents: {names}",
+                    "🧬"
+                )
+                # Refresh cache so daily burst picks them up
+                from app.services.generic_agent import refresh_agent_cache
+                refresh_agent_cache()
+        except Exception as e:
+            self.state.log("maestro", "🧬 Population Guard Error", str(e)[:200], "⚠️")
 
     def _diagnose_failure(self, job) -> Dict:
         """

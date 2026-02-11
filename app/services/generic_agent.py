@@ -6,9 +6,21 @@ strategies, variant, etc.) from the `ai_agents` table.  This replaces the
 need for separate TobyAgent and LexiAgent classes — both are now DB-driven
 instances of GenericAgent.
 
-When a new brand is created, a new AIAgent row is inserted and Maestro will
-automatically include it in the daily burst.  Every agent works across ALL
-brands.
+┌─────────────────────────────────────────────────────────────────────┐
+│  ARCHITECTURE RULE — Agent ↔ Brand relationship:                    │
+│                                                                     │
+│  • Number of AI agents MUST equal number of brands (5 brands = 5    │
+│    agents). Each agent is organisationally "born from" one brand     │
+│    (created_for_brand), but that's just for tracking lineage.       │
+│                                                                     │
+│  • Every agent generates content for EVERY brand — they all work    │
+│    across all brands in the daily burst. The 1:1 mapping is purely  │
+│    organizational, not a content restriction.                       │
+│                                                                     │
+│  • seed_builtin_agents() enforces this on startup.                  │
+│  • Maestro's healing cycle re-checks every 15 minutes.              │
+│  • Brand creation auto-provisions a new agent (brand_manager.py).   │
+└─────────────────────────────────────────────────────────────────────┘
 """
 
 import json
@@ -901,14 +913,22 @@ def refresh_agent_cache():
 
 def seed_builtin_agents():
     """
-    Ensure Toby and Lexi exist in the ai_agents table.
-    Called on app startup. Idempotent.
+    Ensure the system has 1 agent per brand. Called on app startup. Idempotent.
+
+    RULE: Number of agents == Number of brands.
+    Each agent is organisationally "born from" one brand (created_for_brand),
+    but every agent generates content for ALL brands in the daily burst.
+
+    Steps:
+      1. Seed Toby + Lexi if they don't exist (the two original builtins)
+      2. Find any active brands that have NO agent assigned → auto-spawn one
     """
     from app.db_connection import SessionLocal
     import json
 
     db = SessionLocal()
     try:
+        # ── 1. Seed original builtins ──
         # Toby
         if not db.query(AIAgent).filter(AIAgent.agent_id == "toby").first():
             db.add(AIAgent(
@@ -950,11 +970,98 @@ def seed_builtin_agents():
             print("✅ Seeded AI agent: Lexi (builtin)", flush=True)
 
         db.commit()
+
+        # ── 2. Auto-provision agents for brands without one ──
+        # RULE: every brand must have at least 1 agent born from it
+        _ensure_agents_for_all_brands(db)
+
     except Exception as e:
         db.rollback()
         print(f"⚠️ Agent seeding error: {e}", flush=True)
     finally:
         db.close()
+
+
+def _ensure_agents_for_all_brands(db=None):
+    """
+    Check all active brands — if any brand has no agent assigned
+    (created_for_brand), spawn a new agent with randomized DNA and a cool name.
+
+    This is called:
+      - On startup (from seed_builtin_agents)
+      - Every 15 min (from Maestro healing cycle)
+
+    ARCHITECTURE: agents = brands. Each agent works across ALL brands,
+    but is organisationally born from one specific brand.
+    """
+    from app.db_connection import SessionLocal
+    from app.models import Brand
+    import random
+
+    close_db = False
+    if db is None:
+        db = SessionLocal()
+        close_db = True
+
+    try:
+        # Get all active brands
+        try:
+            all_brands = db.query(Brand.id, Brand.display_name).filter(Brand.active == True).all()
+        except Exception:
+            # Fallback if Brand table doesn't exist yet
+            all_brands = []
+
+        if not all_brands:
+            return []
+
+        # Get brands that already have an agent
+        existing = (
+            db.query(AIAgent.created_for_brand)
+            .filter(AIAgent.active == True, AIAgent.created_for_brand != None)
+            .all()
+        )
+        covered_brands = {row[0] for row in existing}
+
+        # Find uncovered brands
+        uncovered = [(bid, bname) for bid, bname in all_brands if bid not in covered_brands]
+
+        if not uncovered:
+            return []
+
+        print(f"🧬 Found {len(uncovered)} brands without agents: {[b[0] for b in uncovered]}", flush=True)
+
+        spawned = []
+        archetypes = [
+            "Bold explorer. Swings for viral moonshots with unexpected angles and surprising facts.",
+            "Precision optimizer. Compounds small wins into massive growth with data-backed patterns.",
+            "Trend surfer. Rides viral waves early, adapts hot topics to our niche before competitors.",
+            "Story weaver. Creates deep emotional connections through narrative and personal transformation.",
+            "Pattern breaker. Deliberately subverts expectations, uses contrarian takes to stop scrolling.",
+            "Consistency engine. Reliable, methodical, builds trust through steady valuable content.",
+        ]
+
+        for brand_id, brand_display in uncovered:
+            try:
+                from app.services.evolution_engine import pick_agent_name
+                agent_name = pick_agent_name(db=db)
+                archetype = random.choice(archetypes)
+                personality = f"{archetype} Specialized for {brand_display or brand_id}."
+
+                agent = create_agent_for_brand(
+                    brand_id=brand_id,
+                    agent_name=agent_name,
+                    randomize=True,
+                    personality=personality,
+                )
+                print(f"🧬 Auto-spawned agent '{agent.display_name}' (temp={agent.temperature}) for brand {brand_id}", flush=True)
+                spawned.append(agent)
+            except Exception as e:
+                print(f"⚠️ Could not spawn agent for {brand_id}: {e}", flush=True)
+
+        return spawned
+    finally:
+        if close_db:
+            db.close()
 
 
 # ── All available strategies that agents can be born with ──
