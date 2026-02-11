@@ -1310,3 +1310,60 @@ class GenePool(Base):
             "times_inherited": self.times_inherited,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# ============================================================
+# SYSTEM DIAGNOSTICS — Maestro self-testing results
+# ============================================================
+
+class SystemDiagnostic(Base):
+    """
+    Stores results of Maestro's self-diagnostic checks.
+
+    Each row = one diagnostic run (multiple checks).
+    Maestro runs diagnostics every 4 hours and stores results here.
+    The dashboard shows the latest run + historical trends.
+    """
+    __tablename__ = "system_diagnostics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Overall result
+    status = Column(String(20), nullable=False)  # "healthy" | "degraded" | "critical"
+    total_checks = Column(Integer, default=0)
+    passed = Column(Integer, default=0)
+    warnings = Column(Integer, default=0)
+    failures = Column(Integer, default=0)
+
+    # Individual check results (JSON array)
+    # Each: {"name": "...", "status": "pass|warn|fail", "detail": "...", "duration_ms": 123}
+    checks = Column(JSON, nullable=False, default=list)
+
+    # System snapshot at time of check
+    active_agents = Column(Integer, default=0)
+    avg_survival_score = Column(Float, default=0.0)
+    gene_pool_size = Column(Integer, default=0)
+    pending_jobs = Column(Integer, default=0)
+    failed_jobs_24h = Column(Integer, default=0)
+    total_scheduled = Column(Integer, default=0)
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "status": self.status,
+            "total_checks": self.total_checks,
+            "passed": self.passed,
+            "warnings": self.warnings,
+            "failures": self.failures,
+            "checks": self.checks or [],
+            "active_agents": self.active_agents,
+            "avg_survival_score": self.avg_survival_score,
+            "gene_pool_size": self.gene_pool_size,
+            "pending_jobs": self.pending_jobs,
+            "failed_jobs_24h": self.failed_jobs_24h,
+            "total_scheduled": self.total_scheduled,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

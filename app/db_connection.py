@@ -348,6 +348,34 @@ def run_migrations():
                 CREATE INDEX ix_gene_pool_reason ON gene_pool(reason);
             """
         },
+        # ── Phase 6: System Diagnostics table (Maestro self-testing) ──
+        {
+            "name": "Create system_diagnostics table",
+            "check_sql": """
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_name='system_diagnostics'
+            """,
+            "migration_sql": """
+                CREATE TABLE system_diagnostics (
+                    id SERIAL PRIMARY KEY,
+                    status VARCHAR(20) NOT NULL,
+                    total_checks INTEGER DEFAULT 0,
+                    passed INTEGER DEFAULT 0,
+                    warnings INTEGER DEFAULT 0,
+                    failures INTEGER DEFAULT 0,
+                    checks JSON NOT NULL DEFAULT '[]',
+                    active_agents INTEGER DEFAULT 0,
+                    avg_survival_score FLOAT DEFAULT 0.0,
+                    gene_pool_size INTEGER DEFAULT 0,
+                    pending_jobs INTEGER DEFAULT 0,
+                    failed_jobs_24h INTEGER DEFAULT 0,
+                    total_scheduled INTEGER DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX ix_system_diagnostics_created ON system_diagnostics(created_at);
+                CREATE INDEX ix_system_diagnostics_status ON system_diagnostics(status);
+            """
+        },
     ]
     
     with engine.connect() as conn:

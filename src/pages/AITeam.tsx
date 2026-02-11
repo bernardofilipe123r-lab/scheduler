@@ -4,7 +4,7 @@ import {
   Dna, Trophy, Skull, Sparkles, Zap, Shield, AlertTriangle, ChevronDown,
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, RefreshCw, Crown,
-  Flame, Target, Swords
+  Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -95,6 +95,30 @@ interface GenePoolEntry {
   created_at: string | null
 }
 
+interface DiagnosticCheck {
+  name: string
+  status: 'pass' | 'warn' | 'fail'
+  detail: string
+  duration_ms: number
+}
+
+interface DiagnosticReport {
+  id: number
+  status: 'healthy' | 'degraded' | 'critical'
+  total_checks: number
+  passed: number
+  warnings: number
+  failures: number
+  checks: DiagnosticCheck[]
+  active_agents: number
+  avg_survival_score: number
+  gene_pool_size: number
+  pending_jobs: number
+  failed_jobs_24h: number
+  total_scheduled: number
+  created_at: string | null
+}
+
 // ── Helpers ──
 
 const TIER_CONFIG = {
@@ -171,11 +195,12 @@ export function AITeamPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [events, setEvents] = useState<EvolutionEvent[]>([])
   const [genePool, setGenePool] = useState<GenePoolEntry[]>([])
+  const [diagnostics, setDiagnostics] = useState<DiagnosticReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [agentPerf, setAgentPerf] = useState<Record<string, PerformanceSnapshot[]>>({})
   const [agentLearnings, setAgentLearnings] = useState<Record<string, EvolutionEvent[]>>({})
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'timeline' | 'gene-pool'>('leaderboard')
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'timeline' | 'gene-pool' | 'health'>('leaderboard')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const fetchAgents = useCallback(async () => {
@@ -199,11 +224,18 @@ export function AITeamPage() {
     } catch (e) { console.error('Failed to fetch gene pool', e) }
   }, [])
 
+  const fetchDiagnostics = useCallback(async () => {
+    try {
+      const data = await get<{ report: DiagnosticReport | null }>('/api/agents/diagnostics/latest')
+      if (data.report) setDiagnostics(data.report)
+    } catch (e) { console.error('Failed to fetch diagnostics', e) }
+  }, [])
+
   const refreshAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([fetchAgents(), fetchEvents(), fetchGenePool()])
+    await Promise.all([fetchAgents(), fetchEvents(), fetchGenePool(), fetchDiagnostics()])
     setLoading(false)
-  }, [fetchAgents, fetchEvents, fetchGenePool])
+  }, [fetchAgents, fetchEvents, fetchGenePool, fetchDiagnostics])
 
   useEffect(() => { refreshAll() }, [refreshAll])
   useEffect(() => {
@@ -316,6 +348,7 @@ export function AITeamPage() {
           { key: 'leaderboard' as const, label: 'Leaderboard', icon: Trophy },
           { key: 'timeline' as const, label: 'Evolution Timeline', icon: Activity },
           { key: 'gene-pool' as const, label: 'Gene Pool', icon: Dna },
+          { key: 'health' as const, label: 'System Health', icon: Stethoscope },
         ].map(tab => (
           <button
             key={tab.key}
@@ -378,6 +411,7 @@ export function AITeamPage() {
 
       {activeTab === 'timeline' && <EvolutionTimeline events={events} />}
       {activeTab === 'gene-pool' && <GenePoolView entries={genePool} />}
+      {activeTab === 'health' && <SystemHealthView report={diagnostics} onRefresh={fetchDiagnostics} />}
     </div>
   )
 }
@@ -760,6 +794,140 @@ function GenePoolView({ entries }: { entries: GenePoolEntry[] }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+
+function SystemHealthView({ report, onRefresh }: { report: DiagnosticReport | null; onRefresh: () => void }) {
+  const [runningManual, setRunningManual] = useState(false)
+  const [manualReport, setManualReport] = useState<DiagnosticReport | null>(null)
+
+  const displayReport = manualReport || report
+
+  const handleRunNow = async () => {
+    setRunningManual(true)
+    try {
+      const data = await post<{ report: DiagnosticReport }>('/api/agents/diagnostics/run', {})
+      setManualReport(data.report)
+      toast.success('Diagnostics complete!')
+      onRefresh()
+    } catch {
+      toast.error('Diagnostics run failed')
+    }
+    setRunningManual(false)
+  }
+
+  if (!displayReport) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <Stethoscope className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500 text-lg">No diagnostics data yet</p>
+        <p className="text-gray-400 text-sm mt-1 mb-4">Maestro runs self-tests every 4 hours, or run one now</p>
+        <button
+          onClick={handleRunNow}
+          disabled={runningManual}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
+          {runningManual ? <Loader2 className="w-4 h-4 animate-spin" /> : <Stethoscope className="w-4 h-4" />}
+          Run Diagnostics Now
+        </button>
+      </div>
+    )
+  }
+
+  const statusConfig = {
+    healthy: { color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-300', label: 'HEALTHY', icon: CheckCircle2 },
+    degraded: { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-300', label: 'DEGRADED', icon: AlertCircle },
+    critical: { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-300', label: 'CRITICAL', icon: XCircle },
+  }
+  const cfg = statusConfig[displayReport.status]
+  const StatusIcon = cfg.icon
+
+  return (
+    <div className="space-y-4">
+      {/* Overall status banner */}
+      <div className={`rounded-xl border-2 ${cfg.border} ${cfg.bg} p-6`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <StatusIcon className={`w-10 h-10 ${cfg.color}`} />
+            <div>
+              <h3 className={`text-2xl font-bold ${cfg.color}`}>{cfg.label}</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {displayReport.passed}/{displayReport.total_checks} checks passed •
+                {displayReport.warnings > 0 && ` ${displayReport.warnings} warnings •`}
+                {displayReport.failures > 0 && ` ${displayReport.failures} failures •`}
+                {' '}{timeAgo(displayReport.created_at)}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleRunNow}
+            disabled={runningManual}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {runningManual ? <Loader2 className="w-4 h-4 animate-spin" /> : <Stethoscope className="w-4 h-4" />}
+            Run Now
+          </button>
+        </div>
+
+        {/* System snapshot */}
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mt-4">
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-xs text-gray-500">Agents</p>
+            <p className="text-lg font-bold">{displayReport.active_agents}</p>
+          </div>
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-xs text-gray-500">Avg Survival</p>
+            <p className="text-lg font-bold">{Math.round(displayReport.avg_survival_score)}</p>
+          </div>
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-xs text-gray-500">Gene Pool</p>
+            <p className="text-lg font-bold">{displayReport.gene_pool_size}</p>
+          </div>
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-xs text-gray-500">Pending Jobs</p>
+            <p className="text-lg font-bold">{displayReport.pending_jobs}</p>
+          </div>
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-xs text-gray-500">Failed (24h)</p>
+            <p className={`text-lg font-bold ${displayReport.failed_jobs_24h > 5 ? 'text-red-600' : ''}`}>{displayReport.failed_jobs_24h}</p>
+          </div>
+          <div className="bg-white/60 rounded-lg p-2 text-center">
+            <p className="text-xs text-gray-500">Scheduled</p>
+            <p className="text-lg font-bold">{displayReport.total_scheduled}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Individual checks */}
+      <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+        {displayReport.checks.map((check, i) => {
+          const checkStatusIcon = check.status === 'pass' ? CheckCircle2 : check.status === 'warn' ? AlertCircle : XCircle
+          const checkColor = check.status === 'pass' ? 'text-emerald-500' : check.status === 'warn' ? 'text-amber-500' : 'text-red-500'
+          const CheckIcon = checkStatusIcon
+
+          return (
+            <div key={i} className="flex items-start gap-3 p-4">
+              <CheckIcon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${checkColor}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm text-gray-900">{check.name.replace(/_/g, ' ')}</span>
+                  <span className="text-xs text-gray-400">{check.duration_ms}ms</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-0.5">{check.detail}</p>
+              </div>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                check.status === 'pass' ? 'bg-emerald-50 text-emerald-700' :
+                check.status === 'warn' ? 'bg-amber-50 text-amber-700' :
+                'bg-red-50 text-red-700'
+              }`}>
+                {check.status.toUpperCase()}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

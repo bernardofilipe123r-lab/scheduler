@@ -63,6 +63,9 @@ MAX_AUTO_RETRIES = int(os.getenv("MAESTRO_MAX_AUTO_RETRIES", "2"))  # Max retrie
 EVOLUTION_DAY = os.getenv("MAESTRO_EVOLUTION_DAY", "sun")  # Day of week
 EVOLUTION_HOUR = int(os.getenv("MAESTRO_EVOLUTION_HOUR", "2"))  # Hour (0-23)
 
+# Diagnostics cycle: self-testing (every 4 hours)
+DIAGNOSTICS_CYCLE_MINUTES = int(os.getenv("MAESTRO_DIAGNOSTICS_MINUTES", "240"))
+
 # Job timeout: if a job is stuck in "generating" or "pending" for longer than this, mark it failed
 JOB_TIMEOUT_MINUTES = int(os.getenv("MAESTRO_JOB_TIMEOUT_MINUTES", "30"))
 
@@ -225,6 +228,8 @@ class MaestroState:
         self.last_feedback_at: Optional[datetime] = None
         self.last_healing_at: Optional[datetime] = None
         self.last_evolution_at: Optional[datetime] = None
+        self.last_diagnostics_at: Optional[datetime] = None
+        self.last_diagnostics_status: Optional[str] = None  # "healthy"/"degraded"/"critical"
 
         # Healing stats
         self.total_healed: int = 0          # Jobs successfully retried
@@ -355,6 +360,12 @@ class MaestroState:
                 "last_evolution_human": _time_ago(self.last_evolution_at) if self.last_evolution_at else "never",
                 "schedule": f"{EVOLUTION_DAY} @ {EVOLUTION_HOUR}:00",
             },
+            "diagnostics": {
+                "last_diagnostics_at": self.last_diagnostics_at.isoformat() if self.last_diagnostics_at else None,
+                "last_diagnostics_human": _time_ago(self.last_diagnostics_at) if self.last_diagnostics_at else "never",
+                "last_status": self.last_diagnostics_status,
+                "cycle_minutes": DIAGNOSTICS_CYCLE_MINUTES,
+            },
             "recent_activity": self.activity_log[:30],
             "daily_config": self._get_daily_config(),
         }
@@ -394,6 +405,7 @@ class MaestroDaemon:
       4. SCOUT   (every 4h)    — Scan trends
       5. FEEDBACK (every 6h)   — Check 48-72h post performance
       6. EVOLUTION (weekly)    — Natural selection: retire weak agents, spawn new ones
+      7. DIAGNOSTICS (every 4h) — Self-testing: validate all subsystems
     """
 
     def __init__(self):
@@ -476,6 +488,17 @@ class MaestroDaemon:
             max_instances=1,
         )
 
+        # Diagnostics cycle — self-testing (every 4h)
+        self.scheduler.add_job(
+            self._diagnostics_cycle,
+            trigger=IntervalTrigger(minutes=DIAGNOSTICS_CYCLE_MINUTES),
+            id="maestro_diagnostics",
+            name="Maestro Diagnostics Cycle",
+            next_run_time=datetime.utcnow() + timedelta(seconds=STARTUP_DELAY_SECONDS + 60),
+            replace_existing=True,
+            max_instances=1,
+        )
+
         self.scheduler.start()
         self.state.started_at = datetime.utcnow()
 
@@ -483,7 +506,7 @@ class MaestroDaemon:
         status_text = "PAUSED (waiting for Resume)" if paused else "RUNNING"
         self.state.log(
             "maestro", "Started",
-            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m, Evolution {EVOLUTION_DAY}@{EVOLUTION_HOUR}:00",
+            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m, Evolution {EVOLUTION_DAY}@{EVOLUTION_HOUR}:00, Diagnostics {DIAGNOSTICS_CYCLE_MINUTES}m",
             "🚀"
         )
 
@@ -1412,6 +1435,66 @@ class MaestroDaemon:
         except Exception as e:
             self.state.errors += 1
             self.state.log("maestro", "Error", f"Evolution cycle failed: {str(e)[:200]}", "❌")
+            import traceback
+            traceback.print_exc()
+
+    # ──────────────────────────────────────────────────────────
+    # CYCLE: DIAGNOSTICS — Self-testing (every 4h)
+    # ──────────────────────────────────────────────────────────
+
+    def _diagnostics_cycle(self):
+        """
+        Maestro's self-testing daemon — validates every subsystem.
+
+        Runs 10 checks: DB, agents, DNA, pipeline, scheduler,
+        evolution, API, publishing, cycle freshness, data consistency.
+        Stores results in system_diagnostics table for dashboard.
+        """
+        self.state.log("maestro", "🔬 Diagnostics", "Running self-test suite...", "🔬")
+
+        try:
+            from app.services.diagnostics_engine import DiagnosticsEngine
+
+            engine = DiagnosticsEngine()
+            report = engine.run_all()
+
+            status = report["status"]
+            passed = report["passed"]
+            warnings = report["warnings"]
+            failures = report["failures"]
+
+            # Log failed checks specifically
+            for check in report.get("checks", []):
+                if check["status"] == "fail":
+                    self.state.log(
+                        "maestro", f"❌ {check['name']}",
+                        check["detail"],
+                        "❌", "detail"
+                    )
+                elif check["status"] == "warn":
+                    self.state.log(
+                        "maestro", f"⚠️ {check['name']}",
+                        check["detail"],
+                        "⚠️", "detail"
+                    )
+
+            # Summary
+            emoji = "✅" if status == "healthy" else "⚠️" if status == "degraded" else "🚨"
+            self.state.log(
+                "maestro", f"{emoji} Diagnostics: {status.upper()}",
+                f"{passed} pass, {warnings} warn, {failures} fail | "
+                f"Agents: {report.get('active_agents', '?')}, "
+                f"Survival: {report.get('avg_survival_score', '?')}, "
+                f"Scheduled: {report.get('total_scheduled', '?')}",
+                emoji
+            )
+
+            self.state.last_diagnostics_at = datetime.utcnow()
+            self.state.last_diagnostics_status = status
+
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "Error", f"Diagnostics cycle failed: {str(e)[:200]}", "❌")
             import traceback
             traceback.print_exc()
 

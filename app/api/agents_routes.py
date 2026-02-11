@@ -423,3 +423,50 @@ def get_evolution_events(limit: int = Query(50), db: Session = Depends(get_db)):
         .all()
     )
     return {"events": [e.to_dict() for e in events], "total": len(events)}
+
+
+# ── Diagnostics endpoints ──
+
+@router.get("/diagnostics/latest", summary="Latest diagnostics report")
+def get_latest_diagnostics(db: Session = Depends(get_db)):
+    """Get the most recent self-test report from Maestro's diagnostics cycle."""
+    try:
+        from app.models import SystemDiagnostic
+        latest = (
+            db.query(SystemDiagnostic)
+            .order_by(desc(SystemDiagnostic.created_at))
+            .first()
+        )
+        if not latest:
+            return {"report": None, "message": "No diagnostics have run yet"}
+        return {"report": latest.to_dict()}
+    except Exception as e:
+        return {"report": None, "error": str(e)}
+
+
+@router.get("/diagnostics/history", summary="Diagnostics history")
+def get_diagnostics_history(limit: int = Query(24), db: Session = Depends(get_db)):
+    """Get historical diagnostics reports — for health trend charts."""
+    try:
+        from app.models import SystemDiagnostic
+        reports = (
+            db.query(SystemDiagnostic)
+            .order_by(desc(SystemDiagnostic.created_at))
+            .limit(limit)
+            .all()
+        )
+        return {"reports": [r.to_dict() for r in reports], "total": len(reports)}
+    except Exception as e:
+        return {"reports": [], "error": str(e)}
+
+
+@router.post("/diagnostics/run", summary="Force run diagnostics now")
+def force_diagnostics():
+    """Manually trigger a diagnostics check (doesn't wait for scheduled cycle)."""
+    try:
+        from app.services.diagnostics_engine import DiagnosticsEngine
+        engine = DiagnosticsEngine()
+        report = engine.run_all()
+        return {"report": report}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Diagnostics failed: {str(e)}")
