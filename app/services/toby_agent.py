@@ -256,8 +256,8 @@ class TobyAgent:
         ct_label = "📄 POST" if content_type == "post" else "🎬 REEL"
         toby_log("Planning", f"{ct_label}{brand_label} — Today: {today_count} total. Generating {remaining} proposals.", "🎯", "detail")
 
-        # Gather intelligence
-        intel = self._gather_intelligence(content_type=content_type)
+        # Gather intelligence (brand-aware for anti-repetition)
+        intel = self._gather_intelligence(content_type=content_type, brand=brand)
 
         # Decide strategy mix for this run
         strategy_plan = self._plan_strategies(remaining, intel)
@@ -291,14 +291,16 @@ class TobyAgent:
     # INTELLIGENCE GATHERING
     # ──────────────────────────────────────────────────────────
 
-    def _gather_intelligence(self, content_type: str = "reel") -> Dict:
-        """Gather all data Toby needs to make decisions."""
+    def _gather_intelligence(self, content_type: str = "reel", brand: str = None) -> Dict:
+        """Gather all data Toby needs to make decisions (brand-aware)."""
         from app.services.toby_daemon import toby_log
 
         intel: Dict[str, Any] = {}
+        intel["brand"] = brand  # Store for strategy methods
         is_post = content_type == "post"
         type_label = "📄 Post" if is_post else "🎬 Reel"
-        toby_log("Gathering intelligence", f"Pulling data for {type_label} proposals...", "🔎", "detail")
+        brand_label = f" for {brand}" if brand else ""
+        toby_log("Gathering intelligence", f"Pulling data for {type_label} proposals{brand_label}...", "🔎", "detail")
 
         # 1. Our performance data
         try:
@@ -335,17 +337,27 @@ class TobyAgent:
             toby_log("Error: Trends", f"Failed to fetch trending data: {e}", "❌", "detail")
             intel["trending"] = []
 
-        # 3. Content history & topic gaps
+        # 3. Content history & topic gaps (brand-aware)
         try:
-            toby_log("API: ContentTracker", f"Checking {type_label} content history, cooldowns, and topic availability", "📡", "api")
-            intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=30)
+            toby_log("API: ContentTracker", f"Checking {type_label} content history{brand_label}, cooldowns, and topic availability", "📡", "api")
+            intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=60, brand=brand)
             intel["topics_on_cooldown"] = [
                 t for t in TOPIC_BUCKETS
                 if t not in self.tracker.get_available_topics(content_type)
             ]
             intel["available_topics"] = self.tracker.get_available_topics(content_type)
             intel["content_stats"] = self.tracker.get_stats(content_type)
-            toby_log("Data: Content history", f"{len(intel['recent_titles'])} recent titles, {len(intel['topics_on_cooldown'])} topics on cooldown, {len(intel['available_topics'])} available", "📊", "data")
+
+            # Build rich brand-specific avoidance block for prompt injection
+            if brand:
+                intel["brand_avoidance"] = self.tracker.get_brand_avoidance_prompt(
+                    brand=brand, content_type=content_type, days=60
+                )
+            else:
+                intel["brand_avoidance"] = ""
+
+            brand_title_count = len(intel['recent_titles'])
+            toby_log("Data: Content history", f"{brand_title_count} recent titles{brand_label}, {len(intel['topics_on_cooldown'])} topics on cooldown, {len(intel['available_topics'])} available", "📊", "data")
             if intel["topics_on_cooldown"]:
                 toby_log("Data: Cooldowns", f"Topics on cooldown: {', '.join(intel['topics_on_cooldown'])}", "📊", "data")
         except Exception as e:
@@ -354,6 +366,7 @@ class TobyAgent:
             intel["topics_on_cooldown"] = []
             intel["available_topics"] = list(TOPIC_BUCKETS)
             intel["content_stats"] = {}
+            intel["brand_avoidance"] = ""
 
         # 4. Best-performing topic buckets
         perf_summary = intel.get("performance_summary", {})
@@ -502,9 +515,10 @@ class TobyAgent:
 
         topic_desc = topic_descriptions.get(topic, topic)
 
-        avoidance = ""
-        if recent_titles:
-            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
+        # Use rich brand-aware avoidance (60 days per-brand + cross-brand)
+        avoidance = intel.get("brand_avoidance", "")
+        if not avoidance and recent_titles:
+            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:30])
 
         # Use actual brand handle if brand is assigned
         brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
@@ -781,9 +795,10 @@ OUTPUT FORMAT (JSON only):
 
         topic_desc = topic_descriptions.get(topic, topic)
 
-        avoidance = ""
-        if recent_titles:
-            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
+        # Use rich brand-aware avoidance
+        avoidance = intel.get("brand_avoidance", "")
+        if not avoidance and recent_titles:
+            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:30])
 
         prompt = f"""Generate a new educational Instagram CAROUSEL POST about {topic_desc}.
 
@@ -952,6 +967,17 @@ Rules:
             # Classify topic
             topic_bucket = topic or ContentHistory.classify_topic_bucket(title)
 
+            # ── Duplicate check (brand-aware, 60-day window) ──
+            if brand:
+                is_dup = self.tracker.is_duplicate_for_brand(title, brand, content_type, days=60)
+                if is_dup:
+                    # Allow repeat only for high performers
+                    if self.tracker.is_high_performer(title, content_type):
+                        toby_log("Duplicate (allowed)", f"'{title[:50]}' was used before for {brand} but is a high performer — allowing repeat", "🔄", "detail")
+                    else:
+                        toby_log("Duplicate BLOCKED", f"'{title[:50]}' was already used for {brand} in last 60 days — skipping", "🚫", "detail")
+                        return None
+
             # Quality check
             from app.services.content_tracker import check_post_quality
             quality = check_post_quality(title)
@@ -990,6 +1016,20 @@ Rules:
 
                 toby_log("Saved to DB", f"{type_label} proposal {proposal_id} saved — brand={brand or 'unassigned'}, strategy={strategy}, topic={topic_bucket}, quality={quality.score}", "💾", "detail")
                 print(f"🤖 Toby proposed [{strategy}/{content_type}] → '{title[:60]}...' ({proposal_id}) brand={brand or 'unassigned'}", flush=True)
+
+                # Record in content history for future anti-repetition
+                try:
+                    self.tracker.record_proposal(
+                        title=title,
+                        content_type=content_type,
+                        brand=brand,
+                        caption=caption,
+                        content_lines=content_lines,
+                        image_prompt=image_prompt,
+                        quality_score=quality.score,
+                    )
+                except Exception:
+                    pass  # Non-critical
 
                 # Mark trending source as used
                 if source_type in ("trending_hashtag", "competitor") and source_ig_media_id:

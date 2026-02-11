@@ -48,6 +48,12 @@ TOPIC_COOLDOWN_DAYS = 3
 # Minimum days before the same keyword hash can appear again
 FINGERPRINT_COOLDOWN_DAYS = 30
 
+# How many days of history to check for anti-repetition
+BRAND_HISTORY_DAYS = 60
+
+# Minimum performance score to allow a topic to be repeated
+HIGH_PERFORMER_THRESHOLD = 85.0
+
 
 # ============================================================
 # QUALITY GATE — structural checks for posts
@@ -401,6 +407,264 @@ class ContentTracker:
 
         lines = "\n".join(f"- {t}" for t in titles)
         return f"\n### PREVIOUSLY GENERATED (avoid repeating these titles and topics):\n{lines}\n"
+
+    # ──────────────────────────────────────────────────────────
+    # BRAND-AWARE AVOIDANCE (for Toby/Lexi prompt injection)
+    # ──────────────────────────────────────────────────────────
+
+    def get_brand_avoidance_prompt(
+        self,
+        brand: str,
+        content_type: str = "reel",
+        days: int = None,
+        cross_brand_days: int = 7,
+    ) -> str:
+        """
+        Build a rich avoidance block for AI prompts.
+
+        Combines:
+        1. Brand-specific history (60 days) — titles this brand already used
+        2. Cross-brand recent titles (7 days) — avoid same content across brands
+        3. Also pulls from toby_proposals table for titles not yet in content_history
+
+        Returns a formatted string ready for prompt injection.
+        """
+        if days is None:
+            days = BRAND_HISTORY_DAYS
+
+        sections = []
+
+        # 1. Brand-specific history from content_history
+        brand_titles = self.get_recent_titles(content_type, limit=60, brand=brand)
+
+        # 2. Also pull from toby_proposals for this brand (covers content not yet in content_history)
+        proposal_titles = self._get_recent_proposal_titles(brand, content_type, days=days, limit=60)
+        for t in proposal_titles:
+            if t not in brand_titles:
+                brand_titles.append(t)
+
+        # 3. Legacy job titles for backward compat
+        legacy_titles = self._get_legacy_job_titles(content_type, limit=30)
+        for t in legacy_titles:
+            if t not in brand_titles:
+                brand_titles.append(t)
+
+        brand_titles = brand_titles[:60]  # Cap at 60
+
+        if brand_titles:
+            lines = "\n".join(f"- {t}" for t in brand_titles)
+            sections.append(
+                f"### TITLES ALREADY USED FOR THIS BRAND (last {days} days — DO NOT repeat or closely rephrase):\n{lines}"
+            )
+
+        # 4. Cross-brand recent titles (last 7 days, all brands except this one)
+        try:
+            from sqlalchemy import desc
+            cutoff = datetime.utcnow() - timedelta(days=cross_brand_days)
+            db = self._get_session()
+            try:
+                rows = (
+                    db.query(ContentHistory.title)
+                    .filter(
+                        ContentHistory.content_type == content_type,
+                        ContentHistory.created_at >= cutoff,
+                        ContentHistory.brand != brand,
+                    )
+                    .order_by(desc(ContentHistory.created_at))
+                    .limit(40)
+                    .all()
+                )
+                cross_titles = [r.title for r in rows]
+            finally:
+                db.close()
+
+            # Also from proposals
+            cross_proposal = self._get_recent_proposal_titles(
+                brand=None, content_type=content_type, days=cross_brand_days,
+                limit=40, exclude_brand=brand,
+            )
+            for t in cross_proposal:
+                if t not in cross_titles:
+                    cross_titles.append(t)
+
+            cross_titles = cross_titles[:40]
+
+            if cross_titles:
+                lines = "\n".join(f"- {t}" for t in cross_titles)
+                sections.append(
+                    f"### TITLES USED BY OTHER BRANDS THIS WEEK (also avoid — we want unique content per brand):\n{lines}"
+                )
+        except Exception as e:
+            print(f"⚠️ ContentTracker cross-brand error: {e}", flush=True)
+
+        if not sections:
+            return ""
+
+        return "\n\n" + "\n\n".join(sections) + "\n"
+
+    def _get_recent_proposal_titles(
+        self,
+        brand: str = None,
+        content_type: str = "reel",
+        days: int = 60,
+        limit: int = 60,
+        exclude_brand: str = None,
+    ) -> List[str]:
+        """Pull recent titles from toby_proposals table."""
+        try:
+            from app.models import TobyProposal
+            from sqlalchemy import desc
+
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            db = self._get_session()
+            try:
+                query = (
+                    db.query(TobyProposal.title)
+                    .filter(
+                        TobyProposal.content_type == content_type,
+                        TobyProposal.created_at >= cutoff,
+                    )
+                )
+                if brand:
+                    query = query.filter(TobyProposal.brand == brand)
+                if exclude_brand:
+                    query = query.filter(TobyProposal.brand != exclude_brand)
+
+                rows = query.order_by(desc(TobyProposal.created_at)).limit(limit).all()
+                return [r.title for r in rows if r.title]
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"⚠️ ContentTracker._get_recent_proposal_titles error: {e}", flush=True)
+            return []
+
+    def is_duplicate_for_brand(
+        self,
+        title: str,
+        brand: str,
+        content_type: str = "reel",
+        days: int = None,
+    ) -> bool:
+        """
+        Check if a title is a near-duplicate for a SPECIFIC brand.
+
+        Checks both content_history and toby_proposals tables.
+        Returns True if the same keyword hash was used in the last N days.
+        """
+        if days is None:
+            days = BRAND_HISTORY_DAYS
+        try:
+            keyword_hash = ContentHistory.compute_keyword_hash(title)
+            cutoff = datetime.utcnow() - timedelta(days=days)
+
+            db = self._get_session()
+            try:
+                # Check content_history
+                ch_count = (
+                    db.query(ContentHistory)
+                    .filter(
+                        ContentHistory.content_type == content_type,
+                        ContentHistory.keyword_hash == keyword_hash,
+                        ContentHistory.brand == brand,
+                        ContentHistory.created_at >= cutoff,
+                    )
+                    .count()
+                )
+                if ch_count > 0:
+                    return True
+
+                # Also check toby_proposals (content might not be in content_history yet)
+                from app.models import TobyProposal
+                # Check proposals by doing keyword comparison on title
+                proposals = (
+                    db.query(TobyProposal.title)
+                    .filter(
+                        TobyProposal.content_type == content_type,
+                        TobyProposal.brand == brand,
+                        TobyProposal.created_at >= cutoff,
+                    )
+                    .all()
+                )
+                for row in proposals:
+                    if row.title and ContentHistory.compute_keyword_hash(row.title) == keyword_hash:
+                        return True
+
+                return False
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"⚠️ ContentTracker.is_duplicate_for_brand error: {e}", flush=True)
+            return False
+
+    def is_high_performer(
+        self,
+        title: str,
+        content_type: str = "reel",
+        threshold: float = None,
+    ) -> bool:
+        """
+        Check if a title's topic was previously a high performer.
+
+        If performance_score >= threshold, the topic can be repeated.
+        Uses PostPerformance data.
+        """
+        if threshold is None:
+            threshold = HIGH_PERFORMER_THRESHOLD
+        try:
+            from app.models import PostPerformance
+
+            keyword_hash = ContentHistory.compute_keyword_hash(title)
+            db = self._get_session()
+            try:
+                # Check if any previous content with similar keywords performed well
+                history = (
+                    db.query(ContentHistory)
+                    .filter(
+                        ContentHistory.content_type == content_type,
+                        ContentHistory.keyword_hash == keyword_hash,
+                        ContentHistory.quality_score.isnot(None),
+                        ContentHistory.quality_score >= threshold,
+                    )
+                    .first()
+                )
+                return history is not None
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"⚠️ ContentTracker.is_high_performer error: {e}", flush=True)
+            return False
+
+    def record_proposal(
+        self,
+        title: str,
+        content_type: str = "reel",
+        brand: str = None,
+        caption: str = None,
+        content_lines: list = None,
+        image_prompt: str = None,
+        quality_score: float = None,
+    ) -> Optional[int]:
+        """
+        Record a proposal in content_history for anti-repetition tracking.
+
+        Stores title + caption + summarized content so future proposals
+        can see what content has already been generated.
+        """
+        # Build a combined caption with content summary for richer history
+        full_caption = caption or ""
+        if content_lines:
+            summary = " | ".join(content_lines[:4])
+            full_caption = f"[Content: {summary}]\n{full_caption}" if full_caption else f"[Content: {summary}]"
+
+        return self.record(
+            title=title,
+            content_type=content_type,
+            brand=brand,
+            caption=full_caption,
+            image_prompt=image_prompt,
+            quality_score=quality_score,
+            was_used=True,
+        )
 
     def _get_legacy_job_titles(self, content_type: str, limit: int) -> List[str]:
         """Pull titles from generation_jobs table (backward compat)."""

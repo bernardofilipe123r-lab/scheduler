@@ -202,7 +202,7 @@ class LexiAgent:
         ct_label = "📄 POST" if content_type == "post" else "🎬 REEL"
         maestro_log("lexi", "Planning", f"{ct_label}{brand_label} — Today: {today_count} total. Generating {remaining} proposals.", "🎯", "detail")
 
-        intel = self._gather_intelligence(content_type=content_type)
+        intel = self._gather_intelligence(content_type=content_type, brand=brand)
         strategy_plan = self._plan_strategies(remaining, intel)
 
         proposals = []
@@ -233,14 +233,16 @@ class LexiAgent:
     # INTELLIGENCE GATHERING
     # ──────────────────────────────────────────────────────────
 
-    def _gather_intelligence(self, content_type: str = "reel") -> Dict:
-        """Gather performance data for data-driven decisions."""
+    def _gather_intelligence(self, content_type: str = "reel", brand: str = None) -> Dict:
+        """Gather performance data for data-driven decisions (brand-aware)."""
         from app.services.maestro import maestro_log
 
         intel: Dict[str, Any] = {}
+        intel["brand"] = brand  # Store for strategy methods
         is_post = content_type == "post"
         type_label = "📄 Post" if is_post else "🎬 Reel"
-        maestro_log("lexi", "Gathering intelligence", f"Pulling data for {type_label} proposals...", "🔎", "detail")
+        brand_label = f" for {brand}" if brand else ""
+        maestro_log("lexi", "Gathering intelligence", f"Pulling data for {type_label} proposals{brand_label}...", "🔎", "detail")
 
         # 1. Performance data
         try:
@@ -272,18 +274,27 @@ class LexiAgent:
             maestro_log("lexi", "Error: Trends", f"Failed: {e}", "❌", "detail")
             intel["trending"] = []
 
-        # 3. Content history
+        # 3. Content history (brand-aware)
         try:
-            maestro_log("lexi", "API: ContentTracker", f"Checking {type_label} history and cooldowns", "📡", "api")
-            intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=30)
+            maestro_log("lexi", "API: ContentTracker", f"Checking {type_label} history{brand_label} and cooldowns", "📡", "api")
+            intel["recent_titles"] = self.tracker.get_recent_titles(content_type, limit=60, brand=brand)
             intel["topics_on_cooldown"] = [
                 t for t in TOPIC_BUCKETS
                 if t not in self.tracker.get_available_topics(content_type)
             ]
             intel["available_topics"] = self.tracker.get_available_topics(content_type)
             intel["content_stats"] = self.tracker.get_stats(content_type)
+
+            # Build rich brand-specific avoidance block for prompt injection
+            if brand:
+                intel["brand_avoidance"] = self.tracker.get_brand_avoidance_prompt(
+                    brand=brand, content_type=content_type, days=60
+                )
+            else:
+                intel["brand_avoidance"] = ""
+
             maestro_log("lexi", "Data: Content history",
-                        f"{len(intel['recent_titles'])} recent, {len(intel['topics_on_cooldown'])} on cooldown, {len(intel['available_topics'])} available",
+                        f"{len(intel['recent_titles'])} recent{brand_label}, {len(intel['topics_on_cooldown'])} on cooldown, {len(intel['available_topics'])} available",
                         "📊", "data")
         except Exception as e:
             maestro_log("lexi", "Error: Content tracker", f"Failed: {e}", "❌", "detail")
@@ -291,6 +302,7 @@ class LexiAgent:
             intel["topics_on_cooldown"] = []
             intel["available_topics"] = list(TOPIC_BUCKETS)
             intel["content_stats"] = {}
+            intel["brand_avoidance"] = ""
 
         # 4. Best/worst topic rankings
         perf_summary = intel.get("performance_summary", {})
@@ -406,9 +418,10 @@ class LexiAgent:
             for i, t in enumerate(top[:5]):
                 top_summary += f"  #{i+1}: \"{t.get('title', 'N/A')}\" — score {t.get('performance_score', 0)}, views {t.get('views', 0)}, topic: {t.get('topic_bucket', 'N/A')}\n"
 
-        avoidance = ""
-        if recent_titles:
-            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
+        # Use rich brand-aware avoidance (60 days per-brand + cross-brand)
+        avoidance = intel.get("brand_avoidance", "")
+        if not avoidance and recent_titles:
+            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:30])
 
         # Use actual brand handle if brand is assigned
         brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
@@ -650,9 +663,10 @@ OUTPUT FORMAT (JSON only):
         }
         topic_desc = topic_descriptions.get(topic, topic)
 
-        avoidance = ""
-        if recent_titles:
-            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
+        # Use rich brand-aware avoidance
+        avoidance = intel.get("brand_avoidance", "")
+        if not avoidance and recent_titles:
+            avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:30])
 
         prompt = f"""Generate a data-optimized Instagram CAROUSEL POST about {topic_desc}.
 
@@ -790,6 +804,16 @@ REMEMBER: Do NOT mention age, gender, or demographics.
 
             topic_bucket = topic or ContentHistory.classify_topic_bucket(title)
 
+            # ── Duplicate check (brand-aware, 60-day window) ──
+            if brand:
+                is_dup = self.tracker.is_duplicate_for_brand(title, brand, content_type, days=60)
+                if is_dup:
+                    if self.tracker.is_high_performer(title, content_type):
+                        maestro_log("lexi", "Duplicate (allowed)", f"'{title[:50]}' high performer — allowing repeat", "🔄", "detail")
+                    else:
+                        maestro_log("lexi", "Duplicate BLOCKED", f"'{title[:50]}' already used for {brand} in last 60 days — skipping", "🚫", "detail")
+                        return None
+
             from app.services.content_tracker import check_post_quality
             quality = check_post_quality(title)
 
@@ -828,6 +852,16 @@ REMEMBER: Do NOT mention age, gender, or demographics.
                             f"{type_label} proposal {proposal_id} — brand={brand or 'unassigned'}, strategy={strategy}, topic={topic_bucket}, quality={quality.score}",
                             "💾", "detail")
                 print(f"📊 Lexi proposed [{strategy}/{content_type}] → '{title[:60]}...' ({proposal_id}) brand={brand or 'unassigned'}", flush=True)
+
+                # Record in content history for future anti-repetition
+                try:
+                    self.tracker.record_proposal(
+                        title=title, content_type=content_type, brand=brand,
+                        caption=caption, content_lines=content_lines,
+                        image_prompt=image_prompt, quality_score=quality.score,
+                    )
+                except Exception:
+                    pass  # Non-critical
 
                 if source_type in ("trending_hashtag", "competitor") and source_ig_media_id:
                     try:
