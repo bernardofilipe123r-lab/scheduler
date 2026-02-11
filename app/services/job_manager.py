@@ -1,8 +1,10 @@
 """
 Job management service for tracking and processing reel generation jobs.
 """
+import os
 import random
 import string
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any
@@ -13,6 +15,9 @@ from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
 from app.services.content_differentiator import ContentDifferentiator
 from app.core.config import BrandType, get_brand_config
+
+# Per-brand generation timeout (in seconds). Default: 10 minutes.
+BRAND_GENERATION_TIMEOUT = int(os.getenv("BRAND_GENERATION_TIMEOUT_SECONDS", "600"))
 
 
 def generate_job_id() -> str:
@@ -621,8 +626,27 @@ class JobManager:
                         return {"success": False, "error": "Job was cancelled", "results": results}
                     progress = int(((i + 1) / (total_brands + 1)) * 100)
                     self.update_job_status(job_id, "generating", f"Generating image for {brand}...", progress)
-                    result = self.process_post_brand(job_id, brand)
-                    results[brand] = result
+
+                    # Timeout guard for post brand processing
+                    post_result = {"success": False, "error": "Timeout"}
+                    def _run_post_brand(b=brand):
+                        nonlocal post_result
+                        try:
+                            post_result = self.process_post_brand(job_id, b)
+                        except Exception as ex:
+                            post_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
+
+                    pt = threading.Thread(target=_run_post_brand, daemon=True)
+                    pt.start()
+                    pt.join(timeout=BRAND_GENERATION_TIMEOUT)
+
+                    if pt.is_alive():
+                        timeout_msg = f"BRAND_TIMEOUT: {brand} post generation exceeded {BRAND_GENERATION_TIMEOUT}s"
+                        print(f"⏱️  POST BRAND TIMEOUT: {brand}", flush=True)
+                        self.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg})
+                        post_result = {"success": False, "error": timeout_msg}
+
+                    results[brand] = post_result
 
                 all_ok = all(r.get("success") for r in results.values())
                 any_ok = any(r.get("success") for r in results.values())
@@ -692,11 +716,43 @@ class JobManager:
                     print(f"      Available keys: {list(brand_content_map.keys())}", flush=True)
                 sys.stdout.flush()
                 
-                result = self.regenerate_brand(
-                    job_id, 
-                    brand, 
-                    content_lines=brand_content  # Pass pre-generated content
-                )
+                # Run regenerate_brand with a timeout to prevent indefinite hangs
+                result = {"success": False, "error": "Timeout"}
+                brand_error = [None]
+
+                def _run_brand():
+                    nonlocal result
+                    try:
+                        result = self.regenerate_brand(
+                            job_id, 
+                            brand, 
+                            content_lines=brand_content
+                        )
+                    except Exception as ex:
+                        brand_error[0] = ex
+                        result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
+
+                brand_thread = threading.Thread(target=_run_brand, daemon=True)
+                brand_thread.start()
+                brand_thread.join(timeout=BRAND_GENERATION_TIMEOUT)
+
+                if brand_thread.is_alive():
+                    # Thread is still running after timeout — mark brand as failed
+                    timeout_msg = (
+                        f"BRAND_TIMEOUT: {brand} generation exceeded {BRAND_GENERATION_TIMEOUT}s timeout. "
+                        f"Step: {(self.get_job(job_id) or type('', (), {'current_step': 'unknown'})).current_step}"
+                    )
+                    print(f"\n⏱️  BRAND TIMEOUT: {brand} exceeded {BRAND_GENERATION_TIMEOUT}s", flush=True)
+                    print(f"    Job: {job_id}", flush=True)
+                    print(f"    The thread is still running but we'll move on", flush=True)
+                    sys.stdout.flush()
+
+                    self.update_brand_output(job_id, brand, {
+                        "status": "failed",
+                        "error": timeout_msg,
+                    })
+                    result = {"success": False, "error": timeout_msg}
+
                 results[brand] = result
                 
                 print(f"   📋 Result for {brand}: {result.get('success', False)}", flush=True)

@@ -58,6 +58,9 @@ FEEDBACK_CYCLE_MINUTES = int(os.getenv("MAESTRO_FEEDBACK_MINUTES", "360"))
 HEALING_CYCLE_MINUTES = int(os.getenv("MAESTRO_HEALING_MINUTES", "15"))
 MAX_AUTO_RETRIES = int(os.getenv("MAESTRO_MAX_AUTO_RETRIES", "2"))  # Max retries per job
 
+# Job timeout: if a job is stuck in "generating" or "pending" for longer than this, mark it failed
+JOB_TIMEOUT_MINUTES = int(os.getenv("MAESTRO_JOB_TIMEOUT_MINUTES", "30"))
+
 STARTUP_DELAY_SECONDS = 30
 
 # ── Concurrency Control ───────────────────────────────────────
@@ -1001,13 +1004,14 @@ class MaestroDaemon:
         """
         Smart self-healing cycle — runs every 15 minutes.
 
-        1. SCAN   — Find all failed jobs created by Maestro (last 24h)
-        2. DIAGNOSE — Classify failure type (FFmpeg, API, resource, content)
-        3. RETRY  — Auto-retry retryable failures (up to MAX_AUTO_RETRIES)
-        4. NOTIFY — Log non-retryable failures as creator notifications
-        5. CLEANUP — Mark permanently-failed proposals for review
+        1. TIMEOUT — Detect jobs stuck in generating/pending for >30min → mark failed
+        2. SCAN    — Find all failed jobs (last 24h)
+        3. DIAGNOSE — Classify failure type (FFmpeg, API, resource, timeout, content)
+        4. RETRY   — Auto-retry retryable failures (up to MAX_AUTO_RETRIES)
+        5. NOTIFY  — Log non-retryable failures as creator notifications
+        6. CLEANUP — Mark permanently-failed proposals for review
         """
-        self.state.log("maestro", "🩺 Healing Scan", "Scanning for failed jobs...", "🔍")
+        self.state.log("maestro", "🩺 Healing Scan", "Scanning for stuck & failed jobs...", "🔍")
 
         try:
             from app.db_connection import SessionLocal
@@ -1017,9 +1021,81 @@ class MaestroDaemon:
             try:
                 now = datetime.utcnow()
                 lookback = now - timedelta(hours=24)
+                timeout_threshold = now - timedelta(minutes=JOB_TIMEOUT_MINUTES)
 
-                # ── 1. SCAN: Find Maestro-created failed jobs (last 24h) ──
-                # Maestro jobs have user_id = proposal_id (like "TOBY-xxxx" or "LEXI-xxxx" or agent prefix)
+                # ── 0. TIMEOUT: Find stuck jobs (generating/pending for >30min) ──
+                stuck_jobs = (
+                    db.query(GenerationJob)
+                    .filter(
+                        GenerationJob.status.in_(["generating", "pending"]),
+                        GenerationJob.created_at <= timeout_threshold,
+                    )
+                    .order_by(GenerationJob.created_at.asc())
+                    .all()
+                )
+
+                timed_out_count = 0
+                if stuck_jobs:
+                    for stuck_job in stuck_jobs:
+                        # Calculate how long it's been stuck
+                        stuck_since = stuck_job.started_at or stuck_job.created_at
+                        minutes_stuck = (now - stuck_since).total_seconds() / 60 if stuck_since else 0
+
+                        # Log detailed timeout info
+                        print(f"\n⏱️  JOB TIMEOUT DETECTED", flush=True)
+                        print(f"   Job ID: {stuck_job.job_id}", flush=True)
+                        print(f"   Title: {(stuck_job.title or '')[:80]}", flush=True)
+                        print(f"   Status: {stuck_job.status}", flush=True)
+                        print(f"   Brands: {stuck_job.brands}", flush=True)
+                        print(f"   Created: {stuck_job.created_at}", flush=True)
+                        print(f"   Started: {stuck_job.started_at}", flush=True)
+                        print(f"   Minutes stuck: {minutes_stuck:.0f}", flush=True)
+                        print(f"   Current step: {stuck_job.current_step}", flush=True)
+                        print(f"   Progress: {stuck_job.progress_percent}%", flush=True)
+
+                        # Check brand_outputs for partial progress
+                        brand_statuses = {}
+                        for brand, output in (stuck_job.brand_outputs or {}).items():
+                            brand_statuses[brand] = {
+                                "status": output.get("status", "unknown"),
+                                "progress": output.get("progress_percent", 0),
+                                "message": output.get("progress_message", ""),
+                            }
+                        print(f"   Brand statuses: {brand_statuses}", flush=True)
+                        import sys
+                        sys.stdout.flush()
+
+                        # Mark as failed with timeout error
+                        timeout_error = (
+                            f"JOB_TIMEOUT: Stuck in '{stuck_job.status}' for {minutes_stuck:.0f} minutes "
+                            f"(threshold: {JOB_TIMEOUT_MINUTES}min). "
+                            f"Last step: {stuck_job.current_step or 'unknown'}. "
+                            f"Progress: {stuck_job.progress_percent or 0}%"
+                        )
+                        stuck_job.status = "failed"
+                        stuck_job.error_message = timeout_error
+                        stuck_job.completed_at = now
+                        db.commit()
+
+                        timed_out_count += 1
+
+                        self.state.log(
+                            "maestro", "⏱️ Job Timed Out",
+                            f"{stuck_job.job_id} — stuck {minutes_stuck:.0f}min in '{stuck_job.status}' → failed. "
+                            f"Brands: {', '.join(stuck_job.brands or ['?'])}",
+                            "🚨"
+                        )
+
+                    self.state.log(
+                        "maestro", "⏱️ Timeout Summary",
+                        f"Timed out {timed_out_count} stuck jobs (>{JOB_TIMEOUT_MINUTES}min)",
+                        "⏱️"
+                    )
+                else:
+                    self.state.log("maestro", "⏱️ No Stuck Jobs", "All jobs progressing normally ✅", "💚", "detail")
+
+                # ── 1. SCAN: Find all failed jobs (last 24h) ──
+                # (includes freshly timed-out jobs)
                 failed_jobs = (
                     db.query(GenerationJob)
                     .filter(
@@ -1152,6 +1228,14 @@ class MaestroDaemon:
           - unknown:         unclassifiable → RETRYABLE (once)
         """
         error = (job.error_message or "").lower()
+
+        # Job timeout — stuck generating for too long
+        if "job_timeout" in error:
+            return {
+                "category": "job_timeout",
+                "retryable": True,
+                "suggested_action": "Job was stuck generating — retrying with fresh resources",
+            }
 
         # FFmpeg encoder issues (the main problem we're fixing)
         if "error while opening encoder" in error or "incorrect parameters" in error:
