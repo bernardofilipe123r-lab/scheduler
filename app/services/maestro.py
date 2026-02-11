@@ -2,12 +2,13 @@
 Maestro — The AI Content Orchestrator (v2).
 
 Maestro runs a DAILY BURST once per day:
-  1. Toby generates 3 unique reel proposals (all dark mode)
-  2. Lexi generates 3 unique reel proposals (all light mode)
-  3. Each proposal → 5 single-brand jobs = 30 jobs/day
-  4. 6 UNIQUE reels per brand (3 dark + 3 light), NO duplicate content
-  5. Auto-schedule into the 6 daily slots per brand
-  6. Publishing daemon posts at scheduled times
+  1. For each of 5 brands, Toby generates 3 unique dark-mode proposals
+  2. For each of 5 brands, Lexi generates 3 unique light-mode proposals
+  3. Total: 30 UNIQUE proposals, each assigned to ONE specific brand
+  4. Each proposal → 1 job = 1 reel (NO content duplication across brands)
+  5. 6 unique reels per brand (3 dark + 3 light)
+  6. Auto-schedule into the 6 daily slots per brand
+  7. Publishing daemon posts at scheduled times
 
 Design:
   - Pause/Resume controlled by user, state persisted in DB
@@ -15,6 +16,7 @@ Design:
   - Daily burst runs ONCE per day (not every 45min)
   - Feedback loop: checks reel performance 48-72h after publish
   - Observe & Scout cycles run independently for intelligence gathering
+  - Brand @handle baked into caption at generation time (not replaced later)
 """
 
 import os
@@ -54,11 +56,13 @@ FEEDBACK_CYCLE_MINUTES = int(os.getenv("MAESTRO_FEEDBACK_MINUTES", "360"))
 
 STARTUP_DELAY_SECONDS = 30
 
-# Daily burst: 3 proposals per agent = 6 unique reels
-# Each reel → 5 single-brand jobs = 30 jobs total
-# Toby = dark mode, Lexi = light mode → 15 dark + 15 light
-PROPOSALS_PER_AGENT = 3
-REELS_PER_BRAND = PROPOSALS_PER_AGENT * 2  # 6 unique reels per brand
+# Daily burst: 30 unique proposals = 5 brands × 6 per brand (3 dark + 3 light)
+# Each proposal is for ONE specific brand with the correct @handle
+# Toby = dark mode (3 per brand = 15 total)
+# Lexi = light mode (3 per brand = 15 total)
+PROPOSALS_PER_BRAND_PER_AGENT = 3  # Each agent generates 3 proposals per brand
+TOTAL_PROPOSALS = PROPOSALS_PER_BRAND_PER_AGENT * 2 * 5  # 30
+REELS_PER_BRAND = PROPOSALS_PER_BRAND_PER_AGENT * 2  # 6 unique reels per brand
 
 ALL_BRANDS = [
     "healthycollege", "vitalitycollege", "longevitycollege",
@@ -227,12 +231,13 @@ class MaestroState:
             },
             "recent_activity": self.activity_log[:30],
             "daily_config": {
-                "proposals_per_agent": PROPOSALS_PER_AGENT,
+                "proposals_per_brand_per_agent": PROPOSALS_PER_BRAND_PER_AGENT,
+                "total_proposals": TOTAL_PROPOSALS,
                 "reels_per_brand": REELS_PER_BRAND,  # 6 unique reels per brand
-                "total_reels_per_day": REELS_PER_BRAND * len(ALL_BRANDS),  # 30
+                "total_reels_per_day": TOTAL_PROPOSALS,  # 30 — each proposal = 1 reel
                 "variants": ["dark", "light"],
                 "brands": ALL_BRANDS,
-                "jobs_per_day": REELS_PER_BRAND * len(ALL_BRANDS),  # 30 single-brand jobs
+                "jobs_per_day": TOTAL_PROPOSALS,  # 30 — 1 job per proposal
             },
         }
 
@@ -419,9 +424,9 @@ class MaestroDaemon:
 
     def _run_daily_burst(self):
         """
-        Generate 6 unique reels (3 Toby dark + 3 Lexi light).
-        Each reel → 5 single-brand jobs.
-        Total: 30 jobs, 15 dark + 15 light, all unique content.
+        Generate 30 UNIQUE proposals — each assigned to a specific brand.
+        5 brands × 3 Toby (dark) + 3 Lexi (light) = 30 unique reels.
+        Each proposal = 1 job = 1 reel. NO content duplication across brands.
         """
         if not self._daily_burst_lock.acquire(blocking=False):
             self.state.log("maestro", "Burst skipped", "Already running", "⏳")
@@ -434,45 +439,49 @@ class MaestroDaemon:
 
             self.state.log(
                 "maestro", "🌅 Daily Burst Started",
-                f"Generating {PROPOSALS_PER_AGENT} Toby (dark) + {PROPOSALS_PER_AGENT} Lexi (light) = {REELS_PER_BRAND} unique reels × {len(ALL_BRANDS)} brands = {REELS_PER_BRAND * len(ALL_BRANDS)} jobs",
+                f"Generating {TOTAL_PROPOSALS} UNIQUE proposals — {PROPOSALS_PER_BRAND_PER_AGENT} Toby (dark) + {PROPOSALS_PER_BRAND_PER_AGENT} Lexi (light) per brand × {len(ALL_BRANDS)} brands",
                 "🚀"
             )
 
             all_proposals = []
 
-            # Toby generates 3 reel proposals
-            try:
-                self.state.current_agent = "toby"
-                from app.services.toby_agent import get_toby_agent
-                toby = get_toby_agent()
-                self.state.log("toby", "Generating", f"{PROPOSALS_PER_AGENT} reel proposals...", "🧠")
-                toby_result = toby.run(max_proposals=PROPOSALS_PER_AGENT, content_type="reel")
-                toby_proposals = toby_result.get("proposals", [])
-                all_proposals.extend(toby_proposals)
-                self.state.agents["toby"].total_proposals += len(toby_proposals)
-                self.state.log("toby", "Done", f"{len(toby_proposals)} proposals created", "✅")
-            except Exception as e:
-                self.state.errors += 1
-                self.state.agents["toby"].errors += 1
-                self.state.log("toby", "Error", f"Generation failed: {str(e)[:200]}", "❌")
-                traceback.print_exc()
+            # Generate proposals per brand — each brand gets unique content
+            for brand in ALL_BRANDS:
+                brand_handle = BRAND_HANDLES.get(brand, brand)
 
-            # Lexi generates 3 reel proposals
-            try:
-                self.state.current_agent = "lexi"
-                from app.services.lexi_agent import get_lexi_agent
-                lexi = get_lexi_agent()
-                self.state.log("lexi", "Generating", f"{PROPOSALS_PER_AGENT} reel proposals...", "📊")
-                lexi_result = lexi.run(max_proposals=PROPOSALS_PER_AGENT, content_type="reel")
-                lexi_proposals = lexi_result.get("proposals", [])
-                all_proposals.extend(lexi_proposals)
-                self.state.agents["lexi"].total_proposals += len(lexi_proposals)
-                self.state.log("lexi", "Done", f"{len(lexi_proposals)} proposals created", "✅")
-            except Exception as e:
-                self.state.errors += 1
-                self.state.agents["lexi"].errors += 1
-                self.state.log("lexi", "Error", f"Generation failed: {str(e)[:200]}", "❌")
-                traceback.print_exc()
+                # Toby generates 3 dark-mode proposals for this brand
+                try:
+                    self.state.current_agent = "toby"
+                    from app.services.toby_agent import get_toby_agent
+                    toby = get_toby_agent()
+                    self.state.log("toby", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} dark reels for {brand} ({brand_handle})", "🧠")
+                    toby_result = toby.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
+                    toby_proposals = toby_result.get("proposals", [])
+                    all_proposals.extend(toby_proposals)
+                    self.state.agents["toby"].total_proposals += len(toby_proposals)
+                    self.state.log("toby", f"Done ({brand})", f"{len(toby_proposals)} dark proposals", "✅")
+                except Exception as e:
+                    self.state.errors += 1
+                    self.state.agents["toby"].errors += 1
+                    self.state.log("toby", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
+                    traceback.print_exc()
+
+                # Lexi generates 3 light-mode proposals for this brand
+                try:
+                    self.state.current_agent = "lexi"
+                    from app.services.lexi_agent import get_lexi_agent
+                    lexi = get_lexi_agent()
+                    self.state.log("lexi", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} light reels for {brand} ({brand_handle})", "📊")
+                    lexi_result = lexi.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
+                    lexi_proposals = lexi_result.get("proposals", [])
+                    all_proposals.extend(lexi_proposals)
+                    self.state.agents["lexi"].total_proposals += len(lexi_proposals)
+                    self.state.log("lexi", f"Done ({brand})", f"{len(lexi_proposals)} light proposals", "✅")
+                except Exception as e:
+                    self.state.errors += 1
+                    self.state.agents["lexi"].errors += 1
+                    self.state.log("lexi", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
+                    traceback.print_exc()
 
             self.state.total_proposals_generated += len(all_proposals)
 
@@ -483,7 +492,7 @@ class MaestroDaemon:
 
             self.state.log(
                 "maestro", "Proposals ready",
-                f"{len(all_proposals)} unique reels — creating 1 job per brand = {len(all_proposals) * len(ALL_BRANDS)} total jobs",
+                f"{len(all_proposals)} unique proposals — each proposal = 1 brand-specific job",
                 "⚡"
             )
 
@@ -495,7 +504,7 @@ class MaestroDaemon:
             except Exception as e:
                 self.state.log("maestro", "Pre-burst schedule error", str(e)[:200], "❌")
 
-            # Auto-accept each proposal and create single-brand jobs
+            # Auto-accept each proposal and create its single job
             self.state.current_phase = "processing"
             self._auto_accept_and_process(all_proposals)
 
@@ -505,7 +514,7 @@ class MaestroDaemon:
             elapsed = (datetime.utcnow() - burst_start).total_seconds()
             self.state.log(
                 "maestro", "🌅 Daily Burst Complete",
-                f"{len(all_proposals)} unique reels × {len(ALL_BRANDS)} brands = {len(all_proposals) * len(ALL_BRANDS)} jobs dispatched. Took {elapsed:.0f}s.",
+                f"{len(all_proposals)} unique proposals = {len(all_proposals)} jobs dispatched. Took {elapsed:.0f}s.",
                 "🏁"
             )
 
@@ -523,12 +532,12 @@ class MaestroDaemon:
         """
         For each proposal:
           1. Mark as accepted in DB
-          2. Determine variant from agent (Toby=dark, Lexi=light)
-          3. Create 5 single-brand jobs (one per brand)
-          4. Process each job in a background thread
+          2. Read brand + variant from proposal (already assigned at generation time)
+          3. Create 1 single-brand job (1 proposal = 1 job)
+          4. Process the job in a background thread
           5. Auto-schedule on completion
 
-        Result: 6 proposals × 5 brands = 30 unique single-brand jobs
+        Result: 30 proposals = 30 unique single-brand jobs (no duplication)
         """
         from app.db_connection import SessionLocal, get_db_session
         from app.models import TobyProposal
@@ -557,58 +566,63 @@ class MaestroDaemon:
                     content_lines = proposal.content_lines or []
                     image_prompt = proposal.image_prompt
                     agent_name = proposal.agent_name or "toby"
+                    proposal_brand = proposal.brand
+                    proposal_variant = proposal.variant
                 finally:
                     db.close()
 
-                # 2. Determine variant: Toby = dark, Lexi = light
-                variant = "dark" if agent_name == "toby" else "light"
+                # 2. Determine variant from proposal (Toby=dark, Lexi=light)
+                variant = proposal_variant or ("dark" if agent_name == "toby" else "light")
+                brand = proposal_brand
 
-                # 3. Create ONE job per brand (single-brand jobs)
-                job_ids = []
-                for brand in ALL_BRANDS:
-                    with get_db_session() as jdb:
-                        manager = JobManager(jdb)
-                        job = manager.create_job(
-                            user_id=proposal_id,
-                            title=title,
-                            content_lines=content_lines,
-                            brands=[brand],  # Single brand per job
-                            variant=variant,
-                            ai_prompt=image_prompt,
-                            cta_type="follow_tips",
-                            platforms=["instagram", "facebook", "youtube"],
-                        )
-                        job_ids.append(job.job_id)
+                if not brand:
+                    # Fallback: should not happen with new flow, but handle gracefully
+                    self.state.log("maestro", "Warning", f"Proposal {proposal_id} has no brand assigned — skipping", "⚠️")
+                    continue
 
-                # Store first job_id on proposal (for reference)
+                # 3. Create ONE job for this specific brand (1 proposal = 1 job)
+                with get_db_session() as jdb:
+                    manager = JobManager(jdb)
+                    job = manager.create_job(
+                        user_id=proposal_id,
+                        title=title,
+                        content_lines=content_lines,
+                        brands=[brand],  # Single brand — from proposal
+                        variant=variant,
+                        ai_prompt=image_prompt,
+                        cta_type="follow_tips",
+                        platforms=["instagram", "facebook", "youtube"],
+                    )
+                    job_id = job.job_id
+
+                # Store job_id on proposal (for reference)
                 db2 = SessionLocal()
                 try:
                     p = db2.query(TobyProposal).filter(
                         TobyProposal.proposal_id == proposal_id
                     ).first()
                     if p:
-                        p.accepted_job_id = job_ids[0]
+                        p.accepted_job_id = job_id
                         db2.commit()
                 finally:
                     db2.close()
 
                 self.state.log(
                     agent_name, "Auto-accepted",
-                    f"{proposal_id} → {len(job_ids)} jobs ({variant} × {len(ALL_BRANDS)} brands)",
+                    f"{proposal_id} → 1 job ({variant} × {brand})",
                     "✅"
                 )
 
                 # Track total jobs dispatched
-                self.state.total_jobs_dispatched += len(job_ids)
+                self.state.total_jobs_dispatched += 1
 
-                # 4. Process each job in background thread
-                for jid in job_ids:
-                    thread = threading.Thread(
-                        target=self._process_and_schedule_job,
-                        args=(jid, proposal_id, agent_name),
-                        daemon=True,
-                    )
-                    thread.start()
+                # 4. Process job in background thread
+                thread = threading.Thread(
+                    target=self._process_and_schedule_job,
+                    args=(job_id, proposal_id, agent_name),
+                    daemon=True,
+                )
+                thread.start()
 
             except Exception as e:
                 self.state.log(

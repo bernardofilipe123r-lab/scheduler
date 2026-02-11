@@ -838,6 +838,10 @@ class TobyProposal(Base):
     # Content type: "reel" or "post"
     content_type = Column(String(10), nullable=False, default="reel")
 
+    # ── Brand assignment (each proposal targets ONE brand) ──
+    brand = Column(String(50), nullable=True, index=True)  # e.g. "healthycollege"
+    variant = Column(String(10), nullable=True)  # "dark" or "light"
+
     # ── Strategy that produced this proposal ──
     # explore      — new topic / angle within the niche
     # iterate      — tweak an underperformer
@@ -890,6 +894,8 @@ class TobyProposal(Base):
             "status": self.status,
             "agent_name": self.agent_name or "toby",
             "content_type": self.content_type,
+            "brand": self.brand,
+            "variant": self.variant,
             "strategy": self.strategy,
             "reasoning": self.reasoning,
             "title": self.title,

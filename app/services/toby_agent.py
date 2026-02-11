@@ -40,6 +40,15 @@ from app.services.content_tracker import get_content_tracker, TOPIC_BUCKETS
 
 # ── Config ──
 MAX_PROPOSALS_PER_DAY = 15
+
+# Brand Instagram handles (for inserting real @handle into AI prompts)
+BRAND_HANDLES = {
+    "healthycollege": "@thehealthycollege",
+    "vitalitycollege": "@thevitalitycollege",
+    "longevitycollege": "@thelongevitycollege",
+    "holisticcollege": "@theholisticcollege",
+    "wellbeingcollege": "@thewellbeingcollege",
+}
 STRATEGY_WEIGHTS = {
     "explore": 0.30,       # 30% — always trying new things
     "iterate": 0.20,       # 20% — fix underperformers
@@ -207,13 +216,14 @@ class TobyAgent:
     # MAIN: RUN TOBY
     # ──────────────────────────────────────────────────────────
 
-    def run(self, max_proposals: int = None, content_type: str = "reel") -> Dict:
+    def run(self, max_proposals: int = None, content_type: str = "reel", brand: str = None) -> Dict:
         """
         Main entry point: Toby analyses data and generates proposals.
 
         Args:
             max_proposals: Max proposals to generate this run
             content_type: "reel" or "post" — determines template and system prompt
+            brand: Target brand for these proposals (e.g. "healthycollege")
 
         Returns summary of what Toby did.
         """
@@ -236,8 +246,9 @@ class TobyAgent:
                 "proposals": [],
             }
 
+        brand_label = f" for {brand}" if brand else ""
         ct_label = "📄 POST" if content_type == "post" else "🎬 REEL"
-        toby_log("Planning", f"{ct_label} — Today: {today_count}/{max_proposals} proposals. Room for {remaining} more.", "🎯", "detail")
+        toby_log("Planning", f"{ct_label}{brand_label} — Today: {today_count}/{max_proposals} proposals. Room for {remaining} more.", "🎯", "detail")
 
         # Gather intelligence
         intel = self._gather_intelligence(content_type=content_type)
@@ -250,7 +261,7 @@ class TobyAgent:
         for strategy, count in strategy_plan.items():
             for _ in range(count):
                 try:
-                    proposal = self._generate_proposal(strategy, intel, content_type=content_type)
+                    proposal = self._generate_proposal(strategy, intel, content_type=content_type, brand=brand)
                     if proposal:
                         proposals.append(proposal)
                 except Exception as e:
@@ -422,37 +433,37 @@ class TobyAgent:
     # PROPOSAL GENERATION
     # ──────────────────────────────────────────────────────────
 
-    def _generate_proposal(self, strategy: str, intel: Dict, content_type: str = "reel") -> Optional[TobyProposal]:
+    def _generate_proposal(self, strategy: str, intel: Dict, content_type: str = "reel", brand: str = None) -> Optional[TobyProposal]:
         """Generate a single proposal using the given strategy."""
 
         if content_type == "post":
             # Route to post-specific methods
             if strategy == "explore":
-                return self._strategy_post_explore(intel)
+                return self._strategy_post_explore(intel, brand=brand)
             elif strategy == "iterate":
-                return self._strategy_post_explore(intel)  # Posts don't iterate yet
+                return self._strategy_post_explore(intel, brand=brand)  # Posts don't iterate yet
             elif strategy == "double_down":
-                return self._strategy_post_explore(intel)  # Posts don't double_down yet
+                return self._strategy_post_explore(intel, brand=brand)  # Posts don't double_down yet
             elif strategy == "trending":
-                return self._strategy_post_trending(intel)
+                return self._strategy_post_trending(intel, brand=brand)
             else:
-                return self._strategy_post_explore(intel)
+                return self._strategy_post_explore(intel, brand=brand)
         else:
             # Reel methods (existing)
             if strategy == "explore":
-                return self._strategy_explore(intel)
+                return self._strategy_explore(intel, brand=brand)
             elif strategy == "iterate":
-                return self._strategy_iterate(intel)
+                return self._strategy_iterate(intel, brand=brand)
             elif strategy == "double_down":
-                return self._strategy_double_down(intel)
+                return self._strategy_double_down(intel, brand=brand)
             elif strategy == "trending":
-                return self._strategy_trending(intel)
+                return self._strategy_trending(intel, brand=brand)
             else:
-                return self._strategy_explore(intel)
+                return self._strategy_explore(intel, brand=brand)
 
     # ── EXPLORE ──────────────────────────────────────────────
 
-    def _strategy_explore(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_explore(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """
         EXPLORE strategy: try a new topic/angle.
 
@@ -489,6 +500,9 @@ class TobyAgent:
         if recent_titles:
             avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
 
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
+
         prompt = f"""Generate a new viral Instagram Reel about {topic_desc}.
 
 Strategy: EXPLORE — trying a fresh topic/angle that we haven't covered recently.
@@ -512,15 +526,15 @@ OUTPUT FORMAT (JSON only):
     "title": "SCROLL-STOPPING TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit/explanation", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph expanding on the title...\n\nScience explanation paragraph...\n\n👉🏼 Follow @brandhandle for daily content on health...\n\n🩵 This post is designed to be saved...\n\n💬 If you found this helpful...\n\n🌱 Content provided for educational purposes...\n\n#health #wellness #naturalhealin",
+    "caption": "Hook paragraph expanding on the title...\\n\\nScience explanation paragraph...\\n\\n👉🏼 Follow {brand_handle} for daily content on health...\\n\\n🩵 This post is designed to be saved...\\n\\n💬 If you found this helpful...\\n\\n🌱 Content provided for educational purposes...\\n\\n#health #wellness #naturalhealin",
     "reasoning": "2-3 sentences explaining why you chose this topic and angle."
 }}"""
 
-        return self._call_ai_and_save(prompt, strategy="explore", topic=topic)
+        return self._call_ai_and_save(prompt, strategy="explore", topic=topic, brand=brand)
 
     # ── ITERATE ──────────────────────────────────────────────
 
-    def _strategy_iterate(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_iterate(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """
         ITERATE strategy: take an underperformer and improve it.
 
@@ -531,7 +545,7 @@ OUTPUT FORMAT (JSON only):
         underperformers = intel.get("underperformers", [])
         if not underperformers:
             toby_log("Iterate → Explore", "No underperformers found, falling back to explore strategy", "🔄", "detail")
-            return self._strategy_explore(intel)
+            return self._strategy_explore(intel, brand=brand)
 
         # Pick a random underperformer
         source = random.choice(underperformers)
@@ -541,6 +555,9 @@ OUTPUT FORMAT (JSON only):
         source_saves = source.get("saves", 0)
 
         toby_log("Iterate", f"Improving underperformer: '{source_title[:60]}' (score: {source_score}, views: {source_views})", "🔄", "detail")
+
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
 
         prompt = f"""This reel underperformed. Analyse why and create a better version.
 
@@ -564,7 +581,7 @@ OUTPUT FORMAT (JSON only):
     "title": "IMPROVED SCROLL-STOPPING TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph...\n\nScience explanation...\n\n👉🏼 Follow @brandhandle for daily content...\n\n🩵 Save and share this...\n\n💬 Follow for more...\n\n🌱 Educational purposes...\n\n#hashtags",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle} for daily content...\\n\\n🩵 Save and share this...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What went wrong with the original, what you changed and why."
 }}"""
 
@@ -572,6 +589,7 @@ OUTPUT FORMAT (JSON only):
             prompt,
             strategy="iterate",
             topic=source.get("topic_bucket"),
+            brand=brand,
             source_type="own_content",
             source_ig_media_id=source.get("ig_media_id"),
             source_title=source_title,
@@ -580,7 +598,7 @@ OUTPUT FORMAT (JSON only):
 
     # ── DOUBLE DOWN ──────────────────────────────────────────
 
-    def _strategy_double_down(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_double_down(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """
         DOUBLE_DOWN strategy: create a variation of a winner.
 
@@ -591,7 +609,7 @@ OUTPUT FORMAT (JSON only):
         top = intel.get("top_performers", [])
         if not top:
             toby_log("Double Down → Explore", "No top performers found, falling back to explore strategy", "📈", "detail")
-            return self._strategy_explore(intel)
+            return self._strategy_explore(intel, brand=brand)
 
         source = random.choice(top[:5])  # Pick from top 5
         source_title = source.get("title", "Unknown")
@@ -601,6 +619,9 @@ OUTPUT FORMAT (JSON only):
         source_topic = source.get("topic_bucket", "general")
 
         toby_log("Double Down", f"Creating variation of winner: '{source_title[:60]}' (score: {source_score}, views: {source_views})", "📈", "detail")
+
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
 
         prompt = f"""This reel performed exceptionally well. Create a similar variation.
 
@@ -625,7 +646,7 @@ OUTPUT FORMAT (JSON only):
     "title": "NEW VARIATION TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph...\n\nScience explanation...\n\n👉🏼 Follow @brandhandle...\n\n🩵 Save and share...\n\n💬 Follow for more...\n\n🌱 Educational purposes...\n\n#hashtags",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What made the original successful, what you kept and changed."
 }}"""
 
@@ -633,6 +654,7 @@ OUTPUT FORMAT (JSON only):
             prompt,
             strategy="double_down",
             topic=source_topic,
+            brand=brand,
             source_type="own_content",
             source_ig_media_id=source.get("ig_media_id"),
             source_title=source_title,
@@ -641,7 +663,7 @@ OUTPUT FORMAT (JSON only):
 
     # ── TRENDING ─────────────────────────────────────────────
 
-    def _strategy_trending(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_trending(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """
         TRENDING strategy: adapt external viral content.
 
@@ -653,7 +675,7 @@ OUTPUT FORMAT (JSON only):
         trending = intel.get("trending", [])
         if not trending:
             toby_log("Trending → Explore", "No trending content available, falling back to explore strategy", "🔥", "detail")
-            return self._strategy_explore(intel)
+            return self._strategy_explore(intel, brand=brand)
 
         source = random.choice(trending[:10])
         source_caption = source.get("caption", "")[:500]
@@ -661,6 +683,9 @@ OUTPUT FORMAT (JSON only):
         source_account = source.get("source_account", "unknown")
 
         toby_log("Trending", f"Adapting viral content from @{source_account} ({source_likes} likes)", "🔥", "detail")
+
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
 
         prompt = f"""This reel is currently going viral in the health niche. Adapt it for our brand.
 
@@ -682,7 +707,7 @@ OUTPUT FORMAT (JSON only):
     "title": "OUR ADAPTED TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph...\n\nScience explanation...\n\n👉🏼 Follow @brandhandle...\n\n🩵 Save and share...\n\n💬 Follow for more...\n\n🌱 Educational purposes...\n\n#hashtags",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What makes the trending content viral, how you adapted it."
 }}"""
 
@@ -690,6 +715,7 @@ OUTPUT FORMAT (JSON only):
             prompt,
             strategy="trending",
             topic=None,
+            brand=brand,
             source_type="trending_hashtag" if source.get("discovery_method") == "hashtag_search" else "competitor",
             source_ig_media_id=source.get("ig_media_id"),
             source_title=source_caption[:100] if source_caption else None,
@@ -700,22 +726,23 @@ OUTPUT FORMAT (JSON only):
     # POST (CAROUSEL) STRATEGIES
     # ══════════════════════════════════════════════════════════
 
-    def _post_output_format(self) -> str:
+    def _post_output_format(self, brand: str = None) -> str:
         """Shared JSON output format for all post strategies."""
-        return """OUTPUT FORMAT (JSON only):
-{
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
+        return f"""OUTPUT FORMAT (JSON only):
+{{
     "title": "STATEMENT-BASED TITLE IN ALL CAPS",
     "slide_texts": [
         "Slide 2: Core scientific explanation paragraph (3-6 sentences). What happens in the body.",
         "Slide 3: Deeper mechanism, why it matters, practical context (3-6 sentences).",
-        "Slide 4: Practical advice, actionable takeaways (3-6 sentences). End with: Follow @brandhandle to learn more about your health."
+        "Slide 4: Practical advice, actionable takeaways (3-6 sentences). End with: Follow {brand_handle} to learn more about your health."
     ],
     "image_prompt": "Soft, minimal wellness aesthetic. 1080x1350 portrait. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\nPractical takeaway...\\n\\nSource:\\nAuthor(s). (Year). Title. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\nDisclaimer:\\nThis content is intended for educational and informational purposes only...\\n\\n#health #wellness #longevity",
     "reasoning": "2-3 sentences explaining why you chose this topic and angle."
-}"""
+}}"""
 
-    def _strategy_post_explore(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_post_explore(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """
         POST EXPLORE strategy: create a new educational carousel post.
 
@@ -769,11 +796,11 @@ Your task:
 
 REMEMBER: Do NOT mention age, gender, or demographics. Universal appeal, science-first.
 
-{self._post_output_format()}"""
+{self._post_output_format(brand=brand)}"""
 
-        return self._call_ai_and_save(prompt, strategy="explore", topic=topic, content_type="post")
+        return self._call_ai_and_save(prompt, strategy="explore", topic=topic, content_type="post", brand=brand)
 
-    def _strategy_post_trending(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_post_trending(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """
         POST TRENDING strategy: adapt viral carousel/image content.
 
@@ -791,7 +818,7 @@ REMEMBER: Do NOT mention age, gender, or demographics. Universal appeal, science
 
         if not post_trending:
             toby_log("Post Trending → Explore", "No trending content available, falling back to post explore", "🔥", "detail")
-            return self._strategy_post_explore(intel)
+            return self._strategy_post_explore(intel, brand=brand)
 
         source = random.choice(post_trending[:10])
         source_caption = source.get("caption", "")[:500]
@@ -817,13 +844,14 @@ Rules:
 5. Include a REAL DOI from a verifiable study related to this topic
 6. Do NOT mention age, gender, or demographics
 
-{self._post_output_format()}"""
+{self._post_output_format(brand=brand)}"""
 
         return self._call_ai_and_save(
             prompt,
             strategy="trending",
             topic=None,
             content_type="post",
+            brand=brand,
             source_type="trending_hashtag" if source.get("discovery_method") == "hashtag_search" else "competitor",
             source_ig_media_id=source.get("ig_media_id"),
             source_title=source_caption[:100] if source_caption else None,
@@ -840,6 +868,7 @@ Rules:
         strategy: str,
         topic: str = None,
         content_type: str = "reel",
+        brand: str = None,
         source_type: str = None,
         source_ig_media_id: str = None,
         source_title: str = None,
@@ -932,6 +961,8 @@ Rules:
                     proposal_id=proposal_id,
                     status="pending",
                     content_type=content_type,
+                    brand=brand,
+                    variant="dark",  # Toby = dark mode
                     strategy=strategy,
                     reasoning=reasoning,
                     title=title,
@@ -951,8 +982,8 @@ Rules:
                 db.commit()
                 db.refresh(proposal)
 
-                toby_log("Saved to DB", f"{type_label} proposal {proposal_id} saved — strategy={strategy}, topic={topic_bucket}, quality={quality.score}", "💾", "detail")
-                print(f"🤖 Toby proposed [{strategy}/{content_type}] → '{title[:60]}...' ({proposal_id})", flush=True)
+                toby_log("Saved to DB", f"{type_label} proposal {proposal_id} saved — brand={brand or 'unassigned'}, strategy={strategy}, topic={topic_bucket}, quality={quality.score}", "💾", "detail")
+                print(f"🤖 Toby proposed [{strategy}/{content_type}] → '{title[:60]}...' ({proposal_id}) brand={brand or 'unassigned'}", flush=True)
 
                 # Mark trending source as used
                 if source_type in ("trending_hashtag", "competitor") and source_ig_media_id:

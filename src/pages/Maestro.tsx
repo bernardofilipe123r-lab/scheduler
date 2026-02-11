@@ -56,6 +56,8 @@ interface Proposal {
   status: 'pending' | 'accepted' | 'rejected' | 'expired'
   agent_name: string
   content_type: string
+  brand: string | null
+  variant: string | null
   strategy: string
   reasoning: string
   title: string
@@ -135,7 +137,8 @@ interface MaestroStatus {
   recent_activity: ActivityEntry[]
   proposal_stats: ProposalStats
   daily_config?: {
-    proposals_per_agent: number
+    proposals_per_brand_per_agent: number
+    total_proposals: number
     reels_per_brand: number
     total_reels_per_day: number
     variants: string[]
@@ -372,7 +375,7 @@ export function MaestroPage() {
       if (result.status === 'accepted' && result.job_id) {
         const variants = result.variants?.join(' + ') || 'dark + light'
         toast.success(
-          `${result.job_ids?.length || 1} jobs created (${variants}) — generating for ${result.brands?.length || 5} brands`,
+          `${result.job_ids?.length || 1} jobs created (${variants}) — generating for ${result.brands?.length || 1} brand${(result.brands?.length || 1) > 1 ? 's' : ''}`,
           { duration: 5000 }
         )
         await Promise.all([fetchProposals(), fetchStatus()])
@@ -409,7 +412,7 @@ export function MaestroPage() {
         failed++
       }
     }
-    toast.success(`Accepted ${accepted} proposals${failed > 0 ? ` (${failed} failed)` : ''} — jobs creating for all brands`, { duration: 6000 })
+    toast.success(`Accepted ${accepted} proposals${failed > 0 ? ` (${failed} failed)` : ''} — 1 job per proposal`, { duration: 6000 })
     await Promise.all([fetchProposals(), fetchStatus()])
     setAcceptingId(null)
   }
@@ -494,7 +497,7 @@ export function MaestroPage() {
     try {
       const result = await post<any>('/api/maestro/trigger-burst')
       if (result.status === 'triggered') {
-        toast.success('Daily burst triggered — 6 reels per brand (3 dark + 3 light) generating now', { duration: 6000 })
+        toast.success('Daily burst triggered — 30 unique reels (6 per brand, each with its own content) generating now', { duration: 6000 })
         // Poll for updates
         const poll = setInterval(async () => {
           await Promise.all([fetchProposals(), fetchStatus()])
@@ -765,7 +768,7 @@ export function MaestroPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
             label="Proposals"
-            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${(maestroStatus?.daily_config?.proposals_per_agent ?? 3) * 2}`}
+            value={`${(stats.agents?.toby?.today ?? 0) + (stats.agents?.lexi?.today ?? 0)}/${maestroStatus?.daily_config?.total_proposals ?? 30}`}
             icon={Clock}
             color="purple"
           />
@@ -1042,6 +1045,20 @@ function ProposalCard({
           {p.content_type === 'post' ? '📄 Post' : '🎬 Reel'}
         </span>
 
+        {/* Brand badge */}
+        {p.brand && (
+          <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+            @the{p.brand}
+          </span>
+        )}
+
+        {/* Variant badge */}
+        {p.variant && (
+          <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${p.variant === 'dark' ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+            {p.variant}
+          </span>
+        )}
+
         {/* Title */}
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-900 truncate">{p.title}</h3>
@@ -1121,7 +1138,9 @@ function ProposalCard({
             <div>
               <div className="text-xs font-medium text-gray-500 mb-1">Caption</div>
               <p className="text-sm text-gray-600 bg-white rounded-lg p-3 border border-gray-100 whitespace-pre-wrap">
-                {p.caption.replace(/@brandhandle/gi, '@yourbrand')}
+                {p.brand
+                  ? p.caption.replace(/@brandhandle/gi, `@the${p.brand}`)
+                  : p.caption.replace(/@brandhandle/gi, '@yourbrand')}
               </p>
             </div>
           )}

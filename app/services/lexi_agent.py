@@ -36,6 +36,15 @@ from app.services.content_tracker import get_content_tracker, TOPIC_BUCKETS
 # ── Config ──
 MAX_PROPOSALS_PER_DAY = 15  # Shared with Toby — Maestro manages the split
 
+# Brand Instagram handles (for inserting real @handle into AI prompts)
+BRAND_HANDLES = {
+    "healthycollege": "@thehealthycollege",
+    "vitalitycollege": "@thevitalitycollege",
+    "longevitycollege": "@thelongevitycollege",
+    "holisticcollege": "@theholisticcollege",
+    "wellbeingcollege": "@thewellbeingcollege",
+}
+
 LEXI_STRATEGY_WEIGHTS = {
     "analyze": 0.30,       # 30% — find patterns in winners
     "refine": 0.40,        # 40% — optimise proven content
@@ -156,13 +165,14 @@ class LexiAgent:
     # MAIN: RUN LEXI
     # ──────────────────────────────────────────────────────────
 
-    def run(self, max_proposals: int = None, content_type: str = "reel") -> Dict:
+    def run(self, max_proposals: int = None, content_type: str = "reel", brand: str = None) -> Dict:
         """
         Main entry point: Lexi analyses data and generates proposals.
 
         Args:
             max_proposals: Max proposals this run
             content_type: "reel" or "post"
+            brand: Target brand for these proposals (e.g. "healthycollege")
 
         Returns summary dict.
         """
@@ -181,8 +191,9 @@ class LexiAgent:
             maestro_log("lexi", "Quota reached", f"Already made {today_count} proposals today", "😴", "action")
             return {"message": f"Quota reached ({today_count})", "proposals": []}
 
+        brand_label = f" for {brand}" if brand else ""
         ct_label = "📄 POST" if content_type == "post" else "🎬 REEL"
-        maestro_log("lexi", "Planning", f"{ct_label} — Today: {today_count}/{max_proposals}, room for {remaining}", "🎯", "detail")
+        maestro_log("lexi", "Planning", f"{ct_label}{brand_label} — Today: {today_count}/{max_proposals}, room for {remaining}", "🎯", "detail")
 
         intel = self._gather_intelligence(content_type=content_type)
         strategy_plan = self._plan_strategies(remaining, intel)
@@ -191,7 +202,7 @@ class LexiAgent:
         for strategy, count in strategy_plan.items():
             for _ in range(count):
                 try:
-                    proposal = self._generate_proposal(strategy, intel, content_type=content_type)
+                    proposal = self._generate_proposal(strategy, intel, content_type=content_type, brand=brand)
                     if proposal:
                         proposals.append(proposal)
                 except Exception as e:
@@ -346,30 +357,30 @@ class LexiAgent:
     # PROPOSAL GENERATION (ROUTER)
     # ──────────────────────────────────────────────────────────
 
-    def _generate_proposal(self, strategy: str, intel: Dict, content_type: str = "reel") -> Optional[TobyProposal]:
+    def _generate_proposal(self, strategy: str, intel: Dict, content_type: str = "reel", brand: str = None) -> Optional[TobyProposal]:
         """Route to the right strategy method."""
         if content_type == "post":
             if strategy == "refine":
-                return self._strategy_post_refine(intel)
+                return self._strategy_post_refine(intel, brand=brand)
             else:
-                return self._strategy_post_analyze(intel)
+                return self._strategy_post_analyze(intel, brand=brand)
         else:
             if strategy == "analyze":
-                return self._strategy_analyze(intel)
+                return self._strategy_analyze(intel, brand=brand)
             elif strategy == "refine":
-                return self._strategy_refine(intel)
+                return self._strategy_refine(intel, brand=brand)
             elif strategy == "systematic":
-                return self._strategy_systematic(intel)
+                return self._strategy_systematic(intel, brand=brand)
             elif strategy == "compound":
-                return self._strategy_compound(intel)
+                return self._strategy_compound(intel, brand=brand)
             else:
-                return self._strategy_analyze(intel)
+                return self._strategy_analyze(intel, brand=brand)
 
     # ══════════════════════════════════════════════════════════
     # REEL STRATEGIES
     # ══════════════════════════════════════════════════════════
 
-    def _strategy_analyze(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_analyze(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """ANALYZE: Find a pattern in top performers and replicate it."""
         from app.services.maestro import maestro_log
 
@@ -391,6 +402,9 @@ class LexiAgent:
         avoidance = ""
         if recent_titles:
             avoidance = "\n\nAVOID these recently used titles:\n" + "\n".join(f"- {t}" for t in recent_titles[:15])
+
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
 
         prompt = f"""Analyze our top-performing content and create a data-backed new reel.
 
@@ -414,20 +428,20 @@ OUTPUT FORMAT (JSON only):
     "title": "PATTERN-MATCHED TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow @brandhandle...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What pattern you identified in top performers and how this content replicates it."
 }}"""
 
-        return self._call_ai_and_save(prompt, strategy="analyze", topic=topic)
+        return self._call_ai_and_save(prompt, strategy="analyze", topic=topic, brand=brand)
 
-    def _strategy_refine(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_refine(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """REFINE: Take a top performer and improve exactly one element."""
         from app.services.maestro import maestro_log
 
         top = intel.get("top_performers", [])
         if not top:
             maestro_log("lexi", "Refine → Analyze", "No top performers, falling back to analyze", "🔄", "detail")
-            return self._strategy_analyze(intel)
+            return self._strategy_analyze(intel, brand=brand)
 
         source = random.choice(top[:5])
         source_title = source.get("title", "Unknown")
@@ -437,6 +451,9 @@ OUTPUT FORMAT (JSON only):
         source_topic = source.get("topic_bucket", "general")
 
         maestro_log("lexi", "Refine", f"Optimizing winner: '{source_title[:60]}' (score: {source_score})", "🔬", "detail")
+
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
 
         prompt = f"""This reel performed well. Create a refined version by improving exactly ONE element.
 
@@ -461,19 +478,19 @@ OUTPUT FORMAT (JSON only):
     "title": "REFINED TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow @brandhandle...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "Which ONE element you changed, why it needed improvement, and what you expect to happen."
 }}"""
 
         return self._call_ai_and_save(
-            prompt, strategy="refine", topic=source_topic,
+            prompt, strategy="refine", topic=source_topic, brand=brand,
             source_type="own_content",
             source_ig_media_id=source.get("ig_media_id"),
             source_title=source_title,
             source_performance_score=source_score,
         )
 
-    def _strategy_systematic(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_systematic(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """SYSTEMATIC: Design a structured content experiment."""
         from app.services.maestro import maestro_log
 
@@ -491,6 +508,9 @@ OUTPUT FORMAT (JSON only):
         test_var = random.choice(test_variables)
 
         maestro_log("lexi", "Systematic", f"Testing: {test_var.split(':')[0]} on topic '{topic}'", "🧪", "detail")
+
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
 
         prompt = f"""Design a content experiment by testing a specific variable.
 
@@ -512,13 +532,13 @@ OUTPUT FORMAT (JSON only):
     "title": "EXPERIMENTAL TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow @brandhandle...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "HYPOTHESIS: [what you expect]. VARIABLE TESTED: [what's different]. CONTROL: [what stayed the same]. EXPECTED OUTCOME: [prediction]."
 }}"""
 
-        return self._call_ai_and_save(prompt, strategy="systematic", topic=topic)
+        return self._call_ai_and_save(prompt, strategy="systematic", topic=topic, brand=brand)
 
-    def _strategy_compound(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_compound(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """COMPOUND: Extend a winning topic with a fresh episode."""
         from app.services.maestro import maestro_log
 
@@ -527,7 +547,7 @@ OUTPUT FORMAT (JSON only):
 
         if not top and not best_topics:
             maestro_log("lexi", "Compound → Analyze", "No winners to extend, falling back to analyze", "🔄", "detail")
-            return self._strategy_analyze(intel)
+            return self._strategy_analyze(intel, brand=brand)
 
         # Find the best topic to extend
         topic = random.choice(best_topics) if best_topics else "general"
@@ -541,6 +561,9 @@ OUTPUT FORMAT (JSON only):
                 examples_str += f"  - \"{t.get('title', 'N/A')}\" (score: {t.get('performance_score', 0)})\n"
 
         maestro_log("lexi", "Compound", f"Extending winning topic '{topic}' ({len(topic_examples)} prior wins)", "📈", "detail")
+
+        # Use actual brand handle if brand is assigned
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
 
         prompt = f"""This topic has been consistently successful. Create the next episode in the series.
 
@@ -562,12 +585,12 @@ OUTPUT FORMAT (JSON only):
     "title": "NEXT EPISODE TITLE IN ALL CAPS",
     "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
-    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow @brandhandle...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
+    "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "How this builds on previous wins in this topic, what's new and what's familiar."
 }}"""
 
         return self._call_ai_and_save(
-            prompt, strategy="compound", topic=topic,
+            prompt, strategy="compound", topic=topic, brand=brand,
             source_type="own_content",
             source_title=f"Series: {topic}",
         )
@@ -576,22 +599,23 @@ OUTPUT FORMAT (JSON only):
     # POST (CAROUSEL) STRATEGIES
     # ══════════════════════════════════════════════════════════
 
-    def _post_output_format(self) -> str:
+    def _post_output_format(self, brand: str = None) -> str:
         """Shared JSON output format for post strategies."""
-        return """OUTPUT FORMAT (JSON only):
-{
+        brand_handle = BRAND_HANDLES.get(brand, "@brandhandle") if brand else "@brandhandle"
+        return f"""OUTPUT FORMAT (JSON only):
+{{
     "title": "DATA-OPTIMIZED STATEMENT TITLE IN ALL CAPS",
     "slide_texts": [
         "Slide 2: Core scientific explanation paragraph (3-6 sentences).",
         "Slide 3: Deeper mechanism, practical context (3-6 sentences).",
-        "Slide 4: Actionable takeaways (3-6 sentences). End with: Follow @brandhandle to learn more about your health."
+        "Slide 4: Actionable takeaways (3-6 sentences). End with: Follow {brand_handle} to learn more about your health."
     ],
     "image_prompt": "Soft, minimal wellness aesthetic. 1080x1350 portrait. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\nPractical takeaway...\\n\\nSource:\\nAuthor(s). (Year). Title. Journal.\\nDOI: 10.xxxx/xxxxx\\n\\nDisclaimer: Educational purposes only...\\n\\n#health #wellness",
     "reasoning": "Data pattern this builds on. What evidence led to this choice."
-}"""
+}}"""
 
-    def _strategy_post_analyze(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_post_analyze(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """POST ANALYZE: Data-driven carousel post creation."""
         from app.services.maestro import maestro_log
 
@@ -639,11 +663,11 @@ Your task:
 
 REMEMBER: Do NOT mention age, gender, or demographics. Universal appeal.
 
-{self._post_output_format()}"""
+{self._post_output_format(brand=brand)}"""
 
-        return self._call_ai_and_save(prompt, strategy="analyze", topic=topic, content_type="post")
+        return self._call_ai_and_save(prompt, strategy="analyze", topic=topic, content_type="post", brand=brand)
 
-    def _strategy_post_refine(self, intel: Dict) -> Optional[TobyProposal]:
+    def _strategy_post_refine(self, intel: Dict, brand: str = None) -> Optional[TobyProposal]:
         """POST REFINE: Improve a winning topic with carousel variation."""
         from app.services.maestro import maestro_log
 
@@ -667,10 +691,10 @@ Your task:
 
 REMEMBER: Do NOT mention age, gender, or demographics.
 
-{self._post_output_format()}"""
+{self._post_output_format(brand=brand)}"""
 
         return self._call_ai_and_save(
-            prompt, strategy="refine", topic=topic, content_type="post",
+            prompt, strategy="refine", topic=topic, content_type="post", brand=brand,
             source_type="own_content",
             source_title=f"Topic leader: {topic}",
         )
@@ -685,6 +709,7 @@ REMEMBER: Do NOT mention age, gender, or demographics.
         strategy: str,
         topic: str = None,
         content_type: str = "reel",
+        brand: str = None,
         source_type: str = None,
         source_ig_media_id: str = None,
         source_title: str = None,
@@ -771,6 +796,8 @@ REMEMBER: Do NOT mention age, gender, or demographics.
                     status="pending",
                     agent_name="lexi",  # KEY: identifies this as Lexi's proposal
                     content_type=content_type,
+                    brand=brand,
+                    variant="light",  # Lexi = light mode
                     strategy=strategy,
                     reasoning=reasoning,
                     title=title,
@@ -791,9 +818,9 @@ REMEMBER: Do NOT mention age, gender, or demographics.
                 db.refresh(proposal)
 
                 maestro_log("lexi", "Saved to DB",
-                            f"{type_label} proposal {proposal_id} — strategy={strategy}, topic={topic_bucket}, quality={quality.score}",
+                            f"{type_label} proposal {proposal_id} — brand={brand or 'unassigned'}, strategy={strategy}, topic={topic_bucket}, quality={quality.score}",
                             "💾", "detail")
-                print(f"📊 Lexi proposed [{strategy}/{content_type}] → '{title[:60]}...' ({proposal_id})", flush=True)
+                print(f"📊 Lexi proposed [{strategy}/{content_type}] → '{title[:60]}...' ({proposal_id}) brand={brand or 'unassigned'}", flush=True)
 
                 if source_type in ("trending_hashtag", "competitor") and source_ig_media_id:
                     try:

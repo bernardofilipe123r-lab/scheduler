@@ -75,6 +75,29 @@ def run_migrations():
                 CREATE INDEX ix_toby_proposals_agent ON toby_proposals(agent_name);
             """
         },
+        # Add brand column to toby_proposals — each proposal is for 1 specific brand
+        {
+            "name": "Add brand column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='brand'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN brand VARCHAR(50);
+                CREATE INDEX ix_toby_proposals_brand ON toby_proposals(brand);
+            """
+        },
+        # Add variant column to toby_proposals — dark or light
+        {
+            "name": "Add variant column to toby_proposals",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='toby_proposals' AND column_name='variant'
+            """,
+            "migration_sql": """
+                ALTER TABLE toby_proposals ADD COLUMN variant VARCHAR(10);
+            """
+        },
     ]
     
     with engine.connect() as conn:

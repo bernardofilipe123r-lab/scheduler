@@ -198,7 +198,7 @@ async def trigger_burst(background_tasks: BackgroundTasks):
 
     return {
         "status": "triggered",
-        "message": f"Daily burst started in background — 3 Toby + 3 Lexi reels, each in dark + light variants.{f' Also scheduled {ready_scheduled} ready reels.' if ready_scheduled > 0 else ''}",
+        "message": f"Daily burst started in background — 30 unique proposals (3 Toby dark + 3 Lexi light per brand × 5 brands).{f' Also scheduled {ready_scheduled} ready reels.' if ready_scheduled > 0 else ''}",
         "ready_scheduled": ready_scheduled,
     }
 
@@ -286,14 +286,15 @@ async def get_proposal(proposal_id: str):
 @router.post("/proposals/{proposal_id}/accept")
 async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     """
-    Accept a proposal — creates TWO generation jobs (dark + light) for ALL brands.
+    Accept a proposal — creates 1 generation job for the proposal's assigned brand.
 
     Flow:
       1. Mark proposal as accepted
-      2. Create 2 GenerationJobs: dark variant + light variant (all 5 brands each)
-      3. Fire background processing for both
-      4. Auto-schedule on completion
-      5. Return job_ids
+      2. Read brand + variant from proposal (assigned at generation time)
+      3. Create 1 GenerationJob for that specific brand
+      4. Fire background processing
+      5. Auto-schedule on completion
+      6. Return job_id
     """
     from app.db_connection import SessionLocal, get_db_session
     from app.models import TobyProposal
@@ -329,6 +330,8 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
         content_lines = proposal.content_lines or []
         image_prompt = proposal.image_prompt
         content_type = proposal.content_type
+        proposal_brand = proposal.brand
+        proposal_variant = proposal.variant
 
         # Record in content tracker
         try:
@@ -345,9 +348,22 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     finally:
         db.close()
 
-    # For posts, create only one job (post variant)
-    # For reels, create TWO jobs: dark + light
-    variants = ["post"] if is_post else ["dark", "light"]
+    # Determine brand and variant from proposal
+    if proposal_brand:
+        # New flow: proposal already has brand assigned
+        brands = [proposal_brand]
+    else:
+        # Legacy fallback: no brand on proposal → all brands
+        brands = ALL_BRANDS
+
+    if is_post:
+        variants = ["post"]
+    elif proposal_variant:
+        variants = [proposal_variant]
+    else:
+        # Legacy fallback: agent-based variant
+        variants = ["dark", "light"]
+
     job_ids = []
 
     for variant in variants:
@@ -357,7 +373,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
                 user_id=proposal_id,
                 title=title,
                 content_lines=content_lines,
-                brands=ALL_BRANDS,
+                brands=brands,
                 variant=variant,
                 ai_prompt=image_prompt,
                 cta_type="follow_tips",
@@ -409,7 +425,6 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     for jid, var in zip(job_ids, variants):
         background_tasks.add_task(_process_job, jid, var)
 
-    variants_str = " + ".join(variants)
     return {
         "status": "accepted",
         "proposal_id": proposal_id,
@@ -418,8 +433,8 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
         "title": title,
         "content_type": content_type,
         "variants": variants,
-        "brands": ALL_BRANDS,
-        "message": f"{len(job_ids)} jobs created ({variants_str}) — generating for {len(ALL_BRANDS)} brands each",
+        "brands": brands,
+        "message": f"{len(job_ids)} job(s) created for {', '.join(brands)} ({', '.join(variants)})",
     }
 
 
