@@ -295,7 +295,7 @@ export function CarouselTextSlide({
           {saveImg && (
             <KonvaImage
               image={saveImg}
-              x={CANVAS_WIDTH - PAD_X - 130}
+              x={CANVAS_WIDTH - PAD_X - 140}
               y={-1}
               width={ICON_SIZE - 2}
               height={ICON_SIZE - 2}
