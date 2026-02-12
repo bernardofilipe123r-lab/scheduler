@@ -19,6 +19,7 @@ import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus } from '@/features/jobs'
+import { useQueryClient } from '@tanstack/react-query'
 import { BrandBadge } from '@/features/brands'
 import { StatusBadge, FullPageLoader, Modal } from '@/shared/components'
 import type { Job, Variant, BrandName } from '@/shared/types'
@@ -31,6 +32,7 @@ export function HistoryPage() {
   const deleteJob = useDeleteJob()
   const regenerateJob = useRegenerateJob()
   const deleteByStatus = useDeleteJobsByStatus()
+  const queryClient = useQueryClient()
   
   const jobsArray = Array.isArray(jobs) ? jobs : []
   
@@ -590,8 +592,18 @@ export function HistoryPage() {
                   if (!confirm(`Delete all ${sectionJobs.length} ${label.toLowerCase()}? This cannot be undone.`)) return
                   setIsDeletingSection(true)
                   try {
-                    await Promise.all(sectionJobs.map(j => deleteJob.mutateAsync(j.id)))
-                    toast.success(`Deleted ${sectionJobs.length} ${label.toLowerCase()}`)
+                    // Delete sequentially to avoid concurrent mutation issues
+                    let deleted = 0
+                    for (const j of sectionJobs) {
+                      try {
+                        await fetch(`/api/jobs/${j.id}`, { method: 'DELETE' })
+                        deleted++
+                      } catch { /* continue */ }
+                    }
+                    // Invalidate queries once at the end
+                    queryClient.invalidateQueries({ queryKey: ['jobs'] })
+                    queryClient.invalidateQueries({ queryKey: ['scheduled'] })
+                    toast.success(`Deleted ${deleted} ${label.toLowerCase()}`)
                   } catch {
                     toast.error('Failed to delete some jobs')
                   } finally {
