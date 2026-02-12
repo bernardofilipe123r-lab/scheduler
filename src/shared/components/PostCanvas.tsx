@@ -136,33 +136,157 @@ export function getBrandAbbreviation(brandId: string): string {
   return (parts[0]?.charAt(0)?.toUpperCase() || 'X') + 'CO'
 }
 
-// ─── Helper: calculate title height ─────────────────────────────────
+// ─── Smart text-balancing engine ─────────────────────────────────────
+
+const TITLE_FONT_FAMILY = 'Anton'
+const MAX_TITLE_FONT_SIZE = 100
+const MIN_TITLE_FONT_SIZE = 40
+
+/** Singleton offscreen canvas for fast text measurement. */
+let _measureCtx: CanvasRenderingContext2D | null = null
+function getMeasureCtx(): CanvasRenderingContext2D {
+  if (!_measureCtx) {
+    const c = document.createElement('canvas')
+    _measureCtx = c.getContext('2d')!
+  }
+  return _measureCtx
+}
+
+/** Measure pixel width of text at a given font size using Anton font. */
+function measureTitleWidth(text: string, fontSize: number): number {
+  const ctx = getMeasureCtx()
+  ctx.font = `${fontSize}px ${TITLE_FONT_FAMILY}`
+  return ctx.measureText(text).width
+}
+
+export interface BalancedTitle {
+  lines: string[]
+  fontSize: number
+}
+
+/**
+ * Balance title text across 1–3 lines with optimal font size.
+ *
+ * Strategy:
+ * 1. Try fitting in 1 line — maximize font size up to MAX.
+ * 2. Try 2 lines — find the split point that minimises width difference.
+ * 3. Try 3 lines — find the split points that minimise max width difference.
+ * 4. Pick the best: fewest lines first, then largest font, then best balance.
+ */
+export function balanceTitleText(
+  title: string,
+  maxWidth: number,
+  baseFontSize: number,
+): BalancedTitle {
+  const text = title.toUpperCase().trim()
+  const words = text.split(/\s+/).filter(Boolean)
+
+  if (words.length === 0) return { lines: [''], fontSize: baseFontSize }
+
+  const fullText = words.join(' ')
+
+  // ── 1 LINE: find max font size where full text fits ────────────
+  if (words.length === 1 || measureTitleWidth(fullText, MIN_TITLE_FONT_SIZE) <= maxWidth) {
+    // Binary-search for the largest font size that fits in 1 line
+    let lo = MIN_TITLE_FONT_SIZE, hi = MAX_TITLE_FONT_SIZE, best1 = MIN_TITLE_FONT_SIZE
+    while (lo <= hi) {
+      const mid = Math.round((lo + hi) / 2)
+      if (measureTitleWidth(fullText, mid) <= maxWidth) {
+        best1 = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
+    }
+    if (best1 >= baseFontSize * 0.8) {
+      return { lines: [fullText], fontSize: best1 }
+    }
+  }
+
+  // ── Helper: best N-line split at a given font size ─────────────
+  function best2Split(fs: number) {
+    let bestLines: string[] | null = null
+    let bestDiff = Infinity
+    for (let i = 1; i < words.length; i++) {
+      const l1 = words.slice(0, i).join(' ')
+      const l2 = words.slice(i).join(' ')
+      const w1 = measureTitleWidth(l1, fs)
+      const w2 = measureTitleWidth(l2, fs)
+      if (w1 > maxWidth || w2 > maxWidth) continue
+      const diff = Math.abs(w1 - w2)
+      if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2] }
+    }
+    return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
+  }
+
+  function best3Split(fs: number) {
+    let bestLines: string[] | null = null
+    let bestDiff = Infinity
+    for (let i = 1; i < words.length - 1; i++) {
+      for (let j = i + 1; j < words.length; j++) {
+        const l1 = words.slice(0, i).join(' ')
+        const l2 = words.slice(i, j).join(' ')
+        const l3 = words.slice(j).join(' ')
+        const w1 = measureTitleWidth(l1, fs)
+        const w2 = measureTitleWidth(l2, fs)
+        const w3 = measureTitleWidth(l3, fs)
+        if (w1 > maxWidth || w2 > maxWidth || w3 > maxWidth) continue
+        const diff = Math.max(Math.abs(w1 - w2), Math.abs(w2 - w3), Math.abs(w1 - w3))
+        if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3] }
+      }
+    }
+    return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
+  }
+
+  // ── 2 LINES: scan font sizes from base upward then downward ────
+  if (words.length >= 2) {
+    // Try upward from baseFontSize (bigger is better if balanced)
+    for (let fs = MAX_TITLE_FONT_SIZE; fs >= baseFontSize; fs -= 2) {
+      const r = best2Split(fs)
+      if (r && r.imbalance <= 0.35) return { lines: r.lines, fontSize: fs }
+    }
+    // Try at baseFontSize
+    const atBase = best2Split(baseFontSize)
+    if (atBase && atBase.imbalance <= 0.45) {
+      return { lines: atBase.lines, fontSize: baseFontSize }
+    }
+    // Try downward
+    for (let fs = baseFontSize - 2; fs >= MIN_TITLE_FONT_SIZE; fs -= 2) {
+      const r = best2Split(fs)
+      if (r && r.imbalance <= 0.45) return { lines: r.lines, fontSize: fs }
+    }
+  }
+
+  // ── 3 LINES: scan font sizes ───────────────────────────────────
+  if (words.length >= 3) {
+    for (let fs = MAX_TITLE_FONT_SIZE; fs >= baseFontSize; fs -= 2) {
+      const r = best3Split(fs)
+      if (r && r.imbalance <= 0.35) return { lines: r.lines, fontSize: fs }
+    }
+    for (let fs = baseFontSize; fs >= MIN_TITLE_FONT_SIZE; fs -= 2) {
+      const r = best3Split(fs)
+      if (r && r.imbalance <= 0.50) return { lines: r.lines, fontSize: fs }
+    }
+  }
+
+  // ── Fallback: best effort at minimum font size ─────────────────
+  const fb3 = best3Split(MIN_TITLE_FONT_SIZE)
+  if (fb3) return { lines: fb3.lines, fontSize: MIN_TITLE_FONT_SIZE }
+  const fb2 = best2Split(MIN_TITLE_FONT_SIZE)
+  if (fb2) return { lines: fb2.lines, fontSize: MIN_TITLE_FONT_SIZE }
+  return { lines: [fullText], fontSize: MIN_TITLE_FONT_SIZE }
+}
+
+// ─── Helper: calculate title height (uses balanced text) ────────────
 export function calculateTitleHeight(
   text: string,
   fontSize: number,
   paddingX: number
 ): number {
-  const textWidth = CANVAS_WIDTH - paddingX * 2
-  const avgCharWidth = fontSize * 0.48
-  const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
-
-  const upperText = text.toUpperCase()
-  const words = upperText.split(' ')
-  let lines = 1
-  let currentLine = ''
-
-  words.forEach((word) => {
-    const testLine = currentLine ? `${currentLine} ${word}` : word
-    if (testLine.length > maxCharsPerLine && currentLine) {
-      lines++
-      currentLine = word
-    } else {
-      currentLine = testLine
-    }
-  })
-
-  const lineHeight = fontSize * 1.1
-  return (lines - 1) * lineHeight + fontSize
+  const maxWidth = CANVAS_WIDTH - paddingX * 2
+  const balanced = balanceTitleText(text, maxWidth, fontSize)
+  const lineHeight = balanced.fontSize * 1.1
+  return (balanced.lines.length - 1) * lineHeight + balanced.fontSize
 }
 
 // ─── Load / save general settings ────────────────────────────────────
@@ -288,46 +412,28 @@ export function LogoWithLines({
   )
 }
 
-/** Title with word-wrap. Always rendered UPPERCASE. */
+/** Title with balanced line-breaks. Always rendered UPPERCASE. */
 export function TitleLayer({
-  config,
+  balanced,
   x,
   y,
   paddingX,
 }: {
-  config: TitleConfig
+  balanced: BalancedTitle
   x: number
   y: number
   paddingX: number
 }) {
   const textWidth = CANVAS_WIDTH - paddingX * 2
-  const upperText = config.text.toUpperCase()
-  const words = upperText.split(' ')
-  const lines: string[] = []
-  let currentLine = ''
-  const avgCharWidth = config.fontSize * 0.48
-  const maxCharsPerLine = Math.floor(textWidth / avgCharWidth)
-
-  words.forEach((word) => {
-    const testLine = currentLine ? `${currentLine} ${word}` : word
-    if (testLine.length > maxCharsPerLine && currentLine) {
-      lines.push(currentLine)
-      currentLine = word
-    } else {
-      currentLine = testLine
-    }
-  })
-  if (currentLine) lines.push(currentLine)
-
-  const lineHeight = config.fontSize * 1.1
+  const lineHeight = balanced.fontSize * 1.1
 
   return (
     <Group x={x} y={y}>
-      {lines.map((line, i) => (
+      {balanced.lines.map((line, i) => (
         <Text
           key={i}
           text={line}
-          fontSize={config.fontSize}
+          fontSize={balanced.fontSize}
           fontFamily="Anton"
           fontStyle="normal"
           fill="white"
@@ -383,11 +489,16 @@ export function PostCanvas({
   stageRef,
 }: PostCanvasProps) {
   const gl = settings.layout
-  const th = calculateTitleHeight(
+  const maxWidth = CANVAS_WIDTH - gl.titlePaddingX * 2
+
+  // Compute balanced title once — shared by height calc and rendering
+  const balanced = balanceTitleText(
     title || 'PLACEHOLDER',
+    maxWidth,
     settings.fontSize,
-    gl.titlePaddingX
   )
+  const th = (balanced.lines.length - 1) * (balanced.fontSize * 1.1) + balanced.fontSize
+
   const rcy = CANVAS_HEIGHT - gl.readCaptionBottom - 24
   const ty = rcy - gl.titleGap - th
   const ly = ty - gl.logoGap - 40
@@ -421,7 +532,7 @@ export function PostCanvas({
           brandName={brand}
         />
         <TitleLayer
-          config={{ text: title, fontSize: settings.fontSize }}
+          balanced={balanced}
           x={gl.titlePaddingX}
           y={ty}
           paddingX={gl.titlePaddingX}
