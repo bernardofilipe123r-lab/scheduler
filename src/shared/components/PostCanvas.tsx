@@ -139,7 +139,6 @@ export function getBrandAbbreviation(brandId: string): string {
 // ─── Smart text-balancing engine ─────────────────────────────────────
 
 const TITLE_FONT_FAMILY = 'Anton'
-const MAX_TITLE_FONT_SIZE = 100
 const MIN_TITLE_FONT_SIZE = 40
 
 /** Singleton offscreen canvas for fast text measurement. */
@@ -167,11 +166,10 @@ export interface BalancedTitle {
 /**
  * Balance title text across 1–3 lines with optimal font size.
  *
- * Strategy:
- * 1. Try fitting in 1 line — maximize font size up to MAX.
- * 2. Try 2 lines — find the split point that minimises width difference.
- * 3. Try 3 lines — find the split points that minimise max width difference.
- * 4. Pick the best: fewest lines first, then largest font, then best balance.
+ * Priority: 1 line → 3 lines → 2 lines (prefer more lines for visual balance).
+ * Font size: baseFontSize is treated as the ceiling — the algorithm only
+ * reduces from there if text doesn't fit. Manual per-brand font size edits
+ * are always respected.
  */
 export function balanceTitleText(
   title: string,
@@ -185,21 +183,11 @@ export function balanceTitleText(
 
   const fullText = words.join(' ')
 
-  // ── 1 LINE: find max font size where full text fits ────────────
-  if (words.length === 1 || measureTitleWidth(fullText, MIN_TITLE_FONT_SIZE) <= maxWidth) {
-    // Binary-search for the largest font size that fits in 1 line
-    let lo = MIN_TITLE_FONT_SIZE, hi = MAX_TITLE_FONT_SIZE, best1 = MIN_TITLE_FONT_SIZE
-    while (lo <= hi) {
-      const mid = Math.round((lo + hi) / 2)
-      if (measureTitleWidth(fullText, mid) <= maxWidth) {
-        best1 = mid
-        lo = mid + 1
-      } else {
-        hi = mid - 1
-      }
-    }
-    if (best1 >= baseFontSize * 0.8) {
-      return { lines: [fullText], fontSize: best1 }
+  // ── 1 LINE: use baseFontSize if it fits, otherwise reduce ──────
+  if (words.length === 1 || measureTitleWidth(fullText, baseFontSize) <= maxWidth) {
+    // Text fits in 1 line at the user's font size — done
+    if (measureTitleWidth(fullText, baseFontSize) <= maxWidth) {
+      return { lines: [fullText], fontSize: baseFontSize }
     }
   }
 
@@ -238,34 +226,25 @@ export function balanceTitleText(
     return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
   }
 
-  // ── 2 LINES: scan font sizes from base upward then downward ────
-  if (words.length >= 2) {
-    // Try upward from baseFontSize (bigger is better if balanced)
-    for (let fs = MAX_TITLE_FONT_SIZE; fs >= baseFontSize; fs -= 2) {
-      const r = best2Split(fs)
-      if (r && r.imbalance <= 0.35) return { lines: r.lines, fontSize: fs }
-    }
-    // Try at baseFontSize
-    const atBase = best2Split(baseFontSize)
-    if (atBase && atBase.imbalance <= 0.45) {
-      return { lines: atBase.lines, fontSize: baseFontSize }
-    }
-    // Try downward
+  // ── 3 LINES FIRST (preferred): scan from baseFontSize downward ─
+  if (words.length >= 3) {
+    const r3 = best3Split(baseFontSize)
+    if (r3 && r3.imbalance <= 0.40) return { lines: r3.lines, fontSize: baseFontSize }
+    // Reduce font size if needed
     for (let fs = baseFontSize - 2; fs >= MIN_TITLE_FONT_SIZE; fs -= 2) {
-      const r = best2Split(fs)
+      const r = best3Split(fs)
       if (r && r.imbalance <= 0.45) return { lines: r.lines, fontSize: fs }
     }
   }
 
-  // ── 3 LINES: scan font sizes ───────────────────────────────────
-  if (words.length >= 3) {
-    for (let fs = MAX_TITLE_FONT_SIZE; fs >= baseFontSize; fs -= 2) {
-      const r = best3Split(fs)
-      if (r && r.imbalance <= 0.35) return { lines: r.lines, fontSize: fs }
-    }
-    for (let fs = baseFontSize; fs >= MIN_TITLE_FONT_SIZE; fs -= 2) {
-      const r = best3Split(fs)
-      if (r && r.imbalance <= 0.50) return { lines: r.lines, fontSize: fs }
+  // ── 2 LINES (fallback): scan from baseFontSize downward ────────
+  if (words.length >= 2) {
+    const r2 = best2Split(baseFontSize)
+    if (r2 && r2.imbalance <= 0.40) return { lines: r2.lines, fontSize: baseFontSize }
+    // Reduce font size if needed
+    for (let fs = baseFontSize - 2; fs >= MIN_TITLE_FONT_SIZE; fs -= 2) {
+      const r = best2Split(fs)
+      if (r && r.imbalance <= 0.45) return { lines: r.lines, fontSize: fs }
     }
   }
 
