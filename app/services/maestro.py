@@ -2136,10 +2136,11 @@ def auto_schedule_job(job_id: str):
                 # Posts only need reel_id + thumbnail_path (no video)
                 if not reel_id:
                     continue
-                # Verify thumbnail exists
+                # Verify thumbnail exists (strip query string from URL-style paths)
                 from pathlib import Path as _Path
                 if thumbnail_path:
-                    thumb_abs = _Path(thumbnail_path.lstrip('/'))
+                    clean_thumb = thumbnail_path.split('?')[0]
+                    thumb_abs = _Path(clean_thumb.lstrip('/'))
                     if not thumb_abs.exists():
                         print(f"[AUTO-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
                         continue
@@ -2257,7 +2258,8 @@ def schedule_all_ready_reels() -> int:
                         continue
                     if thumbnail_path:
                         from pathlib import Path as _Path
-                        thumb_abs = _Path(thumbnail_path.lstrip('/'))
+                        clean_thumb = thumbnail_path.split('?')[0]
+                        thumb_abs = _Path(clean_thumb.lstrip('/'))
                         if not thumb_abs.exists():
                             print(f"[READY-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
                             continue

@@ -538,7 +538,8 @@ class JobManager:
             self.update_brand_output(job_id, brand, {
                 "status": "completed",
                 "reel_id": reel_id,
-                "thumbnail_path": f"/output/posts/{reel_id}_background.png?t={cache_bust}",
+                "thumbnail_path": f"/output/posts/{reel_id}_background.png",
+                "thumbnail_url": f"/output/posts/{reel_id}_background.png?t={cache_bust}",
                 "regenerated_at": datetime.utcnow().isoformat(),
             })
 
