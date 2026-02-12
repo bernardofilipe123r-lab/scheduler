@@ -103,7 +103,7 @@ Each reel consists of 4 components that you must generate:
 
 2) CONTENT LINES — 6-8 numbered text slides shown over the background image.
    Each line follows the format: "Topic/claim — Supporting fact or benefit"
-   The LAST line (line 7 or 8) is ALWAYS a CTA: "If you want to learn more about your health, follow this page!"
+   Do NOT include any CTA (call-to-action) line — the CTA is added automatically by the system.
    Example content_lines:
    [
      "Skipping breakfast - Triggers cellular cleanup mode",
@@ -112,8 +112,7 @@ Each reel consists of 4 components that you must generate:
      "Spicy food daily — Ignites thermogenesis for hours",
      "Standing after eating - Doubles calorie burn rate",
      "Sleeping in cold room - Boosts metabolism overnight",
-     "Cold showers - Activates brown fat instantly",
-     "If you want to learn more about your health, follow this page!"
+     "Cold showers - Activates brown fat instantly"
    ]
 
 3) IMAGE PROMPT — AI-generated background image.
@@ -536,7 +535,7 @@ Apply these learnings — double down on what works, avoid what doesn't."""
         titles_block = "\n".join(f"  - {t}" for t in recent_titles[:20]) if recent_titles else "  (no recent titles)"
 
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
-        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ...],'
 
         return f"""Generate a fresh {content_format} about: {topic}
 Topic context: {topic_desc}
@@ -565,7 +564,7 @@ Respond with a JSON object:
         """Build an iterate/refine strategy prompt."""
         handle = self.brand_handles.get(brand, "@brandhandle")
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
-        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ...],'
 
         # Pick an underperformer to improve
         underperformers = intel.get("underperformers", [])
@@ -604,7 +603,7 @@ Respond with a JSON object:
         """Build a double-down/systematic/compound strategy prompt."""
         handle = self.brand_handles.get(brand, "@brandhandle")
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
-        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ...],'
 
         # Pick a top performer to amplify
         top_performers = intel.get("top_performers", [])
@@ -642,7 +641,7 @@ Respond with a JSON object:
         """Build a trending strategy prompt."""
         handle = self.brand_handles.get(brand, "@brandhandle")
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
-        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ...],'
 
         trending = intel.get("trending", [])
         if trending:

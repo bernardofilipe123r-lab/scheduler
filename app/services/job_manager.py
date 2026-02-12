@@ -19,6 +19,32 @@ from app.core.config import BrandType, get_brand_config
 # Per-brand generation timeout (in seconds). Default: 10 minutes.
 BRAND_GENERATION_TIMEOUT = int(os.getenv("BRAND_GENERATION_TIMEOUT_SECONDS", "600"))
 
+# CTA patterns that the AI sometimes generates despite being told not to.
+# These get stripped from content_lines since the real CTA is appended by image_generator.
+import re
+_CTA_PATTERNS = [
+    re.compile(r'follow.*page', re.IGNORECASE),
+    re.compile(r'follow.*us', re.IGNORECASE),
+    re.compile(r'follow.*for.*part', re.IGNORECASE),
+    re.compile(r'follow.*for.*more', re.IGNORECASE),
+    re.compile(r'follow.*our', re.IGNORECASE),
+    re.compile(r'comment.*"', re.IGNORECASE),
+    re.compile(r'comment.*lean', re.IGNORECASE),
+    re.compile(r'comment.*plan', re.IGNORECASE),
+    re.compile(r'if you want to.*(follow|improve|learn)', re.IGNORECASE),
+    re.compile(r'stay tuned.*follow', re.IGNORECASE),
+]
+
+def _strip_cta_lines(lines: List[str]) -> List[str]:
+    """Remove any CTA-like lines that the AI added despite prompt instructions."""
+    cleaned = []
+    for line in lines:
+        if any(p.search(line) for p in _CTA_PATTERNS):
+            print(f"   ⚠️ Stripped AI-generated CTA from content_lines: {line[:60]}...", flush=True)
+            continue
+        cleaned.append(line)
+    return cleaned
+
 
 def generate_job_id() -> str:
     """Generate a short readable job ID like GEN-001234."""
@@ -236,6 +262,10 @@ class JobManager:
         # Use provided values or fall back to job's stored values
         use_title = title if title is not None else job.title
         use_lines = content_lines if content_lines is not None else job.content_lines
+        
+        # Strip any CTA lines the AI may have included (real CTA added by image_generator)
+        if use_lines and job.variant != 'post':
+            use_lines = _strip_cta_lines(use_lines)
         
         # Only run differentiation if:
         # 1. No pre-generated content was passed

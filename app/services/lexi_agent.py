@@ -88,7 +88,7 @@ OUR REEL TEMPLATE (fixed format, text-only overlays on AI-generated background):
 
 2) CONTENT LINES — 6-8 numbered text slides.
    Format: "Topic/claim - Supporting fact or benefit"
-   LAST line is ALWAYS a CTA: "If you want to learn more about your health, follow this page!"
+   Do NOT include any CTA (call-to-action) line — the CTA is added automatically by the system.
 
 3) IMAGE PROMPT — Soft, minimal, calming wellness aesthetic. Main subject CENTERED in UPPER area.
    Must end with: "No text, no letters, no numbers, no symbols, no logos."
@@ -446,7 +446,7 @@ REMEMBER: Do NOT mention age, gender, or demographics in any content.
 OUTPUT FORMAT (JSON only):
 {{
     "title": "PATTERN-MATCHED TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What pattern you identified in top performers and how this content replicates it."
@@ -496,7 +496,7 @@ Rules:
 OUTPUT FORMAT (JSON only):
 {{
     "title": "REFINED TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "Which ONE element you changed, why it needed improvement, and what you expect to happen."
@@ -550,7 +550,7 @@ Your task:
 OUTPUT FORMAT (JSON only):
 {{
     "title": "EXPERIMENTAL TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "HYPOTHESIS: [what you expect]. VARIABLE TESTED: [what's different]. CONTROL: [what stayed the same]. EXPECTED OUTCOME: [prediction]."
@@ -603,7 +603,7 @@ Your task:
 OUTPUT FORMAT (JSON only):
 {{
     "title": "NEXT EPISODE TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "How this builds on previous wins in this topic, what's new and what's familiar."

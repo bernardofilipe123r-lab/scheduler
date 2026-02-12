@@ -86,7 +86,7 @@ Each reel consists of 4 components that you must generate:
 
 2) CONTENT LINES — 6-8 numbered text slides shown over the background image.
    Each line follows the format: "Topic/claim — Supporting fact or benefit"
-   The LAST line (line 7 or 8) is ALWAYS a CTA: "If you want to learn more about your health, follow this page!"
+   Do NOT include any CTA (call-to-action) line — the CTA is added automatically by the system.
    Example content_lines:
    [
      "Skipping breakfast - Triggers cellular cleanup mode",
@@ -95,8 +95,7 @@ Each reel consists of 4 components that you must generate:
      "Spicy food daily — Ignites thermogenesis for hours",
      "Standing after eating - Doubles calorie burn rate",
      "Sleeping in cold room - Boosts metabolism overnight",
-     "Cold showers - Activates brown fat instantly",
-     "If you want to learn more about your health, follow this page!"
+     "Cold showers - Activates brown fat instantly"
    ]
 
 3) IMAGE PROMPT — AI-generated background image.
@@ -533,7 +532,7 @@ Topic bucket: {topic}
 Your task:
 1. Come up with a compelling, science-backed health claim or insight
 2. Create an ALL CAPS title that stops scrolling
-3. Create 6-8 content lines in "Topic/claim - Supporting fact" format (last line = CTA)
+3. Create 6-8 content lines in "Topic/claim - Supporting fact" format (no CTA — added by system)
 4. Write a cinematic image prompt for the background
 5. Write a full Instagram caption (science-backed, with CTA blocks and hashtags)
 6. Explain WHY you chose this specific topic and angle
@@ -544,7 +543,7 @@ Let the topic naturally attract the right audience.
 OUTPUT FORMAT (JSON only):
 {{
     "title": "SCROLL-STOPPING TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit/explanation", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit/explanation", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph expanding on the title...\\n\\nScience explanation paragraph...\\n\\n👉🏼 Follow {brand_handle} for daily content on health...\\n\\n🩵 This post is designed to be saved...\\n\\n💬 If you found this helpful...\\n\\n🌱 Content provided for educational purposes...\\n\\n#health #wellness #naturalhealin",
     "reasoning": "2-3 sentences explaining why you chose this topic and angle."
@@ -599,7 +598,7 @@ REMEMBER: Do NOT mention age, gender, or demographics anywhere in the content.
 OUTPUT FORMAT (JSON only):
 {{
     "title": "IMPROVED SCROLL-STOPPING TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle} for daily content...\\n\\n🩵 Save and share this...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What went wrong with the original, what you changed and why."
@@ -664,7 +663,7 @@ Rules:
 OUTPUT FORMAT (JSON only):
 {{
     "title": "NEW VARIATION TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What made the original successful, what you kept and changed."
@@ -725,7 +724,7 @@ Rules:
 OUTPUT FORMAT (JSON only):
 {{
     "title": "OUR ADAPTED TITLE IN ALL CAPS",
-    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit", "If you want to learn more about your health, follow this page!"],
+    "content_lines": ["Fact 1 - Benefit", "Fact 2 - Benefit", "Fact 3 - Benefit", "Fact 4 - Benefit", "Fact 5 - Benefit", "Fact 6 - Benefit"],
     "image_prompt": "Soft, minimal wellness aesthetic. Subject centered upper area. No text, no letters, no numbers, no symbols, no logos.",
     "caption": "Hook paragraph...\\n\\nScience explanation...\\n\\n👉🏼 Follow {brand_handle}...\\n\\n🩵 Save and share...\\n\\n💬 Follow for more...\\n\\n🌱 Educational purposes...\\n\\n#hashtags",
     "reasoning": "What makes the trending content viral, how you adapted it."
