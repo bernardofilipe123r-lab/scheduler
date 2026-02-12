@@ -235,37 +235,59 @@ export function calculateTitleHeight(
 }
 
 /**
- * Find the LARGEST font size (≤ startSize) that fits text in ≤ maxLines.
- * Uses the same character-count estimation as balanceTitleText.
- * Returns startSize unchanged if it already fits.
+ * Count how many lines `text` needs at `fontSize` using the char-count estimation.
+ */
+function countLines(text: string, maxWidth: number, fontSize: number): number {
+  const avgCharWidth = fontSize * 0.48
+  const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth)
+  const upperText = (text || '').toUpperCase().trim()
+  const words = upperText.split(/\s+/).filter(Boolean)
+  let lineCount = 1
+  let current = ''
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word
+    if (test.length > maxCharsPerLine && current) {
+      lineCount++
+      current = word
+    } else {
+      current = test
+    }
+  }
+  return lineCount
+}
+
+const AUTO_FIT_MAX = 90
+const AUTO_FIT_MIN = 30
+const THREE_LINE_FLOOR = 64 // below this, give up on 3 lines → try 2
+
+/**
+ * Find the LARGEST font size that produces the best layout:
+ *  1. Start at 90px, try to fit in 3 lines. Reduce until it fits or hits 64px.
+ *  2. If 3 lines never worked (title is too short), start at 90px for 2 lines.
+ *  3. If 2 lines never worked, use 1 line at 90px (or the largest that fits).
  */
 export function autoFitFontSize(
   text: string,
   maxWidth: number,
-  startSize: number,
-  maxLines: number,
+  _startSize: number,
+  _maxLines: number,
 ): number {
-  let fs = startSize
-  while (fs > 30) {
-    const avgCharWidth = fs * 0.48
-    const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth)
-    const upperText = (text || '').toUpperCase().trim()
-    const words = upperText.split(/\s+/).filter(Boolean)
-    let lineCount = 1
-    let current = ''
-    for (const word of words) {
-      const test = current ? `${current} ${word}` : word
-      if (test.length > maxCharsPerLine && current) {
-        lineCount++
-        current = word
-      } else {
-        current = test
-      }
-    }
-    if (lineCount <= maxLines) return fs
-    fs -= 2
+  // ── Try 3 lines: 90px → 64px ──────────────────────────────────
+  for (let fs = AUTO_FIT_MAX; fs >= THREE_LINE_FLOOR; fs -= 2) {
+    if (countLines(text, maxWidth, fs) === 3) return fs
   }
-  return fs
+
+  // ── Try 2 lines: 90px → 30px ──────────────────────────────────
+  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2) {
+    if (countLines(text, maxWidth, fs) === 2) return fs
+  }
+
+  // ── 1 line: largest that fits ─────────────────────────────────
+  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2) {
+    if (countLines(text, maxWidth, fs) <= 1) return fs
+  }
+
+  return AUTO_FIT_MIN
 }
 
 // ─── Load / save general settings ────────────────────────────────────
