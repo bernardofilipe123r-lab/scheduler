@@ -44,10 +44,6 @@ export function HistoryPage() {
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
   const [isDeletingSection, setIsDeletingSection] = useState(false)
   
-  const hideJob = useCallback((jobId: string) => {
-    setHiddenJobIds(prev => new Set([...prev, jobId]))
-  }, [])
-  
   const hideOlderThan2h = useCallback((jobsList: Job[]) => {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
     const toHide = jobsList
