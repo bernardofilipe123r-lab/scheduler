@@ -528,6 +528,7 @@ Apply these learnings — double down on what works, avoid what doesn't."""
         titles_block = "\n".join(f"  - {t}" for t in recent_titles[:20]) if recent_titles else "  (no recent titles)"
 
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
 
         return f"""Generate a fresh {content_format} about: {topic}
 Topic context: {topic_desc}
@@ -546,7 +547,7 @@ Pick an unexpected angle or lesser-known fact within the "{topic}" domain.
 Respond with a JSON object:
 {{
   "title": "YOUR TITLE IN ALL CAPS",
-  {"\"slide_texts\": [\"paragraph 1\", \"paragraph 2\", \"paragraph 3\"]," if is_post else "\"content_lines\": [\"Topic - Fact\", \"Topic - Fact\", ..., \"If you want to learn more about your health, follow this page!\"],"}
+  {content_field}
   "image_prompt": "describe the background image...",
   "caption": "full Instagram caption with {handle}...",
   "reasoning": "explain WHY you chose this angle and what makes it unique"
@@ -556,6 +557,7 @@ Respond with a JSON object:
         """Build an iterate/refine strategy prompt."""
         handle = self.brand_handles.get(brand, "@brandhandle")
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
 
         # Pick an underperformer to improve
         underperformers = intel.get("underperformers", [])
@@ -584,7 +586,7 @@ Instagram handle: {handle}
 Respond with a JSON object:
 {{
   "title": "YOUR IMPROVED TITLE IN ALL CAPS",
-  {"\"slide_texts\": [\"paragraph 1\", \"paragraph 2\", \"paragraph 3\"]," if is_post else "\"content_lines\": [\"Topic - Fact\", \"Topic - Fact\", ..., \"If you want to learn more about your health, follow this page!\"],"}
+  {content_field}
   "image_prompt": "describe the background image...",
   "caption": "full Instagram caption with {handle}...",
   "reasoning": "explain WHAT you improved and WHY it should perform better"
@@ -594,6 +596,7 @@ Respond with a JSON object:
         """Build a double-down/systematic/compound strategy prompt."""
         handle = self.brand_handles.get(brand, "@brandhandle")
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
 
         # Pick a top performer to amplify
         top_performers = intel.get("top_performers", [])
@@ -621,7 +624,7 @@ Instagram handle: {handle}
 Respond with a JSON object:
 {{
   "title": "YOUR VARIATION TITLE IN ALL CAPS",
-  {"\"slide_texts\": [\"paragraph 1\", \"paragraph 2\", \"paragraph 3\"]," if is_post else "\"content_lines\": [\"Topic - Fact\", \"Topic - Fact\", ..., \"If you want to learn more about your health, follow this page!\"],"}
+  {content_field}
   "image_prompt": "describe the background image...",
   "caption": "full Instagram caption with {handle}...",
   "reasoning": "explain how this variation DIFFERS from the original while keeping what works"
@@ -631,6 +634,7 @@ Respond with a JSON object:
         """Build a trending strategy prompt."""
         handle = self.brand_handles.get(brand, "@brandhandle")
         content_format = "carousel post with slide_texts" if is_post else "reel with content_lines"
+        content_field = '"slide_texts": ["paragraph 1", "paragraph 2", "paragraph 3"],' if is_post else '"content_lines": ["Topic - Fact", "Topic - Fact", ..., "If you want to learn more about your health, follow this page!"],'
 
         trending = intel.get("trending", [])
         if trending:
@@ -660,7 +664,7 @@ Instagram handle: {handle}
 Respond with a JSON object:
 {{
   "title": "YOUR TRENDING-INSPIRED TITLE IN ALL CAPS",
-  {"\"slide_texts\": [\"paragraph 1\", \"paragraph 2\", \"paragraph 3\"]," if is_post else "\"content_lines\": [\"Topic - Fact\", \"Topic - Fact\", ..., \"If you want to learn more about your health, follow this page!\"],"}
+  {content_field}
   "image_prompt": "describe the background image...",
   "caption": "full Instagram caption with {handle}...",
   "reasoning": "explain what trending element you adapted and WHY it should work for our audience"
