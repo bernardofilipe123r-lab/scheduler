@@ -139,7 +139,6 @@ export function getBrandAbbreviation(brandId: string): string {
 // ─── Smart text-balancing engine ─────────────────────────────────────
 
 const TITLE_FONT_FAMILY = 'Anton'
-const MIN_TITLE_FONT_SIZE = 40
 
 /** Singleton offscreen canvas for fast text measurement. */
 let _measureCtx: CanvasRenderingContext2D | null = null
@@ -164,96 +163,133 @@ export interface BalancedTitle {
 }
 
 /**
- * Balance title text across 1–3 lines with optimal font size.
+ * Balance title text with optimal line breaks at the EXACT font size given.
  *
- * Priority: 1 line → 3 lines → 2 lines (prefer more lines for visual balance).
- * Font size: baseFontSize is treated as the ceiling — the algorithm only
- * reduces from there if text doesn't fit. Manual per-brand font size edits
- * are always respected.
+ * Rules:
+ *  - Font size is NEVER changed. The user's choice is sacred.
+ *  - Lines are added/removed naturally based on what fits at that font size.
+ *  - Within any line count, the algorithm finds the most balanced word breaks.
+ *  - Prefers more lines when balance is similar (3 > 2 for visual harmony).
  */
 export function balanceTitleText(
   title: string,
   maxWidth: number,
-  baseFontSize: number,
+  fontSize: number,
 ): BalancedTitle {
   const text = title.toUpperCase().trim()
   const words = text.split(/\s+/).filter(Boolean)
 
-  if (words.length === 0) return { lines: [''], fontSize: baseFontSize }
-
+  if (words.length === 0) return { lines: [''], fontSize }
   const fullText = words.join(' ')
 
-  // ── 1 LINE: use baseFontSize if it fits, otherwise reduce ──────
-  if (words.length === 1 || measureTitleWidth(fullText, baseFontSize) <= maxWidth) {
-    // Text fits in 1 line at the user's font size — done
-    if (measureTitleWidth(fullText, baseFontSize) <= maxWidth) {
-      return { lines: [fullText], fontSize: baseFontSize }
-    }
+  // ── 1 LINE: if everything fits, done ───────────────────────────
+  if (measureTitleWidth(fullText, fontSize) <= maxWidth) {
+    return { lines: [fullText], fontSize }
   }
 
-  // ── Helper: best N-line split at a given font size ─────────────
-  function best2Split(fs: number) {
-    let bestLines: string[] | null = null
-    let bestDiff = Infinity
-    for (let i = 1; i < words.length; i++) {
-      const l1 = words.slice(0, i).join(' ')
-      const l2 = words.slice(i).join(' ')
-      const w1 = measureTitleWidth(l1, fs)
-      const w2 = measureTitleWidth(l2, fs)
-      if (w1 > maxWidth || w2 > maxWidth) continue
-      const diff = Math.abs(w1 - w2)
-      if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2] }
-    }
-    return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
-  }
-
-  function best3Split(fs: number) {
-    let bestLines: string[] | null = null
-    let bestDiff = Infinity
-    for (let i = 1; i < words.length - 1; i++) {
-      for (let j = i + 1; j < words.length; j++) {
-        const l1 = words.slice(0, i).join(' ')
-        const l2 = words.slice(i, j).join(' ')
-        const l3 = words.slice(j).join(' ')
-        const w1 = measureTitleWidth(l1, fs)
-        const w2 = measureTitleWidth(l2, fs)
-        const w3 = measureTitleWidth(l3, fs)
-        if (w1 > maxWidth || w2 > maxWidth || w3 > maxWidth) continue
-        const diff = Math.max(Math.abs(w1 - w2), Math.abs(w2 - w3), Math.abs(w1 - w3))
-        if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3] }
+  // ── Greedy wrap to determine the natural line count ────────────
+  function greedyWrap(): string[] {
+    const result: string[] = []
+    let current = ''
+    for (const word of words) {
+      const test = current ? `${current} ${word}` : word
+      if (measureTitleWidth(test, fontSize) > maxWidth && current) {
+        result.push(current)
+        current = word
+      } else {
+        current = test
       }
     }
-    return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
+    if (current) result.push(current)
+    return result
   }
 
-  // ── 3 LINES FIRST (preferred): scan from baseFontSize downward ─
-  if (words.length >= 3) {
-    const r3 = best3Split(baseFontSize)
-    if (r3 && r3.imbalance <= 0.40) return { lines: r3.lines, fontSize: baseFontSize }
-    // Reduce font size if needed
-    for (let fs = baseFontSize - 2; fs >= MIN_TITLE_FONT_SIZE; fs -= 2) {
-      const r = best3Split(fs)
-      if (r && r.imbalance <= 0.45) return { lines: r.lines, fontSize: fs }
+  const greedyLines = greedyWrap()
+  const naturalCount = greedyLines.length
+
+  // ── Best balanced split for exactly N lines ────────────────────
+  function bestSplitN(n: number): { lines: string[]; imbalance: number } | null {
+    if (n <= 1 || n > words.length) return null
+
+    if (n === 2) {
+      let bestLines: string[] | null = null
+      let bestDiff = Infinity
+      for (let i = 1; i < words.length; i++) {
+        const l1 = words.slice(0, i).join(' ')
+        const l2 = words.slice(i).join(' ')
+        const w1 = measureTitleWidth(l1, fontSize)
+        const w2 = measureTitleWidth(l2, fontSize)
+        if (w1 > maxWidth || w2 > maxWidth) continue
+        const diff = Math.abs(w1 - w2)
+        if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2] }
+      }
+      return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
+    }
+
+    if (n === 3) {
+      let bestLines: string[] | null = null
+      let bestDiff = Infinity
+      for (let i = 1; i < words.length - 1; i++) {
+        for (let j = i + 1; j < words.length; j++) {
+          const l1 = words.slice(0, i).join(' ')
+          const l2 = words.slice(i, j).join(' ')
+          const l3 = words.slice(j).join(' ')
+          const w1 = measureTitleWidth(l1, fontSize)
+          const w2 = measureTitleWidth(l2, fontSize)
+          const w3 = measureTitleWidth(l3, fontSize)
+          if (w1 > maxWidth || w2 > maxWidth || w3 > maxWidth) continue
+          const diff = Math.max(Math.abs(w1 - w2), Math.abs(w2 - w3), Math.abs(w1 - w3))
+          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3] }
+        }
+      }
+      return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
+    }
+
+    if (n === 4 && words.length >= 4) {
+      let bestLines: string[] | null = null
+      let bestDiff = Infinity
+      for (let i = 1; i < words.length - 2; i++) {
+        for (let j = i + 1; j < words.length - 1; j++) {
+          for (let k = j + 1; k < words.length; k++) {
+            const ls = [
+              words.slice(0, i).join(' '),
+              words.slice(i, j).join(' '),
+              words.slice(j, k).join(' '),
+              words.slice(k).join(' '),
+            ]
+            const ws = ls.map(l => measureTitleWidth(l, fontSize))
+            if (ws.some(w => w > maxWidth)) continue
+            let diff = 0
+            for (let a = 0; a < ws.length; a++)
+              for (let b = a + 1; b < ws.length; b++)
+                diff = Math.max(diff, Math.abs(ws[a] - ws[b]))
+            if (diff < bestDiff) { bestDiff = diff; bestLines = ls }
+          }
+        }
+      }
+      return bestLines ? { lines: bestLines, imbalance: bestDiff / maxWidth } : null
+    }
+
+    // n >= 5: just use greedy wrap (rare, very small font or huge text)
+    return null
+  }
+
+  // ── Try: naturalCount+1 lines first (prefer more lines) ───────
+  if (naturalCount + 1 <= words.length) {
+    const more = bestSplitN(naturalCount + 1)
+    if (more && more.imbalance <= 0.50) {
+      return { lines: more.lines, fontSize }
     }
   }
 
-  // ── 2 LINES (fallback): scan from baseFontSize downward ────────
-  if (words.length >= 2) {
-    const r2 = best2Split(baseFontSize)
-    if (r2 && r2.imbalance <= 0.40) return { lines: r2.lines, fontSize: baseFontSize }
-    // Reduce font size if needed
-    for (let fs = baseFontSize - 2; fs >= MIN_TITLE_FONT_SIZE; fs -= 2) {
-      const r = best2Split(fs)
-      if (r && r.imbalance <= 0.45) return { lines: r.lines, fontSize: fs }
-    }
+  // ── Try: naturalCount lines with optimal balance ───────────────
+  const balanced = bestSplitN(naturalCount)
+  if (balanced) {
+    return { lines: balanced.lines, fontSize }
   }
 
-  // ── Fallback: best effort at minimum font size ─────────────────
-  const fb3 = best3Split(MIN_TITLE_FONT_SIZE)
-  if (fb3) return { lines: fb3.lines, fontSize: MIN_TITLE_FONT_SIZE }
-  const fb2 = best2Split(MIN_TITLE_FONT_SIZE)
-  if (fb2) return { lines: fb2.lines, fontSize: MIN_TITLE_FONT_SIZE }
-  return { lines: [fullText], fontSize: MIN_TITLE_FONT_SIZE }
+  // ── Fallback: greedy wrap (always works) ───────────────────────
+  return { lines: greedyLines, fontSize }
 }
 
 // ─── Helper: calculate title height (uses balanced text) ────────────
