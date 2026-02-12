@@ -689,6 +689,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                       }}
                       scale={GRID_PREVIEW_SCALE}
                       logoUrl={logoUrl}
+                      autoFitMaxLines={brandFontSizes[brand] !== undefined ? 0 : 3}
                       stageRef={(node) => {
                         if (node) stageRefs.current.set(brand, node)
                       }}
@@ -1208,6 +1209,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                     }}
                     scale={FULL_SCALE}
                     logoUrl={logoUrl}
+                    autoFitMaxLines={brandFontSizes[expandedBrand] !== undefined ? 0 : 3}
                   />
                 ) : (
                   <CarouselTextSlide

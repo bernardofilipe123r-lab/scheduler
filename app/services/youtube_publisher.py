@@ -469,27 +469,34 @@ class YouTubePublisher:
             print(f"   🔗 [YT UPLOAD] URL: https://youtube.com/shorts/{video_id}", flush=True)
             
             # Step 3: Upload custom thumbnail if provided
+            thumb_success = False
+            thumb_error = None
             if thumbnail_path and Path(thumbnail_path).exists():
                 print(f"   📤 [YT UPLOAD] Step 3: Setting custom thumbnail...", flush=True)
                 # Wait for YouTube to process the video before setting thumbnail
                 # YouTube often rejects thumbnails on freshly uploaded videos
                 print(f"   ⏳ [YT UPLOAD] Waiting 15s for YouTube to process video before thumbnail...", flush=True)
                 time.sleep(15)
-                thumb_success = self._set_thumbnail(video_id, thumbnail_path, access_token)
+                thumb_success, thumb_error = self._set_thumbnail(video_id, thumbnail_path, access_token)
                 if not thumb_success:
                     # Retry once more after additional wait
-                    print(f"   🔄 [YT UPLOAD] Thumbnail failed, retrying in 20s...", flush=True)
+                    print(f"   🔄 [YT UPLOAD] Thumbnail failed ({thumb_error}), retrying in 20s...", flush=True)
                     time.sleep(20)
-                    self._set_thumbnail(video_id, thumbnail_path, access_token)
+                    thumb_success, thumb_error = self._set_thumbnail(video_id, thumbnail_path, access_token)
+                    if not thumb_success:
+                        print(f"   ❌ [YT UPLOAD] Thumbnail retry also failed: {thumb_error}", flush=True)
             else:
-                print(f"   ℹ️ [YT UPLOAD] No custom thumbnail to upload (path={thumbnail_path}, exists={Path(thumbnail_path).exists() if thumbnail_path else False})", flush=True)
+                thumb_error = f"File not found (path={thumbnail_path}, exists={Path(thumbnail_path).exists() if thumbnail_path else False})"
+                print(f"   ℹ️ [YT UPLOAD] No custom thumbnail to upload: {thumb_error}", flush=True)
             
             return {
                 "success": True,
                 "video_id": video_id,
                 "url": f"https://youtube.com/shorts/{video_id}",
                 "scheduled": publish_at is not None,
-                "publish_at": publish_at.isoformat() if publish_at else None
+                "publish_at": publish_at.isoformat() if publish_at else None,
+                "thumbnail_set": thumb_success,
+                "thumbnail_error": thumb_error if not thumb_success else None
             }
             
         except Exception as e:
@@ -498,37 +505,73 @@ class YouTubePublisher:
             traceback.print_exc()
             return {"success": False, "error": str(e)}
     
-    def _set_thumbnail(self, video_id: str, thumbnail_path: str, access_token: str) -> bool:
-        """Upload a custom thumbnail for a video."""
+    def _set_thumbnail(self, video_id: str, thumbnail_path: str, access_token: str) -> tuple[bool, str | None]:
+        """Upload a custom thumbnail for a video.
+        
+        Returns:
+            Tuple of (success, error_message_or_None)
+        """
         try:
-            # Determine content type from file extension
-            path = Path(thumbnail_path)
-            ext = path.suffix.lower()
-            content_type = {
-                '.jpg': 'image/jpeg',
-                '.jpeg': 'image/jpeg',
-                '.png': 'image/png',
-                '.gif': 'image/gif',
-            }.get(ext, 'image/png')  # Default to PNG
+            from PIL import Image as PILImage
+            import io
             
             print(f"   📤 [YT THUMBNAIL] Uploading thumbnail: {thumbnail_path}", flush=True)
-            print(f"   📤 [YT THUMBNAIL] Content-Type: {content_type}", flush=True)
             
-            # Read the entire file into memory first
-            with open(thumbnail_path, "rb") as f:
-                image_data = f.read()
+            # YouTube thumbnail limit is 2MB. AI-generated PNGs at 1080x1920
+            # can easily exceed this. Convert to JPEG and compress if needed.
+            YOUTUBE_MAX_THUMB_SIZE = 2 * 1024 * 1024  # 2MB
             
-            print(f"   📤 [YT THUMBNAIL] Image size: {len(image_data)} bytes", flush=True)
+            path = Path(thumbnail_path)
+            file_size = path.stat().st_size
+            print(f"   📤 [YT THUMBNAIL] Original file size: {file_size} bytes ({file_size / 1024 / 1024:.2f} MB)", flush=True)
+            
+            if file_size > YOUTUBE_MAX_THUMB_SIZE:
+                print(f"   ⚠️ [YT THUMBNAIL] File exceeds YouTube 2MB limit! Compressing to JPEG...", flush=True)
+                img = PILImage.open(thumbnail_path)
+                if img.mode == 'RGBA':
+                    img = img.convert('RGB')
+                
+                # Try quality levels until under 2MB
+                for quality in [90, 80, 70, 60]:
+                    buf = io.BytesIO()
+                    img.save(buf, format='JPEG', quality=quality, optimize=True)
+                    image_data = buf.getvalue()
+                    if len(image_data) <= YOUTUBE_MAX_THUMB_SIZE:
+                        print(f"   ✅ [YT THUMBNAIL] Compressed to {len(image_data)} bytes (JPEG q={quality})", flush=True)
+                        break
+                else:
+                    # Even quality 60 is too large — resize
+                    print(f"   ⚠️ [YT THUMBNAIL] Still too large, resizing...", flush=True)
+                    img.thumbnail((1080, 1920), PILImage.LANCZOS)
+                    buf = io.BytesIO()
+                    img.save(buf, format='JPEG', quality=70, optimize=True)
+                    image_data = buf.getvalue()
+                    print(f"   ✅ [YT THUMBNAIL] Resized+compressed to {len(image_data)} bytes", flush=True)
+                
+                content_type = 'image/jpeg'
+            else:
+                # File is under 2MB, use as-is
+                with open(thumbnail_path, "rb") as f:
+                    image_data = f.read()
+                
+                ext = path.suffix.lower()
+                content_type = {
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.png': 'image/png',
+                    '.gif': 'image/gif',
+                }.get(ext, 'image/png')
+            
+            print(f"   📤 [YT THUMBNAIL] Upload size: {len(image_data)} bytes, Content-Type: {content_type}", flush=True)
             
             # YouTube API requires using the UPLOAD endpoint (not the regular API endpoint)
-            # URL format: https://www.googleapis.com/upload/youtube/v3/thumbnails/set
             upload_url = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
             
             response = requests.post(
                 upload_url,
                 params={
                     "videoId": video_id,
-                    "uploadType": "media"  # Required for direct media upload
+                    "uploadType": "media"
                 },
                 headers={
                     "Authorization": f"Bearer {access_token}",
@@ -542,24 +585,25 @@ class YouTubePublisher:
             
             if response.status_code == 200:
                 print(f"   ✅ Custom thumbnail set successfully!", flush=True)
-                return True
+                return True, None
             else:
                 error_info = response.text
                 print(f"   ⚠️ Thumbnail upload failed (status {response.status_code}): {error_info}", flush=True)
                 
-                # Check for common issues
                 if response.status_code == 403:
+                    error_msg = f"403 Forbidden — channel may not be verified for custom thumbnails, or video is still processing"
                     print(f"   ℹ️ [YT THUMBNAIL] 403 Error - Possible causes:", flush=True)
                     print(f"      1. Channel not verified (requires phone verification + 24hr wait)", flush=True)
                     print(f"      2. OAuth token missing youtube.force-ssl scope", flush=True)
                     print(f"      3. Video is processing and not ready for thumbnail", flush=True)
                     print(f"   ℹ️ [YT THUMBNAIL] To fix: Re-connect YouTube in the app to get new OAuth scope", flush=True)
+                    return False, error_msg
                 
-                return False
+                return False, f"HTTP {response.status_code}: {error_info[:200]}"
                 
         except Exception as e:
             print(f"   ⚠️ Thumbnail error: {e}", flush=True)
-            return False
+            return False, str(e)
     
     def get_quota_status(self) -> Dict[str, Any]:
         """Get current quota status as a dict."""

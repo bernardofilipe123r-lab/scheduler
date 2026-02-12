@@ -234,6 +234,40 @@ export function calculateTitleHeight(
   return (balanced.lines.length - 1) * lineHeight + fontSize
 }
 
+/**
+ * Find the LARGEST font size (≤ startSize) that fits text in ≤ maxLines.
+ * Uses the same character-count estimation as balanceTitleText.
+ * Returns startSize unchanged if it already fits.
+ */
+export function autoFitFontSize(
+  text: string,
+  maxWidth: number,
+  startSize: number,
+  maxLines: number,
+): number {
+  let fs = startSize
+  while (fs > 30) {
+    const avgCharWidth = fs * 0.48
+    const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth)
+    const upperText = (text || '').toUpperCase().trim()
+    const words = upperText.split(/\s+/).filter(Boolean)
+    let lineCount = 1
+    let current = ''
+    for (const word of words) {
+      const test = current ? `${current} ${word}` : word
+      if (test.length > maxCharsPerLine && current) {
+        lineCount++
+        current = word
+      } else {
+        current = test
+      }
+    }
+    if (lineCount <= maxLines) return fs
+    fs -= 2
+  }
+  return fs
+}
+
 // ─── Load / save general settings ────────────────────────────────────
 export function loadGeneralSettings(): GeneralSettings {
   try {
@@ -418,6 +452,8 @@ interface PostCanvasProps {
   scale?: number
   logoUrl?: string | null
   stageRef?: (node: Konva.Stage | null) => void
+  /** Max lines for title. Auto-reduces font size to fit. 0 = no limit (edit mode). Default 3. */
+  autoFitMaxLines?: number
 }
 
 /**
@@ -432,15 +468,21 @@ export function PostCanvas({
   scale = GRID_PREVIEW_SCALE,
   logoUrl = null,
   stageRef,
+  autoFitMaxLines = 3,
 }: PostCanvasProps) {
   const gl = settings.layout
   const maxWidth = CANVAS_WIDTH - gl.titlePaddingX * 2
+
+  // Auto-fit: find largest font size that fits within maxLines (if enabled)
+  const effectiveFontSize = autoFitMaxLines > 0
+    ? autoFitFontSize(title || 'PLACEHOLDER', maxWidth, settings.fontSize, autoFitMaxLines)
+    : settings.fontSize
 
   // Compute balanced title once — shared by height calc and rendering
   const balanced = balanceTitleText(
     title || 'PLACEHOLDER',
     maxWidth,
-    settings.fontSize,
+    effectiveFontSize,
   )
   const th = (balanced.lines.length - 1) * (balanced.fontSize * 1.1) + balanced.fontSize
 

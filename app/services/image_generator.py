@@ -182,11 +182,24 @@ class ImageGenerator:
         
         # Save the CLEAN image - no text, no overlay
         # YouTube thumbnails work best with pure striking visuals
+        # Save as JPEG to stay under YouTube's 2MB thumbnail limit
+        # (AI-generated PNGs at 1080x1920 often exceed 2MB)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        image.save(output_path, quality=95)
-        print(f"      ✓ YouTube thumbnail saved (clean AI image, no text)", flush=True)
         
-        return output_path
+        # Convert RGBA to RGB if needed (JPEG doesn't support alpha)
+        save_image = image.convert('RGB') if image.mode == 'RGBA' else image
+        
+        # Use .jpg extension for the saved file
+        jpg_path = output_path.with_suffix('.jpg')
+        save_image.save(jpg_path, format='JPEG', quality=90, optimize=True)
+        file_size = jpg_path.stat().st_size
+        print(f"      ✓ YouTube thumbnail saved as JPEG ({file_size / 1024:.0f} KB, clean AI image, no text)", flush=True)
+        
+        # If caller expected .png path, also note the actual path
+        if output_path.suffix.lower() != '.jpg':
+            print(f"      ℹ️ Note: saved as {jpg_path.name} (JPEG for YouTube 2MB limit)", flush=True)
+        
+        return jpg_path
 
     def generate_thumbnail(
         self,

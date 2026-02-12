@@ -829,6 +829,14 @@ class DatabaseSchedulerService:
             
             print(f"   📺 [YT PUBLISH] upload_youtube_short result: {result}", flush=True)
             
+            # Log thumbnail status specifically
+            if result.get("success"):
+                if result.get("thumbnail_set"):
+                    print(f"   ✅ [YT PUBLISH] Custom thumbnail applied successfully!", flush=True)
+                else:
+                    thumb_err = result.get("thumbnail_error", "unknown")
+                    print(f"   ⚠️ [YT PUBLISH] Video uploaded but THUMBNAIL FAILED: {thumb_err}", flush=True)
+            
             # Update channel status in database
             if result.get("success"):
                 update_youtube_channel_status(

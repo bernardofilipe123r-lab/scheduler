@@ -405,12 +405,13 @@ class JobManager:
             # Generate YouTube thumbnail (clean AI image, no text)
             print(f"   📺 Generating YouTube thumbnail...", flush=True)
             yt_thumbnail_path = output_dir / "thumbnails" / f"{reel_id}_yt_thumbnail.png"
-            generator.generate_youtube_thumbnail(
+            # generate_youtube_thumbnail returns the actual saved path (may be .jpg)
+            actual_yt_thumb_path = generator.generate_youtube_thumbnail(
                 title=use_title,
                 lines=use_lines,
                 output_path=yt_thumbnail_path
             )
-            print(f"   ✓ YouTube thumbnail saved: {yt_thumbnail_path}", flush=True)
+            print(f"   ✓ YouTube thumbnail saved: {actual_yt_thumb_path}", flush=True)
             
             self.update_brand_output(job_id, brand, {
                 "status": "generating",
@@ -419,11 +420,13 @@ class JobManager:
             })
             
             # Update brand output - use web-friendly paths with leading slash
+            # Use the actual file name (may be .jpg instead of .png)
+            yt_thumb_filename = actual_yt_thumb_path.name
             self.update_brand_output(job_id, brand, {
                 "status": "completed",
                 "reel_id": reel_id,
                 "thumbnail_path": f"/output/thumbnails/{reel_id}_thumbnail.png",
-                "yt_thumbnail_path": f"/output/thumbnails/{reel_id}_yt_thumbnail.png",  # Clean AI image for YouTube
+                "yt_thumbnail_path": f"/output/thumbnails/{yt_thumb_filename}",  # Clean AI image for YouTube
                 "reel_path": f"/output/reels/{reel_id}_reel.png",
                 "video_path": f"/output/videos/{reel_id}_video.mp4",
                 "caption": caption,
