@@ -93,7 +93,7 @@ _job_semaphore = threading.Semaphore(MAX_CONCURRENT_JOBS)
 # Daily burst: dynamic — N agents × M brands × proposals_per_brand
 # Each proposal is for ONE specific brand with the correct @handle
 # Number of agents equals number of brands (automatically)
-PROPOSALS_PER_BRAND_PER_AGENT = 3  # Default — overridden by agent DB config
+PROPOSALS_PER_BRAND_PER_AGENT = 6  # 6 reels per brand (+ 6 posts if enabled)
 
 def _get_all_brands() -> List[str]:
     """Load brand IDs from DB (dynamic, not hardcoded)."""
