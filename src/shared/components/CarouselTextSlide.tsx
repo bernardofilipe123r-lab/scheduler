@@ -108,6 +108,8 @@ interface CarouselTextSlideProps {
   scale?: number
   logoUrl?: string | null
   stageRef?: (node: Konva.Stage | null) => void
+  /** Font family for main body text (slides 2+). Defaults to Georgia. */
+  fontFamily?: string
 }
 
 export function CarouselTextSlide({
@@ -118,6 +120,7 @@ export function CarouselTextSlide({
   scale = 0.3,
   logoUrl,
   stageRef,
+  fontFamily = "Georgia, 'Times New Roman', serif",
 }: CarouselTextSlideProps) {
   const brandColor = BRAND_COLORS[brand] || '#0ea5e9'
   const brandName = BRAND_DISPLAY_NAMES[brand] || brand
@@ -243,7 +246,7 @@ export function CarouselTextSlide({
         <Text
           text={displayText}
           fontSize={TEXT_FONT_SIZE}
-          fontFamily="Georgia, 'Times New Roman', serif"
+          fontFamily={fontFamily}
           fill={TEXT_COLOR}
           x={PAD_X}
           y={contentY + HEADER_BLOCK_H + HEADER_TEXT_GAP}

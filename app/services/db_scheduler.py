@@ -1098,20 +1098,17 @@ class DatabaseSchedulerService:
 
         POST SCHEDULING RULES:
         ======================
-        Posts use a separate time grid from reels, offset by +2 hours:
-        - Reels: 0, 4, 8, 12, 16, 20  (every 4h)
-        - Posts:  2, 6, 10, 14, 18, 22 (every 4h, shifted +2h)
+        Posts get 2 slots per day — one morning, one afternoon:
+        - Morning base: 8 AM
+        - Afternoon base: 14 (2 PM)
 
-        This creates a natural alternation: reel → post → reel → post every 2 hours.
-        Brands use the same 1-hour stagger offsets as reels.
-
-        Example (Holistic College, offset 0):
-          Reels: 0:00, 4:00, 8:00, 12:00, 16:00, 20:00
-          Posts:  2:00, 6:00, 10:00, 14:00, 18:00, 22:00
-
-        Example (Healthy College, offset 1):
-          Reels: 1:00, 5:00, 9:00, 13:00, 17:00, 21:00
-          Posts:  3:00, 7:00, 11:00, 15:00, 19:00, 23:00
+        Brands use 1-hour stagger offsets so no two brands ever publish
+        at exactly the same time:
+          Holistic  → 8:00 / 14:00
+          Healthy   → 9:00 / 15:00
+          Vitality  → 10:00 / 16:00
+          Longevity → 11:00 / 17:00
+          Wellbeing → 12:00 / 18:00
         """
         from datetime import timedelta
 
@@ -1125,8 +1122,8 @@ class DatabaseSchedulerService:
             "gymcollege": 0,
         }
 
-        # Post base slots: every 4 hours, shifted +2h from reels
-        BASE_POST_SLOTS = [2, 6, 10, 14, 18, 22]
+        # Post base slots: 2 per day — morning + afternoon
+        BASE_POST_SLOTS = [8, 14]
 
         brand_lower = brand.lower()
         offset = BRAND_OFFSETS.get(brand_lower, 0)

@@ -661,6 +661,7 @@ Write a full Instagram caption (4-5 paragraphs) that:
   Author(s). (Year). Title. Journal, Volume(Issue), Pages.
   DOI: 10.xxxx/xxxxx
   THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org. Use well-known published studies related to the topic.
+  MANDATORY: Every single post MUST include a real DOI. This is non-negotiable. Use studies from PubMed, Nature, The Lancet, JAMA, BMJ, or other reputable journals. NEVER invent or fabricate a DOI.
 - End with a disclaimer block:
   ⚠️ Disclaimer:
   This content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.

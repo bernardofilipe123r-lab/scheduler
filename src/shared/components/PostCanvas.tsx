@@ -19,6 +19,7 @@ export const DEFAULT_LOGO_GAP = 36
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   fontSize: 70,
   barWidth: 0,
+  slideFontFamily: "Georgia, 'Times New Roman', serif",
   layout: {
     readCaptionBottom: DEFAULT_READ_CAPTION_BOTTOM,
     titleGap: DEFAULT_TITLE_GAP,
@@ -26,6 +27,17 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
     titlePaddingX: 45,
   },
 }
+
+export const SLIDE_FONT_OPTIONS = [
+  { label: 'Georgia (Default)', value: "Georgia, 'Times New Roman', serif" },
+  { label: 'Inter', value: "Inter, Arial, sans-serif" },
+  { label: 'Playfair Display', value: "'Playfair Display', Georgia, serif" },
+  { label: 'Lora', value: "Lora, Georgia, serif" },
+  { label: 'Merriweather', value: "Merriweather, Georgia, serif" },
+  { label: 'Roboto Slab', value: "'Roboto Slab', Georgia, serif" },
+  { label: 'Source Serif Pro', value: "'Source Serif Pro', Georgia, serif" },
+  { label: 'Libre Baskerville', value: "'Libre Baskerville', Georgia, serif" },
+]
 
 export const SETTINGS_STORAGE_KEY = 'posts-general-settings'
 
@@ -54,6 +66,7 @@ export interface TitleConfig {
 export interface GeneralSettings {
   fontSize: number
   barWidth: number
+  slideFontFamily?: string
   layout: LayoutConfig
   postsPerDay?: number
 }

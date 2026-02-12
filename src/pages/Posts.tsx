@@ -21,6 +21,7 @@ import {
   PREVIEW_SCALE,
   BRAND_CONFIGS,
   DEFAULT_GENERAL_SETTINGS,
+  SLIDE_FONT_OPTIONS,
   loadGeneralSettings,
   saveGeneralSettings,
   PostCanvas,
@@ -413,6 +414,30 @@ export function PostsPage() {
                       }
                       className="w-full accent-primary-500"
                     />
+                  </div>
+                  <div className="pt-2 border-t border-gray-100">
+                    <label className="text-xs text-gray-500">
+                      Slide Font Family
+                    </label>
+                    <select
+                      value={settings.slideFontFamily || DEFAULT_GENERAL_SETTINGS.slideFontFamily}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          slideFontFamily: e.target.value,
+                        }))
+                      }
+                      className="w-full mt-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      {SLIDE_FONT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Font used for body text on carousel slides 2+
+                    </p>
                   </div>
                   <div className="pt-2 border-t border-gray-100">
                     <label className="text-xs text-gray-500">

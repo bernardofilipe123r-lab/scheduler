@@ -93,7 +93,8 @@ _job_semaphore = threading.Semaphore(MAX_CONCURRENT_JOBS)
 # Daily burst: dynamic — N agents × M brands × proposals_per_brand
 # Each proposal is for ONE specific brand with the correct @handle
 # Number of agents equals number of brands (automatically)
-PROPOSALS_PER_BRAND_PER_AGENT = 6  # 6 reels per brand (+ 6 posts if enabled)
+PROPOSALS_PER_BRAND_PER_AGENT = 6  # 6 reels per brand
+POSTS_PER_BRAND = 2  # 2 posts per brand per day (morning + afternoon slots)
 
 def _get_all_brands() -> List[str]:
     """Load brand IDs from DB (dynamic, not hardcoded)."""
@@ -297,7 +298,7 @@ class MaestroState:
     def _get_daily_config(self) -> Dict:
         """Build daily config dict dynamically from DB agents + brands.
 
-        Formula: 3 reels + 3 posts per brand = 6 × num_brands total.
+        Formula: 6 reels + 2 posts per brand.
         Posts can be paused via is_posts_paused().
         Proposals are split evenly across agents (round-robin).
         """
@@ -308,8 +309,8 @@ class MaestroState:
             n_brands = len(brands)
             posts_paused = is_posts_paused()
 
-            reels_per_brand = PROPOSALS_PER_BRAND_PER_AGENT  # 3
-            posts_per_brand = 0 if posts_paused else PROPOSALS_PER_BRAND_PER_AGENT  # 3
+            reels_per_brand = PROPOSALS_PER_BRAND_PER_AGENT  # 6
+            posts_per_brand = 0 if posts_paused else POSTS_PER_BRAND  # 2
             reels_total = reels_per_brand * n_brands
             posts_total = posts_per_brand * n_brands
             total = reels_total + posts_total
@@ -331,7 +332,7 @@ class MaestroState:
         except Exception:
             n_brands = len(ALL_BRANDS)
             reels = PROPOSALS_PER_BRAND_PER_AGENT * n_brands  # 3 per brand
-            posts = PROPOSALS_PER_BRAND_PER_AGENT * n_brands
+            posts = POSTS_PER_BRAND * n_brands
             return {
                 "proposals_per_brand_per_agent": PROPOSALS_PER_BRAND_PER_AGENT,
                 "brands": ALL_BRANDS,
@@ -339,7 +340,7 @@ class MaestroState:
                 "total_reels": reels,
                 "total_posts": posts,
                 "reels_per_brand": PROPOSALS_PER_BRAND_PER_AGENT,
-                "posts_per_brand": PROPOSALS_PER_BRAND_PER_AGENT,
+                "posts_per_brand": POSTS_PER_BRAND,
                 "posts_paused": False,
                 "jobs_per_day": reels + posts,
                 "fallback": True,
@@ -670,9 +671,9 @@ class MaestroDaemon:
             brands = _get_all_brands()
 
             # Calculate correct per-brand totals
-            reels_per_brand = PROPOSALS_PER_BRAND_PER_AGENT  # 3
+            reels_per_brand = PROPOSALS_PER_BRAND_PER_AGENT  # 6
             posts_paused = is_posts_paused()
-            posts_per_brand = 0 if posts_paused else PROPOSALS_PER_BRAND_PER_AGENT
+            posts_per_brand = 0 if posts_paused else POSTS_PER_BRAND  # 2
             total_expected = (reels_per_brand + posts_per_brand) * len(brands)
 
             if active_agents:
@@ -748,7 +749,7 @@ class MaestroDaemon:
                 else:
                     self.state.log("maestro", "Phase 2: Posts", f"Generating {posts_per_brand} post proposals per brand for {len(brands)} brands...", "📄")
                     for brand in brands:
-                        remaining = posts_per_brand  # 3 per brand total
+                        remaining = posts_per_brand  # 2 per brand total
                         for i, agent in enumerate(active_agents):
                             if remaining <= 0:
                                 break

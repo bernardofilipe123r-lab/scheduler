@@ -18,7 +18,7 @@ Architecture:
 """
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from app.models import ContentHistory
 
@@ -228,7 +228,7 @@ class ContentTracker:
             days = FINGERPRINT_COOLDOWN_DAYS
         try:
             keyword_hash = ContentHistory.compute_keyword_hash(title)
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             db = self._get_session()
             try:
@@ -293,7 +293,7 @@ class ContentTracker:
             cooldown_days = TOPIC_COOLDOWN_DAYS
 
         cooldowns = self.get_topic_cooldowns(content_type)
-        cutoff = datetime.utcnow() - timedelta(days=cooldown_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
         available = []
         for bucket in TOPIC_BUCKETS:
@@ -460,7 +460,7 @@ class ContentTracker:
         # 4. Cross-brand recent titles (last 7 days, all brands except this one)
         try:
             from sqlalchemy import desc
-            cutoff = datetime.utcnow() - timedelta(days=cross_brand_days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=cross_brand_days)
             db = self._get_session()
             try:
                 rows = (
@@ -515,7 +515,7 @@ class ContentTracker:
             from app.models import TobyProposal
             from sqlalchemy import desc
 
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             db = self._get_session()
             try:
                 query = (
@@ -555,7 +555,7 @@ class ContentTracker:
             days = BRAND_HISTORY_DAYS
         try:
             keyword_hash = ContentHistory.compute_keyword_hash(title)
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             db = self._get_session()
             try:

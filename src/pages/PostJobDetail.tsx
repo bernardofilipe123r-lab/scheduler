@@ -51,6 +51,7 @@ import {
   DEFAULT_GENERAL_SETTINGS,
   SETTINGS_STORAGE_KEY,
   POST_BRAND_OFFSETS,
+  SLIDE_FONT_OPTIONS,
   loadGeneralSettings,
   saveGeneralSettings as persistSettings,
   PostCanvas,
@@ -700,6 +701,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                       isLastSlide={currentSlide === slideTexts.length}
                       scale={GRID_PREVIEW_SCALE}
                       logoUrl={logoUrl}
+                      fontFamily={settings.slideFontFamily}
                       stageRef={(node) => {
                         if (node) textSlideRefs.current.set(brand, node)
                       }}
@@ -936,6 +938,31 @@ export function PostJobDetail({ job, refetch }: Props) {
                 }
                 className="w-full accent-primary-500"
               />
+            </div>
+
+            <div className="border-t border-gray-100 pt-4 mb-4">
+              <label className="text-xs text-gray-500 mb-1 block">
+                Slide Font Family
+              </label>
+              <select
+                value={settings.slideFontFamily || DEFAULT_GENERAL_SETTINGS.slideFontFamily}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    slideFontFamily: e.target.value,
+                  }))
+                }
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                {SLIDE_FONT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                Font used for body text on carousel slides 2+
+              </p>
             </div>
 
             <div className="border-t border-gray-100 pt-4 flex gap-2">
@@ -1190,6 +1217,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                     isLastSlide={currentSlide === slideTexts.length}
                     scale={FULL_SCALE}
                     logoUrl={logoUrl}
+                    fontFamily={settings.slideFontFamily}
                   />
                 )}
               </div>
