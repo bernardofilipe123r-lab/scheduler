@@ -18,7 +18,7 @@ import {
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
-import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus } from '@/features/jobs'
+import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus, jobsApi } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
 import { BrandBadge } from '@/features/brands'
 import { StatusBadge, FullPageLoader, Modal } from '@/shared/components'
@@ -596,7 +596,7 @@ export function HistoryPage() {
                     let deleted = 0
                     for (const j of sectionJobs) {
                       try {
-                        await fetch(`/api/jobs/${j.id}`, { method: 'DELETE' })
+                        await jobsApi.delete(j.id)
                         deleted++
                       } catch { /* continue */ }
                     }
