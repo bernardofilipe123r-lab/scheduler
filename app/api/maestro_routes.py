@@ -113,32 +113,6 @@ async def maestro_status():
     return status
 
 
-# ── DEBUG: agent seed ─────────────────────────────────────────
-
-@router.get("/debug-seed-agents")
-async def debug_seed_agents():
-    """Manually trigger seed_builtin_agents and return any errors."""
-    import traceback
-    try:
-        from app.services.generic_agent import seed_builtin_agents
-        seed_builtin_agents()
-
-        from app.db_connection import SessionLocal
-        from app.models import AIAgent
-        db = SessionLocal()
-        try:
-            agents = db.query(AIAgent).all()
-            return {
-                "status": "ok",
-                "agents": [{"agent_id": a.agent_id, "active": a.active, "created_for_brand": a.created_for_brand} for a in agents],
-                "total": len(agents),
-            }
-        finally:
-            db.close()
-    except Exception as e:
-        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
-
-
 # ── PAUSE / RESUME / TRIGGER ─────────────────────────────────
 
 @router.post("/pause")
