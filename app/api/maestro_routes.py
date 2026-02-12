@@ -146,38 +146,6 @@ async def pause_maestro():
     return {"status": "paused", "message": "Maestro paused. Daily burst generation stopped."}
 
 
-@router.post("/pause-posts")
-async def pause_posts():
-    """Pause post generation — AIs will only generate reels. State persisted in DB."""
-    from app.services.maestro import set_posts_paused, is_posts_paused, maestro_log
-
-    if is_posts_paused():
-        return {"status": "already_paused", "message": "Posts are already paused"}
-
-    persisted = set_posts_paused(True)
-    if not persisted:
-        return {"status": "error", "message": "Failed to persist posts-paused state to DB."}
-
-    maestro_log("maestro", "POSTS PAUSED", "User paused post generation — only reels from now on", "⏸️", "action")
-    return {"status": "posts_paused", "message": "Post generation paused. AIs will only generate reels."}
-
-
-@router.post("/resume-posts")
-async def resume_posts():
-    """Resume post generation — AIs will generate both reels and posts again."""
-    from app.services.maestro import set_posts_paused, is_posts_paused, maestro_log
-
-    if not is_posts_paused():
-        return {"status": "already_running", "message": "Posts are already enabled"}
-
-    persisted = set_posts_paused(False)
-    if not persisted:
-        return {"status": "error", "message": "Failed to persist posts-resumed state to DB."}
-
-    maestro_log("maestro", "POSTS RESUMED", "User resumed post generation — reels + posts from now on", "▶️", "action")
-    return {"status": "posts_resumed", "message": "Post generation resumed. AIs will generate reels and posts."}
-
-
 
 @router.post("/resume")
 async def resume_maestro(background_tasks: BackgroundTasks):
