@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   ChevronLeft, 
@@ -39,6 +39,7 @@ import {
 import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, useDynamicBrands } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
+import { PostCanvas, DEFAULT_GENERAL_SETTINGS } from '@/shared/components/PostCanvas'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 
 // Time slot configuration per brand
@@ -107,28 +108,11 @@ export function ScheduledPage() {
   const [selectedDayForMissing, setSelectedDayForMissing] = useState<Date | null>(null)
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
-  // Visual-only hidden post IDs (not persisted, not DB deletes)
-  const [hiddenPostIds, setHiddenPostIds] = useState<Set<string>>(new Set())
-  
-  const hidePost = useCallback((postId: string) => {
-    setHiddenPostIds(prev => new Set([...prev, postId]))
-  }, [])
-  
-  const hideOlderThan2h = useCallback((dayPosts: ScheduledPost[]) => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
-    const toHide = dayPosts
-      .filter(p => parseISO(p.scheduled_time) < twoHoursAgo)
-      .map(p => p.id)
-    if (toHide.length === 0) {
-      toast('No posts older than 2 hours', { icon: '📭' })
-      return
-    }
-    setHiddenPostIds(prev => new Set([...prev, ...toHide]))
-    toast.success(`Hidden ${toHide.length} past posts`)
-  }, [])
-  
-  const resetHidden = useCallback(() => {
-    setHiddenPostIds(new Set())
+
+  // Anton font loading for PostCanvas (post-type detail modal)
+  const [fontLoaded, setFontLoaded] = useState(false)
+  useEffect(() => {
+    document.fonts.load('1em Anton').then(() => setFontLoaded(true))
   }, [])
   
   const calendarDays = useMemo(() => {
@@ -836,193 +820,82 @@ export function ScheduledPage() {
         isOpen={!!selectedDay}
         onClose={() => setSelectedDay(null)}
         title={selectedDay ? format(selectedDay, 'EEEE, MMMM d, yyyy') : ''}
-        size="lg"
+        size="md"
       >
-        {selectedDay && (() => {
-          const allDayPosts = getPostsForDay(selectedDay).filter(p => !hiddenPostIds.has(p.id))
-          const dayReels = allDayPosts.filter(p => (p.metadata?.variant || 'light') !== 'post')
-          const dayPosts = allDayPosts.filter(p => p.metadata?.variant === 'post')
-          
-          return (
-            <div className="space-y-4">
-              {/* Action bar */}
-              <div className="flex items-center gap-2 flex-wrap">
+        {selectedDay && (
+          <div className="space-y-3">
+            {/* Delete All Posts for this day */}
+            {getPostsForDay(selectedDay).length > 0 && (
+              <div className="flex justify-end">
                 <button
-                  onClick={() => hideOlderThan2h(getPostsForDay(selectedDay))}
-                  className="btn btn-secondary text-xs"
-                  title="Hide posts scheduled more than 2 hours ago (visual only)"
+                  onClick={async () => {
+                    const dayStr = format(selectedDay, 'yyyy-MM-dd')
+                    const count = getPostsForDay(selectedDay).length
+                    if (!confirm(`Delete all ${count} posts for ${format(selectedDay, 'MMMM d, yyyy')}?`)) return
+                    try {
+                      await deleteScheduledForDay.mutateAsync(dayStr)
+                      toast.success(`Deleted all posts for ${format(selectedDay, 'MMM d')}`)
+                      setSelectedDay(null)
+                    } catch {
+                      toast.error('Failed to delete posts')
+                    }
+                  }}
+                  disabled={deleteScheduledForDay.isPending}
+                  className="btn btn-danger text-sm"
                 >
-                  <Clock className="w-3.5 h-3.5" />
-                  Hide &gt;2h Ago
+                  {deleteScheduledForDay.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Delete All Posts
                 </button>
-                {hiddenPostIds.size > 0 && (
-                  <button
-                    onClick={resetHidden}
-                    className="btn btn-secondary text-xs"
-                  >
-                    Show All ({hiddenPostIds.size} hidden)
-                  </button>
-                )}
-                <div className="flex-1" />
-                {allDayPosts.length > 0 && (
-                  <button
-                    onClick={async () => {
-                      const dayStr = format(selectedDay, 'yyyy-MM-dd')
-                      const count = getPostsForDay(selectedDay).length
-                      if (!confirm(`Delete all ${count} items for ${format(selectedDay, 'MMMM d, yyyy')}? This removes them from the schedule.`)) return
-                      try {
-                        await deleteScheduledForDay.mutateAsync(dayStr)
-                        toast.success(`Deleted all items for ${format(selectedDay, 'MMM d')}`)
-                        setSelectedDay(null)
-                      } catch {
-                        toast.error('Failed to delete')
-                      }
-                    }}
-                    disabled={deleteScheduledForDay.isPending}
-                    className="btn btn-danger text-xs"
-                  >
-                    {deleteScheduledForDay.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-3.5 h-3.5" />
-                    )}
-                    Delete All
-                  </button>
-                )}
               </div>
-
-              {/* Reels section */}
-              {dayReels.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <span className="text-base">🎬</span> Reels ({dayReels.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {dayReels.sort((a, b) => parseISO(b.scheduled_time).getTime() - parseISO(a.scheduled_time).getTime()).map(post => (
-                      <div
-                        key={post.id}
-                        className="card p-3 hover:shadow-md transition-shadow cursor-pointer group"
-                        style={{ borderLeftColor: getBrandColor(post.brand), borderLeftWidth: '3px' }}
-                      >
-                        <div className="flex items-start gap-3">
-                          {post.thumbnail_path && (
-                            <img
-                              src={post.thumbnail_path}
-                              alt=""
-                              className="w-14 h-20 object-cover rounded flex-shrink-0"
-                              onClick={(e) => { e.stopPropagation(); setSelectedPost(post); setSelectedDay(null); }}
-                            />
-                          )}
-                          <div className="flex-1 min-w-0" onClick={() => { setSelectedPost(post); setSelectedDay(null); }}>
-                            <div className="flex items-center gap-2 mb-1">
-                              <BrandBadge brand={post.brand} size="sm" />
-                              <span className="text-xs text-gray-500">
-                                {format(parseISO(post.scheduled_time), 'h:mm a')}
-                              </span>
-                              <span className={clsx(
-                                'text-xs px-1.5 py-0.5 rounded',
-                                (post.metadata?.variant || 'light') === 'dark'
-                                  ? 'bg-gray-800 text-white'
-                                  : 'bg-amber-100 text-amber-700'
-                              )}>
-                                {(post.metadata?.variant || 'light') === 'dark' ? '🌙' : '☀️'}
-                              </span>
-                            </div>
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {post.title.split('\n')[0]}
-                            </p>
-                          </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); hidePost(post.id); }}
-                            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                            title="Hide from view (visual only)"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+            )}
+            {getPostsForDay(selectedDay).map(post => (
+              <div
+                key={post.id}
+                onClick={() => {
+                  setSelectedPost(post)
+                  setSelectedDay(null)
+                }}
+                className="card p-4 hover:shadow-md transition-shadow cursor-pointer"
+                style={{ borderLeftColor: getBrandColor(post.brand), borderLeftWidth: '3px' }}
+              >
+                <div className="flex items-start gap-3">
+                  {post.thumbnail_path && (
+                    <img
+                      src={post.thumbnail_path}
+                      alt=""
+                      className="w-16 h-24 object-cover rounded"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <BrandBadge brand={post.brand} size="sm" />
+                      <span className="text-sm text-gray-500">
+                        {format(parseISO(post.scheduled_time), 'h:mm a')}
+                      </span>
+                      <span className={clsx(
+                        'text-xs px-1.5 py-0.5 rounded',
+                        post.metadata?.variant === 'post'
+                          ? 'bg-purple-100 text-purple-700'
+                          : (post.metadata?.variant || 'light') === 'dark'
+                            ? 'bg-gray-800 text-white'
+                            : 'bg-amber-100 text-amber-700'
+                      )}>
+                        {post.metadata?.variant === 'post' ? '📄 Post' : (post.metadata?.variant || 'light') === 'dark' ? '🌙' : '☀️'}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {post.title.split('\n')[0]}
+                    </p>
                   </div>
                 </div>
-              )}
-
-              {/* Posts section */}
-              {dayPosts.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <span className="text-base">📄</span> Posts ({dayPosts.length})
-                  </h4>
-                  <div className="space-y-3">
-                    {dayPosts.sort((a, b) => parseISO(b.scheduled_time).getTime() - parseISO(a.scheduled_time).getTime()).map(post => (
-                      <div
-                        key={post.id}
-                        className="card overflow-hidden hover:shadow-md transition-shadow group"
-                        style={{ borderLeftColor: getBrandColor(post.brand), borderLeftWidth: '3px' }}
-                      >
-                        {/* Post header */}
-                        <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-                          <BrandBadge brand={post.brand} size="sm" />
-                          <span className="text-xs text-gray-500">
-                            {format(parseISO(post.scheduled_time), 'h:mm a')}
-                          </span>
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
-                            📄 Post
-                          </span>
-                          <div className="flex-1" />
-                          <button
-                            onClick={() => { setSelectedPost(post); setSelectedDay(null); }}
-                            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                            title="View details"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => hidePost(post.id)}
-                            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Hide from view (visual only)"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        {/* Post content — show caption text */}
-                        <div className="px-4 pb-3">
-                          {post.caption ? (
-                            <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">
-                              {post.caption}
-                            </p>
-                          ) : (
-                            <p className="text-sm font-medium text-gray-900">
-                              {post.title.split('\n')[0]}
-                            </p>
-                          )}
-                        </div>
-                        {/* Post image if available */}
-                        {post.thumbnail_path && (
-                          <div 
-                            className="px-4 pb-3 cursor-pointer"
-                            onClick={() => { setSelectedPost(post); setSelectedDay(null); }}
-                          >
-                            <img
-                              src={post.thumbnail_path}
-                              alt=""
-                              className="w-full max-h-48 object-cover rounded-lg"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {allDayPosts.length === 0 && (
-                <div className="text-center py-6 text-gray-500 text-sm">
-                  {hiddenPostIds.size > 0 ? 'All posts are hidden' : 'No scheduled items for this day'}
-                </div>
-              )}
-            </div>
-          )
-        })()}
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
       
       {/* Missing Slots Modal - shows when brand filter is active and day is clicked */}
@@ -1212,7 +1085,20 @@ export function ScheduledPage() {
             </h3>
             
             <div className={selectedPost.metadata?.variant === 'post' ? '' : 'grid grid-cols-2 gap-4'}>
-              {selectedPost.thumbnail_path && (
+              {selectedPost.metadata?.variant === 'post' && selectedPost.thumbnail_path && fontLoaded ? (
+                <div className="flex justify-center">
+                  <div className="rounded-lg overflow-hidden shadow-lg" style={{ width: 280, height: 350 }}>
+                    <PostCanvas
+                      brand={selectedPost.brand}
+                      title={selectedPost.title}
+                      backgroundImage={selectedPost.thumbnail_path}
+                      settings={DEFAULT_GENERAL_SETTINGS}
+                      scale={280 / 1080}
+                      autoFitMaxLines={3}
+                    />
+                  </div>
+                </div>
+              ) : selectedPost.thumbnail_path && (
                 <div className={clsx(
                   'bg-gray-100 rounded-lg overflow-hidden',
                   selectedPost.metadata?.variant === 'post' ? 'aspect-[4/5] max-w-[280px]' : 'aspect-[9/16]'

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Search, 
@@ -39,6 +39,31 @@ export function HistoryPage() {
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [variantFilter, setVariantFilter] = useState<Variant | 'all'>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'reels' | 'posts'>('all')
+  
+  // Visual-only hidden job IDs (not persisted, not DB deletes)
+  const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
+  const [isDeletingSection, setIsDeletingSection] = useState(false)
+  
+  const hideJob = useCallback((jobId: string) => {
+    setHiddenJobIds(prev => new Set([...prev, jobId]))
+  }, [])
+  
+  const hideOlderThan2h = useCallback((jobsList: Job[]) => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    const toHide = jobsList
+      .filter(j => new Date(j.created_at) < twoHoursAgo)
+      .map(j => j.id.toString())
+    if (toHide.length === 0) {
+      toast('No jobs older than 2 hours', { icon: '📭' })
+      return
+    }
+    setHiddenJobIds(prev => new Set([...prev, ...toHide]))
+    toast.success(`Hidden ${toHide.length} old jobs`)
+  }, [])
+  
+  const resetHidden = useCallback(() => {
+    setHiddenJobIds(new Set())
+  }, [])
   
   // Delete confirmation
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -380,7 +405,7 @@ export function HistoryPage() {
         </div>
       )}
       
-      {/* Jobs List */}
+      {/* Jobs List — Separated into Reels and Posts sections */}
       {filteredJobs.length === 0 ? (
         <div className="card p-12 text-center">
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -394,14 +419,16 @@ export function HistoryPage() {
             }
           </p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredJobs.map(job => {
+      ) : (() => {
+        const visibleJobs = filteredJobs.filter(j => !hiddenJobIds.has(j.id.toString()))
+        const reelJobs = visibleJobs.filter(j => j.variant !== 'post')
+        const postJobs = visibleJobs.filter(j => j.variant === 'post')
+        
+        const renderJobCard = (job: Job) => {
             const progress = getProgress(job)
             const isGenerating = job.status === 'generating' || job.status === 'pending'
             const schedulingInfo = getSchedulingInfo(job)
             
-            // Determine card accent color based on scheduling state
             const isFullyScheduled = schedulingInfo.scheduled.length === schedulingInfo.total && schedulingInfo.total > 0
             const hasReadyToSchedule = schedulingInfo.readyToSchedule.length > 0
             
@@ -409,7 +436,7 @@ export function HistoryPage() {
               <div
                 key={job.id}
                 className={clsx(
-                  'card p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4',
+                  'card p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 group',
                   isFullyScheduled && 'border-l-green-500',
                   hasReadyToSchedule && !isFullyScheduled && 'border-l-amber-500',
                   isGenerating && 'border-l-blue-500',
@@ -423,7 +450,6 @@ export function HistoryPage() {
                       <span className="text-xs font-mono text-gray-400">#{job.id}</span>
                       <StatusBadge status={job.status} />
                       
-                      {/* Scheduling Status Badge */}
                       {isFullyScheduled && (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                           <CalendarCheck className="w-3 h-3" />
@@ -458,7 +484,6 @@ export function HistoryPage() {
                       {job.title?.split('\n')[0] || 'Untitled'}
                     </h3>
                     
-                    {/* Brand badges with individual scheduling status */}
                     <div className="flex flex-wrap gap-1 mb-2">
                       {job.brands?.map(brand => {
                         const output = job.brand_outputs?.[brand]
@@ -547,9 +572,80 @@ export function HistoryPage() {
                 </div>
               </div>
             )
-          })}
-        </div>
-      )}
+        }
+
+        // Helper to render a section with header, delete all, and job list
+        const renderSection = (label: string, icon: string, sectionJobs: Job[], allSectionJobs: Job[]) => (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">{icon}</span>
+              <h3 className="text-base font-semibold text-gray-900">{label}</h3>
+              <span className="text-sm text-gray-500">({sectionJobs.length})</span>
+              <div className="flex-1" />
+              <button
+                onClick={() => hideOlderThan2h(allSectionJobs)}
+                className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+              >
+                <Clock className="w-3 h-3" />
+                Hide &gt;2h Ago
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm(`Delete all ${sectionJobs.length} ${label.toLowerCase()}? This cannot be undone.`)) return
+                  setIsDeletingSection(true)
+                  try {
+                    await Promise.all(sectionJobs.map(j => deleteJob.mutateAsync(j.id)))
+                    toast.success(`Deleted ${sectionJobs.length} ${label.toLowerCase()}`)
+                  } catch {
+                    toast.error('Failed to delete some jobs')
+                  } finally {
+                    setIsDeletingSection(false)
+                  }
+                }}
+                disabled={isDeletingSection || sectionJobs.length === 0}
+                className="text-xs px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+              >
+                {isDeletingSection ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                Delete All
+              </button>
+            </div>
+            {sectionJobs.map(renderJobCard)}
+          </div>
+        )
+        
+        return (
+          <div className="space-y-6">
+            {/* Hidden count banner */}
+            {hiddenJobIds.size > 0 && (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <span className="text-sm text-gray-600">{hiddenJobIds.size} job(s) hidden</span>
+                <button
+                  onClick={resetHidden}
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  Show All
+                </button>
+              </div>
+            )}
+            
+            {/* Show sections based on content type filter */}
+            {(contentTypeFilter === 'all' || contentTypeFilter === 'reels') && reelJobs.length > 0 && (
+              renderSection('Reels', '🎬', reelJobs, filteredJobs.filter(j => j.variant !== 'post'))
+            )}
+            
+            {(contentTypeFilter === 'all' || contentTypeFilter === 'posts') && postJobs.length > 0 && (
+              renderSection('Posts', '📄', postJobs, filteredJobs.filter(j => j.variant === 'post'))
+            )}
+            
+            {visibleJobs.length === 0 && hiddenJobIds.size > 0 && (
+              <div className="card p-12 text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">All jobs hidden</h3>
+                <button onClick={resetHidden} className="btn btn-secondary">Show All</button>
+              </div>
+            )}
+          </div>
+        )
+      })()}
       
       {/* Delete Confirmation Modal */}
       <Modal
