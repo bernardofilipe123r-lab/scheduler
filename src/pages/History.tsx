@@ -38,6 +38,7 @@ export function HistoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [variantFilter, setVariantFilter] = useState<Variant | 'all'>('all')
+  const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'reels' | 'posts'>('all')
   
   // Delete confirmation
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -115,9 +116,13 @@ export function HistoryPage() {
       
       if (variantFilter !== 'all' && job.variant !== variantFilter) return false
       
+      // Content type filter
+      if (contentTypeFilter === 'posts' && job.variant !== 'post') return false
+      if (contentTypeFilter === 'reels' && job.variant === 'post') return false
+      
       return true
     })
-  }, [jobsArray, categorizedJobs, viewFilter, searchQuery, variantFilter])
+  }, [jobsArray, categorizedJobs, viewFilter, searchQuery, variantFilter, contentTypeFilter])
   
   // Calculate job progress
   const getProgress = (job: Job) => {
@@ -290,6 +295,28 @@ export function HistoryPage() {
             />
           </div>
           
+          {/* Content Type Filter */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {[
+              { key: 'all' as const, label: 'All', icon: '📋' },
+              { key: 'reels' as const, label: 'Reels', icon: '🎬' },
+              { key: 'posts' as const, label: 'Posts', icon: '📄' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setContentTypeFilter(opt.key)}
+                className={clsx(
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                  contentTypeFilter === opt.key
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                {opt.icon} {opt.label}
+              </button>
+            ))}
+          </div>
+          
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <select
@@ -300,6 +327,7 @@ export function HistoryPage() {
               <option value="all">All Modes</option>
               <option value="light">Light Mode</option>
               <option value="dark">Dark Mode</option>
+              <option value="post">Post</option>
             </select>
           </div>
           
@@ -418,9 +446,11 @@ export function HistoryPage() {
                         'text-xs px-2 py-0.5 rounded-full',
                         job.variant === 'dark' 
                           ? 'bg-gray-900 text-white' 
-                          : 'bg-gray-100 text-gray-700'
+                          : job.variant === 'post'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-gray-100 text-gray-700'
                       )}>
-                        {job.variant === 'dark' ? '🌙 Dark' : '☀️ Light'}
+                        {job.variant === 'dark' ? '🌙 Dark' : job.variant === 'post' ? '📄 Post' : '☀️ Light'}
                       </span>
                     </div>
                     
