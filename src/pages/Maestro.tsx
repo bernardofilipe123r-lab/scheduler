@@ -121,6 +121,7 @@ interface ActivityEntry {
 interface MaestroStatus {
   is_running: boolean
   is_paused: boolean
+  posts_paused?: boolean
   started_at: string | null
   uptime_seconds: number
   uptime_human: string
@@ -144,6 +145,7 @@ interface MaestroStatus {
     total_posts?: number
     reels_per_brand?: number
     posts_per_brand?: number
+    posts_paused?: boolean
     variants?: string[]
     brands?: string[]
     agents?: { id: string; name: string; variant: string; proposals_per_brand: number }[]
@@ -334,6 +336,7 @@ export function MaestroPage() {
   const [optimizing, setOptimizing] = useState(false)
   const [bursting, setBursting] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [togglingPosts, setTogglingPosts] = useState(false)
   const [activeTab, setActiveTab] = useState<'proposals' | 'activity' | 'insights' | 'trending'>('proposals')
 
   // ── Data fetching ──
@@ -495,8 +498,32 @@ export function MaestroPage() {
   const stats = maestroStatus?.proposal_stats ?? null
   const agents = maestroStatus?.agents ?? {}
   const isPaused = maestroStatus?.is_paused ?? true
+  const postsPaused = maestroStatus?.posts_paused ?? false
   // Dynamic agent IDs — driven by API, no hardcoded list
   const agentIds = Object.keys(agents).filter(id => id !== 'maestro')
+
+  const handleTogglePosts = async () => {
+    setTogglingPosts(true)
+    try {
+      const endpoint = postsPaused ? '/api/maestro/resume-posts' : '/api/maestro/pause-posts'
+      const result = await post<any>(endpoint)
+      if (result.status === 'error') {
+        toast.error(result.message || 'Failed to toggle posts')
+      } else {
+        toast.success(
+          postsPaused
+            ? 'Posts resumed — AIs will generate reels + posts'
+            : 'Posts paused — AIs will only generate reels',
+          { duration: 4000 }
+        )
+        await fetchStatus()
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to toggle posts')
+    } finally {
+      setTogglingPosts(false)
+    }
+  }
 
   const handleTogglePause = async () => {
     setToggling(true)
@@ -676,7 +703,27 @@ export function MaestroPage() {
                 {optimizing ? 'Generating...' : 'Optimize Now'}
               </button>
 
-              {/* Pause/Resume toggle */}
+              {/* Pause/Resume Posts toggle */}
+              <button
+                onClick={handleTogglePosts}
+                disabled={togglingPosts}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all ${
+                  postsPaused
+                    ? 'bg-amber-500/80 hover:bg-amber-500 border-amber-400/50 text-white'
+                    : 'bg-white/20 hover:bg-white/30 border-white/25 text-white'
+                } disabled:opacity-60`}
+              >
+                {togglingPosts ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : postsPaused ? (
+                  <Play className="w-4 h-4" />
+                ) : (
+                  <Pause className="w-4 h-4" />
+                )}
+                {togglingPosts ? '...' : postsPaused ? 'Resume Posts' : 'Pause Posts'}
+              </button>
+
+              {/* Pause/Resume All toggle */}
               <button
                 onClick={handleTogglePause}
                 disabled={toggling}
@@ -783,7 +830,7 @@ export function MaestroPage() {
               <span className="flex items-center gap-1.5">
                 <Sun className="w-3 h-3" />
                 <Moon className="w-3 h-3" />
-                {maestroStatus.daily_config?.total_proposals ?? 60} proposals/day ({maestroStatus.daily_config?.total_reels ?? 30} reels + {maestroStatus.daily_config?.total_posts ?? 30} posts) &middot; Burst at 12PM Lisbon
+                {maestroStatus.daily_config?.total_proposals ?? 30} proposals/day ({maestroStatus.daily_config?.total_reels ?? 15} reels{maestroStatus.daily_config?.posts_paused ? '' : ` + ${maestroStatus.daily_config?.total_posts ?? 15} posts`}){maestroStatus.daily_config?.posts_paused ? ' · Posts paused' : ''} &middot; Burst at 12PM Lisbon
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3" />

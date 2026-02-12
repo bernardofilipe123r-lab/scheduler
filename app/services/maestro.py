@@ -173,6 +173,24 @@ def set_paused(paused: bool) -> bool:
     return True
 
 
+def is_posts_paused() -> bool:
+    """Check if post generation is paused (DB-persisted). Default: not paused."""
+    return _db_get("posts_paused", "false") == "true"
+
+
+def set_posts_paused(paused: bool) -> bool:
+    """Set posts-paused state (DB-persisted). Returns True if successfully persisted."""
+    value = "true" if paused else "false"
+    if not _db_set("posts_paused", value):
+        print(f"[MAESTRO] CRITICAL: set_posts_paused({paused}) failed to persist!", flush=True)
+        return False
+    actual = _db_get("posts_paused", "")
+    if actual != value:
+        print(f"[MAESTRO] CRITICAL: set_posts_paused({paused}) verify failed!", flush=True)
+        return False
+    return True
+
+
 def get_last_daily_run() -> Optional[datetime]:
     """Get the last time the daily burst ran."""
     val = _db_get("last_daily_run", "")
@@ -277,39 +295,52 @@ class MaestroState:
             self.agents[agent_id] = AgentState(agent_id)
 
     def _get_daily_config(self) -> Dict:
-        """Build daily config dict dynamically from DB agents + brands."""
+        """Build daily config dict dynamically from DB agents + brands.
+
+        Formula: 3 reels + 3 posts per brand = 6 × num_brands total.
+        Posts can be paused via is_posts_paused().
+        Proposals are split evenly across agents (round-robin).
+        """
         try:
             from app.services.generic_agent import get_all_active_agents
             agents = get_all_active_agents()
             brands = _get_all_brands()
-            reels_total = sum(a.proposals_per_brand for a in agents) * len(brands)
-            posts_total = reels_total  # Same agents generate posts too (Phase 2)
+            n_brands = len(brands)
+            posts_paused = is_posts_paused()
+
+            reels_per_brand = PROPOSALS_PER_BRAND_PER_AGENT  # 3
+            posts_per_brand = 0 if posts_paused else PROPOSALS_PER_BRAND_PER_AGENT  # 3
+            reels_total = reels_per_brand * n_brands
+            posts_total = posts_per_brand * n_brands
             total = reels_total + posts_total
+
             return {
                 "agents": [{"id": a.agent_id, "name": a.display_name, "variant": a.variant,
                             "proposals_per_brand": a.proposals_per_brand} for a in agents],
                 "brands": brands,
                 "total_agents": len(agents),
-                "total_brands": len(brands),
+                "total_brands": n_brands,
                 "total_proposals": total,
                 "total_reels": reels_total,
                 "total_posts": posts_total,
-                "reels_per_brand": reels_total // max(len(brands), 1),
-                "posts_per_brand": posts_total // max(len(brands), 1),
+                "reels_per_brand": reels_per_brand,
+                "posts_per_brand": posts_per_brand,
+                "posts_paused": posts_paused,
                 "jobs_per_day": total,
             }
         except Exception:
             n_brands = len(ALL_BRANDS)
-            reels = PROPOSALS_PER_BRAND_PER_AGENT * 2 * n_brands  # 2 legacy agents
-            posts = reels
+            reels = PROPOSALS_PER_BRAND_PER_AGENT * n_brands  # 3 per brand
+            posts = PROPOSALS_PER_BRAND_PER_AGENT * n_brands
             return {
                 "proposals_per_brand_per_agent": PROPOSALS_PER_BRAND_PER_AGENT,
                 "brands": ALL_BRANDS,
                 "total_proposals": reels + posts,
                 "total_reels": reels,
                 "total_posts": posts,
-                "reels_per_brand": reels // n_brands,
-                "posts_per_brand": posts // n_brands,
+                "reels_per_brand": PROPOSALS_PER_BRAND_PER_AGENT,
+                "posts_per_brand": PROPOSALS_PER_BRAND_PER_AGENT,
+                "posts_paused": False,
                 "jobs_per_day": reels + posts,
                 "fallback": True,
             }
@@ -345,6 +376,7 @@ class MaestroState:
         return {
             "is_running": not paused,
             "is_paused": paused,
+            "posts_paused": is_posts_paused(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "uptime_seconds": int(uptime),
             "uptime_human": _format_uptime(uptime),
@@ -637,12 +669,18 @@ class MaestroDaemon:
             # Load dynamic brand list
             brands = _get_all_brands()
 
+            # Calculate correct per-brand totals
+            reels_per_brand = PROPOSALS_PER_BRAND_PER_AGENT  # 3
+            posts_paused = is_posts_paused()
+            posts_per_brand = 0 if posts_paused else PROPOSALS_PER_BRAND_PER_AGENT
+            total_expected = (reels_per_brand + posts_per_brand) * len(brands)
+
             if active_agents:
-                total_expected = sum(a.proposals_per_brand for a in active_agents) * len(brands)
                 agent_names = ", ".join(a.display_name for a in active_agents)
+                posts_note = ' (posts paused)' if posts_paused else ''
                 self.state.log(
                     "maestro", "🌅 Daily Burst Started",
-                    f"~{total_expected} proposals — {len(active_agents)} agents ({agent_names}) × {len(brands)} brands",
+                    f"~{total_expected} proposals — {len(active_agents)} agents ({agent_names}) × {len(brands)} brands{posts_note}",
                     "🚀"
                 )
             else:
@@ -656,14 +694,22 @@ class MaestroDaemon:
 
             if active_agents:
                 # ── Dynamic agents path ──
+                # Distribute proposals across agents round-robin:
+                # 3 reels per brand total, split among N agents
+                n_agents = len(active_agents)
+
                 # Phase 1: REEL proposals
-                self.state.log("maestro", "Phase 1: Reels", f"Generating reel proposals for {len(brands)} brands...", "🎬")
+                self.state.log("maestro", "Phase 1: Reels", f"Generating {reels_per_brand} reel proposals per brand for {len(brands)} brands...", "🎬")
                 for brand in brands:
-                    for agent in active_agents:
+                    remaining = reels_per_brand  # 3 per brand total
+                    for i, agent in enumerate(active_agents):
+                        if remaining <= 0:
+                            break
+                        ppb = max(1, remaining // (n_agents - i))  # distribute evenly
+                        remaining -= ppb
                         try:
                             self.state.current_agent = agent.agent_id
                             self.state.ensure_agent_state(agent.agent_id)
-                            ppb = agent.proposals_per_brand
                             self.state.log(
                                 agent.agent_id, "Generating",
                                 f"{ppb} {agent.variant} reels for {brand}",
@@ -695,43 +741,51 @@ class MaestroDaemon:
 
                 reel_count = len(all_proposals)
 
-                # Phase 2: POST proposals (same agents, same brands, same count)
-                self.state.log("maestro", "Phase 2: Posts", f"Generating post proposals for {len(brands)} brands...", "📄")
-                for brand in brands:
-                    for agent in active_agents:
-                        try:
-                            self.state.current_agent = agent.agent_id
-                            ppb = agent.proposals_per_brand
-                            self.state.log(
-                                agent.agent_id, "Generating",
-                                f"{ppb} posts for {brand}",
-                                "📄"
-                            )
-                            result = agent.run(
-                                max_proposals=ppb,
-                                content_type="post",
-                                brand=brand,
-                            )
-                            agent_proposals = result.get("proposals", [])
-                            all_proposals.extend(agent_proposals)
-                            self.state.agents[agent.agent_id].total_proposals += len(agent_proposals)
-                            self.state.log(
-                                agent.agent_id, f"Done ({brand})",
-                                f"{len(agent_proposals)} post proposals",
-                                "✅"
-                            )
-                        except Exception as e:
-                            self.state.errors += 1
-                            if agent.agent_id in self.state.agents:
-                                self.state.agents[agent.agent_id].errors += 1
-                            self.state.log(
-                                agent.agent_id, "Error",
-                                f"Post generation failed for {brand}: {str(e)[:200]}",
-                                "❌"
-                            )
-                            traceback.print_exc()
+                # Phase 2: POST proposals (skip if posts are paused)
+                if posts_paused:
+                    self.state.log("maestro", "Phase 2: Posts SKIPPED", "Posts are paused by user", "⏸️")
+                    post_count = 0
+                else:
+                    self.state.log("maestro", "Phase 2: Posts", f"Generating {posts_per_brand} post proposals per brand for {len(brands)} brands...", "📄")
+                    for brand in brands:
+                        remaining = posts_per_brand  # 3 per brand total
+                        for i, agent in enumerate(active_agents):
+                            if remaining <= 0:
+                                break
+                            ppb = max(1, remaining // (n_agents - i))
+                            remaining -= ppb
+                            try:
+                                self.state.current_agent = agent.agent_id
+                                self.state.log(
+                                    agent.agent_id, "Generating",
+                                    f"{ppb} posts for {brand}",
+                                    "📄"
+                                )
+                                result = agent.run(
+                                    max_proposals=ppb,
+                                    content_type="post",
+                                    brand=brand,
+                                )
+                                agent_proposals = result.get("proposals", [])
+                                all_proposals.extend(agent_proposals)
+                                self.state.agents[agent.agent_id].total_proposals += len(agent_proposals)
+                                self.state.log(
+                                    agent.agent_id, f"Done ({brand})",
+                                    f"{len(agent_proposals)} post proposals",
+                                    "✅"
+                                )
+                            except Exception as e:
+                                self.state.errors += 1
+                                if agent.agent_id in self.state.agents:
+                                    self.state.agents[agent.agent_id].errors += 1
+                                self.state.log(
+                                    agent.agent_id, "Error",
+                                    f"Post generation failed for {brand}: {str(e)[:200]}",
+                                    "❌"
+                                )
+                                traceback.print_exc()
+                    post_count = len(all_proposals) - reel_count
 
-                post_count = len(all_proposals) - reel_count
                 self.state.log("maestro", "Both phases done", f"{reel_count} reels + {post_count} posts = {len(all_proposals)} total", "📊")
 
             else:
