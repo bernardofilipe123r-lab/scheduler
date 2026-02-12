@@ -328,9 +328,22 @@ async def startup_event():
                             platforms = metadata.get('platforms', ['instagram'])
                             print(f"   📋 [PUBLISH] Using platforms from metadata: {platforms}", flush=True)
                         
+                        # ── Normalize output paths ──
+                        # brand_outputs stores paths like /output/videos/... but
+                        # the Docker WORKDIR is /app, so files live at /app/output/...
+                        def _resolve_output_path(raw: str | None) -> str | None:
+                            if not raw:
+                                return None
+                            # Strip cache-bust query params (e.g. ?t=12345)
+                            clean = raw.split('?')[0] if '?' in raw else raw
+                            # /output/... → /app/output/...
+                            if clean.startswith('/output/'):
+                                clean = '/app' + clean
+                            return clean
+
                         # Get paths from metadata or use defaults
-                        video_path_str = metadata.get('video_path')
-                        thumbnail_path_str = metadata.get('thumbnail_path')
+                        video_path_str = _resolve_output_path(metadata.get('video_path'))
+                        thumbnail_path_str = _resolve_output_path(metadata.get('thumbnail_path'))
                         brand = metadata.get('brand', '')
                         variant = metadata.get('variant', 'light')
                         
@@ -348,7 +361,9 @@ async def startup_event():
                                     image_path = Path("/app") / image_path.as_posix().lstrip('/')
                             else:
                                 # Try common post paths
-                                image_path = Path(f"/app/output/posts/{reel_id}.png")
+                                image_path = Path(f"/app/output/posts/{reel_id}_background.png")
+                                if not image_path.exists():
+                                    image_path = Path(f"/app/output/posts/{reel_id}.png")
                             
                             print(f"      🖼️  Image post: {image_path} (exists: {image_path.exists()})")
                             
@@ -427,7 +442,6 @@ async def startup_event():
                             # If paths stored in metadata, use those
                             if video_path_str:
                                 video_path = Path(video_path_str)
-                                # Handle relative paths (e.g., /output/videos/xxx.mp4)
                                 if not video_path.is_absolute():
                                     video_path = Path("/app") / video_path.as_posix().lstrip('/')
                             else:
