@@ -69,9 +69,17 @@ def get_ai_logs(
         rejected = count_q([TobyProposal.status == "rejected"])
         pending = count_q([TobyProposal.status == "pending"])
 
-        # ── Per-agent stats ──
+        # ── Per-agent stats — dynamic from DB ──
         agent_stats = {}
-        for an in ["toby", "lexi"]:
+        try:
+            from app.models import AIAgent
+            agent_rows = db.query(AIAgent.agent_id, AIAgent.display_name, AIAgent.variant).filter(AIAgent.active == True).all()
+            agent_ids = [a.agent_id for a in agent_rows]
+            agent_meta = {a.agent_id: {"name": a.display_name, "variant": a.variant} for a in agent_rows}
+        except Exception:
+            agent_ids = ["toby", "lexi"]
+            agent_meta = {"toby": {"name": "Toby", "variant": "dark"}, "lexi": {"name": "Lexi", "variant": "light"}}
+        for an in agent_ids:
             a_total = db.query(func.count(TobyProposal.id)).filter(
                 TobyProposal.created_at >= since, TobyProposal.agent_name == an
             ).scalar() or 0
@@ -79,7 +87,7 @@ def get_ai_logs(
                 TobyProposal.created_at >= since, TobyProposal.agent_name == an,
                 TobyProposal.status == "accepted"
             ).scalar() or 0
-            agent_stats[an] = {"total": a_total, "accepted": a_accepted}
+            agent_stats[an] = {"total": a_total, "accepted": a_accepted, **(agent_meta.get(an, {}))}
 
         # ── Per-brand stats ──
         brand_rows = (
@@ -232,6 +240,11 @@ def lexi_logs_dashboard(logs_token: Optional[str] = Cookie(None), pwd: Optional[
 @router.get("/maestro-logs", response_class=HTMLResponse, summary="Maestro activity dashboard")
 def maestro_logs_dashboard(logs_token: Optional[str] = Cookie(None), pwd: Optional[str] = Query(None)):
     return _serve_dashboard("maestro", logs_token, pwd)
+
+@router.get("/agent-logs/{agent_id}", response_class=HTMLResponse, summary="Dynamic agent logs dashboard")
+def dynamic_agent_logs(agent_id: str, logs_token: Optional[str] = Cookie(None), pwd: Optional[str] = Query(None)):
+    """Dynamic route for any agent's logs — no code change needed when new agents are added."""
+    return _serve_dashboard(agent_id, logs_token, pwd)
 
 
 # ─── AI About page ──────────────────────────────────────────
@@ -809,9 +822,8 @@ AI_LOGS_HTML = """<!DOCTYPE html>
     <div class="nav" id="nav-links">
         <a href="/ai-about">🧠 About</a>
         <a href="/ai-logs" data-filter="all">📊 All Logs</a>
-        <a href="/toby-logs" data-filter="toby">🤖 Toby</a>
-        <a href="/lexi-logs" data-filter="lexi">✨ Lexi</a>
         <a href="/maestro-logs" data-filter="maestro">🎼 Maestro</a>
+        <!-- Dynamic agent links injected by JS -->
     </div>
 
     <!-- Header -->
@@ -886,11 +898,20 @@ let selectedAgent = INITIAL_AGENT === 'maestro' ? 'all' : INITIAL_AGENT;
 let selectedBrand = '';
 let logLevelFilter = 'all';
 
-const AGENT_INFO = {
-    toby: { icon: '🤖', name: 'Toby', color: 'var(--green)', desc: 'Dark mode strategist' },
-    lexi: { icon: '✨', name: 'Lexi', color: 'var(--yellow)', desc: 'Light mode analyst' },
+// Dynamic agent info — populated from API, no hardcoded agents
+let AGENT_INFO = {
     maestro: { icon: '🎼', name: 'Maestro', color: 'var(--blue)', desc: 'Orchestrator' },
 };
+const AGENT_PALETTE = [
+    { icon: '🤖', color: 'var(--green)' },
+    { icon: '✨', color: 'var(--yellow)' },
+    { icon: '⚡', color: 'var(--cyan)' },
+    { icon: '❄️', color: 'var(--blue)' },
+    { icon: '👻', color: 'var(--purple)' },
+    { icon: '🔥', color: 'var(--orange)' },
+    { icon: '💎', color: 'var(--pink)' },
+    { icon: '🌟', color: 'var(--green)' },
+];
 const STRATEGY_ICONS = { explore:'💡', iterate:'🔄', double_down:'📈', trending:'🔥', analyze:'🔬', refine:'✏️', systematic:'📋', compound:'🧬', post_explore:'💡', post_analyze:'🔬', post_refine:'✏️', post_trending:'🔥' };
 const STRATEGY_COLORS = { explore:'var(--blue)', iterate:'var(--orange)', double_down:'var(--green)', trending:'var(--red)', analyze:'var(--blue)', refine:'var(--orange)', systematic:'var(--cyan)', compound:'var(--pink)', post_explore:'var(--pink)', post_analyze:'var(--pink)', post_refine:'var(--cyan)', post_trending:'var(--cyan)' };
 const STATUS_ICONS = { pending:'⏳', accepted:'✅', rejected:'❌', expired:'⏰' };
@@ -904,14 +925,45 @@ function timeAgo(iso) {
 }
 function esc(s) { return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
 
+function buildAgentInfo(agentStats) {
+    // Build AGENT_INFO dynamically from the API response
+    const ids = Object.keys(agentStats).filter(id => id !== 'maestro');
+    ids.forEach((id, i) => {
+        const meta = agentStats[id];
+        const palette = AGENT_PALETTE[i % AGENT_PALETTE.length];
+        AGENT_INFO[id] = {
+            icon: meta.emoji || palette.icon,
+            name: meta.name || (id.charAt(0).toUpperCase() + id.slice(1)),
+            color: palette.color,
+            desc: meta.variant ? (meta.variant + ' mode') : 'AI Agent',
+        };
+    });
+    // Inject dynamic nav links
+    const nav = document.getElementById('nav-links');
+    const maestroLink = nav.querySelector('[data-filter="maestro"]');
+    // Remove old dynamic links
+    nav.querySelectorAll('.dynamic-agent-link').forEach(el => el.remove());
+    ids.forEach(id => {
+        const info = AGENT_INFO[id];
+        const a = document.createElement('a');
+        a.href = '/agent-logs/' + id;
+        a.dataset.filter = id;
+        a.className = 'dynamic-agent-link';
+        a.textContent = info.icon + ' ' + info.name;
+        if (INITIAL_AGENT === id) a.classList.add('active');
+        nav.insertBefore(a, maestroLink);
+    });
+}
+
 // Set initial header based on agent filter
 function updateHeader() {
-    const icons = { all:'🧠', toby:'🤖', lexi:'✨', maestro:'🎼' };
-    const titles = { all:'AI Command Center', toby:'Toby Logs', lexi:'Lexi Logs', maestro:'Maestro Logs' };
-    const subs = { all:'Full activity log for all AI agents', toby:'Dark-mode content strategist decision history', lexi:'Light-mode content analyst decision history', maestro:'Orchestrator activity and real-time logs' };
-    document.getElementById('header-icon').textContent = icons[INITIAL_AGENT] || icons.all;
-    document.getElementById('header-title').textContent = titles[INITIAL_AGENT] || titles.all;
-    document.getElementById('header-sub').textContent = subs[INITIAL_AGENT] || subs.all;
+    const info = AGENT_INFO[INITIAL_AGENT];
+    const icon = info ? info.icon : '🧠';
+    const title = INITIAL_AGENT === 'all' ? 'AI Command Center' : INITIAL_AGENT === 'maestro' ? 'Maestro Logs' : (info ? info.name + ' Logs' : INITIAL_AGENT + ' Logs');
+    const sub = INITIAL_AGENT === 'all' ? 'Full activity log for all AI agents' : INITIAL_AGENT === 'maestro' ? 'Orchestrator activity and real-time logs' : (info ? info.desc + ' decision history' : 'Agent activity log');
+    document.getElementById('header-icon').textContent = icon;
+    document.getElementById('header-title').textContent = title;
+    document.getElementById('header-sub').textContent = sub;
 
     // Highlight active nav
     document.querySelectorAll('#nav-links a').forEach(a => {
@@ -953,8 +1005,14 @@ async function loadData() {
 
 function renderAgentCards(agentStats) {
     const el = document.getElementById('agent-cards');
-    const cards = ['toby','lexi'].map(a => {
-        const info = AGENT_INFO[a];
+    // Build dynamic agent info from API response
+    buildAgentInfo(agentStats);
+    // Re-render header to pick up dynamic agent names
+    updateHeader();
+    // Render agent cards dynamically — all agents from API
+    const agentIds = Object.keys(agentStats).filter(id => id !== 'maestro');
+    const cards = agentIds.map(a => {
+        const info = AGENT_INFO[a] || { icon: '🤖', name: a, desc: 'AI Agent' };
         const s = agentStats[a] || { total: 0, accepted: 0 };
         const rate = s.total > 0 ? Math.round(s.accepted/s.total*100) : 0;
         const sel = selectedAgent === a ? 'selected' : '';
@@ -963,7 +1021,7 @@ function renderAgentCards(agentStats) {
             <div class="agent-card-stats"><span>${s.total} proposals</span><span style="color:var(--green)">${s.accepted} accepted</span><span>${rate}% rate</span></div>
         </div>`;
     });
-    // Add Maestro card
+    // Add "All Agents" card
     cards.push(`<div class="agent-card ${selectedAgent==='all'?'selected':''}" onclick="selectAgent('all')">
         <div class="agent-card-header"><span class="agent-card-icon">🎼</span><span class="agent-card-name">All Agents</span></div>
         <div class="agent-card-stats"><span>Combined view</span><span style="color:var(--muted)">Click to show all</span></div>
@@ -1052,7 +1110,7 @@ function renderTimeline() {
     if (!items.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🤖</div><div>No proposals matching filter</div></div>'; return; }
     el.innerHTML = items.map(p => {
         const icon = STRATEGY_ICONS[p.strategy] || '📌';
-        const agentInfo = AGENT_INFO[p.agent_name] || AGENT_INFO.toby;
+        const agentInfo = AGENT_INFO[p.agent_name] || { icon: '🤖', name: p.agent_name || 'Unknown', color: 'var(--muted)', desc: '' };
         const brandColor = BRAND_COLORS[p.brand] || 'var(--muted)';
         const qScore = p.quality_score != null ? `<span style="color:${p.quality_score>=80?'var(--green)':p.quality_score>=60?'var(--yellow)':'var(--red)'}">Q${Math.round(p.quality_score)}</span>` : '';
         const src = p.source_type ? `<span class="source-tag">${p.source_account ? '@'+esc(p.source_account) : p.source_type}</span>` : '';

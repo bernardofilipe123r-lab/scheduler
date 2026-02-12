@@ -1947,12 +1947,151 @@ class MaestroDaemon:
     def trigger_burst_now(self):
         """Manually trigger the daily burst. Ignores pause state."""
         self.state.log("maestro", "Manual burst", "Triggered by user", "🔘")
-
-        # Reset last_daily_run so the check cycle picks it up
-        # Or just run it directly
         thread = threading.Thread(target=self._run_daily_burst, daemon=True)
         thread.start()
         return {"status": "triggered", "message": "Daily burst started in background"}
+
+    def run_smart_burst(self, remaining_reels: int, remaining_posts: int):
+        """Generate only the REMAINING proposals for the day.
+        Unlike _run_daily_burst which always generates the full quota,
+        this method generates exactly remaining_reels reels and remaining_posts posts,
+        distributed evenly across brands and agents."""
+        if not self._daily_burst_lock.acquire(blocking=False):
+            self.state.log("maestro", "Smart burst skipped", "Already running", "⏳")
+            return
+
+        try:
+            self.state.total_cycles += 1
+            self.state.current_phase = "generating"
+            burst_start = datetime.utcnow()
+
+            # Load dynamic agents from DB
+            try:
+                from app.services.generic_agent import get_all_active_agents
+                active_agents = get_all_active_agents()
+            except Exception as e:
+                self.state.log("maestro", "Agent load error", f"{e}", "⚠️")
+                active_agents = []
+
+            if not active_agents:
+                self.state.log("maestro", "No agents", "Cannot run smart burst without agents", "❌")
+                return
+
+            brands = _get_all_brands()
+            n_brands = len(brands)
+            n_agents = len(active_agents)
+
+            self.state.log(
+                "maestro", "🚀 Smart Burst",
+                f"Generating {remaining_reels} reels + {remaining_posts} posts across {n_brands} brands",
+                "🚀"
+            )
+
+            all_proposals = []
+
+            # Phase 1: REEL proposals — distribute remaining_reels across brands
+            if remaining_reels > 0:
+                reels_per_brand = max(1, remaining_reels // n_brands)
+                leftover_reels = remaining_reels - (reels_per_brand * n_brands)
+                self.state.log("maestro", "Phase 1: Reels", f"{remaining_reels} reel proposals across {n_brands} brands", "🎬")
+
+                for bi, brand in enumerate(brands):
+                    this_brand = reels_per_brand + (1 if bi < leftover_reels else 0)
+                    if this_brand <= 0:
+                        continue
+                    remaining = this_brand
+                    for i, agent in enumerate(active_agents):
+                        if remaining <= 0:
+                            break
+                        ppb = max(1, remaining // (n_agents - i))
+                        remaining -= ppb
+                        try:
+                            self.state.current_agent = agent.agent_id
+                            self.state.ensure_agent_state(agent.agent_id)
+                            self.state.log(agent.agent_id, "Generating", f"{ppb} reels for {brand}", "🧠")
+                            result = agent.run(max_proposals=ppb, content_type="reel", brand=brand)
+                            props = result.get("proposals", [])
+                            all_proposals.extend(props)
+                            self.state.agents[agent.agent_id].total_proposals += len(props)
+                            self.state.log(agent.agent_id, f"Done ({brand})", f"{len(props)} reel proposals", "✅")
+                        except Exception as e:
+                            self.state.errors += 1
+                            if agent.agent_id in self.state.agents:
+                                self.state.agents[agent.agent_id].errors += 1
+                            self.state.log(agent.agent_id, "Error", f"{str(e)[:200]}", "❌")
+                            traceback.print_exc()
+
+            reel_count = len(all_proposals)
+
+            # Phase 2: POST proposals — distribute remaining_posts across brands
+            if remaining_posts > 0:
+                posts_per_brand = max(1, remaining_posts // n_brands)
+                leftover_posts = remaining_posts - (posts_per_brand * n_brands)
+                self.state.log("maestro", "Phase 2: Posts", f"{remaining_posts} post proposals across {n_brands} brands", "📄")
+
+                for bi, brand in enumerate(brands):
+                    this_brand = posts_per_brand + (1 if bi < leftover_posts else 0)
+                    if this_brand <= 0:
+                        continue
+                    remaining = this_brand
+                    for i, agent in enumerate(active_agents):
+                        if remaining <= 0:
+                            break
+                        ppb = max(1, remaining // (n_agents - i))
+                        remaining -= ppb
+                        try:
+                            self.state.current_agent = agent.agent_id
+                            self.state.log(agent.agent_id, "Generating", f"{ppb} posts for {brand}", "📄")
+                            result = agent.run(max_proposals=ppb, content_type="post", brand=brand)
+                            props = result.get("proposals", [])
+                            all_proposals.extend(props)
+                            self.state.agents[agent.agent_id].total_proposals += len(props)
+                            self.state.log(agent.agent_id, f"Done ({brand})", f"{len(props)} post proposals", "✅")
+                        except Exception as e:
+                            self.state.errors += 1
+                            if agent.agent_id in self.state.agents:
+                                self.state.agents[agent.agent_id].errors += 1
+                            self.state.log(agent.agent_id, "Error", f"{str(e)[:200]}", "❌")
+                            traceback.print_exc()
+
+            post_count = len(all_proposals) - reel_count
+
+            self.state.total_proposals_generated += len(all_proposals)
+            self.state.log("maestro", "Smart burst phases done", f"{reel_count} reels + {post_count} posts = {len(all_proposals)} total", "📊")
+
+            if not all_proposals:
+                self.state.log("maestro", "Smart burst empty", "No proposals generated", "⚠️")
+                set_last_daily_run(datetime.utcnow())
+                return
+
+            # Schedule any existing ready reels
+            try:
+                ready_count = schedule_all_ready_reels()
+                if ready_count > 0:
+                    self.state.log("maestro", "Pre-process scheduling", f"Scheduled {ready_count} ready brand-reels", "📅")
+            except Exception:
+                pass
+
+            # Auto-accept and process
+            self.state.current_phase = "processing"
+            self._auto_accept_and_process(all_proposals)
+
+            set_last_daily_run(datetime.utcnow())
+            elapsed = (datetime.utcnow() - burst_start).total_seconds()
+            self.state.log(
+                "maestro", "🏁 Smart Burst Complete",
+                f"{len(all_proposals)} proposals processed. Took {elapsed:.0f}s.",
+                "🏁"
+            )
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "Smart burst error", f"{str(e)[:200]}", "❌")
+            traceback.print_exc()
+            set_last_daily_run(datetime.utcnow())
+        finally:
+            self.state.current_agent = None
+            self.state.current_phase = None
+            self._daily_burst_lock.release()
 
 
 # ── Auto-Schedule Helper ──────────────────────────────────────

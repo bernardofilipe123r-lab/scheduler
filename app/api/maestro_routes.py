@@ -101,6 +101,19 @@ async def maestro_status():
             "rejected": rejected,
             "agents": agent_stats,
         }
+
+        # Count today's reel vs post proposals for smart burst button
+        today_reels = db.query(TobyProposal).filter(
+            TobyProposal.created_at >= today,
+            TobyProposal.content_type == "reel",
+        ).count()
+        today_posts = db.query(TobyProposal).filter(
+            TobyProposal.created_at >= today,
+            TobyProposal.content_type == "post",
+        ).count()
+        if "daily_config" in status and status["daily_config"]:
+            status["daily_config"]["today_reels"] = today_reels
+            status["daily_config"]["today_posts"] = today_posts
     except Exception as e:
         print(f"[MAESTRO-STATUS] DB query failed (proposals may not have new columns yet): {e}", flush=True)
         status["proposal_stats"] = {
@@ -226,19 +239,45 @@ async def resume_maestro(background_tasks: BackgroundTasks):
 
 @router.post("/trigger-burst")
 async def trigger_burst(background_tasks: BackgroundTasks):
-    """Manually trigger the daily burst. Blocked if already ran today.
-    Also schedules any ready-to-schedule reels first."""
-    from app.services.maestro import get_maestro, maestro_log, schedule_all_ready_reels, get_last_daily_run
+    """Smart burst — counts existing proposals today and generates only the remaining.
+    If all proposals for today are complete, returns 'complete' status."""
+    from app.services.maestro import get_maestro, maestro_log, schedule_all_ready_reels
+    from app.db_connection import SessionLocal
+    from app.models import TobyProposal
     from datetime import datetime
 
-    # Check if burst already ran today
-    last_run = get_last_daily_run()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    if last_run and last_run >= today:
+    maestro = get_maestro()
+    config = maestro.state._get_daily_config()
+    target_reels = config.get("total_reels", 30)
+    target_posts = config.get("total_posts", 10)
+
+    # Count today's existing proposals by type
+    db = SessionLocal()
+    try:
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_reels = db.query(TobyProposal).filter(
+            TobyProposal.created_at >= today,
+            TobyProposal.content_type == "reel",
+        ).count()
+        today_posts = db.query(TobyProposal).filter(
+            TobyProposal.created_at >= today,
+            TobyProposal.content_type == "post",
+        ).count()
+    finally:
+        db.close()
+
+    remaining_reels = max(0, target_reels - today_reels)
+    remaining_posts = max(0, target_posts - today_posts)
+    remaining_total = remaining_reels + remaining_posts
+
+    if remaining_total == 0:
         return {
-            "status": "already_ran",
-            "message": "Daily burst already ran today. Next burst available tomorrow.",
-            "last_run": last_run.isoformat(),
+            "status": "complete",
+            "message": "All proposals for today are complete!",
+            "today_reels": today_reels,
+            "today_posts": today_posts,
+            "target_reels": target_reels,
+            "target_posts": target_posts,
         }
 
     # Schedule any ready reels first
@@ -250,13 +289,20 @@ async def trigger_burst(background_tasks: BackgroundTasks):
     except Exception:
         pass
 
-    maestro = get_maestro()
-    maestro_log("maestro", "Manual Burst", "User triggered daily burst manually", "🔘", "action")
-    background_tasks.add_task(maestro._run_daily_burst)
+    maestro_log(
+        "maestro", "Smart Burst",
+        f"Generating {remaining_reels} reels + {remaining_posts} posts (already have {today_reels} reels + {today_posts} posts)",
+        "🔘", "action"
+    )
+    background_tasks.add_task(maestro.run_smart_burst, remaining_reels, remaining_posts)
 
     return {
         "status": "triggered",
-        "message": f"Daily burst started in background — 30 unique proposals (3 Toby dark + 3 Lexi light per brand × 5 brands).{f' Also scheduled {ready_scheduled} ready reels.' if ready_scheduled > 0 else ''}",
+        "message": f"Smart burst: generating {remaining_reels} reels + {remaining_posts} posts.",
+        "remaining_reels": remaining_reels,
+        "remaining_posts": remaining_posts,
+        "today_reels": today_reels,
+        "today_posts": today_posts,
         "ready_scheduled": ready_scheduled,
     }
 

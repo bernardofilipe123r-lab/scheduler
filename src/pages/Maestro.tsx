@@ -143,6 +143,8 @@ interface MaestroStatus {
     total_proposals: number
     total_reels?: number
     total_posts?: number
+    today_reels?: number
+    today_posts?: number
     reels_per_brand?: number
     posts_per_brand?: number
     posts_paused?: boolean
@@ -333,10 +335,8 @@ export function MaestroPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null)
-  const [optimizing, setOptimizing] = useState(false)
   const [bursting, setBursting] = useState(false)
   const [toggling, setToggling] = useState(false)
-  const [togglingPosts, setTogglingPosts] = useState(false)
   const [activeTab, setActiveTab] = useState<'proposals' | 'activity' | 'insights' | 'trending'>('proposals')
 
   // ── Data fetching ──
@@ -468,62 +468,11 @@ export function MaestroPage() {
     }
   }
 
-  const handleOptimizeNow = async () => {
-    setOptimizing(true)
-    try {
-      const result = await post<any>('/api/maestro/optimize-now')
-      if (result.status === 'started') {
-        toast.success('⚡ Optimize Now — generating 5 reels + 5 posts per agent (20 total)...', { duration: 6000 })
-        // Poll for new proposals every 15s while they generate
-        const poll = setInterval(async () => {
-          await Promise.all([fetchProposals(), fetchStatus()])
-        }, 15000)
-        // Stop polling after 5 minutes
-        setTimeout(() => {
-          clearInterval(poll)
-          setOptimizing(false)
-          fetchProposals()
-          fetchStatus()
-        }, 300000)
-      } else {
-        toast.error(result.error || 'Failed to start')
-        setOptimizing(false)
-      }
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to trigger Optimize Now')
-      setOptimizing(false)
-    }
-  }
-
   const stats = maestroStatus?.proposal_stats ?? null
   const agents = maestroStatus?.agents ?? {}
   const isPaused = maestroStatus?.is_paused ?? true
-  const postsPaused = maestroStatus?.posts_paused ?? false
   // Dynamic agent IDs — driven by API, no hardcoded list
   const agentIds = Object.keys(agents).filter(id => id !== 'maestro')
-
-  const handleTogglePosts = async () => {
-    setTogglingPosts(true)
-    try {
-      const endpoint = postsPaused ? '/api/maestro/resume-posts' : '/api/maestro/pause-posts'
-      const result = await post<any>(endpoint)
-      if (result.status === 'error') {
-        toast.error(result.message || 'Failed to toggle posts')
-      } else {
-        toast.success(
-          postsPaused
-            ? 'Posts resumed — AIs will generate reels + posts'
-            : 'Posts paused — AIs will only generate reels',
-          { duration: 4000 }
-        )
-        await fetchStatus()
-      }
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to toggle posts')
-    } finally {
-      setTogglingPosts(false)
-    }
-  }
 
   const handleTogglePause = async () => {
     setToggling(true)
@@ -550,13 +499,26 @@ export function MaestroPage() {
     }
   }
 
+  // Smart burst: generates only REMAINING proposals for the day
+  const todayReels = maestroStatus?.daily_config?.today_reels ?? 0
+  const todayPosts = maestroStatus?.daily_config?.today_posts ?? 0
+  const targetReels = maestroStatus?.daily_config?.total_reels ?? 30
+  const targetPosts = maestroStatus?.daily_config?.total_posts ?? 10
+  const remainingReels = Math.max(0, targetReels - todayReels)
+  const remainingPosts = Math.max(0, targetPosts - todayPosts)
+  const remainingTotal = remainingReels + remainingPosts
+  const burstComplete = remainingTotal === 0
+
   const handleTriggerBurst = async () => {
     setBursting(true)
     try {
       const result = await post<any>('/api/maestro/trigger-burst')
       if (result.status === 'triggered') {
-        toast.success(`Daily burst triggered — ${maestroStatus?.daily_config?.total_proposals ?? '?'} proposals generating now`, { duration: 6000 })
-        // Poll for updates
+        const msg = result.remaining_reels != null
+          ? `Generating ${result.remaining_reels} reels + ${result.remaining_posts} posts...`
+          : `Burst triggered — generating proposals...`
+        toast.success(msg, { duration: 6000 })
+        // Poll
         const poll = setInterval(async () => {
           await Promise.all([fetchProposals(), fetchStatus()])
         }, 15000)
@@ -566,8 +528,8 @@ export function MaestroPage() {
           fetchStatus()
           setBursting(false)
         }, 300000)
-      } else if (result.status === 'already_ran') {
-        toast('Daily burst already ran today. Next burst available tomorrow.', { icon: '⏰', duration: 5000 })
+      } else if (result.status === 'complete') {
+        toast.success('All proposals for today are complete!', { icon: '✅', duration: 4000 })
         setBursting(false)
       } else {
         toast.error(result.error || 'Failed to trigger burst')
@@ -578,14 +540,6 @@ export function MaestroPage() {
       setBursting(false)
     }
   }
-
-  const burstRanToday = (() => {
-    const lastRun = maestroStatus?.last_daily_run
-    if (!lastRun) return false
-    const lastDate = new Date(lastRun)
-    const now = new Date()
-    return lastDate.toDateString() === now.toDateString()
-  })()
 
   const handleClearProposals = async () => {
     if (!confirm('Clear all proposals? This cannot be undone.')) return
@@ -674,53 +628,19 @@ export function MaestroPage() {
                 Reset All
               </button>
 
-              {/* Trigger Burst button */}
+              {/* Trigger Burst button — smart: generates only remaining */}
               <button
                 onClick={handleTriggerBurst}
-                disabled={burstRanToday || bursting}
+                disabled={burstComplete || bursting}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${
-                  burstRanToday || bursting
+                  burstComplete || bursting
                     ? 'bg-white/10 border-white/15 text-white/40 cursor-not-allowed'
                     : 'bg-white/20 hover:bg-white/30 border-white/25'
                 }`}
-                title={bursting ? 'Burst is running...' : burstRanToday ? 'Burst already ran today — available tomorrow' : 'Manually trigger the daily burst'}
+                title={bursting ? 'Generating...' : burstComplete ? 'All proposals for today are complete' : `Generate ${remainingReels} reels + ${remainingPosts} posts`}
               >
                 {bursting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {bursting ? 'Burst Running...' : burstRanToday ? 'Burst Done Today' : 'Trigger Burst'}
-              </button>
-
-              {/* Optimize Now button */}
-              <button
-                onClick={handleOptimizeNow}
-                disabled={optimizing}
-                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl border border-white/25 text-sm font-semibold transition-all disabled:opacity-60"
-              >
-                {optimizing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Zap className="w-4 h-4" />
-                )}
-                {optimizing ? 'Generating...' : 'Optimize Now'}
-              </button>
-
-              {/* Pause/Resume Posts toggle */}
-              <button
-                onClick={handleTogglePosts}
-                disabled={togglingPosts}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all ${
-                  postsPaused
-                    ? 'bg-amber-500/80 hover:bg-amber-500 border-amber-400/50 text-white'
-                    : 'bg-white/20 hover:bg-white/30 border-white/25 text-white'
-                } disabled:opacity-60`}
-              >
-                {togglingPosts ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : postsPaused ? (
-                  <Play className="w-4 h-4" />
-                ) : (
-                  <Pause className="w-4 h-4" />
-                )}
-                {togglingPosts ? '...' : postsPaused ? 'Resume Posts' : 'Pause Posts'}
+                {bursting ? 'Generating...' : burstComplete ? 'All Done Today ✅' : `Run Burst (${remainingTotal} remaining)`}
               </button>
 
               {/* Pause/Resume All toggle */}
@@ -830,7 +750,7 @@ export function MaestroPage() {
               <span className="flex items-center gap-1.5">
                 <Sun className="w-3 h-3" />
                 <Moon className="w-3 h-3" />
-                {maestroStatus.daily_config?.total_proposals ?? 30} proposals/day ({maestroStatus.daily_config?.total_reels ?? 15} reels{maestroStatus.daily_config?.posts_paused ? '' : ` + ${maestroStatus.daily_config?.total_posts ?? 15} posts`}){maestroStatus.daily_config?.posts_paused ? ' · Posts paused' : ''} &middot; Burst at 12PM Lisbon
+                {targetReels} reels + {targetPosts} posts = {targetReels + targetPosts} proposals/day &middot; Posts at 8AM + 2PM &middot; Burst at 12PM Lisbon
               </span>
               <span className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3" />
@@ -843,10 +763,16 @@ export function MaestroPage() {
 
       {/* ── Proposal stats bar ── */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <StatCard
-            label="Proposals"
-            value={`${Object.values(stats.agents ?? {}).reduce((sum, a) => sum + (a?.today ?? 0), 0)}/${maestroStatus?.daily_config?.total_proposals ?? 60}`}
+            label="Reel Proposals"
+            value={`${todayReels}/${targetReels}`}
+            icon={Sparkles}
+            color="purple"
+          />
+          <StatCard
+            label="Post Proposals"
+            value={`${todayPosts}/${targetPosts}`}
             icon={Clock}
             color="purple"
           />
