@@ -548,6 +548,138 @@ class MetricsCollector:
         finally:
             db.close()
 
+    # ──────────────────────────────────────────────────────────
+    # CROSS-BRAND INTELLIGENCE (pure DB — zero API calls)
+    # ──────────────────────────────────────────────────────────
+
+    def get_cross_brand_top_performers(
+        self,
+        content_type: str = "reel",
+        limit: int = 15,
+        min_age_hours: int = 24,
+    ) -> List[Dict]:
+        """
+        Get top-performing content across ALL brands, sorted by performance_score.
+
+        This gives agents a portfolio-wide view of what topics, hooks, and
+        structures work best — crucial for new agents or cold-start brands
+        that have no brand-specific data yet.
+
+        Pure DB query — zero Meta API calls.
+        """
+        from app.db_connection import SessionLocal
+        from sqlalchemy import desc
+
+        db = SessionLocal()
+        try:
+            query = (
+                db.query(PostPerformance)
+                .filter(
+                    PostPerformance.content_type == content_type,
+                    PostPerformance.performance_score.isnot(None),
+                    PostPerformance.performance_score > 0,
+                )
+            )
+
+            if min_age_hours > 0:
+                cutoff = datetime.utcnow() - timedelta(hours=min_age_hours)
+                query = query.filter(PostPerformance.published_at <= cutoff)
+
+            posts = (
+                query
+                .order_by(desc(PostPerformance.performance_score))
+                .limit(limit)
+                .all()
+            )
+            return [p.to_dict() for p in posts]
+        finally:
+            db.close()
+
+    def get_cross_brand_summary(self) -> Dict:
+        """
+        Portfolio-wide performance summary — what works across all brands.
+
+        Returns best topics, avg scores, total tracked posts, and
+        topic-level breakdowns without filtering by brand.
+        Pure DB query — zero Meta API calls.
+        """
+        from app.db_connection import SessionLocal
+        from sqlalchemy import func
+
+        db = SessionLocal()
+        try:
+            total = db.query(PostPerformance).filter(
+                PostPerformance.performance_score.isnot(None)
+            ).count()
+
+            if total == 0:
+                return {"total_tracked_cross_brand": 0, "has_data": False}
+
+            avg_score = db.query(func.avg(PostPerformance.performance_score)).filter(
+                PostPerformance.performance_score.isnot(None)
+            ).scalar()
+            avg_views = db.query(func.avg(PostPerformance.views)).filter(
+                PostPerformance.performance_score.isnot(None)
+            ).scalar()
+
+            # Best topics across all brands
+            topic_stats = (
+                db.query(
+                    PostPerformance.topic_bucket,
+                    func.avg(PostPerformance.performance_score).label("avg_score"),
+                    func.avg(PostPerformance.views).label("avg_views"),
+                    func.count(PostPerformance.id).label("count"),
+                )
+                .filter(
+                    PostPerformance.performance_score.isnot(None),
+                    PostPerformance.topic_bucket.isnot(None),
+                )
+                .group_by(PostPerformance.topic_bucket)
+                .order_by(func.avg(PostPerformance.performance_score).desc())
+                .all()
+            )
+
+            # Best titles (top 5 across portfolio)
+            from sqlalchemy import desc
+            top_titles = (
+                db.query(PostPerformance.title, PostPerformance.brand,
+                         PostPerformance.performance_score, PostPerformance.views)
+                .filter(
+                    PostPerformance.performance_score.isnot(None),
+                    PostPerformance.title.isnot(None),
+                )
+                .order_by(desc(PostPerformance.performance_score))
+                .limit(5)
+                .all()
+            )
+
+            return {
+                "total_tracked_cross_brand": total,
+                "has_data": True,
+                "avg_performance_score": round(avg_score, 1) if avg_score else 0,
+                "avg_views": int(avg_views) if avg_views else 0,
+                "best_topics": [
+                    {
+                        "topic": t.topic_bucket,
+                        "avg_score": round(t.avg_score, 1),
+                        "avg_views": int(t.avg_views) if t.avg_views else 0,
+                        "count": t.count,
+                    }
+                    for t in topic_stats[:5]
+                ],
+                "top_titles": [
+                    {
+                        "title": t.title[:80] if t.title else "",
+                        "brand": t.brand,
+                        "score": round(t.performance_score, 1) if t.performance_score else 0,
+                        "views": t.views or 0,
+                    }
+                    for t in top_titles
+                ],
+            }
+        finally:
+            db.close()
+
 
 # ── Singleton ──
 

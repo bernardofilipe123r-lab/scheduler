@@ -663,6 +663,324 @@ class TrendScout:
             db.close()
 
     # ──────────────────────────────────────────────────────────
+    # BOOTSTRAP: SAFE INCREMENTAL SCAN (rate-limit friendly)
+    # ──────────────────────────────────────────────────────────
+
+    def bootstrap_scan_tick(self) -> Dict:
+        """
+        One safe bootstrap tick — called every 20 minutes during cold-start.
+
+        Rate-limit strategy (Meta API friendly):
+          - 1 own account (limit=25 posts)  → 1 API call
+          - 1 competitor (limit=8 posts)    → 1 API call
+          - 1 hashtag (limit=10 posts)      → 2 API calls (search + top_media)
+          Total: ~4 API calls per tick = ~12/hour = well under Meta's 200/hour limit
+
+        Rotates through accounts/competitors/hashtags across ticks so
+        eventually all are covered without ever bursting.
+
+        Returns summary of what was collected this tick.
+        """
+        from app.db_connection import SessionLocal
+        import random
+
+        db = SessionLocal()
+        try:
+            from app.services.toby_daemon import toby_log
+
+            results = {
+                "own_account_new": 0,
+                "competitor_new": 0,
+                "hashtag_new": 0,
+                "api_calls": 0,
+            }
+
+            # ── 1. One own account (deeper pull: limit=25) ──
+            try:
+                from app.models import Brand
+                brands = db.query(Brand).filter(Brand.active == True).all()
+                own_handles = []
+                for b in brands:
+                    handle = b.instagram_handle
+                    if handle:
+                        handle = handle.strip().lstrip("@")
+                        if "/" in handle:
+                            handle = handle.rsplit("/", 1)[-1]
+                        if handle:
+                            own_handles.append(handle)
+            except Exception:
+                own_handles = [
+                    "thehealthycollege", "theholisticcollege",
+                    "thelongevitycollege", "thewellbeingcollege",
+                    "thevitalitycollege",
+                ]
+
+            if own_handles:
+                # Pick account with fewest entries in DB (rotate naturally)
+                handle_counts = {}
+                for h in own_handles:
+                    count = (
+                        db.query(TrendingContent.id)
+                        .filter(
+                            TrendingContent.source_account == h,
+                            TrendingContent.discovery_method == "own_account",
+                        )
+                        .count()
+                    )
+                    handle_counts[h] = count
+
+                # Pick the least-scanned account
+                target_handle = min(handle_counts, key=handle_counts.get)
+                toby_log("Bootstrap: Own account",
+                         f"Scanning @{target_handle} (has {handle_counts[target_handle]} entries, limit=25)",
+                         "🪞", "detail")
+
+                items = self.discover_competitor(target_handle, limit=25)
+                results["api_calls"] += 1
+                time.sleep(2)  # Respectful pause
+
+                new_count = 0
+                for item in items:
+                    exists = (
+                        db.query(TrendingContent.id)
+                        .filter(TrendingContent.ig_media_id == item["ig_media_id"])
+                        .first()
+                    )
+                    if exists:
+                        continue
+
+                    caption = item.get("caption", "") or ""
+                    hashtags_found = [
+                        w.lstrip("#").lower()
+                        for w in caption.split()
+                        if w.startswith("#")
+                    ]
+                    ts = None
+                    if item.get("timestamp"):
+                        try:
+                            ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            pass
+
+                    entry = TrendingContent(
+                        ig_media_id=item["ig_media_id"],
+                        source_account=target_handle,
+                        caption=caption[:5000],
+                        media_type=item.get("media_type"),
+                        hashtags=hashtags_found[:30],
+                        like_count=item.get("like_count", 0),
+                        comments_count=item.get("comments_count", 0),
+                        discovery_method="own_account",
+                        media_timestamp=ts,
+                    )
+                    db.add(entry)
+                    new_count += 1
+
+                results["own_account_new"] = new_count
+                toby_log("Bootstrap: Own account done",
+                         f"@{target_handle} → {new_count} new posts stored",
+                         "🪞", "data")
+
+            # ── 2. One competitor (limit=8) ──
+            all_competitors = list(self.competitors) + list(self.post_competitors)
+            if all_competitors:
+                # Pick competitor with fewest entries
+                comp_counts = {}
+                for c in all_competitors:
+                    count = (
+                        db.query(TrendingContent.id)
+                        .filter(
+                            TrendingContent.source_account == c,
+                            TrendingContent.discovery_method == "business_discovery",
+                        )
+                        .count()
+                    )
+                    comp_counts[c] = count
+
+                target_comp = min(comp_counts, key=comp_counts.get)
+                toby_log("Bootstrap: Competitor",
+                         f"Scanning @{target_comp} (has {comp_counts[target_comp]} entries, limit=8)",
+                         "🔍", "detail")
+
+                items = self.discover_competitor(target_comp, limit=8)
+                results["api_calls"] += 1
+                time.sleep(2)  # Respectful pause
+
+                new_count = 0
+                for item in items:
+                    exists = (
+                        db.query(TrendingContent.id)
+                        .filter(TrendingContent.ig_media_id == item["ig_media_id"])
+                        .first()
+                    )
+                    if exists:
+                        continue
+
+                    caption = item.get("caption", "") or ""
+                    hashtags_found = [
+                        w.lstrip("#").lower()
+                        for w in caption.split()
+                        if w.startswith("#")
+                    ]
+                    ts = None
+                    if item.get("timestamp"):
+                        try:
+                            ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            pass
+
+                    entry = TrendingContent(
+                        ig_media_id=item["ig_media_id"],
+                        source_account=target_comp,
+                        caption=caption[:5000],
+                        media_type=item.get("media_type"),
+                        hashtags=hashtags_found[:30],
+                        like_count=item.get("like_count", 0),
+                        comments_count=item.get("comments_count", 0),
+                        discovery_method="business_discovery",
+                        media_timestamp=ts,
+                    )
+                    db.add(entry)
+                    new_count += 1
+
+                results["competitor_new"] = new_count
+                toby_log("Bootstrap: Competitor done",
+                         f"@{target_comp} → {new_count} new posts stored",
+                         "🔍", "data")
+
+            # ── 3. One hashtag (limit=10) ──
+            all_hashtags = list(self.hashtags) + list(self.post_hashtags)
+            if all_hashtags:
+                # Pick hashtag not recently scanned (last 6h)
+                recently = set()
+                try:
+                    cutoff = datetime.utcnow() - timedelta(hours=6)
+                    recent = (
+                        db.query(TrendingContent.discovery_hashtag)
+                        .filter(
+                            TrendingContent.discovery_method == "hashtag_search",
+                            TrendingContent.discovered_at >= cutoff,
+                        )
+                        .distinct()
+                        .all()
+                    )
+                    recently = {r.discovery_hashtag for r in recent if r.discovery_hashtag}
+                except Exception:
+                    pass
+
+                candidates = [h for h in all_hashtags if h not in recently]
+                if not candidates:
+                    candidates = all_hashtags
+
+                target_hashtag = random.choice(candidates)
+                toby_log("Bootstrap: Hashtag",
+                         f"Scanning #{target_hashtag} (limit=10)",
+                         "🏷️", "detail")
+
+                items = self.search_hashtag(target_hashtag, limit=10)
+                results["api_calls"] += 2  # hashtag search = 2 API calls
+                time.sleep(2)  # Respectful pause
+
+                new_count = 0
+                for item in items:
+                    exists = (
+                        db.query(TrendingContent.id)
+                        .filter(TrendingContent.ig_media_id == item["ig_media_id"])
+                        .first()
+                    )
+                    if exists:
+                        continue
+
+                    caption = item.get("caption", "") or ""
+                    hashtags_found = [
+                        w.lstrip("#").lower()
+                        for w in caption.split()
+                        if w.startswith("#")
+                    ]
+                    ts = None
+                    if item.get("timestamp"):
+                        try:
+                            ts = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            pass
+
+                    entry = TrendingContent(
+                        ig_media_id=item["ig_media_id"],
+                        source_account=item.get("source_account"),
+                        caption=caption[:5000],
+                        media_type=item.get("media_type"),
+                        hashtags=hashtags_found[:30],
+                        like_count=item.get("like_count", 0),
+                        comments_count=item.get("comments_count", 0),
+                        discovery_method="hashtag_search",
+                        discovery_hashtag=target_hashtag,
+                        media_timestamp=ts,
+                    )
+                    db.add(entry)
+                    new_count += 1
+
+                results["hashtag_new"] = new_count
+                toby_log("Bootstrap: Hashtag done",
+                         f"#{target_hashtag} → {new_count} new posts stored",
+                         "🏷️", "data")
+
+            db.commit()
+
+            total_new = results["own_account_new"] + results["competitor_new"] + results["hashtag_new"]
+            toby_log("Bootstrap tick complete",
+                     f"{total_new} new items stored ({results['api_calls']} API calls used)",
+                     "🌱", "data")
+            return results
+
+        except Exception as e:
+            db.rollback()
+            from app.services.toby_daemon import toby_log
+            toby_log("Error: Bootstrap tick", f"bootstrap_scan_tick failed: {e}", "❌", "detail")
+            return {"error": str(e)}
+        finally:
+            db.close()
+
+    def get_bootstrap_maturity(self) -> Dict:
+        """
+        Check how much data the system has — used to decide if bootstrap
+        should continue or auto-disable.
+
+        Returns counts of own_account, competitor, hashtag entries.
+        Pure DB query — zero API calls.
+        """
+        from app.db_connection import SessionLocal
+
+        db = SessionLocal()
+        try:
+            own = db.query(TrendingContent.id).filter(
+                TrendingContent.discovery_method == "own_account"
+            ).count()
+            competitor = db.query(TrendingContent.id).filter(
+                TrendingContent.discovery_method == "business_discovery"
+            ).count()
+            hashtag = db.query(TrendingContent.id).filter(
+                TrendingContent.discovery_method == "hashtag_search"
+            ).count()
+
+            # Also check post_performance count
+            from app.models import PostPerformance
+            perf_count = db.query(PostPerformance.id).filter(
+                PostPerformance.performance_score.isnot(None)
+            ).count()
+
+            total = own + competitor + hashtag
+            return {
+                "own_account_entries": own,
+                "competitor_entries": competitor,
+                "hashtag_entries": hashtag,
+                "total_trending": total,
+                "tracked_performances": perf_count,
+                "is_mature": (own >= 50 and total >= 150) or perf_count >= 100,
+            }
+        finally:
+            db.close()
+
+    # ──────────────────────────────────────────────────────────
     # GET TRENDING FOR TOBY
     # ──────────────────────────────────────────────────────────
 

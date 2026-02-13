@@ -52,6 +52,10 @@ class CreateBrandRequest(BaseModel):
     posts_per_day: int = 6
     colors: Optional[ColorConfig] = None
     agent_name: Optional[str] = None  # AI agent name — auto-provisioned on brand creation
+    # Platform credentials (optional — can also be set later via PUT /credentials)
+    meta_access_token: Optional[str] = None
+    instagram_business_account_id: Optional[str] = None
+    facebook_page_id: Optional[str] = None
 
 
 class UpdateBrandRequest(BaseModel):
@@ -241,6 +245,10 @@ async def create_brand(
             "schedule_offset": request.schedule_offset,
             "posts_per_day": request.posts_per_day,
             "colors": request.colors.dict() if request.colors else {},
+            # Platform credentials
+            "meta_access_token": request.meta_access_token,
+            "instagram_business_account_id": request.instagram_business_account_id,
+            "facebook_page_id": request.facebook_page_id,
         }
         
         brand = manager.create_brand(brand_data)

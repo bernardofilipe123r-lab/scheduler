@@ -79,6 +79,11 @@ EVOLUTION_HOUR = int(os.getenv("MAESTRO_EVOLUTION_HOUR", "2"))  # Hour (0-23)
 # Diagnostics cycle: self-testing (every 4 hours)
 DIAGNOSTICS_CYCLE_MINUTES = int(os.getenv("MAESTRO_DIAGNOSTICS_MINUTES", "240"))
 
+# Bootstrap cycle: aggressive-but-safe research during cold-start (every 20 minutes)
+# Auto-disables after maturity (50+ own-account entries OR 150+ total trending OR 14 days)
+BOOTSTRAP_CYCLE_MINUTES = int(os.getenv("MAESTRO_BOOTSTRAP_MINUTES", "20"))
+BOOTSTRAP_MAX_DAYS = int(os.getenv("MAESTRO_BOOTSTRAP_MAX_DAYS", "14"))
+
 # Job timeout: if a job is stuck in "generating" or "pending" for longer than this, mark it failed
 JOB_TIMEOUT_MINUTES = int(os.getenv("MAESTRO_JOB_TIMEOUT_MINUTES", "30"))
 
@@ -262,6 +267,12 @@ class MaestroState:
         self.last_evolution_at: Optional[datetime] = None
         self.last_diagnostics_at: Optional[datetime] = None
         self.last_diagnostics_status: Optional[str] = None  # "healthy"/"degraded"/"critical"
+
+        # Bootstrap (cold-start research)
+        self.last_bootstrap_at: Optional[datetime] = None
+        self.bootstrap_complete: bool = False
+        self.bootstrap_ticks: int = 0
+        self.bootstrap_items_collected: int = 0
 
         # Healing stats
         self.total_healed: int = 0          # Jobs successfully retried
@@ -447,6 +458,7 @@ class MaestroDaemon:
       5. FEEDBACK (every 6h)   — Check 48-72h post performance
       6. EVOLUTION (weekly)    — Natural selection: retire weak agents, spawn new ones
       7. DIAGNOSTICS (every 4h) — Self-testing: validate all subsystems
+      8. BOOTSTRAP (every 20min) — Cold-start research: safe incremental API polling
     """
 
     def __init__(self):
@@ -543,6 +555,17 @@ class MaestroDaemon:
             max_instances=1,
         )
 
+        # Bootstrap cycle — cold-start research (every 20min, auto-disables)
+        self.scheduler.add_job(
+            self._bootstrap_cycle,
+            trigger=IntervalTrigger(minutes=BOOTSTRAP_CYCLE_MINUTES),
+            id="maestro_bootstrap",
+            name="Maestro Bootstrap Cycle",
+            next_run_time=datetime.utcnow() + timedelta(seconds=STARTUP_DELAY_SECONDS + 45),
+            replace_existing=True,
+            max_instances=1,
+        )
+
         self.scheduler.start()
         self.state.started_at = datetime.utcnow()
 
@@ -550,7 +573,7 @@ class MaestroDaemon:
         status_text = "PAUSED (waiting for Resume)" if paused else "RUNNING"
         self.state.log(
             "maestro", "Started",
-            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m, Evolution {EVOLUTION_DAY}@{EVOLUTION_HOUR}:00, Diagnostics {DIAGNOSTICS_CYCLE_MINUTES}m",
+            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m, Evolution {EVOLUTION_DAY}@{EVOLUTION_HOUR}:00, Diagnostics {DIAGNOSTICS_CYCLE_MINUTES}m, Bootstrap {BOOTSTRAP_CYCLE_MINUTES}m (auto-disable)",
             "🚀"
         )
 

@@ -826,10 +826,11 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
     setScheduleOffset(defaultOffset)
   }, [defaultOffset])
   
-  // Step 4: Social handles (optional)
+  // Step 4: Platform credentials (optional)
   const [instagramHandle, setInstagramHandle] = useState('')
-  const [facebookPage, setFacebookPage] = useState('')
-  const [youtubeChannel, setYoutubeChannel] = useState('')
+  const [facebookPageId, setFacebookPageId] = useState('')
+  const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
+  const [metaAccessToken, setMetaAccessToken] = useState('')
 
   // Auto-generate ID and short name from display name
   const handleNameChange = (name: string) => {
@@ -926,11 +927,13 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
       display_name: displayName,
       short_name: shortName,
       instagram_handle: instagramHandle || undefined,
-      facebook_page_name: facebookPage || undefined,
-      youtube_channel_name: youtubeChannel || undefined,
       schedule_offset: scheduleOffset,
       posts_per_day: 2,
       colors,
+      // Platform credentials
+      facebook_page_id: facebookPageId || undefined,
+      instagram_business_account_id: instagramBusinessAccountId || undefined,
+      meta_access_token: metaAccessToken || undefined,
     }
     
     try {
@@ -1153,48 +1156,104 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
             </div>
           )}
 
-          {/* Color preview */}
+          {/* Color preview — Reel Mockups */}
           <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="rounded-lg overflow-hidden border">
-              <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-xs text-gray-600">
-                <Sun className="w-3 h-3" /> Light Mode
+            {/* Light Mode Reel */}
+            <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+              <div className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 text-xs text-gray-600 font-medium">
+                <Sun className="w-3 h-3" /> Light Mode Reel
               </div>
-              <div 
-                className="p-4 text-center"
-                style={{ 
-                  backgroundColor: adjustColorBrightness(primaryColor, 180),
+              <div
+                className="relative"
+                style={{
+                  aspectRatio: '9/16',
+                  background: `linear-gradient(180deg, ${adjustColorBrightness(primaryColor, 180)} 0%, ${adjustColorBrightness(accentColor, 150)} 100%)`,
                 }}
               >
-                <div 
-                  className="w-10 h-10 rounded-full mx-auto mb-2"
-                  style={{ backgroundColor: primaryColor }}
-                >
-                  <span className="text-white text-xs font-bold leading-10">{shortName}</span>
+                {/* Brand abbreviation */}
+                <div className="absolute top-3 left-0 right-0 flex justify-center">
+                  <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: primaryColor }}>
+                    {shortName || 'BRD'}
+                  </span>
                 </div>
-                <p className="text-sm font-medium" style={{ color: primaryColor }}>
-                  {displayName || 'Brand Name'}
-                </p>
+                {/* Title */}
+                <div className="absolute top-6 left-3 right-3 flex justify-center">
+                  <p className="text-[9px] font-black text-center leading-tight uppercase" style={{ color: '#000000' }}>
+                    YOUR BRAIN HAS A CLEANING SYSTEM
+                  </p>
+                </div>
+                {/* Content lines */}
+                <div className="absolute top-[42%] left-2 right-2 space-y-1">
+                  {['Sleep cycles — Reset every 90 minutes', 'Cold showers — Activate brown fat', 'Fasting — Triggers autophagy'].map((line, i) => (
+                    <div
+                      key={i}
+                      className="rounded-md px-1.5 py-0.5"
+                      style={{ backgroundColor: 'rgba(0,0,0,0.06)' }}
+                    >
+                      <p className="text-[6px] font-medium" style={{ color: '#000000' }}>
+                        {i + 1}. {line}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {/* CTA */}
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div
+                    className="rounded-md py-1 text-center"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    <p className="text-[5px] font-bold text-white">Follow for more health tips!</p>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="rounded-lg overflow-hidden border">
-              <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 text-xs text-gray-300">
-                <Moon className="w-3 h-3" /> Dark Mode
+            {/* Dark Mode Reel */}
+            <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+              <div className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 text-xs text-gray-300 font-medium">
+                <Moon className="w-3 h-3" /> Dark Mode Reel
               </div>
-              <div 
-                className="p-4 text-center"
-                style={{ 
-                  backgroundColor: adjustColorBrightness(primaryColor, -40),
+              <div
+                className="relative"
+                style={{
+                  aspectRatio: '9/16',
+                  background: `linear-gradient(180deg, ${adjustColorBrightness(primaryColor, -40)} 0%, ${adjustColorBrightness(primaryColor, -20)} 100%)`,
                 }}
               >
-                <div 
-                  className="w-10 h-10 rounded-full mx-auto mb-2"
-                  style={{ backgroundColor: accentColor }}
-                >
-                  <span className="text-white text-xs font-bold leading-10">{shortName}</span>
+                {/* Brand abbreviation */}
+                <div className="absolute top-3 left-0 right-0 flex justify-center">
+                  <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: accentColor }}>
+                    {shortName || 'BRD'}
+                  </span>
                 </div>
-                <p className="text-sm font-medium text-white">
-                  {displayName || 'Brand Name'}
-                </p>
+                {/* Title */}
+                <div className="absolute top-6 left-3 right-3 flex justify-center">
+                  <p className="text-[9px] font-black text-center leading-tight uppercase text-white">
+                    YOUR BRAIN HAS A CLEANING SYSTEM
+                  </p>
+                </div>
+                {/* Content lines */}
+                <div className="absolute top-[42%] left-2 right-2 space-y-1">
+                  {['Sleep cycles — Reset every 90 minutes', 'Cold showers — Activate brown fat', 'Fasting — Triggers autophagy'].map((line, i) => (
+                    <div
+                      key={i}
+                      className="rounded-md px-1.5 py-0.5"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
+                    >
+                      <p className="text-[6px] font-medium text-white">
+                        {i + 1}. {line}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {/* CTA */}
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div
+                    className="rounded-md py-1 text-center"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    <p className="text-[5px] font-bold text-white">Follow for more health tips!</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1401,69 +1460,101 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
         </div>
       )}
 
-      {/* Step 4: Social Handles */}
+      {/* Step 4: Platform Connections */}
       {step === 4 && (
         <div className="space-y-4">
-          <div className="text-center mb-6">
+          <div className="text-center mb-4">
             <Link2 className="w-12 h-12 text-primary-500 mx-auto mb-2" />
-            <h3 className="text-lg font-semibold">Social Media Handles</h3>
-            <p className="text-sm text-gray-500">Add your social media accounts (optional)</p>
+            <h3 className="text-lg font-semibold">Platform Connections</h3>
+            <p className="text-sm text-gray-500">Connect your social accounts to enable auto-publishing</p>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
-                <Instagram className="w-5 h-5 text-white" />
+          {/* Meta (Instagram + Facebook) — shared token */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
+                <Facebook className="w-4 h-4 text-white" />
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700">Instagram Handle</label>
-                <input
-                  type="text"
-                  value={instagramHandle}
-                  onChange={(e) => setInstagramHandle(e.target.value)}
-                  placeholder="@yourbrand"
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm mt-1"
-                />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
+                <Instagram className="w-4 h-4 text-white" />
               </div>
+              <span className="text-sm font-semibold text-gray-800">Meta (Instagram & Facebook)</span>
             </div>
-
-            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl">
-              <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
-                <Facebook className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700">Facebook Page</label>
-                <input
-                  type="text"
-                  value={facebookPage}
-                  onChange={(e) => setFacebookPage(e.target.value)}
-                  placeholder="Your Page Name"
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm mt-1"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl">
-              <div className="w-10 h-10 rounded-lg bg-red-500 flex items-center justify-center">
-                <Youtube className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700">YouTube Channel</label>
-                <input
-                  type="text"
-                  value={youtubeChannel}
-                  onChange={(e) => setYoutubeChannel(e.target.value)}
-                  placeholder="Your Channel Name"
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm mt-1"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-            <p className="text-sm text-blue-800">
-              <strong>Note:</strong> API credentials (access tokens, page IDs) can be configured in the brand settings after creation.
+            <p className="text-xs text-gray-500 -mt-2">
+              One Meta access token works for both platforms. The Page ID and IG Account ID are specific to this brand.
             </p>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Instagram Handle
+              </label>
+              <input
+                type="text"
+                value={instagramHandle}
+                onChange={(e) => setInstagramHandle(e.target.value)}
+                placeholder="@yourbrand"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Facebook Page ID <span className="text-gray-400 font-normal">— found in Page Settings → Transparency</span>
+              </label>
+              <input
+                type="text"
+                value={facebookPageId}
+                onChange={(e) => setFacebookPageId(e.target.value)}
+                placeholder="e.g., 421725411022067"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Instagram Business Account ID <span className="text-gray-400 font-normal">— from Graph API Explorer</span>
+              </label>
+              <input
+                type="text"
+                value={instagramBusinessAccountId}
+                onChange={(e) => setInstagramBusinessAccountId(e.target.value)}
+                placeholder="e.g., 17841468847801005"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Meta Access Token <span className="text-gray-400 font-normal">— long-lived page token</span>
+              </label>
+              <input
+                type="password"
+                value={metaAccessToken}
+                onChange={(e) => setMetaAccessToken(e.target.value)}
+                placeholder="EAAx..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">
+                Shared across all brands — only needed once. Leave blank if already set globally.
+              </p>
+            </div>
+          </div>
+
+          {/* YouTube */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-red-500 flex items-center justify-center">
+                <Youtube className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-sm font-semibold text-gray-800">YouTube</span>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              YouTube uses OAuth — connect after the brand is created from the Connected page.
+            </p>
+            <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg border border-gray-200">
+              <AlertCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <span className="text-xs text-gray-600">Available after creation via Settings → Connected Accounts</span>
+            </div>
           </div>
         </div>
       )}

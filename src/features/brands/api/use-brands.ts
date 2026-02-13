@@ -58,6 +58,10 @@ export interface CreateBrandInput {
   schedule_offset?: number
   posts_per_day?: number
   colors?: Partial<BrandColors>
+  // Platform credentials (optional — can also be set later)
+  meta_access_token?: string
+  instagram_business_account_id?: string
+  facebook_page_id?: string
 }
 
 export interface UpdateBrandInput {

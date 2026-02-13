@@ -327,6 +327,18 @@ class GenericAgent:
             intel["underperformers"] = []
             intel["performance_summary"] = {}
 
+        # 1b. Cross-brand intelligence (portfolio-wide learnings, zero API calls)
+        try:
+            from app.services.metrics_collector import get_metrics_collector
+            collector = get_metrics_collector()
+            intel["cross_brand_top"] = collector.get_cross_brand_top_performers(
+                content_type=content_type, limit=10
+            )
+            intel["cross_brand_summary"] = collector.get_cross_brand_summary()
+        except Exception:
+            intel["cross_brand_top"] = []
+            intel["cross_brand_summary"] = {}
+
         # 2. Trending
         try:
             from app.services.trend_scout import get_trend_scout
@@ -486,6 +498,33 @@ class GenericAgent:
 YOUR AUDIENCE'S TOP PERFORMERS (content from OUR accounts that resonated):
 {own_block}
 Learn from what YOUR audience engages with. Use similar angles, tones, or topics that proved popular above."""
+
+        # 📊 Inject cross-brand portfolio intelligence (what works across ALL brands)
+        cross_brand = intel.get("cross_brand_top", [])
+        cross_summary = intel.get("cross_brand_summary", {})
+        if cross_brand and cross_summary.get("has_data"):
+            cb_lines = []
+            for item in cross_brand[:5]:
+                cb_lines.append(
+                    f"  - [{item.get('brand', '?')}] \"{(item.get('title', '') or '')[:60]}\" — "
+                    f"score: {item.get('performance_score', 0)}, views: {item.get('views', 0)}"
+                )
+            cb_block = "\n".join(cb_lines)
+
+            best_topics_str = ""
+            best_topics = cross_summary.get("best_topics", [])
+            if best_topics:
+                best_topics_str = "Best-performing topics: " + ", ".join(
+                    f"{t['topic']} (avg score: {t['avg_score']})" for t in best_topics[:3]
+                )
+
+            avoidance += f"""
+
+CROSS-BRAND PORTFOLIO INTELLIGENCE (what works best across ALL our brands):
+{cb_block}
+{best_topics_str}
+These titles/topics performed best across our entire portfolio.
+Learn from the patterns — hooks, angles, and topic structures that resonate with our combined audience."""
 
         # 🧬 Inject evolution lessons (what this agent has learned from past performance)
         lessons = intel.get("agent_lessons", "")
