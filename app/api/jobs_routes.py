@@ -23,6 +23,7 @@ class JobCreateRequest(BaseModel):
     cta_type: Optional[str] = "follow_tips"
     user_id: str = "default"
     platforms: Optional[List[str]] = None  # ["instagram", "facebook", "youtube"] - defaults to all if None
+    fixed_title: bool = False  # If True, use title as-is (no AI generation)
 
 
 class JobUpdateRequest(BaseModel):
@@ -128,7 +129,8 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
                 variant=request.variant,
                 ai_prompt=request.ai_prompt,
                 cta_type=request.cta_type,
-                platforms=request.platforms
+                platforms=request.platforms,
+                fixed_title=request.fixed_title
             )
             
             job_id = job.job_id

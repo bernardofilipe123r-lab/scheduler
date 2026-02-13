@@ -80,7 +80,8 @@ class JobManager:
         variant: str = "light",
         ai_prompt: Optional[str] = None,
         cta_type: Optional[str] = None,
-        platforms: Optional[List[str]] = None
+        platforms: Optional[List[str]] = None,
+        fixed_title: bool = False,
     ) -> GenerationJob:
         """Create a new generation job."""
         job_id = generate_job_id()
@@ -103,6 +104,7 @@ class JobManager:
             ai_prompt=ai_prompt,
             cta_type=cta_type,
             platforms=platforms,
+            fixed_title=fixed_title,
             status="pending",
             brand_outputs={brand: {"status": "pending"} for brand in brands}
         )
@@ -626,32 +628,56 @@ class JobManager:
         
         # ── POST variant: only generate backgrounds ──────────────────
         if job.variant == "post":
-            print(f"📸 POST variant — generating unique posts per brand", flush=True)
+            print(f"📸 POST variant — generating posts per brand", flush=True)
             results = {}
             total_brands = len(job.brands)
             try:
-                # Generate N unique posts (one per brand) in a single AI call
                 from app.services.content_generator_v2 import ContentGenerator
                 cg = ContentGenerator()
 
-                topic_hint = job.ai_prompt or None
-                print(f"   🧠 Generating {total_brands} unique posts...", flush=True)
-                self.update_job_status(job_id, "generating", "Generating unique content for each brand...", 5)
+                if getattr(job, 'fixed_title', False):
+                    # ── MANUAL MODE: Use the user's title as-is ──────────
+                    print(f"   📌 Fixed title mode — using title as-is: {job.title[:80]}", flush=True)
+                    self.update_job_status(job_id, "generating", "Using provided title...", 5)
 
-                batch_posts = cg.generate_post_titles_batch(total_brands, topic_hint)
-                print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
+                    # Generate image prompt only if not provided
+                    image_prompt = job.ai_prompt
+                    if not image_prompt:
+                        print(f"   🎨 No image prompt provided — generating from title...", flush=True)
+                        prompt_result = cg.generate_image_prompt(job.title)
+                        image_prompt = prompt_result.get("image_prompt", "")
+                        print(f"   ✓ Generated image prompt: {image_prompt[:80]}...", flush=True)
 
-                # Store unique content per brand in brand_outputs
-                for i, brand in enumerate(job.brands):
-                    post_data = batch_posts[i] if i < len(batch_posts) else cg._fallback_post_title()
-                    self.update_brand_output(job_id, brand, {
-                        "title": post_data.get("title", job.title),
-                        "caption": post_data.get("caption", ""),
-                        "ai_prompt": post_data.get("image_prompt", ""),
-                        "slide_texts": post_data.get("slide_texts", []),
-                        "status": "pending",
-                    })
-                    print(f"   📝 {brand}: {post_data.get('title', '?')[:60]}...", flush=True)
+                    # Apply the SAME title + prompt to each brand
+                    for brand in job.brands:
+                        self.update_brand_output(job_id, brand, {
+                            "title": job.title,
+                            "caption": "",
+                            "ai_prompt": image_prompt,
+                            "slide_texts": [],
+                            "status": "pending",
+                        })
+                        print(f"   📝 {brand}: {job.title[:60]}...", flush=True)
+                else:
+                    # ── AUTO MODE: AI generates unique posts per brand ───
+                    topic_hint = job.ai_prompt or None
+                    print(f"   🧠 Generating {total_brands} unique posts...", flush=True)
+                    self.update_job_status(job_id, "generating", "Generating unique content for each brand...", 5)
+
+                    batch_posts = cg.generate_post_titles_batch(total_brands, topic_hint)
+                    print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
+
+                    # Store unique content per brand in brand_outputs
+                    for i, brand in enumerate(job.brands):
+                        post_data = batch_posts[i] if i < len(batch_posts) else cg._fallback_post_title()
+                        self.update_brand_output(job_id, brand, {
+                            "title": post_data.get("title", job.title),
+                            "caption": post_data.get("caption", ""),
+                            "ai_prompt": post_data.get("image_prompt", ""),
+                            "slide_texts": post_data.get("slide_texts", []),
+                            "status": "pending",
+                        })
+                        print(f"   📝 {brand}: {post_data.get('title', '?')[:60]}...", flush=True)
 
                 # Now generate images per brand using their unique prompts
                 for i, brand in enumerate(job.brands):

@@ -30,6 +30,7 @@ class GenerationJob(Base):
     cta_type = Column(String(50), nullable=True)
     brands = Column(JSON, nullable=False)  # List of brands to generate
     platforms = Column(JSON, nullable=True)  # List of platforms: ["instagram", "facebook", "youtube"]
+    fixed_title = Column(Boolean, default=False, nullable=False, server_default="false")
     
     # Generated outputs per brand
     # Format: {"gymcollege": {"reel_id": "...", "thumbnail": "...", "video": "...", "status": "completed"}, ...}
@@ -68,6 +69,7 @@ class GenerationJob(Base):
             "ai_prompt": self.ai_prompt,
             "cta_type": self.cta_type,
             "brands": self.brands,
+            "fixed_title": getattr(self, 'fixed_title', False) or False,
             "platforms": platforms,
             "brand_outputs": self.brand_outputs or {},
             "ai_background_path": self.ai_background_path,

@@ -12,6 +12,7 @@ interface BackendJob {
   ai_prompt?: string
   cta_type: string
   status: string
+  fixed_title?: boolean
   brand_outputs: Record<string, unknown>
   current_step?: string
   progress_percent?: number
@@ -51,6 +52,7 @@ export interface JobCreateRequest {
   ai_prompt?: string
   cta_type?: string
   platforms?: string[]  // ['instagram', 'facebook', 'youtube']
+  fixed_title?: boolean
 }
 
 // API functions

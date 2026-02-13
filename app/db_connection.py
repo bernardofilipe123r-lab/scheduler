@@ -406,6 +406,17 @@ def run_migrations():
                 CREATE INDEX ix_system_diagnostics_status ON system_diagnostics(status);
             """
         },
+        # ── Add fixed_title column to generation_jobs ──
+        {
+            "name": "Add fixed_title column to generation_jobs",
+            "check_sql": """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='generation_jobs' AND column_name='fixed_title'
+            """,
+            "migration_sql": """
+                ALTER TABLE generation_jobs ADD COLUMN fixed_title BOOLEAN NOT NULL DEFAULT false;
+            """
+        },
     ]
     
     with engine.connect() as conn:
