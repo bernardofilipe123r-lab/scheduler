@@ -400,6 +400,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
 
         title = proposal.title
         content_lines = proposal.content_lines or []
+        slide_texts = proposal.slide_texts or []
         image_prompt = proposal.image_prompt
         content_type = proposal.content_type
         proposal_brand = proposal.brand
@@ -407,9 +408,9 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
 
         # Record in content tracker
         try:
-            from app.services.toby_agent import get_toby_agent
-            agent = get_toby_agent()
-            agent.tracker.record(
+            from app.services.content_tracker import ContentTracker
+            tracker = ContentTracker()
+            tracker.record(
                 title=title,
                 content_type=content_type,
                 quality_score=proposal.quality_score,
@@ -441,15 +442,19 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     for variant in variants:
         with get_db_session() as job_db:
             manager = JobManager(job_db)
+            # For posts, use slide_texts instead of content_lines
+            job_content = slide_texts if is_post and slide_texts else content_lines
+            # Posts don't go to YouTube
+            job_platforms = ["instagram", "facebook"] if is_post else ["instagram", "facebook", "youtube"]
             job = manager.create_job(
                 user_id=proposal_id,
                 title=title,
-                content_lines=content_lines,
+                content_lines=job_content,
                 brands=brands,
                 variant=variant,
                 ai_prompt=image_prompt,
                 cta_type="follow_tips",
-                platforms=["instagram", "facebook", "youtube"],
+                platforms=job_platforms,
             )
             job_ids.append(job.job_id)
 
@@ -513,11 +518,31 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
 @router.post("/proposals/{proposal_id}/reject")
 async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()):
     """Reject a proposal."""
-    from app.services.toby_agent import get_toby_agent
+    from app.db_connection import SessionLocal
+    from app.models import TobyProposal
 
-    agent = get_toby_agent()
-    result = agent.reject_proposal(proposal_id, notes=req.notes)
-    return result
+    db = SessionLocal()
+    try:
+        proposal = (
+            db.query(TobyProposal)
+            .filter(TobyProposal.proposal_id == proposal_id)
+            .first()
+        )
+        if not proposal:
+            return {"error": f"Proposal {proposal_id} not found"}
+
+        proposal.status = "rejected"
+        proposal.reviewed_at = datetime.utcnow()
+        if req.notes:
+            proposal.reviewer_notes = req.notes
+        db.commit()
+
+        return {"status": "rejected", "proposal_id": proposal_id}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+    finally:
+        db.close()
 
 
 @router.delete("/proposals/clear")
@@ -637,8 +662,8 @@ async def get_trending(
 @router.post("/optimize-now")
 async def optimize_now(background_tasks: BackgroundTasks):
     """
-    Trigger both Toby and Lexi to generate proposals immediately.
-    5 reels + 5 posts per agent = 20 total proposals.
+    Trigger all active agents to generate proposals immediately.
+    Uses GenericAgent system (DB-driven agents).
 
     Runs in background so the response is instant.
     Returns immediately with a confirmation — proposals appear in the feed.
@@ -647,43 +672,44 @@ async def optimize_now(background_tasks: BackgroundTasks):
 
     def _run_optimize():
         import traceback
+        from app.services.generic_agent import get_all_active_agents
 
-        maestro_log("maestro", "⚡ Optimize Now", "Triggered — Toby×5 reels + 5 posts, Lexi×5 reels + 5 posts", "🚀", "action")
+        agents = get_all_active_agents()
+        if not agents:
+            maestro_log("maestro", "⚡ Optimize Now", "No active agents found in DB", "⚠️", "action")
+            return
+
+        agent_names = ", ".join(a.agent_id for a in agents)
+        maestro_log("maestro", "⚡ Optimize Now", f"Triggered — {len(agents)} agents: {agent_names}", "🚀", "action")
 
         results = {}
+        total = 0
 
-        for agent_name, agent_label, agent_emoji in [("toby", "Toby", "🧠"), ("lexi", "Lexi", "📊")]:
+        for agent in agents:
             agent_results = {"reels": 0, "posts": 0, "errors": []}
 
             for content_type, ct_count in [("reel", 5), ("post", 5)]:
                 try:
-                    if agent_name == "toby":
-                        from app.services.toby_agent import get_toby_agent
-                        agent = get_toby_agent()
-                    else:
-                        from app.services.lexi_agent import get_lexi_agent
-                        agent = get_lexi_agent()
-
-                    maestro_log("maestro", "Optimize Now", f"Running {agent_label} × {ct_count} {content_type}s...", agent_emoji, "action")
+                    maestro_log("maestro", "Optimize Now", f"Running {agent.agent_id} × {ct_count} {content_type}s...", "🧠", "action")
                     result = agent.run(max_proposals=ct_count, content_type=content_type)
                     created = result.get("proposals_created", 0)
                     agent_results[f"{content_type}s"] = created
-                    maestro_log("maestro", "Optimize Now", f"{agent_label} done — {created} {content_type} proposals", "✅", "action")
+                    total += created
+                    maestro_log("maestro", "Optimize Now", f"{agent.agent_id} done — {created} {content_type} proposals", "✅", "action")
                 except Exception as e:
-                    maestro_log("maestro", "Optimize Now Error", f"{agent_label} {content_type}s failed: {e}", "❌", "action")
+                    maestro_log("maestro", "Optimize Now Error", f"{agent.agent_id} {content_type}s failed: {e}", "❌", "action")
                     traceback.print_exc()
                     agent_results["errors"].append(f"{content_type}: {str(e)[:100]}")
 
-            results[agent_name] = agent_results
+            results[agent.agent_id] = agent_results
 
-        total = sum(r.get("reels", 0) + r.get("posts", 0) for r in results.values())
         maestro_log("maestro", "⚡ Optimize Now Complete", f"Total: {total} proposals (reels + posts)", "🏁", "action")
 
     background_tasks.add_task(_run_optimize)
 
     return {
         "status": "started",
-        "message": "Optimize Now triggered — Toby (5 reels + 5 posts) + Lexi (5 reels + 5 posts) generating in background.",
+        "message": "Optimize Now triggered — all active agents generating 5 reels + 5 posts each in background.",
     }
 
 

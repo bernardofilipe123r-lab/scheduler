@@ -813,67 +813,8 @@ class MaestroDaemon:
                 self.state.log("maestro", "Both phases done", f"{reel_count} reels + {post_count} posts = {len(all_proposals)} total", "📊")
 
             else:
-                # ── Legacy fallback (Toby + Lexi hardcoded) ──
-                for brand in brands:
-                    brand_handle = BRAND_HANDLES.get(brand, brand)
-
-                    # Reels
-                    try:
-                        self.state.current_agent = "toby"
-                        from app.services.toby_agent import get_toby_agent
-                        toby = get_toby_agent()
-                        self.state.log("toby", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} dark reels for {brand} ({brand_handle})", "🧠")
-                        toby_result = toby.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
-                        toby_proposals = toby_result.get("proposals", [])
-                        all_proposals.extend(toby_proposals)
-                        self.state.agents["toby"].total_proposals += len(toby_proposals)
-                        self.state.log("toby", f"Done ({brand})", f"{len(toby_proposals)} dark proposals", "✅")
-                    except Exception as e:
-                        self.state.errors += 1
-                        self.state.agents["toby"].errors += 1
-                        self.state.log("toby", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
-                        traceback.print_exc()
-
-                    try:
-                        self.state.current_agent = "lexi"
-                        from app.services.lexi_agent import get_lexi_agent
-                        lexi = get_lexi_agent()
-                        self.state.log("lexi", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} light reels for {brand} ({brand_handle})", "📊")
-                        lexi_result = lexi.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="reel", brand=brand)
-                        lexi_proposals = lexi_result.get("proposals", [])
-                        all_proposals.extend(lexi_proposals)
-                        self.state.agents["lexi"].total_proposals += len(lexi_proposals)
-                        self.state.log("lexi", f"Done ({brand})", f"{len(lexi_proposals)} light proposals", "✅")
-                    except Exception as e:
-                        self.state.errors += 1
-                        self.state.agents["lexi"].errors += 1
-                        self.state.log("lexi", "Error", f"Generation failed for {brand}: {str(e)[:200]}", "❌")
-                        traceback.print_exc()
-
-                    # Posts (legacy: both agents generate posts too)
-                    try:
-                        self.state.current_agent = "toby"
-                        toby = get_toby_agent()
-                        self.state.log("toby", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} posts for {brand}", "📄")
-                        toby_post_result = toby.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="post", brand=brand)
-                        toby_post_proposals = toby_post_result.get("proposals", [])
-                        all_proposals.extend(toby_post_proposals)
-                        self.state.agents["toby"].total_proposals += len(toby_post_proposals)
-                    except Exception as e:
-                        self.state.errors += 1
-                        traceback.print_exc()
-
-                    try:
-                        self.state.current_agent = "lexi"
-                        lexi = get_lexi_agent()
-                        self.state.log("lexi", "Generating", f"{PROPOSALS_PER_BRAND_PER_AGENT} posts for {brand}", "📄")
-                        lexi_post_result = lexi.run(max_proposals=PROPOSALS_PER_BRAND_PER_AGENT, content_type="post", brand=brand)
-                        lexi_post_proposals = lexi_post_result.get("proposals", [])
-                        all_proposals.extend(lexi_post_proposals)
-                        self.state.agents["lexi"].total_proposals += len(lexi_post_proposals)
-                    except Exception as e:
-                        self.state.errors += 1
-                        traceback.print_exc()
+                # ── No dynamic agents found — log warning ──
+                self.state.log("maestro", "Warning", "No active agents found in DB — skipping burst", "⚠️")
 
             self.state.total_proposals_generated += len(all_proposals)
 

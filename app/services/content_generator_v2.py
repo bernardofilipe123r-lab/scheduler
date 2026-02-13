@@ -601,7 +601,8 @@ Generate a SINGLE short, engaging, health-focused title and a matching Instagram
 Women 35+ interested in healthy aging, energy, hormones, and longevity.
 
 ### WHAT MAKES A GREAT POST TITLE:
-- A short, clear health statement written in simple, wellness-friendly tone (not overly technical)
+- A bold, impactful health statement written in ALL CAPS
+- TITLE MUST BE 8-14 WORDS LONG (approximately 55-90 characters) — this is critical for the cover layout
 - Focused on one or two main benefits
 - Some titles may include percentages for extra impact
 - Positive, empowering, and slightly exaggerated to create scroll-stop engagement
@@ -625,22 +626,22 @@ Women 35+ interested in healthy aging, energy, hormones, and longevity.
 - Brain health and memory-supporting nutrients
 - Heart-healthy foods and natural remedies
 
-### EXAMPLE POST TITLES (learn the pattern):
-- "Vitamin D and magnesium helps reduce depression and brain aging."
-- "Collagen may improve skin elasticity by up to 20% after 8 weeks."
-- "Magnesium supports better sleep and stress relief during midlife."
-- "A cup of chamomile tea before bed may improve sleep quality by 30%."
-- "Probiotics may reduce bloating and support gut health after 40."
-- "Omega-3 from salmon and walnuts may reduce inflammation by 25%."
-- "Adding turmeric to your meals may lower joint pain and inflammation."
-- "Drinking warm lemon water each morning supports digestion and energy."
-- "Ashwagandha may reduce cortisol levels and support hormonal balance."
-- "Green tea antioxidants support metabolism and healthy aging."
-- "Eating berries daily may slow brain aging and boost memory."
-- "A spoonful of honey and cinnamon may support immune health."
-- "Dark chocolate in moderation may improve mood and heart health."
-- "Bone broth contains collagen that supports skin and joint health."
-- "Flaxseed may help balance estrogen levels during menopause."
+### EXAMPLE POST TITLES (learn the pattern — 8-14 words, ALL CAPS):
+- "VITAMIN D AND MAGNESIUM TOGETHER MAY REDUCE DEPRESSION AND SLOW BRAIN AGING"
+- "YOUR SKIN LOSES 1% OF ITS COLLAGEN EVERY YEAR AFTER AGE 30"
+- "MAGNESIUM IS THE MINERAL MOST WOMEN DON'T GET ENOUGH OF, AND IT AFFECTS EVERYTHING"
+- "A SIMPLE CUP OF CHAMOMILE TEA BEFORE BED MAY IMPROVE YOUR SLEEP BY 30%"
+- "PROBIOTICS DO MORE THAN FIX DIGESTION. THEY SUPPORT YOUR IMMUNE SYSTEM TOO"
+- "OMEGA-3 FROM SALMON AND WALNUTS MAY REDUCE CHRONIC INFLAMMATION BY 25%"
+- "ADDING TURMERIC TO YOUR DAILY MEALS MAY LOWER JOINT PAIN AND INFLAMMATION"
+- "DRINKING WARM LEMON WATER EACH MORNING SUPPORTS DIGESTION, ENERGY, AND METABOLISM"
+- "HOW YOUR SLEEP SCHEDULE IS QUIETLY DESTROYING YOUR MUSCLE RECOVERY"
+- "THE HIDDEN REASON YOUR PROTEIN INTAKE ISN'T ACTUALLY BUILDING MUSCLE"
+- "CHRONIC STRESS DOESN'T JUST FEEL BAD. IT LITERALLY AGES YOUR CELLS FASTER"
+- "STABLE BLOOD SUGAR ISN'T JUST FOR DIABETICS. IT'S THE KEY TO STEADY ENERGY"
+- "95% OF AMERICAN WOMEN DON'T EAT ENOUGH FIBER. HERE'S WHY THAT MATTERS"
+- "WALKING AFTER MEALS IS ONE OF THE MOST UNDERRATED HABITS FOR HEALTH"
+- "DRINKING MORE WATER WON'T HELP IF YOU'RE LOW ON ELECTROLYTES"
 
 ### WHAT TO AVOID:
 - Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."

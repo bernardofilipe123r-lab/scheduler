@@ -164,6 +164,7 @@ CRITICAL RULE — NEVER MENTION THE AVATAR DIRECTLY:
 OUR POST TEMPLATE (fixed format — cover slide + 3-4 text carousel slides):
 
 1) TITLE — The main hook on the cover slide. ALL CAPS. Bold, statement-based.
+   MUST BE 8-14 WORDS (55-90 characters). Needs to fill 3 lines on the cover.
 
 2) SLIDE TEXTS — 3-4 paragraph slides (carousel slides 2, 3, 4, optionally 5):
    Each slide is a standalone paragraph (3-6 sentences) in calm, authoritative, educational tone.

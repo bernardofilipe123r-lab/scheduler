@@ -95,12 +95,6 @@ def check_post_quality(title: str, caption: str = "") -> PostQualityResult:
     if title.strip().endswith("."):
         result.fail("Title ends with period", 5)
 
-    # Should be sentence case, not ALL CAPS
-    words = title.split()
-    caps_count = sum(1 for w in words if w.isupper() and len(w) > 2)
-    if caps_count > len(words) * 0.5:
-        result.fail("Title is mostly ALL CAPS (reel-style)", 15)
-
     # Should not be a list/numbered format
     if re.match(r"^\d+\s", title.strip()):
         result.fail("Title starts with a number (list-style, reel-style)", 15)

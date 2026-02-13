@@ -20,9 +20,15 @@ Endpoints:
     GET  /api/toby/trending           — Trending content discovered by scout
 """
 
+from datetime import datetime
 from typing import Optional
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
+from sqlalchemy import desc, func
+
+from app.db_connection import SessionLocal
+from app.models import TobyProposal
 
 router = APIRouter(prefix="/api/toby", tags=["toby"])
 
@@ -45,38 +51,77 @@ class AcceptResponse(BaseModel):
 @router.get("/status")
 async def toby_status():
     """
-    Get Toby's daemon status — is he running or paused, uptime,
-    last thought, recent activity log.
+    Get Toby's status and proposal stats.
+    Daemon is legacy — returns a simple status response.
     """
-    from app.services.toby_daemon import get_toby_daemon
+    status = {
+        "running": False,
+        "paused": True,
+        "message": "Toby daemon is legacy. Proposals are managed via Maestro.",
+    }
 
-    daemon = get_toby_daemon()
-    status = daemon.get_status()
+    # Proposal stats inline
+    db = SessionLocal()
+    try:
+        total = db.query(func.count(TobyProposal.id)).scalar() or 0
+        pending = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "pending").scalar() or 0
+        accepted = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "accepted").scalar() or 0
+        rejected = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "rejected").scalar() or 0
 
-    # Also include proposal stats
-    from app.services.toby_agent import get_toby_agent
-    agent = get_toby_agent()
-    stats = agent.get_proposal_stats()
+        strategy_counts = (
+            db.query(TobyProposal.strategy, func.count(TobyProposal.id))
+            .group_by(TobyProposal.strategy)
+            .all()
+        )
+        strategy_acceptance = {}
+        for strategy, count in strategy_counts:
+            strat_accepted = (
+                db.query(func.count(TobyProposal.id))
+                .filter(TobyProposal.strategy == strategy, TobyProposal.status == "accepted")
+                .scalar() or 0
+            )
+            strategy_acceptance[strategy] = {
+                "total": count,
+                "accepted": strat_accepted,
+                "rate": round(strat_accepted / count * 100, 1) if count > 0 else 0,
+            }
+
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_count = (
+            db.query(func.count(TobyProposal.id))
+            .filter(TobyProposal.agent_name == "toby")
+            .filter(TobyProposal.created_at >= today_start)
+            .scalar() or 0
+        )
+
+        stats = {
+            "total": total,
+            "today": today_count,
+            "daily_limit": 15,
+            "pending": pending,
+            "accepted": accepted,
+            "rejected": rejected,
+            "acceptance_rate": round(accepted / total * 100, 1) if total > 0 else 0,
+            "strategies": strategy_acceptance,
+        }
+    except Exception as e:
+        stats = {"error": str(e)}
+    finally:
+        db.close()
 
     return {**status, "proposal_stats": stats}
 
 
 @router.post("/pause")
 async def pause_toby():
-    """Pause Toby — stops all autonomous cycles but keeps state."""
-    from app.services.toby_daemon import get_toby_daemon
-
-    daemon = get_toby_daemon()
-    return daemon.pause()
+    """Pause Toby — legacy endpoint, daemon no longer runs."""
+    return {"status": "paused", "message": "Toby daemon is legacy. No action taken."}
 
 
 @router.post("/resume")
 async def resume_toby():
-    """Resume Toby — restarts all autonomous cycles."""
-    from app.services.toby_daemon import get_toby_daemon
-
-    daemon = get_toby_daemon()
-    return daemon.resume()
+    """Resume Toby — legacy endpoint, daemon no longer runs."""
+    return {"status": "resumed", "message": "Toby daemon is legacy. No action taken."}
 
 
 # ── PROPOSALS ─────────────────────────────────────────────────
@@ -87,11 +132,22 @@ async def list_proposals(
     limit: int = Query(50, ge=1, le=200),
 ):
     """List Toby's proposals."""
-    from app.services.toby_agent import get_toby_agent
+    db = SessionLocal()
+    try:
+        query = db.query(TobyProposal)
+        if status:
+            query = query.filter(TobyProposal.status == status)
 
-    agent = get_toby_agent()
-    proposals = agent.get_proposals(status=status, limit=limit)
-    return {"count": len(proposals), "proposals": proposals}
+        proposals = (
+            query
+            .order_by(desc(TobyProposal.created_at))
+            .limit(limit)
+            .all()
+        )
+        result = [p.to_dict() for p in proposals]
+        return {"count": len(result), "proposals": result}
+    finally:
+        db.close()
 
 
 @router.get("/proposals/{proposal_id}")
@@ -122,21 +178,75 @@ async def accept_proposal(proposal_id: str):
     The frontend should then use the returned title/content_lines/image_prompt
     to trigger God Automation for brand version creation.
     """
-    from app.services.toby_agent import get_toby_agent
+    db = SessionLocal()
+    try:
+        proposal = (
+            db.query(TobyProposal)
+            .filter(TobyProposal.proposal_id == proposal_id)
+            .first()
+        )
+        if not proposal:
+            return {"error": f"Proposal {proposal_id} not found"}
 
-    agent = get_toby_agent()
-    result = agent.accept_proposal(proposal_id)
-    return result
+        if proposal.status != "pending":
+            return {"error": f"Proposal {proposal_id} is already {proposal.status}"}
+
+        proposal.status = "accepted"
+        proposal.reviewed_at = datetime.utcnow()
+        db.commit()
+
+        # Record in content tracker
+        from app.services.content_tracker import ContentTracker
+        tracker = ContentTracker()
+        tracker.record(
+            title=proposal.title,
+            content_type=proposal.content_type,
+            quality_score=proposal.quality_score,
+        )
+
+        return {
+            "status": "accepted",
+            "proposal_id": proposal_id,
+            "title": proposal.title,
+            "content_lines": proposal.content_lines,
+            "slide_texts": proposal.slide_texts,
+            "image_prompt": proposal.image_prompt,
+            "caption": proposal.caption,
+            "content_type": proposal.content_type,
+            "strategy": proposal.strategy,
+        }
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+    finally:
+        db.close()
 
 
 @router.post("/proposals/{proposal_id}/reject")
 async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()):
     """Reject a proposal with optional notes."""
-    from app.services.toby_agent import get_toby_agent
+    db = SessionLocal()
+    try:
+        proposal = (
+            db.query(TobyProposal)
+            .filter(TobyProposal.proposal_id == proposal_id)
+            .first()
+        )
+        if not proposal:
+            return {"error": f"Proposal {proposal_id} not found"}
 
-    agent = get_toby_agent()
-    result = agent.reject_proposal(proposal_id, notes=req.notes)
-    return result
+        proposal.status = "rejected"
+        proposal.reviewed_at = datetime.utcnow()
+        if req.notes:
+            proposal.reviewer_notes = req.notes
+        db.commit()
+
+        return {"status": "rejected", "proposal_id": proposal_id}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+    finally:
+        db.close()
 
 
 # ── STATS & INSIGHTS ─────────────────────────────────────────
@@ -144,10 +254,53 @@ async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()
 @router.get("/stats")
 async def toby_stats():
     """Get Toby's proposal stats (total, accepted, rejected, per-strategy)."""
-    from app.services.toby_agent import get_toby_agent
+    db = SessionLocal()
+    try:
+        total = db.query(func.count(TobyProposal.id)).scalar() or 0
+        pending = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "pending").scalar() or 0
+        accepted = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "accepted").scalar() or 0
+        rejected = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "rejected").scalar() or 0
 
-    agent = get_toby_agent()
-    return agent.get_proposal_stats()
+        strategy_counts = (
+            db.query(TobyProposal.strategy, func.count(TobyProposal.id))
+            .group_by(TobyProposal.strategy)
+            .all()
+        )
+        strategy_acceptance = {}
+        for strategy, count in strategy_counts:
+            strat_accepted = (
+                db.query(func.count(TobyProposal.id))
+                .filter(TobyProposal.strategy == strategy, TobyProposal.status == "accepted")
+                .scalar() or 0
+            )
+            strategy_acceptance[strategy] = {
+                "total": count,
+                "accepted": strat_accepted,
+                "rate": round(strat_accepted / count * 100, 1) if count > 0 else 0,
+            }
+
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_count = (
+            db.query(func.count(TobyProposal.id))
+            .filter(TobyProposal.agent_name == "toby")
+            .filter(TobyProposal.created_at >= today_start)
+            .scalar() or 0
+        )
+
+        return {
+            "total": total,
+            "today": today_count,
+            "daily_limit": 15,
+            "pending": pending,
+            "accepted": accepted,
+            "rejected": rejected,
+            "acceptance_rate": round(accepted / total * 100, 1) if total > 0 else 0,
+            "strategies": strategy_acceptance,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        db.close()
 
 
 @router.get("/insights")

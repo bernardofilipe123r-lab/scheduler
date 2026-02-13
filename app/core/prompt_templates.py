@@ -571,7 +571,8 @@ Pick {count} DIFFERENT categories from this list (one per post):
 18. Fiber intake and digestive health
 
 ### WHAT MAKES A GREAT POST TITLE (Slide 1):
-- A short, clear health statement written in ALL CAPS
+- A bold, impactful health statement written in ALL CAPS
+- TITLE MUST BE 8-14 WORDS LONG (approximately 55-90 characters) — this is critical for the cover layout
 - Focused on one or two main benefits
 - Positive, empowering, and slightly exaggerated to create scroll-stop engagement
 - Do NOT lie, but dramatize slightly to spark discussion
