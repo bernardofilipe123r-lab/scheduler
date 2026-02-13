@@ -105,9 +105,11 @@ export function PostsPage() {
   }
 
   const toggleAutoBrand = (brand: BrandName) => {
-    setAutoBrands((prev) =>
-      prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
-    )
+    setAutoBrands((prev) => {
+      const next = prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
+      setAutoCount(next.length)
+      return next
+    })
   }
 
   const handleAutoSubmit = async () => {
