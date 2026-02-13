@@ -826,6 +826,10 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
     setScheduleOffset(defaultOffset)
   }, [defaultOffset])
   
+  // Logo
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+
   // Step 4: Platform credentials (optional)
   const [instagramHandle, setInstagramHandle] = useState('')
   const [facebookPageId, setFacebookPageId] = useState('')
@@ -938,6 +942,24 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
     
     try {
       await createBrandMutation.mutateAsync(input)
+
+      // Upload logo if provided
+      if (logoFile) {
+        try {
+          const formData = new FormData()
+          formData.append('logo', logoFile)
+          // Theme endpoint requires color fields too
+          formData.append('brand_color', primaryColor)
+          formData.append('light_title_color', '#000000')
+          formData.append('light_bg_color', adjustColorBrightness(primaryColor, 180))
+          formData.append('dark_title_color', '#ffffff')
+          formData.append('dark_bg_color', adjustColorBrightness(primaryColor, -40))
+          await fetch(`/api/brands/${brandId}/theme`, { method: 'POST', body: formData })
+        } catch {
+          console.warn('Logo upload failed — can be added later via theme editor')
+        }
+      }
+
       onSuccess?.()
       onClose()
     } catch (err) {
@@ -1030,12 +1052,67 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
             </div>
           </div>
 
+          {/* Logo Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Brand Logo</label>
+            <div className="flex items-center gap-4">
+              {logoPreview ? (
+                <div className="relative">
+                  <img
+                    src={logoPreview}
+                    alt="Logo preview"
+                    className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-white p-1"
+                  />
+                  <button
+                    onClick={() => { setLogoPreview(null); setLogoFile(null) }}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <label className="cursor-pointer group">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        setLogoFile(file)
+                        const reader = new FileReader()
+                        reader.onload = (ev) => setLogoPreview(ev.target?.result as string)
+                        reader.readAsDataURL(file)
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <div className="w-16 h-16 rounded-lg bg-gray-100 flex flex-col items-center justify-center group-hover:bg-gray-200 transition-colors border-2 border-dashed border-gray-300">
+                    <Upload className="w-5 h-5 text-gray-400" />
+                    <span className="text-[10px] text-gray-400 mt-1">Upload</span>
+                  </div>
+                </label>
+              )}
+              <div className="flex-1">
+                <p className="text-xs text-gray-500">
+                  PNG or SVG recommended. Used on reels and thumbnails.
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  If no logo, the short name <strong>{shortName || '???'}</strong> will be used.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Preview */}
           {displayName && (
             <div className="bg-gray-100 rounded-xl p-4 text-center mt-4">
-              <div className="w-16 h-16 rounded-full bg-primary-500 flex items-center justify-center mx-auto mb-2">
-                <span className="text-white font-bold text-xl">{shortName || '?'}</span>
-              </div>
+              {logoPreview ? (
+                <img src={logoPreview} alt="Logo" className="w-16 h-16 object-contain mx-auto mb-2" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-primary-500 flex items-center justify-center mx-auto mb-2">
+                  <span className="text-white font-bold text-xl">{shortName || '?'}</span>
+                </div>
+              )}
               <p className="font-semibold">{displayName}</p>
               <p className="text-sm text-gray-500 font-mono">{brandId || 'brand-id'}</p>
             </div>
@@ -1170,14 +1247,18 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
                   background: `linear-gradient(180deg, ${adjustColorBrightness(primaryColor, 180)} 0%, ${adjustColorBrightness(accentColor, 150)} 100%)`,
                 }}
               >
-                {/* Brand abbreviation */}
+                {/* Brand logo / abbreviation */}
                 <div className="absolute top-3 left-0 right-0 flex justify-center">
-                  <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: primaryColor }}>
-                    {shortName || 'BRD'}
-                  </span>
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="" className="h-4 object-contain opacity-70" />
+                  ) : (
+                    <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: primaryColor }}>
+                      {shortName || 'BRD'}
+                    </span>
+                  )}
                 </div>
                 {/* Title */}
-                <div className="absolute top-6 left-3 right-3 flex justify-center">
+                <div className="absolute top-7 left-3 right-3 flex justify-center">
                   <p className="text-[9px] font-black text-center leading-tight uppercase" style={{ color: '#000000' }}>
                     YOUR BRAIN HAS A CLEANING SYSTEM
                   </p>
@@ -1219,14 +1300,18 @@ function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
                   background: `linear-gradient(180deg, ${adjustColorBrightness(primaryColor, -40)} 0%, ${adjustColorBrightness(primaryColor, -20)} 100%)`,
                 }}
               >
-                {/* Brand abbreviation */}
+                {/* Brand logo / abbreviation */}
                 <div className="absolute top-3 left-0 right-0 flex justify-center">
-                  <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: accentColor }}>
-                    {shortName || 'BRD'}
-                  </span>
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="" className="h-4 object-contain opacity-70" />
+                  ) : (
+                    <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: accentColor }}>
+                      {shortName || 'BRD'}
+                    </span>
+                  )}
                 </div>
                 {/* Title */}
-                <div className="absolute top-6 left-3 right-3 flex justify-center">
+                <div className="absolute top-7 left-3 right-3 flex justify-center">
                   <p className="text-[9px] font-black text-center leading-tight uppercase text-white">
                     YOUR BRAIN HAS A CLEANING SYSTEM
                   </p>
