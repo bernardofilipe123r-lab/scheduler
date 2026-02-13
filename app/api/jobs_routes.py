@@ -485,27 +485,111 @@ async def delete_jobs_by_status(job_status: str = "completed"):
         db.close()
 
 
+class BulkDeleteByIdsRequest(BaseModel):
+    """Request to delete jobs by a list of IDs."""
+    job_ids: List[str]
+
+
+@router.post(
+    "/bulk/delete-by-ids",
+    summary="Delete multiple jobs by their IDs"
+)
+async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest):
+    """Delete multiple jobs by their IDs in a single operation.
+    Also deletes associated scheduled_reels entries and cleans up files."""
+    from app.models import ScheduledReel
+
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            deleted_count = 0
+            errors = []
+
+            for job_id in request.job_ids:
+                try:
+                    job = manager.get_job(job_id)
+                    if not job:
+                        continue  # Skip missing jobs silently
+
+                    # Delete associated scheduled reels
+                    brand_outputs = job.brand_outputs or {}
+                    for brand, output in brand_outputs.items():
+                        reel_id = output.get("reel_id") if isinstance(output, dict) else None
+                        if reel_id:
+                            db.query(ScheduledReel).filter(
+                                ScheduledReel.reel_id == reel_id
+                            ).delete(synchronize_session=False)
+
+                    # Clean up files (best-effort, don't fail on file errors)
+                    try:
+                        manager.cleanup_job_files(job_id)
+                    except Exception:
+                        pass  # File cleanup is best-effort
+
+                    # Delete the job record
+                    db.delete(job)
+                    deleted_count += 1
+                except Exception as e:
+                    errors.append({"job_id": job_id, "error": str(e)})
+
+            db.commit()
+
+            return {
+                "status": "deleted",
+                "deleted": deleted_count,
+                "requested": len(request.job_ids),
+                "errors": errors
+            }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to bulk delete jobs: {str(e)}"
+        )
+
+
 @router.delete(
     "/{job_id}",
     summary="Delete a job"
 )
 async def delete_job(job_id: str):
-    """Delete a job and optionally its associated files."""
+    """Delete a job and its associated files and scheduled reels."""
+    from app.models import ScheduledReel
+
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            
-            if not manager.delete_job(job_id):
+            job = manager.get_job(job_id)
+
+            if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
+            # Delete associated scheduled reels
+            brand_outputs = job.brand_outputs or {}
+            for brand, output in brand_outputs.items():
+                reel_id = output.get("reel_id") if isinstance(output, dict) else None
+                if reel_id:
+                    db.query(ScheduledReel).filter(
+                        ScheduledReel.reel_id == reel_id
+                    ).delete(synchronize_session=False)
+
+            # Clean up files (best-effort)
+            try:
+                manager.cleanup_job_files(job_id)
+            except Exception:
+                pass
+
+            # Delete the job
+            db.delete(job)
+            db.commit()
+
             return {
                 "status": "deleted",
                 "job_id": job_id
             }
-            
+
     except HTTPException:
         raise
     except Exception as e:

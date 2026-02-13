@@ -418,6 +418,14 @@ class MaestroState:
                 "last_status": self.last_diagnostics_status,
                 "cycle_minutes": DIAGNOSTICS_CYCLE_MINUTES,
             },
+            "bootstrap": {
+                "last_bootstrap_at": self.last_bootstrap_at.isoformat() if self.last_bootstrap_at else None,
+                "last_bootstrap_human": _time_ago(self.last_bootstrap_at) if self.last_bootstrap_at else "never",
+                "is_complete": self.bootstrap_complete,
+                "total_ticks": self.bootstrap_ticks,
+                "items_collected": self.bootstrap_items_collected,
+                "cycle_minutes": BOOTSTRAP_CYCLE_MINUTES,
+            },
             "recent_activity": self.activity_log[:30],
             "daily_config": self._get_daily_config(),
         }
@@ -1356,6 +1364,138 @@ class MaestroDaemon:
         except Exception as e:
             self.state.errors += 1
             self.state.log("maestro", "Error", f"Scout cycle failed: {str(e)[:200]}", "❌")
+
+    # ──────────────────────────────────────────────────────────
+    # CYCLE: BOOTSTRAP — Cold-start safe research (every 20min)
+    # ──────────────────────────────────────────────────────────
+
+    def _bootstrap_cycle(self):
+        """
+        Cold-start research cycle — populates agents' knowledge base safely.
+
+        Runs every 20 minutes and auto-disables once mature.
+
+        Rate-limit strategy (Meta API friendly):
+          - Each tick: 1 own account + 1 competitor + 1 hashtag = ~4 API calls
+          - 4 calls / 20 min = 12 calls/hour — well under Meta's 200/hour limit
+          - 2-second pauses between API calls inside bootstrap_scan_tick()
+          - Rotates through accounts/hashtags naturally (picks least-scanned)
+
+        Auto-disable conditions (checked BEFORE each tick):
+          - 50+ own-account entries in trending_content
+          - AND 150+ total trending entries
+          - OR system has been running for 14+ days
+          - OR bootstrap_complete flag set manually
+
+        Once disabled, removes itself from the scheduler permanently.
+        """
+        # Skip if already complete
+        if self.state.bootstrap_complete:
+            return
+
+        # Check if bootstrap was already marked complete in DB
+        if _db_get("bootstrap_complete", "false") == "true":
+            self.state.bootstrap_complete = True
+            self._stop_bootstrap_scheduler()
+            return
+
+        try:
+            from app.services.trend_scout import get_trend_scout
+            scout = get_trend_scout()
+
+            # ── Check maturity — should we stop? ──
+            maturity = scout.get_bootstrap_maturity()
+
+            if maturity.get("is_mature"):
+                self.state.bootstrap_complete = True
+                _db_set("bootstrap_complete", "true")
+                self._stop_bootstrap_scheduler()
+                self.state.log(
+                    "maestro", "🌱 Bootstrap Complete",
+                    f"System is mature — own: {maturity['own_account_entries']}, "
+                    f"competitors: {maturity['competitor_entries']}, "
+                    f"hashtags: {maturity['hashtag_entries']}, "
+                    f"performances: {maturity['tracked_performances']}. "
+                    f"Collected {self.state.bootstrap_items_collected} items over {self.state.bootstrap_ticks} ticks. "
+                    f"Bootstrap cycle disabled — regular Scout cycle handles ongoing research.",
+                    "✅"
+                )
+                return
+
+            # Check age-based auto-disable (14 days)
+            bootstrap_started = _db_get("bootstrap_started_at", "")
+            if bootstrap_started:
+                try:
+                    started = datetime.fromisoformat(bootstrap_started)
+                    age_days = (datetime.utcnow() - started).days
+                    if age_days >= BOOTSTRAP_MAX_DAYS:
+                        self.state.bootstrap_complete = True
+                        _db_set("bootstrap_complete", "true")
+                        self._stop_bootstrap_scheduler()
+                        self.state.log(
+                            "maestro", "🌱 Bootstrap Aged Out",
+                            f"Running for {age_days} days (max {BOOTSTRAP_MAX_DAYS}). "
+                            f"Collected {self.state.bootstrap_items_collected} items. Disabling.",
+                            "✅"
+                        )
+                        return
+                except Exception:
+                    pass
+            else:
+                # First ever run — record start time
+                _db_set("bootstrap_started_at", datetime.utcnow().isoformat())
+
+            # ── Run one safe tick ──
+            self.state.log(
+                "maestro", "🌱 Bootstrap Tick",
+                f"Tick #{self.state.bootstrap_ticks + 1} — "
+                f"own: {maturity.get('own_account_entries', 0)}, "
+                f"comp: {maturity.get('competitor_entries', 0)}, "
+                f"hash: {maturity.get('hashtag_entries', 0)} "
+                f"(mature at: own≥50 & total≥150)",
+                "🌱"
+            )
+
+            result = scout.bootstrap_scan_tick()
+
+            if "error" not in result:
+                tick_total = (
+                    result.get("own_account_new", 0) +
+                    result.get("competitor_new", 0) +
+                    result.get("hashtag_new", 0)
+                )
+                self.state.bootstrap_ticks += 1
+                self.state.bootstrap_items_collected += tick_total
+                self.state.last_bootstrap_at = datetime.utcnow()
+
+                self.state.log(
+                    "maestro", "🌱 Bootstrap Done",
+                    f"+{tick_total} items (own: +{result.get('own_account_new', 0)}, "
+                    f"comp: +{result.get('competitor_new', 0)}, "
+                    f"hash: +{result.get('hashtag_new', 0)}) — "
+                    f"{result.get('api_calls', 0)} API calls used. "
+                    f"Total collected: {self.state.bootstrap_items_collected}",
+                    "🌱"
+                )
+            else:
+                self.state.log(
+                    "maestro", "Bootstrap tick error",
+                    f"{result.get('error', 'unknown')[:200]}",
+                    "⚠️", "detail"
+                )
+
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "Error", f"Bootstrap cycle failed: {str(e)[:200]}", "❌")
+
+    def _stop_bootstrap_scheduler(self):
+        """Remove the bootstrap job from the scheduler."""
+        try:
+            if self.scheduler and self.scheduler.running:
+                self.scheduler.remove_job("maestro_bootstrap")
+                self.state.log("maestro", "Bootstrap scheduler removed", "No longer needed", "🌱", "detail")
+        except Exception:
+            pass  # Job may not exist
 
     # ──────────────────────────────────────────────────────────
     # CYCLE: FEEDBACK — Performance attribution (48-72h)

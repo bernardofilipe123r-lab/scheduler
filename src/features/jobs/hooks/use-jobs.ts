@@ -84,6 +84,18 @@ export function useDeleteJobsByStatus() {
   })
 }
 
+export function useDeleteJobsByIds() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (jobIds: string[]) => jobsApi.deleteByIds(jobIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: ['scheduled'] })
+    },
+  })
+}
+
 export function useCancelJob() {
   const queryClient = useQueryClient()
   

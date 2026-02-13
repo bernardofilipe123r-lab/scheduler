@@ -79,6 +79,12 @@ export const jobsApi = {
 
   deleteByStatus: (jobStatus: string) =>
     del<{ status: string; deleted: number }>(`/jobs/bulk/by-status?job_status=${jobStatus}`),
+
+  deleteByIds: (jobIds: string[]) =>
+    post<{ status: string; deleted: number; requested: number; errors: { job_id: string; error: string }[] }>(
+      '/jobs/bulk/delete-by-ids',
+      { job_ids: jobIds }
+    ),
   
   cancel: async (id: string): Promise<Job> => {
     const job = await post<BackendJob>(`/jobs/${id}/cancel`)

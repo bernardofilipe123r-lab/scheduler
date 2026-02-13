@@ -18,8 +18,7 @@ import {
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
-import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus, jobsApi } from '@/features/jobs'
-import { useQueryClient } from '@tanstack/react-query'
+import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus, useDeleteJobsByIds } from '@/features/jobs'
 import { BrandBadge } from '@/features/brands'
 import { StatusBadge, FullPageLoader, Modal } from '@/shared/components'
 import type { Job, Variant, BrandName } from '@/shared/types'
@@ -32,7 +31,7 @@ export function HistoryPage() {
   const deleteJob = useDeleteJob()
   const regenerateJob = useRegenerateJob()
   const deleteByStatus = useDeleteJobsByStatus()
-  const queryClient = useQueryClient()
+  const deleteByIds = useDeleteJobsByIds()
   
   const jobsArray = Array.isArray(jobs) ? jobs : []
   
@@ -592,20 +591,19 @@ export function HistoryPage() {
                   if (!confirm(`Delete all ${sectionJobs.length} ${label.toLowerCase()}? This cannot be undone.`)) return
                   setIsDeletingSection(true)
                   try {
-                    // Delete sequentially to avoid concurrent mutation issues
-                    let deleted = 0
-                    for (const j of sectionJobs) {
-                      try {
-                        await jobsApi.delete(j.id)
-                        deleted++
-                      } catch { /* continue */ }
+                    const jobIds = sectionJobs.map(j => j.id)
+                    const result = await deleteByIds.mutateAsync(jobIds)
+                    if (result.deleted > 0) {
+                      toast.success(`Deleted ${result.deleted} ${label.toLowerCase()}`)
+                    } else {
+                      toast.error(`Failed to delete ${label.toLowerCase()}`)
                     }
-                    // Invalidate queries once at the end
-                    queryClient.invalidateQueries({ queryKey: ['jobs'] })
-                    queryClient.invalidateQueries({ queryKey: ['scheduled'] })
-                    toast.success(`Deleted ${deleted} ${label.toLowerCase()}`)
-                  } catch {
-                    toast.error('Failed to delete some jobs')
+                    if (result.errors?.length > 0) {
+                      console.error('Bulk delete errors:', result.errors)
+                    }
+                  } catch (err) {
+                    console.error('Delete all failed:', err)
+                    toast.error(`Failed to delete ${label.toLowerCase()}`)
                   } finally {
                     setIsDeletingSection(false)
                   }
