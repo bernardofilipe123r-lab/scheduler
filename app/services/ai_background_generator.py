@@ -429,18 +429,25 @@ class AIBackgroundGenerator:
         
         # For posts, we use the user prompt directly (already wellness-styled from AI)
         # Add a quality-boosting suffix with composition guidance
+        # Composition guidance goes FIRST to ensure AI model prioritizes it
+        composition_prefix = (
+            "CRITICAL LAYOUT RULE: The hero subject MUST occupy the TOP THIRD of the frame. "
+            "The top 30-40%% of the image contains ALL important visual elements — the main subject, "
+            "key details, and focal point. The bottom half should be empty space, soft bokeh, "
+            "a clean surface, subtle gradient, or negative space. "
+            "Think of it as a social media post where only the top portion is visible in the feed. "
+            "Top-heavy composition, bird's eye or slightly overhead angle. "
+        )
+        
         quality_suffix = (
             "Ultra high quality, 8K, sharp focus, professional photography, "
             "soft natural lighting, premium lifestyle aesthetic. "
             "Photorealistic, detailed textures, beautiful composition. "
-            "CRITICAL COMPOSITION: Subject must be centered in the UPPER HALF of the frame. "
-            "The bottom third of the image should be soft bokeh, clean surface, or subtle gradient — "
-            "NOT the main subject. Portrait orientation, slightly overhead camera angle, "
-            "hero subject positioned in center-upper area of frame."
+            "Portrait orientation 4:5 aspect ratio."
         )
         
         prompt = user_prompt or "Soft cinematic wellness still life with natural ingredients on white countertop in morning light."
-        prompt = f"{prompt} {quality_suffix}"
+        prompt = f"{composition_prefix} {prompt} {quality_suffix}"
         
         # Add unique identifier
         unique_id = str(uuid.uuid4())[:8]

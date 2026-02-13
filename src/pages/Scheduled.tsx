@@ -867,7 +867,7 @@ export function ScheduledPage() {
                     <img
                       src={post.thumbnail_path}
                       alt=""
-                      className="w-16 h-24 object-cover rounded"
+                      className="w-16 h-24 object-cover object-top rounded"
                     />
                   )}
                   <div className="flex-1 min-w-0">
@@ -1106,7 +1106,7 @@ export function ScheduledPage() {
                   <img
                     src={selectedPost.thumbnail_path}
                     alt="Thumbnail"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover object-top"
                   />
                 </div>
               )}

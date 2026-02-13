@@ -638,7 +638,7 @@ export function PromptsPage({ contentType = 'posts' }: { contentType?: PromptCon
                         <img
                           src={result.image_data}
                           alt={`Test image ${result.index}`}
-                          className="w-full aspect-[4/5] object-cover"
+                          className="w-full aspect-[4/5] object-cover object-top"
                         />
                         <div className="p-3 bg-gray-50 border-t border-gray-200">
                           <p className="text-xs text-gray-500">

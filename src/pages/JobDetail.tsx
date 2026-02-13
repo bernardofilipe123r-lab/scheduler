@@ -566,7 +566,7 @@ export function JobDetailPage() {
                               <img
                                 src={output.thumbnail_path}
                                 alt={`${brand} thumbnail`}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover object-top"
                               />
                             </div>
                           ) : (
@@ -585,7 +585,7 @@ export function JobDetailPage() {
                               <img
                                 src={output.yt_thumbnail_path}
                                 alt={`${brand} YouTube thumbnail`}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover object-top"
                               />
                             </div>
                           ) : (

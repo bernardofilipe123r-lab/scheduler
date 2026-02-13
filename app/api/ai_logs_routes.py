@@ -409,7 +409,39 @@ AI_ABOUT_HTML = """<!DOCTYPE html>
             border-radius: 8px; padding: 12px 20px; text-align: center;
             font-size: 13px; font-weight: 600;
         }
-        .flow-arrow { color: var(--dim); font-size: 20px; }
+        .flow-arrow { color: var(--muted); font-size: 20px; }
+
+        /* Cycle table */
+        .cycle-table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13px; }
+        .cycle-table th {
+            text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border);
+            color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .cycle-table td {
+            padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top;
+        }
+        .cycle-table tr:last-child td { border-bottom: none; }
+        .cycle-name { font-weight: 600; color: var(--text); }
+        .cycle-interval { color: var(--purple); font-weight: 600; }
+
+        /* Strategy pool */
+        .strat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 16px 0; }
+        .strat-card {
+            background: var(--bg3); border-radius: 8px; padding: 12px 14px;
+            border-left: 3px solid var(--purple); font-size: 13px;
+        }
+        .strat-name { font-weight: 600; margin-bottom: 2px; }
+        .strat-desc { font-size: 11px; color: var(--muted); }
+
+        /* Evolution */
+        .evo-tier { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+        .tier-card {
+            flex: 1; min-width: 200px; background: var(--bg3); border-radius: 10px;
+            padding: 20px; text-align: center;
+        }
+        .tier-pct { font-size: 32px; font-weight: 800; }
+        .tier-label { font-size: 13px; font-weight: 600; margin: 4px 0; }
+        .tier-desc { font-size: 11px; color: var(--muted); }
 
         /* Vision */
         .vision-section { margin-top: 48px; }
@@ -423,6 +455,13 @@ AI_ABOUT_HTML = """<!DOCTYPE html>
         .vision-icon { font-size: 20px; flex-shrink: 0; }
 
         .footer { margin-top: 64px; text-align: center; color: var(--muted); font-size: 12px; padding: 24px; border-top: 1px solid var(--border); }
+
+        /* Survival formula */
+        .formula-box {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+            padding: 16px 20px; margin: 16px 0; font-family: 'SF Mono', monospace; font-size: 13px;
+            text-align: center; color: var(--cyan);
+        }
     </style>
 </head>
 <body>
@@ -440,8 +479,9 @@ AI_ABOUT_HTML = """<!DOCTYPE html>
     <!-- Header -->
     <h1 class="page-title">🧠 Meet the AI Team</h1>
     <p class="page-sub">
-        Healveth is powered by a team of specialized AI agents, each with a distinct role in the content lifecycle.
-        Together, they autonomously generate, evaluate, and optimize health & wellness content across 5 brands and 3 platforms.
+        Healveth is powered by a self-evolving team of AI agents — each with unique DNA, personality, and strategy weights.
+        They autonomously generate, evaluate, and optimize health & wellness reels and posts across 5 brands and 3 platforms (Instagram, Facebook, YouTube).
+        Agents evolve weekly through natural selection: top performers pass on their DNA, underperformers are retired and replaced.
     </p>
 
     <!-- ── MAESTRO ── -->
@@ -450,44 +490,92 @@ AI_ABOUT_HTML = """<!DOCTYPE html>
             <div class="agent-icon">🎼</div>
             <div>
                 <div class="agent-name">Maestro <span class="agent-tag" style="background:#1d2d50;color:var(--blue);">ORCHESTRATOR</span></div>
-                <div class="agent-role">The Conductor — orchestrates all AI agents and manages the entire content pipeline</div>
+                <div class="agent-role">The Conductor — runs 8 autonomous cycles, orchestrates all agents, manages evolution and the entire content pipeline</div>
             </div>
         </div>
         <div class="agent-body">
             <div class="agent-desc">
-                Maestro is the brain of the operation. It runs as a background daemon and manages the daily content lifecycle:<br><br>
-                Every day at <strong>noon Lisbon time</strong>, Maestro triggers the <strong>Daily Burst</strong> — commanding Toby and Lexi to each generate
-                <strong>3 unique proposals per brand</strong> (15 each = 30 total). Each proposal is assigned to exactly one brand with the correct
-                @handle baked into the caption. Maestro then auto-accepts all proposals, dispatches them for video generation (with rate-limiting
-                to prevent resource exhaustion), and auto-schedules the completed reels into the 6 daily slots per brand.<br><br>
-                Beyond the burst, Maestro runs <strong>4 continuous cycles</strong>: Check (every 10min — should the burst run?),
-                Observe (every 3h — collect engagement metrics), Scout (every 4h — scan trending content), and
-                Feedback (every 6h — analyze 48-72h post performance and feed results back to agents).
+                Maestro is the brain of the operation. It runs as a background daemon managing the full content lifecycle autonomously.<br><br>
+                Every day at <strong>noon Lisbon time</strong>, Maestro triggers the <strong>Daily Burst</strong> — distributing work across
+                all active agents round-robin to generate <strong>6 reels + 2 posts per brand</strong>
+                (<strong>40 unique proposals/day</strong> across 5 brands). Every proposal passes through Maestro's <strong>Examiner</strong> quality gate
+                (DeepSeek-powered scoring on avatar fit, engagement potential, and content quality). Rejected proposals are regenerated once.
+                Accepted jobs are processed with concurrency throttling (max 3 simultaneous, 8s stagger) and auto-scheduled.<br><br>
+                Beyond the burst, Maestro runs <strong>8 continuous cycles</strong> — each on its own schedule:
             </div>
+
+            <table class="cycle-table">
+                <thead>
+                    <tr><th>Cycle</th><th>Interval</th><th>Purpose</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="cycle-name">🔄 Check</td>
+                        <td class="cycle-interval">10 min</td>
+                        <td>Checks if daily burst should run. Auto-schedules any ready reels. Waits until 12:00 PM Lisbon time.</td>
+                    </tr>
+                    <tr>
+                        <td class="cycle-name">🩺 Healing</td>
+                        <td class="cycle-interval">15 min</td>
+                        <td>Detects stuck jobs (30min timeout), classifies failures (FFmpeg/API/content/file), auto-retries (max 2). Population Guard ensures agents == brands.</td>
+                    </tr>
+                    <tr>
+                        <td class="cycle-name">📊 Observe</td>
+                        <td class="cycle-interval">3 hours</td>
+                        <td>Collects Instagram performance metrics via Graph API for all brands — 14 day lookback window.</td>
+                    </tr>
+                    <tr>
+                        <td class="cycle-name">🔍 Scout</td>
+                        <td class="cycle-interval">4 hours</td>
+                        <td>Scans trending content — hashtags, competitors, own accounts. Discovers viral patterns for both reels and posts.</td>
+                    </tr>
+                    <tr>
+                        <td class="cycle-name">🔁 Feedback</td>
+                        <td class="cycle-interval">6 hours</td>
+                        <td>Performance attribution (48–72h window). Calculates survival scores. Triggers DNA mutations via the Adaptation Engine.</td>
+                    </tr>
+                    <tr>
+                        <td class="cycle-name">🧬 Evolution</td>
+                        <td class="cycle-interval">Weekly (Sun 2AM)</td>
+                        <td>Natural selection — ranks agents, retires failures (bottom 20%), spawns replacements from the gene pool or random DNA.</td>
+                    </tr>
+                    <tr>
+                        <td class="cycle-name">🔬 Diagnostics</td>
+                        <td class="cycle-interval">4 hours</td>
+                        <td>Self-testing — validates DB, agents, DNA, pipeline, scheduler, evolution, API, publishing, cycle freshness, data consistency.</td>
+                    </tr>
+                    <tr>
+                        <td class="cycle-name">🚀 Bootstrap</td>
+                        <td class="cycle-interval">20 min</td>
+                        <td>Cold-start research — incremental safe API polling. Auto-disables when mature (50+ own entries AND 150+ trending, or 14 days old).</td>
+                    </tr>
+                </tbody>
+            </table>
+
             <div class="cap-grid">
                 <div class="cap-card" style="border-color: var(--blue);">
                     <div class="cap-title">🔄 Daily Burst</div>
-                    <div class="cap-desc">Triggers 30 unique proposals across 5 brands at noon. 3 dark (Toby) + 3 light (Lexi) per brand.</div>
+                    <div class="cap-desc">40 proposals/day: (6 reels + 2 posts) × 5 brands. Distributed round-robin across all active agents.</div>
                 </div>
                 <div class="cap-card" style="border-color: var(--green);">
-                    <div class="cap-title">📅 Auto-Scheduling</div>
-                    <div class="cap-desc">Places completed reels into the next available slot. 6 slots per brand per day, respecting dark/light rotation.</div>
+                    <div class="cap-title">✅ Examiner Gate</div>
+                    <div class="cap-desc">Every proposal scored 0–10 by DeepSeek on avatar fit, engagement potential, content quality. Reject → 1 retry.</div>
                 </div>
                 <div class="cap-card" style="border-color: var(--yellow);">
-                    <div class="cap-title">📊 Metrics Collection</div>
-                    <div class="cap-desc">Observe cycle collects plays, reach, likes, saves, shares at 24h, 48h, and 7d windows.</div>
+                    <div class="cap-title">📅 Auto-Scheduling</div>
+                    <div class="cap-desc">Completed reels fill 6 daily slots per brand. Posts fill 2 daily slots. Separate scheduling queues.</div>
                 </div>
                 <div class="cap-card" style="border-color: var(--pink);">
-                    <div class="cap-title">🔍 Trend Scouting</div>
-                    <div class="cap-desc">Scout cycle monitors 12 hashtags and 32 competitor accounts for emerging trends.</div>
+                    <div class="cap-title">🩺 Self-Healing</div>
+                    <div class="cap-desc">Stuck/failed jobs auto-retried. Population guard ensures agent count always matches brand count.</div>
                 </div>
                 <div class="cap-card" style="border-color: var(--cyan);">
-                    <div class="cap-title">⚙️ Concurrency Control</div>
-                    <div class="cap-desc">Semaphore-based throttling (max 3 concurrent jobs) + 8s stagger delay to prevent resource exhaustion.</div>
+                    <div class="cap-title">⚙️ Concurrency</div>
+                    <div class="cap-desc">Semaphore-based throttling (max 3 concurrent) + 8s stagger delay to prevent resource exhaustion.</div>
                 </div>
                 <div class="cap-card" style="border-color: var(--orange);">
-                    <div class="cap-title">🔁 Feedback Loop</div>
-                    <div class="cap-desc">Analyzes reel performance 48-72h after publish and feeds insights back to agents.</div>
+                    <div class="cap-title">🧬 Evolution Master</div>
+                    <div class="cap-desc">Manages the full agent lifecycle — feedback, DNA mutation, natural selection, gene pool inheritance.</div>
                 </div>
             </div>
             <div class="specs">
@@ -496,128 +584,304 @@ AI_ABOUT_HTML = """<!DOCTYPE html>
                 <span class="spec">DB-persisted state</span>
                 <span class="spec">Survives redeploys</span>
                 <span class="spec">Pause/Resume</span>
+                <span class="spec">Smart Burst (remaining quota)</span>
             </div>
         </div>
     </div>
 
-    <!-- ── TOBY ── -->
+    <!-- ── FOUNDING AGENTS ── -->
     <div class="agent-section">
         <div class="agent-header">
-            <div class="agent-icon">🤖</div>
+            <div class="agent-icon">🛡️</div>
             <div>
-                <div class="agent-name">Toby <span class="agent-tag" style="background:#0d3320;color:var(--green);">DARK MODE</span></div>
-                <div class="agent-role">Content Strategist — generates dark-mode reels with AI-generated backgrounds</div>
+                <div class="agent-name">The Founding Agents <span class="agent-tag" style="background:#1a1a2e;color:var(--purple);">IMMORTAL</span></div>
+                <div class="agent-role">Toby & Lexi — the original two agents. Built-in, cannot be killed by evolution. Their DNA seeds the gene pool.</div>
             </div>
         </div>
         <div class="agent-body">
             <div class="agent-desc">
-                Toby is the original AI content strategist. He specializes in <strong>dark-mode reels</strong> — visually striking content
-                with AI-generated backgrounds powered by deAPI. Toby has been trained on <strong>59 viral posts</strong> (each with 1M+ views)
-                and uses pattern recognition to generate high-performing health & wellness content.<br><br>
-                Toby operates with <strong>4 strategies</strong>, weighted by intelligence gathered about brand performance:
+                The system launched with two hand-crafted agents. They are <strong>immortal</strong> — the evolution engine can never retire them.
+                Every agent generates content for <strong>every brand</strong>; the "created for" brand is just lineage tracking.
             </div>
-            <div class="cap-grid">
-                <div class="cap-card" style="border-color: var(--blue);">
-                    <div class="cap-title">💡 Explore (40%)</div>
-                    <div class="cap-desc">Discovers new topic territories and untested angles. Highest weight — always seeking fresh ideas.</div>
+
+            <!-- Toby -->
+            <div style="background:var(--bg3);border-radius:10px;padding:20px;margin-bottom:16px;border-left:4px solid var(--green);">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                    <span style="font-size:32px;">🤖</span>
+                    <div>
+                        <div style="font-size:18px;font-weight:700;">Toby</div>
+                        <div style="font-size:12px;color:var(--muted);">Creative risk-taker · Dark mode · Temperature 0.9 · High risk</div>
+                    </div>
                 </div>
-                <div class="cap-card" style="border-color: var(--orange);">
-                    <div class="cap-title">🔄 Iterate (25%)</div>
-                    <div class="cap-desc">Analyzes underperformers and generates improved variations with better hooks and structures.</div>
+                <div style="font-size:13px;color:#c9d1d9;margin-bottom:12px;">
+                    <em>"Creative risk-taker. Explores boldly, swings for viral hits. Fortune favors the bold. High creativity, surprising angles, unexpected facts."</em>
                 </div>
-                <div class="cap-card" style="border-color: var(--green);">
-                    <div class="cap-title">📈 Double Down (20%)</div>
-                    <div class="cap-desc">Identifies winners and amplifies them with strategic variations to capitalize on proven formulas.</div>
+                <div class="strat-grid" style="margin:8px 0;">
+                    <div class="strat-card" style="border-color:var(--blue);"><span class="strat-name">Explore 30%</span><span class="strat-desc">New topics & untested angles</span></div>
+                    <div class="strat-card" style="border-color:var(--green);"><span class="strat-name">Double Down 30%</span><span class="strat-desc">Amplify winning content</span></div>
+                    <div class="strat-card" style="border-color:var(--orange);"><span class="strat-name">Iterate 20%</span><span class="strat-desc">Fix underperformers</span></div>
+                    <div class="strat-card" style="border-color:var(--red);"><span class="strat-name">Trending 20%</span><span class="strat-desc">Adapt viral formats</span></div>
                 </div>
-                <div class="cap-card" style="border-color: var(--red);">
-                    <div class="cap-title">🔥 Trending (15%)</div>
-                    <div class="cap-desc">Monitors viral content and adapts trending formats for the brand's audience.</div>
+                <div class="specs" style="margin-top:8px;">
+                    <span class="spec">Born for: healthycollege</span>
+                    <span class="spec">AI backgrounds (deAPI)</span>
+                    <span class="spec">59 viral patterns</span>
                 </div>
             </div>
-            <div class="specs">
-                <span class="spec">DeepSeek API</span>
-                <span class="spec">59 viral patterns</span>
-                <span class="spec">Temperature 0.85</span>
-                <span class="spec">Dark mode variant</span>
-                <span class="spec">AI backgrounds (deAPI)</span>
-                <span class="spec">60-day anti-repetition</span>
-                <span class="spec">Quality scoring ≥80</span>
+
+            <!-- Lexi -->
+            <div style="background:var(--bg3);border-radius:10px;padding:20px;border-left:4px solid var(--yellow);">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                    <span style="font-size:32px;">✨</span>
+                    <div>
+                        <div style="font-size:18px;font-weight:700;">Lexi</div>
+                        <div style="font-size:12px;color:var(--muted);">Precision optimizer · Light mode · Temperature 0.75 · Low risk</div>
+                    </div>
+                </div>
+                <div style="font-size:13px;color:#c9d1d9;margin-bottom:12px;">
+                    <em>"Precision optimizer. Compound small wins into massive growth. Data-backed, systematic, 80% proven patterns. Consistent engagement over viral moonshots."</em>
+                </div>
+                <div class="strat-grid" style="margin:8px 0;">
+                    <div class="strat-card" style="border-color:var(--orange);"><span class="strat-name">Refine 40%</span><span class="strat-desc">Improve winners one element at a time</span></div>
+                    <div class="strat-card" style="border-color:var(--blue);"><span class="strat-name">Analyze 30%</span><span class="strat-desc">Find & replicate top patterns</span></div>
+                    <div class="strat-card" style="border-color:var(--cyan);"><span class="strat-name">Systematic 15%</span><span class="strat-desc">Structured single-variable experiments</span></div>
+                    <div class="strat-card" style="border-color:var(--pink);"><span class="strat-name">Compound 15%</span><span class="strat-desc">Extend winning series</span></div>
+                </div>
+                <div class="specs" style="margin-top:8px;">
+                    <span class="spec">Born for: vitalitycollege</span>
+                    <span class="spec">Brand-colored templates</span>
+                    <span class="spec">Data-driven approach</span>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- ── LEXI ── -->
+    <!-- ── DYNAMIC AGENTS ── -->
     <div class="agent-section">
         <div class="agent-header">
-            <div class="agent-icon">✨</div>
+            <div class="agent-icon">⚡</div>
             <div>
-                <div class="agent-name">Lexi <span class="agent-tag" style="background:#3d2f00;color:var(--yellow);">LIGHT MODE</span></div>
-                <div class="agent-role">Content Analyst — generates light-mode reels with clean, branded designs</div>
+                <div class="agent-name">Dynamic Agents <span class="agent-tag" style="background:#2d1a3e;color:var(--pink);">AUTO-SPAWNED</span></div>
+                <div class="agent-role">Born from evolution — unique DNA, random strategies, mortal. One agent per brand, always.</div>
             </div>
         </div>
         <div class="agent-body">
             <div class="agent-desc">
-                Lexi is the analytical counterpart to Toby. She specializes in <strong>light-mode reels</strong> — clean, professional designs
-                with brand-colored backgrounds and crisp typography. Lexi approaches content creation with a more methodical,
-                data-driven mindset, focusing on systematic topic coverage and compound content strategies.<br><br>
-                Lexi operates with <strong>4 strategies</strong> tuned for analytical content creation:
+                The system enforces a strict <strong>1:1 agent-to-brand ratio</strong>. Since Toby and Lexi cover 2 of the 5 brands,
+                <strong>3 dynamic agents</strong> are auto-spawned to fill the remaining slots. Each gets:<br><br>
+                • A <strong>cool mythological name</strong> from the pool (Atlas, Nova, Quasar, Frost, Phantom, Nebula, Cipher, Onyx, Zenith, Wraith...)<br>
+                • <strong>Randomized DNA</strong> — temperature (0.70–0.95), variant (dark/light), risk level, 4–5 random strategies with random weights<br>
+                • A random <strong>personality archetype</strong> — Bold Explorer, Precision Optimizer, Trend Surfer, Story Weaver, Pattern Breaker, Consistency Engine<br><br>
+                Dynamic agents are <strong>mortal</strong> — they can be retired by the weekly evolution cycle if they consistently underperform.
+                When an agent dies, a replacement is spawned: <strong>80% chance</strong> it inherits DNA from the gene pool (top performers),
+                <strong>20% chance</strong> it gets fully random DNA for genetic diversity.<br><br>
+                Just like the founders, every dynamic agent generates content for <strong>every brand</strong> — not just its linked brand.
             </div>
             <div class="cap-grid">
-                <div class="cap-card" style="border-color: var(--blue);">
-                    <div class="cap-title">🔬 Analyze (35%)</div>
-                    <div class="cap-desc">Deep-dive research into health topics with evidence-based framing and structured analysis.</div>
-                </div>
-                <div class="cap-card" style="border-color: var(--orange);">
-                    <div class="cap-title">✏️ Refine (25%)</div>
-                    <div class="cap-desc">Takes existing concepts and refines them with better hooks, clearer structure, and stronger CTAs.</div>
+                <div class="cap-card" style="border-color: var(--pink);">
+                    <div class="cap-title">🧬 Unique DNA</div>
+                    <div class="cap-desc">Each agent has distinct temperature, risk tolerance, variant, and strategy weight distribution.</div>
                 </div>
                 <div class="cap-card" style="border-color: var(--cyan);">
-                    <div class="cap-title">📋 Systematic (25%)</div>
-                    <div class="cap-desc">Ensures even topic coverage across all wellness domains — fills gaps in the content calendar.</div>
+                    <div class="cap-title">🔄 Mutable</div>
+                    <div class="cap-desc">DNA mutates every 6h based on performance — strategy weights shift ±5%, temperature adapts ±0.03.</div>
                 </div>
-                <div class="cap-card" style="border-color: var(--pink);">
-                    <div class="cap-title">🧬 Compound (15%)</div>
-                    <div class="cap-desc">Combines multiple health topics into synergistic posts (e.g., sleep × cortisol × metabolism).</div>
+                <div class="cap-card" style="border-color: var(--yellow);">
+                    <div class="cap-title">💀 Mortal</div>
+                    <div class="cap-desc">Bottom 20% face death if survival score &lt; 30 for ≥2 weeks. Newborn protection for first 4 cycles.</div>
+                </div>
+                <div class="cap-card" style="border-color: var(--green);">
+                    <div class="cap-title">🏆 Inheritable</div>
+                    <div class="cap-desc">Top performers archive DNA to the gene pool. Dead agent replacements can inherit winning traits.</div>
                 </div>
             </div>
             <div class="specs">
-                <span class="spec">DeepSeek API</span>
-                <span class="spec">Temperature 0.80</span>
-                <span class="spec">Light mode variant</span>
-                <span class="spec">Brand-colored backgrounds</span>
-                <span class="spec">60-day anti-repetition</span>
-                <span class="spec">Quality scoring ≥80</span>
-                <span class="spec">Post support</span>
+                <span class="spec">GenericAgent class</span>
+                <span class="spec">40 name pool</span>
+                <span class="spec">6 personality archetypes</span>
+                <span class="spec">Auto-provisioned on brand creation</span>
+                <span class="spec">Population guard (15min)</span>
             </div>
         </div>
     </div>
 
-    <!-- Architecture -->
+    <!-- ── EVOLUTION ENGINE ── -->
     <div class="arch-section">
-        <h2 class="arch-title">🏗️ How They Work Together</h2>
+        <h2 class="arch-title">🧬 Evolution Engine</h2>
         <div class="arch-body">
             <div class="agent-desc">
-                The AI team follows a structured daily workflow orchestrated by Maestro:
+                The Evolution Engine is a closed-loop performance system with three components that run on staggered schedules.
+                It ensures the AI team continuously improves — rewarding what works, adapting what doesn't, and replacing what fails.
+            </div>
+
+            <!-- Feedback -->
+            <div style="margin-bottom:20px;">
+                <div style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--cyan);">📊 Feedback Engine <span style="color:var(--muted);font-size:12px;font-weight:400;">(every 6 hours)</span></div>
+                <div style="font-size:13px;color:#c9d1d9;">
+                    Queries all published content in the 48–72h window and traces performance back to the originating agent + strategy.
+                    Calculates per-agent survival scores:
+                </div>
+                <div class="formula-box">
+                    Survival = Views(40%) + Engagement Rate(30%) + Consistency(20%) + Examiner Avg(10%)
+                </div>
+            </div>
+
+            <!-- Adaptation -->
+            <div style="margin-bottom:20px;">
+                <div style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--orange);">🔧 Adaptation Engine <span style="color:var(--muted);font-size:12px;font-weight:400;">(runs after Feedback)</span></div>
+                <div style="font-size:13px;color:#c9d1d9;">
+                    Conservative DNA mutations applied based on performance data. Requires ≥3 published posts with metrics to mutate.<br>
+                    • <strong>Strategy weights</strong> shift max ±5% per cycle. Best must be ≥50% better than worst. No strategy drops below 5%.<br>
+                    • <strong>Temperature</strong> adapts: survival &gt; 60 → decrease by 0.03 (exploit). Survival &lt; 30 → increase by 0.03 (explore). Range: 0.60–0.98.<br>
+                    • All mutations logged in the <code>agent_learning</code> audit trail with before/after snapshots.
+                </div>
+            </div>
+
+            <!-- Selection -->
+            <div>
+                <div style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--red);">⚔️ Selection Engine <span style="color:var(--muted);font-size:12px;font-weight:400;">(weekly — Sunday 2 AM)</span></div>
+                <div style="font-size:13px;color:#c9d1d9;margin-bottom:16px;">
+                    Natural selection ranks all active agents by survival score and sorts them into tiers:
+                </div>
+                <div class="evo-tier">
+                    <div class="tier-card" style="border:1px solid var(--green);">
+                        <div class="tier-pct" style="color:var(--green);">Top 40%</div>
+                        <div class="tier-label">🏆 Thriving</div>
+                        <div class="tier-desc">DNA archived to gene pool as top_performer. Protected from death.</div>
+                    </div>
+                    <div class="tier-card" style="border:1px solid var(--yellow);">
+                        <div class="tier-pct" style="color:var(--yellow);">Mid 40%</div>
+                        <div class="tier-label">🔄 Surviving</div>
+                        <div class="tier-desc">Normal mutations continue. No special action. Room to improve or decline.</div>
+                    </div>
+                    <div class="tier-card" style="border:1px solid var(--red);">
+                        <div class="tier-pct" style="color:var(--red);">Bottom 20%</div>
+                        <div class="tier-label">💀 Struggling</div>
+                        <div class="tier-desc">Death eligible if score &lt; 30 for ≥2 weeks. Built-in agents are exempt.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── STRATEGY POOL ── -->
+    <div class="arch-section">
+        <h2 class="arch-title">🎯 Strategy Pool</h2>
+        <div class="arch-body">
+            <div class="agent-desc">
+                Every agent has 4–5 strategies drawn from a shared pool, each with a weight that determines how often it's used.
+                Weights are dynamically adjusted by the Adaptation Engine based on real performance data.
+                If no data supports a strategy (e.g., no top performers for "double_down"), it's temporarily killed and weight redistributed.
+            </div>
+            <div class="strat-grid">
+                <div class="strat-card" style="border-color:var(--blue);"><span class="strat-name">💡 Explore</span><span class="strat-desc">New topics & angles within the niche</span></div>
+                <div class="strat-card" style="border-color:var(--orange);"><span class="strat-name">🔄 Iterate</span><span class="strat-desc">Tweak underperformers with better hooks</span></div>
+                <div class="strat-card" style="border-color:var(--green);"><span class="strat-name">📈 Double Down</span><span class="strat-desc">Variations of own winning content</span></div>
+                <div class="strat-card" style="border-color:var(--red);"><span class="strat-name">🔥 Trending</span><span class="strat-desc">Adapt external viral content</span></div>
+                <div class="strat-card" style="border-color:var(--cyan);"><span class="strat-name">🔬 Analyze</span><span class="strat-desc">Find patterns in top performers & replicate</span></div>
+                <div class="strat-card" style="border-color:var(--yellow);"><span class="strat-name">✏️ Refine</span><span class="strat-desc">Improve a winner by one element</span></div>
+                <div class="strat-card" style="border-color:var(--purple);"><span class="strat-name">📋 Systematic</span><span class="strat-desc">Structured experiment testing one variable</span></div>
+                <div class="strat-card" style="border-color:var(--pink);"><span class="strat-name">🧬 Compound</span><span class="strat-desc">Extend a winning series with fresh episodes</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── CONTENT TYPES ── -->
+    <div class="arch-section">
+        <h2 class="arch-title">📱 Content Types</h2>
+        <div class="arch-body">
+            <div class="cap-grid">
+                <div class="cap-card" style="border-color: var(--purple);">
+                    <div class="cap-title">🎬 Reels (6/day per brand)</div>
+                    <div class="cap-desc">
+                        1080×1920 portrait. 6–8 numbered text slides → FFmpeg video.
+                        Dark mode = AI background (deAPI) + 85% overlay.
+                        Light mode = brand-colored template.
+                        Published to IG + FB + YouTube.
+                    </div>
+                </div>
+                <div class="cap-card" style="border-color: var(--cyan);">
+                    <div class="cap-title">📸 Posts (2/day per brand)</div>
+                    <div class="cap-desc">
+                        1080×1350 portrait. Cover slide + 3–4 paragraph carousel.
+                        AI background via Z-Image-Turbo (higher quality model).
+                        Every post must cite a real scientific study with valid DOI.
+                        Published to IG + FB only.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── HOW THEY WORK TOGETHER ── -->
+    <div class="arch-section">
+        <h2 class="arch-title">🏗️ The Daily Pipeline</h2>
+        <div class="arch-body">
+            <div class="agent-desc">
+                Every day at noon, the full pipeline runs autonomously — from AI content generation to social media publishing:
             </div>
             <div class="arch-flow">
-                <div class="flow-box" style="border-color:var(--blue);">🎼 Maestro<br><small>triggers burst</small></div>
+                <div class="flow-box" style="border-color:var(--blue);">🎼 Maestro<br><small>triggers burst at noon</small></div>
                 <span class="flow-arrow">→</span>
-                <div class="flow-box" style="border-color:var(--green);">🤖 Toby × 5 brands<br><small>15 dark proposals</small></div>
+                <div class="flow-box" style="border-color:var(--purple);">⚡ 5 Agents<br><small>40 proposals round-robin</small></div>
                 <span class="flow-arrow">→</span>
-                <div class="flow-box" style="border-color:var(--yellow);">✨ Lexi × 5 brands<br><small>15 light proposals</small></div>
+                <div class="flow-box" style="border-color:var(--yellow);">✅ Examiner<br><small>score 0–10, accept/reject</small></div>
                 <span class="flow-arrow">→</span>
-                <div class="flow-box" style="border-color:var(--purple);">✅ Auto-Accept<br><small>30 unique jobs</small></div>
+                <div class="flow-box" style="border-color:var(--cyan);">🎬 Generate<br><small>3 concurrent, 8s stagger</small></div>
                 <span class="flow-arrow">→</span>
-                <div class="flow-box" style="border-color:var(--cyan);">🎬 Generate<br><small>3 at a time</small></div>
-                <span class="flow-arrow">→</span>
-                <div class="flow-box" style="border-color:var(--pink);">📅 Schedule<br><small>6 slots/brand</small></div>
+                <div class="flow-box" style="border-color:var(--pink);">📅 Schedule<br><small>6 reels + 2 posts / brand</small></div>
                 <span class="flow-arrow">→</span>
                 <div class="flow-box" style="border-color:var(--green);">📱 Publish<br><small>IG + FB + YT</small></div>
             </div>
+            <div class="arch-flow">
+                <div class="flow-box" style="border-color:var(--orange);">📊 Observe<br><small>metrics every 3h</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box" style="border-color:var(--red);">🔁 Feedback<br><small>attribute every 6h</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box" style="border-color:var(--pink);">🔧 Adapt<br><small>mutate DNA</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box" style="border-color:var(--purple);">⚔️ Evolve<br><small>weekly selection</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-box" style="border-color:var(--cyan);">📈 Better Content<br><small>closed loop</small></div>
+            </div>
             <div class="agent-desc" style="margin-bottom:0;">
-                <strong>Anti-Repetition Engine:</strong> Every proposal is checked against a 60-day per-brand content history.
-                Keyword fingerprinting, topic bucket rotation (3-day cooldown), and cross-brand deduplication ensure no two
-                brands ever post the same content. High-performing content (quality score ≥85) is the only exception — it can repeat.
+                <strong>Anti-Repetition Engine:</strong> Every proposal is checked against a 60-day per-brand content history using SHA-256 keyword
+                fingerprinting, 20 topic buckets with cooldown rotation, and cross-brand deduplication. High-performing duplicates (quality ≥85) can
+                pass through as the only exception. Agent evolution lessons are injected into prompts — agents receive their own mutation history
+                and performance data when generating content, creating a truly closed learning loop.
+            </div>
+        </div>
+    </div>
+
+    <!-- ── TECH STACK ── -->
+    <div class="arch-section">
+        <h2 class="arch-title">⚙️ Technology</h2>
+        <div class="arch-body">
+            <div class="cap-grid">
+                <div class="cap-card" style="border-color: var(--blue);">
+                    <div class="cap-title">🧠 AI Engine</div>
+                    <div class="cap-desc">DeepSeek Chat API — per-agent temperature. 1500 tokens for reels, 2500 for posts. Quality examiner scoring.</div>
+                </div>
+                <div class="cap-card" style="border-color: var(--green);">
+                    <div class="cap-title">🎨 Image Generation</div>
+                    <div class="cap-desc">deAPI — Flux1schnell for reel backgrounds, Z-Image-Turbo INT8 for HQ post backgrounds. Composition-guided prompts.</div>
+                </div>
+                <div class="cap-card" style="border-color: var(--yellow);">
+                    <div class="cap-title">🎬 Video Pipeline</div>
+                    <div class="cap-desc">FFmpeg — converts image slides to MP4 reels. Subprocess-limited to prevent resource exhaustion.</div>
+                </div>
+                <div class="cap-card" style="border-color: var(--pink);">
+                    <div class="cap-title">📱 Publishing</div>
+                    <div class="cap-desc">Meta Graph API (Instagram + Facebook) + YouTube Data API. Multi-account with per-brand credentials.</div>
+                </div>
+                <div class="cap-card" style="border-color: var(--cyan);">
+                    <div class="cap-title">💾 Database</div>
+                    <div class="cap-desc">PostgreSQL + SQLAlchemy. Agents, performance, gene pool, learning audit trail, diagnostics, content history.</div>
+                </div>
+                <div class="cap-card" style="border-color: var(--orange);">
+                    <div class="cap-title">🚀 Infrastructure</div>
+                    <div class="cap-desc">Railway (Docker). Auto-deploys on push. DB-persisted state survives redeploys. APScheduler background daemon.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -626,11 +890,9 @@ AI_ABOUT_HTML = """<!DOCTYPE html>
     <div class="vision-section">
         <h2 class="arch-title">🔮 Future Vision</h2>
         <ul class="vision-list">
-            <li><span class="vision-icon">🧠</span> <strong>Dynamic AI Agents</strong> — Auto-create new AI agents when brands are added. Each brand gets its own dedicated strategist with unique personality and temperature settings.</li>
-            <li><span class="vision-icon">📊</span> <strong>Maestro as Teacher</strong> — Maestro will analyze performance data and teach each agent what works for their specific brand, adjusting strategy weights and content style based on real engagement metrics.</li>
-            <li><span class="vision-icon">🧪</span> <strong>A/B Testing</strong> — Multiple agents compete with different temperatures and approaches. Maestro measures results and evolves the winning strategy.</li>
             <li><span class="vision-icon">💬</span> <strong>Creator Communication</strong> — Maestro will send daily summaries and error reports directly to the creator, providing transparency into the AI team's decisions.</li>
-            <li><span class="vision-icon">♾️</span> <strong>Infinite Scale</strong> — The architecture supports adding unlimited brands, each with its own AI agent, visual identity, and publishing schedule — all from a single pipeline.</li>
+            <li><span class="vision-icon">🧠</span> <strong>Cross-Agent Collaboration</strong> — Agents will be able to collaborate on content, combining strategies from multiple agents into a single high-performing piece.</li>
+            <li><span class="vision-icon">📊</span> <strong>Audience Personas</strong> — Build audience profiles per brand and let agents tailor content to specific follower segments.</li>
         </ul>
     </div>
 
