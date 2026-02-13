@@ -31,7 +31,9 @@ class DatabaseSchedulerService:
         yt_thumbnail_path: Optional[Path] = None,  # Clean AI image for YouTube
         user_name: Optional[str] = None,
         brand: Optional[str] = None,
-        variant: Optional[str] = None
+        variant: Optional[str] = None,
+        post_title: Optional[str] = None,
+        slide_texts: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Schedule a reel for future publishing.
@@ -80,7 +82,9 @@ class DatabaseSchedulerService:
                     "yt_thumbnail_path": str(yt_thumbnail_path) if yt_thumbnail_path else None,  # Clean AI image for YouTube
                     "brand": brand,
                     "variant": variant or "light",
-                    "yt_title": yt_title  # Store YouTube title in metadata
+                    "yt_title": yt_title,  # Store YouTube title in metadata
+                    "title": post_title,  # Store post title for cover slide compositing
+                    "slide_texts": slide_texts,  # Store carousel text slides
                 }
                 print(f"   ✅ Metadata prepared: {metadata}")
                 

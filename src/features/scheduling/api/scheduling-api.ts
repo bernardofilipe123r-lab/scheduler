@@ -49,8 +49,11 @@ interface ScheduledResponse {
     metadata?: {
       platforms?: string[]
       brand?: string
+      variant?: string
       video_path?: string
       thumbnail_path?: string
+      title?: string
+      slide_texts?: string[]
       post_ids?: Record<string, string>
       publish_results?: Record<string, {
         success: boolean
@@ -84,7 +87,7 @@ export const schedulingApi = {
       brand: (s.metadata?.brand || s.brand) as BrandName,
       job_id: s.reel_id,
       reel_id: s.reel_id,
-      title: s.caption || 'Scheduled Post',
+      title: s.metadata?.title || s.caption?.split('\n')[0]?.slice(0, 80) || 'Scheduled Post',
       scheduled_time: s.scheduled_time,
       caption: s.caption,
       status: s.status as ScheduledPost['status'],

@@ -2294,6 +2294,8 @@ def auto_schedule_job(job_id: str):
             yt_thumbnail_path = output.get("yt_thumbnail_path")
             caption = output.get("caption", "")
             yt_title = output.get("yt_title")
+            post_title = output.get("title", "")
+            slide_texts = output.get("slide_texts", [])
 
             if is_post:
                 # Posts only need reel_id + thumbnail_path (no video)
@@ -2345,6 +2347,8 @@ def auto_schedule_job(job_id: str):
                     user_name="Maestro",
                     brand=brand,
                     variant=variant,
+                    post_title=post_title if is_post else None,
+                    slide_texts=slide_texts if is_post else None,
                 )
 
                 # Mark brand output as scheduled so it's not re-scheduled

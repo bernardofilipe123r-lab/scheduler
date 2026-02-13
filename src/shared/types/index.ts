@@ -76,6 +76,8 @@ export interface ScheduledPost {
     platforms?: string[]
     brand?: string
     variant?: string
+    title?: string
+    slide_texts?: string[]
     post_ids?: Record<string, string>
     publish_results?: Record<string, {
       success: boolean

@@ -370,6 +370,26 @@ async def startup_event():
                             if not image_path.exists():
                                 raise FileNotFoundError(f"Post image not found: {image_path}")
                             
+                            # ── Compose cover slide (title + gradient + brand on background) ──
+                            post_title = metadata.get('title') or ''
+                            if post_title:
+                                try:
+                                    from app.services.post_compositor import compose_cover_slide
+                                    composed_name = image_path.stem.replace('_background', '_cover') + '.png'
+                                    composed_path = image_path.parent / composed_name
+                                    compose_cover_slide(
+                                        background_path=str(image_path),
+                                        title=post_title,
+                                        brand=brand,
+                                        output_path=str(composed_path),
+                                    )
+                                    image_path = composed_path
+                                    print(f"      ✅ Cover slide composed: {composed_path}")
+                                except Exception as comp_err:
+                                    print(f"      ⚠️ Cover compositing failed, using raw background: {comp_err}")
+                            else:
+                                print(f"      ⚠️ No title in metadata — publishing raw background")
+                            
                             # Build public image URL
                             railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
                             if railway_domain:
