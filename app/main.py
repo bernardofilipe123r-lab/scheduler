@@ -14,6 +14,7 @@ from app.api.routes import router as reels_router
 from app.api.content.jobs_routes import router as jobs_router
 from app.api.youtube.routes import router as youtube_router
 from app.api.brands.routes import router as brands_router
+from app.api.brands.templates_routes import router as templates_router
 from app.api.system.settings_routes import router as settings_router
 from app.api.analytics.routes import router as analytics_router
 from app.api.system.logs_routes import router as logs_router
@@ -86,6 +87,7 @@ app.include_router(jobs_router)
 app.include_router(youtube_router, prefix="/api")
 app.include_router(brands_router, prefix="/api")  # Backward-compatible mount
 app.include_router(brands_router, prefix="/api/v2")  # V2 mount
+app.include_router(templates_router, prefix="/api")  # Template management
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
@@ -237,7 +239,8 @@ async def startup_event():
         
         db = SessionLocal()
         try:
-            brands_seeded = seed_brands_if_needed(db)
+            default_user_id = os.getenv("DEFAULT_USER_ID")
+            brands_seeded = seed_brands_if_needed(db, user_id=default_user_id)
             settings_seeded = seed_settings_if_needed(db)
             
             if brands_seeded > 0:

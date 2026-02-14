@@ -13,7 +13,6 @@ import {
 import { useBrands, useUpdateBrand } from '@/features/brands/api/use-brands'
 import {
   type BrandInfo,
-  BRAND_SCHEDULES,
   generateSchedule,
   formatHour,
 } from '@/features/brands/constants'
@@ -31,11 +30,11 @@ export function BrandSettingsModal({ brand, connections, allBrands, onClose }: B
   const updateBrandMutation = useUpdateBrand()
   const { data: v2Brands } = useBrands()
   
-  // Get schedule from v2 API data, fall back to hardcoded constants
+  // Get schedule from v2 API data (DB is single source of truth)
   const v2Brand = v2Brands?.find(b => b.id === brand.id)
   const schedule = {
-    offset: v2Brand?.schedule_offset ?? BRAND_SCHEDULES[brand.id]?.offset ?? 0,
-    postsPerDay: v2Brand?.posts_per_day ?? BRAND_SCHEDULES[brand.id]?.postsPerDay ?? 2,
+    offset: v2Brand?.schedule_offset ?? 0,
+    postsPerDay: v2Brand?.posts_per_day ?? 2,
   }
   
   const [offset, setOffset] = useState(schedule.offset)
@@ -46,12 +45,12 @@ export function BrandSettingsModal({ brand, connections, allBrands, onClose }: B
   // Generate preview of schedule
   const previewSlots = generateSchedule(offset, postsPerDay)
 
-  // Check if offset conflicts with another brand - use v2 data with fallback
+  // Check if offset conflicts with another brand
   const getOffsetConflict = (checkOffset: number): string | null => {
     for (const otherBrand of allBrands) {
       if (otherBrand.id === brand.id) continue
       const otherV2 = v2Brands?.find(b => b.id === otherBrand.id)
-      const otherOffset = otherV2?.schedule_offset ?? BRAND_SCHEDULES[otherBrand.id]?.offset
+      const otherOffset = otherV2?.schedule_offset
       if (otherOffset !== undefined && otherOffset === checkOffset) {
         return otherBrand.name
       }

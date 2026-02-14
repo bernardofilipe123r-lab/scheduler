@@ -1,8 +1,7 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Palette,
   Check,
-  Clock,
   Link2,
   Instagram,
   Facebook,
@@ -17,9 +16,8 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { useBrands, useCreateBrand, type CreateBrandInput, type BrandColors } from '@/features/brands/api/use-brands'
+import { supabase } from '@/shared/api/supabase'
 import {
-  BRAND_SCHEDULES,
-  BRAND_THEMES,
   COLOR_PRESETS,
   generateModeColors,
   adjustColorBrightness,
@@ -33,17 +31,6 @@ export interface CreateBrandModalProps {
 export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
   const createBrandMutation = useCreateBrand()
   const { data: existingBrands } = useBrands()
-  
-  // Compute smart default offset: +1 from the highest existing offset
-  const defaultOffset = useMemo(() => {
-    if (!existingBrands?.length) return 0
-    // Also check hardcoded fallbacks for brands that haven't been migrated yet
-    const maxOffset = existingBrands.reduce((max, b) => {
-      const offset = b.schedule_offset ?? BRAND_SCHEDULES[b.id]?.offset ?? 0
-      return Math.max(max, offset)
-    }, -1)
-    return (maxOffset + 1) % 24
-  }, [existingBrands])
   
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
@@ -59,14 +46,6 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
   const [accentColor, setAccentColor] = useState('#818cf8')
   const [colorName, setColorName] = useState('indigo')
   const [useCustomColors, setUseCustomColors] = useState(false)
-  
-  // Step 3: Schedule - default offset is smart: +1 from last brand
-  const [scheduleOffset, setScheduleOffset] = useState(defaultOffset)
-  
-  // Update default offset when data loads
-  useEffect(() => {
-    setScheduleOffset(defaultOffset)
-  }, [defaultOffset])
   
   // Logo
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -173,7 +152,6 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
       display_name: displayName,
       short_name: shortName,
       instagram_handle: instagramHandle || undefined,
-      schedule_offset: scheduleOffset,
       posts_per_day: 2,
       colors,
       // Platform credentials
@@ -196,7 +174,13 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
           formData.append('light_bg_color', adjustColorBrightness(primaryColor, 180))
           formData.append('dark_title_color', '#ffffff')
           formData.append('dark_bg_color', adjustColorBrightness(primaryColor, -40))
-          await fetch(`/api/brands/${brandId}/theme`, { method: 'POST', body: formData })
+          const { data: sessionData } = await supabase.auth.getSession()
+          const token = sessionData.session?.access_token
+          await fetch(`${import.meta.env.VITE_API_URL || ''}/api/brands/${brandId}/theme`, {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: formData,
+          })
         } catch {
           console.warn('Logo upload failed — can be added later via theme editor')
         }
@@ -209,13 +193,13 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
     }
   }
 
-  const totalSteps = 4
+  const totalSteps = 3
 
   return (
     <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
       {/* Progress steps */}
       <div className="flex items-center justify-center gap-2 mb-4">
-        {[1, 2, 3, 4].map(s => (
+        {[1, 2, 3].map(s => (
           <div key={s} className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
@@ -228,7 +212,7 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
             >
               {s < step ? <Check className="w-4 h-4" /> : s}
             </div>
-            {s < 4 && <div className={`w-8 h-0.5 ${s < step ? 'bg-green-500' : 'bg-gray-200'}`} />}
+            {s < 3 && <div className={`w-8 h-0.5 ${s < step ? 'bg-green-500' : 'bg-gray-200'}`} />}
           </div>
         ))}
       </div>
@@ -587,208 +571,8 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
         </div>
       )}
 
-      {/* Step 3: Schedule */}
+      {/* Step 3: Platform Connections */}
       {step === 3 && (
-        <div className="space-y-4">
-          <div className="text-center mb-4">
-            <Clock className="w-10 h-10 text-primary-500 mx-auto mb-2" />
-            <h3 className="text-lg font-semibold">Publishing Schedule</h3>
-            <p className="text-sm text-gray-500">Your brand's offset determines all posting times</p>
-          </div>
-
-          {/* Offset slider */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Schedule Offset (Hour)
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min={0}
-                max={23}
-                value={scheduleOffset}
-                onChange={(e) => setScheduleOffset(parseInt(e.target.value))}
-                className="flex-1"
-              />
-              <span className="w-16 text-center font-mono text-lg">{scheduleOffset}:00</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              This offset shifts both reel and post times — choose a unique hour to avoid overlap
-            </p>
-            {/* Conflict warning */}
-            {existingBrands?.some(b => (b.schedule_offset ?? BRAND_SCHEDULES[b.id]?.offset) === scheduleOffset) && (
-              <div className="mt-2 flex items-center gap-2 text-amber-600 bg-amber-50 rounded-lg px-3 py-2 text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>
-                  This offset is already used by <strong>{existingBrands.find(b => (b.schedule_offset ?? BRAND_SCHEDULES[b.id]?.offset) === scheduleOffset)?.display_name}</strong> — pick a different hour!
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Reels schedule — fixed, read-only */}
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-indigo-900">📹 Reels — 6 per day</p>
-              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Fixed</span>
-            </div>
-            <p className="text-xs text-indigo-600 mb-3">Every 4 hours · alternating Light → Dark</p>
-            <div className="flex flex-wrap gap-1.5">
-              {[0, 4, 8, 12, 16, 20].map((baseHour, i) => {
-                const hour = (baseHour + scheduleOffset) % 24
-                const isLight = i % 2 === 0
-                return (
-                  <div
-                    key={i}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium ${
-                      isLight ? 'bg-amber-100 text-amber-800' : 'bg-gray-700 text-white'
-                    }`}
-                  >
-                    {hour.toString().padStart(2, '0')}:00 {isLight ? '☀️' : '🌙'}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Posts schedule — fixed, read-only */}
-          <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-purple-900">📄 Posts — 2 per day</p>
-              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Fixed</span>
-            </div>
-            <p className="text-xs text-purple-600 mb-3">Morning + Afternoon</p>
-            <div className="flex flex-wrap gap-1.5">
-              {[8, 14].map((baseHour, i) => {
-                const hour = (baseHour + scheduleOffset) % 24
-                return (
-                  <div
-                    key={i}
-                    className="px-2.5 py-1 rounded-md text-xs font-medium bg-purple-200 text-purple-800"
-                  >
-                    {hour.toString().padStart(2, '0')}:00 {i === 0 ? '🌅' : '☀️'}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Full schedule map — all brands */}
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-            <p className="text-sm font-semibold text-gray-800 mb-3">🗺️ Full Schedule Map</p>
-            <p className="text-xs text-gray-500 mb-3">All brands — no two should share the same offset</p>
-
-            {/* 24-hour timeline header */}
-            <div className="mb-1 flex">
-              <div className="w-28 flex-shrink-0" />
-              <div className="flex-1 flex">
-                {Array.from({ length: 24 }, (_, h) => (
-                  <div key={h} className="flex-1 text-center text-[9px] text-gray-400 font-mono">
-                    {h}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Existing brands */}
-            {(existingBrands ?? []).map(brand => {
-              const off = brand.schedule_offset ?? BRAND_SCHEDULES[brand.id]?.offset ?? 0
-              const reelHours = [0, 4, 8, 12, 16, 20].map(h => (h + off) % 24)
-              const postHours = [8, 14].map(h => (h + off) % 24)
-              const bColor = BRAND_THEMES[brand.id]?.brandColor || brand.colors?.primary || '#6b7280'
-              return (
-                <div key={brand.id} className="flex items-center mb-1">
-                  <div className="w-28 flex-shrink-0 flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: bColor }} />
-                    <span className="text-xs text-gray-600 truncate">{brand.display_name || brand.id}</span>
-                  </div>
-                  <div className="flex-1 flex h-5 bg-gray-100 rounded-sm relative">
-                    {Array.from({ length: 24 }, (_, h) => {
-                      const isReel = reelHours.includes(h)
-                      const isPost = postHours.includes(h)
-                      return (
-                        <div key={h} className="flex-1 relative border-r border-gray-200/50 last:border-r-0">
-                          {isReel && (
-                            <div
-                              className="absolute inset-0.5 rounded-[2px]"
-                              style={{ backgroundColor: bColor, opacity: 0.7 }}
-                              title={`${brand.display_name} reel @ ${h}:00`}
-                            />
-                          )}
-                          {isPost && (
-                            <div
-                              className="absolute inset-0.5 rounded-[2px] border-2"
-                              style={{ borderColor: bColor, backgroundColor: 'white' }}
-                              title={`${brand.display_name} post @ ${h}:00`}
-                            />
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* New brand (highlighted) */}
-            <div className="flex items-center mb-1 mt-1">
-              <div className="w-28 flex-shrink-0 flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-2 ring-primary-400" style={{ backgroundColor: primaryColor }} />
-                <span className="text-xs font-semibold text-primary-700 truncate">{displayName || 'New Brand'} ✨</span>
-              </div>
-              <div className="flex-1 flex h-5 bg-primary-50 rounded-sm ring-1 ring-primary-200 relative">
-                {Array.from({ length: 24 }, (_, h) => {
-                  const reelHours = [0, 4, 8, 12, 16, 20].map(bh => (bh + scheduleOffset) % 24)
-                  const postHours = [8, 14].map(bh => (bh + scheduleOffset) % 24)
-                  const isReel = reelHours.includes(h)
-                  const isPost = postHours.includes(h)
-                  return (
-                    <div key={h} className="flex-1 relative border-r border-primary-100/50 last:border-r-0">
-                      {isReel && (
-                        <div
-                          className="absolute inset-0.5 rounded-[2px]"
-                          style={{ backgroundColor: primaryColor }}
-                          title={`New brand reel @ ${h}:00`}
-                        />
-                      )}
-                      {isPost && (
-                        <div
-                          className="absolute inset-0.5 rounded-[2px] border-2"
-                          style={{ borderColor: primaryColor, backgroundColor: 'white' }}
-                          title={`New brand post @ ${h}:00`}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Legend */}
-            <div className="flex items-center gap-4 mt-3 pt-2 border-t border-gray-200">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <div className="w-3 h-3 rounded-[2px] bg-gray-400" />
-                <span>Reel</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <div className="w-3 h-3 rounded-[2px] border-2 border-gray-400 bg-white" />
-                <span>Post</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <span className="text-[10px]">☀️</span>
-                <span>Light</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <span className="text-[10px]">🌙</span>
-                <span>Dark</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Step 4: Platform Connections */}
-      {step === 4 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
             <Link2 className="w-12 h-12 text-primary-500 mx-auto mb-2" />

@@ -908,19 +908,7 @@ class DatabaseSchedulerService:
         """
         from datetime import timedelta
         
-        # Brand hour offsets (staggered by 1 hour)
-        BRAND_OFFSETS = {
-            "holisticcollege": 0,
-            "healthycollege": 1,
-            "vitalitycollege": 2,
-            "longevitycollege": 3,
-            "wellbeingcollege": 4,
-            # Legacy support
-            "gymcollege": 0,
-        }
-        
         # Base slot pattern (every 4 hours, alternating L/D/L/D/L/D)
-        # For holisticcollege at offset 0: 0(L), 4(D), 8(L), 12(D), 16(L), 20(D)
         BASE_SLOTS = [
             (0, "light"),   # 12 AM - Light
             (4, "dark"),    # 4 AM - Dark
@@ -930,9 +918,14 @@ class DatabaseSchedulerService:
             (20, "dark"),   # 8 PM - Dark
         ]
         
-        # Get brand offset
+        # Get brand offset from database
         brand_lower = brand.lower()
-        offset = BRAND_OFFSETS.get(brand_lower, 0)
+        offset = 0
+        with get_db_session() as db:
+            from app.models import Brand as BrandModel
+            db_brand = db.query(BrandModel).filter(BrandModel.id == brand_lower).first()
+            if db_brand:
+                offset = db_brand.schedule_offset or 0
         
         # Build slots for this brand (apply offset, wrap around 24h)
         brand_slots = [((hour + offset) % 24, v) for hour, v in BASE_SLOTS]
@@ -1090,21 +1083,17 @@ class DatabaseSchedulerService:
         """
         from datetime import timedelta
 
-        # Same brand offsets as reels
-        BRAND_OFFSETS = {
-            "holisticcollege": 0,
-            "healthycollege": 1,
-            "vitalitycollege": 2,
-            "longevitycollege": 3,
-            "wellbeingcollege": 4,
-            "gymcollege": 0,
-        }
-
         # Post base slots: 2 per day — morning + afternoon
         BASE_POST_SLOTS = [8, 14]
 
+        # Get brand offset from database
         brand_lower = brand.lower()
-        offset = BRAND_OFFSETS.get(brand_lower, 0)
+        offset = 0
+        with get_db_session() as db:
+            from app.models import Brand as BrandModel
+            db_brand = db.query(BrandModel).filter(BrandModel.id == brand_lower).first()
+            if db_brand:
+                offset = db_brand.schedule_offset or 0
 
         # Apply brand offset and wrap around 24h
         brand_post_slots = sorted([(hour + offset) % 24 for hour in BASE_POST_SLOTS])

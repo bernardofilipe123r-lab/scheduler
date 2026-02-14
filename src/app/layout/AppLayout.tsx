@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Link2, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Info, Music, Bot, BookOpen, Dna } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Info, Music, Bot, BookOpen, Dna } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -14,7 +14,7 @@ export function AppLayout() {
   const { user, logout } = useAuth()
   
   // Check if current route is a settings page
-  const isSettingsRoute = ['/connected', '/brands', '/settings', '/posts-prompts', '/reels-prompts', '/prompts', '/about'].includes(location.pathname)
+  const isSettingsRoute = ['/brands', '/settings', '/posts-prompts', '/reels-prompts', '/prompts', '/about'].includes(location.pathname)
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -166,20 +166,6 @@ export function AppLayout() {
                 {settingsOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                     <NavLink
-                      to="/connected"
-                      onClick={() => setSettingsOpen(false)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-primary-50 text-primary-600'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`
-                      }
-                    >
-                      <Link2 className="w-4 h-4" />
-                      Connected Pages
-                    </NavLink>
-                    <NavLink
                       to="/brands"
                       onClick={() => setSettingsOpen(false)}
                       className={({ isActive }) =>
@@ -191,7 +177,7 @@ export function AppLayout() {
                       }
                     >
                       <Layers className="w-4 h-4" />
-                      Brand Settings
+                      Brands
                     </NavLink>
                     <NavLink
                       to="/settings"

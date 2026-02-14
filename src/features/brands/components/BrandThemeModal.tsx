@@ -8,6 +8,8 @@ import {
   Save,
 } from 'lucide-react'
 import { useBrands } from '@/features/brands/api/use-brands'
+import { apiClient } from '@/shared/api/client'
+import { supabase } from '@/shared/api/supabase'
 import {
   type BrandInfo,
   BRAND_THEMES,
@@ -56,24 +58,21 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
   useEffect(() => {
     const fetchSavedTheme = async () => {
       try {
-        const response = await fetch(`/api/brands/${brand.id}/theme`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.has_overrides && data.theme) {
-            // Use saved values
-            if (data.theme.brand_color) setBrandColor(data.theme.brand_color)
-            if (data.theme.light_title_color) setLightTitleColor(data.theme.light_title_color)
-            if (data.theme.light_bg_color) setLightBgColor(data.theme.light_bg_color)
-            if (data.theme.dark_title_color) setDarkTitleColor(data.theme.dark_title_color)
-            if (data.theme.dark_bg_color) setDarkBgColor(data.theme.dark_bg_color)
-            
-            // Load logo if exists
-            if (data.theme.logo) {
-              const logoUrl = `/brand-logos/${data.theme.logo}?t=${Date.now()}`
-              const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
-              if (logoCheck.ok) {
-                setLogoPreview(logoUrl)
-              }
+        const data = await apiClient.get<{ has_overrides: boolean; theme: Record<string, string> }>(`/api/brands/${brand.id}/theme`)
+        if (data.has_overrides && data.theme) {
+          // Use saved values
+          if (data.theme.brand_color) setBrandColor(data.theme.brand_color)
+          if (data.theme.light_title_color) setLightTitleColor(data.theme.light_title_color)
+          if (data.theme.light_bg_color) setLightBgColor(data.theme.light_bg_color)
+          if (data.theme.dark_title_color) setDarkTitleColor(data.theme.dark_title_color)
+          if (data.theme.dark_bg_color) setDarkBgColor(data.theme.dark_bg_color)
+          
+          // Load logo if exists
+          if (data.theme.logo) {
+            const logoUrl = `/brand-logos/${data.theme.logo}?t=${Date.now()}`
+            const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
+            if (logoCheck.ok) {
+              setLogoPreview(logoUrl)
             }
           }
         }
@@ -129,8 +128,11 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
         formData.append('logo', logoFile)
       }
       
-      const response = await fetch(`/api/brands/${brand.id}/theme`, {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/brands/${brand.id}/theme`, {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData
       })
       

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 from PIL import Image, ImageDraw
 from app.services.media.ai_background import AIBackgroundGenerator
+from app.services.media.template_loader import load_template_image
 from app.core.config import get_brand_config, BrandType
 from app.core.brand_colors import get_brand_colors, get_brand_display_name
 from app.core.constants import (
@@ -229,11 +230,9 @@ class ImageGenerator:
         
         # Load or generate thumbnail background based on variant
         if self.variant == "light":
-            # Light mode: use template images
-            template_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "light mode" / "thumbnail_template.png"
-            print(f"      📂 Loading template: {template_path}", flush=True)
-            print(f"      Template exists: {template_path.exists()}", flush=True)
-            image = Image.open(template_path)
+            # Light mode: use template images (Supabase Storage → cache → local fallback)
+            print(f"      📂 Loading thumbnail template for {self.brand_name}", flush=True)
+            image = load_template_image(self.brand_name, "thumbnail_template")
             print(f"      ✓ Template loaded", flush=True)
         else:
             # Dark mode: use AI background with content context
@@ -372,9 +371,8 @@ class ImageGenerator:
         
         # Load or generate content background based on variant
         if self.variant == "light":
-            # Light mode: use template images
-            template_path = Path(__file__).resolve().parent.parent.parent / "assets" / "templates" / self.brand_name / "light mode" / "content_template.png"
-            image = Image.open(template_path)
+            # Light mode: use template images (Supabase Storage → cache → local fallback)
+            image = load_template_image(self.brand_name, "content_template")
         else:
             # Dark mode: use AI background with content context
             ai_bg = self._get_or_generate_ai_background(title=title, lines=lines)

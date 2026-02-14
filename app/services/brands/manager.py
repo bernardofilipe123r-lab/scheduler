@@ -152,7 +152,6 @@ DEFAULT_BRANDS = {
         "instagram_handle": "@thehealthycollege",
         "facebook_page_name": "The Healthy College",
         "youtube_channel_name": "The Healthy College",
-        "schedule_offset": 0,
         "posts_per_day": 6,
         "baseline_for_content": False,
     },
@@ -162,7 +161,6 @@ DEFAULT_BRANDS = {
         "instagram_handle": "@thelongevitycollege",
         "facebook_page_name": "The Longevity College",
         "youtube_channel_name": "The Longevity College",
-        "schedule_offset": 2,
         "posts_per_day": 6,
         "baseline_for_content": True,  # This is the baseline for content differentiation
     },
@@ -172,7 +170,6 @@ DEFAULT_BRANDS = {
         "instagram_handle": "@thevitalitycollege",
         "facebook_page_name": "The Vitality College",
         "youtube_channel_name": "The Vitality College",
-        "schedule_offset": 4,
         "posts_per_day": 6,
         "baseline_for_content": False,
     },
@@ -182,7 +179,6 @@ DEFAULT_BRANDS = {
         "instagram_handle": "@theholisticcollege",
         "facebook_page_name": "The Holistic College",
         "youtube_channel_name": "The Holistic College",
-        "schedule_offset": 6,
         "posts_per_day": 6,
         "baseline_for_content": False,
     },
@@ -192,7 +188,6 @@ DEFAULT_BRANDS = {
         "instagram_handle": "@thewellbeingcollege",
         "facebook_page_name": "The Wellbeing College",
         "youtube_channel_name": "The Wellbeing College",
-        "schedule_offset": 8,
         "posts_per_day": 6,
         "baseline_for_content": False,
     },
@@ -324,6 +319,13 @@ class BrandManager:
         if existing:
             raise ValueError(f"Brand '{brand_data['id']}' already exists")
         
+        # Auto-assign schedule_offset if not explicitly provided
+        if brand_data.get("schedule_offset") is None:
+            count_query = self.db.query(Brand).filter(Brand.active == True)
+            if user_id:
+                count_query = count_query.filter(Brand.user_id == user_id)
+            brand_data["schedule_offset"] = count_query.count()
+        
         # Create brand
         brand = Brand(
             id=brand_data["id"],
@@ -450,7 +452,7 @@ class BrandManager:
         logger.info("Seeding default brands...")
         seeded = 0
         
-        for brand_id, config in DEFAULT_BRANDS.items():
+        for idx, (brand_id, config) in enumerate(DEFAULT_BRANDS.items()):
             colors = DEFAULT_BRAND_COLORS.get(brand_id, {})
             
             brand = Brand(
@@ -461,7 +463,7 @@ class BrandManager:
                 instagram_handle=config.get("instagram_handle"),
                 facebook_page_name=config.get("facebook_page_name"),
                 youtube_channel_name=config.get("youtube_channel_name"),
-                schedule_offset=config.get("schedule_offset", 0),
+                schedule_offset=idx,  # Auto-assign based on creation order
                 posts_per_day=config.get("posts_per_day", 6),
                 baseline_for_content=config.get("baseline_for_content", False),
                 colors=colors,
@@ -486,7 +488,7 @@ def get_brand_manager(db: Session) -> BrandManager:
     return BrandManager(db)
 
 
-def seed_brands_if_needed(db: Session):
+def seed_brands_if_needed(db: Session, user_id: Optional[str] = None):
     """Seed default brands if the brands table is empty."""
     manager = get_brand_manager(db)
-    return manager.seed_default_brands()
+    return manager.seed_default_brands(user_id=user_id)

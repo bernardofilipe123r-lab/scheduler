@@ -5,17 +5,6 @@ export interface BrandInfo {
   logo: string
 }
 
-// Brand scheduling configuration - OFFSET based system
-// Each brand has an offset (0-23 hours) from the base schedule
-// Posts alternate: LIGHT, DARK, LIGHT, DARK, etc. every (24/postsPerDay) hours
-export const BRAND_SCHEDULES: Record<string, { offset: number; postsPerDay: number }> = {
-  healthycollege: { offset: 0, postsPerDay: 2 },    // Starts at 12:00 AM
-  longevitycollege: { offset: 1, postsPerDay: 2 },  // Starts at 1:00 AM
-  wellbeingcollege: { offset: 2, postsPerDay: 2 },  // Starts at 2:00 AM
-  vitalitycollege: { offset: 3, postsPerDay: 2 },   // Starts at 3:00 AM
-  holisticcollege: { offset: 4, postsPerDay: 2 },   // Starts at 4:00 AM
-}
-
 // Brand theme colors - matches Python brand_colors.py
 // Each brand has a primary color, and light/dark mode title and background colors
 export interface BrandTheme {

@@ -50,7 +50,7 @@ class CreateBrandRequest(BaseModel):
     instagram_handle: Optional[str] = None
     facebook_page_name: Optional[str] = None
     youtube_channel_name: Optional[str] = None
-    schedule_offset: int = 0  # Hour offset 0-23
+    schedule_offset: Optional[int] = None  # Auto-assigned if not provided
     posts_per_day: int = 6
     colors: Optional[ColorConfig] = None
     agent_name: Optional[str] = None  # AI agent name — auto-provisioned on brand creation
@@ -176,6 +176,119 @@ async def get_brand_ids(db: Session = Depends(get_db), user: dict = Depends(get_
     }
 
 
+# ============================================================================
+# CONNECTION STATUS ENDPOINTS
+# (Must be defined BEFORE /{brand_id} to avoid being shadowed)
+# ============================================================================
+
+@router.get("/connections")
+async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
+    """
+    Get connection status for all platforms for all brands.
+    
+    Returns Instagram, Facebook, and YouTube connection status.
+    """
+    manager = get_brand_manager(db)
+    brands = manager.get_all_brands(user_id=user["id"])
+    
+    # Get YouTube channels from database
+    youtube_channels = db.query(YouTubeChannel).all()
+    youtube_map = {ch.brand: ch for ch in youtube_channels}
+    
+    brand_connections = []
+    
+    for brand in brands:
+        brand_id = brand["id"]
+        brand_with_creds = manager.get_brand_with_credentials(brand_id, user_id=user["id"])
+        
+        # Check Instagram
+        ig_connected = bool(
+            brand_with_creds.get("instagram_business_account_id") and 
+            (brand_with_creds.get("instagram_access_token") or brand_with_creds.get("meta_access_token"))
+        )
+        
+        instagram = {
+            "connected": ig_connected,
+            "account_id": brand_with_creds.get("instagram_business_account_id"),
+            "account_name": brand.get("instagram_handle"),
+            "status": "connected" if ig_connected else "not_configured"
+        }
+        
+        # Check Facebook
+        fb_connected = bool(
+            brand_with_creds.get("facebook_page_id") and 
+            (brand_with_creds.get("facebook_access_token") or brand_with_creds.get("meta_access_token"))
+        )
+        
+        facebook = {
+            "connected": fb_connected,
+            "account_id": brand_with_creds.get("facebook_page_id"),
+            "account_name": brand.get("facebook_page_name"),
+            "status": "connected" if fb_connected else "not_configured"
+        }
+        
+        # Check YouTube
+        yt_channel = youtube_map.get(brand_id)
+        if yt_channel:
+            youtube = {
+                "connected": yt_channel.status == "connected",
+                "account_id": yt_channel.channel_id,
+                "account_name": yt_channel.channel_name,
+                "status": yt_channel.status,
+                "last_error": yt_channel.last_error
+            }
+        else:
+            youtube = {
+                "connected": False,
+                "status": "not_connected"
+            }
+        
+        brand_connections.append({
+            "brand": brand_id,
+            "display_name": brand["display_name"],
+            "color": brand["colors"].get("primary", "#000000"),
+            "instagram": instagram,
+            "facebook": facebook,
+            "youtube": youtube
+        })
+    
+    # Check which OAuth is configured
+    oauth_configured = {
+        "meta": bool(os.getenv("INSTAGRAM_APP_ID")) and bool(os.getenv("INSTAGRAM_APP_SECRET")),
+        "youtube": bool(os.getenv("YOUTUBE_CLIENT_ID")) and bool(os.getenv("YOUTUBE_CLIENT_SECRET"))
+    }
+    
+    return {
+        "brands": brand_connections,
+        "oauth_configured": oauth_configured
+    }
+
+
+@router.post("/seed")
+async def seed_brands(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
+    """
+    Seed default brands if none exist.
+    
+    This is called automatically on app startup, but can also be
+    triggered manually.
+    """
+    manager = get_brand_manager(db)
+    count = manager.seed_default_brands(user_id=user["id"])
+    
+    if count > 0:
+        return {
+            "success": True,
+            "message": f"Seeded {count} default brands",
+            "count": count
+        }
+    else:
+        return {
+            "success": True,
+            "message": "Brands already exist, no seeding needed",
+            "count": 0
+        }
+
+
 @router.get("/{brand_id}")
 async def get_brand(
     brand_id: str,
@@ -248,7 +361,7 @@ async def create_brand(
             "instagram_handle": request.instagram_handle,
             "facebook_page_name": request.facebook_page_name,
             "youtube_channel_name": request.youtube_channel_name,
-            "schedule_offset": request.schedule_offset,
+            "schedule_offset": request.schedule_offset,  # None = auto-assigned by manager
             "posts_per_day": request.posts_per_day,
             "colors": request.colors.dict() if request.colors else {},
             # Platform credentials
@@ -403,93 +516,6 @@ async def reactivate_brand(
 
 
 # ============================================================================
-# CONNECTION STATUS ENDPOINTS
-# ============================================================================
-
-@router.get("/connections")
-async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
-    """
-    Get connection status for all platforms for all brands.
-    
-    Returns Instagram, Facebook, and YouTube connection status.
-    """
-    manager = get_brand_manager(db)
-    brands = manager.get_all_brands(user_id=user["id"])
-    
-    # Get YouTube channels from database
-    youtube_channels = db.query(YouTubeChannel).all()
-    youtube_map = {ch.brand: ch for ch in youtube_channels}
-    
-    brand_connections = []
-    
-    for brand in brands:
-        brand_id = brand["id"]
-        brand_with_creds = manager.get_brand_with_credentials(brand_id, user_id=user["id"])
-        
-        # Check Instagram
-        ig_connected = bool(
-            brand_with_creds.get("instagram_business_account_id") and 
-            (brand_with_creds.get("instagram_access_token") or brand_with_creds.get("meta_access_token"))
-        )
-        
-        instagram = {
-            "connected": ig_connected,
-            "account_id": brand_with_creds.get("instagram_business_account_id"),
-            "account_name": brand.get("instagram_handle"),
-            "status": "connected" if ig_connected else "not_configured"
-        }
-        
-        # Check Facebook
-        fb_connected = bool(
-            brand_with_creds.get("facebook_page_id") and 
-            (brand_with_creds.get("facebook_access_token") or brand_with_creds.get("meta_access_token"))
-        )
-        
-        facebook = {
-            "connected": fb_connected,
-            "account_id": brand_with_creds.get("facebook_page_id"),
-            "account_name": brand.get("facebook_page_name"),
-            "status": "connected" if fb_connected else "not_configured"
-        }
-        
-        # Check YouTube
-        yt_channel = youtube_map.get(brand_id)
-        if yt_channel:
-            youtube = {
-                "connected": yt_channel.status == "connected",
-                "account_id": yt_channel.channel_id,
-                "account_name": yt_channel.channel_name,
-                "status": yt_channel.status,
-                "last_error": yt_channel.last_error
-            }
-        else:
-            youtube = {
-                "connected": False,
-                "status": "not_connected"
-            }
-        
-        brand_connections.append({
-            "brand": brand_id,
-            "display_name": brand["display_name"],
-            "color": brand["colors"].get("primary", "#000000"),
-            "instagram": instagram,
-            "facebook": facebook,
-            "youtube": youtube
-        })
-    
-    # Check which OAuth is configured
-    oauth_configured = {
-        "meta": bool(os.getenv("INSTAGRAM_APP_ID")) and bool(os.getenv("INSTAGRAM_APP_SECRET")),
-        "youtube": bool(os.getenv("YOUTUBE_CLIENT_ID")) and bool(os.getenv("YOUTUBE_CLIENT_SECRET"))
-    }
-    
-    return {
-        "brands": brand_connections,
-        "oauth_configured": oauth_configured
-    }
-
-
-# ============================================================================
 # THEME ENDPOINTS (for backward compatibility)
 # ============================================================================
 
@@ -602,32 +628,3 @@ async def update_brand_theme(
             "logo": updates.get("logo_path", brand.get("logo_path"))
         }
     }
-
-
-# ============================================================================
-# SEED ENDPOINT (for initial setup)
-# ============================================================================
-
-@router.post("/seed")
-async def seed_brands(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
-    """
-    Seed default brands if none exist.
-    
-    This is called automatically on app startup, but can also be
-    triggered manually.
-    """
-    manager = get_brand_manager(db)
-    count = manager.seed_default_brands(user_id=user["id"])
-    
-    if count > 0:
-        return {
-            "success": True,
-            "message": f"Seeded {count} default brands",
-            "count": count
-        }
-    else:
-        return {
-            "success": True,
-            "message": "Brands already exist, no seeding needed",
-            "count": 0
-        }
