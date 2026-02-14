@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.db_connection import get_db
 from app.models import Brand, YouTubeChannel
 from app.services.brand_manager import get_brand_manager, BrandManager
+from app.services.brand_resolver import brand_resolver
 
 
 logger = logging.getLogger(__name__)
@@ -252,6 +253,7 @@ async def create_brand(
         }
         
         brand = manager.create_brand(brand_data)
+        brand_resolver.invalidate_cache()
 
         # Auto-provision an AI agent for this brand
         agent_info = None
@@ -301,6 +303,8 @@ async def update_brand(
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
     
+    brand_resolver.invalidate_cache()
+    
     return {
         "success": True,
         "message": f"Brand '{brand_id}' updated successfully",
@@ -333,6 +337,8 @@ async def update_brand_credentials(
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
     
+    brand_resolver.invalidate_cache()
+    
     return {
         "success": True,
         "message": f"Credentials updated for '{brand_id}'",
@@ -358,6 +364,8 @@ async def delete_brand(
     
     if not success:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
+    
+    brand_resolver.invalidate_cache()
     
     return {
         "success": True,

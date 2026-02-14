@@ -263,14 +263,14 @@ async def startup_event():
     
     # Log brand credentials status at startup (CRITICAL for debugging cross-posting)
     print("\n🏷️ Brand Credentials Status:", flush=True)
-    from app.core.config import BRAND_CONFIGS, BrandType
-    for brand_type, config in BRAND_CONFIGS.items():
-        ig_status = "✅" if config.instagram_business_account_id else "❌ MISSING"
-        fb_status = "✅" if config.facebook_page_id else "❌ MISSING"
-        token_status = "✅" if config.meta_access_token else "❌ MISSING"
-        print(f"   {config.display_name}:", flush=True)
-        print(f"      Instagram ID: {ig_status} ({config.instagram_business_account_id or 'None'})", flush=True)
-        print(f"      Facebook ID:  {fb_status} ({config.facebook_page_id or 'None'})", flush=True)
+    from app.services.brand_resolver import brand_resolver
+    for brand in brand_resolver.get_all_brands():
+        ig_status = "✅" if brand.instagram_business_account_id else "❌ MISSING"
+        fb_status = "✅" if brand.facebook_page_id else "❌ MISSING"
+        token_status = "✅" if brand.meta_access_token else "❌ MISSING"
+        print(f"   {brand.display_name}:", flush=True)
+        print(f"      Instagram ID: {ig_status} ({brand.instagram_business_account_id or 'None'})", flush=True)
+        print(f"      Facebook ID:  {fb_status} ({brand.facebook_page_id or 'None'})", flush=True)
         print(f"      Token:        {token_status}", flush=True)
     print("", flush=True)
     
@@ -411,35 +411,11 @@ async def startup_event():
                             
                             # Resolve brand credentials and publish image
                             from app.services.social_publisher import SocialPublisher
-                            from app.core.config import BrandType, BRAND_CONFIGS
+                            from app.services.brand_resolver import brand_resolver
                             
                             publisher = None
-                            brand_name_normalized = brand.lower().replace(' ', '_').replace('-', '_')
-                            brand_mapping = {
-                                'gymcollege': BrandType.THE_GYM_COLLEGE,
-                                'gym_college': BrandType.THE_GYM_COLLEGE,
-                                'the_gym_college': BrandType.THE_GYM_COLLEGE,
-                                'thegymcollege': BrandType.THE_GYM_COLLEGE,
-                                'healthycollege': BrandType.HEALTHY_COLLEGE,
-                                'healthy_college': BrandType.HEALTHY_COLLEGE,
-                                'thehealthycollege': BrandType.HEALTHY_COLLEGE,
-                                'vitalitycollege': BrandType.VITALITY_COLLEGE,
-                                'vitality_college': BrandType.VITALITY_COLLEGE,
-                                'thevitalitycollege': BrandType.VITALITY_COLLEGE,
-                                'longevitycollege': BrandType.LONGEVITY_COLLEGE,
-                                'longevity_college': BrandType.LONGEVITY_COLLEGE,
-                                'thelongevitycollege': BrandType.LONGEVITY_COLLEGE,
-                                'holisticcollege': BrandType.HOLISTIC_COLLEGE,
-                                'holistic_college': BrandType.HOLISTIC_COLLEGE,
-                                'theholisticcollege': BrandType.HOLISTIC_COLLEGE,
-                                'wellbeingcollege': BrandType.WELLBEING_COLLEGE,
-                                'wellbeing_college': BrandType.WELLBEING_COLLEGE,
-                                'thewellbeingcollege': BrandType.WELLBEING_COLLEGE,
-                            }
-                            
-                            brand_type = brand_mapping.get(brand_name_normalized)
-                            if brand_type and brand_type in BRAND_CONFIGS:
-                                resolved_config = BRAND_CONFIGS[brand_type]
+                            resolved_config = brand_resolver.get_brand_config(brand)
+                            if resolved_config:
                                 publisher = SocialPublisher(brand_config=resolved_config)
                             else:
                                 publisher = SocialPublisher()

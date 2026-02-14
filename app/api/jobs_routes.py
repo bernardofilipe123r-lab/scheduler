@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 
 from app.db_connection import get_db_session
 from app.services.job_manager import JobManager
+from app.services.brand_resolver import brand_resolver
 
 
 # Request/Response models
@@ -296,7 +297,7 @@ async def regenerate_brand(
                 )
         
         # Validate brand
-        valid_brands = ["gymcollege", "healthycollege", "vitalitycollege", "longevitycollege"]
+        valid_brands = brand_resolver.get_all_brand_ids()
         if brand.lower() not in valid_brands:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

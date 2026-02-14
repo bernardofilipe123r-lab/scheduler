@@ -26,6 +26,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Query, BackgroundTasks
 from pydantic import BaseModel
+from app.services.brand_resolver import brand_resolver
 
 router = APIRouter(prefix="/api/maestro", tags=["maestro"])
 
@@ -373,10 +374,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     from app.services.job_manager import JobManager
     from datetime import datetime
 
-    ALL_BRANDS = [
-        "healthycollege", "vitalitycollege", "longevitycollege",
-        "holisticcollege", "wellbeingcollege",
-    ]
+    ALL_BRANDS = brand_resolver.get_all_brand_ids()
 
     db = SessionLocal()
     try:

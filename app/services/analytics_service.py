@@ -17,8 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.models import BrandAnalytics, AnalyticsRefreshLog, YouTubeChannel, AnalyticsSnapshot
-from app.core.config import BRAND_CONFIGS, BrandType
-from app.core.constants import BRAND_NAME_MAP
+from app.services.brand_resolver import brand_resolver
 
 
 logger = logging.getLogger(__name__)
@@ -115,8 +114,8 @@ class AnalyticsService:
         updated_count = 0
         
         # Fetch Instagram analytics for all brands
-        for brand_name, brand_type in BRAND_NAME_MAP.items():
-            config = BRAND_CONFIGS.get(brand_type)
+        for brand_name in brand_resolver.get_all_brand_ids():
+            config = brand_resolver.get_brand_config(brand_name)
             if not config:
                 continue
             
@@ -739,8 +738,8 @@ class AnalyticsService:
         now = datetime.now(timezone.utc)
         
         # Process each brand
-        for brand_name, brand_type in BRAND_NAME_MAP.items():
-            config = BRAND_CONFIGS.get(brand_type)
+        for brand_name in brand_resolver.get_all_brand_ids():
+            config = brand_resolver.get_brand_config(brand_name)
             if not config:
                 continue
             

@@ -538,7 +538,7 @@ class DatabaseSchedulerService:
             Publishing results
         """
         from app.services.social_publisher import SocialPublisher
-        from app.core.config import BrandType, BRAND_CONFIGS
+        from app.services.brand_resolver import brand_resolver
         
         # Priority: brand_config > brand_name > user_id > default
         publisher = None
@@ -549,35 +549,10 @@ class DatabaseSchedulerService:
             publisher = SocialPublisher(brand_config=brand_config)
         elif brand_name:
             # Look up brand config by name
-            brand_name_normalized = brand_name.lower().replace(' ', '_').replace('-', '_')
-            print(f"🏷️ Looking up brand config for: {brand_name} (normalized: {brand_name_normalized})")
+            print(f"🏷️ Looking up brand config for: {brand_name}")
             
-            # Map common names to BrandType
-            brand_mapping = {
-                'gymcollege': BrandType.THE_GYM_COLLEGE,
-                'gym_college': BrandType.THE_GYM_COLLEGE,
-                'the_gym_college': BrandType.THE_GYM_COLLEGE,
-                'thegymcollege': BrandType.THE_GYM_COLLEGE,
-                'healthycollege': BrandType.HEALTHY_COLLEGE,
-                'healthy_college': BrandType.HEALTHY_COLLEGE,
-                'thehealthycollege': BrandType.HEALTHY_COLLEGE,
-                'vitalitycollege': BrandType.VITALITY_COLLEGE,
-                'vitality_college': BrandType.VITALITY_COLLEGE,
-                'thevitalitycollege': BrandType.VITALITY_COLLEGE,
-                'longevitycollege': BrandType.LONGEVITY_COLLEGE,
-                'longevity_college': BrandType.LONGEVITY_COLLEGE,
-                'thelongevitycollege': BrandType.LONGEVITY_COLLEGE,
-                'holisticcollege': BrandType.HOLISTIC_COLLEGE,
-                'holistic_college': BrandType.HOLISTIC_COLLEGE,
-                'theholisticcollege': BrandType.HOLISTIC_COLLEGE,
-                'wellbeingcollege': BrandType.WELLBEING_COLLEGE,
-                'wellbeing_college': BrandType.WELLBEING_COLLEGE,
-                'thewellbeingcollege': BrandType.WELLBEING_COLLEGE,
-            }
-            
-            brand_type = brand_mapping.get(brand_name_normalized)
-            if brand_type and brand_type in BRAND_CONFIGS:
-                resolved_config = BRAND_CONFIGS[brand_type]
+            resolved_config = brand_resolver.get_brand_config(brand_name)
+            if resolved_config:
                 print(f"   ✅ Found brand config: {resolved_config.name}")
                 print(f"   📸 Instagram Account ID: {resolved_config.instagram_business_account_id}")
                 print(f"   📘 Facebook Page ID: {resolved_config.facebook_page_id}")
@@ -605,7 +580,7 @@ class DatabaseSchedulerService:
                 
                 publisher = SocialPublisher(brand_config=resolved_config)
             else:
-                error_msg = f"CRITICAL: Brand '{brand_name}' not found in config! Cannot publish to unknown brand."
+                error_msg = f"CRITICAL: Brand '{brand_name}' not found in DB! Cannot publish to unknown brand."
                 print(f"   ❌ {error_msg}")
                 return {
                     "instagram": {"success": False, "error": error_msg, "platform": "instagram"},

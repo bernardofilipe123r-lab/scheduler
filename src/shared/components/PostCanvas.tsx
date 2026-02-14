@@ -5,6 +5,7 @@
 import { Stage, Layer, Image as KonvaImage, Rect, Text, Line, Group } from 'react-konva'
 import useImage from 'use-image'
 import Konva from 'konva'
+import { BRAND_CONFIG } from '@/features/brands/model/brand-config'
 
 // ─── Constants ───────────────────────────────────────────────────────
 export const CANVAS_WIDTH = 1080
@@ -113,6 +114,9 @@ export const BRAND_CONFIGS: Record<
  */
 export function getBrandConfig(brandId: string) {
   if (BRAND_CONFIGS[brandId]) return BRAND_CONFIGS[brandId]
+  // Check runtime cache (populated by registerBrand via useDynamicBrands)
+  const cached = BRAND_CONFIG[brandId]
+  if (cached) return { name: cached.label, color: cached.color, colorName: 'custom', accentColor: cached.color }
   // Generate sensible defaults for unknown (new) brands
   const label = brandId.replace(/college$/i, ' College').replace(/^\w/, c => c.toUpperCase())
   return { name: label, color: '#6b7280', colorName: 'gray', accentColor: '#4b5563' }

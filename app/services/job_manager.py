@@ -15,6 +15,7 @@ from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
 from app.services.content_differentiator import ContentDifferentiator
 from app.core.config import BrandType, get_brand_config
+from app.services.brand_resolver import brand_resolver
 
 # Per-brand generation timeout (in seconds). Default: 10 minutes.
 BRAND_GENERATION_TIMEOUT = int(os.getenv("BRAND_GENERATION_TIMEOUT_SECONDS", "600"))
@@ -54,15 +55,8 @@ def generate_job_id() -> str:
 
 def get_brand_type(brand_name: str) -> BrandType:
     """Convert brand name to BrandType enum."""
-    brand_map = {
-        "gymcollege": BrandType.THE_GYM_COLLEGE,
-        "healthycollege": BrandType.HEALTHY_COLLEGE,
-        "vitalitycollege": BrandType.VITALITY_COLLEGE,
-        "longevitycollege": BrandType.LONGEVITY_COLLEGE,
-        "holisticcollege": BrandType.HOLISTIC_COLLEGE,
-        "wellbeingcollege": BrandType.WELLBEING_COLLEGE,
-    }
-    return brand_map.get(brand_name, BrandType.HEALTHY_COLLEGE)
+    bt = brand_resolver.get_brand_type(brand_name)
+    return bt if bt else BrandType.HEALTHY_COLLEGE
 
 
 class JobManager:

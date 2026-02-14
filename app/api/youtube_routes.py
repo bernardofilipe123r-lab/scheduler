@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.db_connection import get_db, get_db_session
 from app.models import YouTubeChannel
 from app.services.youtube_publisher import YouTubePublisher, YouTubeCredentials
+from app.services.brand_resolver import brand_resolver
 
 
 logger = logging.getLogger(__name__)
@@ -31,15 +32,6 @@ router = APIRouter(prefix="/youtube", tags=["youtube"])
 
 # Initialize YouTube publisher (handles OAuth and API calls)
 youtube_publisher = YouTubePublisher()
-
-# List of valid brands
-VALID_BRANDS = [
-    "healthycollege",
-    "vitalitycollege", 
-    "longevitycollege",
-    "holisticcollege",
-    "wellbeingcollege"
-]
 
 
 @router.get("/connect")
@@ -59,10 +51,11 @@ async def youtube_connect(brand: str = Query(..., description="Brand to connect 
     """
     brand = brand.lower()
     
-    if brand not in VALID_BRANDS:
+    valid_brands = brand_resolver.get_all_brand_ids()
+    if brand not in valid_brands:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid brand. Must be one of: {', '.join(VALID_BRANDS)}"
+            detail=f"Invalid brand. Must be one of: {', '.join(valid_brands)}"
         )
     
     if not youtube_publisher.client_id:
@@ -407,7 +400,7 @@ async def youtube_status(db: Session = Depends(get_db)):
     channel_map = {ch.brand: ch for ch in channels}
     
     status = {}
-    for brand in VALID_BRANDS:
+    for brand in brand_resolver.get_all_brand_ids():
         if brand in channel_map:
             ch = channel_map[brand]
             status[brand] = {

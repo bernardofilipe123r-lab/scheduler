@@ -21,6 +21,7 @@ from app.db_connection import get_db
 from app.models import YouTubeChannel
 from app.core.config import BRAND_CONFIGS, BrandType
 from app.core.constants import BRAND_NAME_MAP, VALID_BRANDS
+from app.services.brand_resolver import brand_resolver
 
 
 logger = logging.getLogger(__name__)
@@ -282,7 +283,8 @@ async def update_brand_theme(
     This saves color overrides to a JSON file and uploads logo to assets folder.
     """
     # Validate brand exists
-    if brand_id not in VALID_BRANDS:
+    valid_brands = brand_resolver.get_all_brand_ids()
+    if brand_id not in valid_brands:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
     
     # Load current overrides
@@ -346,7 +348,8 @@ async def get_brand_theme(brand_id: str):
     
     Returns stored overrides or defaults from brand_colors.py.
     """
-    if brand_id not in VALID_BRANDS:
+    valid_brands = brand_resolver.get_all_brand_ids()
+    if brand_id not in valid_brands:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
     
     # Load overrides

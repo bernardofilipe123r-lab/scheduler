@@ -103,28 +103,17 @@ POSTS_PER_BRAND = 2  # 2 posts per brand per day (morning + afternoon slots)
 
 def _get_all_brands() -> List[str]:
     """Load brand IDs from DB (dynamic, not hardcoded)."""
-    try:
-        from app.db_connection import SessionLocal
-        from app.models import Brand
-        db = SessionLocal()
-        try:
-            brands = db.query(Brand.id).filter(Brand.active == True).all()
-            return [b[0] for b in brands] if brands else [
-                "healthycollege", "vitalitycollege", "longevitycollege",
-                "holisticcollege", "wellbeingcollege",
-            ]
-        finally:
-            db.close()
-    except Exception:
-        return [
-            "healthycollege", "vitalitycollege", "longevitycollege",
-            "holisticcollege", "wellbeingcollege",
-        ]
+    from app.services.brand_resolver import brand_resolver
+    ids = brand_resolver.get_all_brand_ids()
+    return ids if ids else ["healthycollege"]
 
-ALL_BRANDS = [
-    "healthycollege", "vitalitycollege", "longevitycollege",
-    "holisticcollege", "wellbeingcollege",
-]
+
+def _get_all_brands_list() -> List[str]:
+    """Alias kept for backward-compat; prefer _get_all_brands()."""
+    return _get_all_brands()
+
+# Dynamic — always call _get_all_brands() instead of using this directly
+ALL_BRANDS = _get_all_brands()
 
 
 # ── DB-Persisted State ───────────────────────────────────────

@@ -30,23 +30,13 @@ AUTO_FIT_MAX = 90
 AUTO_FIT_MIN = 30
 THREE_LINE_FLOOR = 64
 
-# Brand abbreviations (match PostCanvas.tsx)
-BRAND_ABBREVIATIONS = {
-    "healthycollege": "HCO",
-    "holisticcollege": "HCO",
-    "longevitycollege": "LCO",
-    "vitalitycollege": "VCO",
-    "wellbeingcollege": "WCO",
-}
+from app.services.brand_resolver import brand_resolver
 
 
 def _get_brand_abbreviation(brand_id: str) -> str:
-    """Get brand abbreviation with dynamic fallback."""
-    if brand_id in BRAND_ABBREVIATIONS:
-        return BRAND_ABBREVIATIONS[brand_id]
-    # Generate abbreviation: first letter of each word + 'CO'
-    parts = brand_id.replace("college", "").strip()
-    return (parts[0].upper() if parts else "X") + "CO"
+    """Get brand abbreviation from DB with dynamic fallback."""
+    abbr = brand_resolver.get_brand_abbreviation(brand_id)
+    return abbr if abbr else brand_id[:3].upper()
 
 
 def _load_font(name: str, size: int) -> ImageFont.FreeTypeFont:

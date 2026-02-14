@@ -2,7 +2,7 @@
  * Posts page — simplified form that creates a "post" Job
  * and navigates to the job detail page for monitoring / scheduling.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   FileImage,
   Loader2,
@@ -17,9 +17,9 @@ import {
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import { useCreateJob } from '@/features/jobs'
+import { useDynamicBrands } from '@/features/brands'
 import {
   PREVIEW_SCALE,
-  BRAND_CONFIGS,
   DEFAULT_GENERAL_SETTINGS,
   SLIDE_FONT_OPTIONS,
   loadGeneralSettings,
@@ -29,23 +29,20 @@ import {
 import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
 import type { BrandName } from '@/shared/types'
 
-
-const ALL_BRANDS: BrandName[] = [
-  'healthycollege',
-  'longevitycollege',
-  'wellbeingcollege',
-  'vitalitycollege',
-  'holisticcollege',
-]
-
 export function PostsPage() {
   const navigate = useNavigate()
   const createJob = useCreateJob()
+  const { brands: dynamicBrands, brandIds } = useDynamicBrands()
+  const brandMap = useMemo(() => {
+    const map: Record<string, { name: string; color: string }> = {}
+    dynamicBrands.forEach(b => { map[b.id] = { name: b.label, color: b.color } })
+    return map
+  }, [dynamicBrands])
 
   // Form state
   const [title, setTitle] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
-  const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([ALL_BRANDS[0]])
+  const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [settings, setSettings] = useState<GeneralSettings>(loadGeneralSettings)
   const [showSettings, setShowSettings] = useState(false)
 
@@ -53,14 +50,21 @@ export function PostsPage() {
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [showAutoModal, setShowAutoModal] = useState(false)
-  const [autoCount, setAutoCount] = useState(ALL_BRANDS.length)
-  const [autoBrands, setAutoBrands] = useState<BrandName[]>([...ALL_BRANDS])
+  const [autoCount, setAutoCount] = useState(0)
+  const [autoBrands, setAutoBrands] = useState<BrandName[]>([])
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
   useEffect(() => {
     document.fonts.load('1em Anton').then(() => setFontLoaded(true))
   }, [])
+
+  // Select first brand when brands load
+  useEffect(() => {
+    if (brandIds.length > 0 && selectedBrands.length === 0) {
+      setSelectedBrands([brandIds[0]])
+    }
+  }, [brandIds])
 
   const selectBrand = (brand: BrandName) => {
     setSelectedBrands([brand])
@@ -101,7 +105,7 @@ export function PostsPage() {
   // ── Auto Generate modal helpers ────────────────────────────────────
   const handleAutoCountChange = (count: number) => {
     setAutoCount(count)
-    setAutoBrands(ALL_BRANDS.slice(0, count))
+    setAutoBrands(brandIds.slice(0, count))
   }
 
   const toggleAutoBrand = (brand: BrandName) => {
@@ -173,7 +177,7 @@ export function PostsPage() {
     toast.success('Settings reset to default')
   }
 
-  const previewBrand = selectedBrands[0] || 'healthycollege'
+  const previewBrand = selectedBrands[0] || brandIds[0] || 'healthycollege'
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-4">
@@ -245,8 +249,8 @@ export function PostsPage() {
                 Brands
               </label>
               <div className="flex flex-wrap gap-2">
-                {ALL_BRANDS.map((brand) => {
-                  const config = BRAND_CONFIGS[brand]
+                {brandIds.map((brand) => {
+                  const config = brandMap[brand]
                   const selected = selectedBrands.includes(brand)
                   return (
                     <button
@@ -439,8 +443,8 @@ export function PostsPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={() => {
-                setAutoCount(ALL_BRANDS.length)
-                setAutoBrands([...ALL_BRANDS])
+                setAutoCount(brandIds.length)
+                setAutoBrands([...brandIds])
                 setShowAutoModal(true)
               }}
               disabled={isCreating}
@@ -508,7 +512,7 @@ export function PostsPage() {
                 How many brands?
               </label>
               <div className="flex gap-2">
-                {ALL_BRANDS.map((_, i) => {
+                {brandIds.map((_, i) => {
                   const count = i + 1
                   return (
                     <button
@@ -533,8 +537,8 @@ export function PostsPage() {
                 Select brands
               </label>
               <div className="space-y-2">
-                {ALL_BRANDS.map((brand) => {
-                  const config = BRAND_CONFIGS[brand]
+                {brandIds.map((brand) => {
+                  const config = brandMap[brand]
                   const checked = autoBrands.includes(brand)
                   return (
                     <label
