@@ -1036,7 +1036,7 @@ def seed_builtin_agents(user_id: str | None = None):
 
         # ── 2. Auto-provision agents for brands without one ──
         # RULE: every brand must have at least 1 agent born from it
-        _ensure_agents_for_all_brands(db)
+        _ensure_agents_for_all_brands(db, user_id=user_id)
 
     except Exception as e:
         db.rollback()
@@ -1069,7 +1069,7 @@ def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
     try:
         # Get all active brands
         try:
-            all_brands = db.query(Brand.id, Brand.display_name).filter(Brand.active == True).all()
+            all_brands = db.query(Brand.id, Brand.display_name, Brand.user_id).filter(Brand.active == True).all()
         except Exception:
             # Fallback if Brand table doesn't exist yet
             all_brands = []
@@ -1086,7 +1086,7 @@ def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
         covered_brands = {row[0] for row in existing}
 
         # Find uncovered brands
-        uncovered = [(bid, bname) for bid, bname in all_brands if bid not in covered_brands]
+        uncovered = [(bid, bname, buid) for bid, bname, buid in all_brands if bid not in covered_brands]
 
         if not uncovered:
             return []
@@ -1103,7 +1103,7 @@ def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
             "Consistency engine. Reliable, methodical, builds trust through steady valuable content.",
         ]
 
-        for brand_id, brand_display in uncovered:
+        for brand_id, brand_display, brand_user_id in uncovered:
             try:
                 from app.services.agents.evolution_engine import pick_agent_name
                 agent_name = pick_agent_name()
@@ -1115,7 +1115,7 @@ def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
                     agent_name=agent_name,
                     randomize=True,
                     personality=personality,
-                    user_id=user_id,
+                    user_id=brand_user_id or user_id,
                 )
                 print(f"🧬 Auto-spawned agent '{agent.display_name}' (temp={agent.temperature}) for brand {brand_id}", flush=True)
                 spawned.append(agent)
