@@ -16,7 +16,6 @@ Endpoints used (official Meta Graph API):
     GET /{media_id}/insights?metric=plays,reach,saved,shares
 """
 
-import os
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
@@ -53,27 +52,20 @@ class MetricsCollector:
     # ──────────────────────────────────────────────────────────
 
     def _load_brand_credentials(self):
-        """Load IG access tokens per brand from env vars."""
-        brands = [
-            "gymcollege", "healthycollege", "vitalitycollege",
-            "longevitycollege", "holisticcollege", "wellbeingcollege",
-        ]
-        for brand in brands:
-            token = os.getenv(f"{brand.upper()}_INSTAGRAM_ACCESS_TOKEN") or os.getenv(f"{brand.upper()}_META_ACCESS_TOKEN")
-            account_id = os.getenv(f"{brand.upper()}_INSTAGRAM_BUSINESS_ACCOUNT_ID")
+        """Load IG access tokens per brand from the database brands table."""
+        from app.services.brands.resolver import brand_resolver
+
+        for brand_id in brand_resolver.get_all_brand_ids():
+            brand = brand_resolver.get_brand(brand_id)
+            if not brand:
+                continue
+            token = brand.meta_access_token or brand.instagram_access_token
+            account_id = brand.instagram_business_account_id
             if token and account_id:
-                self._brand_tokens[brand] = {
+                self._brand_tokens[brand_id] = {
                     "token": token,
                     "account_id": account_id,
                 }
-
-        # Fallback: shared token
-        fallback_token = os.getenv("META_ACCESS_TOKEN")
-        if fallback_token and not self._brand_tokens:
-            self._brand_tokens["default"] = {
-                "token": fallback_token,
-                "account_id": os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID", ""),
-            }
 
     def _get_token_for_brand(self, brand: str) -> Optional[str]:
         creds = self._brand_tokens.get(brand) or self._brand_tokens.get("default")

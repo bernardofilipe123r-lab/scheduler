@@ -103,59 +103,42 @@ def _create_brand_config(
 
 
 # Brand configuration mapping - colors sourced from brand_colors.py
+# Credentials are loaded from the database at call time via get_brand_config().
 BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
-    BrandType.THE_GYM_COLLEGE: _create_brand_config(
-        BrandType.THE_GYM_COLLEGE,
-        instagram_business_account_id="17841468847801005",  # @thegymcollege
-        facebook_page_id="421725951022067",  # Gym College Facebook Page
-        meta_access_token=os.getenv("META_ACCESS_TOKEN"),
-    ),
-    BrandType.HEALTHY_COLLEGE: _create_brand_config(
-        BrandType.HEALTHY_COLLEGE,
-        instagram_business_account_id="17841479849607158",  # @thehealthycollege
-        facebook_page_id="944977965368075",  # Healthy College Facebook Page
-        meta_access_token=os.getenv("META_ACCESS_TOKEN"),
-    ),
-    BrandType.VITALITY_COLLEGE: _create_brand_config(
-        BrandType.VITALITY_COLLEGE,
-        instagram_business_account_id=os.getenv("VITALITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
-        facebook_page_id=os.getenv("VITALITYCOLLEGE_FACEBOOK_PAGE_ID"),
-        meta_access_token=os.getenv("VITALITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-    ),
-    BrandType.LONGEVITY_COLLEGE: _create_brand_config(
-        BrandType.LONGEVITY_COLLEGE,
-        instagram_business_account_id=os.getenv("LONGEVITYCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
-        facebook_page_id=os.getenv("LONGEVITYCOLLEGE_FACEBOOK_PAGE_ID"),
-        meta_access_token=os.getenv("LONGEVITYCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-    ),
-    BrandType.HOLISTIC_COLLEGE: _create_brand_config(
-        BrandType.HOLISTIC_COLLEGE,
-        instagram_business_account_id=os.getenv("HOLISTICCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
-        facebook_page_id=os.getenv("HOLISTICCOLLEGE_FACEBOOK_PAGE_ID"),
-        meta_access_token=os.getenv("HOLISTICCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-    ),
-    BrandType.WELLBEING_COLLEGE: _create_brand_config(
-        BrandType.WELLBEING_COLLEGE,
-        instagram_business_account_id=os.getenv("WELLBEINGCOLLEGE_INSTAGRAM_BUSINESS_ACCOUNT_ID"),
-        facebook_page_id=os.getenv("WELLBEINGCOLLEGE_FACEBOOK_PAGE_ID"),
-        meta_access_token=os.getenv("WELLBEINGCOLLEGE_META_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN"),
-    ),
+    bt: _create_brand_config(bt) for bt in BrandType
 }
 
 
 def get_brand_config(brand_type: BrandType) -> BrandConfig:
     """
     Get the brand configuration for a given brand type.
-    
+
+    Credentials (meta_access_token, instagram_business_account_id,
+    facebook_page_id) are loaded from the database brands table at call
+    time.  Colour / display info falls back to the static BRAND_CONFIGS
+    when the DB is unavailable.
+
     Args:
         brand_type: The brand type enum
-        
+
     Returns:
         The corresponding brand configuration
-        
+
     Raises:
         ValueError: If brand type is not in the mapping
     """
     if brand_type not in BRAND_CONFIGS:
         raise ValueError(f"Invalid brand type: {brand_type}")
+
+    # Try to load full config (with credentials) from the database
+    brand_key = BRAND_TYPE_TO_KEY.get(brand_type)
+    if brand_key:
+        try:
+            from app.services.brands.resolver import brand_resolver
+            db_config = brand_resolver.get_brand_config(brand_key)
+            if db_config is not None:
+                return db_config
+        except Exception:
+            pass  # Fall back to static config (no credentials)
+
     return BRAND_CONFIGS[brand_type]

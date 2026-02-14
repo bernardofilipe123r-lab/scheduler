@@ -1,7 +1,6 @@
 """
 Social media publisher for Instagram and Facebook Reels.
 """
-import os
 import time
 import re
 import requests
@@ -87,18 +86,18 @@ class SocialPublisher:
             brand_config: Optional brand configuration with specific credentials.
                          If not provided, uses default environment variables.
         """
-        # Use brand-specific credentials if provided, otherwise fall back to defaults
+        # Use brand-specific credentials if provided; caller is responsible
+        # for supplying them (credentials are stored in the DB brands table).
         if brand_config:
             self.ig_business_account_id = brand_config.instagram_business_account_id
             self.fb_page_id = brand_config.facebook_page_id
             self._system_user_token = brand_config.meta_access_token
             self.ig_access_token = brand_config.meta_access_token
         else:
-            # Fallback to default environment variables
-            self._system_user_token = os.getenv("META_ACCESS_TOKEN")
-            self.ig_access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN") or os.getenv("META_ACCESS_TOKEN")
-            self.ig_business_account_id = os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID")
-            self.fb_page_id = os.getenv("FACEBOOK_PAGE_ID")
+            self._system_user_token = None
+            self.ig_access_token = None
+            self.ig_business_account_id = None
+            self.fb_page_id = None
         
         self.api_version = "v19.0"
         self._page_access_token_cache = {}  # Cache for page access tokens
