@@ -372,6 +372,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
     from app.db_connection import SessionLocal, get_db_session
     from app.models import TobyProposal
     from app.services.job_manager import JobManager
+    from app.services.job_processor import JobProcessor
     from datetime import datetime
 
     ALL_BRANDS = brand_resolver.get_all_brand_ids()
@@ -475,8 +476,8 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
         print(f"{'='*60}", flush=True)
         try:
             with get_db_session() as pdb:
-                m = JobManager(pdb)
-                m.process_job(jid)
+                p = JobProcessor(pdb)
+                p.process_job(jid)
             print(f"✅ MAESTRO: Job {jid} ({var}) completed", flush=True)
         except Exception as e:
             print(f"❌ MAESTRO: Job {jid} ({var}) failed: {e}", flush=True)

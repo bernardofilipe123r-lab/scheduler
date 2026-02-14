@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 
 from app.db_connection import get_db_session
 from app.services.job_manager import JobManager
+from app.services.job_processor import JobProcessor
 from app.services.brand_resolver import brand_resolver
 
 
@@ -65,14 +66,14 @@ def process_job_async(job_id: str):
         with get_db_session() as db:
             print(f"   ✓ Database session opened", flush=True)
             
-            print(f"🔧 Creating JobManager...", flush=True)
-            manager = JobManager(db)
-            print(f"   ✓ JobManager created", flush=True)
+            print(f"🔧 Creating JobProcessor...", flush=True)
+            processor = JobProcessor(db)
+            print(f"   ✓ JobProcessor created", flush=True)
             
             print(f"🎬 Calling process_job({job_id})...", flush=True)
             sys.stdout.flush()
             
-            result = manager.process_job(job_id)
+            result = processor.process_job(job_id)
             
             print(f"\n{'='*60}", flush=True)
             print(f"✅ JOB PROCESSING COMPLETED", flush=True)
@@ -288,8 +289,8 @@ async def regenerate_brand(
     try:
         def regenerate_async():
             with get_db_session() as db:
-                manager = JobManager(db)
-                manager.regenerate_brand(
+                processor = JobProcessor(db)
+                processor.regenerate_brand(
                     job_id=job_id,
                     brand=brand,
                     title=request.title if request else None,
@@ -855,8 +856,8 @@ async def regenerate_brand_image(
 
         def regen_async():
             with get_db_session() as db2:
-                mgr = JobManager(db2)
-                mgr.process_post_brand(job_id, brand)
+                processor = JobProcessor(db2)
+                processor.process_post_brand(job_id, brand)
 
         if background_tasks:
             background_tasks.add_task(regen_async)

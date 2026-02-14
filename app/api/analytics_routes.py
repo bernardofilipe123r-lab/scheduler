@@ -68,7 +68,7 @@ class RefreshResponse(BaseModel):
     analytics: Optional[List[BrandMetrics]] = None
 
 
-# Brand display info (should match brands_routes.py)
+# Brand display info (fallback for analytics display)
 BRAND_DISPLAY_INFO = {
     "healthycollege": {"display_name": "Healthy College", "color": "#004f00"},
     "vitalitycollege": {"display_name": "Vitality College", "color": "#028f7a"},

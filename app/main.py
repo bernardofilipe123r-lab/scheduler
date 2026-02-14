@@ -13,8 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from app.api.routes import router as reels_router
 from app.api.jobs_routes import router as jobs_router
 from app.api.youtube_routes import router as youtube_router
-from app.api.brands_routes import router as brands_router  # Legacy routes
-from app.api.brands_routes_v2 import router as brands_v2_router  # New database-backed routes
+from app.api.brands_routes_v2 import router as brands_v2_router  # Database-backed brand routes
 from app.api.settings_routes import router as settings_router
 from app.api.analytics_routes import router as analytics_router
 from app.api.logs_routes import router as logs_router
@@ -85,8 +84,8 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(reels_router)
 app.include_router(jobs_router)
 app.include_router(youtube_router, prefix="/api")
-app.include_router(brands_router, prefix="/api")  # Legacy routes for backward compatibility
-app.include_router(brands_v2_router, prefix="/api/v2")  # New database-backed routes
+app.include_router(brands_v2_router, prefix="/api")  # Backward-compatible mount
+app.include_router(brands_v2_router, prefix="/api/v2")  # V2 mount
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs

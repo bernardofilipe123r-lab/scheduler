@@ -65,15 +65,4 @@ CONTENT_LINE_SPACING = 1.5
 DEFAULT_MUSIC_ID = "default_01"
 MUSIC_FADE_DURATION = 0.5  # seconds
 
-# Brand name mapping (frontend name -> BrandType)
-from app.core.config import BrandType
 
-BRAND_NAME_MAP = {
-    "healthycollege": BrandType.HEALTHY_COLLEGE,
-    "vitalitycollege": BrandType.VITALITY_COLLEGE,
-    "longevitycollege": BrandType.LONGEVITY_COLLEGE,
-    "holisticcollege": BrandType.HOLISTIC_COLLEGE,
-    "wellbeingcollege": BrandType.WELLBEING_COLLEGE,
-}
-
-VALID_BRANDS = list(BRAND_NAME_MAP.keys())
