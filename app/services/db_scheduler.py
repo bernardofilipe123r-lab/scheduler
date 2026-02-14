@@ -627,7 +627,7 @@ class DatabaseSchedulerService:
             public_url_base = f"https://{railway_domain}"
             print(f"🌐 Using Railway domain: {railway_domain}")
         else:
-            public_url_base = os.getenv("PUBLIC_URL_BASE", "http://localhost:8000")
+            public_url_base = os.getenv("PUBLIC_URL_BASE", "")
             print(f"🌐 Using PUBLIC_URL_BASE: {public_url_base}")
         
         video_url = f"{public_url_base}/output/videos/{video_path.name}"
@@ -663,14 +663,10 @@ class DatabaseSchedulerService:
         if "youtube" in platforms:
             print("📺 Publishing to YouTube...", flush=True)
             
-            print(f"   📺 [YT DEBUG] metadata received: {metadata}", flush=True)
-            print(f"   📺 [YT DEBUG] brand_name: {brand_name}", flush=True)
             # Get yt_title from metadata if available
             yt_title = metadata.get("yt_title") if metadata else None
-            print(f"   📺 [YT DEBUG] yt_title from metadata: {yt_title}", flush=True)
             # Get yt_thumbnail_path from metadata - clean AI image without text
             yt_thumbnail_path = metadata.get("yt_thumbnail_path") if metadata else None
-            print(f"   📺 [YT DEBUG] yt_thumbnail_path from metadata: {yt_thumbnail_path}", flush=True)
             if yt_thumbnail_path:
                 yt_thumbnail_path = Path(yt_thumbnail_path)
                 # Resolve relative paths (e.g., /output/thumbnails/...) to absolute (e.g., /app/output/...)
@@ -686,17 +682,8 @@ class DatabaseSchedulerService:
                 if not yt_thumbnail_path.exists():
                     print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}", flush=True)
                     yt_thumbnail_path = thumbnail_path
-                else:
-                    print(f"   📺 [YT DEBUG] YT thumbnail exists: {yt_thumbnail_path}", flush=True)
             else:
-                print(f"   📺 [YT DEBUG] No YT thumbnail in metadata, using regular: {thumbnail_path}", flush=True)
                 yt_thumbnail_path = thumbnail_path
-            
-            print(f"   📺 [YT DEBUG] Calling _publish_to_youtube with:", flush=True)
-            print(f"      video_path={video_path}", flush=True)
-            print(f"      thumbnail_path={yt_thumbnail_path}", flush=True)
-            print(f"      brand_name={brand_name}", flush=True)
-            print(f"      yt_title={yt_title}", flush=True)
             
             results["youtube"] = self._publish_to_youtube(
                 video_path=video_path,
@@ -705,7 +692,6 @@ class DatabaseSchedulerService:
                 brand_name=brand_name,
                 yt_title=yt_title
             )
-            print(f"   📺 [YT DEBUG] _publish_to_youtube result: {results['youtube']}", flush=True)
         
         return results
     

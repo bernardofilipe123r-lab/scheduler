@@ -172,17 +172,7 @@ grep -v '^\s*#' .env | grep -v '^\s*$' | xargs railway variables set
 2. Add brand prompts if needed
 3. Register brand in the brand configuration
 
-### Step 6: Test
-
-```bash
-# Run locally
-python -m pytest tests/test_brands_updated.py -v
-
-# Or test specific brand
-python tests/test_all_brands.py
-```
-
-### Step 7: Deploy
+### Step 6: Deploy
 
 ```bash
 git add .

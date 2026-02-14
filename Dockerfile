@@ -58,8 +58,6 @@ RUN npm run build
 # Copy application code (Python backend)
 COPY app/ app/
 COPY assets/ assets/
-COPY *.py ./
-COPY *.sh ./
 COPY railway.json ./
 
 # Create output directories

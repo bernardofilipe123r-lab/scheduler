@@ -71,7 +71,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(","),
+    allow_origins=os.environ.get("CORS_ORIGINS", "").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -394,7 +394,7 @@ async def startup_event():
                             if railway_domain:
                                 public_url_base = f"https://{railway_domain}"
                             else:
-                                public_url_base = os.getenv("PUBLIC_URL_BASE", "http://localhost:8000")
+                                public_url_base = os.getenv("PUBLIC_URL_BASE", "")
                             
                             # Determine URL path based on where image is stored
                             image_rel = image_path.as_posix()
@@ -652,13 +652,3 @@ async def shutdown_event():
         except Exception:
             pass
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )

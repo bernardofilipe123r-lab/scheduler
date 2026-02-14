@@ -168,7 +168,7 @@ class YouTubePublisher:
         """
         self.client_id = os.getenv("YOUTUBE_CLIENT_ID")
         self.client_secret = os.getenv("YOUTUBE_CLIENT_SECRET")
-        self.redirect_uri = os.getenv("YOUTUBE_REDIRECT_URI", "http://localhost:8000/api/youtube/callback")
+        self.redirect_uri = os.getenv("YOUTUBE_REDIRECT_URI", "")
         
         self.credentials = credentials
         self.quota_monitor = YouTubeQuotaMonitor()
