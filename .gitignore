@@ -25,14 +25,7 @@ env/
 Thumbs.db
 
 # Output (generated files) - NEVER commit these
-output/videos/
-output/thumbnails/
-output/reels/
-output/schedules.db
-output/scheduled.json
-output/*.png
-output/*.json
-output/*.db
+output/
 
 # Example outputs (generated during testing)
 assets/examples/
@@ -45,7 +38,6 @@ reels_history.db
 *.log
 
 # Test outputs
-.pytest_cache/
 .coverage
 htmlcov/
 test_*.png
@@ -59,4 +51,8 @@ ed25519_key
 
 # Sensitive data files
 youtube_quota.json
-output/brand-data/
+
+# No local development
+.env.local
+.env.development
+*.sqlite
