@@ -15,6 +15,7 @@ class AIAgent(Base):
     __tablename__ = "ai_agents"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
     agent_id = Column(String(50), unique=True, nullable=False, index=True)  # e.g. "toby", "lexi", "marco"
     display_name = Column(String(100), nullable=False)  # User-defined name
     personality = Column(Text, nullable=False, default="")  # System prompt personality description
@@ -113,6 +114,7 @@ class AgentPerformance(Base):
     __tablename__ = "agent_performance"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
     agent_id = Column(String(50), nullable=False, index=True)  # FK to ai_agents.agent_id
     period = Column(String(20), nullable=False, default="feedback")  # "feedback" | "daily" | "weekly"
 
@@ -178,6 +180,7 @@ class AgentLearning(Base):
     __tablename__ = "agent_learning"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
     agent_id = Column(String(50), nullable=False, index=True)
 
     # What changed
@@ -229,6 +232,7 @@ class GenePool(Base):
     __tablename__ = "gene_pool"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
     source_agent_id = Column(String(50), nullable=False, index=True)     # Origin agent
     source_agent_name = Column(String(100), nullable=False)
 
@@ -295,6 +299,7 @@ class TobyProposal(Base):
     __tablename__ = "toby_proposals"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
 
     # Human-readable ID (e.g., "TOBY-001")
     proposal_id = Column(String(20), nullable=False, unique=True, index=True)

@@ -6,12 +6,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Depends
 
 from app.db_connection import get_db_session
 from app.services.job_manager import JobManager
 from app.services.job_processor import JobProcessor
 from app.services.brand_resolver import brand_resolver
+from app.api.auth_middleware import get_current_user
 
 
 # Request/Response models
@@ -112,7 +113,7 @@ def process_job_async(job_id: str):
     summary="Create a new generation job",
     description="Creates a job and starts processing in the background. Returns job ID immediately."
 )
-async def create_job(request: JobCreateRequest, background_tasks: BackgroundTasks):
+async def create_job(request: JobCreateRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """
     Create a new generation job.
     
@@ -124,7 +125,7 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
             manager = JobManager(db)
             
             job = manager.create_job(
-                user_id=request.user_id,
+                user_id=user["id"],
                 title=request.title,
                 content_lines=request.content_lines or [],
                 brands=request.brands,
@@ -159,7 +160,7 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
     "/{job_id}",
     summary="Get job details and status"
 )
-async def get_job(job_id: str):
+async def get_job(job_id: str, user: dict = Depends(get_current_user)):
     """
     Get full job details including status, progress, and outputs.
     
@@ -168,7 +169,7 @@ async def get_job(job_id: str):
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             
             if not job:
                 raise HTTPException(
@@ -191,14 +192,14 @@ async def get_job(job_id: str):
     "/{job_id}/status",
     summary="Get job status (lightweight)"
 )
-async def get_job_status(job_id: str):
+async def get_job_status(job_id: str, user: dict = Depends(get_current_user)):
     """
     Get just the job status - useful for polling during generation.
     """
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             
             if not job:
                 raise HTTPException(
@@ -228,7 +229,7 @@ async def get_job_status(job_id: str):
     summary="Update job inputs",
     description="Update title/content without regenerating. Use regenerate endpoints to apply changes."
 )
-async def update_job(job_id: str, request: JobUpdateRequest):
+async def update_job(job_id: str, request: JobUpdateRequest, user: dict = Depends(get_current_user)):
     """
     Update job inputs (title, content, CTA).
     
@@ -240,6 +241,7 @@ async def update_job(job_id: str, request: JobUpdateRequest):
             
             job = manager.update_job_inputs(
                 job_id=job_id,
+                user_id=user["id"],
                 title=request.title,
                 content_lines=request.content_lines,
                 ai_prompt=request.ai_prompt,
@@ -277,7 +279,8 @@ async def regenerate_brand(
     job_id: str,
     brand: str,
     request: Optional[BrandRegenerateRequest] = None,
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    user: dict = Depends(get_current_user),
 ):
     """
     Regenerate just one brand's outputs.
@@ -308,7 +311,7 @@ async def regenerate_brand(
         # Check job exists
         with get_db_session() as db:
             manager = JobManager(db)
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -360,7 +363,8 @@ async def regenerate_brand(
 async def regenerate_all(
     job_id: str,
     request: Optional[JobUpdateRequest] = None,
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    user: dict = Depends(get_current_user),
 ):
     """
     Regenerate all brand outputs.
@@ -375,13 +379,14 @@ async def regenerate_all(
             if request:
                 manager.update_job_inputs(
                     job_id=job_id,
+                    user_id=user["id"],
                     title=request.title,
                     content_lines=request.content_lines,
                     ai_prompt=request.ai_prompt,
                     cta_type=request.cta_type
                 )
             
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -421,23 +426,16 @@ async def regenerate_all(
     summary="List all jobs (history)"
 )
 async def list_jobs(
-    user_id: Optional[str] = None,
-    limit: int = 50
+    limit: int = 50,
+    user: dict = Depends(get_current_user),
 ):
     """
-    Get job history.
-    
-    - If user_id provided, shows only that user's jobs
-    - Otherwise shows all recent jobs
+    Get job history for the current user.
     """
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            
-            if user_id:
-                jobs = manager.get_user_jobs(user_id, limit)
-            else:
-                jobs = manager.get_all_jobs(limit)
+            jobs = manager.get_all_jobs(limit=limit, user_id=user["id"])
             
             return {
                 "jobs": [job.to_dict() for job in jobs],
@@ -455,7 +453,7 @@ async def list_jobs(
     "/bulk/by-status",
     summary="Delete all jobs matching a status"
 )
-async def delete_jobs_by_status(job_status: str = "completed"):
+async def delete_jobs_by_status(job_status: str = "completed", user: dict = Depends(get_current_user)):
     """Delete all jobs matching a given status (completed, failed, etc.).
     Also deletes the corresponding scheduled_reels entries."""
     from app.db_connection import SessionLocal
@@ -463,8 +461,11 @@ async def delete_jobs_by_status(job_status: str = "completed"):
 
     db = SessionLocal()
     try:
-        # Find matching jobs
-        jobs = db.query(GenerationJob).filter(GenerationJob.status.in_([job_status, "failed"])).all()
+        # Find matching jobs for this user
+        jobs = db.query(GenerationJob).filter(
+            GenerationJob.status.in_([job_status, "failed"]),
+            GenerationJob.user_id == user["id"]
+        ).all()
         if not jobs:
             return {"status": "ok", "deleted": 0}
 
@@ -498,7 +499,7 @@ class BulkDeleteByIdsRequest(BaseModel):
     "/bulk/delete-by-ids",
     summary="Delete multiple jobs by their IDs"
 )
-async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest):
+async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest, user: dict = Depends(get_current_user)):
     """Delete multiple jobs by their IDs in a single operation.
     Also deletes associated scheduled_reels entries and cleans up files."""
     from app.models import ScheduledReel
@@ -511,7 +512,7 @@ async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest):
 
             for job_id in request.job_ids:
                 try:
-                    job = manager.get_job(job_id)
+                    job = manager.get_job(job_id, user_id=user["id"])
                     if not job:
                         continue  # Skip missing jobs silently
 
@@ -555,14 +556,14 @@ async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest):
     "/{job_id}",
     summary="Delete a job"
 )
-async def delete_job(job_id: str):
+async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
     """Delete a job and its associated files and scheduled reels."""
     from app.models import ScheduledReel
 
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
 
             if not job:
                 raise HTTPException(
@@ -607,7 +608,7 @@ async def delete_job(job_id: str):
     "/{job_id}/cancel",
     summary="Cancel a running job"
 )
-async def cancel_job(job_id: str):
+async def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
     """
     Cancel a job that's pending or generating.
     
@@ -619,7 +620,7 @@ async def cancel_job(job_id: str):
         with get_db_session() as db:
             manager = JobManager(db)
             
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -662,7 +663,7 @@ async def cancel_job(job_id: str):
     "/{job_id}/next-slots",
     summary="Get next available schedule slots for all brands in a job"
 )
-async def get_next_slots(job_id: str):
+async def get_next_slots(job_id: str, user: dict = Depends(get_current_user)):
     """
     Get the next available scheduling slots for all brands in a job.
     
@@ -676,7 +677,7 @@ async def get_next_slots(job_id: str):
         with get_db_session() as db:
             manager = JobManager(db)
             
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -714,7 +715,7 @@ class BrandStatusUpdate(BaseModel):
     "/{job_id}/brand/{brand}/status",
     summary="Update a brand's status (e.g., mark as scheduled)"
 )
-async def update_brand_status(job_id: str, brand: str, request: BrandStatusUpdate):
+async def update_brand_status(job_id: str, brand: str, request: BrandStatusUpdate, user: dict = Depends(get_current_user)):
     """
     Update a brand's status within a job.
     Used to mark brands as 'scheduled' after scheduling, preventing re-scheduling.
@@ -723,7 +724,7 @@ async def update_brand_status(job_id: str, brand: str, request: BrandStatusUpdat
         with get_db_session() as db:
             manager = JobManager(db)
             
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -783,12 +784,12 @@ class BrandContentUpdate(BaseModel):
     "/{job_id}/brand/{brand}/content",
     summary="Update a brand's title and/or caption"
 )
-async def update_brand_content(job_id: str, brand: str, request: BrandContentUpdate):
+async def update_brand_content(job_id: str, brand: str, request: BrandContentUpdate, user: dict = Depends(get_current_user)):
     """Update the per-brand title and/or caption stored in brand_outputs."""
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
             if brand not in job.brands:
@@ -834,6 +835,7 @@ async def regenerate_brand_image(
     brand: str,
     request: Optional[BrandImageRegenRequest] = None,
     background_tasks: BackgroundTasks = None,
+    user: dict = Depends(get_current_user),
 ):
     """
     Regenerate only the background image for one brand.
@@ -842,7 +844,7 @@ async def regenerate_brand_image(
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            job = manager.get_job(job_id)
+            job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
             if brand not in job.brands:

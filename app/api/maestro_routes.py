@@ -24,9 +24,10 @@ Endpoints:
 
 from typing import Optional
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Query, BackgroundTasks
+from fastapi import APIRouter, Query, BackgroundTasks, Depends
 from pydantic import BaseModel
 from app.services.brand_resolver import brand_resolver
+from app.api.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/maestro", tags=["maestro"])
 
@@ -38,14 +39,14 @@ class RejectRequest(BaseModel):
 # ── ORCHESTRATOR STATUS ───────────────────────────────────────
 
 @router.get("/status")
-async def maestro_status():
+async def maestro_status(user: dict = Depends(get_current_user)):
     """
     Full Maestro status — always running, both agents, unified activity log.
     """
     from app.services.maestro import get_maestro
 
     maestro = get_maestro()
-    status = maestro.get_status()
+    status = maestro.get_status(user_id=user.get("id"))
 
     # Include proposal stats (global + per-agent)
     from app.db_connection import SessionLocal
@@ -130,7 +131,7 @@ async def maestro_status():
 # ── PAUSE / RESUME / TRIGGER ─────────────────────────────────
 
 @router.post("/pause")
-async def pause_maestro():
+async def pause_maestro(user: dict = Depends(get_current_user)):
     """Pause Maestro — stops daily burst generation. State persisted in DB."""
     from app.services.maestro import set_paused, is_paused, maestro_log
 
@@ -149,7 +150,7 @@ async def pause_maestro():
 
 
 @router.post("/resume")
-async def resume_maestro(background_tasks: BackgroundTasks):
+async def resume_maestro(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """
     Resume Maestro — re-enables daily burst generation.
     First schedules any ready-to-schedule reels, then triggers burst if needed.
@@ -207,7 +208,7 @@ async def resume_maestro(background_tasks: BackgroundTasks):
 
 
 @router.post("/trigger-burst")
-async def trigger_burst(background_tasks: BackgroundTasks):
+async def trigger_burst(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """Smart burst — counts existing proposals today and generates only the remaining.
     If all proposals for today are complete, returns 'complete' status."""
     from app.services.maestro import get_maestro, maestro_log, schedule_all_ready_reels
@@ -216,7 +217,7 @@ async def trigger_burst(background_tasks: BackgroundTasks):
     from datetime import datetime
 
     maestro = get_maestro()
-    config = maestro.state._get_daily_config()
+    config = maestro.state._get_daily_config(user_id=user.get("id"))
     target_reels = config.get("total_reels", 30)
     target_posts = config.get("total_posts", 10)
 
@@ -263,7 +264,7 @@ async def trigger_burst(background_tasks: BackgroundTasks):
         f"Generating {remaining_reels} reels + {remaining_posts} posts (already have {today_reels} reels + {today_posts} posts)",
         "🔘", "action"
     )
-    background_tasks.add_task(maestro.run_smart_burst, remaining_reels, remaining_posts)
+    background_tasks.add_task(maestro.run_smart_burst, remaining_reels, remaining_posts, user.get("id"))
 
     return {
         "status": "triggered",
@@ -277,7 +278,7 @@ async def trigger_burst(background_tasks: BackgroundTasks):
 
 
 @router.get("/feedback")
-async def get_feedback():
+async def get_feedback(user: dict = Depends(get_current_user)):
     """Get latest agent performance feedback data."""
     import json
     from app.services.maestro import _db_get
@@ -293,7 +294,7 @@ async def get_feedback():
 
 
 @router.post("/reset-daily-run")
-async def reset_daily_run():
+async def reset_daily_run(user: dict = Depends(get_current_user)):
     """Reset today's daily burst limit so it can be triggered again."""
     from app.services.maestro import _db_set
     # Set last_daily_run to yesterday so the burst check passes
@@ -311,6 +312,7 @@ async def list_proposals(
     agent: Optional[str] = Query(None, description="Filter: toby, lexi"),
     content_type: Optional[str] = Query(None, description="Filter: reel, post"),
     limit: int = Query(50, ge=1, le=200),
+    user: dict = Depends(get_current_user),
 ):
     """List proposals from all agents, with optional filters."""
     from app.db_connection import SessionLocal
@@ -337,7 +339,7 @@ async def list_proposals(
 
 
 @router.get("/proposals/{proposal_id}")
-async def get_proposal(proposal_id: str):
+async def get_proposal(proposal_id: str, user: dict = Depends(get_current_user)):
     """Get a single proposal by ID."""
     from app.db_connection import SessionLocal
     from app.models import TobyProposal
@@ -357,7 +359,7 @@ async def get_proposal(proposal_id: str):
 
 
 @router.post("/proposals/{proposal_id}/accept")
-async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
+async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """
     Accept a proposal — creates 1 generation job for the proposal's assigned brand.
 
@@ -515,7 +517,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks):
 
 
 @router.post("/proposals/{proposal_id}/reject")
-async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()):
+async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest(), user: dict = Depends(get_current_user)):
     """Reject a proposal."""
     from app.db_connection import SessionLocal
     from app.models import TobyProposal
@@ -545,7 +547,7 @@ async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()
 
 
 @router.delete("/proposals/clear")
-async def clear_proposals():
+async def clear_proposals(user: dict = Depends(get_current_user)):
     """Delete ALL proposals from the database."""
     from app.db_connection import SessionLocal
     from app.models import TobyProposal
@@ -566,7 +568,7 @@ async def clear_proposals():
 # ── STATS ─────────────────────────────────────────────────────
 
 @router.get("/stats")
-async def maestro_stats():
+async def maestro_stats(user: dict = Depends(get_current_user)):
     """Per-agent and global stats."""
     from app.db_connection import SessionLocal
     from app.models import TobyProposal
@@ -618,7 +620,7 @@ async def maestro_stats():
 # ── INSIGHTS & TRENDING ──────────────────────────────────────
 
 @router.get("/insights")
-async def performance_insights(brand: Optional[str] = None):
+async def performance_insights(brand: Optional[str] = None, user: dict = Depends(get_current_user)):
     """Get performance insights (shared across agents)."""
     try:
         from app.services.metrics_collector import get_metrics_collector
@@ -642,6 +644,7 @@ async def get_trending(
     min_likes: int = Query(200, ge=0),
     limit: int = Query(20, ge=1, le=100),
     content_type: Optional[str] = Query(None, description="Filter: reel, post"),
+    user: dict = Depends(get_current_user),
 ):
     """Get trending content discovered by TrendScout."""
     try:
@@ -659,21 +662,22 @@ async def get_trending(
 # ── OPTIMIZE NOW ──────────────────────────────────────────────
 
 @router.post("/optimize-now")
-async def optimize_now(background_tasks: BackgroundTasks):
+async def optimize_now(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """
     Trigger all active agents to generate proposals immediately.
-    Uses GenericAgent system (DB-driven agents).
 
     Runs in background so the response is instant.
     Returns immediately with a confirmation — proposals appear in the feed.
     """
     from app.services.maestro import maestro_log
 
+    user_id = user.get("id")
+
     def _run_optimize():
         import traceback
         from app.services.generic_agent import get_all_active_agents
 
-        agents = get_all_active_agents()
+        agents = get_all_active_agents(user_id=user_id)
         if not agents:
             maestro_log("maestro", "⚡ Optimize Now", "No active agents found in DB", "⚠️", "action")
             return
@@ -715,7 +719,7 @@ async def optimize_now(background_tasks: BackgroundTasks):
 # ── HEALING: Smart self-repair ────────────────────────────────
 
 @router.get("/healing")
-async def maestro_healing_status():
+async def maestro_healing_status(user: dict = Depends(get_current_user)):
     """
     Get healing status — failed jobs, retry history, notifications.
     """
@@ -783,7 +787,7 @@ async def maestro_healing_status():
 
 
 @router.post("/trigger-healing")
-async def trigger_healing(background_tasks: BackgroundTasks):
+async def trigger_healing(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """Manually trigger the healing cycle — scan, diagnose, retry failed jobs."""
     from app.services.maestro import get_maestro
 
@@ -801,7 +805,7 @@ async def trigger_healing(background_tasks: BackgroundTasks):
 
 
 @router.post("/retry-job/{job_id}")
-async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks):
+async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """Manually retry a specific failed job."""
     from app.services.maestro import get_maestro
     from app.db_connection import SessionLocal
@@ -840,7 +844,7 @@ async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks):
 # ── Examiner Stats ────────────────────────────────────────────
 
 @router.get("/examiner/stats")
-def get_examiner_stats(days: int = 7):
+def get_examiner_stats(days: int = 7, user: dict = Depends(get_current_user)):
     """
     Examiner quality gate statistics: acceptance rate, avg scores,
     top rejection reasons, score distributions.
@@ -946,6 +950,7 @@ def get_rejected_proposals(
     limit: int = 50,
     brand: str = None,
     content_type: str = None,
+    user: dict = Depends(get_current_user),
 ):
     """List recently rejected proposals with examiner details."""
     from app.db_connection import SessionLocal

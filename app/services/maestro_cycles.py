@@ -2,7 +2,7 @@
 
 import traceback
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List, Optional
 
 from app.services.maestro_state import (
     _db_get,
@@ -13,6 +13,21 @@ from app.services.maestro_state import (
     EVOLUTION_DAY,
     EVOLUTION_HOUR,
 )
+
+
+def _get_active_user_ids() -> List[str]:
+    """Return user_ids for all active UserProfile records, or empty list."""
+    try:
+        from app.db_connection import SessionLocal
+        from app.models import UserProfile
+        db = SessionLocal()
+        try:
+            users = db.query(UserProfile.user_id).filter(UserProfile.active == True).all()
+            return [u[0] for u in users]
+        finally:
+            db.close()
+    except Exception:
+        return []
 
 
 class CyclesMixin:
@@ -247,6 +262,7 @@ class CyclesMixin:
     def _feedback_cycle(self):
         """
         Performance attribution + agent learning loop.
+        Multi-user: iterates over all active users, falls back to unscoped if none.
 
         1. FeedbackEngine: attributes published content (48-72h) back to agents
         2. Calculates per-agent survival scores with strategy breakdowns
@@ -254,6 +270,24 @@ class CyclesMixin:
         4. Logs all mutations to AgentLearning for audit trail
         """
         self.state.log("maestro", "Feedback", "Running performance attribution + learning loop...", "📈")
+
+        user_ids = _get_active_user_ids()
+        targets = user_ids if user_ids else [None]  # None = unscoped fallback
+
+        for uid in targets:
+            try:
+                self._current_user_id = uid
+                user_label = f" [user={uid}]" if uid else ""
+                self._run_feedback_for_context(user_label)
+            except Exception as e:
+                self.state.errors += 1
+                self.state.log("maestro", "Error", f"Feedback cycle failed{f' for user {uid}' if uid else ''}: {str(e)[:200]}", "❌")
+                traceback.print_exc()
+            finally:
+                self._current_user_id = None
+
+    def _run_feedback_for_context(self, user_label: str = ""):
+        """Run feedback attribution + adaptation for the current context."""
 
         try:
             from app.services.evolution_engine import FeedbackEngine, AdaptationEngine
@@ -324,6 +358,7 @@ class CyclesMixin:
     def _evolution_cycle(self):
         """
         Weekly natural selection — survival of the fittest.
+        Multi-user: iterates over all active users, falls back to unscoped if none.
 
         1. Rank all active agents by survival_score
         2. Top 40%: thriving (DNA archived to gene pool)
@@ -333,6 +368,24 @@ class CyclesMixin:
         6. Refresh agent cache so Maestro picks up newborns
         """
         self.state.log("maestro", "🧬 EVOLUTION", "Running weekly natural selection...", "🧬")
+
+        user_ids = _get_active_user_ids()
+        targets = user_ids if user_ids else [None]
+
+        for uid in targets:
+            try:
+                self._current_user_id = uid
+                user_label = f" [user={uid}]" if uid else ""
+                self._run_evolution_for_context(user_label)
+            except Exception as e:
+                self.state.errors += 1
+                self.state.log("maestro", "Error", f"Evolution cycle failed{f' for user {uid}' if uid else ''}: {str(e)[:200]}", "❌")
+                traceback.print_exc()
+            finally:
+                self._current_user_id = None
+
+    def _run_evolution_for_context(self, user_label: str = ""):
+        """Run weekly natural selection for the current context."""
 
         try:
             from app.services.evolution_engine import SelectionEngine

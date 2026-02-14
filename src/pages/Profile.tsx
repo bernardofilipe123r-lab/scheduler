@@ -1,60 +1,25 @@
 /**
- * Profile Page
- * 
- * Edit user profile (name, email) and change password.
- * Single user system.
+ * Profile Page — view profile info, change password via Supabase.
  */
 import { useState, useEffect } from 'react'
-import { User, Mail, Save, KeyRound, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react'
+import { User, Mail, KeyRound, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { useAuth, changePasswordApi, updateProfileApi } from '@/features/auth'
+import { useAuth } from '@/features/auth'
+import { supabase } from '@/shared/api/supabase'
 
 export function ProfilePage() {
   const { user, refreshUser } = useAuth()
   const navigate = useNavigate()
-  
-  const [name, setName] = useState(user?.name || '')
-  const [email, setEmail] = useState(user?.email || '')
-  const [profileSaving, setProfileSaving] = useState(false)
-  
-  const [currentPw, setCurrentPw] = useState('')
+
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [showNewPw, setShowNewPw] = useState(false)
   const [pwSaving, setPwSaving] = useState(false)
 
   useEffect(() => {
-    if (user) {
-      setName(user.name || '')
-      setEmail(user.email || '')
-    }
-  }, [user])
-
-  const profileChanged = name !== (user?.name || '') || email !== (user?.email || '')
-
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) {
-      toast.error('Name is required')
-      return
-    }
-    if (!email.trim()) {
-      toast.error('Email is required')
-      return
-    }
-    
-    setProfileSaving(true)
-    try {
-      await updateProfileApi({ name: name.trim(), email: email.trim() })
-      await refreshUser()
-      toast.success('Profile updated')
-    } catch {
-      toast.error('Failed to update profile')
-    } finally {
-      setProfileSaving(false)
-    }
-  }
+    refreshUser()
+  }, [])
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,13 +34,13 @@ export function ProfilePage() {
 
     setPwSaving(true)
     try {
-      await changePasswordApi(currentPw, newPw)
+      const { error } = await supabase.auth.updateUser({ password: newPw })
+      if (error) throw new Error(error.message)
       toast.success('Password changed successfully')
-      setCurrentPw('')
       setNewPw('')
       setConfirmPw('')
     } catch {
-      toast.error('Failed to change password. Check your current password.')
+      toast.error('Failed to change password')
     } finally {
       setPwSaving(false)
     }
@@ -100,7 +65,7 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Profile Info Card */}
+      {/* Profile Info Card (read-only) */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -108,18 +73,17 @@ export function ProfilePage() {
             Account Information
           </h2>
         </div>
-        
-        <form onSubmit={handleSaveProfile} className="p-6 space-y-5">
+
+        <div className="p-6 space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Display Name</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                value={user?.name || ''}
+                readOnly
+                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600"
               />
             </div>
           </div>
@@ -130,25 +94,13 @@ export function ProfilePage() {
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                value={user?.email || ''}
+                readOnly
+                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600"
               />
             </div>
           </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={!profileChanged || profileSaving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Changes
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
 
       {/* Change Password Card */}
@@ -159,19 +111,8 @@ export function ProfilePage() {
             Change Password
           </h2>
         </div>
-        
-        <form onSubmit={handleChangePassword} className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Current Password</label>
-            <input
-              type="password"
-              value={currentPw}
-              onChange={(e) => setCurrentPw(e.target.value)}
-              placeholder="Enter current password"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
 
+        <form onSubmit={handleChangePassword} className="p-6 space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">New Password</label>
             <div className="relative">
@@ -206,7 +147,7 @@ export function ProfilePage() {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={!currentPw || !newPw || !confirmPw || pwSaving}
+              disabled={!newPw || !confirmPw || pwSaving}
               className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               {pwSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}

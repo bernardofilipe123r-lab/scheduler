@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
 from app.services.analytics_service import AnalyticsService
+from app.api.auth_middleware import get_current_user
 
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def format_analytics_response(analytics_list: List[Dict], db: Session) -> List[B
 
 
 @router.get("", response_model=AnalyticsResponse)
-async def get_analytics(db: Session = Depends(get_db)):
+async def get_analytics(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Get cached analytics data for all brands.
     
@@ -130,18 +131,22 @@ async def get_analytics(db: Session = Depends(get_db)):
     Data is cached and only refreshed when the user clicks refresh.
     """
     service = AnalyticsService(db)
+    user_id = user.get("id")
     
     # Get cached analytics
-    analytics = service.get_all_analytics()
+    analytics = service.get_all_analytics(user_id=user_id)
     
     # Check if data is stale (needs auto-refresh)
-    needs_refresh = service.needs_auto_refresh()
+    needs_refresh = service.needs_auto_refresh(user_id=user_id)
     
     # Find last refresh time
     from app.models import AnalyticsRefreshLog
     from sqlalchemy import desc
     
-    last_log = db.query(AnalyticsRefreshLog).order_by(
+    query = db.query(AnalyticsRefreshLog)
+    if user_id:
+        query = query.filter(AnalyticsRefreshLog.user_id == user_id)
+    last_log = query.order_by(
         desc(AnalyticsRefreshLog.refreshed_at)
     ).first()
     
@@ -161,7 +166,7 @@ async def get_analytics(db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=RefreshResponse)
-async def refresh_analytics(db: Session = Depends(get_db)):
+async def refresh_analytics(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Refresh analytics data for all brands.
     
@@ -173,9 +178,10 @@ async def refresh_analytics(db: Session = Depends(get_db)):
     - YouTube Data API (subscribers, views, likes)
     """
     service = AnalyticsService(db)
+    user_id = user.get("id")
     
     # Perform refresh (no rate limits)
-    result = service.refresh_all_analytics()
+    result = service.refresh_all_analytics(user_id=user_id)
     
     if result["success"]:
         return RefreshResponse(
@@ -206,7 +212,7 @@ async def refresh_analytics(db: Session = Depends(get_db)):
 
 
 @router.get("/rate-limit", response_model=RateLimitInfo)
-async def get_rate_limit_status(db: Session = Depends(get_db)):
+async def get_rate_limit_status(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Get current rate limit status for analytics refresh.
     No limits applied - always returns can_refresh=True.
@@ -220,7 +226,7 @@ async def get_rate_limit_status(db: Session = Depends(get_db)):
 
 
 @router.get("/brand/{brand}")
-async def get_brand_analytics(brand: str, db: Session = Depends(get_db)):
+async def get_brand_analytics(brand: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Get analytics for a specific brand.
     
@@ -231,7 +237,8 @@ async def get_brand_analytics(brand: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Brand '{brand}' not found")
     
     service = AnalyticsService(db)
-    result = service.get_analytics_by_brand(brand)
+    user_id = user.get("id")
+    result = service.get_analytics_by_brand(brand, user_id=user_id)
     
     brand_info = BRAND_DISPLAY_INFO[brand]
     
@@ -266,7 +273,8 @@ async def get_snapshots(
     brand: Optional[str] = None,
     platform: Optional[str] = None,
     days: int = 30,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Get historical analytics snapshots for trend analysis.
@@ -288,7 +296,8 @@ async def get_snapshots(
     days = min(max(days, 1), 90)  # Clamp to 1-90 days
     
     service = AnalyticsService(db)
-    snapshots = service.get_snapshots(brand=brand, platform=platform, days=days)
+    user_id = user.get("id")
+    snapshots = service.get_snapshots(brand=brand, platform=platform, days=days, user_id=user_id)
     
     # Get unique brands and platforms from snapshots
     brands_set = set()
@@ -321,7 +330,8 @@ class ClearResponse(BaseModel):
 
 @router.delete("/snapshots", response_model=ClearResponse)
 async def clear_snapshots(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Clear all historical analytics snapshots.
@@ -329,7 +339,8 @@ async def clear_snapshots(
     Use this to remove bad/approximated data before re-backfilling.
     """
     service = AnalyticsService(db)
-    result = service.clear_backfilled_data()
+    user_id = user.get("id")
+    result = service.clear_backfilled_data(user_id=user_id)
     
     return ClearResponse(
         success=result["success"],
@@ -341,7 +352,8 @@ async def clear_snapshots(
 async def backfill_historical_data(
     days: int = 28,
     clear_existing: bool = True,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Backfill historical analytics data from Instagram insights.
@@ -359,13 +371,14 @@ async def backfill_historical_data(
     days = min(max(days, 1), 28)  # Clamp to 1-28 days
     
     service = AnalyticsService(db)
+    user_id = user.get("id")
     
     deleted_count = 0
     if clear_existing:
-        clear_result = service.clear_backfilled_data()
+        clear_result = service.clear_backfilled_data(user_id=user_id)
         deleted_count = clear_result["deleted_count"]
     
-    result = service.backfill_historical_data(days_back=days)
+    result = service.backfill_historical_data(days_back=days, user_id=user_id)
     
     return BackfillResponse(
         success=result["success"],

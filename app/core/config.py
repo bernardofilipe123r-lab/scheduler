@@ -10,6 +10,13 @@ import os
 # Import colors from brand_colors.py - the single source of truth
 from app.core.brand_colors import BRAND_COLORS, BRAND_DISPLAY_NAMES, hex_to_rgb, hex_to_rgba
 
+# ---------------------------------------------------------------------------
+# Supabase configuration
+# ---------------------------------------------------------------------------
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")  # publishable/anon key
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")  # service role key (backend only)
+
 
 class BrandType(str, Enum):
     """Available brand types."""

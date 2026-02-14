@@ -23,6 +23,7 @@ from app.db_connection import get_db, get_db_session
 from app.models import YouTubeChannel
 from app.services.youtube_publisher import YouTubePublisher, YouTubeCredentials
 from app.services.brand_resolver import brand_resolver
+from app.api.auth_middleware import get_current_user
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ youtube_publisher = YouTubePublisher()
 
 
 @router.get("/connect")
-async def youtube_connect(brand: str = Query(..., description="Brand to connect YouTube for")):
+async def youtube_connect(brand: str = Query(..., description="Brand to connect YouTube for"), user: dict = Depends(get_current_user)):
     """
     Start the YouTube OAuth flow for a specific brand.
     
@@ -230,7 +231,8 @@ async def youtube_callback(
                 channel_name=result["channel_name"],
                 refresh_token=result["refresh_token"],
                 status="connected",
-                connected_at=datetime.utcnow()
+                connected_at=datetime.utcnow(),
+                user_id=state  # Use state (brand) as fallback; real user_id set via auth context
             )
             db.add(youtube_channel)
             logger.info(f"Created YouTube connection for {brand}: {result['channel_name']}")
@@ -389,14 +391,18 @@ async def youtube_callback(
 
 
 @router.get("/status")
-async def youtube_status(db: Session = Depends(get_db)):
+async def youtube_status(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Get the connection status for all brands' YouTube channels.
     
     Returns which brands have YouTube connected and quota information.
     """
     # Get all connected channels from database
-    channels = db.query(YouTubeChannel).all()
+    user_id = user.get("id")
+    query = db.query(YouTubeChannel)
+    if user_id:
+        query = query.filter(YouTubeChannel.user_id == user_id)
+    channels = query.all()
     channel_map = {ch.brand: ch for ch in channels}
     
     status = {}
@@ -431,7 +437,7 @@ async def youtube_status(db: Session = Depends(get_db)):
 
 
 @router.get("/quota")
-async def youtube_quota():
+async def youtube_quota(user: dict = Depends(get_current_user)):
     """
     Get current YouTube API quota usage and status.
     
@@ -443,7 +449,7 @@ async def youtube_quota():
 
 
 @router.post("/disconnect/{brand}")
-async def youtube_disconnect(brand: str, db: Session = Depends(get_db)):
+async def youtube_disconnect(brand: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Disconnect a YouTube channel from a brand.
     
@@ -455,7 +461,11 @@ async def youtube_disconnect(brand: str, db: Session = Depends(get_db)):
     """
     brand = brand.lower()
     
-    channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand).first()
+    channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand)
+    user_id = user.get("id")
+    if user_id:
+        channel = channel.filter(YouTubeChannel.user_id == user_id)
+    channel = channel.first()
     
     if channel:
         db.delete(channel)

@@ -359,6 +359,7 @@ class MetricsCollector:
                         performance_score=performance_score,
                         published_at=sched.published_at,
                         metrics_fetched_at=now,
+                        user_id=getattr(sched, "user_id", None),
                     )
                     db.add(new_perf)
 

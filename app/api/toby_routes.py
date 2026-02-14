@@ -23,12 +23,13 @@ Endpoints:
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel
 from sqlalchemy import desc, func
 
 from app.db_connection import SessionLocal
 from app.models import TobyProposal
+from app.api.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/toby", tags=["toby"])
 
@@ -49,7 +50,7 @@ class AcceptResponse(BaseModel):
 # ── DAEMON CONTROL ────────────────────────────────────────────
 
 @router.get("/status")
-async def toby_status():
+async def toby_status(user: dict = Depends(get_current_user)):
     """
     Get Toby's status and proposal stats.
     Daemon is legacy — returns a simple status response.
@@ -63,13 +64,14 @@ async def toby_status():
     # Proposal stats inline
     db = SessionLocal()
     try:
-        total = db.query(func.count(TobyProposal.id)).scalar() or 0
-        pending = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "pending").scalar() or 0
-        accepted = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "accepted").scalar() or 0
-        rejected = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "rejected").scalar() or 0
+        total = db.query(func.count(TobyProposal.id)).filter(TobyProposal.user_id == user["id"]).scalar() or 0
+        pending = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "pending", TobyProposal.user_id == user["id"]).scalar() or 0
+        accepted = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "accepted", TobyProposal.user_id == user["id"]).scalar() or 0
+        rejected = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "rejected", TobyProposal.user_id == user["id"]).scalar() or 0
 
         strategy_counts = (
             db.query(TobyProposal.strategy, func.count(TobyProposal.id))
+            .filter(TobyProposal.user_id == user["id"])
             .group_by(TobyProposal.strategy)
             .all()
         )
@@ -77,7 +79,7 @@ async def toby_status():
         for strategy, count in strategy_counts:
             strat_accepted = (
                 db.query(func.count(TobyProposal.id))
-                .filter(TobyProposal.strategy == strategy, TobyProposal.status == "accepted")
+                .filter(TobyProposal.strategy == strategy, TobyProposal.status == "accepted", TobyProposal.user_id == user["id"])
                 .scalar() or 0
             )
             strategy_acceptance[strategy] = {
@@ -113,13 +115,13 @@ async def toby_status():
 
 
 @router.post("/pause")
-async def pause_toby():
+async def pause_toby(user: dict = Depends(get_current_user)):
     """Pause Toby — legacy endpoint, daemon no longer runs."""
     return {"status": "paused", "message": "Toby daemon is legacy. No action taken."}
 
 
 @router.post("/resume")
-async def resume_toby():
+async def resume_toby(user: dict = Depends(get_current_user)):
     """Resume Toby — legacy endpoint, daemon no longer runs."""
     return {"status": "resumed", "message": "Toby daemon is legacy. No action taken."}
 
@@ -130,11 +132,12 @@ async def resume_toby():
 async def list_proposals(
     status: Optional[str] = Query(None, description="Filter: pending, accepted, rejected"),
     limit: int = Query(50, ge=1, le=200),
+    user: dict = Depends(get_current_user),
 ):
     """List Toby's proposals."""
     db = SessionLocal()
     try:
-        query = db.query(TobyProposal)
+        query = db.query(TobyProposal).filter(TobyProposal.user_id == user["id"])
         if status:
             query = query.filter(TobyProposal.status == status)
 
@@ -151,7 +154,7 @@ async def list_proposals(
 
 
 @router.get("/proposals/{proposal_id}")
-async def get_proposal(proposal_id: str):
+async def get_proposal(proposal_id: str, user: dict = Depends(get_current_user)):
     """Get a single proposal by ID."""
     from app.db_connection import SessionLocal
     from app.models import TobyProposal
@@ -160,7 +163,7 @@ async def get_proposal(proposal_id: str):
     try:
         proposal = (
             db.query(TobyProposal)
-            .filter(TobyProposal.proposal_id == proposal_id)
+            .filter(TobyProposal.proposal_id == proposal_id, TobyProposal.user_id == user["id"])
             .first()
         )
         if not proposal:
@@ -171,7 +174,7 @@ async def get_proposal(proposal_id: str):
 
 
 @router.post("/proposals/{proposal_id}/accept")
-async def accept_proposal(proposal_id: str):
+async def accept_proposal(proposal_id: str, user: dict = Depends(get_current_user)):
     """
     Accept a proposal — marks it as accepted, records in content tracker.
 
@@ -182,7 +185,7 @@ async def accept_proposal(proposal_id: str):
     try:
         proposal = (
             db.query(TobyProposal)
-            .filter(TobyProposal.proposal_id == proposal_id)
+            .filter(TobyProposal.proposal_id == proposal_id, TobyProposal.user_id == user["id"])
             .first()
         )
         if not proposal:
@@ -223,13 +226,13 @@ async def accept_proposal(proposal_id: str):
 
 
 @router.post("/proposals/{proposal_id}/reject")
-async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()):
+async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest(), user: dict = Depends(get_current_user)):
     """Reject a proposal with optional notes."""
     db = SessionLocal()
     try:
         proposal = (
             db.query(TobyProposal)
-            .filter(TobyProposal.proposal_id == proposal_id)
+            .filter(TobyProposal.proposal_id == proposal_id, TobyProposal.user_id == user["id"])
             .first()
         )
         if not proposal:
@@ -252,17 +255,18 @@ async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()
 # ── STATS & INSIGHTS ─────────────────────────────────────────
 
 @router.get("/stats")
-async def toby_stats():
+async def toby_stats(user: dict = Depends(get_current_user)):
     """Get Toby's proposal stats (total, accepted, rejected, per-strategy)."""
     db = SessionLocal()
     try:
-        total = db.query(func.count(TobyProposal.id)).scalar() or 0
-        pending = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "pending").scalar() or 0
-        accepted = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "accepted").scalar() or 0
-        rejected = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "rejected").scalar() or 0
+        total = db.query(func.count(TobyProposal.id)).filter(TobyProposal.user_id == user["id"]).scalar() or 0
+        pending = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "pending", TobyProposal.user_id == user["id"]).scalar() or 0
+        accepted = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "accepted", TobyProposal.user_id == user["id"]).scalar() or 0
+        rejected = db.query(func.count(TobyProposal.id)).filter(TobyProposal.status == "rejected", TobyProposal.user_id == user["id"]).scalar() or 0
 
         strategy_counts = (
             db.query(TobyProposal.strategy, func.count(TobyProposal.id))
+            .filter(TobyProposal.user_id == user["id"])
             .group_by(TobyProposal.strategy)
             .all()
         )
@@ -270,7 +274,7 @@ async def toby_stats():
         for strategy, count in strategy_counts:
             strat_accepted = (
                 db.query(func.count(TobyProposal.id))
-                .filter(TobyProposal.strategy == strategy, TobyProposal.status == "accepted")
+                .filter(TobyProposal.strategy == strategy, TobyProposal.status == "accepted", TobyProposal.user_id == user["id"])
                 .scalar() or 0
             )
             strategy_acceptance[strategy] = {
@@ -304,7 +308,7 @@ async def toby_stats():
 
 
 @router.get("/insights")
-async def performance_insights(brand: Optional[str] = None):
+async def performance_insights(brand: Optional[str] = None, user: dict = Depends(get_current_user)):
     """Get performance insights summary across all content."""
     try:
         from app.services.metrics_collector import get_metrics_collector
@@ -327,6 +331,7 @@ async def performance_insights(brand: Optional[str] = None):
 async def get_trending(
     min_likes: int = Query(200, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    user: dict = Depends(get_current_user),
 ):
     """Get trending content discovered by TrendScout."""
     try:

@@ -73,9 +73,12 @@ class JobManager:
         
         return job
     
-    def get_job(self, job_id: str) -> Optional[GenerationJob]:
-        """Get a job by ID."""
-        return self.db.query(GenerationJob).filter_by(job_id=job_id).first()
+    def get_job(self, job_id: str, user_id: str | None = None) -> Optional[GenerationJob]:
+        """Get a job by ID, optionally filtered by user."""
+        query = self.db.query(GenerationJob).filter_by(job_id=job_id)
+        if user_id:
+            query = query.filter(GenerationJob.user_id == user_id)
+        return query.first()
     
     def get_user_jobs(self, user_id: str, limit: int = 50) -> List[GenerationJob]:
         """Get recent jobs for a user."""
@@ -87,10 +90,13 @@ class JobManager:
             .all()
         )
     
-    def get_all_jobs(self, limit: int = 100) -> List[GenerationJob]:
-        """Get all recent jobs (for admin/shared view)."""
+    def get_all_jobs(self, limit: int = 100, user_id: str | None = None) -> List[GenerationJob]:
+        """Get all recent jobs, optionally filtered by user."""
+        query = self.db.query(GenerationJob)
+        if user_id:
+            query = query.filter(GenerationJob.user_id == user_id)
         return (
-            self.db.query(GenerationJob)
+            query
             .order_by(GenerationJob.created_at.desc())
             .limit(limit)
             .all()
@@ -171,13 +177,14 @@ class JobManager:
     def update_job_inputs(
         self,
         job_id: str,
+        user_id: str | None = None,
         title: Optional[str] = None,
         content_lines: Optional[List[str]] = None,
         ai_prompt: Optional[str] = None,
         cta_type: Optional[str] = None
     ) -> Optional[GenerationJob]:
         """Update job inputs (for re-generation with changes)."""
-        job = self.get_job(job_id)
+        job = self.get_job(job_id, user_id=user_id)
         if not job:
             return None
         

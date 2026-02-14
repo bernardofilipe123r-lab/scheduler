@@ -248,6 +248,7 @@ class GenericAgent:
         self.config = agent_config
         self.agent_id = agent_config.agent_id
         self.display_name = agent_config.display_name
+        self.user_id = getattr(agent_config, 'user_id', None)
         self.temperature = agent_config.temperature
         self.variant = agent_config.variant
         self.proposal_prefix = agent_config.proposal_prefix.upper()
@@ -822,6 +823,7 @@ Respond with a JSON object:
             try:
                 proposal = TobyProposal(
                     proposal_id=proposal_id,
+                    user_id=self.user_id or "",
                     status="pending",
                     content_type=content_type,
                     brand=brand,
@@ -920,14 +922,22 @@ Respond with a JSON object:
 _agent_cache: Dict[str, GenericAgent] = {}
 
 
-def get_all_active_agents() -> List[GenericAgent]:
-    """Load all active agents from DB and return GenericAgent instances."""
+def get_all_active_agents(user_id: str | None = None) -> List[GenericAgent]:
+    """Load all active agents from DB and return GenericAgent instances.
+
+    Args:
+        user_id: If provided, only return agents belonging to this user.
+                 If None, returns all active agents (backward compat).
+    """
     global _agent_cache
     from app.db_connection import SessionLocal
 
     db = SessionLocal()
     try:
-        configs = db.query(AIAgent).filter(AIAgent.active == True).order_by(AIAgent.id).all()
+        q = db.query(AIAgent).filter(AIAgent.active == True)
+        if user_id is not None:
+            q = q.filter(AIAgent.user_id == user_id)
+        configs = q.order_by(AIAgent.id).all()
         agents = []
         for cfg in configs:
             if cfg.agent_id not in _agent_cache:
@@ -962,7 +972,7 @@ def refresh_agent_cache():
     _agent_cache.clear()
 
 
-def seed_builtin_agents():
+def seed_builtin_agents(user_id: str | None = None):
     """
     Ensure the system has 1 agent per brand. Called on app startup. Idempotent.
 
@@ -984,6 +994,7 @@ def seed_builtin_agents():
         if not db.query(AIAgent).filter(AIAgent.agent_id == "toby").first():
             db.add(AIAgent(
                 agent_id="toby",
+                user_id=user_id or "",
                 display_name="Toby",
                 personality="Creative risk-taker. Explores boldly, swings for viral hits. 'Fortune favors the bold.' High creativity, surprising angles, unexpected facts.",
                 temperature=0.9,
@@ -1004,6 +1015,7 @@ def seed_builtin_agents():
         if not db.query(AIAgent).filter(AIAgent.agent_id == "lexi").first():
             db.add(AIAgent(
                 agent_id="lexi",
+                user_id=user_id or "",
                 display_name="Lexi",
                 personality="Precision optimizer. Compound small wins into massive growth. Data-backed, systematic, 80% proven patterns. Consistent engagement over viral moonshots.",
                 temperature=0.75,
@@ -1033,7 +1045,7 @@ def seed_builtin_agents():
         db.close()
 
 
-def _ensure_agents_for_all_brands(db=None):
+def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
     """
     Check all active brands — if any brand has no agent assigned
     (created_for_brand), spawn a new agent with randomized DNA and a cool name.
@@ -1103,6 +1115,7 @@ def _ensure_agents_for_all_brands(db=None):
                     agent_name=agent_name,
                     randomize=True,
                     personality=personality,
+                    user_id=user_id,
                 )
                 print(f"🧬 Auto-spawned agent '{agent.display_name}' (temp={agent.temperature}) for brand {brand_id}", flush=True)
                 spawned.append(agent)
@@ -1157,6 +1170,7 @@ def create_agent_for_brand(
     strategies: List[str] = None,
     strategy_weights: Dict[str, float] = None,
     randomize: bool = False,
+    user_id: str | None = None,
 ) -> AIAgent:
     """
     Auto-provision a new AI agent when a brand is created.
@@ -1199,6 +1213,7 @@ def create_agent_for_brand(
 
         agent = AIAgent(
             agent_id=agent_id,
+            user_id=user_id or "",
             display_name=agent_name,
             personality=personality,
             temperature=temperature,

@@ -32,7 +32,7 @@ from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
 router = APIRouter(tags=["logs"])
 
 # Logs password (from env or default)
-LOGS_PASSWORD = os.getenv("LOGS_PASSWORD", "logs12345@")
+LOGS_PASSWORD = os.environ.get("LOGS_PASSWORD")
 
 
 @router.get("/api/logs", summary="Query logs with filtering")
@@ -275,7 +275,10 @@ def logs_dashboard(logs_token: Optional[str] = Cookie(None), pwd: Optional[str] 
     Protected by a simple password.
     Access via: /logs?pwd=<password> (sets cookie for future visits)
     """
-    expected = os.getenv("LOGS_PASSWORD", LOGS_PASSWORD)
+    expected = os.environ.get("LOGS_PASSWORD")
+    
+    if not expected:
+        return HTMLResponse(content="<h1>Logs password not configured</h1><p>Set the LOGS_PASSWORD environment variable.</p>", status_code=503)
     
     # Check cookie or query param
     if pwd == expected:

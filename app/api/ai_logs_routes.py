@@ -21,7 +21,7 @@ from app.models import TobyProposal, TrendingContent, PostPerformance
 
 router = APIRouter(tags=["ai-logs"])
 
-LOGS_PASSWORD = os.getenv("LOGS_PASSWORD", "logs12345@")
+LOGS_PASSWORD = os.environ.get("LOGS_PASSWORD")
 
 
 # ─── JSON API ────────────────────────────────────────────────
@@ -214,7 +214,9 @@ def get_ai_logs(
 
 def _serve_dashboard(agent_filter: str, logs_token: Optional[str], pwd: Optional[str]):
     """Serve the unified AI logs dashboard with an optional agent pre-filter."""
-    expected = os.getenv("LOGS_PASSWORD", LOGS_PASSWORD)
+    expected = os.environ.get("LOGS_PASSWORD")
+    if not expected:
+        return HTMLResponse(content="<h1>Logs password not configured</h1><p>Set the LOGS_PASSWORD environment variable.</p>", status_code=503)
     html = AI_LOGS_HTML.replace("__AGENT_FILTER__", agent_filter)
     if pwd == expected:
         response = HTMLResponse(content=html)
@@ -251,7 +253,9 @@ def dynamic_agent_logs(agent_id: str, logs_token: Optional[str] = Cookie(None), 
 
 @router.get("/ai-about", response_class=HTMLResponse, summary="About the AI agents")
 def ai_about_page(logs_token: Optional[str] = Cookie(None), pwd: Optional[str] = Query(None)):
-    expected = os.getenv("LOGS_PASSWORD", LOGS_PASSWORD)
+    expected = os.environ.get("LOGS_PASSWORD")
+    if not expected:
+        return HTMLResponse(content="<h1>Logs password not configured</h1><p>Set the LOGS_PASSWORD environment variable.</p>", status_code=503)
     if pwd == expected:
         response = HTMLResponse(content=AI_ABOUT_HTML)
         response.set_cookie("logs_token", expected, max_age=60*60*24*30, httponly=True, samesite="lax")

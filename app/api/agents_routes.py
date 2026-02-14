@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
 from app.models import AIAgent, AgentPerformance, AgentLearning
+from app.api.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/agents", tags=["ai-agents"])
 
@@ -61,8 +62,8 @@ class UpdateAgentRequest(BaseModel):
 # ── Endpoints ──
 
 @router.get("", summary="List all AI agents with evolution stats")
-def list_agents(db: Session = Depends(get_db), include_inactive: bool = Query(False)):
-    q = db.query(AIAgent).order_by(desc(AIAgent.survival_score))
+def list_agents(db: Session = Depends(get_db), include_inactive: bool = Query(False), user: dict = Depends(get_current_user)):
+    q = db.query(AIAgent).filter(AIAgent.user_id == user["id"]).order_by(desc(AIAgent.survival_score))
     if not include_inactive:
         q = q.filter(AIAgent.active == True)
     agents = q.all()
@@ -115,15 +116,15 @@ def list_agents(db: Session = Depends(get_db), include_inactive: bool = Query(Fa
 
 
 @router.get("/{agent_id}", summary="Get single agent")
-def get_agent_detail(agent_id: str, db: Session = Depends(get_db)):
-    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+def get_agent_detail(agent_id: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
     return agent.to_dict()
 
 
 @router.post("", summary="Create new AI agent")
-def create_agent(req: CreateAgentRequest, db: Session = Depends(get_db)):
+def create_agent(req: CreateAgentRequest, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     from app.services.generic_agent import create_agent_for_brand
 
     agent = create_agent_for_brand(
@@ -134,6 +135,7 @@ def create_agent(req: CreateAgentRequest, db: Session = Depends(get_db)):
         variant=req.variant,
         strategies=req.strategies,
         strategy_weights=req.strategy_weights,
+        user_id=user["id"],
     )
 
     # Update extra fields if provided
@@ -151,8 +153,8 @@ def create_agent(req: CreateAgentRequest, db: Session = Depends(get_db)):
 
 
 @router.put("/{agent_id}", summary="Update agent config")
-def update_agent(agent_id: str, req: UpdateAgentRequest, db: Session = Depends(get_db)):
-    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+def update_agent(agent_id: str, req: UpdateAgentRequest, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -186,8 +188,8 @@ def update_agent(agent_id: str, req: UpdateAgentRequest, db: Session = Depends(g
 
 
 @router.delete("/{agent_id}", summary="Deactivate agent")
-def delete_agent(agent_id: str, db: Session = Depends(get_db)):
-    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+def delete_agent(agent_id: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
     if agent.is_builtin:
@@ -203,14 +205,14 @@ def delete_agent(agent_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/seed", summary="Seed builtin agents (Toby + Lexi)")
-def seed_agents():
+def seed_agents(user: dict = Depends(get_current_user)):
     from app.services.generic_agent import seed_builtin_agents
     seed_builtin_agents()
     return {"seeded": True}
 
 
 @router.post("/refresh", summary="Refresh agent cache")
-def refresh_cache():
+def refresh_cache(user: dict = Depends(get_current_user)):
     from app.services.generic_agent import refresh_agent_cache
     refresh_agent_cache()
     return {"refreshed": True}
@@ -219,9 +221,9 @@ def refresh_cache():
 # ── Evolution endpoints ──
 
 @router.get("/{agent_id}/performance", summary="Agent performance history")
-def get_agent_performance(agent_id: str, limit: int = Query(30), db: Session = Depends(get_db)):
+def get_agent_performance(agent_id: str, limit: int = Query(30), db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Get survival score + metrics over time for charting."""
-    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -241,9 +243,9 @@ def get_agent_performance(agent_id: str, limit: int = Query(30), db: Session = D
 
 
 @router.get("/{agent_id}/learnings", summary="Agent mutation/learning log")
-def get_agent_learnings(agent_id: str, limit: int = Query(20), db: Session = Depends(get_db)):
+def get_agent_learnings(agent_id: str, limit: int = Query(20), db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Recent evolution events for this agent — mutations, births, deaths."""
-    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -262,9 +264,9 @@ def get_agent_learnings(agent_id: str, limit: int = Query(20), db: Session = Dep
 
 
 @router.post("/{agent_id}/mutate", summary="Force DNA mutation")
-def force_mutate(agent_id: str, db: Session = Depends(get_db)):
+def force_mutate(agent_id: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Manually re-roll an agent's DNA (random mutation)."""
-    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -304,9 +306,9 @@ def force_mutate(agent_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{agent_id}/clone", summary="Clone agent DNA into new agent")
-def clone_agent(agent_id: str, db: Session = Depends(get_db)):
+def clone_agent(agent_id: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Duplicate a winning agent's DNA into a brand-new agent."""
-    source = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+    source = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not source:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
@@ -322,6 +324,7 @@ def clone_agent(agent_id: str, db: Session = Depends(get_db)):
         variant=source.variant,
         strategies=source.get_strategies(),
         strategy_weights=source.get_strategy_weights(),
+        user_id=user["id"],
     )
 
     # Set parent reference
@@ -348,9 +351,9 @@ def clone_agent(agent_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{agent_id}/retire", summary="Manual retirement")
-def retire_agent(agent_id: str, db: Session = Depends(get_db)):
+def retire_agent(agent_id: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Manually retire an agent — archives DNA to gene pool first."""
-    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id).first()
+    agent = db.query(AIAgent).filter(AIAgent.agent_id == agent_id, AIAgent.user_id == user["id"]).first()
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
     if agent.is_builtin:
@@ -398,12 +401,13 @@ def retire_agent(agent_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/gene-pool/entries", summary="Browse archived DNA in gene pool")
-def get_gene_pool(limit: int = Query(50), db: Session = Depends(get_db)):
+def get_gene_pool(limit: int = Query(50), db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """List all DNA entries in the gene pool."""
     try:
         from app.models import GenePool
         entries = (
             db.query(GenePool)
+            .filter(GenePool.user_id == user["id"])
             .order_by(desc(GenePool.survival_score))
             .limit(limit)
             .all()
@@ -414,10 +418,11 @@ def get_gene_pool(limit: int = Query(50), db: Session = Depends(get_db)):
 
 
 @router.get("/evolution-events/timeline", summary="Evolution timeline events")
-def get_evolution_events(limit: int = Query(50), db: Session = Depends(get_db)):
+def get_evolution_events(limit: int = Query(50), db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Timeline of deaths, births, mutations across all agents — for the event feed."""
     events = (
         db.query(AgentLearning)
+        .filter(AgentLearning.user_id == user["id"])
         .order_by(desc(AgentLearning.created_at))
         .limit(limit)
         .all()
@@ -428,7 +433,7 @@ def get_evolution_events(limit: int = Query(50), db: Session = Depends(get_db)):
 # ── Diagnostics endpoints ──
 
 @router.get("/diagnostics/latest", summary="Latest diagnostics report")
-def get_latest_diagnostics(db: Session = Depends(get_db)):
+def get_latest_diagnostics(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Get the most recent self-test report from Maestro's diagnostics cycle."""
     try:
         from app.models import SystemDiagnostic
@@ -445,7 +450,7 @@ def get_latest_diagnostics(db: Session = Depends(get_db)):
 
 
 @router.get("/diagnostics/history", summary="Diagnostics history")
-def get_diagnostics_history(limit: int = Query(24), db: Session = Depends(get_db)):
+def get_diagnostics_history(limit: int = Query(24), db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Get historical diagnostics reports — for health trend charts."""
     try:
         from app.models import SystemDiagnostic
@@ -461,7 +466,7 @@ def get_diagnostics_history(limit: int = Query(24), db: Session = Depends(get_db
 
 
 @router.post("/diagnostics/run", summary="Force run diagnostics now")
-def force_diagnostics():
+def force_diagnostics(user: dict = Depends(get_current_user)):
     """Manually trigger a diagnostics check (doesn't wait for scheduled cycle)."""
     try:
         from app.services.diagnostics_engine import DiagnosticsEngine

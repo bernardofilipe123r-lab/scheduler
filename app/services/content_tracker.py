@@ -173,6 +173,7 @@ class ContentTracker:
         image_prompt: str = None,
         quality_score: float = None,
         was_used: bool = True,
+        user_id: str = None,
     ) -> Optional[int]:
         """
         Record a generated piece of content in the DB.
@@ -197,6 +198,7 @@ class ContentTracker:
                     was_used=was_used,
                     image_prompt=image_prompt,
                     caption=caption,
+                    user_id=user_id,
                 )
                 db.add(entry)
                 db.commit()
@@ -212,7 +214,7 @@ class ContentTracker:
     # DUPLICATE CHECK (fingerprint)
     # ──────────────────────────────────────────────────────────
 
-    def is_duplicate(self, title: str, content_type: str = "post", days: int = None) -> bool:
+    def is_duplicate(self, title: str, content_type: str = "post", days: int = None, user_id: str = None) -> bool:
         """
         Check if a title is a near-duplicate of recent content.
 
@@ -226,15 +228,17 @@ class ContentTracker:
 
             db = self._get_session()
             try:
-                count = (
+                query = (
                     db.query(ContentHistory)
                     .filter(
                         ContentHistory.content_type == content_type,
                         ContentHistory.keyword_hash == keyword_hash,
                         ContentHistory.created_at >= cutoff,
                     )
-                    .count()
                 )
+                if user_id:
+                    query = query.filter(ContentHistory.user_id == user_id)
+                count = query.count()
                 return count > 0
             finally:
                 db.close()
@@ -637,6 +641,7 @@ class ContentTracker:
         content_lines: list = None,
         image_prompt: str = None,
         quality_score: float = None,
+        user_id: str = None,
     ) -> Optional[int]:
         """
         Record a proposal in content_history for anti-repetition tracking.
@@ -658,6 +663,7 @@ class ContentTracker:
             image_prompt=image_prompt,
             quality_score=quality_score,
             was_used=True,
+            user_id=user_id,
         )
 
     def _get_legacy_job_titles(self, content_type: str, limit: int) -> List[str]:

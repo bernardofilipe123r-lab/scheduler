@@ -1,6 +1,7 @@
 /**
- * HTTP client with error handling and interceptors
+ * HTTP client with error handling — auto-attaches Supabase JWT.
  */
+import { supabase } from './supabase'
 
 const BASE_URL = import.meta.env.VITE_API_URL || ''
 
@@ -11,6 +12,12 @@ export interface ApiError {
 
 export interface RequestOptions {
   headers?: Record<string, string>
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -31,17 +38,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function get<T>(endpoint: string, options?: RequestOptions): Promise<T> {
+  const auth = await authHeaders()
   const response = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: options?.headers,
+    headers: { ...auth, ...options?.headers },
   })
   return handleResponse<T>(response)
 }
 
 export async function post<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
+  const auth = await authHeaders()
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...auth,
       ...options?.headers,
     },
     body: data ? JSON.stringify(data) : undefined,
@@ -50,10 +60,12 @@ export async function post<T>(endpoint: string, data?: unknown, options?: Reques
 }
 
 export async function put<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
+  const auth = await authHeaders()
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
+      ...auth,
       ...options?.headers,
     },
     body: data ? JSON.stringify(data) : undefined,
@@ -62,18 +74,21 @@ export async function put<T>(endpoint: string, data?: unknown, options?: Request
 }
 
 export async function del<T>(endpoint: string, options?: RequestOptions): Promise<T> {
+  const auth = await authHeaders()
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method: 'DELETE',
-    headers: options?.headers,
+    headers: { ...auth, ...options?.headers },
   })
   return handleResponse<T>(response)
 }
 
 export async function patch<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
+  const auth = await authHeaders()
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
+      ...auth,
       ...options?.headers,
     },
     body: data ? JSON.stringify(data) : undefined,

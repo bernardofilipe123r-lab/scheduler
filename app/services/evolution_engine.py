@@ -81,7 +81,7 @@ class FeedbackEngine:
     - Survival score
     """
 
-    def run(self, window_hours: Tuple[int, int] = (72, 48)) -> Dict:
+    def run(self, window_hours: Tuple[int, int] = (72, 48), user_id: str | None = None) -> Dict:
         """
         Run full feedback attribution for all agents.
 
@@ -100,11 +100,14 @@ class FeedbackEngine:
             window_end = now - timedelta(hours=window_hours[1])
 
             # 1. Find all published items in window
-            published = db.query(ScheduledReel).filter(
+            published_query = db.query(ScheduledReel).filter(
                 ScheduledReel.status == "published",
                 ScheduledReel.published_at >= window_start,
                 ScheduledReel.published_at <= window_end,
-            ).all()
+            )
+            if user_id:
+                published_query = published_query.filter(ScheduledReel.user_id == user_id)
+            published = published_query.all()
 
             if not published:
                 logger.info("📊 Feedback: No published items in window")
@@ -314,7 +317,7 @@ class AdaptationEngine:
     - All weights must sum to 1.0 after mutation
     """
 
-    def adapt(self, feedback_results: Dict) -> Dict[str, List[str]]:
+    def adapt(self, feedback_results: Dict, user_id: str | None = None) -> Dict[str, List[str]]:
         """
         Apply mutations to all agents based on feedback results.
 
@@ -332,7 +335,10 @@ class AdaptationEngine:
 
             for agent_id, perf in feedback_results.items():
                 mutations = []
-                agent = db.query(AIAgent).filter_by(agent_id=agent_id, active=True).first()
+                agent_query = db.query(AIAgent).filter_by(agent_id=agent_id, active=True)
+                if user_id:
+                    agent_query = agent_query.filter(AIAgent.user_id == user_id)
+                agent = agent_query.first()
                 if not agent:
                     continue
 
@@ -456,7 +462,7 @@ class AdaptationEngine:
             db.close()
 
 
-def get_agent_lessons(agent_id: str, limit: int = 5) -> str:
+def get_agent_lessons(agent_id: str, limit: int = 5, user_id: str | None = None) -> str:
     """
     Get a compact summary of recent agent learnings for injection into prompts.
 
@@ -539,7 +545,7 @@ class SelectionEngine:
     - Only non-builtin agents can die
     """
 
-    def run_weekly_selection(self) -> Dict:
+    def run_weekly_selection(self, user_id: str | None = None) -> Dict:
         """
         Execute weekly natural selection across all active agents.
 
@@ -552,7 +558,10 @@ class SelectionEngine:
         db = SessionLocal()
         try:
             # 1. Load all active agents
-            agents = db.query(AIAgent).filter(AIAgent.active == True).all()
+            agents_query = db.query(AIAgent).filter(AIAgent.active == True)
+            if user_id:
+                agents_query = agents_query.filter(AIAgent.user_id == user_id)
+            agents = agents_query.all()
             if not agents:
                 logger.info("🧬 Selection: No active agents found")
                 return {"error": "no_agents"}

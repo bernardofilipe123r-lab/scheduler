@@ -1,12 +1,7 @@
 export { AuthProvider, useAuth } from './AuthContext'
 export {
-  getAuthToken,
-  clearAuth,
-  authHeaders,
   loginApi,
-  getMeApi,
-  changePasswordApi,
-  updateProfileApi,
   logoutApi,
+  getSessionToken,
   type AuthUser,
 } from './api/auth-api'

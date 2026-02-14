@@ -101,10 +101,15 @@ _job_semaphore = threading.Semaphore(MAX_CONCURRENT_JOBS)
 PROPOSALS_PER_BRAND_PER_AGENT = 6  # 6 reels per brand
 POSTS_PER_BRAND = 2  # 2 posts per brand per day (morning + afternoon slots)
 
-def _get_all_brands() -> List[str]:
-    """Load brand IDs from DB (dynamic, not hardcoded)."""
+def _get_all_brands(user_id: str | None = None) -> List[str]:
+    """Load brand IDs from DB (dynamic, not hardcoded).
+
+    Args:
+        user_id: If provided, only return brands belonging to this user.
+                 If None, returns all active brands (backward compat).
+    """
     from app.services.brand_resolver import brand_resolver
-    ids = brand_resolver.get_all_brand_ids()
+    ids = brand_resolver.get_all_brand_ids(user_id=user_id)
     return ids if ids else ["healthycollege"]
 
 
@@ -295,17 +300,20 @@ class MaestroState:
         if agent_id not in self.agents:
             self.agents[agent_id] = AgentState(agent_id)
 
-    def _get_daily_config(self) -> Dict:
+    def _get_daily_config(self, user_id: str | None = None) -> Dict:
         """Build daily config dict dynamically from DB agents + brands.
 
         Formula: 6 reels + 2 posts per brand.
         Posts can be paused via is_posts_paused().
         Proposals are split evenly across agents (round-robin).
+
+        Args:
+            user_id: If provided, scope to this user's agents and brands.
         """
         try:
             from app.services.generic_agent import get_all_active_agents
-            agents = get_all_active_agents()
-            brands = _get_all_brands()
+            agents = get_all_active_agents(user_id=user_id)
+            brands = _get_all_brands(user_id=user_id)
             n_brands = len(brands)
             reels_per_brand = PROPOSALS_PER_BRAND_PER_AGENT  # 6
             posts_per_brand = POSTS_PER_BRAND  # 2

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
 from app.models import AppSettings
+from app.api.auth_middleware import get_current_user
 
 
 logger = logging.getLogger(__name__)
@@ -293,7 +294,8 @@ def seed_settings_if_needed(db: Session) -> int:
 @router.get("")
 async def list_settings(
     category: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get all settings.
@@ -364,7 +366,8 @@ async def list_settings(
 
 @router.get("/categories")
 async def get_categories(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get list of all setting categories."""
     from sqlalchemy import distinct
@@ -379,7 +382,8 @@ async def get_categories(
 @router.get("/{key}")
 async def get_setting(
     key: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get a single setting by key."""
     setting = db.query(AppSettings).filter(AppSettings.key == key).first()
@@ -413,7 +417,8 @@ async def get_setting(
 async def update_setting(
     key: str,
     request: UpdateSettingRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Update a single setting."""
     setting = db.query(AppSettings).filter(AppSettings.key == key).first()
@@ -459,7 +464,8 @@ async def update_setting(
 @router.post("/bulk")
 async def bulk_update_settings(
     request: BulkUpdateSettingsRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Update multiple settings at once.
@@ -497,7 +503,8 @@ async def bulk_update_settings(
 
 @router.post("/seed")
 async def seed_settings(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Seed default settings if they don't exist.
@@ -524,7 +531,8 @@ async def seed_settings(
 @router.delete("/{key}")
 async def delete_setting(
     key: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Delete a setting (reset to no value).

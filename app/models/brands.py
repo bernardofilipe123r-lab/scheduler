@@ -16,6 +16,7 @@ class Brand(Base):
     
     # Primary key - lowercase brand identifier (e.g., 'healthycollege')
     id = Column(String(50), primary_key=True)
+    user_id = Column(String(100), nullable=False, index=True)
     
     # Display information
     display_name = Column(String(100), nullable=False)  # e.g., 'THE HEALTHY COLLEGE'

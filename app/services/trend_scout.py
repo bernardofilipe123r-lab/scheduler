@@ -104,7 +104,9 @@ class TrendScout:
         "guthealth", "hormonehealth", "antiaging",
     ]
 
-    def __init__(self):
+    def __init__(self, user_id: str = None):
+        # User context for tenant isolation (optional for background services)
+        self._user_id = user_id
         # Use the first available brand token for API calls
         self._access_token = None
         self._ig_user_id = None
@@ -377,6 +379,7 @@ class TrendScout:
                         discovery_method="hashtag_search",
                         discovery_hashtag=hashtag,
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     total_new += 1
@@ -446,6 +449,7 @@ class TrendScout:
                         comments_count=item.get("comments_count", 0),
                         discovery_method="business_discovery",
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     total_new += 1
@@ -546,6 +550,7 @@ class TrendScout:
                         comments_count=item.get("comments_count", 0),
                         discovery_method="business_discovery",
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     total_new += 1
@@ -641,6 +646,7 @@ class TrendScout:
                         discovery_method="hashtag_search",
                         discovery_hashtag=hashtag,
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     total_new += 1
@@ -772,6 +778,7 @@ class TrendScout:
                         comments_count=item.get("comments_count", 0),
                         discovery_method="own_account",
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     new_count += 1
@@ -839,6 +846,7 @@ class TrendScout:
                         comments_count=item.get("comments_count", 0),
                         discovery_method="business_discovery",
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     new_count += 1
@@ -915,6 +923,7 @@ class TrendScout:
                         discovery_method="hashtag_search",
                         discovery_hashtag=target_hashtag,
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     new_count += 1
@@ -1063,6 +1072,7 @@ class TrendScout:
                         comments_count=item.get("comments_count", 0),
                         discovery_method="own_account",
                         media_timestamp=ts,
+                        user_id=self._user_id,
                     )
                     db.add(entry)
                     total_new += 1

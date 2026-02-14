@@ -15,7 +15,8 @@ import uuid
 from io import BytesIO
 from typing import Optional, List
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
+from app.api.auth_middleware import get_current_user
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
@@ -51,7 +52,7 @@ class TestGenerateRequest(BaseModel):
 # ============================================================
 
 @router.get("/overview", summary="Get the full prompt pipeline overview")
-async def get_prompt_overview():
+async def get_prompt_overview(user: dict = Depends(get_current_user)):
     """
     Returns all prompt layers used in content and image generation,
     organized by stage in the pipeline.
@@ -145,7 +146,7 @@ async def get_prompt_overview():
 # ============================================================
 
 @router.post("/test-generate", summary="Generate test images from a prompt")
-async def test_generate_images(request: TestGenerateRequest):
+async def test_generate_images(request: TestGenerateRequest, user: dict = Depends(get_current_user)):
     """
     Generate 1-2 test images from a given prompt using the post model (ZImageTurbo).
     Returns base64 PNG images so the user can see what the prompt produces.
@@ -195,7 +196,7 @@ async def test_generate_images(request: TestGenerateRequest):
 # ============================================================
 
 @router.post("/build-final", summary="Preview the final prompt sent to deAPI")
-async def build_final_prompt(request: TestGenerateRequest):
+async def build_final_prompt(request: TestGenerateRequest, user: dict = Depends(get_current_user)):
     """
     Shows the complete final prompt that would be sent to deAPI,
     after all suffixes and quality modifiers are applied.

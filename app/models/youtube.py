@@ -24,6 +24,7 @@ class YouTubeChannel(Base):
     
     # Primary key - the brand name (lowercase)
     brand = Column(String(50), primary_key=True)
+    user_id = Column(String(100), nullable=False, index=True)
     
     # YouTube channel info
     channel_id = Column(String(100), nullable=False, index=True)

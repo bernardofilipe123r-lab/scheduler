@@ -19,6 +19,7 @@ class BrandAnalytics(Base):
     # Composite primary key: brand + platform
     brand = Column(String(50), primary_key=True)
     platform = Column(String(20), primary_key=True)  # instagram, facebook, youtube
+    user_id = Column(String(100), nullable=False, index=True)
     
     # Analytics metrics
     followers_count = Column(Integer, default=0)
@@ -55,7 +56,7 @@ class AnalyticsRefreshLog(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     refreshed_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
-    user_id = Column(String(100), nullable=True)  # Optional: track who refreshed
+    user_id = Column(String(100), nullable=True, index=True)  # Optional: track who refreshed
     status = Column(String(20), default="success")  # success, failed
     error_message = Column(Text, nullable=True)
 
@@ -70,6 +71,7 @@ class AnalyticsSnapshot(Base):
     __tablename__ = "analytics_snapshots"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
     brand = Column(String(50), nullable=False, index=True)
     platform = Column(String(20), nullable=False, index=True)
     
@@ -110,6 +112,7 @@ class ContentHistory(Base):
     __tablename__ = "content_history"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
 
     # Content type: "post" or "reel"
     content_type = Column(String(10), nullable=False, index=True)
@@ -275,6 +278,7 @@ class PostPerformance(Base):
     __tablename__ = "post_performance"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
 
     # Instagram media ID (the key for Graph API calls)
     ig_media_id = Column(String(100), nullable=False, unique=True, index=True)
@@ -362,6 +366,7 @@ class TrendingContent(Base):
     __tablename__ = "trending_content"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
 
     # Instagram media ID (from external account)
     ig_media_id = Column(String(100), nullable=False, unique=True, index=True)

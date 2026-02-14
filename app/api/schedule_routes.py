@@ -6,9 +6,10 @@ import base64
 from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.brand_resolver import brand_resolver
+from app.api.auth_middleware import get_current_user
 
 
 # Pydantic models
@@ -60,7 +61,7 @@ scheduler_service = DatabaseSchedulerService()
     summary="Schedule a reel for publication",
     description="Schedule an existing reel to be published on Instagram at a specific date and time"
 )
-async def schedule_reel(request: ScheduleRequest):
+async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_current_user)):
     """
     Schedule a reel for future publication on Instagram.
     
@@ -113,7 +114,7 @@ async def schedule_reel(request: ScheduleRequest):
         # Schedule the reel
         print("\n💾 Saving to database...")
         result = scheduler_service.schedule_reel(
-            user_id="web_user",  # Default user for web interface
+            user_id=user["id"],
             reel_id=request.reel_id,
             scheduled_time=scheduled_datetime,
             video_path=video_path,
@@ -169,7 +170,7 @@ async def schedule_reel(request: ScheduleRequest):
     summary="Auto-schedule a reel to next available slot",
     description="Automatically schedule a reel to the next available time slot based on brand and variant"
 )
-async def schedule_auto(request: AutoScheduleRequest):
+async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_current_user)):
     """
     Auto-schedule a reel for future publication.
     
@@ -260,7 +261,7 @@ async def schedule_auto(request: AutoScheduleRequest):
         
         # Schedule the reel
         result = scheduler_service.schedule_reel(
-            user_id=request.user_id,
+            user_id=user["id"],
             reel_id=request.reel_id,
             scheduled_time=next_slot,
             video_path=video_path if video_path.exists() else None,
@@ -301,14 +302,12 @@ async def schedule_auto(request: AutoScheduleRequest):
 
 
 @router.get("/scheduled")
-async def get_scheduled_posts(user_id: Optional[str] = None):
+async def get_scheduled_posts(user: dict = Depends(get_current_user)):
     """
-    Get all scheduled posts.
-    
-    Optional: Filter by user_id to see only specific user's schedules.
+    Get all scheduled posts for the current user.
     """
     try:
-        schedules = scheduler_service.get_all_scheduled(user_id=user_id)
+        schedules = scheduler_service.get_all_scheduled(user_id=user["id"])
         
         # Format the response with human-readable data
         formatted_schedules = []
@@ -368,7 +367,7 @@ async def get_scheduled_posts(user_id: Optional[str] = None):
 
 
 @router.delete("/scheduled/bulk/from-date")
-async def delete_scheduled_from_date(from_date: str):
+async def delete_scheduled_from_date(from_date: str, user: dict = Depends(get_current_user)):
     """Delete all scheduled reels from a given date onwards (inclusive).
     from_date format: YYYY-MM-DD"""
     from app.db_connection import SessionLocal
@@ -380,7 +379,7 @@ async def delete_scheduled_from_date(from_date: str):
         cutoff = datetime.fromisoformat(from_date)
         count = (
             db.query(ScheduledReel)
-            .filter(ScheduledReel.scheduled_time >= cutoff)
+            .filter(ScheduledReel.scheduled_time >= cutoff, ScheduledReel.user_id == user["id"])
             .delete()
         )
         db.commit()
@@ -393,7 +392,7 @@ async def delete_scheduled_from_date(from_date: str):
 
 
 @router.delete("/scheduled/bulk/day/{date}")
-async def delete_scheduled_for_day(date: str):
+async def delete_scheduled_for_day(date: str, user: dict = Depends(get_current_user)):
     """Delete all scheduled reels for a specific day.
     date format: YYYY-MM-DD"""
     from app.db_connection import SessionLocal
@@ -408,6 +407,7 @@ async def delete_scheduled_for_day(date: str):
             db.query(ScheduledReel)
             .filter(ScheduledReel.scheduled_time >= day_start)
             .filter(ScheduledReel.scheduled_time < day_end)
+            .filter(ScheduledReel.user_id == user["id"])
             .delete()
         )
         db.commit()
@@ -420,14 +420,14 @@ async def delete_scheduled_for_day(date: str):
 
 
 @router.delete("/scheduled/{schedule_id}")
-async def delete_scheduled_post(schedule_id: str, user_id: Optional[str] = None):
+async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_current_user)):
     """
     Delete a scheduled post.
     
     Optional: Provide user_id to ensure only the owner can delete.
     """
     try:
-        success = scheduler_service.delete_scheduled(schedule_id, user_id=user_id)
+        success = scheduler_service.delete_scheduled(schedule_id, user_id=user["id"])
         
         if not success:
             raise HTTPException(
@@ -449,7 +449,7 @@ async def delete_scheduled_post(schedule_id: str, user_id: Optional[str] = None)
 
 
 @router.post("/scheduled/{schedule_id}/retry")
-async def retry_failed_post(schedule_id: str):
+async def retry_failed_post(schedule_id: str, user: dict = Depends(get_current_user)):
     """
     Retry a failed scheduled post by resetting its status to 'scheduled'.
     
@@ -478,7 +478,7 @@ async def retry_failed_post(schedule_id: str):
 
 
 @router.patch("/scheduled/{schedule_id}/reschedule")
-async def reschedule_post(schedule_id: str, request: RescheduleRequest):
+async def reschedule_post(schedule_id: str, request: RescheduleRequest, user: dict = Depends(get_current_user)):
     """
     Reschedule a scheduled post to a new date/time.
     
@@ -520,7 +520,7 @@ async def reschedule_post(schedule_id: str, request: RescheduleRequest):
 
 
 @router.post("/scheduled/{schedule_id}/publish-now")
-async def publish_scheduled_now(schedule_id: str):
+async def publish_scheduled_now(schedule_id: str, user: dict = Depends(get_current_user)):
     """
     Immediately publish a scheduled post (bypass the scheduled time).
     
@@ -552,7 +552,7 @@ async def publish_scheduled_now(schedule_id: str):
 
 
 @router.get("/next-slot/{brand}/{variant}")
-async def get_next_available_slot(brand: str, variant: str):
+async def get_next_available_slot(brand: str, variant: str, user: dict = Depends(get_current_user)):
     """
     Get the next available scheduling slot for a brand+variant combination.
     
@@ -600,7 +600,7 @@ async def get_next_available_slot(brand: str, variant: str):
 
 
 @router.get("/next-slots")
-async def get_all_next_slots():
+async def get_all_next_slots(user: dict = Depends(get_current_user)):
     """
     Get the next available slots for all brand+variant combinations.
     
@@ -642,7 +642,7 @@ async def get_all_next_slots():
 
 
 @router.post("/schedule-post-image")
-async def schedule_post_image(request: SchedulePostImageRequest):
+async def schedule_post_image(request: SchedulePostImageRequest, user: dict = Depends(get_current_user)):
     """Schedule a single post image for a specific brand at a given time."""
     try:
         from datetime import datetime
@@ -695,7 +695,7 @@ async def schedule_post_image(request: SchedulePostImageRequest):
         
         # Schedule using existing scheduler (post = image only, no video)
         result = scheduler_service.schedule_reel(
-            user_id="web_user",
+            user_id=user["id"],
             reel_id=post_id,
             scheduled_time=schedule_dt,
             video_path=None,
@@ -738,7 +738,7 @@ async def schedule_post_image(request: SchedulePostImageRequest):
 
 
 @router.get("/scheduled/occupied-post-slots")
-async def get_occupied_post_slots():
+async def get_occupied_post_slots(user: dict = Depends(get_current_user)):
     """
     Return all occupied post slots (variant='post') grouped by brand.
     Frontend uses this to avoid scheduling collisions.
@@ -773,7 +773,7 @@ async def get_occupied_post_slots():
 
 
 @router.post("/scheduled/clean-reel-slots")
-async def clean_reel_slots():
+async def clean_reel_slots(user: dict = Depends(get_current_user)):
     """
     Reel Scheduler Cleaner: ensures every scheduled reel sits on its correct
     brand slot (brand offset + base 4-hour pattern, alternating light/dark).
@@ -1014,7 +1014,7 @@ async def clean_reel_slots():
 
 
 @router.post("/scheduled/clean-post-slots")
-async def clean_post_slots(posts_per_day: int = 6):
+async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_current_user)):
     """
     Post Schedule Cleaner: find collisions (multiple posts at exact same 
     time for any brand) and re-schedule the duplicates to the next valid

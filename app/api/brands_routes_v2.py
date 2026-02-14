@@ -20,6 +20,7 @@ from app.db_connection import get_db
 from app.models import Brand, YouTubeChannel
 from app.services.brand_manager import get_brand_manager, BrandManager
 from app.services.brand_resolver import brand_resolver
+from app.api.auth_middleware import get_current_user
 
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,8 @@ class BrandResponse(BaseModel):
 @router.get("")
 async def list_brands(
     include_inactive: bool = False,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get all brands.
@@ -126,7 +128,7 @@ async def list_brands(
     Set include_inactive=true to include deactivated brands.
     """
     manager = get_brand_manager(db)
-    brands = manager.get_all_brands(include_inactive=include_inactive)
+    brands = manager.get_all_brands(include_inactive=include_inactive, user_id=user["id"])
     
     return {
         "brands": brands,
@@ -135,14 +137,14 @@ async def list_brands(
 
 
 @router.get("/list")
-async def list_brands_legacy(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def list_brands_legacy(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Legacy endpoint for listing brands.
     
     Maintains backward compatibility with existing frontend code.
     """
     manager = get_brand_manager(db)
-    brands = manager.get_all_brands()
+    brands = manager.get_all_brands(user_id=user["id"])
     
     # Format for legacy frontend
     return {
@@ -159,14 +161,14 @@ async def list_brands_legacy(db: Session = Depends(get_db)) -> Dict[str, Any]:
 
 
 @router.get("/ids")
-async def get_brand_ids(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def get_brand_ids(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Get just the IDs of all active brands.
     
     Useful for validation and quick lookups.
     """
     manager = get_brand_manager(db)
-    brand_ids = manager.get_all_brand_ids()
+    brand_ids = manager.get_all_brand_ids(user_id=user["id"])
     
     return {
         "brand_ids": brand_ids,
@@ -177,11 +179,12 @@ async def get_brand_ids(db: Session = Depends(get_db)) -> Dict[str, Any]:
 @router.get("/{brand_id}")
 async def get_brand(
     brand_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get a single brand by ID."""
     manager = get_brand_manager(db)
-    brand = manager.get_brand(brand_id)
+    brand = manager.get_brand(brand_id, user_id=user["id"])
     
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
@@ -192,11 +195,12 @@ async def get_brand(
 @router.get("/{brand_id}/colors")
 async def get_brand_colors(
     brand_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get just the color configuration for a brand."""
     manager = get_brand_manager(db)
-    colors = manager.get_brand_colors(brand_id)
+    colors = manager.get_brand_colors(brand_id, user_id=user["id"])
     
     if colors is None:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
@@ -210,7 +214,8 @@ async def get_brand_colors(
 @router.post("")
 async def create_brand(
     request: CreateBrandRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Create a new brand.
@@ -252,7 +257,7 @@ async def create_brand(
             "facebook_page_id": request.facebook_page_id,
         }
         
-        brand = manager.create_brand(brand_data)
+        brand = manager.create_brand(brand_data, user_id=user["id"])
         brand_resolver.invalidate_cache()
 
         # Auto-provision an AI agent for this brand
@@ -287,7 +292,8 @@ async def create_brand(
 async def update_brand(
     brand_id: str,
     request: UpdateBrandRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Update an existing brand."""
     manager = get_brand_manager(db)
@@ -298,7 +304,7 @@ async def update_brand(
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
     
-    brand = manager.update_brand(brand_id, updates)
+    brand = manager.update_brand(brand_id, updates, user_id=user["id"])
     
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
@@ -316,7 +322,8 @@ async def update_brand(
 async def update_brand_credentials(
     brand_id: str,
     request: UpdateCredentialsRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Update API credentials for a brand.
@@ -332,7 +339,7 @@ async def update_brand_credentials(
     if not updates:
         raise HTTPException(status_code=400, detail="No credentials provided")
     
-    brand = manager.update_brand(brand_id, updates)
+    brand = manager.update_brand(brand_id, updates, user_id=user["id"])
     
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
@@ -350,7 +357,8 @@ async def update_brand_credentials(
 @router.delete("/{brand_id}")
 async def delete_brand(
     brand_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Delete a brand (soft delete).
@@ -360,7 +368,7 @@ async def delete_brand(
     """
     manager = get_brand_manager(db)
     
-    success = manager.delete_brand(brand_id)
+    success = manager.delete_brand(brand_id, user_id=user["id"])
     
     if not success:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
@@ -376,12 +384,13 @@ async def delete_brand(
 @router.post("/{brand_id}/reactivate")
 async def reactivate_brand(
     brand_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Reactivate a previously deleted brand."""
     manager = get_brand_manager(db)
     
-    brand = manager.update_brand(brand_id, {"active": True})
+    brand = manager.update_brand(brand_id, {"active": True}, user_id=user["id"])
     
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
@@ -398,14 +407,14 @@ async def reactivate_brand(
 # ============================================================================
 
 @router.get("/connections")
-async def get_brand_connections(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Get connection status for all platforms for all brands.
     
     Returns Instagram, Facebook, and YouTube connection status.
     """
     manager = get_brand_manager(db)
-    brands = manager.get_all_brands()
+    brands = manager.get_all_brands(user_id=user["id"])
     
     # Get YouTube channels from database
     youtube_channels = db.query(YouTubeChannel).all()
@@ -415,7 +424,7 @@ async def get_brand_connections(db: Session = Depends(get_db)) -> Dict[str, Any]
     
     for brand in brands:
         brand_id = brand["id"]
-        brand_with_creds = manager.get_brand_with_credentials(brand_id)
+        brand_with_creds = manager.get_brand_with_credentials(brand_id, user_id=user["id"])
         
         # Check Instagram
         ig_connected = bool(
@@ -487,7 +496,8 @@ async def get_brand_connections(db: Session = Depends(get_db)) -> Dict[str, Any]
 @router.get("/{brand_id}/theme")
 async def get_brand_theme(
     brand_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Get a brand's theme settings.
@@ -495,7 +505,7 @@ async def get_brand_theme(
     Returns colors from the database.
     """
     manager = get_brand_manager(db)
-    brand = manager.get_brand(brand_id)
+    brand = manager.get_brand(brand_id, user_id=user["id"])
     
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
@@ -528,7 +538,8 @@ async def update_brand_theme(
     dark_title_color: str = Form(...),
     dark_bg_color: str = Form(...),
     logo: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Update a brand's theme settings.
@@ -538,7 +549,7 @@ async def update_brand_theme(
     manager = get_brand_manager(db)
     
     # Get current brand
-    brand = manager.get_brand(brand_id)
+    brand = manager.get_brand(brand_id, user_id=user["id"])
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
     
@@ -577,7 +588,7 @@ async def update_brand_theme(
         updates["logo_path"] = logo_filename
     
     # Update brand
-    updated_brand = manager.update_brand(brand_id, updates)
+    updated_brand = manager.update_brand(brand_id, updates, user_id=user["id"])
     
     return {
         "success": True,
@@ -598,7 +609,7 @@ async def update_brand_theme(
 # ============================================================================
 
 @router.post("/seed")
-async def seed_brands(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def seed_brands(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Seed default brands if none exist.
     
@@ -606,7 +617,7 @@ async def seed_brands(db: Session = Depends(get_db)) -> Dict[str, Any]:
     triggered manually.
     """
     manager = get_brand_manager(db)
-    count = manager.seed_default_brands()
+    count = manager.seed_default_brands(user_id=user["id"])
     
     if count > 0:
         return {

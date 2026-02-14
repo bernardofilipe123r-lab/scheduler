@@ -56,3 +56,7 @@ dist/
 .vite/
 
 ed25519_key
+
+# Sensitive data files
+youtube_quota.json
+output/brand-data/

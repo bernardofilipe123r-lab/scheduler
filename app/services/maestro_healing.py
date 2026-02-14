@@ -231,7 +231,8 @@ class HealingMixin:
         # If a brand was added before the evolution engine, it has no agent — fix it.
         try:
             from app.services.generic_agent import _ensure_agents_for_all_brands
-            spawned = _ensure_agents_for_all_brands()
+            user_id = getattr(self, '_current_user_id', None)
+            spawned = _ensure_agents_for_all_brands(user_id=user_id)
             if spawned:
                 names = ", ".join(a.display_name for a in spawned)
                 self.state.log(

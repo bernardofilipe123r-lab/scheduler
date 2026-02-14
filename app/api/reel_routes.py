@@ -6,14 +6,16 @@ import shutil
 from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 from app.api.schemas import ReelCreateRequest, ReelCreateResponse, ErrorResponse
 from app.services.image_generator import ImageGenerator
 from app.services.video_generator import VideoGenerator
 from app.services.caption_builder import CaptionBuilder
 from app.services.db_scheduler import DatabaseSchedulerService
 from app.services.brand_resolver import brand_resolver
-from app.database.db import ReelDatabase
+from app.db_connection import get_db
+from app.models.jobs import GenerationJob
 from app.core.config import BrandType
 
 
@@ -37,7 +39,6 @@ router = APIRouter()
 
 # Initialize services
 scheduler_service = DatabaseSchedulerService()
-db = ReelDatabase()
 
 
 @router.post(
@@ -185,7 +186,7 @@ async def create_reel(request: ReelCreateRequest) -> ReelCreateResponse:
     summary="Generate reel (simple interface)",
     description="Simplified endpoint for web interface - generates thumbnail, reel image, and video"
 )
-async def generate_reel(request: SimpleReelRequest):
+async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db)):
     """
     Generate reel images and video from title and content lines.
     
@@ -196,14 +197,18 @@ async def generate_reel(request: SimpleReelRequest):
         reel_id = str(uuid.uuid4())[:8]
         
         # Create database record
-        db.create_generation(
-            generation_id=reel_id,
+        job = GenerationJob(
+            job_id=reel_id,
+            user_id="web",
             title=request.title,
-            content=request.content_lines,
-            brand=request.brand,
+            content_lines=request.content_lines,
+            brands=[request.brand],
             variant=request.variant,
-            ai_prompt=request.ai_prompt
+            ai_prompt=request.ai_prompt,
+            status="generating",
         )
+        db.add(job)
+        db.commit()
         
         # Get base directory
         base_dir = Path(__file__).resolve().parent.parent.parent
@@ -218,7 +223,9 @@ async def generate_reel(request: SimpleReelRequest):
         brand = brand_resolver.get_brand_type(brand_id) if brand_id else BrandType.HEALTHY_COLLEGE
         
         # Update progress
-        db.update_progress(reel_id, "initializing", 5, "Starting generation...")
+        job.current_step = "initializing"
+        job.progress_percent = 5
+        db.commit()
         
         # Initialize image generator with variant and optional AI prompt
         image_generator = ImageGenerator(
@@ -229,14 +236,18 @@ async def generate_reel(request: SimpleReelRequest):
         )
         
         # Generate thumbnail
-        db.update_progress(reel_id, "thumbnail", 20, "Generating thumbnail...")
+        job.current_step = "thumbnail"
+        job.progress_percent = 20
+        db.commit()
         image_generator.generate_thumbnail(
             title=request.title,
             output_path=thumbnail_path
         )
         
         # Generate reel image
-        db.update_progress(reel_id, "content", 50, "Generating content image...")
+        job.current_step = "content"
+        job.progress_percent = 50
+        db.commit()
         image_generator.generate_reel_image(
             title=request.title,
             lines=request.content_lines,
@@ -245,7 +256,9 @@ async def generate_reel(request: SimpleReelRequest):
         )
         
         # Generate video with random duration and music
-        db.update_progress(reel_id, "video", 75, "Creating video with music...")
+        job.current_step = "video"
+        job.progress_percent = 75
+        db.commit()
         video_generator = VideoGenerator()
         video_generator.generate_reel_video(
             reel_image_path=reel_image_path,
@@ -253,7 +266,9 @@ async def generate_reel(request: SimpleReelRequest):
         )
         
         # Generate caption
-        db.update_progress(reel_id, "caption", 90, "Building caption...")
+        job.current_step = "caption"
+        job.progress_percent = 90
+        db.commit()
         caption_builder = CaptionBuilder()
         caption = caption_builder.build_caption(
             title=request.title,
@@ -261,13 +276,18 @@ async def generate_reel(request: SimpleReelRequest):
         )
         
         # Update database with completion
-        db.update_generation_status(
-            generation_id=reel_id,
-            status='completed',
-            thumbnail_path=f"/output/thumbnails/{reel_id}.png",
-            video_path=f"/output/videos/{reel_id}.mp4"
-        )
-        db.update_progress(reel_id, "completed", 100, "Generation complete!")
+        job.status = "completed"
+        job.current_step = "completed"
+        job.progress_percent = 100
+        job.brand_outputs = {
+            request.brand: {
+                "reel_id": reel_id,
+                "thumbnail": f"/output/thumbnails/{reel_id}.png",
+                "video": f"/output/videos/{reel_id}.mp4",
+                "status": "completed",
+            }
+        }
+        db.commit()
         
         # Return web-friendly paths
         return {
@@ -281,11 +301,11 @@ async def generate_reel(request: SimpleReelRequest):
     except Exception as e:
         # Update database with error
         if 'reel_id' in locals():
-            db.update_generation_status(
-                generation_id=reel_id,
-                status='failed',
-                error=str(e)
-            )
+            job = db.query(GenerationJob).filter(GenerationJob.job_id == reel_id).first()
+            if job:
+                job.status = "failed"
+                job.error_message = str(e)
+                db.commit()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate reel: {str(e)}"

@@ -29,68 +29,71 @@ class BrandResolver:
     """
     Resolves brand names/IDs dynamically from the database.
     Caches results with TTL to avoid repeated DB queries.
-    Thread-safe singleton.
+    Thread-safe singleton. Cache is per-user for multi-tenant isolation.
     """
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._brands: list[Brand] = []
-        self._brands_by_id: dict[str, Brand] = {}
-        self._last_refresh: float = 0.0
+        self._brands_by_user: dict[Optional[str], list[Brand]] = {}
+        self._brands_by_user_and_id: dict[Optional[str], dict[str, Brand]] = {}
+        self._last_refresh_by_user: dict[Optional[str], float] = {}
 
     # ── Cache management ──────────────────────────────────────
 
-    def _needs_refresh(self) -> bool:
-        return time.time() - self._last_refresh > _CACHE_TTL_SECONDS
+    def _needs_refresh(self, user_id: Optional[str] = None) -> bool:
+        return time.time() - self._last_refresh_by_user.get(user_id, 0.0) > _CACHE_TTL_SECONDS
 
-    def _refresh_cache(self) -> None:
-        """Load all active brands from DB into memory."""
+    def _refresh_cache(self, user_id: Optional[str] = None) -> None:
+        """Load brands from DB into memory, optionally scoped to a user."""
         from app.db_connection import SessionLocal
 
         try:
             db = SessionLocal()
             try:
-                brands = db.query(Brand).filter(Brand.active.is_(True)).all()
+                query = db.query(Brand).filter(Brand.active.is_(True))
+                if user_id:
+                    query = query.filter(Brand.user_id == user_id)
+                brands = query.all()
                 # Detach from session so objects survive after close
                 db.expunge_all()
             finally:
                 db.close()
 
             with self._lock:
-                self._brands = brands
-                self._brands_by_id = {b.id: b for b in brands}
-                self._last_refresh = time.time()
+                self._brands_by_user[user_id] = brands
+                self._brands_by_user_and_id[user_id] = {b.id: b for b in brands}
+                self._last_refresh_by_user[user_id] = time.time()
 
-            logger.debug("BrandResolver cache refreshed: %d brands", len(brands))
+            logger.debug("BrandResolver cache refreshed: %d brands (user=%s)", len(brands), user_id)
         except Exception as e:
             logger.error("BrandResolver failed to refresh cache: %s", e)
             # Keep stale cache rather than blowing up
 
-    def _ensure_cache(self) -> None:
-        if self._needs_refresh():
-            self._refresh_cache()
+    def _ensure_cache(self, user_id: Optional[str] = None) -> None:
+        if self._needs_refresh(user_id):
+            self._refresh_cache(user_id)
 
     def invalidate_cache(self) -> None:
-        """Clear cache (call after brand create/update/delete)."""
+        """Clear cache for all users (call after brand create/update/delete)."""
         with self._lock:
-            self._last_refresh = 0.0
+            self._last_refresh_by_user.clear()
 
     # ── Core lookups ──────────────────────────────────────────
 
-    def get_all_brands(self) -> list[Brand]:
+    def get_all_brands(self, user_id: Optional[str] = None) -> list[Brand]:
         """Get all active brands from DB (cached)."""
-        self._ensure_cache()
-        return list(self._brands)
+        self._ensure_cache(user_id)
+        return list(self._brands_by_user.get(user_id, []))
 
-    def get_brand(self, brand_id: str) -> Optional[Brand]:
+    def get_brand(self, brand_id: str, user_id: Optional[str] = None) -> Optional[Brand]:
         """Get a single brand by ID (e.g., 'healthycollege')."""
-        self._ensure_cache()
-        return self._brands_by_id.get(brand_id)
+        self._ensure_cache(user_id)
+        return self._brands_by_user_and_id.get(user_id, {}).get(brand_id)
 
-    def get_all_brand_ids(self) -> list[str]:
+    def get_all_brand_ids(self, user_id: Optional[str] = None) -> list[str]:
         """Get list of all active brand IDs."""
-        self._ensure_cache()
-        return list(self._brands_by_id.keys())
+        self._ensure_cache(user_id)
+        return list(self._brands_by_user_and_id.get(user_id, {}).keys())
 
     # ── Flexible name resolution ──────────────────────────────
 
@@ -108,7 +111,7 @@ class BrandResolver:
             s = s[3:]
         return s
 
-    def resolve_brand_name(self, name: str) -> Optional[str]:
+    def resolve_brand_name(self, name: str, user_id: Optional[str] = None) -> Optional[str]:
         """
         Resolve any brand name variant to the canonical brand ID.
 
@@ -119,15 +122,17 @@ class BrandResolver:
         if not name:
             return None
 
-        self._ensure_cache()
+        self._ensure_cache(user_id)
+
+        brands_by_id = self._brands_by_user_and_id.get(user_id, {})
 
         # Fast path: exact match
-        if name in self._brands_by_id:
+        if name in brands_by_id:
             return name
 
         normalized = self._normalize(name)
 
-        for brand_id in self._brands_by_id:
+        for brand_id in brands_by_id:
             if self._normalize(brand_id) == normalized:
                 return brand_id
 
@@ -135,12 +140,12 @@ class BrandResolver:
 
     # ── Legacy bridges ────────────────────────────────────────
 
-    def get_brand_type(self, brand_name: str) -> Optional[BrandType]:
+    def get_brand_type(self, brand_name: str, user_id: Optional[str] = None) -> Optional[BrandType]:
         """
         Resolve brand name to BrandType enum (for legacy code that still needs it).
         Maps brand_id → BrandType by convention, e.g. 'healthycollege' → HEALTHY_COLLEGE.
         """
-        brand_id = self.resolve_brand_name(brand_name)
+        brand_id = self.resolve_brand_name(brand_name, user_id)
         if not brand_id:
             return None
 
@@ -164,15 +169,15 @@ class BrandResolver:
 
         return None
 
-    def get_brand_config(self, brand_name: str) -> Optional[BrandConfig]:
+    def get_brand_config(self, brand_name: str, user_id: Optional[str] = None) -> Optional[BrandConfig]:
         """
         Build a BrandConfig from DB data for code that still expects one.
         """
-        brand_id = self.resolve_brand_name(brand_name)
+        brand_id = self.resolve_brand_name(brand_name, user_id)
         if not brand_id:
             return None
 
-        brand = self._brands_by_id.get(brand_id)
+        brand = self._brands_by_user_and_id.get(user_id, {}).get(brand_id)
         if not brand:
             return None
 
@@ -217,14 +222,14 @@ class BrandResolver:
 
     # ── Convenience accessors ─────────────────────────────────
 
-    def get_brand_abbreviation(self, brand_id: str) -> str:
+    def get_brand_abbreviation(self, brand_id: str, user_id: Optional[str] = None) -> str:
         """Get brand abbreviation (e.g., 'HCO' for healthycollege). Uses short_name from DB."""
-        brand = self.get_brand(brand_id)
+        brand = self.get_brand(brand_id, user_id)
         return brand.short_name if brand else brand_id[:3].upper()
 
-    def get_brand_display_name(self, brand_id: str) -> str:
+    def get_brand_display_name(self, brand_id: str, user_id: Optional[str] = None) -> str:
         """Get display name from DB."""
-        brand = self.get_brand(brand_id)
+        brand = self.get_brand(brand_id, user_id)
         return brand.display_name if brand else brand_id
 
 

@@ -230,27 +230,35 @@ class BrandManager:
         age = (datetime.utcnow() - self._cache_time).total_seconds()
         return age < self._cache_ttl
     
-    def get_all_brands(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
+    def get_all_brands(self, include_inactive: bool = False, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all brands from database."""
         Brand = self._get_brand_model()
         
         query = self.db.query(Brand)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
         if not include_inactive:
             query = query.filter(Brand.active == True)
         
         brands = query.order_by(Brand.display_name).all()
         return [b.to_dict() for b in brands]
     
-    def get_brand(self, brand_id: str) -> Optional[Dict[str, Any]]:
+    def get_brand(self, brand_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get a single brand by ID."""
         Brand = self._get_brand_model()
-        brand = self.db.query(Brand).filter(Brand.id == brand_id).first()
+        query = self.db.query(Brand).filter(Brand.id == brand_id)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        brand = query.first()
         return brand.to_dict() if brand else None
     
-    def get_brand_with_credentials(self, brand_id: str) -> Optional[Dict[str, Any]]:
+    def get_brand_with_credentials(self, brand_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get a brand including its credentials (for publishing)."""
         Brand = self._get_brand_model()
-        brand = self.db.query(Brand).filter(Brand.id == brand_id).first()
+        query = self.db.query(Brand).filter(Brand.id == brand_id)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        brand = query.first()
         
         if not brand:
             return None
@@ -277,36 +285,49 @@ class BrandManager:
         
         return data
     
-    def get_all_brand_ids(self) -> List[str]:
+    def get_all_brand_ids(self, user_id: Optional[str] = None) -> List[str]:
         """Get list of all active brand IDs."""
         Brand = self._get_brand_model()
-        brands = self.db.query(Brand.id).filter(Brand.active == True).all()
+        query = self.db.query(Brand.id).filter(Brand.active == True)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        brands = query.all()
         return [b.id for b in brands]
     
-    def get_brand_colors(self, brand_id: str) -> Optional[Dict[str, Any]]:
+    def get_brand_colors(self, brand_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get just the colors for a brand."""
         Brand = self._get_brand_model()
-        brand = self.db.query(Brand).filter(Brand.id == brand_id).first()
+        query = self.db.query(Brand).filter(Brand.id == brand_id)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        brand = query.first()
         return brand.colors if brand else None
     
-    def get_baseline_brand(self) -> Optional[str]:
+    def get_baseline_brand(self, user_id: Optional[str] = None) -> Optional[str]:
         """Get the brand marked as baseline for content differentiation."""
         Brand = self._get_brand_model()
-        brand = self.db.query(Brand).filter(Brand.baseline_for_content == True).first()
+        query = self.db.query(Brand).filter(Brand.baseline_for_content == True)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        brand = query.first()
         return brand.id if brand else None
     
-    def create_brand(self, brand_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_brand(self, brand_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         """Create a new brand."""
         Brand = self._get_brand_model()
         
-        # Check if brand already exists
-        existing = self.db.query(Brand).filter(Brand.id == brand_data["id"]).first()
+        # Check if brand already exists for this user
+        exist_query = self.db.query(Brand).filter(Brand.id == brand_data["id"])
+        if user_id:
+            exist_query = exist_query.filter(Brand.user_id == user_id)
+        existing = exist_query.first()
         if existing:
             raise ValueError(f"Brand '{brand_data['id']}' already exists")
         
         # Create brand
         brand = Brand(
             id=brand_data["id"],
+            user_id=user_id,
             display_name=brand_data["display_name"],
             short_name=brand_data.get("short_name", brand_data["id"][:3].upper()),
             instagram_handle=brand_data.get("instagram_handle"),
@@ -353,17 +374,20 @@ class BrandManager:
         
         return brand.to_dict()
     
-    def update_brand(self, brand_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_brand(self, brand_id: str, updates: Dict[str, Any], user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Update an existing brand."""
         Brand = self._get_brand_model()
         
-        brand = self.db.query(Brand).filter(Brand.id == brand_id).first()
+        query = self.db.query(Brand).filter(Brand.id == brand_id)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        brand = query.first()
         if not brand:
             return None
         
         # Update fields
         for key, value in updates.items():
-            if hasattr(brand, key) and key not in ["id", "created_at"]:
+            if hasattr(brand, key) and key not in ["id", "user_id", "created_at"]:
                 setattr(brand, key, value)
         
         self.db.commit()
@@ -374,11 +398,14 @@ class BrandManager:
         
         return brand.to_dict()
     
-    def delete_brand(self, brand_id: str) -> bool:
+    def delete_brand(self, brand_id: str, user_id: Optional[str] = None) -> bool:
         """Delete a brand (soft delete - sets active=False)."""
         Brand = self._get_brand_model()
         
-        brand = self.db.query(Brand).filter(Brand.id == brand_id).first()
+        query = self.db.query(Brand).filter(Brand.id == brand_id)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        brand = query.first()
         if not brand:
             return False
         
@@ -404,7 +431,7 @@ class BrandManager:
         
         return True
     
-    def seed_default_brands(self) -> int:
+    def seed_default_brands(self, user_id: Optional[str] = None) -> int:
         """
         Seed default brands if none exist.
         
@@ -412,7 +439,10 @@ class BrandManager:
         """
         Brand = self._get_brand_model()
         
-        existing_count = self.db.query(Brand).count()
+        query = self.db.query(Brand)
+        if user_id:
+            query = query.filter(Brand.user_id == user_id)
+        existing_count = query.count()
         if existing_count > 0:
             logger.info(f"Brands already exist ({existing_count}), skipping seed")
             return 0
@@ -425,6 +455,7 @@ class BrandManager:
             
             brand = Brand(
                 id=brand_id,
+                user_id=user_id,
                 display_name=config["display_name"],
                 short_name=config["short_name"],
                 instagram_handle=config.get("instagram_handle"),

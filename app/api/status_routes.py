@@ -1,51 +1,61 @@
 """
 Status and history API routes.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 from app.services.video_generator import VideoGenerator
-from app.database.db import ReelDatabase
+from app.db_connection import get_db
+from app.models.jobs import GenerationJob
 
 
 # Create router
 router = APIRouter()
 
-# Initialize services
-db = ReelDatabase()
-
 
 @router.get("/status")
-async def get_status():
+async def get_status(db: Session = Depends(get_db)):
     """Get current generation status."""
-    active = db.get_active_generation()
+    active = db.query(GenerationJob).filter(
+        GenerationJob.status.in_(["pending", "generating"])
+    ).order_by(GenerationJob.created_at.desc()).first()
     if active:
-        progress = db.get_progress(active['id'])
         return {
             "status": "generating",
-            "generation": active,
-            "progress": progress
+            "generation": active.to_dict(),
+            "progress": {
+                "step": active.current_step,
+                "percent": active.progress_percent,
+            }
         }
     return {"status": "idle"}
 
 
 @router.get("/history")
-async def get_history(limit: int = 10):
+async def get_history(limit: int = 10, db: Session = Depends(get_db)):
     """Get recent generation history."""
+    jobs = db.query(GenerationJob).order_by(
+        GenerationJob.created_at.desc()
+    ).limit(limit).all()
     return {
-        "generations": db.get_recent_generations(limit)
+        "generations": [j.to_dict() for j in jobs]
     }
 
 
 @router.get("/generation/{generation_id}")
-async def get_generation(generation_id: str):
+async def get_generation(generation_id: str, db: Session = Depends(get_db)):
     """Get specific generation details."""
-    generation = db.get_generation(generation_id)
-    if not generation:
+    job = db.query(GenerationJob).filter(
+        GenerationJob.job_id == generation_id
+    ).first()
+    if not job:
         raise HTTPException(status_code=404, detail="Generation not found")
     
-    progress = db.get_progress(generation_id)
     return {
-        "generation": generation,
-        "progress": progress
+        "generation": job.to_dict(),
+        "progress": {
+            "step": job.current_step,
+            "percent": job.progress_percent,
+        }
     }
 
 

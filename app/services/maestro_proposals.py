@@ -269,7 +269,8 @@ class ProposalsMixin:
             from app.services.generic_agent import get_all_active_agents
 
             # Find the agent that created the original proposal
-            agents = get_all_active_agents()
+            user_id = getattr(self, '_current_user_id', None)
+            agents = get_all_active_agents(user_id=user_id)
             agent = None
             for a in agents:
                 if a.agent_id == agent_name:

@@ -889,7 +889,8 @@ class DatabaseSchedulerService:
         self,
         brand: str,
         variant: str,
-        reference_date: Optional[datetime] = None
+        reference_date: Optional[datetime] = None,
+        user_id: str | None = None,
     ) -> datetime:
         """
         Get the next available scheduling slot for a brand+variant combo.
@@ -962,12 +963,15 @@ class DatabaseSchedulerService:
         
         # Get all scheduled posts for this brand
         with get_db_session() as db:
-            schedules = db.query(ScheduledReel).filter(
+            sched_query = db.query(ScheduledReel).filter(
                 and_(
                     ScheduledReel.status.in_(["scheduled", "publishing"]),
                     ScheduledReel.scheduled_time >= start_date
                 )
-            ).all()
+            )
+            if user_id:
+                sched_query = sched_query.filter(ScheduledReel.user_id == user_id)
+            schedules = sched_query.all()
             
             # Filter by brand and variant - build set of occupied timestamps
             occupied_slots = set()
@@ -1078,7 +1082,8 @@ class DatabaseSchedulerService:
     def get_next_available_post_slot(
         self,
         brand: str,
-        reference_date: Optional[datetime] = None
+        reference_date: Optional[datetime] = None,
+        user_id: str | None = None,
     ) -> datetime:
         """
         Get the next available scheduling slot for a POST (image/carousel) for a brand.
@@ -1125,12 +1130,15 @@ class DatabaseSchedulerService:
 
         # Get all scheduled posts for this brand with variant="post"
         with get_db_session() as db:
-            schedules = db.query(ScheduledReel).filter(
+            sched_query = db.query(ScheduledReel).filter(
                 and_(
                     ScheduledReel.status.in_(["scheduled", "publishing"]),
                     ScheduledReel.scheduled_time >= start_date
                 )
-            ).all()
+            )
+            if user_id:
+                sched_query = sched_query.filter(ScheduledReel.user_id == user_id)
+            schedules = sched_query.all()
 
             occupied_slots = set()
             for schedule in schedules:

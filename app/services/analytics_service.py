@@ -46,13 +46,16 @@ class AnalyticsService:
         # No rate limits - always allow refresh
         return True, 9999, None
     
-    def needs_auto_refresh(self) -> bool:
+    def needs_auto_refresh(self, user_id: str = None) -> bool:
         """
         Check if analytics data is stale and needs auto-refresh.
         Returns True if last refresh was more than AUTO_REFRESH_INTERVAL_HOURS ago.
         """
         # Get most recent analytics entry
-        latest = self.db.query(BrandAnalytics).order_by(
+        query = self.db.query(BrandAnalytics)
+        if user_id:
+            query = query.filter(BrandAnalytics.user_id == user_id)
+        latest = query.order_by(
             BrandAnalytics.last_fetched_at.desc()
         ).first()
         
@@ -73,16 +76,22 @@ class AnalyticsService:
         self.db.add(log_entry)
         self.db.commit()
     
-    def get_all_analytics(self) -> List[Dict[str, Any]]:
+    def get_all_analytics(self, user_id: str = None) -> List[Dict[str, Any]]:
         """Get all cached analytics data."""
-        analytics = self.db.query(BrandAnalytics).all()
+        query = self.db.query(BrandAnalytics)
+        if user_id:
+            query = query.filter(BrandAnalytics.user_id == user_id)
+        analytics = query.all()
         return [a.to_dict() for a in analytics]
     
-    def get_analytics_by_brand(self, brand: str) -> Dict[str, Any]:
+    def get_analytics_by_brand(self, brand: str, user_id: str = None) -> Dict[str, Any]:
         """Get analytics for a specific brand across all platforms."""
-        analytics = self.db.query(BrandAnalytics).filter(
+        query = self.db.query(BrandAnalytics).filter(
             BrandAnalytics.brand == brand
-        ).all()
+        )
+        if user_id:
+            query = query.filter(BrandAnalytics.user_id == user_id)
+        analytics = query.all()
         
         return {
             "brand": brand,
@@ -126,7 +135,7 @@ class AnalyticsService:
                         config.instagram_business_account_id,
                         config.meta_access_token
                     )
-                    self._update_analytics(brand_name, "instagram", ig_data)
+                    self._update_analytics(brand_name, "instagram", ig_data, user_id=user_id)
                     updated_count += 1
             except Exception as e:
                 logger.error(f"Failed to fetch Instagram analytics for {brand_name}: {e}")
@@ -139,21 +148,24 @@ class AnalyticsService:
                         config.facebook_page_id,
                         config.meta_access_token
                     )
-                    self._update_analytics(brand_name, "facebook", fb_data)
+                    self._update_analytics(brand_name, "facebook", fb_data, user_id=user_id)
                     updated_count += 1
             except Exception as e:
                 logger.error(f"Failed to fetch Facebook analytics for {brand_name}: {e}")
                 errors.append(f"Facebook/{brand_name}: {str(e)}")
         
         # Fetch YouTube analytics for connected channels
-        youtube_channels = self.db.query(YouTubeChannel).filter(
+        query = self.db.query(YouTubeChannel).filter(
             YouTubeChannel.status == "connected"
-        ).all()
+        )
+        if user_id:
+            query = query.filter(YouTubeChannel.user_id == user_id)
+        youtube_channels = query.all()
         
         for channel in youtube_channels:
             try:
                 yt_data = self._fetch_youtube_analytics(channel)
-                self._update_analytics(channel.brand, "youtube", yt_data)
+                self._update_analytics(channel.brand, "youtube", yt_data, user_id=user_id)
                 updated_count += 1
             except Exception as e:
                 logger.error(f"Failed to fetch YouTube analytics for {channel.brand}: {e}")
@@ -177,7 +189,7 @@ class AnalyticsService:
                 "remaining": remaining_after,
                 "next_reset": None  # No rate limits
             },
-            "analytics": self.get_all_analytics()
+            "analytics": self.get_all_analytics(user_id=user_id)
         }
     
     def _fetch_instagram_analytics(self, account_id: str, access_token: str) -> Dict[str, Any]:
@@ -622,14 +634,17 @@ class AnalyticsService:
         except Exception:
             return None
     
-    def _update_analytics(self, brand: str, platform: str, data: Dict[str, Any]):
+    def _update_analytics(self, brand: str, platform: str, data: Dict[str, Any], user_id: str = None):
         """Update or create analytics record and save a snapshot."""
         now = datetime.now(timezone.utc)
         
-        analytics = self.db.query(BrandAnalytics).filter(
+        query = self.db.query(BrandAnalytics).filter(
             BrandAnalytics.brand == brand,
             BrandAnalytics.platform == platform
-        ).first()
+        )
+        if user_id:
+            query = query.filter(BrandAnalytics.user_id == user_id)
+        analytics = query.first()
         
         if analytics:
             analytics.followers_count = data.get("followers_count", 0)
@@ -645,7 +660,8 @@ class AnalyticsService:
                 views_last_7_days=data.get("views_last_7_days", 0),
                 likes_last_7_days=data.get("likes_last_7_days", 0),
                 extra_metrics=data.get("extra_metrics"),
-                last_fetched_at=now
+                last_fetched_at=now,
+                user_id=user_id
             )
             self.db.add(analytics)
         
@@ -656,7 +672,8 @@ class AnalyticsService:
             snapshot_at=now,
             followers_count=data.get("followers_count", 0),
             views_last_7_days=data.get("views_last_7_days", 0),
-            likes_last_7_days=data.get("likes_last_7_days", 0)
+            likes_last_7_days=data.get("likes_last_7_days", 0),
+            user_id=user_id
         )
         self.db.add(snapshot)
         
@@ -666,7 +683,8 @@ class AnalyticsService:
         self,
         brand: Optional[str] = None,
         platform: Optional[str] = None,
-        days: int = 30
+        days: int = 30,
+        user_id: str = None
     ) -> List[Dict[str, Any]]:
         """
         Get historical analytics snapshots, deduplicated to the latest
@@ -676,6 +694,7 @@ class AnalyticsService:
             brand: Filter by brand name (optional)
             platform: Filter by platform (optional)
             days: Number of days to look back (default 30)
+            user_id: Filter by user_id (optional)
 
         Returns:
             List of snapshot dictionaries ordered by time
@@ -689,6 +708,8 @@ class AnalyticsService:
         ).filter(
             AnalyticsSnapshot.snapshot_at >= since
         )
+        if user_id:
+            base_q = base_q.filter(AnalyticsSnapshot.user_id == user_id)
         if brand:
             base_q = base_q.filter(AnalyticsSnapshot.brand == brand)
         if platform:
@@ -708,7 +729,7 @@ class AnalyticsService:
         )
         return [s.to_dict() for s in snapshots]
     
-    def backfill_historical_data(self, days_back: int = 28) -> Dict[str, Any]:
+    def backfill_historical_data(self, days_back: int = 28, user_id: str = None) -> Dict[str, Any]:
         """
         Backfill historical analytics data from Instagram insights.
         
@@ -758,7 +779,10 @@ class AnalyticsService:
                             AnalyticsSnapshot.brand == brand_name,
                             AnalyticsSnapshot.platform == "instagram",
                             func.date(AnalyticsSnapshot.snapshot_at) == day_data["date"].date()
-                        ).first()
+                        )
+                        if user_id:
+                            existing = existing.filter(AnalyticsSnapshot.user_id == user_id)
+                        existing = existing.first()
                         
                         if not existing:
                             # Only store ACTUAL data from API
@@ -769,7 +793,8 @@ class AnalyticsService:
                                 snapshot_at=day_data["date"],
                                 followers_count=0,  # Historical followers NOT available from API
                                 views_last_7_days=day_data["impressions"],  # ACTUAL data from API
-                                likes_last_7_days=day_data["likes"]  # ACTUAL data from API
+                                likes_last_7_days=day_data["likes"],  # ACTUAL data from API
+                                user_id=user_id
                             )
                             self.db.add(snapshot)
                             snapshots_created += 1
@@ -790,7 +815,7 @@ class AnalyticsService:
             "note": "Historical follower data is NOT available from Instagram API. Only views/impressions for the past 28 days can be backfilled. Follower tracking starts from when you first refresh analytics."
         }
     
-    def clear_backfilled_data(self) -> Dict[str, Any]:
+    def clear_backfilled_data(self, user_id: str = None) -> Dict[str, Any]:
         """
         Clear all backfilled/approximated historical data.
         
@@ -800,7 +825,10 @@ class AnalyticsService:
         from app.models import AnalyticsSnapshot
         
         # Delete all snapshots (we'll rebuild from fresh data)
-        deleted = self.db.query(AnalyticsSnapshot).delete()
+        query = self.db.query(AnalyticsSnapshot)
+        if user_id:
+            query = query.filter(AnalyticsSnapshot.user_id == user_id)
+        deleted = query.delete()
         self.db.commit()
         
         return {

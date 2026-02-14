@@ -1,21 +1,10 @@
 /**
- * AuthContext — provides authentication state to the entire app.
- * 
- * Single user model. If not logged in, the app shows the Login page.
- * Token and user info persisted in localStorage.
+ * AuthContext — Supabase-backed authentication state.
  */
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-import {
-  getAuthToken,
-  setAuthToken,
-  clearAuth,
-  getStoredUser,
-  setStoredUser,
-  loginApi,
-  getMeApi,
-  logoutApi,
-  type AuthUser,
-} from './api/auth-api'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { supabase } from '@/shared/api/supabase'
+import type { User } from '@supabase/supabase-js'
+import type { AuthUser } from './api/auth-api'
 
 interface AuthContextType {
   user: AuthUser | null
@@ -28,57 +17,52 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+function mapUser(supaUser: User | null): AuthUser | null {
+  if (!supaUser) return null
+  return {
+    email: supaUser.email || '',
+    name: supaUser.user_metadata?.name || '',
+    id: supaUser.id,
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => getStoredUser())
-  const [isLoading, setIsLoading] = useState(() => !!getAuthToken())
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const isAuthenticated = !!user && !!getAuthToken()
-
-  // On mount, validate existing token
   useEffect(() => {
-    const token = getAuthToken()
-    if (!token) {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(mapUser(session?.user ?? null))
       setIsLoading(false)
-      return
-    }
+    })
 
-    getMeApi()
-      .then((userData) => {
-        setUser(userData)
-        setStoredUser(userData)
-      })
-      .catch(() => {
-        // Token invalid — clear everything
-        clearAuth()
-        setUser(null)
-      })
-      .finally(() => setIsLoading(false))
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(mapUser(session?.user ?? null))
+      setIsLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await loginApi(email, password)
-    setAuthToken(result.token)
-    setStoredUser(result.user)
-    setUser(result.user)
-  }, [])
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw new Error(error.message)
+  }
 
-  const logout = useCallback(async () => {
-    await logoutApi()
+  const logout = async () => {
+    await supabase.auth.signOut()
     setUser(null)
-  }, [])
+  }
 
-  const refreshUser = useCallback(async () => {
-    try {
-      const userData = await getMeApi()
-      setUser(userData)
-      setStoredUser(userData)
-    } catch {
-      // ignore
-    }
-  }, [])
+  const refreshUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    setUser(mapUser(session?.user ?? null))
+  }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
