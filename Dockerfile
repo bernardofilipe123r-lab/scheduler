@@ -52,6 +52,12 @@ COPY tsconfig.node.json .
 COPY tailwind.config.js .
 COPY postcss.config.js .
 
+# Vite bakes env vars at build time — pass them as build args
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 # Build React frontend
 RUN npm run build
 

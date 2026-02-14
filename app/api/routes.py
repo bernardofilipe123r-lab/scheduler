@@ -6,13 +6,13 @@ This module re-exports a single `router` with prefix="/reels"
 so that app/main.py needs no changes.
 """
 from fastapi import APIRouter
-from app.api.content_routes import router as content_router
-from app.api.reel_routes import router as reel_router
-from app.api.schedule_routes import router as schedule_router
-from app.api.publish_routes import router as publish_router
-from app.api.user_routes import router as user_router
-from app.api.feedback_routes import router as feedback_router
-from app.api.status_routes import router as status_router
+from app.api.content.routes import router as content_router
+from app.api.content.reel_routes import router as reel_router
+from app.api.content.schedule_routes import router as schedule_router
+from app.api.content.publish_routes import router as publish_router
+from app.api.auth.user_routes import router as user_router
+from app.api.content.feedback_routes import router as feedback_router
+from app.api.system.status_routes import router as status_router
 
 router = APIRouter(prefix="/reels", tags=["reels"])
 

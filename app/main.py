@@ -11,21 +11,21 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.api.routes import router as reels_router
-from app.api.jobs_routes import router as jobs_router
-from app.api.youtube_routes import router as youtube_router
-from app.api.brands_routes_v2 import router as brands_v2_router  # Database-backed brand routes
-from app.api.settings_routes import router as settings_router
-from app.api.analytics_routes import router as analytics_router
-from app.api.logs_routes import router as logs_router
-from app.api.auth_routes import router as auth_router
-from app.api.prompts_routes import router as prompts_router
-from app.api.toby_routes import router as toby_router
-from app.api.ai_logs_routes import router as ai_logs_router
-from app.api.maestro_routes import router as maestro_router
-from app.api.agents_routes import router as agents_router
-from app.services.db_scheduler import DatabaseSchedulerService
-from app.services.logging_service import get_logging_service, DEPLOYMENT_ID
-from app.services.logging_middleware import RequestLoggingMiddleware
+from app.api.content.jobs_routes import router as jobs_router
+from app.api.youtube.routes import router as youtube_router
+from app.api.brands.routes import router as brands_router
+from app.api.system.settings_routes import router as settings_router
+from app.api.analytics.routes import router as analytics_router
+from app.api.system.logs_routes import router as logs_router
+from app.api.auth.routes import router as auth_router
+from app.api.content.prompts_routes import router as prompts_router
+from app.api.agents.toby_routes import router as toby_router
+from app.api.system.ai_logs_routes import router as ai_logs_router
+from app.api.maestro.routes import router as maestro_router
+from app.api.agents.routes import router as agents_router
+from app.services.publishing.scheduler import DatabaseSchedulerService
+from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
+from app.services.logging.middleware import RequestLoggingMiddleware
 from app.db_connection import init_db
 
 # Load environment variables from .env file
@@ -84,8 +84,8 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(reels_router)
 app.include_router(jobs_router)
 app.include_router(youtube_router, prefix="/api")
-app.include_router(brands_v2_router, prefix="/api")  # Backward-compatible mount
-app.include_router(brands_v2_router, prefix="/api/v2")  # V2 mount
+app.include_router(brands_router, prefix="/api")  # Backward-compatible mount
+app.include_router(brands_router, prefix="/api/v2")  # V2 mount
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
@@ -232,8 +232,8 @@ async def startup_event():
         # Seed brands and settings if needed
         print("🌱 Checking for brand/settings seeds...", flush=True)
         from app.db_connection import SessionLocal
-        from app.services.brand_manager import seed_brands_if_needed
-        from app.api.settings_routes import seed_settings_if_needed
+        from app.services.brands.manager import seed_brands_if_needed
+        from app.api.system.settings_routes import seed_settings_if_needed
         
         db = SessionLocal()
         try:
@@ -251,7 +251,7 @@ async def startup_event():
                 print(f"   ⚙️ Settings already exist", flush=True)
 
             # Seed builtin AI agents (Toby + Lexi)
-            from app.services.generic_agent import seed_builtin_agents
+            from app.services.agents.generic_agent import seed_builtin_agents
             seed_builtin_agents()
         finally:
             db.close()
@@ -262,7 +262,7 @@ async def startup_event():
     
     # Log brand credentials status at startup (CRITICAL for debugging cross-posting)
     print("\n🏷️ Brand Credentials Status:", flush=True)
-    from app.services.brand_resolver import brand_resolver
+    from app.services.brands.resolver import brand_resolver
     for brand in brand_resolver.get_all_brands():
         ig_status = "✅" if brand.instagram_business_account_id else "❌ MISSING"
         fb_status = "✅" if brand.facebook_page_id else "❌ MISSING"
@@ -276,7 +276,7 @@ async def startup_event():
     # Reset any stuck "publishing" posts from previous crashes
     print("🔄 Checking for stuck publishing posts...", flush=True)
     try:
-        from app.services.db_scheduler import DatabaseSchedulerService
+        from app.services.publishing.scheduler import DatabaseSchedulerService
         scheduler_service = DatabaseSchedulerService()
         reset_count = scheduler_service.reset_stuck_publishing(max_age_minutes=10)
         if reset_count > 0:
@@ -373,7 +373,7 @@ async def startup_event():
                             post_title = metadata.get('title') or ''
                             if post_title:
                                 try:
-                                    from app.services.post_compositor import compose_cover_slide
+                                    from app.services.media.post_compositor import compose_cover_slide
                                     composed_name = image_path.stem.replace('_background', '_cover') + '.png'
                                     composed_path = image_path.parent / composed_name
                                     compose_cover_slide(
@@ -409,8 +409,8 @@ async def startup_event():
                             print(f"      🏷️ Publishing IMAGE POST with brand: {brand}")
                             
                             # Resolve brand credentials and publish image
-                            from app.services.social_publisher import SocialPublisher
-                            from app.services.brand_resolver import brand_resolver
+                            from app.services.publishing.social_publisher import SocialPublisher
+                            from app.services.brands.resolver import brand_resolver
                             
                             publisher = None
                             resolved_config = brand_resolver.get_brand_config(brand)
@@ -564,7 +564,7 @@ async def startup_event():
     def refresh_analytics():
         """Auto-refresh analytics data every 12 hours."""
         try:
-            from app.services.analytics_service import AnalyticsService
+            from app.services.analytics.analytics_service import AnalyticsService
             from app.db_connection import get_db_session
             
             print(f"\n📊 Auto-refresh analytics running at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -615,7 +615,7 @@ async def startup_event():
     # ── Start Maestro (orchestrating Toby + Lexi) ──
     print("🎼 Starting Maestro orchestrator...", flush=True)
     try:
-        from app.services.maestro import start_maestro
+        from app.services.maestro.maestro import start_maestro
         maestro = start_maestro()
         app.state.maestro = maestro
         print("✅ Maestro active — orchestrating Toby (Explorer) + Lexi (Optimizer)", flush=True)
