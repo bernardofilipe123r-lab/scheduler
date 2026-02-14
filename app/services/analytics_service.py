@@ -18,7 +18,7 @@ from sqlalchemy import func
 
 from app.models import BrandAnalytics, AnalyticsRefreshLog, YouTubeChannel, AnalyticsSnapshot
 from app.core.config import BRAND_CONFIGS, BrandType
-from app.api.brands_routes import BRAND_NAME_MAP
+from app.core.constants import BRAND_NAME_MAP
 
 
 logger = logging.getLogger(__name__)

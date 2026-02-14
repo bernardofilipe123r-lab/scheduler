@@ -20,24 +20,13 @@ from sqlalchemy.orm import Session
 from app.db_connection import get_db
 from app.models import YouTubeChannel
 from app.core.config import BRAND_CONFIGS, BrandType
+from app.core.constants import BRAND_NAME_MAP, VALID_BRANDS
 
 
 logger = logging.getLogger(__name__)
 
 # Create router for brand endpoints
 router = APIRouter(prefix="/brands", tags=["brands"])
-
-# Map frontend brand names to backend BrandType
-BRAND_NAME_MAP = {
-    "healthycollege": BrandType.HEALTHY_COLLEGE,
-    "vitalitycollege": BrandType.VITALITY_COLLEGE,
-    "longevitycollege": BrandType.LONGEVITY_COLLEGE,
-    "holisticcollege": BrandType.HOLISTIC_COLLEGE,
-    "wellbeingcollege": BrandType.WELLBEING_COLLEGE,
-}
-
-# List of valid brands
-VALID_BRANDS = list(BRAND_NAME_MAP.keys())
 
 
 class PlatformConnection(BaseModel):

@@ -11,6 +11,9 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 
+from sqlalchemy.orm import Session
+from app.models import YouTubeChannel
+
 
 # YouTube API quota costs
 QUOTA_COSTS = {
@@ -618,8 +621,8 @@ class YouTubePublisher:
         }
 
 
-# Brand-specific YouTube credentials loader
-def get_youtube_credentials_for_brand(brand: str) -> Optional[YouTubeCredentials]:
+# Brand-specific YouTube credentials loader (env-var fallback)
+def get_youtube_credentials_for_brand_env(brand: str) -> Optional[YouTubeCredentials]:
     """
     Load YouTube credentials for a specific brand from environment variables.
     
@@ -647,3 +650,66 @@ def get_youtube_credentials_for_brand(brand: str) -> Optional[YouTubeCredentials
         channel_name=brand.replace("college", " College").title(),
         refresh_token=refresh_token
     )
+
+
+def get_youtube_credentials_for_brand(brand: str, db: Session) -> Optional[YouTubeCredentials]:
+    """
+    Get YouTube credentials for a brand from the database.
+    
+    This is the function used by the scheduler/publisher to get
+    the refresh_token needed for uploads.
+    
+    Args:
+        brand: Brand name (e.g., "healthycollege")
+        db: Database session
+        
+    Returns:
+        YouTubeCredentials if found and connected, None otherwise
+    """
+    channel = db.query(YouTubeChannel).filter(
+        YouTubeChannel.brand == brand.lower(),
+        YouTubeChannel.status == "connected"
+    ).first()
+    
+    if channel:
+        return YouTubeCredentials(
+            channel_id=channel.channel_id,
+            channel_name=channel.channel_name or brand,
+            refresh_token=channel.refresh_token
+        )
+    
+    return None
+
+
+def update_youtube_channel_status(
+    brand: str, 
+    db: Session,
+    status: str = None,
+    last_error: str = None,
+    last_upload_at: datetime = None
+):
+    """
+    Update the status of a YouTube channel after an upload attempt.
+    
+    Called by the scheduler after each upload to track success/failure.
+    
+    Args:
+        brand: Brand name
+        db: Database session
+        status: New status ("connected", "error", "revoked")
+        last_error: Error message if upload failed
+        last_upload_at: Timestamp of successful upload
+    """
+    channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand.lower()).first()
+    
+    if channel:
+        if status:
+            channel.status = status
+        if last_error is not None:
+            channel.last_error = last_error
+        if last_upload_at:
+            channel.last_upload_at = last_upload_at
+            channel.last_error = None  # Clear error on success
+        
+        channel.updated_at = datetime.utcnow()
+        db.commit()

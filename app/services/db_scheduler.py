@@ -762,7 +762,7 @@ class DatabaseSchedulerService:
         Returns:
             Publishing result dict
         """
-        from app.api.youtube_routes import get_youtube_credentials_for_brand, update_youtube_channel_status
+        from app.services.youtube_publisher import get_youtube_credentials_for_brand, update_youtube_channel_status
         from app.services.youtube_publisher import YouTubePublisher
         from datetime import datetime
         

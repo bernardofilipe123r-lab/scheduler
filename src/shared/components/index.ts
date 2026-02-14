@@ -2,4 +2,3 @@
 export { Modal } from './Modal'
 export { LoadingSpinner, FullPageLoader, CardLoader } from './LoadingSpinner'
 export { StatusBadge } from './StatusBadge'
-export { GodAutomation } from './GodAutomation'
