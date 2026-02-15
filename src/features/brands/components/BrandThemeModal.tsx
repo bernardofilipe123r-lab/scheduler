@@ -1,13 +1,5 @@
 import { useState, useEffect } from 'react'
-import {
-  Sun,
-  Moon,
-  Upload,
-  X,
-  Loader2,
-  Save,
-} from 'lucide-react'
-import { useBrands } from '@/features/brands/api/use-brands'
+import { Upload, Loader2 } from 'lucide-react'
 import { apiClient } from '@/shared/api/client'
 import { supabase } from '@/shared/api/supabase'
 import {
@@ -22,359 +14,276 @@ export interface BrandThemeModalProps {
 }
 
 export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps) {
-  // Get theme from v2 API data, fall back to hardcoded BRAND_THEMES constants
-  const { data: v2Brands } = useBrands()
-  const v2Brand = v2Brands?.find(b => b.id === brand.id)
-  
-  // Build theme defaults: v2 API colors > hardcoded BRAND_THEMES > generic fallback
-  const themeDefaults = (() => {
-    const hardcoded = BRAND_THEMES[brand.id]
-    const v2Colors = v2Brand?.colors
-    return {
-      brandColor: v2Colors?.primary ?? hardcoded?.brandColor ?? brand.color,
-      lightTitleColor: v2Colors?.light_mode?.text ?? hardcoded?.lightTitleColor ?? '#000000',
-      lightBgColor: v2Colors?.light_mode?.background ?? hardcoded?.lightBgColor ?? '#dcf6c8',
-      darkTitleColor: v2Colors?.dark_mode?.text ?? hardcoded?.darkTitleColor ?? '#ffffff',
-      darkBgColor: v2Colors?.dark_mode?.background ?? hardcoded?.darkBgColor ?? brand.color,
-    }
-  })()
+  const [mode, setMode] = useState<'light' | 'dark'>('light')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
-  // Theme state - editable colors (initialized from brand-specific defaults)
+  const themeDefaults = BRAND_THEMES[brand.id] ?? {
+    brandColor: brand.color,
+    lightTitleColor: '#000000',
+    lightBgColor: '#FFFFFF',
+    darkTitleColor: '#F7FAFC',
+    darkBgColor: '#000000',
+  }
+
   const [brandColor, setBrandColor] = useState(themeDefaults.brandColor)
   const [lightTitleColor, setLightTitleColor] = useState(themeDefaults.lightTitleColor)
   const [lightBgColor, setLightBgColor] = useState(themeDefaults.lightBgColor)
   const [darkTitleColor, setDarkTitleColor] = useState(themeDefaults.darkTitleColor)
   const [darkBgColor, setDarkBgColor] = useState(themeDefaults.darkBgColor)
-  const [hasChanges, setHasChanges] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  
-  // Logo state
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  
-  // Fetch saved theme on mount
+
+  // Derived from current mode
+  const titleColor = mode === 'light' ? lightTitleColor : darkTitleColor
+  const bgColor = mode === 'light' ? lightBgColor : darkBgColor
+  const contentTextColor = mode === 'light' ? '#374151' : '#D1D5DB'
+
   useEffect(() => {
-    const fetchSavedTheme = async () => {
+    const fetchTheme = async () => {
       try {
         const data = await apiClient.get<{ has_overrides: boolean; theme: Record<string, string> }>(`/api/brands/${brand.id}/theme`)
         if (data.has_overrides && data.theme) {
-          // Use saved values
           if (data.theme.brand_color) setBrandColor(data.theme.brand_color)
           if (data.theme.light_title_color) setLightTitleColor(data.theme.light_title_color)
           if (data.theme.light_bg_color) setLightBgColor(data.theme.light_bg_color)
           if (data.theme.dark_title_color) setDarkTitleColor(data.theme.dark_title_color)
           if (data.theme.dark_bg_color) setDarkBgColor(data.theme.dark_bg_color)
-          
-          // Load logo if exists
           if (data.theme.logo) {
             const logoUrl = `/brand-logos/${data.theme.logo}?t=${Date.now()}`
             const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
-            if (logoCheck.ok) {
-              setLogoPreview(logoUrl)
-            }
+            if (logoCheck.ok) setLogoPreview(logoUrl)
           }
         }
-      } catch (error) {
-        console.error('Failed to fetch saved theme:', error)
-      } finally {
-        setIsLoading(false)
-      }
+      } catch { /* use defaults */ }
+      setLoading(false)
     }
-    
-    fetchSavedTheme()
+    fetchTheme()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brand.id])
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setLogoFile(file)
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        setLogoPreview(event.target?.result as string)
-      }
-      reader.readAsDataURL(file)
-      setHasChanges(true)
-    }
-  }
-
-  const removeLogo = () => {
-    setLogoPreview(null)
-    setLogoFile(null)
-    setHasChanges(true)
-  }
-
-  const handleColorChange = (setter: (v: string) => void) => (value: string) => {
-    setter(value)
-    setHasChanges(true)
-    setSaveError(null)
-  }
-
   const handleSave = async () => {
-    setIsSaving(true)
-    setSaveError(null)
-    
+    setSaving(true)
     try {
-      // Create form data
       const formData = new FormData()
       formData.append('brand_color', brandColor)
       formData.append('light_title_color', lightTitleColor)
       formData.append('light_bg_color', lightBgColor)
       formData.append('dark_title_color', darkTitleColor)
       formData.append('dark_bg_color', darkBgColor)
-      
-      if (logoFile) {
-        formData.append('logo', logoFile)
-      }
-      
+      if (logoFile) formData.append('logo', logoFile)
+
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/brands/${brand.id}/theme`, {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/brands/${brand.id}/theme`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData
+        body: formData,
       })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to save theme')
-      }
-      
-      // Success - notify parent and close modal
+      if (!resp.ok) throw new Error('Save failed')
       onSave?.()
       onClose()
-    } catch (error) {
-      console.error('Failed to save theme:', error)
-      setSaveError(error instanceof Error ? error.message : 'Failed to save theme')
-    } finally {
-      setIsSaving(false)
+    } catch {
+      // save error handled silently
+    }
+    setSaving(false)
+  }
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setLogoFile(file)
+      setLogoPreview(URL.createObjectURL(file))
     }
   }
 
+  const setTitleColor = (c: string) => mode === 'light' ? setLightTitleColor(c) : setDarkTitleColor(c)
+  const setBgColorForMode = (c: string) => mode === 'light' ? setLightBgColor(c) : setDarkBgColor(c)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Loading state */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-500">Loading theme...</span>
-        </div>
-      )}
-      
-      {!isLoading && (
-        <>
-      {/* Main content - horizontal layout */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Left column - Logo and Brand Color */}
-        <div className="space-y-4">
-          {/* Logo upload */}
-          <div 
-            className="rounded-xl p-4 text-center"
-            style={{ backgroundColor: brandColor }}
-          >
-            {logoPreview ? (
-              <div className="relative inline-block">
-                <img 
-                  src={logoPreview} 
-                  alt={brand.name} 
-                  className="w-16 h-16 object-contain mx-auto"
-                />
-                <button
-                  onClick={removeLogo}
-                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+    <div className="flex flex-col gap-6">
+      <div className="flex gap-6">
+        {/* LEFT: Live Preview */}
+        <div className="flex-[3] space-y-4">
+          {/* Mode Toggle */}
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setMode('light')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                mode === 'light' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              ☀️ Light Mode
+            </button>
+            <button
+              onClick={() => setMode('dark')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                mode === 'dark' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🌙 Dark Mode
+            </button>
+          </div>
+
+          {/* Thumbnail Preview (16:9) */}
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">Thumbnail Preview</p>
+            <div
+              className="w-full rounded-xl overflow-hidden border border-gray-200 relative"
+              style={{ backgroundColor: bgColor, aspectRatio: '16/9' }}
+            >
+              <div className="absolute inset-0 flex items-center justify-center p-6">
+                <h2
+                  className="text-2xl md:text-3xl font-black text-center uppercase tracking-wide"
+                  style={{ color: titleColor }}
                 >
-                  <X className="w-3 h-3" />
-                </button>
+                  SAMPLE TITLE TEXT
+                </h2>
               </div>
-            ) : (
-              <label className="cursor-pointer group">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  className="hidden"
+              {logoPreview && (
+                <img
+                  src={logoPreview}
+                  alt="Logo"
+                  className="absolute bottom-3 right-3 w-8 h-8 object-contain opacity-80"
                 />
-                <div className="w-16 h-16 mx-auto rounded-lg bg-white/20 flex flex-col items-center justify-center group-hover:bg-white/30 transition-colors border-2 border-dashed border-white/40">
-                  <Upload className="w-5 h-5 text-white/60" />
-                  <span className="text-[10px] text-white/60 mt-1">Upload</span>
+              )}
+            </div>
+          </div>
+
+          {/* Content/Reel Preview (9:16) */}
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">Reel Preview</p>
+            <div
+              className="w-full max-w-[240px] mx-auto rounded-2xl overflow-hidden border border-gray-200 relative"
+              style={{ backgroundColor: bgColor, aspectRatio: '9/16' }}
+            >
+              {/* Title bar */}
+              <div className="mt-8 mx-3">
+                <div
+                  className="rounded-lg px-3 py-2"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  <p
+                    className="text-xs font-black uppercase text-center"
+                    style={{ color: titleColor }}
+                  >
+                    SAMPLE TITLE
+                  </p>
                 </div>
-              </label>
-            )}
-            <p className="text-white text-sm font-medium mt-2">{brand.name}</p>
+              </div>
+
+              {/* Content lines */}
+              <div className="mt-4 mx-4 space-y-2">
+                {['First content line here', 'Second content line', 'Third content line'].map((line, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span
+                      className="text-xs font-bold mt-0.5 flex-shrink-0"
+                      style={{ color: brandColor }}
+                    >
+                      {i + 1}.
+                    </span>
+                    <p className="text-xs" style={{ color: contentTextColor }}>
+                      {line}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Brand name */}
+              <div className="absolute bottom-4 left-0 right-0 text-center">
+                <p className="text-[10px] font-medium opacity-60" style={{ color: contentTextColor }}>
+                  {brand.name}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: Controls */}
+        <div className="flex-[2] space-y-5">
+          {/* Logo Upload */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Logo</label>
+            <label className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 transition-colors">
+              {logoPreview ? (
+                <img src={logoPreview} alt="Logo" className="w-10 h-10 object-contain" />
+              ) : (
+                <Upload className="w-5 h-5 text-gray-400" />
+              )}
+              <span className="text-sm text-gray-500">{logoFile ? logoFile.name : 'Upload logo'}</span>
+              <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
+            </label>
           </div>
 
           {/* Brand Color */}
-          <div>
-            <label className="text-xs font-medium text-gray-700 mb-1 block">Brand Color</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={brandColor}
-                onChange={(e) => handleColorChange(setBrandColor)(e.target.value)}
-                className="w-10 h-10 rounded cursor-pointer border border-gray-200"
-              />
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={brandColor.toUpperCase()}
-                  onChange={(e) => handleColorChange(setBrandColor)(e.target.value)}
-                  className="w-full px-2 py-1 border border-gray-300 rounded font-mono text-xs"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+          <ColorPicker label="Brand Color" value={brandColor} onChange={setBrandColor} />
 
-        {/* Middle column - Light Mode */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Sun className="w-4 h-4 text-yellow-500" />
-            <span className="font-medium text-gray-900 text-sm">Light Mode</span>
-          </div>
-          
-          <div 
-            className="w-full h-12 rounded-lg mb-3 flex items-center justify-center border"
-            style={{ backgroundColor: lightBgColor }}
-          >
-            <span style={{ color: lightTitleColor }} className="font-bold text-xs">
-              Sample Title
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            <div>
-              <label className="text-xs text-gray-600 mb-1 block">Title Color</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={lightTitleColor}
-                  onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
-                  className="w-6 h-6 rounded cursor-pointer border border-gray-300"
-                />
-                <input
-                  type="text"
-                  value={lightTitleColor.toUpperCase()}
-                  onChange={(e) => handleColorChange(setLightTitleColor)(e.target.value)}
-                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-300 rounded bg-white text-gray-800"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-gray-600 mb-1 block">Background</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={lightBgColor}
-                  onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
-                  className="w-6 h-6 rounded cursor-pointer border border-gray-300"
-                />
-                <input
-                  type="text"
-                  value={lightBgColor.toUpperCase()}
-                  onChange={(e) => handleColorChange(setLightBgColor)(e.target.value)}
-                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-300 rounded bg-white text-gray-800"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right column - Dark Mode */}
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Moon className="w-4 h-4 text-gray-400" />
-            <span className="font-medium text-white text-sm">Dark Mode</span>
-          </div>
-          
-          <div 
-            className="w-full h-12 rounded-lg mb-3 flex items-center justify-center border border-gray-600"
-            style={{ backgroundColor: darkBgColor }}
-          >
-            <span style={{ color: darkTitleColor }} className="font-bold text-xs">
-              Sample Title
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Title Color</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={darkTitleColor}
-                  onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
-                  className="w-6 h-6 rounded cursor-pointer border border-gray-600"
-                />
-                <input
-                  type="text"
-                  value={darkTitleColor.toUpperCase()}
-                  onChange={(e) => handleColorChange(setDarkTitleColor)(e.target.value)}
-                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-600 rounded"
-                  style={{ backgroundColor: '#374151', color: '#f3f4f6' }}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Background</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={darkBgColor}
-                  onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
-                  className="w-6 h-6 rounded cursor-pointer border border-gray-600"
-                />
-                <input
-                  type="text"
-                  value={darkBgColor.toUpperCase()}
-                  onChange={(e) => handleColorChange(setDarkBgColor)(e.target.value)}
-                  className="flex-1 px-2 py-1 text-xs font-mono border border-gray-600 rounded"
-                  style={{ backgroundColor: '#374151', color: '#f3f4f6' }}
-                />
-              </div>
+          {/* Mode-specific colors */}
+          <div className="border-t border-gray-200 pt-4">
+            <h4 className="text-sm font-semibold text-gray-800 mb-3">
+              {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Colors
+            </h4>
+            <div className="space-y-4">
+              <ColorPicker label="Title Color" value={titleColor} onChange={setTitleColor} />
+              <ColorPicker label="Background" value={bgColor} onChange={setBgColorForMode} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Error message */}
-      {saveError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm text-red-800">
-            <strong>Error:</strong> {saveError}
-          </p>
-        </div>
-      )}
-
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-        <button
-          onClick={onClose}
-          disabled={isSaving}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
-        >
+      <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
           Cancel
         </button>
         <button
           onClick={handleSave}
-          disabled={isSaving || !hasChanges}
-          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={saving}
+          className="px-6 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 disabled:opacity-50 flex items-center gap-2"
         >
-          {isSaving ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              Save Theme
-            </>
-          )}
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          Save Theme
         </button>
       </div>
-      </>
-      )}
+    </div>
+  )
+}
+
+function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="text-sm font-medium text-gray-600 mb-1.5 block">{label}</label>
+      <div className="flex items-center gap-3">
+        <label
+          className="w-10 h-10 rounded-lg border-2 border-gray-200 cursor-pointer overflow-hidden flex-shrink-0"
+          style={{ backgroundColor: value }}
+        >
+          <input
+            type="color"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="opacity-0 w-full h-full cursor-pointer"
+          />
+        </label>
+        <input
+          type="text"
+          value={value}
+          onChange={e => {
+            const v = e.target.value
+            if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v)
+          }}
+          className="flex-1 px-3 py-2 text-sm font-mono border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          maxLength={7}
+        />
+      </div>
     </div>
   )
 }

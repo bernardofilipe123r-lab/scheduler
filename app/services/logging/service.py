@@ -142,7 +142,7 @@ class LogBuffer:
 
 
 # Global buffer instance
-_log_buffer = LogBuffer(max_size=30, flush_interval=1.5)
+_log_buffer = LogBuffer(max_size=100, flush_interval=5.0)
 
 
 class DatabaseLogHandler(logging.Handler):

@@ -5,7 +5,6 @@ Connects to Supabase PostgreSQL via DATABASE_URL.
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
 from contextlib import contextmanager
 from app.models import Base
 
@@ -22,7 +21,10 @@ print("✅ Connected to PostgreSQL database (Supabase)")
 # PostgreSQL connection
 engine = create_engine(
     DATABASE_URL,
-    poolclass=NullPool,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800,
     pool_pre_ping=True,
 )
 

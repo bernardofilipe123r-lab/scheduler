@@ -11,8 +11,7 @@ import {
   Loader2,
   AlertCircle,
   Database,
-  Server,
-  Globe
+  Server
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { 
@@ -24,23 +23,28 @@ import { CompetitorSection } from '@/features/ai-team/components/CompetitorSecti
 
 // Category icons
 const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
-  ai: Sparkles,
   content: Sparkles,
   scheduling: Calendar,
   meta: Key,
   youtube: Key,
-  application: Globe,
 }
 
 // Category labels
 const CATEGORY_LABELS: Record<string, string> = {
-  ai: 'AI & Content Generation',
   content: 'Content Settings',
   scheduling: 'Scheduling',
   meta: 'Meta/Instagram',
   youtube: 'YouTube',
-  application: 'Application',
 }
+
+// Categories and keys visible to normal users (in display order)
+const VISIBLE_CATEGORIES = ['meta', 'youtube', 'content', 'scheduling'] as const
+const VISIBLE_KEYS = new Set([
+  'instagram_app_id', 'instagram_app_secret',
+  'youtube_client_id', 'youtube_client_secret', 'youtube_redirect_uri',
+  'default_caption_count', 'default_content_lines',
+  'default_posts_per_day', 'scheduling_timezone',
+])
 
 // Source badges
 const SOURCE_BADGE: Record<string, { label: string; className: string; icon: typeof Database }> = {
@@ -130,6 +134,16 @@ export function SettingsTab() {
   
   const grouped = data?.grouped || {}
   
+  // Filter to only user-visible categories and keys, in defined order
+  const visibleGrouped = VISIBLE_CATEGORIES.reduce<Record<string, Setting[]>>((acc, cat) => {
+    const settings = grouped[cat]
+    if (settings) {
+      const filtered = settings.filter(s => VISIBLE_KEYS.has(s.key))
+      if (filtered.length > 0) acc[cat] = filtered
+    }
+    return acc
+  }, {})
+  
   return (
     <div className="space-y-6">
       {/* Action buttons */}
@@ -165,7 +179,7 @@ export function SettingsTab() {
       
       {/* Settings by Category */}
       <div className="space-y-6">
-        {Object.entries(grouped).map(([category, settings]) => {
+        {Object.entries(visibleGrouped).map(([category, settings]) => {
           const Icon = CATEGORY_ICONS[category] || SettingsIcon
           const label = CATEGORY_LABELS[category] || category.charAt(0).toUpperCase() + category.slice(1)
           
@@ -279,24 +293,6 @@ export function SettingsTab() {
         <CompetitorSection />
       </div>
 
-      {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-medium text-blue-900">About Settings</h3>
-            <p className="text-sm text-blue-700 mt-1">
-              Settings stored here take precedence over environment variables set on Railway.
-              If a setting is empty, the system will fall back to the corresponding environment variable.
-            </p>
-            <ul className="text-sm text-blue-700 mt-2 space-y-1 list-disc list-inside">
-              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium"><Database className="w-3 h-3" />DB</span> — Value saved in database (takes priority)</li>
-              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium"><Server className="w-3 h-3" />ENV</span> — Value from Railway/environment variable (fallback)</li>
-              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs font-medium">Default</span> — Using built-in default value</li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
