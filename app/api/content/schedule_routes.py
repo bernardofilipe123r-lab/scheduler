@@ -304,10 +304,10 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
 @router.get("/scheduled")
 async def get_scheduled_posts(user: dict = Depends(get_current_user)):
     """
-    Get all scheduled posts for the current user.
+    Get all scheduled posts (reels and posts from all sources including Maestro).
     """
     try:
-        schedules = scheduler_service.get_all_scheduled(user_id=user["id"])
+        schedules = scheduler_service.get_all_scheduled()
         
         # Format the response with human-readable data
         formatted_schedules = []
@@ -381,7 +381,7 @@ async def delete_scheduled_from_date(from_date: str, user: dict = Depends(get_cu
         cutoff = datetime.fromisoformat(from_date)
         count = (
             db.query(ScheduledReel)
-            .filter(ScheduledReel.scheduled_time >= cutoff, ScheduledReel.user_id == user["id"])
+            .filter(ScheduledReel.scheduled_time >= cutoff)
             .delete()
         )
         db.commit()
@@ -409,7 +409,6 @@ async def delete_scheduled_for_day(date: str, user: dict = Depends(get_current_u
             db.query(ScheduledReel)
             .filter(ScheduledReel.scheduled_time >= day_start)
             .filter(ScheduledReel.scheduled_time < day_end)
-            .filter(ScheduledReel.user_id == user["id"])
             .delete()
         )
         db.commit()
@@ -429,7 +428,7 @@ async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_curre
     Optional: Provide user_id to ensure only the owner can delete.
     """
     try:
-        success = scheduler_service.delete_scheduled(schedule_id, user_id=user["id"])
+        success = scheduler_service.delete_scheduled(schedule_id)
         
         if not success:
             raise HTTPException(
