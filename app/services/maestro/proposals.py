@@ -23,7 +23,7 @@ class ProposalsMixin:
         get replacement attempts. Maintains volume while filtering bad content.
         """
         from app.db_connection import SessionLocal, get_db_session
-        from app.models import TobyProposal
+        from app.models import AgentProposal
         from app.services.content.job_manager import JobManager
         from app.services.maestro.examiner import examine_proposal
 
@@ -61,7 +61,7 @@ class ProposalsMixin:
         Examine one proposal, accept or reject, and optionally regenerate replacement.
         """
         from app.db_connection import SessionLocal, get_db_session
-        from app.models import TobyProposal
+        from app.models import AgentProposal
         from app.services.content.job_manager import JobManager
 
         # ── Step 1: Examiner quality gate ──
@@ -79,8 +79,8 @@ class ProposalsMixin:
         # ── Step 2: Store examiner scores on proposal ──
         db = SessionLocal()
         try:
-            proposal = db.query(TobyProposal).filter(
-                TobyProposal.proposal_id == proposal_id
+            proposal = db.query(AgentProposal).filter(
+                AgentProposal.proposal_id == proposal_id
             ).first()
             if not proposal or proposal.status != "pending":
                 return
@@ -193,7 +193,7 @@ class ProposalsMixin:
     ):
         """Create a job from an accepted proposal and dispatch it for processing."""
         from app.db_connection import SessionLocal, get_db_session
-        from app.models import TobyProposal
+        from app.models import AgentProposal
         from app.services.content.job_manager import JobManager
 
         is_post = (content_type == "post")
@@ -228,8 +228,8 @@ class ProposalsMixin:
         # Store job_id on proposal
         db2 = SessionLocal()
         try:
-            p = db2.query(TobyProposal).filter(
-                TobyProposal.proposal_id == proposal_id
+            p = db2.query(AgentProposal).filter(
+                AgentProposal.proposal_id == proposal_id
             ).first()
             if p:
                 p.accepted_job_id = job_id

@@ -226,6 +226,7 @@ export function PostJobDetail({ job, refetch }: Props) {
         },
       })
       toast.success('Content updated!')
+      setEditingBrand(null)
       refetch()
     } catch {
       toast.error('Failed to update content')
@@ -357,10 +358,22 @@ export function PostJobDetail({ job, refetch }: Props) {
 
         // Ensure we're on cover slide for primary capture
         setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
-        await new Promise((r) => setTimeout(r, 100))
+        await new Promise((r) => setTimeout(r, 300))
 
-        const stage = stageRefs.current.get(brand)
-        if (!stage) { failed++; continue }
+        // Retry logic: wait for stage ref to become available
+        let stage = stageRefs.current.get(brand)
+        if (!stage) {
+          // Force a re-render and wait longer
+          setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+          await new Promise((r) => setTimeout(r, 500))
+          stage = stageRefs.current.get(brand)
+        }
+        if (!stage) {
+          console.error(`Auto-schedule: Canvas ref is null for brand "${brand}". Skipping.`)
+          toast.error(`Failed to capture image for ${getBrandConfig(brand).name}`)
+          failed++
+          continue
+        }
 
         const imageData = stage.toDataURL({
           pixelRatio: 1 / GRID_PREVIEW_SCALE,
@@ -372,12 +385,19 @@ export function PostJobDetail({ job, refetch }: Props) {
         const carouselImages: string[] = []
         for (let s = 0; s < slideTexts.length; s++) {
           setBrandSlideIndex((prev) => ({ ...prev, [brand]: s + 1 }))
-          await new Promise((r) => setTimeout(r, 150))
-          const textStage = textSlideRefs.current.get(brand)
+          await new Promise((r) => setTimeout(r, 400))
+          let textStage = textSlideRefs.current.get(brand)
+          if (!textStage) {
+            // Retry once with extra wait
+            await new Promise((r) => setTimeout(r, 300))
+            textStage = textSlideRefs.current.get(brand)
+          }
           if (textStage) {
             carouselImages.push(
               textStage.toDataURL({ pixelRatio: 1 / GRID_PREVIEW_SCALE, mimeType: 'image/png' })
             )
+          } else {
+            console.warn(`Auto-schedule: Text slide ref null for brand "${brand}" slide ${s + 1}`)
           }
         }
         // Reset back to cover
@@ -436,9 +456,12 @@ export function PostJobDetail({ job, refetch }: Props) {
               })
             } catch { /* ignore status update failure */ }
           } else {
+            const errText = await resp.text().catch(() => 'Unknown error')
+            console.error(`Auto-schedule: POST failed for brand "${brand}":`, errText)
             failed++
           }
-        } catch {
+        } catch (err) {
+          console.error(`Auto-schedule: Network error for brand "${brand}":`, err)
           failed++
         }
       }

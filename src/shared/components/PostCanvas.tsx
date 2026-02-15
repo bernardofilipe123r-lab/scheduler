@@ -298,7 +298,17 @@ export function autoFitFontSize(
 export function loadGeneralSettings(): GeneralSettings {
   try {
     const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
-    if (saved) return JSON.parse(saved) as GeneralSettings
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<GeneralSettings>
+      return {
+        ...DEFAULT_GENERAL_SETTINGS,
+        ...parsed,
+        layout: {
+          ...DEFAULT_GENERAL_SETTINGS.layout,
+          ...(parsed.layout || {}),
+        },
+      }
+    }
   } catch {
     /* ignore */
   }

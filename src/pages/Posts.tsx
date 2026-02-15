@@ -15,8 +15,8 @@ import {
   X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useNavigate } from 'react-router-dom'
 import { useCreateJob } from '@/features/jobs'
+import { useQueryClient } from '@tanstack/react-query'
 import { useDynamicBrands } from '@/features/brands'
 import {
   PREVIEW_SCALE,
@@ -30,7 +30,7 @@ import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanv
 import type { BrandName } from '@/shared/types'
 
 export function PostsPage() {
-  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const createJob = useCreateJob()
   const { brands: dynamicBrands, brandIds } = useDynamicBrands()
   const brandMap = useMemo(() => {
@@ -131,8 +131,8 @@ export function PostsPage() {
         variant: 'post',
         cta_type: 'none',
       })
-      toast.success('Auto generate job created!')
-      navigate(`/job/${job.id}`)
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      toast.success(`Post job ${job.id.slice(0, 8)}... created and processing!`, { duration: 6000 })
     } catch {
       toast.error('Failed to create auto generate job')
     } finally {
@@ -157,8 +157,10 @@ export function PostsPage() {
         cta_type: 'none',
         fixed_title: true,
       })
-      toast.success('Post job created!')
-      navigate(`/job/${job.id}`)
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      toast.success(`Post job ${job.id.slice(0, 8)}... created and processing!`, { duration: 6000 })
+      setTitle('')
+      setAiPrompt('')
     } catch {
       toast.error('Failed to create post job')
     } finally {

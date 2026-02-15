@@ -22,7 +22,6 @@ import {
 } from '@/features/settings/api/use-settings'
 import { useUpdateBrandCredentials } from '@/features/brands/api/use-brands'
 import { apiClient } from '@/shared/api/client'
-import { CompetitorSection } from '@/features/ai-team/components/CompetitorSection'
 
 // Category icons
 const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
@@ -85,13 +84,17 @@ export function SettingsTab() {
   const [savingBrand, setSavingBrand] = useState<string | null>(null)
   
   // Fetch brand credentials
+  const [brandsError, setBrandsError] = useState(false)
   useEffect(() => {
     const fetchCreds = async () => {
       try {
         const resp = await apiClient.get<{ brands: BrandCredentials[] }>('/api/v2/brands/credentials')
         setBrandCreds(resp.brands)
-      } catch {
-        // ignore
+        setBrandsError(false)
+      } catch (e) {
+        console.error('Failed to fetch brand credentials:', e)
+        setBrandsError(true)
+        toast.error('Failed to load brand connections')
       }
       setBrandsLoading(false)
     }
@@ -293,6 +296,24 @@ export function SettingsTab() {
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
           </div>
+        ) : brandsError ? (
+          <div className="px-6 py-8 text-center">
+            <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+            <p className="text-gray-600">Failed to load brand connections</p>
+            <button
+              onClick={() => {
+                setBrandsLoading(true)
+                setBrandsError(false)
+                apiClient.get<{ brands: BrandCredentials[] }>('/api/v2/brands/credentials')
+                  .then(resp => { setBrandCreds(resp.brands); setBrandsError(false) })
+                  .catch(() => { setBrandsError(true); toast.error('Failed to load brand connections') })
+                  .finally(() => setBrandsLoading(false))
+              }}
+              className="mt-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm"
+            >
+              Retry
+            </button>
+          </div>
         ) : brandCreds.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">
             No brands found
@@ -485,15 +506,6 @@ export function SettingsTab() {
         })}
       </div>
       
-      {/* Competitor Accounts Section */}
-      <div className="mt-8 border-t border-gray-700 pt-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Competitor Accounts</h3>
-        <p className="text-sm text-gray-400 mb-4">
-          Add Instagram accounts for your AI agents to learn from. They'll analyze top-performing content to improve your strategy.
-        </p>
-        <CompetitorSection />
-      </div>
-
     </div>
   )
 }

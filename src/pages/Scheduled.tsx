@@ -1064,8 +1064,8 @@ export function ScheduledPage() {
       >
         {selectedPost && (() => {
           const slideTexts = selectedPost.metadata?.slide_texts || []
-          const totalSlides = selectedPost.metadata?.variant === 'post' ? 1 + slideTexts.length : 1
-          const isPost = selectedPost.metadata?.variant === 'post'
+          const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
+          const totalSlides = isPost ? 1 + slideTexts.length : 1
           const brandColor = getBrandColor(selectedPost.brand)
           const brandCfg = getBrandConfig(selectedPost.brand)
           const savedSettings = loadGeneralSettings()

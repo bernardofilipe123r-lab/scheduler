@@ -50,7 +50,7 @@ async def maestro_status(user: dict = Depends(get_current_user)):
 
     # Include proposal stats (global + per-agent)
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal, AIAgent
+    from app.models import AgentProposal, AIAgent
     from sqlalchemy import func
     from datetime import datetime
 
@@ -59,28 +59,28 @@ async def maestro_status(user: dict = Depends(get_current_user)):
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Global stats
-        total = db.query(TobyProposal).count()
-        pending = db.query(TobyProposal).filter(TobyProposal.status == "pending").count()
-        accepted = db.query(TobyProposal).filter(TobyProposal.status == "accepted").count()
-        rejected = db.query(TobyProposal).filter(TobyProposal.status == "rejected").count()
+        total = db.query(AgentProposal).count()
+        pending = db.query(AgentProposal).filter(AgentProposal.status == "pending").count()
+        accepted = db.query(AgentProposal).filter(AgentProposal.status == "accepted").count()
+        rejected = db.query(AgentProposal).filter(AgentProposal.status == "rejected").count()
 
         # Per-agent stats — dynamic, all active agents
         agent_stats = {}
         agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True).all()]
 
         for agent_name in agent_ids:
-            a_total = db.query(TobyProposal).filter(TobyProposal.agent_name == agent_name).count()
-            a_pending = db.query(TobyProposal).filter(
-                TobyProposal.agent_name == agent_name, TobyProposal.status == "pending"
+            a_total = db.query(AgentProposal).filter(AgentProposal.agent_name == agent_name).count()
+            a_pending = db.query(AgentProposal).filter(
+                AgentProposal.agent_name == agent_name, AgentProposal.status == "pending"
             ).count()
-            a_accepted = db.query(TobyProposal).filter(
-                TobyProposal.agent_name == agent_name, TobyProposal.status == "accepted"
+            a_accepted = db.query(AgentProposal).filter(
+                AgentProposal.agent_name == agent_name, AgentProposal.status == "accepted"
             ).count()
-            a_rejected = db.query(TobyProposal).filter(
-                TobyProposal.agent_name == agent_name, TobyProposal.status == "rejected"
+            a_rejected = db.query(AgentProposal).filter(
+                AgentProposal.agent_name == agent_name, AgentProposal.status == "rejected"
             ).count()
-            a_today = db.query(TobyProposal).filter(
-                TobyProposal.agent_name == agent_name, TobyProposal.created_at >= today
+            a_today = db.query(AgentProposal).filter(
+                AgentProposal.agent_name == agent_name, AgentProposal.created_at >= today
             ).count()
 
             agent_stats[agent_name] = {
@@ -101,13 +101,13 @@ async def maestro_status(user: dict = Depends(get_current_user)):
         }
 
         # Count today's reel vs post proposals for smart burst button
-        today_reels = db.query(TobyProposal).filter(
-            TobyProposal.created_at >= today,
-            TobyProposal.content_type == "reel",
+        today_reels = db.query(AgentProposal).filter(
+            AgentProposal.created_at >= today,
+            AgentProposal.content_type == "reel",
         ).count()
-        today_posts = db.query(TobyProposal).filter(
-            TobyProposal.created_at >= today,
-            TobyProposal.content_type == "post",
+        today_posts = db.query(AgentProposal).filter(
+            AgentProposal.created_at >= today,
+            AgentProposal.content_type == "post",
         ).count()
         if "daily_config" in status and status["daily_config"]:
             status["daily_config"]["today_reels"] = today_reels
@@ -209,7 +209,7 @@ async def trigger_burst(background_tasks: BackgroundTasks, user: dict = Depends(
     If all proposals for today are complete, returns 'complete' status."""
     from app.services.maestro.maestro import get_maestro, maestro_log, schedule_all_ready_reels
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
     from datetime import datetime
 
     maestro = get_maestro()
@@ -221,13 +221,13 @@ async def trigger_burst(background_tasks: BackgroundTasks, user: dict = Depends(
     db = SessionLocal()
     try:
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_reels = db.query(TobyProposal).filter(
-            TobyProposal.created_at >= today,
-            TobyProposal.content_type == "reel",
+        today_reels = db.query(AgentProposal).filter(
+            AgentProposal.created_at >= today,
+            AgentProposal.content_type == "reel",
         ).count()
-        today_posts = db.query(TobyProposal).filter(
-            TobyProposal.created_at >= today,
-            TobyProposal.content_type == "post",
+        today_posts = db.query(AgentProposal).filter(
+            AgentProposal.created_at >= today,
+            AgentProposal.content_type == "post",
         ).count()
     finally:
         db.close()
@@ -312,20 +312,20 @@ async def list_proposals(
 ):
     """List proposals from all agents, with optional filters."""
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
 
     db = SessionLocal()
     try:
-        q = db.query(TobyProposal)
+        q = db.query(AgentProposal)
 
         if status:
-            q = q.filter(TobyProposal.status == status)
+            q = q.filter(AgentProposal.status == status)
         if agent:
-            q = q.filter(TobyProposal.agent_name == agent)
+            q = q.filter(AgentProposal.agent_name == agent)
         if content_type:
-            q = q.filter(TobyProposal.content_type == content_type)
+            q = q.filter(AgentProposal.content_type == content_type)
 
-        proposals = q.order_by(TobyProposal.created_at.desc()).limit(limit).all()
+        proposals = q.order_by(AgentProposal.created_at.desc()).limit(limit).all()
         return {
             "count": len(proposals),
             "proposals": [p.to_dict() for p in proposals],
@@ -338,13 +338,13 @@ async def list_proposals(
 async def get_proposal(proposal_id: str, user: dict = Depends(get_current_user)):
     """Get a single proposal by ID."""
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
 
     db = SessionLocal()
     try:
         proposal = (
-            db.query(TobyProposal)
-            .filter(TobyProposal.proposal_id == proposal_id)
+            db.query(AgentProposal)
+            .filter(AgentProposal.proposal_id == proposal_id)
             .first()
         )
         if not proposal:
@@ -368,7 +368,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, u
       6. Return job_id
     """
     from app.db_connection import SessionLocal, get_db_session
-    from app.models import TobyProposal
+    from app.models import AgentProposal
     from app.services.content.job_manager import JobManager
     from app.services.content.job_processor import JobProcessor
     from datetime import datetime
@@ -378,8 +378,8 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, u
     db = SessionLocal()
     try:
         proposal = (
-            db.query(TobyProposal)
-            .filter(TobyProposal.proposal_id == proposal_id)
+            db.query(AgentProposal)
+            .filter(AgentProposal.proposal_id == proposal_id)
             .first()
         )
         if not proposal:
@@ -458,7 +458,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, u
     # Store first job_id on proposal
     db2 = SessionLocal()
     try:
-        p = db2.query(TobyProposal).filter(TobyProposal.proposal_id == proposal_id).first()
+        p = db2.query(AgentProposal).filter(AgentProposal.proposal_id == proposal_id).first()
         if p:
             p.accepted_job_id = job_ids[0]
             db2.commit()
@@ -516,13 +516,13 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, u
 async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest(), user: dict = Depends(get_current_user)):
     """Reject a proposal."""
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
 
     db = SessionLocal()
     try:
         proposal = (
-            db.query(TobyProposal)
-            .filter(TobyProposal.proposal_id == proposal_id)
+            db.query(AgentProposal)
+            .filter(AgentProposal.proposal_id == proposal_id)
             .first()
         )
         if not proposal:
@@ -546,12 +546,12 @@ async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()
 async def clear_proposals(user: dict = Depends(get_current_user)):
     """Delete ALL proposals from the database."""
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
 
     db = SessionLocal()
     try:
-        count = db.query(TobyProposal).count()
-        db.query(TobyProposal).delete()
+        count = db.query(AgentProposal).count()
+        db.query(AgentProposal).delete()
         db.commit()
         return {"status": "cleared", "deleted": count}
     except Exception as e:
@@ -567,7 +567,7 @@ async def clear_proposals(user: dict = Depends(get_current_user)):
 async def maestro_stats(user: dict = Depends(get_current_user)):
     """Per-agent and global stats."""
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
     from sqlalchemy import func
     from datetime import datetime
 
@@ -577,34 +577,34 @@ async def maestro_stats(user: dict = Depends(get_current_user)):
         result = {"global": {}, "agents": {}}
 
         # Global
-        result["global"]["total"] = db.query(TobyProposal).count()
-        result["global"]["pending"] = db.query(TobyProposal).filter(TobyProposal.status == "pending").count()
-        result["global"]["accepted"] = db.query(TobyProposal).filter(TobyProposal.status == "accepted").count()
-        result["global"]["rejected"] = db.query(TobyProposal).filter(TobyProposal.status == "rejected").count()
-        result["global"]["today"] = db.query(TobyProposal).filter(TobyProposal.created_at >= today).count()
+        result["global"]["total"] = db.query(AgentProposal).count()
+        result["global"]["pending"] = db.query(AgentProposal).filter(AgentProposal.status == "pending").count()
+        result["global"]["accepted"] = db.query(AgentProposal).filter(AgentProposal.status == "accepted").count()
+        result["global"]["rejected"] = db.query(AgentProposal).filter(AgentProposal.status == "rejected").count()
+        result["global"]["today"] = db.query(AgentProposal).filter(AgentProposal.created_at >= today).count()
 
         # Per agent — dynamic from DB
         agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True).all()]
         for name in agent_ids:
-            aq = db.query(TobyProposal).filter(TobyProposal.agent_name == name)
+            aq = db.query(AgentProposal).filter(AgentProposal.agent_name == name)
             total = aq.count()
-            accepted = aq.filter(TobyProposal.status == "accepted").count()
-            rejected = aq.filter(TobyProposal.status == "rejected").count()
+            accepted = aq.filter(AgentProposal.status == "accepted").count()
+            rejected = aq.filter(AgentProposal.status == "rejected").count()
 
             # Per-strategy breakdown
             strategies = (
-                db.query(TobyProposal.strategy, func.count(TobyProposal.id))
-                .filter(TobyProposal.agent_name == name)
-                .group_by(TobyProposal.strategy)
+                db.query(AgentProposal.strategy, func.count(AgentProposal.id))
+                .filter(AgentProposal.agent_name == name)
+                .group_by(AgentProposal.strategy)
                 .all()
             )
 
             result["agents"][name] = {
                 "total": total,
-                "pending": aq.filter(TobyProposal.status == "pending").count(),
+                "pending": aq.filter(AgentProposal.status == "pending").count(),
                 "accepted": accepted,
                 "rejected": rejected,
-                "today": aq.filter(TobyProposal.created_at >= today).count(),
+                "today": aq.filter(AgentProposal.created_at >= today).count(),
                 "acceptance_rate": round(accepted / total * 100, 1) if total > 0 else 0,
                 "strategies": {s: c for s, c in strategies},
             }
@@ -722,7 +722,7 @@ async def maestro_healing_status(user: dict = Depends(get_current_user)):
     """
     from app.services.maestro.maestro import get_maestro
     from app.db_connection import SessionLocal
-    from app.models import GenerationJob, TobyProposal
+    from app.models import GenerationJob, AgentProposal
     from datetime import datetime, timedelta
 
     maestro = get_maestro()
@@ -747,8 +747,8 @@ async def maestro_healing_status(user: dict = Depends(get_current_user)):
         failed_details = []
         for job in failed_jobs:
             proposal = (
-                db.query(TobyProposal)
-                .filter(TobyProposal.accepted_job_id == job.job_id)
+                db.query(AgentProposal)
+                .filter(AgentProposal.accepted_job_id == job.job_id)
                 .first()
             )
             is_maestro = proposal is not None or (
@@ -806,7 +806,7 @@ async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks, use
     """Manually retry a specific failed job."""
     from app.services.maestro.maestro import get_maestro
     from app.db_connection import SessionLocal
-    from app.models import GenerationJob, TobyProposal
+    from app.models import GenerationJob, AgentProposal
 
     maestro = get_maestro()
 
@@ -820,8 +820,8 @@ async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks, use
             return {"success": False, "error": f"Job {job_id} is not failed (status={job.status})"}
 
         proposal = (
-            db.query(TobyProposal)
-            .filter(TobyProposal.accepted_job_id == job.job_id)
+            db.query(AgentProposal)
+            .filter(AgentProposal.accepted_job_id == job.job_id)
             .first()
         )
 
@@ -847,7 +847,7 @@ def get_examiner_stats(days: int = 7, user: dict = Depends(get_current_user)):
     top rejection reasons, score distributions.
     """
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
     from sqlalchemy import func
 
     db = SessionLocal()
@@ -856,10 +856,10 @@ def get_examiner_stats(days: int = 7, user: dict = Depends(get_current_user)):
 
         # All examined proposals (have examiner_score)
         examined = (
-            db.query(TobyProposal)
+            db.query(AgentProposal)
             .filter(
-                TobyProposal.examiner_score.isnot(None),
-                TobyProposal.created_at >= cutoff,
+                AgentProposal.examiner_score.isnot(None),
+                AgentProposal.created_at >= cutoff,
             )
             .all()
         )
@@ -951,22 +951,22 @@ def get_rejected_proposals(
 ):
     """List recently rejected proposals with examiner details."""
     from app.db_connection import SessionLocal
-    from app.models import TobyProposal
+    from app.models import AgentProposal
 
     db = SessionLocal()
     try:
         query = (
-            db.query(TobyProposal)
-            .filter(TobyProposal.examiner_verdict == "reject")
+            db.query(AgentProposal)
+            .filter(AgentProposal.examiner_verdict == "reject")
         )
 
         if brand:
-            query = query.filter(TobyProposal.brand == brand)
+            query = query.filter(AgentProposal.brand == brand)
         if content_type:
-            query = query.filter(TobyProposal.content_type == content_type)
+            query = query.filter(AgentProposal.content_type == content_type)
 
         proposals = (
-            query.order_by(TobyProposal.created_at.desc())
+            query.order_by(AgentProposal.created_at.desc())
             .limit(limit)
             .all()
         )

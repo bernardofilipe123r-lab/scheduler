@@ -89,7 +89,7 @@ class FeedbackEngine:
         """
         from app.db_connection import SessionLocal
         from app.models import (
-            AIAgent, TobyProposal, ScheduledReel, GenerationJob,
+            AIAgent, AgentProposal, ScheduledReel, GenerationJob,
             AgentPerformance,
         )
 
@@ -133,7 +133,7 @@ class FeedbackEngine:
 
                 # job.user_id stores the proposal_id
                 proposal_id = job.user_id
-                proposal = db.query(TobyProposal).filter_by(proposal_id=proposal_id).first()
+                proposal = db.query(AgentProposal).filter_by(proposal_id=proposal_id).first()
                 if not proposal:
                     continue
 
@@ -274,14 +274,14 @@ class FeedbackEngine:
 
             # Also count proposals generated per agent (regardless of publication)
             for agent_id in results:
-                proposal_count = db.query(TobyProposal).filter(
-                    TobyProposal.agent_name == agent_id,
-                    TobyProposal.created_at >= window_start,
+                proposal_count = db.query(AgentProposal).filter(
+                    AgentProposal.agent_name == agent_id,
+                    AgentProposal.created_at >= window_start,
                 ).count()
-                accepted_count = db.query(TobyProposal).filter(
-                    TobyProposal.agent_name == agent_id,
-                    TobyProposal.status == "accepted",
-                    TobyProposal.created_at >= window_start,
+                accepted_count = db.query(AgentProposal).filter(
+                    AgentProposal.agent_name == agent_id,
+                    AgentProposal.status == "accepted",
+                    AgentProposal.created_at >= window_start,
                 ).count()
                 results[agent_id]["total_proposals"] = proposal_count
                 results[agent_id]["accepted_proposals"] = accepted_count

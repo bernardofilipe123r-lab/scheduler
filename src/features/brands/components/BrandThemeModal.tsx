@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Upload, Loader2 } from 'lucide-react'
 import { apiClient } from '@/shared/api/client'
 import { supabase } from '@/shared/api/supabase'
@@ -53,9 +53,6 @@ const DARK_BG =
 
 /* Sample data for preview */
 const SAMPLE_TITLE = 'SURPRISING TRUTHS ABOUT DETOXIFICATION'
-const TITLE_LINES = ['SURPRISING TRUTHS', 'ABOUT', 'DETOXIFICATION']
-/* Stepped bar widths proportional to text length, centered (like PIL renderer) */
-const BAR_WIDTHS = ['80%', '30%', '62%']
 const SAMPLE_CONTENT = [
   'Your liver does an incredible job filtering toxins',
   'Drinking more water supports natural detox',
@@ -98,6 +95,28 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
   const [darkThumbnailTextColor, setDarkThumbnailTextColor] = useState(defaults.darkThumbnailTextColor)
   const [darkContentTitleTextColor, setDarkContentTitleTextColor] = useState(defaults.darkContentTitleTextColor)
   const [darkContentTitleBgColor, setDarkContentTitleBgColor] = useState(defaults.darkContentTitleBgColor)
+
+  /* Editable preview text */
+  const [previewTitle, setPreviewTitle] = useState(SAMPLE_TITLE)
+  const [previewContentText, setPreviewContentText] = useState(SAMPLE_CONTENT.join('\n'))
+
+  const previewContentLines = previewContentText.split('\n').filter(l => l.trim())
+
+  const titleLines = useMemo(() => {
+    const words = previewTitle.trim().split(/\s+/).filter(Boolean)
+    if (words.length <= 2) return [previewTitle.trim()]
+    const third = Math.ceil(words.length / 3)
+    return [
+      words.slice(0, third).join(' '),
+      words.slice(third, third * 2).join(' '),
+      words.slice(third * 2).join(' '),
+    ].filter(l => l.trim())
+  }, [previewTitle])
+
+  const barWidths = useMemo(() => {
+    const maxLen = Math.max(...titleLines.map(l => l.length), 1)
+    return titleLines.map(l => `${Math.max(25, Math.round((l.length / maxLen) * 85))}%`)
+  }, [titleLines])
 
   /* Derived for current mode */
   const thumbnailTextColor = mode === 'light' ? lightThumbnailTextColor : '#ffffff'
@@ -188,7 +207,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
 
   /* Content start Y = barStartY + N bars × barHeight + titleContentGap */
   const contentStartY =
-    PX.barStartY + TITLE_LINES.length * PX.barHeight + PX.titleContentGap
+    PX.barStartY + titleLines.length * PX.barHeight + PX.titleContentGap
 
   /* ──────────────────────── RENDER ──────────────────────── */
   return (
@@ -211,6 +230,30 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
         >
           🌙 Dark Mode
         </button>
+      </div>
+
+      {/* ── Preview Text Inputs ── */}
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-0.5 block">Preview Title</label>
+          <input
+            type="text"
+            value={previewTitle}
+            onChange={e => setPreviewTitle(e.target.value)}
+            className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent"
+            placeholder="Title text…"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-0.5 block">Preview Content (one per line)</label>
+          <textarea
+            value={previewContentText}
+            onChange={e => setPreviewContentText(e.target.value)}
+            rows={2}
+            className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent resize-none leading-tight"
+            placeholder="Line 1&#10;Line 2&#10;Line 3"
+          />
+        </div>
       </div>
 
       <div className="flex gap-6">
@@ -269,7 +312,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
                         wordBreak: 'break-word',
                       }}
                     >
-                      {SAMPLE_TITLE}
+                      {previewTitle}
                     </div>
 
                     {/* Brand name — absolute so it doesn't shift title centering */}
@@ -327,11 +370,11 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
                     zIndex: 1,
                   }}
                 >
-                  {TITLE_LINES.map((line, i) => (
+                  {titleLines.map((line, i) => (
                     <div
                       key={i}
                       style={{
-                        width: BAR_WIDTHS[i],
+                        width: barWidths[i],
                         height: PX.barHeight,
                         margin: '0 auto',
                         backgroundColor: hexToRgba(contentTitleBgColor, 200 / 255),
@@ -367,7 +410,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
                     zIndex: 1,
                   }}
                 >
-                  {SAMPLE_CONTENT.map((line, i) => (
+                  {previewContentLines.map((line, i) => (
                     <div
                       key={i}
                       style={{

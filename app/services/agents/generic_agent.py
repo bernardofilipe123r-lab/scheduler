@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
-from app.models import TobyProposal, PostPerformance, TrendingContent, ContentHistory, AIAgent
+from app.models import AgentProposal, PostPerformance, TrendingContent, ContentHistory, AIAgent
 from app.services.content.tracker import get_content_tracker, TOPIC_BUCKETS
 
 
@@ -461,7 +461,7 @@ class GenericAgent:
     # PROPOSAL GENERATION — generic strategy router
     # ──────────────────────────────────────────────────────────
 
-    def _generate_proposal(self, strategy: str, intel: Dict, content_type: str = "reel", brand: str = None) -> Optional[TobyProposal]:
+    def _generate_proposal(self, strategy: str, intel: Dict, content_type: str = "reel", brand: str = None) -> Optional[AgentProposal]:
         """Route to the appropriate strategy prompt builder."""
 
         is_post = content_type == "post"
@@ -473,7 +473,7 @@ class GenericAgent:
         else:
             return self._generic_strategy(strategy, intel, content_type, brand, is_post=False)
 
-    def _generic_strategy(self, strategy: str, intel: Dict, content_type: str, brand: str = None, is_post: bool = False) -> Optional[TobyProposal]:
+    def _generic_strategy(self, strategy: str, intel: Dict, content_type: str, brand: str = None, is_post: bool = False) -> Optional[AgentProposal]:
         """
         Universal strategy executor — builds the right prompt based on strategy
         name and calls DeepSeek.
@@ -728,7 +728,7 @@ Respond with a JSON object:
         source_type: str = None, source_ig_media_id: str = None,
         source_title: str = None, source_performance_score: float = None,
         source_account: str = None,
-    ) -> Optional[TobyProposal]:
+    ) -> Optional[AgentProposal]:
         """Call DeepSeek API, parse response, save proposal to DB."""
 
         is_post = content_type == "post"
@@ -847,7 +847,7 @@ Respond with a JSON object:
             from app.db_connection import SessionLocal
             db = SessionLocal()
             try:
-                proposal = TobyProposal(
+                proposal = AgentProposal(
                     proposal_id=proposal_id,
                     user_id=self.user_id or "",
                     status="pending",
@@ -954,7 +954,7 @@ Respond with a JSON object:
         from sqlalchemy import func
         db = SessionLocal()
         try:
-            max_id = db.query(func.max(TobyProposal.id)).scalar()
+            max_id = db.query(func.max(AgentProposal.id)).scalar()
             num = (max_id or 0) + 1
             return f"{self.proposal_prefix}-{num:03d}"
         finally:

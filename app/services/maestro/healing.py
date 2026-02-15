@@ -26,7 +26,7 @@ class HealingMixin:
 
         try:
             from app.db_connection import SessionLocal
-            from app.models import GenerationJob, TobyProposal
+            from app.models import GenerationJob, AgentProposal
 
             db = SessionLocal()
             try:
@@ -127,8 +127,8 @@ class HealingMixin:
                 other_failures = []
                 for job in failed_jobs:
                     proposal = (
-                        db.query(TobyProposal)
-                        .filter(TobyProposal.accepted_job_id == job.job_id)
+                        db.query(AgentProposal)
+                        .filter(AgentProposal.accepted_job_id == job.job_id)
                         .first()
                     )
                     if proposal:

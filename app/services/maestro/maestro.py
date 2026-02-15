@@ -208,19 +208,19 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
     def _refresh_agent_counts(self, user_id: Optional[str] = None):
         """Refresh per-agent today's proposal counts from DB (dynamic)."""
         from app.db_connection import SessionLocal
-        from app.models import TobyProposal
+        from app.models import AgentProposal
 
         db = SessionLocal()
         try:
             today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             for agent_name in list(self.state.agents.keys()):
                 q = (
-                    db.query(TobyProposal)
-                    .filter(TobyProposal.agent_name == agent_name)
-                    .filter(TobyProposal.created_at >= today)
+                    db.query(AgentProposal)
+                    .filter(AgentProposal.agent_name == agent_name)
+                    .filter(AgentProposal.created_at >= today)
                 )
                 if user_id:
-                    q = q.filter(TobyProposal.user_id == user_id)
+                    q = q.filter(AgentProposal.user_id == user_id)
                 count = q.count()
                 self.state.agents[agent_name].proposals_today = count
         finally:

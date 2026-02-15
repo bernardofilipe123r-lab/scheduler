@@ -200,14 +200,14 @@ class DiagnosticsEngine:
     def _check_content_pipeline(self) -> CheckResult:
         """Verify content is being generated — proposals + jobs in last 48h."""
         from app.db_connection import SessionLocal
-        from app.models import TobyProposal, GenerationJob
+        from app.models import AgentProposal, GenerationJob
 
         db = SessionLocal()
         try:
             cutoff = datetime.utcnow() - timedelta(hours=48)
 
-            proposals_48h = db.query(TobyProposal).filter(
-                TobyProposal.created_at >= cutoff
+            proposals_48h = db.query(AgentProposal).filter(
+                AgentProposal.created_at >= cutoff
             ).count()
 
             jobs_48h = db.query(GenerationJob).filter(
@@ -293,8 +293,8 @@ class DiagnosticsEngine:
 
             if perf_count == 0 and mutations_2w == 0:
                 # System might be new, check if there are enough posts
-                from app.models import TobyProposal
-                total_proposals = db.query(TobyProposal).count()
+                from app.models import AgentProposal
+                total_proposals = db.query(AgentProposal).count()
                 if total_proposals < 10:
                     return CheckResult("evolution_integrity", "warn", "Evolution not started — too few proposals yet (expected for new system)")
                 return CheckResult("evolution_integrity", "warn", "No performance snapshots or mutations yet — feedback cycle may not be running")
@@ -414,7 +414,7 @@ class DiagnosticsEngine:
     def _check_data_consistency(self) -> CheckResult:
         """Check for orphaned/inconsistent data."""
         from app.db_connection import SessionLocal
-        from app.models import AIAgent, TobyProposal
+        from app.models import AIAgent, AgentProposal
 
         db = SessionLocal()
         try:
@@ -425,8 +425,8 @@ class DiagnosticsEngine:
             all_agent_ids = {a.agent_id for a in db.query(AIAgent).all()}
 
             recent = datetime.utcnow() - timedelta(days=7)
-            recent_proposals = db.query(TobyProposal).filter(
-                TobyProposal.created_at >= recent
+            recent_proposals = db.query(AgentProposal).filter(
+                AgentProposal.created_at >= recent
             ).all()
 
             orphan_count = 0

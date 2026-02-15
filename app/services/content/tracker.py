@@ -423,7 +423,7 @@ class ContentTracker:
         Combines:
         1. Brand-specific history (60 days) — titles this brand already used
         2. Cross-brand recent titles (7 days) — avoid same content across brands
-        3. Also pulls from toby_proposals table for titles not yet in content_history
+        3. Also pulls from agent_proposals table for titles not yet in content_history
 
         Returns a formatted string ready for prompt injection.
         """
@@ -435,7 +435,7 @@ class ContentTracker:
         # 1. Brand-specific history from content_history
         brand_titles = self.get_recent_titles(content_type, limit=60, brand=brand)
 
-        # 2. Also pull from toby_proposals for this brand (covers content not yet in content_history)
+        # 2. Also pull from agent_proposals for this brand (covers content not yet in content_history)
         proposal_titles = self._get_recent_proposal_titles(brand, content_type, days=days, limit=60)
         for t in proposal_titles:
             if t not in brand_titles:
@@ -508,27 +508,27 @@ class ContentTracker:
         limit: int = 60,
         exclude_brand: str = None,
     ) -> List[str]:
-        """Pull recent titles from toby_proposals table."""
+        """Pull recent titles from agent_proposals table."""
         try:
-            from app.models import TobyProposal
+            from app.models import AgentProposal
             from sqlalchemy import desc
 
             cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             db = self._get_session()
             try:
                 query = (
-                    db.query(TobyProposal.title)
+                    db.query(AgentProposal.title)
                     .filter(
-                        TobyProposal.content_type == content_type,
-                        TobyProposal.created_at >= cutoff,
+                        AgentProposal.content_type == content_type,
+                        AgentProposal.created_at >= cutoff,
                     )
                 )
                 if brand:
-                    query = query.filter(TobyProposal.brand == brand)
+                    query = query.filter(AgentProposal.brand == brand)
                 if exclude_brand:
-                    query = query.filter(TobyProposal.brand != exclude_brand)
+                    query = query.filter(AgentProposal.brand != exclude_brand)
 
-                rows = query.order_by(desc(TobyProposal.created_at)).limit(limit).all()
+                rows = query.order_by(desc(AgentProposal.created_at)).limit(limit).all()
                 return [r.title for r in rows if r.title]
             finally:
                 db.close()
@@ -546,7 +546,7 @@ class ContentTracker:
         """
         Check if a title is a near-duplicate for a SPECIFIC brand.
 
-        Checks both content_history and toby_proposals tables.
+        Checks both content_history and agent_proposals tables.
         Returns True if the same keyword hash was used in the last N days.
         """
         if days is None:
@@ -571,15 +571,15 @@ class ContentTracker:
                 if ch_count > 0:
                     return True
 
-                # Also check toby_proposals (content might not be in content_history yet)
-                from app.models import TobyProposal
+                # Also check agent_proposals (content might not be in content_history yet)
+                from app.models import AgentProposal
                 # Check proposals by doing keyword comparison on title
                 proposals = (
-                    db.query(TobyProposal.title)
+                    db.query(AgentProposal.title)
                     .filter(
-                        TobyProposal.content_type == content_type,
-                        TobyProposal.brand == brand,
-                        TobyProposal.created_at >= cutoff,
+                        AgentProposal.content_type == content_type,
+                        AgentProposal.brand == brand,
+                        AgentProposal.created_at >= cutoff,
                     )
                     .all()
                 )

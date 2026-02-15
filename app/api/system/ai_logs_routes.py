@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import desc, func
 
 from app.db_connection import SessionLocal
-from app.models import TobyProposal, TrendingContent, PostPerformance
+from app.models import AgentProposal, TrendingContent, PostPerformance
 
 router = APIRouter(tags=["ai-logs"])
 
@@ -32,33 +32,33 @@ def get_ai_logs(
         since = datetime.utcnow() - timedelta(days=days)
 
         # ── Base query ──
-        q = db.query(TobyProposal).filter(TobyProposal.created_at >= since)
+        q = db.query(AgentProposal).filter(AgentProposal.created_at >= since)
         if agent and agent != "all":
-            q = q.filter(TobyProposal.agent_name == agent)
+            q = q.filter(AgentProposal.agent_name == agent)
         if brand:
-            q = q.filter(TobyProposal.brand == brand)
+            q = q.filter(AgentProposal.brand == brand)
         if status:
-            q = q.filter(TobyProposal.status == status)
+            q = q.filter(AgentProposal.status == status)
         if strategy:
-            q = q.filter(TobyProposal.strategy == strategy)
-        proposals = q.order_by(desc(TobyProposal.created_at)).limit(limit).all()
+            q = q.filter(AgentProposal.strategy == strategy)
+        proposals = q.order_by(desc(AgentProposal.created_at)).limit(limit).all()
 
         # ── Global stats ──
         def count_q(extra_filters=None):
-            cq = db.query(func.count(TobyProposal.id)).filter(TobyProposal.created_at >= since)
+            cq = db.query(func.count(AgentProposal.id)).filter(AgentProposal.created_at >= since)
             if agent and agent != "all":
-                cq = cq.filter(TobyProposal.agent_name == agent)
+                cq = cq.filter(AgentProposal.agent_name == agent)
             if brand:
-                cq = cq.filter(TobyProposal.brand == brand)
+                cq = cq.filter(AgentProposal.brand == brand)
             if extra_filters:
                 for f in extra_filters:
                     cq = cq.filter(f)
             return cq.scalar() or 0
 
         total = count_q()
-        accepted = count_q([TobyProposal.status == "accepted"])
-        rejected = count_q([TobyProposal.status == "rejected"])
-        pending = count_q([TobyProposal.status == "pending"])
+        accepted = count_q([AgentProposal.status == "accepted"])
+        rejected = count_q([AgentProposal.status == "rejected"])
+        pending = count_q([AgentProposal.status == "pending"])
 
         # ── Per-agent stats — dynamic from DB ──
         agent_stats = {}
@@ -71,20 +71,20 @@ def get_ai_logs(
             agent_ids = []
             agent_meta = {}
         for an in agent_ids:
-            a_total = db.query(func.count(TobyProposal.id)).filter(
-                TobyProposal.created_at >= since, TobyProposal.agent_name == an
+            a_total = db.query(func.count(AgentProposal.id)).filter(
+                AgentProposal.created_at >= since, AgentProposal.agent_name == an
             ).scalar() or 0
-            a_accepted = db.query(func.count(TobyProposal.id)).filter(
-                TobyProposal.created_at >= since, TobyProposal.agent_name == an,
-                TobyProposal.status == "accepted"
+            a_accepted = db.query(func.count(AgentProposal.id)).filter(
+                AgentProposal.created_at >= since, AgentProposal.agent_name == an,
+                AgentProposal.status == "accepted"
             ).scalar() or 0
             agent_stats[an] = {"total": a_total, "accepted": a_accepted, **(agent_meta.get(an, {}))}
 
         # ── Per-brand stats ──
         brand_rows = (
-            db.query(TobyProposal.brand, TobyProposal.status, func.count(TobyProposal.id))
-            .filter(TobyProposal.created_at >= since)
-            .group_by(TobyProposal.brand, TobyProposal.status)
+            db.query(AgentProposal.brand, AgentProposal.status, func.count(AgentProposal.id))
+            .filter(AgentProposal.created_at >= since)
+            .group_by(AgentProposal.brand, AgentProposal.status)
             .all()
         )
         brand_stats = {}
@@ -97,12 +97,12 @@ def get_ai_logs(
                 brand_stats[bname][st] += c
 
         # ── Strategy breakdown ──
-        strat_q = db.query(TobyProposal.strategy, TobyProposal.status, func.count(TobyProposal.id)).filter(
-            TobyProposal.created_at >= since
+        strat_q = db.query(AgentProposal.strategy, AgentProposal.status, func.count(AgentProposal.id)).filter(
+            AgentProposal.created_at >= since
         )
         if agent and agent != "all":
-            strat_q = strat_q.filter(TobyProposal.agent_name == agent)
-        strat_rows = strat_q.group_by(TobyProposal.strategy, TobyProposal.status).all()
+            strat_q = strat_q.filter(AgentProposal.agent_name == agent)
+        strat_rows = strat_q.group_by(AgentProposal.strategy, AgentProposal.status).all()
         strategies = {}
         for s, st, c in strat_rows:
             if s not in strategies:
@@ -125,8 +125,8 @@ def get_ai_logs(
 
         # ── Today ──
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_proposals = db.query(func.count(TobyProposal.id)).filter(
-            TobyProposal.created_at >= today_start
+        today_proposals = db.query(func.count(AgentProposal.id)).filter(
+            AgentProposal.created_at >= today_start
         ).scalar() or 0
 
         # ── Daily breakdown (7 days) ──
@@ -134,12 +134,12 @@ def get_ai_logs(
         for d in range(7):
             day_start = (datetime.utcnow() - timedelta(days=d)).replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
-            dq = db.query(func.count(TobyProposal.id)).filter(
-                TobyProposal.created_at >= day_start, TobyProposal.created_at < day_end,
+            dq = db.query(func.count(AgentProposal.id)).filter(
+                AgentProposal.created_at >= day_start, AgentProposal.created_at < day_end,
             )
-            da = db.query(func.count(TobyProposal.id)).filter(
-                TobyProposal.created_at >= day_start, TobyProposal.created_at < day_end,
-                TobyProposal.status == "accepted",
+            da = db.query(func.count(AgentProposal.id)).filter(
+                AgentProposal.created_at >= day_start, AgentProposal.created_at < day_end,
+                AgentProposal.status == "accepted",
             )
             daily.append({
                 "date": day_start.strftime("%Y-%m-%d"),

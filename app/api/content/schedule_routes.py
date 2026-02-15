@@ -705,7 +705,9 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
             platforms=["instagram", "facebook"],
             user_name="Web Interface User",
             brand=request.brand,
-            variant="carousel" if carousel_paths else "post"
+            variant="post",
+            post_title=request.title,
+            slide_texts=request.slide_texts,
         )
         
         # Store carousel metadata alongside the schedule

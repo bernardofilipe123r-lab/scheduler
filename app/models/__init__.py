@@ -4,7 +4,7 @@ from app.models.base import Base
 from app.models.jobs import GenerationJob
 from app.models.scheduling import ScheduledReel
 from app.models.brands import Brand
-from app.models.agents import AIAgent, AgentPerformance, AgentLearning, GenePool, TobyProposal
+from app.models.agents import AIAgent, AgentPerformance, AgentLearning, GenePool, AgentProposal
 from app.models.auth import UserProfile
 from app.models.analytics import (
     BrandAnalytics,
@@ -34,7 +34,7 @@ __all__ = [
     "AgentPerformance",
     "AgentLearning",
     "GenePool",
-    "TobyProposal",
+    "AgentProposal",
     "UserProfile",
     "BrandAnalytics",
     "AnalyticsRefreshLog",

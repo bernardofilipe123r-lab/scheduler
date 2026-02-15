@@ -3,12 +3,13 @@ import { get, post } from '@/shared/api/client'
 import {
   Dna, Trophy, Skull, Sparkles, Zap, Shield, AlertTriangle, ChevronDown,
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
-  Heart, Activity, Loader2, RefreshCw, Crown,
+  Heart, Activity, Loader2, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
   Bot, Brain, Calendar, Info, Gauge, Pause, Play
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQuotas, useAgentStatuses, type AgentStatus, type QuotaData } from '@/features/ai-team'
+import { CompetitorSection } from '@/features/ai-team/components/CompetitorSection'
 
 // ── Types ──
 
@@ -213,7 +214,7 @@ export function AITeamPage() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [agentPerf, setAgentPerf] = useState<Record<string, PerformanceSnapshot[]>>({})
   const [agentLearnings, setAgentLearnings] = useState<Record<string, EvolutionEvent[]>>({})
-  const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'timeline' | 'gene-pool' | 'health' | 'quotas'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'timeline' | 'gene-pool' | 'health' | 'quotas' | 'competitors'>('overview')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const { data: agentStatusesData } = useAgentStatuses(activeTab === 'leaderboard')
@@ -347,13 +348,6 @@ export function AITeamPage() {
             {activeAgents.length} active agents competing • Generation {Math.max(...activeAgents.map(a => a.generation || 1), 1)} • {genePool.length} DNA archived
           </p>
         </div>
-        <button
-          onClick={refreshAll}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
       </div>
 
       {/* Stats Banner */}
@@ -374,6 +368,7 @@ export function AITeamPage() {
           { key: 'gene-pool' as const, label: 'Gene Pool', icon: Dna },
           { key: 'health' as const, label: 'System Health', icon: Stethoscope },
           { key: 'quotas' as const, label: 'API Quotas', icon: Gauge },
+          { key: 'competitors' as const, label: 'Competitors', icon: Swords },
         ].map(tab => (
           <button
             key={tab.key}
@@ -418,6 +413,19 @@ export function AITeamPage() {
       {activeTab === 'gene-pool' && <GenePoolView entries={genePool} />}
       {activeTab === 'health' && <SystemHealthView report={diagnostics} onRefresh={fetchDiagnostics} />}
       {activeTab === 'quotas' && <QuotasTab quotas={quotasData} quotasLoading={quotasLoading} />}
+
+      {activeTab === 'competitors' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <Swords className="w-5 h-5 text-indigo-500" />
+            Competitor Accounts
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Add Instagram accounts for your AI agents to learn from. They'll analyze top-performing content to improve your strategy.
+          </p>
+          <CompetitorSection />
+        </div>
+      )}
     </div>
   )
 }
@@ -1047,7 +1055,7 @@ function EvolutionTimeline({ events }: { events: EvolutionEvent[] }) {
       <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
         <Activity className="w-12 h-12 text-gray-300 mx-auto mb-3" />
         <p className="text-gray-500 text-lg">No evolution events yet</p>
-        <p className="text-gray-400 text-sm mt-1">Events will appear after the first feedback cycle</p>
+        <p className="text-gray-400 text-sm mt-1 max-w-lg mx-auto">When Maestro runs content generation cycles, agents compete by proposing content. Their performance (views, engagement) determines which agents survive and evolve. Events like mutations, selections, and eliminations will appear here.</p>
       </div>
     )
   }
@@ -1097,8 +1105,8 @@ function GenePoolView({ entries }: { entries: GenePoolEntry[] }) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
         <Dna className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-        <p className="text-gray-500 text-lg">Gene pool is empty</p>
-        <p className="text-gray-400 text-sm mt-1">DNA gets archived when agents are retired or perform well</p>
+        <p className="text-gray-500 text-lg">No archived DNA yet</p>
+        <p className="text-gray-400 text-sm mt-1 max-w-lg mx-auto">When an agent performs exceptionally well, its strategy parameters (creativity level, risk tolerance, content style) are saved as 'DNA' in the gene pool. Future agents can inherit these proven strategies to improve content quality over time.</p>
       </div>
     )
   }

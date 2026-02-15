@@ -29,13 +29,13 @@ export function CompetitorSection() {
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           placeholder="@instagram_handle"
-          className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
         />
         <button
           onClick={handleAdd}
           disabled={!handle.trim() || addMutation.isPending}
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {addMutation.isPending ? 'Adding...' : 'Add'}
         </button>
@@ -43,7 +43,7 @@ export function CompetitorSection() {
 
       {/* Error message */}
       {addMutation.isError && (
-        <p className="text-red-400 text-xs">
+        <p className="text-red-600 text-xs">
           Failed to add account. It may already exist.
         </p>
       )}
@@ -56,18 +56,18 @@ export function CompetitorSection() {
           {competitors.map((comp) => (
             <div
               key={comp.id}
-              className="flex items-center justify-between bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3"
+              className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-3"
             >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">
                   IG
                 </div>
                 <div>
-                  <span className="text-white text-sm font-medium">
+                  <span className="text-gray-900 text-sm font-medium">
                     @{comp.instagram_handle}
                   </span>
                   {comp.brand_id && (
-                    <span className="ml-2 text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">
+                    <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
                       {comp.brand_id}
                     </span>
                   )}
@@ -95,7 +95,7 @@ export function CompetitorSection() {
           ))}
         </div>
       ) : (
-        <div className="text-gray-500 text-sm text-center py-4 border border-dashed border-gray-700 rounded-lg">
+        <div className="text-gray-500 text-sm text-center py-4 border border-dashed border-gray-300 rounded-lg">
           No competitor accounts added yet
         </div>
       )}

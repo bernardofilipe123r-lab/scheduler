@@ -173,7 +173,7 @@ class APIQuotaManager:
         return True
 
     async def fetch_deapi_balance(self) -> dict:
-        """Fetch deAPI account balance. Endpoint: GET https://api.deapi.co/v1/balance"""
+        """Fetch deAPI account balance. Endpoint: GET https://api.deapi.ai/api/v1/client/balance"""
         import os
         import aiohttp
 
@@ -184,7 +184,7 @@ class APIQuotaManager:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    'https://api.deapi.co/v1/balance',
+                    'https://api.deapi.ai/api/v1/client/balance',
                     headers={'Authorization': f'Bearer {api_key}'},
                     timeout=aiohttp.ClientTimeout(total=5)
                 ) as resp:
