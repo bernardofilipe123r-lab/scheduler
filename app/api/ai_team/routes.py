@@ -125,45 +125,50 @@ async def get_agents_status(db: Session = Depends(get_db), user: dict = Depends(
 # ── QUOTAS ────────────────────────────────────────────────────
 
 @router.get("/quotas")
-async def get_api_quotas(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def get_api_quotas(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get API quota usage for all services."""
-    from app.services.api_quota_manager import APIQuotaManager
+    from app.services.api_quota_manager import get_quota_manager
+    qm = get_quota_manager(db)
 
-    manager = APIQuotaManager(db)
+    hourly = qm.get_usage_summary()
+    daily = qm.get_daily_summary()
 
-    # Meta uses hourly limits
-    hourly = manager.get_usage_summary()
-    meta_info = hourly.get('meta', {})
+    # Build base quota data
+    meta_data = hourly.get('meta', {})
+    deapi_data = daily.get('deapi', {'used': 0, 'limit': 500, 'remaining': 500, 'percentage': 0})
+    deepseek_data = daily.get('deepseek', {'used': 0, 'limit': 1000, 'remaining': 1000, 'percentage': 0})
 
-    # deAPI and DeepSeek use daily limits
-    daily = manager.get_daily_summary()
+    # Try fetching external quota info (non-blocking)
+    try:
+        deapi_external = await qm.fetch_deapi_balance()
+        if 'error' not in deapi_external:
+            deapi_data.update(deapi_external)
+        else:
+            deapi_data['error'] = deapi_external['error']
+    except Exception:
+        pass
 
-    deepseek_used = daily.get('deepseek', {}).get('used', 0)
-    cost_estimate = round(deepseek_used * 0.002, 2)
+    try:
+        deepseek_external = await qm.fetch_deepseek_info()
+        if 'error' not in deepseek_external:
+            deepseek_data.update(deepseek_external)
+        else:
+            deepseek_data['error'] = deepseek_external['error']
+    except Exception:
+        pass
+
+    deapi_data['period'] = 'daily'
+    deepseek_data['period'] = 'daily'
+    meta_data['period'] = 'hourly'
+
+    history = qm.get_history(hours=24)
 
     return {
-        'quotas': {
-            'meta': {
-                'used': meta_info.get('used', 0),
-                'limit': meta_info.get('limit', 150),
-                'remaining': meta_info.get('remaining', 150),
-                'period': 'hourly',
-            },
-            'deapi': {
-                'used': daily.get('deapi', {}).get('used', 0),
-                'limit': daily.get('deapi', {}).get('limit', 500),
-                'remaining': daily.get('deapi', {}).get('remaining', 500),
-                'period': 'daily',
-            },
-            'deepseek': {
-                'used': deepseek_used,
-                'limit': daily.get('deepseek', {}).get('limit', 1000),
-                'remaining': daily.get('deepseek', {}).get('remaining', 1000),
-                'period': 'daily',
-            },
-        },
-        'cost_estimate': {'today_usd': cost_estimate},
-        'history': manager.get_history(hours=24),
+        "meta": meta_data,
+        "deapi": deapi_data,
+        "deepseek": deepseek_data,
+        "cost_estimate": {"today_usd": round(deepseek_data.get('used', 0) * 0.002, 2)},
+        "history": [{"hour": str(h.get('hour', '')), "service": h.get('service', ''), "calls_made": h.get('calls_made', 0)} for h in history]
     }
 
 

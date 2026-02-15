@@ -76,6 +76,31 @@ function formatHour(hour: number): string {
   return `${hour - 12}:00 PM`
 }
 
+/** Format an ISO datetime string as UTC time (HH:mm) */
+function formatUTCTime(iso: string, fmt: '24h' | '12h' = '24h'): string {
+  const d = parseISO(iso)
+  const h = d.getUTCHours()
+  const m = String(d.getUTCMinutes()).padStart(2, '0')
+  if (fmt === '24h') return `${String(h).padStart(2, '0')}:${m}`
+  const period = h >= 12 ? 'PM' : 'AM'
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return `${h12}:${m} ${period}`
+}
+
+/** Format an ISO datetime string as a full UTC date + time */
+function formatUTCDateTime(iso: string): string {
+  const d = parseISO(iso)
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const month = months[d.getUTCMonth()]
+  const day = d.getUTCDate()
+  const year = d.getUTCFullYear()
+  const h = d.getUTCHours()
+  const m = String(d.getUTCMinutes()).padStart(2, '0')
+  const period = h >= 12 ? 'PM' : 'AM'
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return `${month} ${day}, ${year} ${h12}:${m} ${period}`
+}
+
 export function ScheduledPage() {
   const navigate = useNavigate()
   const { data: posts = [], isLoading } = useScheduledPosts()
@@ -142,7 +167,9 @@ export function ScheduledPage() {
         if (contentTypeFilter === 'reels' && isPost) return
       }
 
-      const dateKey = format(parseISO(post.scheduled_time), 'yyyy-MM-dd')
+      // Use UTC date to match the UTC-based scheduling slot system
+      const d = parseISO(post.scheduled_time)
+      const dateKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
       if (!grouped[dateKey]) {
         grouped[dateKey] = []
       }
@@ -161,7 +188,8 @@ export function ScheduledPage() {
     const darkSlots = brandSlots.filter(s => s.variant === 'dark').map(s => s.hour)
     
     return (day: Date) => {
-      const dateKey = format(day, 'yyyy-MM-dd')
+      // Use same key format as getPostsForDay (local calendar date)
+      const dateKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
       const dayPosts = postsByDate[dateKey] || []
       
       // Filter to just this brand's posts
@@ -172,7 +200,7 @@ export function ScheduledPage() {
       const scheduledDark: number[] = []
       
       brandPosts.forEach(post => {
-        const hour = parseISO(post.scheduled_time).getHours()
+        const hour = parseISO(post.scheduled_time).getUTCHours()
         const variant = post.metadata?.variant || 'light'
         if (variant === 'light') {
           scheduledLight.push(hour)
@@ -202,7 +230,8 @@ export function ScheduledPage() {
   }, [brandFilter, postsByDate, brandOffsets])
   
   const getPostsForDay = (date: Date) => {
-    const dateKey = format(date, 'yyyy-MM-dd')
+    // Use UTC date key to match postsByDate grouping
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     let dayPosts = postsByDate[dateKey] || []
     
     // Apply platform filter
@@ -306,10 +335,12 @@ export function ScheduledPage() {
   }
 
   const openRescheduleModal = (post: ScheduledPost) => {
-    // Pre-fill with current scheduled time
+    // Pre-fill with current scheduled time in UTC (matches slot system)
     const currentTime = parseISO(post.scheduled_time)
-    setRescheduleDate(format(currentTime, 'yyyy-MM-dd'))
-    setRescheduleTime(format(currentTime, 'HH:mm'))
+    const utcDate = `${currentTime.getUTCFullYear()}-${String(currentTime.getUTCMonth() + 1).padStart(2, '0')}-${String(currentTime.getUTCDate()).padStart(2, '0')}`
+    const utcTime = `${String(currentTime.getUTCHours()).padStart(2, '0')}:${String(currentTime.getUTCMinutes()).padStart(2, '0')}`
+    setRescheduleDate(utcDate)
+    setRescheduleTime(utcTime)
     setShowRescheduleModal(true)
   }
   
@@ -317,12 +348,13 @@ export function ScheduledPage() {
     if (!selectedPost || !rescheduleDate || !rescheduleTime) return
     
     try {
-      const newDateTime = new Date(`${rescheduleDate}T${rescheduleTime}`)
+      // Treat user input as UTC to match the scheduling slot system
+      const isoString = `${rescheduleDate}T${rescheduleTime}:00Z`
       await reschedule.mutateAsync({
         id: selectedPost.id,
-        scheduledTime: newDateTime.toISOString()
+        scheduledTime: isoString
       })
-      toast.success(`Post rescheduled to ${format(newDateTime, 'MMM d, yyyy h:mm a')}`)
+      toast.success(`Post rescheduled to ${rescheduleDate} ${rescheduleTime} UTC`)
       setShowRescheduleModal(false)
       setSelectedPost(null)
     } catch {
@@ -739,7 +771,7 @@ export function ScheduledPage() {
                           color: getBrandColor(post.brand)
                         }}
                       >
-                        {format(parseISO(post.scheduled_time), 'HH:mm')}
+                        {formatUTCTime(post.scheduled_time)}
                       </div>
                     ))}
                     {dayPosts.length > 3 && (
@@ -799,7 +831,7 @@ export function ScheduledPage() {
                           }}
                         >
                           <div className="text-xs font-medium" style={{ color: getBrandColor(post.brand) }}>
-                            {format(parseISO(post.scheduled_time), 'h:mm a')}
+                            {formatUTCTime(post.scheduled_time, '12h')}
                           </div>
                           <div className="text-xs text-gray-600 truncate mt-0.5">
                             {post.title.split('\n')[0]}
@@ -874,7 +906,7 @@ export function ScheduledPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <BrandBadge brand={post.brand} size="sm" />
                       <span className="text-sm text-gray-500">
-                        {format(parseISO(post.scheduled_time), 'h:mm a')}
+                        {formatUTCTime(post.scheduled_time, '12h')}
                       </span>
                       <span className={clsx(
                         'text-xs px-1.5 py-0.5 rounded',
@@ -1005,7 +1037,7 @@ export function ScheduledPage() {
                         className="p-2 rounded border border-gray-200 hover:bg-gray-50 cursor-pointer flex items-center gap-3"
                       >
                         <span className="text-sm font-medium text-gray-700">
-                          {format(parseISO(post.scheduled_time), 'h:mm a')}
+                          {formatUTCTime(post.scheduled_time, '12h')}
                         </span>
                         <span className={clsx(
                           'text-xs px-2 py-0.5 rounded',
@@ -1053,7 +1085,7 @@ export function ScheduledPage() {
             <div className="flex items-center gap-3">
               <BrandBadge brand={selectedPost.brand} size="md" />
               <span className="text-gray-500">
-                {format(parseISO(selectedPost.scheduled_time), 'MMMM d, yyyy h:mm a')}
+                {formatUTCDateTime(selectedPost.scheduled_time)}
               </span>
               {selectedPost.status === 'failed' && (
                 <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full flex items-center gap-1">

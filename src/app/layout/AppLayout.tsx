@@ -80,7 +80,7 @@ export function AppLayout() {
               </NavLink>
               
               <NavLink
-                to="/history"
+                to="/jobs"
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                     isActive

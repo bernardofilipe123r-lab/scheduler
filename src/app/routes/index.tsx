@@ -58,7 +58,8 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginGuard />} />
       <Route path="/" element={<AuthGuard><AppLayout /></AuthGuard>}>
         <Route index element={<GeneratorPage />} />
-        <Route path="history" element={<HistoryPage />} />
+        <Route path="jobs" element={<HistoryPage />} />
+        <Route path="history" element={<Navigate to="/jobs" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />
         <Route path="scheduled" element={<ScheduledPage />} />
         <Route path="connected" element={<Navigate to="/brands?tab=connections" replace />} />

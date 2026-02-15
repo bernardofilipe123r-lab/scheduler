@@ -442,18 +442,22 @@ class ImageGenerator:
             
             print(f"📝 Using manual line breaks: {len(title_wrapped)} lines at {title_font_size}px")
         else:
-            # No manual breaks - use auto-wrap logic with scaling from specified size down to 20px
-            current_title_font_size = title_font_size
+            # No manual breaks - use stepped auto-scaling: 56 → 46 → 40 → 36 (minimum)
+            font_size_steps = [s for s in [56, 46, 40, 36] if s <= title_font_size]
+            if not font_size_steps or font_size_steps[0] < title_font_size:
+                font_size_steps.insert(0, title_font_size)
+            
             title_font = None
             title_wrapped = []
+            current_title_font_size = font_size_steps[0]
             
-            while current_title_font_size >= 20:
+            for step_size in font_size_steps:
+                current_title_font_size = step_size
                 title_font = load_font(FONT_BOLD, current_title_font_size)
                 title_wrapped = wrap_text(title_upper, title_font, max_title_width)
                 
                 if len(title_wrapped) <= 2:
                     break
-                current_title_font_size -= 1
             print(f"📝 Using auto-wrap: {len(title_wrapped)} lines at {current_title_font_size}px")
         
         # Calculate title height to determine content start position

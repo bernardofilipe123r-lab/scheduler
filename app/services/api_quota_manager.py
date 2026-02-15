@@ -171,7 +171,74 @@ class APIQuotaManager:
             return False
         
         return True
-    
+
+    async def fetch_deapi_balance(self) -> dict:
+        """Fetch deAPI account balance. Endpoint: GET https://api.deapi.co/v1/balance"""
+        import os
+        import aiohttp
+
+        api_key = os.getenv('DEAPI_API_KEY')
+        if not api_key:
+            return {'error': 'No DEAPI_API_KEY configured'}
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    'https://api.deapi.co/v1/balance',
+                    headers={'Authorization': f'Bearer {api_key}'},
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        balance = data.get('balance', 0)
+                        account_type = data.get('account_type', 'basic')
+                        rpm_limit = 300 if account_type == 'premium' else 3
+                        rpd_limit = None if account_type == 'premium' else 100
+                        return {
+                            'balance': balance,
+                            'account_type': account_type,
+                            'rpm_limit': rpm_limit,
+                            'rpd_limit': rpd_limit,
+                            'currency': data.get('currency', 'USD'),
+                        }
+                    return {'error': f'HTTP {resp.status}'}
+        except Exception as e:
+            return {'error': str(e)[:100]}
+
+    async def fetch_deepseek_info(self) -> dict:
+        """Fetch DeepSeek API rate limit info from response headers."""
+        import os
+        import aiohttp
+
+        api_key = os.getenv('DEEPSEEK_API_KEY')
+        if not api_key:
+            return {'error': 'No DEEPSEEK_API_KEY configured'}
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    'https://api.deepseek.com/models',
+                    headers={'Authorization': f'Bearer {api_key}'},
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        headers = resp.headers
+                        rpm_limit = int(headers.get('x-ratelimit-limit-requests', '0'))
+                        rpm_remaining = int(headers.get('x-ratelimit-remaining-requests', str(rpm_limit)))
+                        tpm_limit = int(headers.get('x-ratelimit-limit-tokens', '0'))
+                        tpm_remaining = int(headers.get('x-ratelimit-remaining-tokens', str(tpm_limit)))
+                        result = {}
+                        if rpm_limit > 0:
+                            result['requests_used'] = rpm_limit - rpm_remaining
+                            result['requests_limit'] = rpm_limit
+                        if tpm_limit > 0:
+                            result['tokens_used'] = tpm_limit - tpm_remaining
+                            result['tokens_limit'] = tpm_limit
+                        return result if result else {'error': 'No rate limit headers found'}
+                    return {'error': f'HTTP {resp.status}'}
+        except Exception as e:
+            return {'error': str(e)[:100]}
+
     def _current_hour(self) -> datetime:
         now = datetime.utcnow()
         return now.replace(minute=0, second=0, microsecond=0)

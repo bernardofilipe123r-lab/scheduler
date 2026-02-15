@@ -501,53 +501,92 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
   if (!quotas) return <div className="text-gray-500 text-center py-8">No quota data available</div>
 
   const services = [
-    { key: 'meta' as const, label: 'Meta Instagram API', limit: 150 },
-    { key: 'deapi' as const, label: 'deAPI (Image Generation)', limit: quotas.deapi?.limit || 999999 },
-    { key: 'deepseek' as const, label: 'DeepSeek (Content AI)', limit: quotas.deepseek?.limit || 999999 },
+    { key: 'deapi' as const, label: 'deAPI (Image Generation)', icon: '🎨', gradient: 'from-purple-50 to-pink-50', border: 'border-purple-200', bar: 'from-purple-500 to-pink-500' },
+    { key: 'deepseek' as const, label: 'DeepSeek (Content AI)', icon: '🧠', gradient: 'from-blue-50 to-cyan-50', border: 'border-blue-200', bar: 'from-blue-500 to-cyan-500' },
   ]
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {services.map(svc => {
-          const serviceData = quotas[svc.key]
-          if (!serviceData || typeof serviceData !== 'object' || !('used' in serviceData)) return null
-          const pct = Math.min(100, Math.round((serviceData.used / svc.limit) * 100))
-          const isHigh = pct > 80
+          const d = quotas[svc.key]
+          if (!d || typeof d !== 'object') return null
+          const used = d.used ?? 0
+          const limit = d.limit ?? 1
+          const remaining = d.remaining ?? (limit - used)
+          const pct = Math.min(100, Math.round((used / limit) * 100))
+          const period = d.period ?? 'daily'
+          const balance = d.balance
+          const accountType = d.account_type
+          const rpmLimit = d.rpm_limit
+          const error = d.error
 
           return (
-            <div key={svc.key} className="bg-white rounded-lg border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-700">{svc.label}</h3>
-                <span className={`text-xs font-mono ${isHigh ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {serviceData.used}/{svc.limit}
-                </span>
+            <div key={svc.key} className={`rounded-xl border ${svc.border} bg-gradient-to-br ${svc.gradient} p-6`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{svc.icon}</span>
+                  <h3 className="text-lg font-semibold text-gray-900">{svc.label}</h3>
+                </div>
+                {accountType && (
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    accountType === 'premium' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {accountType.toUpperCase()}
+                  </span>
+                )}
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    isHigh ? 'bg-red-500' : pct > 50 ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <div className="text-xs text-gray-500">
-                Resets {serviceData.reset_at ? new Date(serviceData.reset_at).toLocaleTimeString() : 'hourly'}
-              </div>
-              {serviceData.agent_breakdown && Object.keys(serviceData.agent_breakdown).length > 0 && (
-                <div className="mt-3 space-y-1">
-                  <div className="text-xs text-gray-500 font-medium">By Agent:</div>
-                  {Object.entries(serviceData.agent_breakdown).map(([agent, calls]) => (
-                    <div key={agent} className="flex justify-between text-xs">
-                      <span className="text-gray-600">{agent}</span>
-                      <span className="text-gray-900 font-mono">{calls as number}</span>
+              {error ? (
+                <p className="text-sm text-red-600">⚠️ {error}</p>
+              ) : (
+                <div className="space-y-3">
+                  {balance !== undefined && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Balance</span>
+                      <span className="font-mono font-bold text-emerald-600">${Number(balance).toFixed(2)}</span>
                     </div>
-                  ))}
+                  )}
+                  {rpmLimit !== undefined && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Rate Limit</span>
+                      <span className="font-mono text-gray-900">{rpmLimit} req/min</span>
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">{period === 'hourly' ? 'Hourly' : 'Daily'} Usage</span>
+                      <span className={`font-mono font-medium ${pct > 80 ? 'text-red-600' : 'text-gray-900'}`}>
+                        {used} / {limit}
+                      </span>
+                    </div>
+                    <div className="w-full bg-white/60 rounded-full h-2.5">
+                      <div className={`h-2.5 rounded-full bg-gradient-to-r ${svc.bar} transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>{remaining} remaining</span>
+                      <span>{pct}% used</span>
+                    </div>
+                  </div>
+                  {d.agent_breakdown && Object.keys(d.agent_breakdown).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-200/50 space-y-1">
+                      <div className="text-xs text-gray-500 font-medium">By Agent:</div>
+                      {Object.entries(d.agent_breakdown).map(([agent, calls]) => (
+                        <div key={agent} className="flex justify-between text-xs">
+                          <span className="text-gray-600">{agent}</span>
+                          <span className="text-gray-900 font-mono">{calls as number}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )
         })}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
+        💡 <strong>Note:</strong> Meta API quotas are tracked internally but not displayed here. deAPI and DeepSeek usage is tracked from actual API calls.
       </div>
 
       {quotas.history && quotas.history.length > 0 && (
@@ -636,18 +675,18 @@ function OverviewTab({
               <button
                 onClick={handlePauseResume}
                 disabled={pauseLoading}
-                className={`ml-auto flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-50 ${
+                className={`ml-auto flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 ${
                   isPaused
-                    ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
-                    : 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                    : 'bg-amber-600 text-white hover:bg-amber-500'
                 }`}
               >
                 {pauseLoading ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : isPaused ? (
-                  <Play className="w-3 h-3" />
+                  <Play className="w-4 h-4" />
                 ) : (
-                  <Pause className="w-3 h-3" />
+                  <Pause className="w-4 h-4" />
                 )}
                 {isPaused ? 'Resume' : 'Pause'}
               </button>

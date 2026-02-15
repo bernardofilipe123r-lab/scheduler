@@ -30,6 +30,11 @@ export interface QuotaService {
   reset_at: string
   agent_breakdown: Record<string, number>
   operation_breakdown: Record<string, number>
+  balance?: number
+  account_type?: string
+  rpm_limit?: number
+  period?: string
+  error?: string
 }
 
 export interface QuotaData {
