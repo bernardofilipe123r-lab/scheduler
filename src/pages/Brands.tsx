@@ -5,6 +5,7 @@ import { BrandsTabBar, type BrandsTab } from '@/features/brands/components/Brand
 import { MyBrandsTab } from '@/features/brands/components/MyBrandsTab'
 import { TemplatesTab } from '@/features/brands/components/TemplatesTab'
 import { ConnectionsTab } from '@/features/brands/components/ConnectionsTab'
+import { SettingsTab } from '@/features/brands/components/SettingsTab'
 
 export function BrandsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -56,6 +57,7 @@ export function BrandsPage() {
       )}
       {activeTab === 'templates' && <TemplatesTab />}
       {activeTab === 'connections' && <ConnectionsTab />}
+      {activeTab === 'settings' && <SettingsTab />}
     </div>
   )
 }

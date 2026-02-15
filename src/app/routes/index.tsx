@@ -11,13 +11,11 @@ import { ScheduledPage } from '@/pages/Scheduled'
 import { BrandsPage } from '@/pages/Brands'
 import { PostsPage } from '@/pages/Posts'
 import { AnalyticsPage } from '@/pages/Analytics'
-import { SettingsPage } from '@/pages/Settings'
-import { PostsPromptsPage } from '@/pages/PostsPrompts'
-import { ReelsPromptsPage } from '@/pages/ReelsPrompts'
 import { TobyPage } from '@/pages/Toby'
 import { MaestroPage } from '@/pages/Maestro'
 import { AITeamPage } from '@/pages/AITeam'
 import { AboutPage } from '@/pages/About'
+import { LogsPage } from '@/pages/Logs'
 import { Loader2 } from 'lucide-react'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -69,14 +67,12 @@ export function AppRoutes() {
         <Route path="brands" element={<BrandsPage />} />
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="prompts" element={<PostsPromptsPage />} />
-        <Route path="posts-prompts" element={<PostsPromptsPage />} />
-        <Route path="reels-prompts" element={<ReelsPromptsPage />} />
+        <Route path="settings" element={<Navigate to="/brands?tab=settings" replace />} />
         <Route path="toby" element={<TobyPage />} />
         <Route path="maestro" element={<MaestroPage />} />
         <Route path="ai-team" element={<AITeamPage />} />
         <Route path="about" element={<AboutPage />} />
+        <Route path="logs" element={<LogsPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>

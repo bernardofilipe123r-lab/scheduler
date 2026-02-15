@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Wand2, Info, Music, Bot, BookOpen, Dna } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Info, Music, Bot, BookOpen, Dna } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -14,7 +14,7 @@ export function AppLayout() {
   const { user, logout } = useAuth()
   
   // Check if current route is a settings page
-  const isSettingsRoute = ['/brands', '/settings', '/posts-prompts', '/reels-prompts', '/prompts', '/about'].includes(location.pathname)
+  const isSettingsRoute = ['/brands', '/about', '/logs'].includes(location.pathname)
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -180,7 +180,7 @@ export function AppLayout() {
                       Brands
                     </NavLink>
                     <NavLink
-                      to="/settings"
+                      to="/brands?tab=settings"
                       onClick={() => setSettingsOpen(false)}
                       className={({ isActive }) =>
                         `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
@@ -192,34 +192,6 @@ export function AppLayout() {
                     >
                       <Sliders className="w-4 h-4" />
                       App Settings
-                    </NavLink>
-                    <NavLink
-                      to="/posts-prompts"
-                      onClick={() => setSettingsOpen(false)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-primary-50 text-primary-600'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`
-                      }
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      Posts Prompts
-                    </NavLink>
-                    <NavLink
-                      to="/reels-prompts"
-                      onClick={() => setSettingsOpen(false)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-primary-50 text-primary-600'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`
-                      }
-                    >
-                      <Film className="w-4 h-4" />
-                      Reels Prompts
                     </NavLink>
                     <NavLink
                       to="/about"
@@ -256,16 +228,20 @@ export function AppLayout() {
                       <BookOpen className="w-4 h-4" />
                       AI Architecture
                     </a>
-                    <a
-                      href="/logs"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <NavLink
+                      to="/logs"
                       onClick={() => setSettingsOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-600'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`
+                      }
                     >
                       <ScrollText className="w-4 h-4" />
                       System Logs
-                    </a>
+                    </NavLink>
                   </div>
                 )}
               </div>

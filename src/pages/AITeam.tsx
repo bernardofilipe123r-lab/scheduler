@@ -4,7 +4,8 @@ import {
   Dna, Trophy, Skull, Sparkles, Zap, Shield, AlertTriangle, ChevronDown,
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, RefreshCw, Crown,
-  Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle
+  Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
+  Bot, Brain, Users, Calendar, Info
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -119,6 +120,16 @@ interface DiagnosticReport {
   created_at: string | null
 }
 
+interface MaestroStatus {
+  is_running: boolean
+  is_paused: boolean
+  uptime_human: string
+  total_cycles: number
+  total_proposals_generated: number
+  current_phase: string | null
+  errors: number
+}
+
 // ── Helpers ──
 
 const TIER_CONFIG = {
@@ -196,11 +207,12 @@ export function AITeamPage() {
   const [events, setEvents] = useState<EvolutionEvent[]>([])
   const [genePool, setGenePool] = useState<GenePoolEntry[]>([])
   const [diagnostics, setDiagnostics] = useState<DiagnosticReport | null>(null)
+  const [maestroStatus, setMaestroStatus] = useState<MaestroStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [agentPerf, setAgentPerf] = useState<Record<string, PerformanceSnapshot[]>>({})
   const [agentLearnings, setAgentLearnings] = useState<Record<string, EvolutionEvent[]>>({})
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'timeline' | 'gene-pool' | 'health'>('leaderboard')
+  const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'timeline' | 'gene-pool' | 'health'>('overview')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const fetchAgents = useCallback(async () => {
@@ -231,11 +243,18 @@ export function AITeamPage() {
     } catch (e) { console.error('Failed to fetch diagnostics', e) }
   }, [])
 
+  const fetchMaestroStatus = useCallback(async () => {
+    try {
+      const data = await get<MaestroStatus>('/api/maestro/status')
+      setMaestroStatus(data)
+    } catch (e) { console.error('Failed to fetch maestro status', e) }
+  }, [])
+
   const refreshAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([fetchAgents(), fetchEvents(), fetchGenePool(), fetchDiagnostics()])
+    await Promise.all([fetchAgents(), fetchEvents(), fetchGenePool(), fetchDiagnostics(), fetchMaestroStatus()])
     setLoading(false)
-  }, [fetchAgents, fetchEvents, fetchGenePool, fetchDiagnostics])
+  }, [fetchAgents, fetchEvents, fetchGenePool, fetchDiagnostics, fetchMaestroStatus])
 
   useEffect(() => { refreshAll() }, [refreshAll])
   useEffect(() => {
@@ -345,6 +364,7 @@ export function AITeamPage() {
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
         {[
+          { key: 'overview' as const, label: 'Overview', icon: Info },
           { key: 'leaderboard' as const, label: 'Leaderboard', icon: Trophy },
           { key: 'timeline' as const, label: 'Evolution Timeline', icon: Activity },
           { key: 'gene-pool' as const, label: 'Gene Pool', icon: Dna },
@@ -366,6 +386,14 @@ export function AITeamPage() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <OverviewTab
+          agents={activeAgents}
+          maestroStatus={maestroStatus}
+          totalProposals={activeAgents.reduce((s, a) => s + (a.lifetime_proposals || 0), 0)}
+        />
+      )}
+
       {activeTab === 'leaderboard' && (
         <div className="space-y-3">
           {activeAgents.map((agent, idx) => (
@@ -418,6 +446,206 @@ export function AITeamPage() {
 
 
 // ── Sub-components ──
+
+function OverviewTab({
+  agents,
+  maestroStatus,
+  totalProposals,
+}: {
+  agents: Agent[]
+  maestroStatus: MaestroStatus | null
+  totalProposals: number
+}) {
+  const builtinAgents = agents.filter(a => a.is_builtin)
+  const dynamicAgents = agents.filter(a => !a.is_builtin)
+  const isRunning = maestroStatus?.is_running ?? false
+  const isPaused = maestroStatus?.is_paused ?? false
+
+  return (
+    <div className="space-y-6">
+      {/* Live Status Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Bot className="w-5 h-5 text-indigo-500" />
+            <span className="text-sm font-medium text-gray-500">Active Agents</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{agents.length}</p>
+          <p className="text-xs text-gray-400 mt-1">{builtinAgents.length} core + {dynamicAgents.length} dynamic</p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-5 h-5 text-purple-500" />
+            <span className="text-sm font-medium text-gray-500">Total Proposals</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{formatNumber(totalProposals)}</p>
+          <p className="text-xs text-gray-400 mt-1">Lifetime across all agents</p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Brain className="w-5 h-5 text-violet-500" />
+            <span className="text-sm font-medium text-gray-500">Maestro</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${isRunning && !isPaused ? 'bg-green-500' : isPaused ? 'bg-yellow-500' : 'bg-gray-400'}`} />
+            <p className="text-lg font-bold text-gray-900">
+              {isRunning && !isPaused ? 'Running' : isPaused ? 'Paused' : 'Offline'}
+            </p>
+          </div>
+          {maestroStatus?.uptime_human && (
+            <p className="text-xs text-gray-400 mt-1">Up {maestroStatus.uptime_human}</p>
+          )}
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Activity className="w-5 h-5 text-emerald-500" />
+            <span className="text-sm font-medium text-gray-500">Burst Cycles</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{maestroStatus?.total_cycles ?? 0}</p>
+          <p className="text-xs text-gray-400 mt-1">Daily generation runs</p>
+        </div>
+      </div>
+
+      {/* System Architecture */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">System Architecture</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Toby */}
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900">Toby</h4>
+                <span className="text-xs text-indigo-600 font-medium">Explorer</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Proposes new content ideas, explores viral trends, and discovers winning angles.
+              High creativity, surprising takes, risk-tolerant.
+            </p>
+          </div>
+
+          {/* Lexi */}
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900">Lexi</h4>
+                <span className="text-xs text-emerald-600 font-medium">Optimizer</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Analyzes post performance, refines underperformers, and compounds wins.
+              Data-backed, systematic, consistent engagement over moonshots.
+            </p>
+          </div>
+
+          {/* Dynamic Agents */}
+          <div className="rounded-lg border border-purple-100 bg-purple-50/50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Users className="w-4 h-4 text-purple-600" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900">Dynamic Agents</h4>
+                <span className="text-xs text-purple-600 font-medium">{dynamicAgents.length} active</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              One agent auto-created per brand with randomized DNA (temperature, strategies, risk tolerance).
+              Each agent works across all brands but is born from one specific brand.
+            </p>
+          </div>
+
+          {/* Maestro */}
+          <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                <Brain className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900">Maestro</h4>
+                <span className="text-xs text-amber-600 font-medium">Orchestrator</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Orchestrates all agents on a schedule. Runs daily bursts at 12 PM Lisbon time,
+              collects metrics, scans trends, heals failed jobs, and triggers weekly evolution.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Scheduling System */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-blue-500" />
+          Scheduling &mdash; Offset System
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Each brand gets an auto-assigned offset (0, 1, 2, 3, 4) so content is staggered throughout the day.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-lg bg-gray-50 p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Reels Schedule</h4>
+            <p className="text-xs text-gray-500 mb-2">Base hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00</p>
+            <div className="space-y-1 text-xs font-mono text-gray-600">
+              <div>Offset 0 → 00:00, 04:00, 08:00, 12:00, 16:00, 20:00</div>
+              <div>Offset 1 → 01:00, 05:00, 09:00, 13:00, 17:00, 21:00</div>
+              <div>Offset 2 → 02:00, 06:00, 10:00, 14:00, 18:00, 22:00</div>
+              <div className="text-gray-400">...and so on</div>
+            </div>
+          </div>
+          <div className="rounded-lg bg-gray-50 p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Posts Schedule</h4>
+            <p className="text-xs text-gray-500 mb-2">Base hours: 08:00, 20:00</p>
+            <div className="space-y-1 text-xs font-mono text-gray-600">
+              <div>Offset 0 → 08:00, 20:00</div>
+              <div>Offset 1 → 09:00, 21:00</div>
+              <div>Offset 2 → 10:00, 22:00</div>
+              <div className="text-gray-400">...and so on</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Agent List */}
+      {agents.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Active Agents</h3>
+          <div className="divide-y divide-gray-100">
+            {agents.map(agent => (
+              <div key={agent.agent_id} className="flex items-center gap-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900">{agent.display_name}</span>
+                    {agent.is_builtin && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">CORE</span>
+                    )}
+                    {agent.created_for_brand && (
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{agent.created_for_brand}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">{agent.personality?.split('.')[0]}</p>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span title="Temperature"><Flame className="w-3 h-3 inline mr-1" />{agent.temperature}</span>
+                  <span title="Risk"><Target className="w-3 h-3 inline mr-1" />{agent.risk_tolerance}</span>
+                  <span title="Proposals"><Sparkles className="w-3 h-3 inline mr-1" />{agent.lifetime_proposals || 0}</span>
+                </div>
+                <div className="w-24">{survivalBar(agent.survival_score)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function StatCard({ icon: Icon, label, value, suffix, color }: { icon: any; label: string; value: string | number; suffix?: string; color: string }) {
   const colorMap: Record<string, string> = {
