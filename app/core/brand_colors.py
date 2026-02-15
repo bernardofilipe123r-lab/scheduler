@@ -198,6 +198,8 @@ def get_brand_colors(brand_name: str, variant: str) -> BrandModeColors:
     """
     Get color configuration for a specific brand and variant.
     
+    Reads from DB first, falls back to hardcoded BRAND_COLORS.
+    
     Args:
         brand_name: Brand identifier (gymcollege, healthycollege, etc.)
         variant: Mode variant ("light" or "dark")
@@ -208,12 +210,33 @@ def get_brand_colors(brand_name: str, variant: str) -> BrandModeColors:
     Raises:
         ValueError: If brand_name or variant is invalid
     """
+    if variant not in ("light", "dark"):
+        raise ValueError(f"Invalid variant: {variant}. Must be 'light' or 'dark'")
+
+    # Try DB first
+    try:
+        from app.services.brands.resolver import brand_resolver
+        brand = brand_resolver.get_brand(brand_name)
+        if brand and brand.colors:
+            colors = brand.colors
+            prefix = f"{variant}_"
+            thumb = colors.get(f"{prefix}thumbnail_text_color")
+            title_text = colors.get(f"{prefix}content_title_text_color")
+            title_bg = colors.get(f"{prefix}content_title_bg_color")
+
+            if thumb and title_text and title_bg:
+                return BrandModeColors(
+                    thumbnail_text_color=hex_to_rgb(thumb),
+                    content_title_text_color=hex_to_rgb(title_text),
+                    content_title_bg_color=hex_to_rgba(title_bg),
+                )
+    except Exception:
+        pass  # Fall through to hardcoded
+
+    # Fallback to hardcoded dict
     if brand_name not in BRAND_COLORS:
         raise ValueError(f"Unknown brand: {brand_name}. Available: {list(BRAND_COLORS.keys())}")
-    
-    if variant not in ["light", "dark"]:
-        raise ValueError(f"Invalid variant: {variant}. Must be 'light' or 'dark'")
-    
+
     brand_config = BRAND_COLORS[brand_name]
     return brand_config.light_mode if variant == "light" else brand_config.dark_mode
 
@@ -222,10 +245,19 @@ def get_brand_display_name(brand_name: str) -> str:
     """
     Get the display name for a brand (used in dark mode thumbnails).
     
+    Reads from DB first, falls back to hardcoded BRAND_DISPLAY_NAMES.
+    
     Args:
         brand_name: Brand identifier
         
     Returns:
         Display name string (e.g., "THE GYM COLLEGE")
     """
+    try:
+        from app.services.brands.resolver import brand_resolver
+        brand = brand_resolver.get_brand(brand_name)
+        if brand:
+            return brand.display_name
+    except Exception:
+        pass
     return BRAND_DISPLAY_NAMES.get(brand_name, "THE GYM COLLEGE")

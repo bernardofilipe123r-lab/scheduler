@@ -538,13 +538,20 @@ async def get_brand_theme(
     
     colors = brand.get("colors", {})
     
-    # Format for legacy theme endpoint
+    # Format for legacy theme endpoint + rendering colors
     theme = {
         "brand_color": colors.get("primary", "#000000"),
         "light_title_color": colors.get("light_mode", {}).get("text", "#000000"),
         "light_bg_color": colors.get("light_mode", {}).get("background", "#ffffff"),
         "dark_title_color": colors.get("dark_mode", {}).get("text", "#ffffff"),
         "dark_bg_color": colors.get("dark_mode", {}).get("background", "#000000"),
+        # Rendering colors
+        "light_thumbnail_text_color": colors.get("light_thumbnail_text_color"),
+        "light_content_title_text_color": colors.get("light_content_title_text_color"),
+        "light_content_title_bg_color": colors.get("light_content_title_bg_color"),
+        "dark_thumbnail_text_color": colors.get("dark_thumbnail_text_color"),
+        "dark_content_title_text_color": colors.get("dark_content_title_text_color"),
+        "dark_content_title_bg_color": colors.get("dark_content_title_bg_color"),
         "logo": brand.get("logo_path")
     }
     
@@ -563,6 +570,13 @@ async def update_brand_theme(
     light_bg_color: str = Form(...),
     dark_title_color: str = Form(...),
     dark_bg_color: str = Form(...),
+    # Rendering color fields (optional for backward compat)
+    light_thumbnail_text_color: Optional[str] = Form(None),
+    light_content_title_text_color: Optional[str] = Form(None),
+    light_content_title_bg_color: Optional[str] = Form(None),
+    dark_thumbnail_text_color: Optional[str] = Form(None),
+    dark_content_title_text_color: Optional[str] = Form(None),
+    dark_content_title_bg_color: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
@@ -596,6 +610,19 @@ async def update_brand_theme(
         }
     }
     
+    # Merge rendering colors if provided
+    rendering_fields = {
+        "light_thumbnail_text_color": light_thumbnail_text_color,
+        "light_content_title_text_color": light_content_title_text_color,
+        "light_content_title_bg_color": light_content_title_bg_color,
+        "dark_thumbnail_text_color": dark_thumbnail_text_color,
+        "dark_content_title_text_color": dark_content_title_text_color,
+        "dark_content_title_bg_color": dark_content_title_bg_color,
+    }
+    for key, val in rendering_fields.items():
+        if val is not None:
+            updated_colors[key] = val
+    
     updates = {"colors": updated_colors}
     
     # Handle logo upload
@@ -625,6 +652,12 @@ async def update_brand_theme(
             "light_bg_color": light_bg_color,
             "dark_title_color": dark_title_color,
             "dark_bg_color": dark_bg_color,
+            "light_thumbnail_text_color": updated_colors.get("light_thumbnail_text_color"),
+            "light_content_title_text_color": updated_colors.get("light_content_title_text_color"),
+            "light_content_title_bg_color": updated_colors.get("light_content_title_bg_color"),
+            "dark_thumbnail_text_color": updated_colors.get("dark_thumbnail_text_color"),
+            "dark_content_title_text_color": updated_colors.get("dark_content_title_text_color"),
+            "dark_content_title_bg_color": updated_colors.get("dark_content_title_bg_color"),
             "logo": updates.get("logo_path", brand.get("logo_path"))
         }
     }

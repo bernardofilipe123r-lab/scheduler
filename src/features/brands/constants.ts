@@ -5,51 +5,72 @@ export interface BrandInfo {
   logo: string
 }
 
-// Brand theme colors - matches Python brand_colors.py
-// Each brand has a primary color, and light/dark mode title and background colors
+// Brand theme colors - matches Python brand_colors.py rendering fields
+// Each brand has 3 color fields per mode that control actual reel/thumbnail rendering
 export interface BrandTheme {
   brandColor: string
-  lightTitleColor: string
-  lightBgColor: string
-  darkTitleColor: string
-  darkBgColor: string
+  lightThumbnailTextColor: string
+  lightContentTitleTextColor: string
+  lightContentTitleBgColor: string
+  darkThumbnailTextColor: string
+  darkContentTitleTextColor: string
+  darkContentTitleBgColor: string
 }
 
 export const BRAND_THEMES: Record<string, BrandTheme> = {
+  gymcollege: {
+    brandColor: '#000000',
+    lightThumbnailTextColor: '#000000',
+    lightContentTitleTextColor: '#000000',
+    lightContentTitleBgColor: '#c8e1f6',
+    darkThumbnailTextColor: '#ffffff',
+    darkContentTitleTextColor: '#ffffff',
+    darkContentTitleBgColor: '#00435c',
+  },
   healthycollege: {
-    brandColor: '#004f00',      // Dark green
-    lightTitleColor: '#000000',
-    lightBgColor: '#dcf6c8',    // Light green
-    darkTitleColor: '#ffffff',
-    darkBgColor: '#004f00',     // Dark green
+    brandColor: '#004f00',
+    lightThumbnailTextColor: '#004f00',
+    lightContentTitleTextColor: '#000000',
+    lightContentTitleBgColor: '#dcf6c8',
+    darkThumbnailTextColor: '#ffffff',
+    darkContentTitleTextColor: '#ffffff',
+    darkContentTitleBgColor: '#004f00',
   },
   longevitycollege: {
-    brandColor: '#019dc8',      // Cyan
-    lightTitleColor: '#000000',
-    lightBgColor: '#c8eaf6',    // Light cyan
-    darkTitleColor: '#ffffff',
-    darkBgColor: '#019dc8',     // Cyan
+    brandColor: '#019dc8',
+    lightThumbnailTextColor: '#019dc8',
+    lightContentTitleTextColor: '#000000',
+    lightContentTitleBgColor: '#c8eaf6',
+    darkThumbnailTextColor: '#ffffff',
+    darkContentTitleTextColor: '#ffffff',
+    darkContentTitleBgColor: '#019dc8',
   },
   wellbeingcollege: {
-    brandColor: '#ebbe4d',      // Yellow/gold
-    lightTitleColor: '#000000',
-    lightBgColor: '#fff4d6',    // Light yellow
-    darkTitleColor: '#ffffff',
-    darkBgColor: '#ebbe4d',     // Yellow
+    brandColor: '#ebbe4d',
+    lightThumbnailTextColor: '#ffcd53',
+    lightContentTitleTextColor: '#000000',
+    lightContentTitleBgColor: '#fff4d6',
+    darkThumbnailTextColor: '#ffffff',
+    darkContentTitleTextColor: '#ffffff',
+    darkContentTitleBgColor: '#ebbe4d',
   },
   vitalitycollege: {
-    brandColor: '#028f7a',      // Teal
-    lightTitleColor: '#ffffff',
-    lightBgColor: '#028f7a',    // Teal
-    darkTitleColor: '#ffffff',
-    darkBgColor: '#028f7a',     // Teal
+    brandColor: '#028f7a',
+    lightThumbnailTextColor: '#028f7a',
+    lightContentTitleTextColor: '#ffffff',
+    lightContentTitleBgColor: '#028f7a',
+    darkThumbnailTextColor: '#ffffff',
+    darkContentTitleTextColor: '#ffffff',
+    darkContentTitleBgColor: '#028f7a',
   },
   holisticcollege: {
-    brandColor: '#f0836e',      // Coral
-    lightTitleColor: '#000000',
-    lightBgColor: '#f9e0db',    // Light coral
-    darkTitleColor: '#ffffff',
-    darkBgColor: '#f0836e',     // Coral
+    brandColor: '#f0836e',
+    lightThumbnailTextColor: '#f19b8a',
+    lightContentTitleTextColor: '#000000',
+    lightContentTitleBgColor: '#f9e0db',
+    darkThumbnailTextColor: '#ffffff',
+    darkContentTitleTextColor: '#ffffff',
+    darkContentTitleBgColor: '#f0836e',
   },
 }
 
