@@ -122,6 +122,7 @@ def run_migrations():
             );
             CREATE INDEX IF NOT EXISTS idx_aqu_service ON api_quota_usage(service);
             CREATE INDEX IF NOT EXISTS idx_aqu_window ON api_quota_usage(hour_window DESC);
+            CREATE INDEX IF NOT EXISTS idx_aqu_service_created ON api_quota_usage(service, created_at);
         """))
 
         conn.execute(text("""
@@ -145,6 +146,8 @@ def run_migrations():
             CREATE INDEX IF NOT EXISTS idx_alc_type ON agent_learning_cycles(cycle_type);
             CREATE INDEX IF NOT EXISTS idx_alc_status ON agent_learning_cycles(status);
             CREATE INDEX IF NOT EXISTS idx_alc_created ON agent_learning_cycles(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_alc_agent_status ON agent_learning_cycles(agent_id, status);
+            CREATE INDEX IF NOT EXISTS idx_alc_agent_completed ON agent_learning_cycles(agent_id, completed_at DESC);
         """))
 
         conn.commit()

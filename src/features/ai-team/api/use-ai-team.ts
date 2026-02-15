@@ -142,19 +142,21 @@ async function fetchLearningCycles(agentId?: string): Promise<LearningCycleData[
 // Hooks
 // ═══════════════════════════════════════════════════
 
-export function useAgentStatuses() {
+export function useAgentStatuses(enabled = true) {
   return useQuery({
     queryKey: aiTeamKeys.agentStatuses(),
     queryFn: fetchAgentStatuses,
-    refetchInterval: 15000,
+    refetchInterval: enabled ? 15000 : false,
+    enabled,
   })
 }
 
-export function useQuotas() {
+export function useQuotas(enabled = true) {
   return useQuery({
     queryKey: aiTeamKeys.quotas(),
     queryFn: fetchQuotas,
-    refetchInterval: 30000,
+    refetchInterval: enabled ? 30000 : false,
+    enabled,
   })
 }
 

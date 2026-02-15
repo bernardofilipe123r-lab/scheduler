@@ -8,6 +8,7 @@ Uses token bucket algorithm with sliding window tracking.
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import APIQuotaUsage
@@ -20,10 +21,13 @@ class APIQuotaManager:
     """Rate limiter for external API calls."""
     
     LIMITS = {
-        'meta': 150,       # Calls per hour (conservative, Meta allows 200)
-        'deapi': 999999,   # Track only (no enforced limit)
-        'deepseek': 999999 # Track only
+        'meta': 150,        # Calls per hour (conservative, Meta allows 200)
+        'deapi': 500,       # Daily limit for content generation
+        'deepseek': 1000,   # Daily limit for AI operations
     }
+
+    HOURLY_SERVICES = {'meta'}
+    DAILY_SERVICES = {'deapi', 'deepseek'}
     
     PRIORITY_WEIGHTS = {
         'own_analysis': 1,       # Highest priority
@@ -104,6 +108,29 @@ class APIQuotaManager:
         
         return result
     
+    def get_daily_usage(self, service: str) -> int:
+        """Get total calls made for a service today (UTC)."""
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        total = self.db.query(func.coalesce(func.sum(APIQuotaUsage.calls_made), 0)).filter(
+            APIQuotaUsage.service == service,
+            APIQuotaUsage.hour_window >= today_start,
+        ).scalar()
+        return int(total)
+
+    def get_daily_summary(self) -> Dict:
+        """Get daily usage summary for daily-tracked services (deapi, deepseek)."""
+        result = {}
+        for service in self.DAILY_SERVICES:
+            limit = self.LIMITS.get(service, 500)
+            used = self.get_daily_usage(service)
+            result[service] = {
+                'used': used,
+                'limit': limit,
+                'remaining': max(0, limit - used),
+                'percentage': round(used / limit * 100, 1) if limit else 0,
+            }
+        return result
+
     def get_history(self, hours: int = 24) -> list:
         """Get usage history for the last N hours."""
         cutoff = self._current_hour() - timedelta(hours=hours)

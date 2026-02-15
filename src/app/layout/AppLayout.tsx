@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Info, Bot, BookOpen, Dna } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Info, Dna } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -193,27 +193,6 @@ export function AppLayout() {
                       <Info className="w-4 h-4" />
                       About
                     </NavLink>
-                    <div className="border-t border-gray-100 my-1" />
-                    <a
-                      href="/ai-logs"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setSettingsOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Bot className="w-4 h-4" />
-                      AI Logs
-                    </a>
-                    <a
-                      href="/ai-about"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setSettingsOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      AI Architecture
-                    </a>
                     <NavLink
                       to="/logs"
                       onClick={() => setSettingsOpen(false)}

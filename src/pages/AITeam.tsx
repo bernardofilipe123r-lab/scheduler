@@ -5,10 +5,10 @@ import {
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, RefreshCw, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
-  Bot, Brain, Calendar, Info, Gauge
+  Bot, Brain, Calendar, Info, Gauge, Pause, Play
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useQuotas, useAgentStatuses } from '@/features/ai-team'
+import { useQuotas, useAgentStatuses, type AgentStatus, type QuotaData } from '@/features/ai-team'
 
 // ── Types ──
 
@@ -216,6 +216,9 @@ export function AITeamPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'timeline' | 'gene-pool' | 'health' | 'quotas'>('overview')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  const { data: agentStatusesData } = useAgentStatuses(activeTab === 'leaderboard')
+  const { data: quotasData, isLoading: quotasLoading } = useQuotas(activeTab === 'quotas')
+
   const fetchAgents = useCallback(async () => {
     try {
       const data = await get<{ agents: Agent[] }>('/api/agents?include_inactive=true')
@@ -393,6 +396,7 @@ export function AITeamPage() {
           agents={activeAgents}
           maestroStatus={maestroStatus}
           totalProposals={activeAgents.reduce((s, a) => s + (a.lifetime_proposals || 0), 0)}
+          onRefresh={fetchMaestroStatus}
         />
       )}
 
@@ -407,12 +411,13 @@ export function AITeamPage() {
         onMutate={handleMutate}
         onClone={handleClone}
         onRetire={handleRetire}
+        agentStatuses={agentStatusesData}
       />}
 
       {activeTab === 'timeline' && <EvolutionTimeline events={events} />}
       {activeTab === 'gene-pool' && <GenePoolView entries={genePool} />}
       {activeTab === 'health' && <SystemHealthView report={diagnostics} onRefresh={fetchDiagnostics} />}
-      {activeTab === 'quotas' && <QuotasTab />}
+      {activeTab === 'quotas' && <QuotasTab quotas={quotasData} quotasLoading={quotasLoading} />}
     </div>
   )
 }
@@ -422,7 +427,7 @@ export function AITeamPage() {
 
 function LeaderboardTab({
   agents, retiredAgents, expandedAgent, agentPerf, agentLearnings,
-  actionLoading, onToggle, onMutate, onClone, onRetire,
+  actionLoading, onToggle, onMutate, onClone, onRetire, agentStatuses,
 }: {
   agents: Agent[]
   retiredAgents: Agent[]
@@ -434,8 +439,8 @@ function LeaderboardTab({
   onMutate: (id: string) => void
   onClone: (id: string) => void
   onRetire: (id: string, name: string) => void
+  agentStatuses: AgentStatus[] | undefined
 }) {
-  const { data: agentStatuses } = useAgentStatuses()
 
   return (
     <div className="space-y-3">
@@ -485,10 +490,8 @@ function LeaderboardTab({
   )
 }
 
-function QuotasTab() {
-  const { data: quotas, isLoading } = useQuotas()
-
-  if (isLoading) {
+function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; quotasLoading: boolean }) {
+  if (quotasLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -571,13 +574,33 @@ function OverviewTab({
   agents,
   maestroStatus,
   totalProposals,
+  onRefresh,
 }: {
   agents: Agent[]
   maestroStatus: MaestroStatus | null
   totalProposals: number
+  onRefresh: () => void
 }) {
+  const [pauseLoading, setPauseLoading] = useState(false)
   const isRunning = maestroStatus?.is_running ?? false
   const isPaused = maestroStatus?.is_paused ?? false
+
+  const handlePauseResume = async () => {
+    setPauseLoading(true)
+    try {
+      if (isPaused) {
+        await post('/api/maestro/resume', {})
+        toast.success('Maestro resumed')
+      } else {
+        await post('/api/maestro/pause', {})
+        toast.success('Maestro paused')
+      }
+      onRefresh()
+    } catch {
+      toast.error(isPaused ? 'Failed to resume Maestro' : 'Failed to pause Maestro')
+    }
+    setPauseLoading(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -609,6 +632,26 @@ function OverviewTab({
             <p className="text-lg font-bold text-gray-900">
               {isRunning && !isPaused ? 'Running' : isPaused ? 'Paused' : 'Offline'}
             </p>
+            {isRunning && (
+              <button
+                onClick={handlePauseResume}
+                disabled={pauseLoading}
+                className={`ml-auto flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-50 ${
+                  isPaused
+                    ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
+                    : 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
+                }`}
+              >
+                {pauseLoading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : isPaused ? (
+                  <Play className="w-3 h-3" />
+                ) : (
+                  <Pause className="w-3 h-3" />
+                )}
+                {isPaused ? 'Resume' : 'Pause'}
+              </button>
+            )}
           </div>
           {maestroStatus?.uptime_human && (
             <p className="text-xs text-gray-400 mt-1">Up {maestroStatus.uptime_human}</p>

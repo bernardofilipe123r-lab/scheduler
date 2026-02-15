@@ -14,6 +14,7 @@ Endpoints:
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
@@ -28,38 +29,61 @@ router = APIRouter(prefix="/api/ai-team", tags=["ai-team"])
 @router.get("/agents/status")
 async def get_agents_status(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Get real-time status for all agents."""
+    # 1. Fetch all active agents in one query
     agents = db.query(AIAgent).filter(AIAgent.active == True).all()
+    if not agents:
+        return []
+
+    agent_ids = [a.agent_id for a in agents]
+
+    # 2. Batch fetch all running cycles (one query)
+    running_cycles = db.query(AgentLearningCycle).filter(
+        AgentLearningCycle.agent_id.in_(agent_ids),
+        AgentLearningCycle.status == 'running'
+    ).all()
+    running_map = {}
+    for c in running_cycles:
+        prev = running_map.get(c.agent_id)
+        if not prev or (c.started_at and prev.started_at and c.started_at > prev.started_at):
+            running_map[c.agent_id] = c
+
+    # 3. Batch fetch last completed cycle per agent (one query with subquery)
+    latest_sq = db.query(
+        AgentLearningCycle.agent_id,
+        func.max(AgentLearningCycle.completed_at).label('max_completed')
+    ).filter(
+        AgentLearningCycle.agent_id.in_(agent_ids),
+        AgentLearningCycle.status == 'completed'
+    ).group_by(AgentLearningCycle.agent_id).subquery()
+
+    last_cycles = db.query(AgentLearningCycle).join(
+        latest_sq,
+        (AgentLearningCycle.agent_id == latest_sq.c.agent_id) &
+        (AgentLearningCycle.completed_at == latest_sq.c.max_completed)
+    ).all()
+    last_cycle_map = {c.agent_id: c for c in last_cycles}
+
+    # 4. Fetch API usage once (same row for all agents)
+    current_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    meta_usage = db.query(APIQuotaUsage).filter(
+        APIQuotaUsage.service == 'meta',
+        APIQuotaUsage.hour_window == current_hour
+    ).first()
+
+    status_map = {
+        'own_brand_analysis': 'analyzing',
+        'competitor_scrape': 'scraping',
+        'content_generation': 'generating',
+    }
 
     result = []
     for agent in agents:
-        # Get current running cycle
-        current_cycle = db.query(AgentLearningCycle).filter(
-            AgentLearningCycle.agent_id == agent.agent_id,
-            AgentLearningCycle.status == 'running'
-        ).order_by(AgentLearningCycle.started_at.desc()).first()
-
-        # Get API usage this hour
-        current_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-        meta_usage = db.query(APIQuotaUsage).filter(
-            APIQuotaUsage.service == 'meta',
-            APIQuotaUsage.hour_window == current_hour
-        ).first()
+        current_cycle = running_map.get(agent.agent_id)
+        last_cycle = last_cycle_map.get(agent.agent_id)
 
         agent_calls = 0
         if meta_usage and meta_usage.agent_breakdown:
             agent_calls = meta_usage.agent_breakdown.get(agent.agent_id, 0)
-
-        # Get last completed activity
-        last_cycle = db.query(AgentLearningCycle).filter(
-            AgentLearningCycle.agent_id == agent.agent_id,
-            AgentLearningCycle.status == 'completed'
-        ).order_by(AgentLearningCycle.completed_at.desc()).first()
-
-        status_map = {
-            'own_brand_analysis': 'analyzing',
-            'competitor_scrape': 'scraping',
-            'content_generation': 'generating',
-        }
 
         current_status = 'idle'
         learning_progress = None
@@ -106,12 +130,40 @@ async def get_api_quotas(db: Session = Depends(get_db), user: dict = Depends(get
     from app.services.api_quota_manager import APIQuotaManager
 
     manager = APIQuotaManager(db)
-    summary = manager.get_usage_summary()
-    history = manager.get_history(hours=24)
+
+    # Meta uses hourly limits
+    hourly = manager.get_usage_summary()
+    meta_info = hourly.get('meta', {})
+
+    # deAPI and DeepSeek use daily limits
+    daily = manager.get_daily_summary()
+
+    deepseek_used = daily.get('deepseek', {}).get('used', 0)
+    cost_estimate = round(deepseek_used * 0.002, 2)
 
     return {
-        **summary,
-        'history': history
+        'quotas': {
+            'meta': {
+                'used': meta_info.get('used', 0),
+                'limit': meta_info.get('limit', 150),
+                'remaining': meta_info.get('remaining', 150),
+                'period': 'hourly',
+            },
+            'deapi': {
+                'used': daily.get('deapi', {}).get('used', 0),
+                'limit': daily.get('deapi', {}).get('limit', 500),
+                'remaining': daily.get('deapi', {}).get('remaining', 500),
+                'period': 'daily',
+            },
+            'deepseek': {
+                'used': deepseek_used,
+                'limit': daily.get('deepseek', {}).get('limit', 1000),
+                'remaining': daily.get('deepseek', {}).get('remaining', 1000),
+                'period': 'daily',
+            },
+        },
+        'cost_estimate': {'today_usd': cost_estimate},
+        'history': manager.get_history(hours=24),
     }
 
 
