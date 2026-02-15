@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Settings as SettingsIcon, 
   Key, 
@@ -11,7 +11,8 @@ import {
   Loader2,
   AlertCircle,
   Database,
-  Server
+  Server,
+  Instagram
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { 
@@ -19,13 +20,14 @@ import {
   useBulkUpdateSettings, 
   type Setting 
 } from '@/features/settings/api/use-settings'
+import { useUpdateBrandCredentials } from '@/features/brands/api/use-brands'
+import { apiClient } from '@/shared/api/client'
 import { CompetitorSection } from '@/features/ai-team/components/CompetitorSection'
 
 // Category icons
 const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
   content: Sparkles,
   scheduling: Calendar,
-  meta: Key,
   youtube: Key,
 }
 
@@ -33,18 +35,32 @@ const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
 const CATEGORY_LABELS: Record<string, string> = {
   content: 'Content Settings',
   scheduling: 'Scheduling',
-  meta: 'Meta/Instagram',
   youtube: 'YouTube',
 }
 
 // Categories and keys visible to normal users (in display order)
-const VISIBLE_CATEGORIES = ['meta', 'youtube', 'content', 'scheduling'] as const
+const VISIBLE_CATEGORIES = ['youtube', 'content', 'scheduling'] as const
 const VISIBLE_KEYS = new Set([
-  'instagram_app_id', 'instagram_app_secret',
   'youtube_client_id', 'youtube_client_secret', 'youtube_redirect_uri',
   'default_caption_count', 'default_content_lines',
   'default_posts_per_day', 'scheduling_timezone',
 ])
+
+// Per-brand credential fields
+interface BrandCredentials {
+  id: string
+  display_name: string
+  color: string
+  facebook_page_id: string
+  instagram_business_account_id: string
+  meta_access_token: string
+}
+
+const CREDENTIAL_FIELDS = [
+  { key: 'facebook_page_id' as const, label: 'Facebook Page ID', sensitive: false },
+  { key: 'instagram_business_account_id' as const, label: 'Instagram Business Account ID', sensitive: false },
+  { key: 'meta_access_token' as const, label: 'Meta Access Token', sensitive: true },
+]
 
 // Source badges
 const SOURCE_BADGE: Record<string, { label: string; className: string; icon: typeof Database }> = {
@@ -56,20 +72,50 @@ const SOURCE_BADGE: Record<string, { label: string; className: string; icon: typ
 export function SettingsTab() {
   const { data, isLoading, error, refetch } = useSettings()
   const bulkUpdate = useBulkUpdateSettings()
+  const updateCredentials = useUpdateBrandCredentials()
   
   const [editedValues, setEditedValues] = useState<Record<string, string>>({})
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   
-  const hasChanges = Object.keys(editedValues).length > 0
+  // Per-brand credentials state
+  const [brandCreds, setBrandCreds] = useState<BrandCredentials[]>([])
+  const [brandsLoading, setBrandsLoading] = useState(true)
+  const [editedCreds, setEditedCreds] = useState<Record<string, Record<string, string>>>({})
+  const [revealedCredKeys, setRevealedCredKeys] = useState<Set<string>>(new Set())
+  const [savingBrand, setSavingBrand] = useState<string | null>(null)
+  
+  // Fetch brand credentials
+  useEffect(() => {
+    const fetchCreds = async () => {
+      try {
+        const resp = await apiClient.get<{ brands: BrandCredentials[] }>('/api/v2/brands/credentials')
+        setBrandCreds(resp.brands)
+      } catch {
+        // ignore
+      }
+      setBrandsLoading(false)
+    }
+    fetchCreds()
+  }, [])
+  
+  const hasSettingsChanges = Object.keys(editedValues).length > 0
+  const hasCredChanges = Object.keys(editedCreds).length > 0
+  const hasChanges = hasSettingsChanges || hasCredChanges
   
   const toggleReveal = (key: string) => {
     setRevealedKeys(prev => {
       const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  
+  const toggleCredReveal = (compositeKey: string) => {
+    setRevealedCredKeys(prev => {
+      const next = new Set(prev)
+      if (next.has(compositeKey)) next.delete(compositeKey)
+      else next.add(compositeKey)
       return next
     })
   }
@@ -81,20 +127,56 @@ export function SettingsTab() {
     }))
   }
   
+  const handleCredChange = (brandId: string, field: string, value: string) => {
+    setEditedCreds(prev => ({
+      ...prev,
+      [brandId]: {
+        ...(prev[brandId] || {}),
+        [field]: value,
+      },
+    }))
+  }
+  
   const handleSave = async () => {
-    if (!hasChanges) return
+    // Save global settings
+    if (hasSettingsChanges) {
+      try {
+        await bulkUpdate.mutateAsync(editedValues)
+        toast.success('Settings saved')
+        setEditedValues({})
+      } catch {
+        toast.error('Failed to save settings')
+      }
+    }
     
-    try {
-      await bulkUpdate.mutateAsync(editedValues)
-      toast.success('Settings saved successfully')
-      setEditedValues({})
-    } catch (error) {
-      toast.error('Failed to save settings')
+    // Save per-brand credentials
+    if (hasCredChanges) {
+      let allOk = true
+      for (const [brandId, fields] of Object.entries(editedCreds)) {
+        setSavingBrand(brandId)
+        try {
+          await updateCredentials.mutateAsync({ id: brandId, ...fields })
+        } catch {
+          allOk = false
+          toast.error(`Failed to save credentials for ${brandId}`)
+        }
+      }
+      setSavingBrand(null)
+      if (allOk) {
+        toast.success('Brand credentials saved')
+        // Refresh brand creds
+        try {
+          const resp = await apiClient.get<{ brands: BrandCredentials[] }>('/api/v2/brands/credentials')
+          setBrandCreds(resp.brands)
+        } catch { /* ignore */ }
+        setEditedCreds({})
+      }
     }
   }
   
   const handleReset = () => {
     setEditedValues({})
+    setEditedCreds({})
     toast.success('Changes discarded')
   }
   
@@ -106,7 +188,25 @@ export function SettingsTab() {
   }
   
   const isEdited = (key: string): boolean => {
-    return editedValues[key] !== undefined
+    if (editedValues[key] === undefined) return false
+    // Compare against original value to avoid false positives from browser autofill
+    const original = data?.settings.find(s => s.key === key)?.value || ''
+    return editedValues[key] !== original
+  }
+  
+  const getCredValue = (brandId: string, field: keyof BrandCredentials): string => {
+    if (editedCreds[brandId]?.[field] !== undefined) {
+      return editedCreds[brandId][field]
+    }
+    const brand = brandCreds.find(b => b.id === brandId)
+    return (brand?.[field] as string) || ''
+  }
+  
+  const isCredEdited = (brandId: string, field: string): boolean => {
+    if (editedCreds[brandId]?.[field] === undefined) return false
+    const brand = brandCreds.find(b => b.id === brandId)
+    const original = (brand?.[field as keyof BrandCredentials] as string) || ''
+    return editedCreds[brandId][field] !== original
   }
   
   if (isLoading) {
@@ -165,16 +265,115 @@ export function SettingsTab() {
         </button>
         <button
           onClick={handleSave}
-          disabled={!hasChanges || bulkUpdate.isPending}
+          disabled={!hasChanges || bulkUpdate.isPending || savingBrand !== null}
           className="flex items-center gap-2 px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {bulkUpdate.isPending ? (
+          {(bulkUpdate.isPending || savingBrand !== null) ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <Save className="w-4 h-4" />
           )}
           Save Changes
         </button>
+      </div>
+      
+      {/* Brand Connections (per-brand credentials) */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Instagram className="w-5 h-5 text-primary-500" />
+            Brand Connections
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Facebook Page ID, Instagram Business Account ID, and Meta Access Token for each brand
+          </p>
+        </div>
+        
+        {brandsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+          </div>
+        ) : brandCreds.length === 0 ? (
+          <div className="px-6 py-8 text-center text-gray-500">
+            No brands found
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {brandCreds.map((brand) => (
+              <div key={brand.id} className="px-6 py-5">
+                {/* Brand header */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: brand.color }}
+                  >
+                    <span className="text-white font-bold text-sm">
+                      {brand.display_name.charAt(0)}
+                    </span>
+                  </div>
+                  <h3 className="font-semibold text-gray-900">{brand.display_name}</h3>
+                  {savingBrand === brand.id && (
+                    <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
+                  )}
+                </div>
+                
+                {/* Credential fields */}
+                <div className="space-y-3 ml-11">
+                  {CREDENTIAL_FIELDS.map((field) => {
+                    const compositeKey = `${brand.id}:${field.key}`
+                    const value = getCredValue(brand.id, field.key)
+                    const edited = isCredEdited(brand.id, field.key)
+                    
+                    return (
+                      <div key={field.key} className="flex items-center gap-3">
+                        <label className="text-sm font-medium text-gray-600 w-56 flex-shrink-0 flex items-center gap-2">
+                          {field.label}
+                          {edited && (
+                            <span className="px-1.5 py-0.5 text-[10px] bg-yellow-100 text-yellow-700 rounded-full">
+                              Modified
+                            </span>
+                          )}
+                        </label>
+                        {field.sensitive ? (
+                          <div className="relative flex-1">
+                            <input
+                              type={revealedCredKeys.has(compositeKey) ? 'text' : 'password'}
+                              value={value}
+                              onChange={(e) => handleCredChange(brand.id, field.key, e.target.value)}
+                              placeholder="Enter value..."
+                              autoComplete="off"
+                              className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => toggleCredReveal(compositeKey)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                            >
+                              {revealedCredKeys.has(compositeKey) ? (
+                                <EyeOff className="w-4 h-4" />
+                              ) : (
+                                <Eye className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={value}
+                            onChange={(e) => handleCredChange(brand.id, field.key, e.target.value)}
+                            placeholder="Enter value..."
+                            autoComplete="off"
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       
       {/* Settings by Category */}
@@ -250,6 +449,7 @@ export function SettingsTab() {
                               value={getValue(setting)}
                               onChange={(e) => handleChange(setting.key, e.target.value)}
                               placeholder="Enter value..."
+                              autoComplete="off"
                               className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
                             />
                             <button
@@ -270,6 +470,7 @@ export function SettingsTab() {
                             value={getValue(setting)}
                             onChange={(e) => handleChange(setting.key, e.target.value)}
                             placeholder="Enter value..."
+                            autoComplete="off"
                             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                           />
                         )}

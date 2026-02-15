@@ -39,7 +39,7 @@ import {
 import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, useDynamicBrands } from '@/features/brands'
 import { FullPageLoader, Modal } from '@/shared/components'
-import { PostCanvas, DEFAULT_GENERAL_SETTINGS } from '@/shared/components/PostCanvas'
+import { PostCanvas, getBrandConfig, loadGeneralSettings } from '@/shared/components/PostCanvas'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 
 // Time slot configuration per brand
@@ -118,6 +118,7 @@ export function ScheduledPage() {
   const [selectedDayForMissing, setSelectedDayForMissing] = useState<Date | null>(null)
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
+  const [detailSlideIndex, setDetailSlideIndex] = useState(0)
 
   // Anton font loading for PostCanvas (post-type detail modal)
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -802,7 +803,7 @@ export function ScheduledPage() {
                       dayPosts.map(post => (
                         <div
                           key={post.id}
-                          onClick={() => setSelectedPost(post)}
+                          onClick={() => { setDetailSlideIndex(0); setSelectedPost(post) }}
                           className="p-2 rounded cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ 
                             backgroundColor: `${getBrandColor(post.brand)}15`,
@@ -867,6 +868,7 @@ export function ScheduledPage() {
               <div
                 key={post.id}
                 onClick={() => {
+                  setDetailSlideIndex(0)
                   setSelectedPost(post)
                   setSelectedDay(null)
                 }}
@@ -1010,6 +1012,7 @@ export function ScheduledPage() {
                       <div
                         key={post.id}
                         onClick={() => {
+                          setDetailSlideIndex(0)
                           setSelectedPost(post)
                           setSelectedDayForMissing(null)
                         }}
@@ -1055,11 +1058,19 @@ export function ScheduledPage() {
       {/* Post Detail Modal */}
       <Modal
         isOpen={!!selectedPost}
-        onClose={() => setSelectedPost(null)}
+        onClose={() => { setSelectedPost(null); setDetailSlideIndex(0) }}
         title="Post Details"
         size="lg"
       >
-        {selectedPost && (
+        {selectedPost && (() => {
+          const slideTexts = selectedPost.metadata?.slide_texts || []
+          const totalSlides = selectedPost.metadata?.variant === 'post' ? 1 + slideTexts.length : 1
+          const isPost = selectedPost.metadata?.variant === 'post'
+          const brandColor = getBrandColor(selectedPost.brand)
+          const brandCfg = getBrandConfig(selectedPost.brand)
+          const savedSettings = loadGeneralSettings()
+
+          return (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <BrandBadge brand={selectedPost.brand} size="md" />
@@ -1095,24 +1106,134 @@ export function ScheduledPage() {
               {selectedPost.title}
             </h3>
             
-            <div className={selectedPost.metadata?.variant === 'post' ? '' : 'grid grid-cols-2 gap-4'}>
-              {selectedPost.metadata?.variant === 'post' && selectedPost.thumbnail_path && fontLoaded ? (
-                <div className="flex justify-center">
-                  <div className="rounded-lg overflow-hidden shadow-lg" style={{ width: 280, height: 350 }}>
-                    <PostCanvas
-                      brand={selectedPost.brand}
-                      title={selectedPost.title}
-                      backgroundImage={selectedPost.thumbnail_path}
-                      settings={DEFAULT_GENERAL_SETTINGS}
-                      scale={280 / 1080}
-                      autoFitMaxLines={3}
-                    />
+            <div className={isPost ? '' : 'grid grid-cols-2 gap-4'}>
+              {/* Post carousel: cover + text slides */}
+              {isPost && selectedPost.thumbnail_path ? (
+                <div className="flex flex-col items-center">
+                  <div className="relative" style={{ width: 320 }}>
+                    {/* Slide content */}
+                    <div className="rounded-lg overflow-hidden shadow-lg" style={{ width: 320, height: 400 }}>
+                      {detailSlideIndex === 0 && fontLoaded ? (
+                        <PostCanvas
+                          brand={selectedPost.brand}
+                          title={selectedPost.title}
+                          backgroundImage={selectedPost.thumbnail_path}
+                          settings={savedSettings}
+                          scale={320 / 1080}
+                          autoFitMaxLines={3}
+                        />
+                      ) : detailSlideIndex === 0 ? (
+                        <img
+                          src={selectedPost.thumbnail_path}
+                          alt="Cover"
+                          className="w-full h-full object-cover object-top"
+                        />
+                      ) : (
+                        /* CSS-based text slide preview */
+                        <div
+                          style={{
+                            width: 320,
+                            height: 400,
+                            backgroundColor: '#f8f5f0',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            position: 'relative',
+                            fontFamily: "Georgia, 'Times New Roman', serif",
+                          }}
+                        >
+                          {/* Brand header bar */}
+                          <div
+                            style={{
+                              backgroundColor: brandColor,
+                              padding: '6px 12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, fontFamily: 'Inter, sans-serif', letterSpacing: '0.05em' }}>
+                              {brandCfg.name.toUpperCase()}
+                            </span>
+                          </div>
+                          {/* Body text */}
+                          <div style={{ flex: 1, padding: '16px 20px 8px', overflow: 'hidden' }}>
+                            <p style={{
+                              fontSize: 11,
+                              lineHeight: 1.65,
+                              color: '#2d2a26',
+                              whiteSpace: 'pre-wrap',
+                              margin: 0,
+                            }}>
+                              {slideTexts[detailSlideIndex - 1] || ''}
+                            </p>
+                          </div>
+                          {/* Bottom share/save bar */}
+                          <div style={{
+                            padding: '6px 20px 10px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            opacity: 0.5,
+                          }}>
+                            <span style={{ fontSize: 8, color: '#888', fontFamily: 'Inter, sans-serif' }}>
+                              {detailSlideIndex < slideTexts.length ? '← Swipe →' : '🔖 Save this post'}
+                            </span>
+                            <span style={{ fontSize: 8, color: '#888', fontFamily: 'Inter, sans-serif' }}>
+                              {detailSlideIndex}/{slideTexts.length}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Prev/Next arrows overlaid */}
+                    {totalSlides > 1 && (
+                      <>
+                        <button
+                          onClick={() => setDetailSlideIndex(i => Math.max(0, i - 1))}
+                          disabled={detailSlideIndex === 0}
+                          className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronLeft className="w-5 h-5 text-white" />
+                        </button>
+                        <button
+                          onClick={() => setDetailSlideIndex(i => Math.min(totalSlides - 1, i + 1))}
+                          disabled={detailSlideIndex >= totalSlides - 1}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronRight className="w-5 h-5 text-white" />
+                        </button>
+                      </>
+                    )}
                   </div>
+
+                  {/* Slide indicator dots + counter */}
+                  {totalSlides > 1 && (
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      <div className="flex items-center gap-1.5">
+                        {Array.from({ length: totalSlides }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setDetailSlideIndex(i)}
+                            className={clsx(
+                              'w-2 h-2 rounded-full transition-all',
+                              i === detailSlideIndex
+                                ? 'bg-blue-500 scale-125'
+                                : 'bg-gray-300 hover:bg-gray-400'
+                            )}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs text-gray-400 ml-1">
+                        {detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`} / {totalSlides}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : selectedPost.thumbnail_path && (
                 <div className={clsx(
                   'bg-gray-100 rounded-lg overflow-hidden',
-                  selectedPost.metadata?.variant === 'post' ? 'aspect-[4/5] max-w-[280px]' : 'aspect-[9/16]'
+                  isPost ? 'aspect-[4/5] max-w-[280px]' : 'aspect-[9/16]'
                 )}>
                   <img
                     src={selectedPost.thumbnail_path}
@@ -1294,7 +1415,8 @@ export function ScheduledPage() {
               </button>
             </div>
           </div>
-        )}
+          )
+        })()}
       </Modal>
       
       {/* Reschedule Modal */}

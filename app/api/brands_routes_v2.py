@@ -403,6 +403,39 @@ async def reactivate_brand(
 
 
 # ============================================================================
+# CREDENTIALS ENDPOINTS
+# ============================================================================
+
+@router.get("/credentials")
+async def get_all_brand_credentials(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Get credentials for all brands (for the Settings tab).
+    Returns facebook_page_id, instagram_business_account_id, meta_access_token per brand.
+    """
+    manager = get_brand_manager(db)
+    brands = manager.get_all_brands(user_id=user["id"])
+
+    result = []
+    for brand in brands:
+        brand_id = brand["id"]
+        creds = manager.get_brand_with_credentials(brand_id, user_id=user["id"])
+        if creds:
+            result.append({
+                "id": brand_id,
+                "display_name": brand["display_name"],
+                "color": brand.get("colors", {}).get("primary", "#000000"),
+                "facebook_page_id": creds.get("facebook_page_id") or "",
+                "instagram_business_account_id": creds.get("instagram_business_account_id") or "",
+                "meta_access_token": creds.get("meta_access_token") or "",
+            })
+
+    return {"brands": result}
+
+
+# ============================================================================
 # CONNECTION STATUS ENDPOINTS
 # ============================================================================
 
