@@ -3,6 +3,7 @@
 import os
 import logging
 import jwt as pyjwt
+from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
@@ -14,6 +15,22 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 
 # Cached Supabase client — avoid creating a new client per request
 _supabase_client: Client | None = None
+
+# Cached JWKS client for ES256 token validation
+_jwks_client: PyJWKClient | None = None
+
+
+def _get_jwks_client() -> PyJWKClient | None:
+    """Get or create a cached JWKS client for the Supabase project."""
+    global _jwks_client
+    if _jwks_client is not None:
+        return _jwks_client
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    if not supabase_url:
+        return None
+    jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+    _jwks_client = PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
+    return _jwks_client
 
 
 def get_supabase_client() -> Client:
@@ -29,10 +46,24 @@ def get_supabase_client() -> Client:
     return _supabase_client
 
 
+def _extract_user(payload: dict) -> dict:
+    """Extract user info from a decoded JWT payload."""
+    return {
+        "id": payload.get("sub", ""),
+        "email": payload.get("email", ""),
+        "role": payload.get("role", "authenticated"),
+    }
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
     """Verify Supabase JWT and return user data.
+    
+    Tries validation in order:
+    1. JWKS (ES256) — fetches public key from Supabase JWKS endpoint
+    2. HS256 with SUPABASE_JWT_SECRET (legacy fallback)
+    3. Supabase API call (slowest, but always works)
     
     Returns dict with at minimum: { "id": str, "email": str }
     """
@@ -40,36 +71,51 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     token = credentials.credentials
-    try:
-        # Validate JWT locally — no network call needed
-        if SUPABASE_JWT_SECRET:
+
+    # --- 1. Try JWKS-based validation (ES256) ---
+    jwks_client = _get_jwks_client()
+    if jwks_client:
+        try:
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            payload = pyjwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["ES256"],
+                audience="authenticated",
+            )
+            return _extract_user(payload)
+        except pyjwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Token expired")
+        except (pyjwt.InvalidTokenError, Exception) as e:
+            logger.debug("JWKS validation failed: %s", e)
+
+    # --- 2. Try HS256 with shared secret (legacy) ---
+    if SUPABASE_JWT_SECRET:
+        try:
             payload = pyjwt.decode(
                 token,
                 SUPABASE_JWT_SECRET,
                 algorithms=["HS256"],
                 audience="authenticated",
             )
-            return {
-                "id": payload.get("sub", ""),
-                "email": payload.get("email", ""),
-                "role": payload.get("role", "authenticated"),
-            }
-        else:
-            # Fallback: call Supabase API (slow, but works without JWT secret)
-            supabase = get_supabase_client()
-            response = supabase.auth.get_user(token)
-            user = response.user
-            if not user:
-                raise HTTPException(status_code=401, detail="Invalid token")
-            return {
-                "id": user.id,
-                "email": user.email or "",
-                "role": user.role or "authenticated",
-            }
-    except pyjwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except pyjwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+            return _extract_user(payload)
+        except pyjwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Token expired")
+        except pyjwt.InvalidTokenError as e:
+            logger.debug("HS256 validation failed: %s", e)
+
+    # --- 3. Fallback: call Supabase API ---
+    try:
+        supabase = get_supabase_client()
+        response = supabase.auth.get_user(token)
+        user = response.user
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return {
+            "id": user.id,
+            "email": user.email or "",
+            "role": user.role or "authenticated",
+        }
     except HTTPException:
         raise
     except Exception:
