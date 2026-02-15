@@ -20,6 +20,7 @@ import {
   useBulkUpdateSettings, 
   type Setting 
 } from '@/features/settings/api/use-settings'
+import { CompetitorSection } from '@/features/ai-team/components/CompetitorSection'
 
 // Category icons
 const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
@@ -269,6 +270,15 @@ export function SettingsTab() {
         })}
       </div>
       
+      {/* Competitor Accounts Section */}
+      <div className="mt-8 border-t border-gray-700 pt-6">
+        <h3 className="text-lg font-semibold text-white mb-2">Competitor Accounts</h3>
+        <p className="text-sm text-gray-400 mb-4">
+          Add Instagram accounts for your AI agents to learn from. They'll analyze top-performing content to improve your strategy.
+        </p>
+        <CompetitorSection />
+      </div>
+
       {/* Info Box */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <div className="flex items-start gap-3">

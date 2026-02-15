@@ -77,8 +77,8 @@ def get_ai_logs(
             agent_ids = [a.agent_id for a in agent_rows]
             agent_meta = {a.agent_id: {"name": a.display_name, "variant": a.variant} for a in agent_rows}
         except Exception:
-            agent_ids = ["toby", "lexi"]
-            agent_meta = {"toby": {"name": "Toby", "variant": "dark"}, "lexi": {"name": "Lexi", "variant": "light"}}
+            agent_ids = []
+            agent_meta = {}
         for an in agent_ids:
             a_total = db.query(func.count(TobyProposal.id)).filter(
                 TobyProposal.created_at >= since, TobyProposal.agent_name == an
@@ -187,7 +187,7 @@ def get_ai_logs(
                     "proposal_id": p.proposal_id,
                     "status": p.status,
                     "strategy": p.strategy,
-                    "agent_name": p.agent_name or "toby",
+                    "agent_name": p.agent_name or "unknown",
                     "brand": p.brand,
                     "variant": p.variant,
                     "title": p.title,

@@ -163,6 +163,27 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
             max_instances=1,
         )
 
+        # Learning analysis cycle — own-brand pattern extraction (every 4h, staggered)
+        self.scheduler.add_job(
+            self._learning_analysis_cycle,
+            trigger=IntervalTrigger(hours=4),
+            id="maestro_learning_analysis",
+            name="Maestro Learning Analysis",
+            next_run_time=datetime.utcnow() + timedelta(seconds=STARTUP_DELAY_SECONDS + 240),
+            replace_existing=True,
+            max_instances=1,
+        )
+
+        # Pattern consolidation — decay and pruning (twice daily at 6AM and 6PM)
+        self.scheduler.add_job(
+            self._pattern_consolidation_cycle,
+            trigger=CronTrigger(hour='6,18'),
+            id="maestro_pattern_consolidation",
+            name="Maestro Pattern Consolidation",
+            replace_existing=True,
+            max_instances=1,
+        )
+
         self.scheduler.start()
         self.state.started_at = datetime.utcnow()
 
@@ -170,7 +191,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
         status_text = "PAUSED (waiting for Resume)" if paused else "RUNNING"
         self.state.log(
             "maestro", "Started",
-            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m, Evolution {EVOLUTION_DAY}@{EVOLUTION_HOUR}:00, Diagnostics {DIAGNOSTICS_CYCLE_MINUTES}m, Bootstrap {BOOTSTRAP_CYCLE_MINUTES}m (auto-disable)",
+            f"Status: {status_text}. Check {CHECK_CYCLE_MINUTES}m, Healing {HEALING_CYCLE_MINUTES}m, Observe {METRICS_CYCLE_MINUTES}m, Scout {SCAN_CYCLE_MINUTES}m, Feedback {FEEDBACK_CYCLE_MINUTES}m, Evolution {EVOLUTION_DAY}@{EVOLUTION_HOUR}:00, Diagnostics {DIAGNOSTICS_CYCLE_MINUTES}m, Bootstrap {BOOTSTRAP_CYCLE_MINUTES}m (auto-disable), Learning 4h, Consolidation 6/18h",
             "🚀"
         )
 
@@ -696,7 +717,7 @@ def maestro_log(agent: str, action: str, detail: str = "", emoji: str = "🤖", 
     """
     Log to Maestro's unified activity feed from anywhere.
 
-    Import this in toby_agent.py, lexi_agent.py, trend_scout.py, metrics_collector.py
+    Import this in trend_scout.py, metrics_collector.py, etc.
     to have all actions in one timeline.
     """
     try:

@@ -17,6 +17,13 @@ from app.models.analytics import (
 from app.models.youtube import YouTubeChannel
 from app.models.logs import LogEntry, SystemDiagnostic
 from app.models.config import MaestroConfig, AppSettings
+from app.models.learning import (
+    LearnedPattern,
+    BrandPerformanceMemory,
+    CompetitorAccount,
+    APIQuotaUsage,
+    AgentLearningCycle,
+)
 
 __all__ = [
     "Base",
@@ -40,4 +47,9 @@ __all__ = [
     "SystemDiagnostic",
     "MaestroConfig",
     "AppSettings",
+    "LearnedPattern",
+    "BrandPerformanceMemory",
+    "CompetitorAccount",
+    "APIQuotaUsage",
+    "AgentLearningCycle",
 ]

@@ -3,7 +3,7 @@ GenericAgent — Dynamic AI agent parameterized from the AIAgent DB model.
 
 Each GenericAgent instance reads its config (system prompt, temperature,
 strategies, variant, etc.) from the `ai_agents` table.  This replaces the
-need for separate TobyAgent and LexiAgent classes — both are now DB-driven
+need for separate per-agent classes — all agents are now DB-driven
 instances of GenericAgent.
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -240,7 +240,7 @@ class GenericAgent:
     """
     DB-driven AI agent — all config comes from the AIAgent model.
 
-    Replaces the need for separate TobyAgent / LexiAgent classes.
+    All config comes from the AIAgent DB model.
     Each instance reads its config on init and uses it for API calls.
     """
 
@@ -270,7 +270,7 @@ class GenericAgent:
     # ──────────────────────────────────────────────────────────
 
     def run(self, max_proposals: int = None, content_type: str = "reel", brand: str = None) -> Dict:
-        """Main entry — same interface as TobyAgent.run()."""
+        """Main entry point for content generation."""
 
         if not self.api_key:
             _agent_log(self.agent_id, "Error", "No DEEPSEEK_API_KEY configured", "❌", "action")
@@ -345,7 +345,7 @@ class GenericAgent:
         try:
             from app.services.analytics.trend_scout import get_trend_scout
             scout = get_trend_scout()
-            intel["trending"] = scout.get_trending_for_toby(min_likes=200, limit=15, content_type=content_type)
+            intel["trending"] = scout.get_trending_content(min_likes=200, limit=15, content_type=content_type)
         except Exception:
             intel["trending"] = []
 
@@ -734,6 +734,32 @@ Respond with a JSON object:
         is_post = content_type == "post"
         type_label = "📄 Post" if is_post else "🎬 Reel"
 
+        # Audit trail: record learning cycle
+        cycle = None
+        try:
+            from app.models import AgentLearningCycle
+            from app.db_connection import SessionLocal as _CycleSession
+            _cdb = _CycleSession()
+            try:
+                cycle = AgentLearningCycle(
+                    agent_id=self.agent_id,
+                    cycle_type='content_generation',
+                    status='running',
+                    started_at=datetime.utcnow()
+                )
+                _cdb.add(cycle)
+                _cdb.commit()
+                _cdb.refresh(cycle)
+                _cycle_id = cycle.id
+            except Exception:
+                cycle = None
+                _cycle_id = None
+            finally:
+                _cdb.close()
+        except Exception:
+            cycle = None
+            _cycle_id = None
+
         # Build system prompt from template
         system_prompt_template = POST_SYSTEM_PROMPT_TEMPLATE if is_post else REEL_SYSTEM_PROMPT_TEMPLATE
         system_prompt = system_prompt_template.format(
@@ -874,8 +900,27 @@ Respond with a JSON object:
             finally:
                 db.close()
 
+            # Mark learning cycle as completed (reached only on success)
+
         except Exception as e:
             _agent_log(self.agent_id, "Error", f"_call_ai_and_save failed: {str(e)[:200]}", "❌", "api")
+            # Mark learning cycle as failed
+            if _cycle_id:
+                try:
+                    from app.db_connection import SessionLocal as _FailSession
+                    _fdb = _FailSession()
+                    try:
+                        from app.models import AgentLearningCycle
+                        _fc = _fdb.query(AgentLearningCycle).get(_cycle_id)
+                        if _fc:
+                            _fc.status = 'failed'
+                            _fc.completed_at = datetime.utcnow()
+                            _fc.error_message = str(e)[:500]
+                            _fdb.commit()
+                    finally:
+                        _fdb.close()
+                except Exception:
+                    pass
             return None
 
     def _parse_json(self, text: str) -> Optional[Dict]:

@@ -101,7 +101,7 @@ class ProposalsMixin:
                 proposal.reviewer_notes = f"Maestro Examiner: {reason} (score: {composite:.1f}/10)"
                 db.commit()
 
-                agent_name = proposal.agent_name or "toby"
+                agent_name = proposal.agent_name or "unknown"
                 content_type = getattr(proposal, 'content_type', None) or "reel"
                 brand = proposal.brand
 
@@ -134,7 +134,7 @@ class ProposalsMixin:
                 content_lines = proposal.content_lines or []
                 slide_texts = proposal.slide_texts
                 image_prompt = proposal.image_prompt
-                agent_name = proposal.agent_name or "toby"
+                agent_name = proposal.agent_name or "unknown"
                 brand = proposal.brand
                 proposal_variant = proposal.variant
                 content_type = getattr(proposal, 'content_type', None) or "reel"
@@ -202,7 +202,7 @@ class ProposalsMixin:
             variant = "post"
             platforms = ["instagram", "facebook"]
         else:
-            variant = proposal_variant or ("dark" if agent_name == "toby" else "light")
+            variant = proposal_variant or "dark"
             platforms = ["instagram", "facebook", "youtube"]
 
         if not brand:

@@ -5,9 +5,10 @@ import {
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, RefreshCw, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
-  Bot, Brain, Calendar, Info
+  Bot, Brain, Calendar, Info, Gauge
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useQuotas, useAgentStatuses } from '@/features/ai-team'
 
 // ── Types ──
 
@@ -212,7 +213,7 @@ export function AITeamPage() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [agentPerf, setAgentPerf] = useState<Record<string, PerformanceSnapshot[]>>({})
   const [agentLearnings, setAgentLearnings] = useState<Record<string, EvolutionEvent[]>>({})
-  const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'timeline' | 'gene-pool' | 'health'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'timeline' | 'gene-pool' | 'health' | 'quotas'>('overview')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const fetchAgents = useCallback(async () => {
@@ -369,6 +370,7 @@ export function AITeamPage() {
           { key: 'timeline' as const, label: 'Evolution Timeline', icon: Activity },
           { key: 'gene-pool' as const, label: 'Gene Pool', icon: Dna },
           { key: 'health' as const, label: 'System Health', icon: Stethoscope },
+          { key: 'quotas' as const, label: 'API Quotas', icon: Gauge },
         ].map(tab => (
           <button
             key={tab.key}
@@ -394,58 +396,176 @@ export function AITeamPage() {
         />
       )}
 
-      {activeTab === 'leaderboard' && (
-        <div className="space-y-3">
-          {activeAgents.map((agent, idx) => (
-            <AgentCard
-              key={agent.agent_id}
-              agent={agent}
-              rank={idx + 1}
-              expanded={expandedAgent === agent.agent_id}
-              onToggle={() => toggleExpand(agent.agent_id)}
-              perfHistory={agentPerf[agent.agent_id] || []}
-              learnings={agentLearnings[agent.agent_id] || []}
-              onMutate={() => handleMutate(agent.agent_id)}
-              onClone={() => handleClone(agent.agent_id)}
-              onRetire={() => handleRetire(agent.agent_id, agent.display_name)}
-              actionLoading={actionLoading}
-            />
-          ))}
-
-          {retiredAgents.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold text-gray-400 mb-3 flex items-center gap-2">
-                <Skull className="w-5 h-5" />
-                Retired ({retiredAgents.length})
-              </h3>
-              {retiredAgents.map(agent => (
-                <div key={agent.agent_id} className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-2 opacity-60">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-gray-400">{agent.display_name}</span>
-                      <span className="text-xs text-gray-400">Gen {agent.generation || 1}</span>
-                      {agent.created_for_brand && (
-                        <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">{agent.created_for_brand}</span>
-                      )}
-                    </div>
-                    <span className="text-sm text-gray-400">Score: {Math.round(agent.survival_score || 0)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'leaderboard' && <LeaderboardTab
+        agents={activeAgents}
+        retiredAgents={retiredAgents}
+        expandedAgent={expandedAgent}
+        agentPerf={agentPerf}
+        agentLearnings={agentLearnings}
+        actionLoading={actionLoading}
+        onToggle={toggleExpand}
+        onMutate={handleMutate}
+        onClone={handleClone}
+        onRetire={handleRetire}
+      />}
 
       {activeTab === 'timeline' && <EvolutionTimeline events={events} />}
       {activeTab === 'gene-pool' && <GenePoolView entries={genePool} />}
       {activeTab === 'health' && <SystemHealthView report={diagnostics} onRefresh={fetchDiagnostics} />}
+      {activeTab === 'quotas' && <QuotasTab />}
     </div>
   )
 }
 
 
 // ── Sub-components ──
+
+function LeaderboardTab({
+  agents, retiredAgents, expandedAgent, agentPerf, agentLearnings,
+  actionLoading, onToggle, onMutate, onClone, onRetire,
+}: {
+  agents: Agent[]
+  retiredAgents: Agent[]
+  expandedAgent: string | null
+  agentPerf: Record<string, PerformanceSnapshot[]>
+  agentLearnings: Record<string, EvolutionEvent[]>
+  actionLoading: string | null
+  onToggle: (id: string) => void
+  onMutate: (id: string) => void
+  onClone: (id: string) => void
+  onRetire: (id: string, name: string) => void
+}) {
+  const { data: agentStatuses } = useAgentStatuses()
+
+  return (
+    <div className="space-y-3">
+      {agents.map((agent, idx) => {
+        const status = agentStatuses?.find(s => s.agent_id === agent.agent_id)
+        return (
+          <AgentCard
+            key={agent.agent_id}
+            agent={agent}
+            rank={idx + 1}
+            expanded={expandedAgent === agent.agent_id}
+            onToggle={() => onToggle(agent.agent_id)}
+            perfHistory={agentPerf[agent.agent_id] || []}
+            learnings={agentLearnings[agent.agent_id] || []}
+            onMutate={() => onMutate(agent.agent_id)}
+            onClone={() => onClone(agent.agent_id)}
+            onRetire={() => onRetire(agent.agent_id, agent.display_name)}
+            actionLoading={actionLoading}
+            status={status}
+          />
+        )
+      })}
+
+      {retiredAgents.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold text-gray-400 mb-3 flex items-center gap-2">
+            <Skull className="w-5 h-5" />
+            Retired ({retiredAgents.length})
+          </h3>
+          {retiredAgents.map(agent => (
+            <div key={agent.agent_id} className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-2 opacity-60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-bold text-gray-400">{agent.display_name}</span>
+                  <span className="text-xs text-gray-400">Gen {agent.generation || 1}</span>
+                  {agent.created_for_brand && (
+                    <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">{agent.created_for_brand}</span>
+                  )}
+                </div>
+                <span className="text-sm text-gray-400">Score: {Math.round(agent.survival_score || 0)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QuotasTab() {
+  const { data: quotas, isLoading } = useQuotas()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    )
+  }
+  if (!quotas) return <div className="text-gray-500 text-center py-8">No quota data available</div>
+
+  const services = [
+    { key: 'meta' as const, label: 'Meta Instagram API', limit: 150 },
+    { key: 'deapi' as const, label: 'deAPI (Image Generation)', limit: quotas.deapi?.limit || 999999 },
+    { key: 'deepseek' as const, label: 'DeepSeek (Content AI)', limit: quotas.deepseek?.limit || 999999 },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {services.map(svc => {
+          const serviceData = quotas[svc.key]
+          if (!serviceData || typeof serviceData !== 'object' || !('used' in serviceData)) return null
+          const pct = Math.min(100, Math.round((serviceData.used / svc.limit) * 100))
+          const isHigh = pct > 80
+
+          return (
+            <div key={svc.key} className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">{svc.label}</h3>
+                <span className={`text-xs font-mono ${isHigh ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {serviceData.used}/{svc.limit}
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
+                <div
+                  className={`h-2 rounded-full transition-all ${
+                    isHigh ? 'bg-red-500' : pct > 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="text-xs text-gray-500">
+                Resets {serviceData.reset_at ? new Date(serviceData.reset_at).toLocaleTimeString() : 'hourly'}
+              </div>
+              {serviceData.agent_breakdown && Object.keys(serviceData.agent_breakdown).length > 0 && (
+                <div className="mt-3 space-y-1">
+                  <div className="text-xs text-gray-500 font-medium">By Agent:</div>
+                  {Object.entries(serviceData.agent_breakdown).map(([agent, calls]) => (
+                    <div key={agent} className="flex justify-between text-xs">
+                      <span className="text-gray-600">{agent}</span>
+                      <span className="text-gray-900 font-mono">{calls as number}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {quotas.history && quotas.history.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Last 24 Hours</h3>
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {quotas.history.slice().reverse().map((h, i) => (
+              <div key={i} className="flex justify-between text-xs py-1 border-b border-gray-100">
+                <span className="text-gray-500">
+                  {new Date(h.hour).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
+                </span>
+                <span className="text-gray-700 font-medium">{h.service}</span>
+                <span className="text-gray-900 font-mono">{h.calls_made} calls</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function OverviewTab({
   agents,
@@ -591,7 +711,7 @@ function StatCard({ icon: Icon, label, value, suffix, color }: { icon: any; labe
 
 
 function AgentCard({
-  agent, rank, expanded, onToggle, perfHistory, learnings, onMutate, onClone, onRetire, actionLoading
+  agent, rank, expanded, onToggle, perfHistory, learnings, onMutate, onClone, onRetire, actionLoading, status
 }: {
   agent: Agent
   rank: number
@@ -603,6 +723,7 @@ function AgentCard({
   onClone: () => void
   onRetire: () => void
   actionLoading: string | null
+  status?: import('@/features/ai-team').AgentStatus
 }) {
   const tier = TIER_CONFIG[agent.tier]
   const TierIcon = tier.icon
@@ -629,6 +750,12 @@ function AgentCard({
               {tier.label}
             </span>
             <span className="text-xs text-gray-400">Gen {agent.generation || 1}</span>
+            {status && status.current_status !== 'idle' && (
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {status.current_status}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
             {agent.created_for_brand && <span className="bg-gray-100 px-2 py-0.5 rounded">{agent.created_for_brand}</span>}

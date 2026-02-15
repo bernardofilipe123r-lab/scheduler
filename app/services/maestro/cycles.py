@@ -7,12 +7,14 @@ from typing import Dict, List, Optional
 from app.services.maestro.state import (
     _db_get,
     _db_set,
+    is_paused,
     BOOTSTRAP_CYCLE_MINUTES,
     BOOTSTRAP_MAX_DAYS,
     DIAGNOSTICS_CYCLE_MINUTES,
     EVOLUTION_DAY,
     EVOLUTION_HOUR,
 )
+from app.models import AIAgent
 
 
 def _get_active_user_ids() -> List[str]:
@@ -62,6 +64,12 @@ class CyclesMixin:
                 "📊"
             )
 
+            # Record API usage for quota tracking (~2 calls per post updated)
+            from app.services.api_quota_manager import get_quota_manager
+            estimated_calls = max(total_updated * 2, 1)
+            quota = get_quota_manager()
+            quota.record_usage('meta', estimated_calls, operation='observe_cycle')
+
         except Exception as e:
             self.state.errors += 1
             self.state.log("maestro", "Error", f"Observe cycle failed: {str(e)[:200]}", "❌")
@@ -72,6 +80,13 @@ class CyclesMixin:
 
     def _scout_cycle(self):
         """Scan for trending content — reels AND posts. Runs even when paused."""
+        # Quota gate — defer if API budget is reserved for higher-priority work
+        from app.services.api_quota_manager import get_quota_manager
+        quota = get_quota_manager()
+        if not quota.should_allow('meta', 'competitor_scrape', calls_needed=10):
+            self.state.log("maestro", "Scout deferred", "API quota reserved for higher priority", "⏸️", "detail")
+            return
+
         self.state.log("maestro", "Scouting", "Scanning trends for reels + posts...", "🔭")
 
         try:
@@ -118,6 +133,9 @@ class CyclesMixin:
                 f"Found {total_found} new — Reels: {h_new} hashtags + {c_new} competitors | Posts: {ph_new} hashtags + {pc_new} competitors | Own: {own_new}",
                 "🔥"
             )
+
+            # Record API usage for quota tracking (~10 calls for full scout)
+            quota.record_usage('meta', 10, operation='scout_cycle')
 
         except Exception as e:
             self.state.errors += 1
@@ -456,6 +474,58 @@ class CyclesMixin:
             self.state.log("maestro", "Error", f"Evolution cycle failed: {str(e)[:200]}", "❌")
             import traceback
             traceback.print_exc()
+
+    # ──────────────────────────────────────────────────────────
+    # CYCLE: LEARNING ANALYSIS — Own-brand pattern extraction
+    # ──────────────────────────────────────────────────────────
+
+    def _learning_analysis_cycle(self):
+        """Staggered own-brand analysis for each agent."""
+        try:
+            if is_paused():
+                return
+
+            from app.services.agent_learning_engine import AgentLearningEngine
+            from app.db_connection import get_db
+
+            db = next(get_db())
+            engine = AgentLearningEngine(db)
+
+            agents = db.query(AIAgent).filter(AIAgent.active == True).all()
+            for agent in agents:
+                try:
+                    engine.run_own_brand_analysis(agent.agent_id)
+                except Exception as e:
+                    self.state.log("maestro", "Learning analysis failed", f"{agent.agent_id}: {str(e)[:150]}", "❌", "detail")
+
+            self.state.log("maestro", "Learning analysis", f"Cycle complete — {len(agents)} agents analyzed", "🧠")
+
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "Error", f"Learning analysis cycle error: {str(e)[:200]}", "❌")
+
+    # ──────────────────────────────────────────────────────────
+    # CYCLE: PATTERN CONSOLIDATION — Decay and pruning
+    # ──────────────────────────────────────────────────────────
+
+    def _pattern_consolidation_cycle(self):
+        """Apply pattern decay and prune stale patterns."""
+        try:
+            if is_paused():
+                return
+
+            from app.services.agent_learning_engine import AgentLearningEngine
+            from app.db_connection import get_db
+
+            db = next(get_db())
+            engine = AgentLearningEngine(db)
+            engine.consolidate_patterns()
+
+            self.state.log("maestro", "Pattern consolidation", "Complete", "🔄")
+
+        except Exception as e:
+            self.state.errors += 1
+            self.state.log("maestro", "Error", f"Pattern consolidation error: {str(e)[:200]}", "❌")
 
     # ──────────────────────────────────────────────────────────
     # CYCLE: DIAGNOSTICS — Self-testing (every 4h)

@@ -25,11 +25,20 @@ import requests
 from app.models import TrendingContent
 
 
+def _log(action: str, detail: str = "", emoji: str = "🤖", level: str = "detail"):
+    """Log to Maestro's activity feed."""
+    try:
+        from app.services.maestro.maestro import maestro_log
+        maestro_log("scout", action, detail, emoji, level)
+    except Exception:
+        print(f"   [SCOUT] {action} — {detail}", flush=True)
+
+
 class TrendScout:
     """
     Discovers trending health/wellness content from external IG accounts.
 
-    Feeds into Toby's 'trending' strategy — adapt viral external content
+    Feeds into the agents' 'trending' strategy — adapt viral external content
     to our brand template.
     """
 
@@ -176,10 +185,8 @@ class TrendScout:
             return []
 
         try:
-            from app.services.agents.toby_daemon import toby_log
-
             # Step 1: Get hashtag ID
-            toby_log("API: IG Hashtag Search", f"GET /{self._ig_user_id}/ig_hashtag_search?q={hashtag}", "🌐", "api")
+            _log("API: IG Hashtag Search", f"GET /{self._ig_user_id}/ig_hashtag_search?q={hashtag}", "🌐", "api")
             search_resp = requests.get(
                 f"{self.BASE_URL}/{self._ig_user_id}/ig_hashtag_search",
                 params={
@@ -190,19 +197,19 @@ class TrendScout:
             )
 
             if search_resp.status_code != 200:
-                toby_log("API Error: Hashtag Search", f"HTTP {search_resp.status_code} for #{hashtag}", "❌", "api")
+                _log("API Error: Hashtag Search", f"HTTP {search_resp.status_code} for #{hashtag}", "❌", "api")
                 return []
 
             hashtag_data = search_resp.json().get("data", [])
             if not hashtag_data:
-                toby_log("Data: Hashtag", f"No hashtag_id found for #{hashtag}", "📊", "data")
+                _log("Data: Hashtag", f"No hashtag_id found for #{hashtag}", "📊", "data")
                 return []
 
             hashtag_id = hashtag_data[0]["id"]
-            toby_log("API Response: Hashtag", f"HTTP 200 — #{hashtag} → hashtag_id={hashtag_id}", "✅", "api")
+            _log("API Response: Hashtag", f"HTTP 200 — #{hashtag} → hashtag_id={hashtag_id}", "✅", "api")
 
             # Step 2: Get top media
-            toby_log("API: IG Top Media", f"GET /{hashtag_id}/top_media?user_id=...&limit={limit}", "🌐", "api")
+            _log("API: IG Top Media", f"GET /{hashtag_id}/top_media?user_id=...&limit={limit}", "🌐", "api")
             media_resp = requests.get(
                 f"{self.BASE_URL}/{hashtag_id}/top_media",
                 params={
@@ -215,11 +222,11 @@ class TrendScout:
             )
 
             if media_resp.status_code != 200:
-                toby_log("API Error: Top Media", f"HTTP {media_resp.status_code} for #{hashtag}", "❌", "api")
+                _log("API Error: Top Media", f"HTTP {media_resp.status_code} for #{hashtag}", "❌", "api")
                 return []
 
             media_items = media_resp.json().get("data", [])
-            toby_log("API Response: Top Media", f"HTTP 200 — {len(media_items)} media items for #{hashtag}", "✅", "api")
+            _log("API Response: Top Media", f"HTTP 200 — {len(media_items)} media items for #{hashtag}", "✅", "api")
             results = []
             for item in media_items:
                 results.append({
@@ -254,8 +261,7 @@ class TrendScout:
             return []
 
         try:
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("API: IG Business Discovery", f"GET /{self._ig_user_id}?fields=business_discovery...username({username})&limit={limit}", "🌐", "api")
+            _log("API: IG Business Discovery", f"GET /{self._ig_user_id}?fields=business_discovery...username({username})&limit={limit}", "🌐", "api")
 
             resp = requests.get(
                 f"{self.BASE_URL}/{self._ig_user_id}",
@@ -267,13 +273,13 @@ class TrendScout:
             )
 
             if resp.status_code != 200:
-                toby_log("API Error: Business Discovery", f"HTTP {resp.status_code} for @{username}", "❌", "api")
+                _log("API Error: Business Discovery", f"HTTP {resp.status_code} for @{username}", "❌", "api")
                 return []
 
             bd = resp.json().get("business_discovery", {})
             media_data = bd.get("media", {}).get("data", [])
             source_username = bd.get("username", username)
-            toby_log("API Response: Business Discovery", f"HTTP 200 — @{source_username}: {len(media_data)} media items", "✅", "api")
+            _log("API Response: Business Discovery", f"HTTP 200 — @{source_username}: {len(media_data)} media items", "✅", "api")
 
             results = []
             for item in media_data:
@@ -332,8 +338,7 @@ class TrendScout:
             random.shuffle(candidates)
             to_scan = candidates[:max_hashtags]
 
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Hashtag scan", f"Scanning {len(to_scan)} hashtags: {', '.join('#' + h for h in to_scan)} (skipping {len(scanned)} recently scanned)", "🔍", "detail")
+            _log("Hashtag scan", f"Scanning {len(to_scan)} hashtags: {', '.join('#' + h for h in to_scan)} (skipping {len(scanned)} recently scanned)", "🔍", "detail")
 
             total_found = 0
             total_new = 0
@@ -387,7 +392,7 @@ class TrendScout:
                 time.sleep(1)  # Rate limit respect
 
             db.commit()
-            toby_log("Hashtag scan complete", f"{len(to_scan)} hashtags → {total_found} media found, {total_new} new stored in DB", "📊", "data")
+            _log("Hashtag scan complete", f"{len(to_scan)} hashtags → {total_found} media found, {total_new} new stored in DB", "📊", "data")
             return {
                 "hashtags_scanned": len(to_scan),
                 "media_found": total_found,
@@ -395,8 +400,7 @@ class TrendScout:
             }
         except Exception as e:
             db.rollback()
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Error: Hashtag scan", f"scan_hashtags failed: {e}", "❌", "detail")
+            _log("Error: Hashtag scan", f"scan_hashtags failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()
@@ -410,8 +414,7 @@ class TrendScout:
 
         db = SessionLocal()
         try:
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Competitor scan", f"Scanning {len(self.competitors)} competitors: {', '.join('@' + c for c in self.competitors)}", "🔍", "detail")
+            _log("Competitor scan", f"Scanning {len(self.competitors)} competitors: {', '.join('@' + c for c in self.competitors)}", "🔍", "detail")
 
             total_new = 0
             for username in self.competitors:
@@ -457,15 +460,14 @@ class TrendScout:
                 time.sleep(1)
 
             db.commit()
-            toby_log("Competitor scan complete", f"{len(self.competitors)} competitors scanned, {total_new} new posts stored in DB", "📊", "data")
+            _log("Competitor scan complete", f"{len(self.competitors)} competitors scanned, {total_new} new posts stored in DB", "📊", "data")
             return {
                 "competitors_scanned": len(self.competitors),
                 "new_stored": total_new,
             }
         except Exception as e:
             db.rollback()
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Error: Competitor scan", f"scan_competitors failed: {e}", "❌", "detail")
+            _log("Error: Competitor scan", f"scan_competitors failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()
@@ -485,7 +487,6 @@ class TrendScout:
 
         db = SessionLocal()
         try:
-            from app.services.agents.toby_daemon import toby_log
 
             # Find accounts not recently scanned (last 24h)
             recently_scanned = set()
@@ -512,7 +513,7 @@ class TrendScout:
             random.shuffle(candidates)
             to_scan = candidates[:max_accounts]
 
-            toby_log("Post competitor scan", f"Scanning {len(to_scan)}/{len(self.post_competitors)} post competitors: {', '.join('@' + c for c in to_scan)}", "🔍", "detail")
+            _log("Post competitor scan", f"Scanning {len(to_scan)}/{len(self.post_competitors)} post competitors: {', '.join('@' + c for c in to_scan)}", "🔍", "detail")
 
             total_new = 0
             for username in to_scan:
@@ -558,15 +559,14 @@ class TrendScout:
                 time.sleep(1)
 
             db.commit()
-            toby_log("Post competitor scan complete", f"{len(to_scan)} post competitors scanned, {total_new} new items stored", "📊", "data")
+            _log("Post competitor scan complete", f"{len(to_scan)} post competitors scanned, {total_new} new items stored", "📊", "data")
             return {
                 "competitors_scanned": len(to_scan),
                 "new_stored": total_new,
             }
         except Exception as e:
             db.rollback()
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Error: Post competitor scan", f"scan_post_competitors failed: {e}", "❌", "detail")
+            _log("Error: Post competitor scan", f"scan_post_competitors failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()
@@ -602,8 +602,7 @@ class TrendScout:
             random.shuffle(candidates)
             to_scan = candidates[:max_hashtags]
 
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Post hashtag scan", f"Scanning {len(to_scan)} post hashtags: {', '.join('#' + h for h in to_scan)}", "🔍", "detail")
+            _log("Post hashtag scan", f"Scanning {len(to_scan)} post hashtags: {', '.join('#' + h for h in to_scan)}", "🔍", "detail")
 
             total_found = 0
             total_new = 0
@@ -654,7 +653,7 @@ class TrendScout:
                 time.sleep(1)
 
             db.commit()
-            toby_log("Post hashtag scan complete", f"{len(to_scan)} hashtags → {total_found} media found, {total_new} new stored", "📊", "data")
+            _log("Post hashtag scan complete", f"{len(to_scan)} hashtags → {total_found} media found, {total_new} new stored", "📊", "data")
             return {
                 "hashtags_scanned": len(to_scan),
                 "media_found": total_found,
@@ -662,8 +661,7 @@ class TrendScout:
             }
         except Exception as e:
             db.rollback()
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Error: Post hashtag scan", f"scan_post_hashtags failed: {e}", "❌", "detail")
+            _log("Error: Post hashtag scan", f"scan_post_hashtags failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()
@@ -692,7 +690,6 @@ class TrendScout:
 
         db = SessionLocal()
         try:
-            from app.services.agents.toby_daemon import toby_log
 
             results = {
                 "own_account_new": 0,
@@ -737,7 +734,7 @@ class TrendScout:
 
                 # Pick the least-scanned account
                 target_handle = min(handle_counts, key=handle_counts.get)
-                toby_log("Bootstrap: Own account",
+                _log("Bootstrap: Own account",
                          f"Scanning @{target_handle} (has {handle_counts[target_handle]} entries, limit=25)",
                          "🪞", "detail")
 
@@ -784,7 +781,7 @@ class TrendScout:
                     new_count += 1
 
                 results["own_account_new"] = new_count
-                toby_log("Bootstrap: Own account done",
+                _log("Bootstrap: Own account done",
                          f"@{target_handle} → {new_count} new posts stored",
                          "🪞", "data")
 
@@ -805,7 +802,7 @@ class TrendScout:
                     comp_counts[c] = count
 
                 target_comp = min(comp_counts, key=comp_counts.get)
-                toby_log("Bootstrap: Competitor",
+                _log("Bootstrap: Competitor",
                          f"Scanning @{target_comp} (has {comp_counts[target_comp]} entries, limit=8)",
                          "🔍", "detail")
 
@@ -852,7 +849,7 @@ class TrendScout:
                     new_count += 1
 
                 results["competitor_new"] = new_count
-                toby_log("Bootstrap: Competitor done",
+                _log("Bootstrap: Competitor done",
                          f"@{target_comp} → {new_count} new posts stored",
                          "🔍", "data")
 
@@ -881,7 +878,7 @@ class TrendScout:
                     candidates = all_hashtags
 
                 target_hashtag = random.choice(candidates)
-                toby_log("Bootstrap: Hashtag",
+                _log("Bootstrap: Hashtag",
                          f"Scanning #{target_hashtag} (limit=10)",
                          "🏷️", "detail")
 
@@ -929,22 +926,21 @@ class TrendScout:
                     new_count += 1
 
                 results["hashtag_new"] = new_count
-                toby_log("Bootstrap: Hashtag done",
+                _log("Bootstrap: Hashtag done",
                          f"#{target_hashtag} → {new_count} new posts stored",
                          "🏷️", "data")
 
             db.commit()
 
             total_new = results["own_account_new"] + results["competitor_new"] + results["hashtag_new"]
-            toby_log("Bootstrap tick complete",
+            _log("Bootstrap tick complete",
                      f"{total_new} new items stored ({results['api_calls']} API calls used)",
                      "🌱", "data")
             return results
 
         except Exception as e:
             db.rollback()
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Error: Bootstrap tick", f"bootstrap_scan_tick failed: {e}", "❌", "detail")
+            _log("Error: Bootstrap tick", f"bootstrap_scan_tick failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()
@@ -1005,7 +1001,6 @@ class TrendScout:
 
         db = SessionLocal()
         try:
-            from app.services.agents.toby_daemon import toby_log
 
             # Dynamically load own handles from brands table
             try:
@@ -1032,7 +1027,7 @@ class TrendScout:
             if not own_handles:
                 return {"own_accounts_scanned": 0, "new_stored": 0}
 
-            toby_log("Own account scan",
+            _log("Own account scan",
                      f"Scanning {len(own_handles)} own accounts: {', '.join('@' + h for h in own_handles)}",
                      "🪞", "detail")
 
@@ -1080,7 +1075,7 @@ class TrendScout:
                 time.sleep(1)
 
             db.commit()
-            toby_log("Own account scan complete",
+            _log("Own account scan complete",
                      f"{len(own_handles)} own accounts scanned, {total_new} new posts stored",
                      "🪞", "data")
             return {
@@ -1089,8 +1084,7 @@ class TrendScout:
             }
         except Exception as e:
             db.rollback()
-            from app.services.agents.toby_daemon import toby_log
-            toby_log("Error: Own account scan", f"scan_own_accounts failed: {e}", "❌", "detail")
+            _log("Error: Own account scan", f"scan_own_accounts failed: {e}", "❌", "detail")
             return {"error": str(e)}
         finally:
             db.close()
@@ -1134,7 +1128,7 @@ class TrendScout:
         finally:
             db.close()
 
-    def get_trending_for_toby(
+    def get_trending_content(
         self,
         min_likes: int = 500,
         limit: int = 20,
@@ -1142,7 +1136,7 @@ class TrendScout:
         content_type: str = None,
     ) -> List[Dict]:
         """
-        Get high-engagement trending content that Toby hasn't used yet.
+        Get high-engagement trending content that hasn't been used yet.
 
         Args:
             content_type: Optional filter — "reel" (VIDEO only), "post" (CAROUSEL_ALBUM, IMAGE), or None (all)

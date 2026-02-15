@@ -19,10 +19,10 @@ from app.api.analytics.routes import router as analytics_router
 from app.api.system.logs_routes import router as logs_router
 from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
-from app.api.agents.toby_routes import router as toby_router
 from app.api.system.ai_logs_routes import router as ai_logs_router
 from app.api.maestro.routes import router as maestro_router
 from app.api.agents.routes import router as agents_router
+from app.api.ai_team.routes import router as ai_team_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -91,10 +91,10 @@ app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
-app.include_router(toby_router)  # Toby AI agent (Phase 3) — backward compat
-app.include_router(ai_logs_router)  # AI logs at /ai-logs, /toby-logs, /lexi-logs, /maestro-logs, /ai-about
+app.include_router(ai_logs_router)  # AI logs at /ai-logs, /maestro-logs, /ai-about
 app.include_router(maestro_router)  # Maestro orchestrator (Toby + Lexi)
 app.include_router(agents_router)  # Dynamic AI agents CRUD at /api/agents
+app.include_router(ai_team_router)  # AI Team dashboard at /api/ai-team
 
 # Mount static files - use absolute path for Railway volume support
 # The output directory is at /app/output when running in Docker

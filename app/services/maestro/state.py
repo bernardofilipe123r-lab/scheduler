@@ -290,10 +290,7 @@ class MaestroState:
                 db.close()
         except Exception:
             pass
-        # Ensure at least toby + lexi exist
-        for name in ["toby", "lexi"]:
-            if name not in self.agents:
-                self.agents[name] = AgentState(name)
+        # Agent states are loaded from DB above; new agents get states lazily via ensure_agent_state()
 
     def ensure_agent_state(self, agent_id: str):
         """Lazily create an AgentState if a new agent appears."""

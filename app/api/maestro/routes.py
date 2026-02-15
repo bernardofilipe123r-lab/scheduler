@@ -67,10 +67,6 @@ async def maestro_status(user: dict = Depends(get_current_user)):
         # Per-agent stats — dynamic, all active agents
         agent_stats = {}
         agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True).all()]
-        # Always include toby/lexi even if inactive (backwards compat)
-        for fallback in ["toby", "lexi"]:
-            if fallback not in agent_ids:
-                agent_ids.append(fallback)
 
         for agent_name in agent_ids:
             a_total = db.query(TobyProposal).filter(TobyProposal.agent_name == agent_name).count()
@@ -587,8 +583,9 @@ async def maestro_stats(user: dict = Depends(get_current_user)):
         result["global"]["rejected"] = db.query(TobyProposal).filter(TobyProposal.status == "rejected").count()
         result["global"]["today"] = db.query(TobyProposal).filter(TobyProposal.created_at >= today).count()
 
-        # Per agent
-        for name in ["toby", "lexi"]:
+        # Per agent — dynamic from DB
+        agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True).all()]
+        for name in agent_ids:
             aq = db.query(TobyProposal).filter(TobyProposal.agent_name == name)
             total = aq.count()
             accepted = aq.filter(TobyProposal.status == "accepted").count()
@@ -651,7 +648,7 @@ async def get_trending(
         from app.services.analytics.trend_scout import get_trend_scout
 
         scout = get_trend_scout()
-        trending = scout.get_trending_for_toby(
+        trending = scout.get_trending_content(
             min_likes=min_likes, limit=limit, content_type=content_type or "reel"
         )
         return {"count": len(trending), "trending": trending}
