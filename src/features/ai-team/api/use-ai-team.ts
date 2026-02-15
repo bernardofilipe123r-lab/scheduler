@@ -27,14 +27,22 @@ export interface QuotaService {
   used: number
   limit: number
   remaining: number
-  reset_at: string
-  agent_breakdown: Record<string, number>
-  operation_breakdown: Record<string, number>
+  reset_at?: string
+  agent_breakdown?: Record<string, number>
+  operation_breakdown?: Record<string, number>
   balance?: number
   account_type?: string
   rpm_limit?: number
+  rpd_limit?: number | null
+  currency?: string
   period?: string
   error?: string
+  percentage?: number
+  // DeepSeek-specific fields
+  requests_used?: number
+  requests_limit?: number
+  tokens_used?: number
+  tokens_limit?: number
 }
 
 export interface QuotaData {

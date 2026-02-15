@@ -508,93 +508,163 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
   }
   if (!quotas) return <div className="text-gray-500 text-center py-8">No quota data available</div>
 
-  const services = [
-    { key: 'deapi' as const, label: 'deAPI (Image Generation)', icon: '🎨', gradient: 'from-purple-50 to-pink-50', border: 'border-purple-200', bar: 'from-purple-500 to-pink-500' },
-    { key: 'deepseek' as const, label: 'DeepSeek (Content AI)', icon: '🧠', gradient: 'from-blue-50 to-cyan-50', border: 'border-blue-200', bar: 'from-blue-500 to-cyan-500' },
-  ]
+  const deapi = quotas.deapi
+  const deepseek = quotas.deepseek
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {services.map(svc => {
-          const d = quotas[svc.key]
-          if (!d || typeof d !== 'object') return null
-          const used = d.used ?? 0
-          const limit = d.limit ?? 1
-          const remaining = d.remaining ?? (limit - used)
-          const pct = Math.min(100, Math.round((used / limit) * 100))
-          const period = d.period ?? 'daily'
-          const balance = d.balance
-          const accountType = d.account_type
-          const rpmLimit = d.rpm_limit
-          const error = d.error
-
-          return (
-            <div key={svc.key} className={`rounded-xl border ${svc.border} bg-gradient-to-br ${svc.gradient} p-6`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{svc.icon}</span>
-                  <h3 className="text-lg font-semibold text-gray-900">{svc.label}</h3>
-                </div>
-                {accountType && (
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    accountType === 'premium' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {accountType.toUpperCase()}
-                  </span>
-                )}
+        {/* deAPI Card */}
+        {deapi && typeof deapi === 'object' && (
+          <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🎨</span>
+                <h3 className="text-lg font-semibold text-gray-900">deAPI</h3>
               </div>
-              {error ? (
-                <p className="text-sm text-red-600">⚠️ {error}</p>
-              ) : (
-                <div className="space-y-3">
-                  {balance !== undefined && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Balance</span>
-                      <span className="font-mono font-bold text-emerald-600">${Number(balance).toFixed(2)}</span>
-                    </div>
-                  )}
-                  {rpmLimit !== undefined && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Rate Limit</span>
-                      <span className="font-mono text-gray-900">{rpmLimit} req/min</span>
-                    </div>
-                  )}
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">{period === 'hourly' ? 'Hourly' : 'Daily'} Usage</span>
-                      <span className={`font-mono font-medium ${pct > 80 ? 'text-red-600' : 'text-gray-900'}`}>
-                        {used} / {limit}
-                      </span>
-                    </div>
-                    <div className="w-full bg-white/60 rounded-full h-2.5">
-                      <div className={`h-2.5 rounded-full bg-gradient-to-r ${svc.bar} transition-all`} style={{ width: `${pct}%` }} />
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>{remaining} remaining</span>
-                      <span>{pct}% used</span>
-                    </div>
-                  </div>
-                  {d.agent_breakdown && Object.keys(d.agent_breakdown).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-200/50 space-y-1">
-                      <div className="text-xs text-gray-500 font-medium">By Agent:</div>
-                      {Object.entries(d.agent_breakdown).map(([agent, calls]) => (
-                        <div key={agent} className="flex justify-between text-xs">
-                          <span className="text-gray-600">{agent}</span>
-                          <span className="text-gray-900 font-mono">{calls as number}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              {deapi.account_type && (
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  deapi.account_type === 'premium' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {deapi.account_type.toUpperCase()}
+                </span>
               )}
             </div>
-          )
-        })}
+            {deapi.error ? (
+              <p className="text-sm text-red-600">⚠️ {deapi.error}</p>
+            ) : (
+              <div className="space-y-4">
+                {/* Balance — prominent display */}
+                {deapi.balance !== undefined ? (
+                  <div className="text-center py-3">
+                    <p className={`text-4xl font-bold font-mono ${
+                      Number(deapi.balance) > 5 ? 'text-emerald-600' :
+                      Number(deapi.balance) > 1 ? 'text-amber-600' :
+                      'text-red-600'
+                    }`}>
+                      ${Number(deapi.balance).toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">available credits</p>
+                    <div className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-medium ${
+                      Number(deapi.balance) > 5 ? 'bg-emerald-100 text-emerald-700' :
+                      Number(deapi.balance) > 1 ? 'bg-amber-100 text-amber-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${
+                        Number(deapi.balance) > 5 ? 'bg-emerald-500' :
+                        Number(deapi.balance) > 1 ? 'bg-amber-500' :
+                        'bg-red-500'
+                      }`} />
+                      {Number(deapi.balance) > 5 ? 'Healthy' :
+                       Number(deapi.balance) > 1 ? 'Low balance' :
+                       'Critical — top up soon'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-3">
+                    <p className="text-sm text-gray-500">Balance unavailable</p>
+                  </div>
+                )}
+
+                {/* Details row */}
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-purple-200/50">
+                  {deapi.rpm_limit !== undefined && (
+                    <div className="bg-white/60 rounded-lg p-3 text-center">
+                      <p className="text-xs text-gray-500">Rate Limit</p>
+                      <p className="text-sm font-bold text-gray-900">{deapi.rpm_limit} req/min</p>
+                    </div>
+                  )}
+                  <div className="bg-white/60 rounded-lg p-3 text-center">
+                    <p className="text-xs text-gray-500">Calls Today</p>
+                    <p className="text-sm font-bold text-gray-900">{deapi.used ?? 0}</p>
+                  </div>
+                </div>
+
+                {/* Agent breakdown */}
+                {deapi.agent_breakdown && Object.keys(deapi.agent_breakdown).length > 0 && (
+                  <div className="pt-3 border-t border-purple-200/50 space-y-1">
+                    <div className="text-xs text-gray-500 font-medium">By Agent:</div>
+                    {Object.entries(deapi.agent_breakdown).map(([agent, calls]) => (
+                      <div key={agent} className="flex justify-between text-xs">
+                        <span className="text-gray-600">{agent}</span>
+                        <span className="text-gray-900 font-mono">{calls as number}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DeepSeek Card */}
+        {deepseek && typeof deepseek === 'object' && (
+          <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🧠</span>
+                <h3 className="text-lg font-semibold text-gray-900">DeepSeek</h3>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                USAGE-BASED
+              </span>
+            </div>
+            {deepseek.error ? (
+              <p className="text-sm text-red-600">⚠️ {deepseek.error}</p>
+            ) : (
+              <div className="space-y-4">
+                {/* Billing model */}
+                <div className="text-center py-3">
+                  <p className="text-sm text-gray-600">Pay-per-token billing</p>
+                  <p className="text-xs text-gray-400 mt-1">No fixed daily limit — charged per API call</p>
+                </div>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-blue-200/50">
+                  <div className="bg-white/60 rounded-lg p-3 text-center">
+                    <p className="text-xs text-gray-500">Calls Today</p>
+                    <p className="text-sm font-bold text-gray-900">{deepseek.used ?? 0}</p>
+                  </div>
+                  {deepseek.requests_limit ? (
+                    <div className="bg-white/60 rounded-lg p-3 text-center">
+                      <p className="text-xs text-gray-500">Rate Limit</p>
+                      <p className="text-sm font-bold text-gray-900">{deepseek.requests_limit} req/min</p>
+                    </div>
+                  ) : deepseek.rpm_limit !== undefined ? (
+                    <div className="bg-white/60 rounded-lg p-3 text-center">
+                      <p className="text-xs text-gray-500">Rate Limit</p>
+                      <p className="text-sm font-bold text-gray-900">{deepseek.rpm_limit} req/min</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white/60 rounded-lg p-3 text-center">
+                      <p className="text-xs text-gray-500">Est. Cost Today</p>
+                      <p className="text-sm font-bold text-gray-900">
+                        ${((deepseek.used ?? 0) * 0.002).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Agent breakdown */}
+                {deepseek.agent_breakdown && Object.keys(deepseek.agent_breakdown).length > 0 && (
+                  <div className="pt-3 border-t border-blue-200/50 space-y-1">
+                    <div className="text-xs text-gray-500 font-medium">By Agent:</div>
+                    {Object.entries(deepseek.agent_breakdown).map(([agent, calls]) => (
+                      <div key={agent} className="flex justify-between text-xs">
+                        <span className="text-gray-600">{agent}</span>
+                        <span className="text-gray-900 font-mono">{calls as number}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
-        💡 <strong>Note:</strong> Meta API quotas are tracked internally but not displayed here. deAPI and DeepSeek usage is tracked from actual API calls.
+        💡 <strong>Note:</strong> deAPI balance is fetched live from your account. DeepSeek uses pay-per-token billing. Meta API quotas are tracked internally.
       </div>
 
       {quotas.history && quotas.history.length > 0 && (

@@ -59,6 +59,10 @@ import {
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
 import type { Job, BrandName, BrandOutput } from '@/shared/types'
+import { apiClient } from '@/shared/api/client'
+
+// ─── Font-size persistence ───────────────────────────────────────────
+const POST_BRAND_FONT_SIZES_KEY = 'post_brand_font_sizes'
 
 // ─── Logo storage helpers ────────────────────────────────────────────
 const LOGOS_STORAGE_KEY = 'post-brand-logos'
@@ -110,8 +114,19 @@ export function PostJobDetail({ job, refetch }: Props) {
   const [isScheduling, setIsScheduling] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
-  // Per-brand font size overrides (non-permanent, session only)
-  const [brandFontSizes, setBrandFontSizes] = useState<Record<string, number>>({})
+  // Per-brand font size overrides (persisted to localStorage)
+  const [brandFontSizes, setBrandFontSizes] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(POST_BRAND_FONT_SIZES_KEY) || '{}')
+    } catch {
+      return {}
+    }
+  })
+
+  // Persist font sizes to localStorage
+  useEffect(() => {
+    localStorage.setItem(POST_BRAND_FONT_SIZES_KEY, JSON.stringify(brandFontSizes))
+  }, [brandFontSizes])
 
   // Brand logos — start with localStorage, then overlay theme logos from server
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>(loadBrandLogos)
@@ -123,14 +138,11 @@ export function PostJobDetail({ job, refetch }: Props) {
       const logos: Record<string, string> = {}
       for (const brand of allBrands) {
         try {
-          const r = await fetch(`/api/brands/${brand}/theme`)
-          if (r.ok) {
-            const d = await r.json()
-            if (d.theme?.logo) {
-              const url = `/brand-logos/${d.theme.logo}`
-              const check = await fetch(url, { method: 'HEAD' })
-              if (check.ok) logos[brand] = url
-            }
+          const d = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand}/theme`)
+          if (d.theme?.logo) {
+            const url = `/brand-logos/${d.theme.logo}`
+            const check = await fetch(url, { method: 'HEAD' })
+            if (check.ok) logos[brand] = url
           }
         } catch { /* ignore */ }
       }
@@ -329,11 +341,8 @@ export function PostJobDetail({ job, refetch }: Props) {
       // 1) Fetch already-occupied post slots from the backend
       let occupiedByBrand: Record<string, string[]> = {}
       try {
-        const occResp = await fetch('/reels/scheduled/occupied-post-slots')
-        if (occResp.ok) {
-          const occData = await occResp.json()
-          occupiedByBrand = occData.occupied || {}
-        }
+        const occData = await apiClient.get<{ occupied?: Record<string, string[]> }>('/reels/scheduled/occupied-post-slots')
+        occupiedByBrand = occData.occupied || {}
       } catch {
         // If fetch fails, continue without collision data
         console.warn('Could not fetch occupied post slots')
@@ -431,37 +440,27 @@ export function PostJobDetail({ job, refetch }: Props) {
         }
 
         try {
-          const resp = await fetch('/reels/schedule-post-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              brand,
-              title: brandTitle,
-              caption: output?.caption || '',
-              image_data: imageData,
-              carousel_images: carouselImages,
-              slide_texts: slideTexts,
-              schedule_time: scheduleTime.toISOString(),
-            }),
+          await apiClient.post('/reels/schedule-post-image', {
+            brand,
+            title: brandTitle,
+            caption: output?.caption || '',
+            image_data: imageData,
+            carousel_images: carouselImages,
+            slide_texts: slideTexts,
+            schedule_time: scheduleTime.toISOString(),
           })
-          if (resp.ok) {
-            scheduled++
-            // Mark this slot as occupied for the rest of this batch
-            markOccupied(brand, scheduleTime)
-            try {
-              await updateBrandStatus.mutateAsync({
-                id: job.id,
-                brand: brand as BrandName,
-                status: 'scheduled',
-              })
-            } catch { /* ignore status update failure */ }
-          } else {
-            const errText = await resp.text().catch(() => 'Unknown error')
-            console.error(`Auto-schedule: POST failed for brand "${brand}":`, errText)
-            failed++
-          }
+          scheduled++
+          // Mark this slot as occupied for the rest of this batch
+          markOccupied(brand, scheduleTime)
+          try {
+            await updateBrandStatus.mutateAsync({
+              id: job.id,
+              brand: brand as BrandName,
+              status: 'scheduled',
+            })
+          } catch { /* ignore status update failure */ }
         } catch (err) {
-          console.error(`Auto-schedule: Network error for brand "${brand}":`, err)
+          console.error(`Auto-schedule: Failed for brand "${brand}":`, err)
           failed++
         }
       }
