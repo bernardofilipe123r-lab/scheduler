@@ -5,7 +5,7 @@ import {
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, RefreshCw, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
-  Bot, Brain, Users, Calendar, Info
+  Bot, Brain, Calendar, Info
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
