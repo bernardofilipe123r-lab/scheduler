@@ -138,7 +138,7 @@ def run_migrations():
                 patterns_discovered INTEGER DEFAULT 0,
                 patterns_updated INTEGER DEFAULT 0,
                 error_message TEXT,
-                metadata JSONB,
+                cycle_metadata JSONB,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_alc_agent ON agent_learning_cycles(agent_id);

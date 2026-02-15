@@ -137,6 +137,6 @@ class AgentLearningCycle(Base):
     patterns_updated = Column(Integer, default=0)
     error_message = Column(Text)
 
-    metadata = Column(JSON)
+    cycle_metadata = Column(JSON)
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)

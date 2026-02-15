@@ -65,10 +65,10 @@ async def get_agents_status(db: Session = Depends(get_db), user: dict = Depends(
         learning_progress = None
         if current_cycle:
             current_status = status_map.get(current_cycle.cycle_type, 'working')
-            if current_cycle.metadata:
+            if current_cycle.cycle_metadata:
                 learning_progress = {
-                    'current': current_cycle.metadata.get('current', 0),
-                    'total': current_cycle.metadata.get('total', 100)
+                    'current': current_cycle.cycle_metadata.get('current', 0),
+                    'total': current_cycle.cycle_metadata.get('total', 100)
                 }
 
         last_activity = None
