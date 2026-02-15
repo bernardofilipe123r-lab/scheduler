@@ -101,6 +101,7 @@ def auto_schedule_job(job_id: str):
                     variant=variant,
                     post_title=post_title if is_post else None,
                     slide_texts=slide_texts if is_post else None,
+                    job_id=job_id,
                 )
 
                 # Mark brand output as scheduled so it's not re-scheduled
@@ -227,6 +228,7 @@ def schedule_all_ready_reels() -> int:
                         user_name="Maestro",
                         brand=brand,
                         variant=variant,
+                        job_id=job.job_id,
                     )
                     brand_outputs[brand]["status"] = "scheduled"
                     brand_outputs[brand]["scheduled_time"] = slot.isoformat()

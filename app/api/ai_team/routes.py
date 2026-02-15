@@ -127,6 +127,9 @@ async def get_agents_status(db: Session = Depends(get_db), user: dict = Depends(
 @router.get("/quotas")
 async def get_api_quotas(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get API quota usage for all services."""
+    import logging
+    log = logging.getLogger(__name__)
+
     from app.services.api_quota_manager import get_quota_manager
     qm = get_quota_manager(db)
 
@@ -136,29 +139,40 @@ async def get_api_quotas(user: dict = Depends(get_current_user), db: Session = D
     # Build base quota data
     meta_data = hourly.get('meta', {})
     deapi_data = daily.get('deapi', {'used': 0, 'limit': 500, 'remaining': 500, 'percentage': 0})
-    deepseek_data = daily.get('deepseek', {'used': 0, 'limit': 1000, 'remaining': 1000, 'percentage': 0})
+    deepseek_data = daily.get('deepseek', {'used': 0, 'limit': 0, 'remaining': 0, 'percentage': 0})
 
-    # Try fetching external quota info (non-blocking)
+    # Fetch deAPI balance
     try:
         deapi_external = await qm.fetch_deapi_balance()
         if 'error' not in deapi_external:
             deapi_data.update(deapi_external)
         else:
+            log.warning(f'deAPI balance error: {deapi_external["error"]}')
             deapi_data['error'] = deapi_external['error']
-    except Exception:
-        pass
+    except Exception as e:
+        log.error(f'deAPI balance fetch crashed: {e}', exc_info=True)
+        deapi_data['error'] = f'Fetch failed: {str(e)[:100]}'
 
+    # Fetch DeepSeek balance
+    try:
+        ds_balance = await qm.fetch_deepseek_balance()
+        if 'error' not in ds_balance:
+            deepseek_data.update(ds_balance)
+        else:
+            log.warning(f'DeepSeek balance error: {ds_balance["error"]}')
+    except Exception as e:
+        log.error(f'DeepSeek balance fetch crashed: {e}', exc_info=True)
+
+    # Fetch DeepSeek rate limits
     try:
         deepseek_external = await qm.fetch_deepseek_info()
         if 'error' not in deepseek_external:
             deepseek_data.update(deepseek_external)
-        else:
-            deepseek_data['error'] = deepseek_external['error']
-    except Exception:
-        pass
+    except Exception as e:
+        log.error(f'DeepSeek rate-limit fetch crashed: {e}', exc_info=True)
 
     deapi_data['period'] = 'daily'
-    deepseek_data['period'] = 'daily'
+    deepseek_data['period'] = 'usage-based'
     meta_data['period'] = 'hourly'
 
     history = qm.get_history(hours=24)

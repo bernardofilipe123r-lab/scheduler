@@ -52,8 +52,10 @@ interface ScheduledResponse {
       variant?: string
       video_path?: string
       thumbnail_path?: string
+      carousel_image_paths?: string[]
       title?: string
       slide_texts?: string[]
+      job_id?: string
       post_ids?: Record<string, string>
       publish_results?: Record<string, {
         success: boolean
@@ -85,7 +87,7 @@ export const schedulingApi = {
     return response.schedules.map(s => ({
       id: s.schedule_id,
       brand: (s.metadata?.brand || s.brand) as BrandName,
-      job_id: s.reel_id,
+      job_id: s.metadata?.job_id || s.reel_id,
       reel_id: s.reel_id,
       title: s.metadata?.title || s.caption?.split('\n')[0]?.slice(0, 80) || 'Scheduled Post',
       scheduled_time: s.scheduled_time,
@@ -102,8 +104,10 @@ export const schedulingApi = {
   deleteScheduled: (id: string) =>
     del<{ success: boolean }>(`/reels/scheduled/${id}`),
 
-  deleteScheduledForDay: (date: string) =>
-    del<{ status: string; deleted: number; date: string }>(`/reels/scheduled/bulk/day/${date}`),
+  deleteScheduledForDay: ({ date, variant }: { date: string; variant?: 'reel' | 'post' }) => {
+    const params = variant ? `?variant=${variant}` : ''
+    return del<{ status: string; deleted: number; date: string; variant?: string }>(`/reels/scheduled/bulk/day/${date}${params}`)
+  },
   
   retryFailed: (id: string) =>
     post<{ success: boolean }>(`/reels/scheduled/${id}/retry`),

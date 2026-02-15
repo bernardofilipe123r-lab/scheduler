@@ -18,7 +18,7 @@ import {
   type BrandConnectionStatus,
   type PlatformConnection
 } from '@/features/brands'
-import { FullPageLoader } from '@/shared/components'
+import { PageLoader } from '@/shared/components'
 import type { BrandName } from '@/shared/types'
 
 type Platform = 'instagram' | 'facebook' | 'youtube'
@@ -289,7 +289,7 @@ export function ConnectedPage() {
   }, [data?.brands])
 
   if (isLoading) {
-    return <FullPageLoader text="Loading connections..." />
+    return <PageLoader page="connections" />
   }
 
   if (!data) {

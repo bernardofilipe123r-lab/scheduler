@@ -32,7 +32,7 @@ const PX = {
   /* Content slide — title bars */
   barStartY: Math.round(280 * S),                   // 62
   barHeight: Math.round(100 * S),                    // 22
-  barRadius: Math.round(20 * S),                     // 4
+  hPadding: Math.round(20 * S),                      // 4 (H_PADDING per side)
   barTitleFont: Math.round(56 * S),                  // 12
 
   /* Content slide — body */
@@ -112,11 +112,6 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
       words.slice(third * 2).join(' '),
     ].filter(l => l.trim())
   }, [previewTitle])
-
-  const barWidths = useMemo(() => {
-    const maxLen = Math.max(...titleLines.map(l => l.length), 1)
-    return titleLines.map(l => `${Math.max(25, Math.round((l.length / maxLen) * 85))}%`)
-  }, [titleLines])
 
   /* Derived for current mode */
   const thumbnailTextColor = mode === 'light' ? lightThumbnailTextColor : '#ffffff'
@@ -360,13 +355,16 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
                   <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)' }} />
                 )}
 
-                {/* Title bars — stacked, 0 gap, stepped widths */}
+                {/* Title bars — stacked, 0 gap (BAR_GAP=0), auto-width, sharp corners */}
                 <div
                   style={{
                     position: 'absolute',
                     top: PX.barStartY,
                     left: 0,
                     right: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
                     zIndex: 1,
                   }}
                 >
@@ -374,14 +372,14 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
                     <div
                       key={i}
                       style={{
-                        width: barWidths[i],
                         height: PX.barHeight,
-                        margin: '0 auto',
+                        paddingLeft: PX.hPadding,
+                        paddingRight: PX.hPadding,
                         backgroundColor: hexToRgba(contentTitleBgColor, 200 / 255),
-                        borderRadius: PX.barRadius,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       <span

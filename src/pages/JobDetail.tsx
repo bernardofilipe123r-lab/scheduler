@@ -29,7 +29,7 @@ import {
 } from '@/features/jobs'
 import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
-import { StatusBadge, FullPageLoader, Modal } from '@/shared/components'
+import { StatusBadge, PageLoader, Modal } from '@/shared/components'
 import { createFacebookCaption } from '@/shared/lib/captionUtils'
 import { PostJobDetail } from './PostJobDetail'
 import type { BrandName, BrandOutput } from '@/shared/types'
@@ -320,7 +320,7 @@ export function JobDetailPage() {
   }
   
   if (isLoading) {
-    return <FullPageLoader text="Loading job..." />
+    return <PageLoader page="jobs" />
   }
   
   if (error || !job) {

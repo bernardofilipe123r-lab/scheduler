@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
 import { apiClient } from '@/shared/api/client'
-import { FullPageLoader } from '@/shared/components'
+import { PageLoader } from '@/shared/components'
 import { ConnectionSummaryBar } from './ConnectionSummaryBar'
 import { ConnectionCard } from './ConnectionCard'
 
@@ -36,7 +36,7 @@ export function ConnectionsTab() {
   }, [data?.brands])
 
   if (isLoading) {
-    return <FullPageLoader text="Loading connections..." />
+    return <PageLoader page="connections" />
   }
 
   if (!data) {

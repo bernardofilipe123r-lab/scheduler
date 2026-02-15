@@ -47,6 +47,7 @@ class SchedulePostImageRequest(BaseModel):
     carousel_images: list[str] = []  # base64 PNG images for carousel text slides (slides 2-4)
     slide_texts: list[str] = []  # text content for each carousel slide
     schedule_time: str  # ISO datetime string
+    job_id: Optional[str] = None  # Link back to the generation job
 
 
 # Create router
@@ -332,6 +333,15 @@ async def get_scheduled_posts(user: dict = Depends(get_current_user)):
                 else:
                     video_url = raw_video
             
+            # Convert carousel image paths to URLs
+            raw_carousel = metadata.get("carousel_paths", [])
+            carousel_urls = []
+            for cp in (raw_carousel or []):
+                if cp and "/output/" in cp:
+                    carousel_urls.append("/output/" + cp.split("/output/", 1)[1])
+                elif cp:
+                    carousel_urls.append(cp)
+            
             formatted_schedules.append({
                 "schedule_id": schedule.get("schedule_id"),
                 "reel_id": schedule.get("reel_id"),
@@ -350,8 +360,10 @@ async def get_scheduled_posts(user: dict = Depends(get_current_user)):
                     "platforms": metadata.get("platforms"),
                     "video_path": video_url,
                     "thumbnail_path": thumb_url,
+                    "carousel_image_paths": carousel_urls,
                     "title": metadata.get("title"),
                     "slide_texts": metadata.get("slide_texts"),
+                    "job_id": metadata.get("job_id"),
                     "post_ids": metadata.get("post_ids"),
                     "publish_results": metadata.get("publish_results"),
                 }
@@ -394,25 +406,35 @@ async def delete_scheduled_from_date(from_date: str, user: dict = Depends(get_cu
 
 
 @router.delete("/scheduled/bulk/day/{date}")
-async def delete_scheduled_for_day(date: str, user: dict = Depends(get_current_user)):
-    """Delete all scheduled reels for a specific day.
-    date format: YYYY-MM-DD"""
+async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """Delete scheduled entries for a specific day, optionally filtered by variant.
+    date format: YYYY-MM-DD
+    variant: 'reel' (only reels), 'post' (only posts), or omit for all."""
     from app.db_connection import SessionLocal
     from app.models import ScheduledReel
     from datetime import datetime, timedelta
+    from sqlalchemy import cast, String as SAString
 
     db = SessionLocal()
     try:
         day_start = datetime.fromisoformat(date)
         day_end = day_start + timedelta(days=1)
-        count = (
+        query = (
             db.query(ScheduledReel)
             .filter(ScheduledReel.scheduled_time >= day_start)
             .filter(ScheduledReel.scheduled_time < day_end)
-            .delete()
         )
+        if variant == "post":
+            query = query.filter(
+                cast(ScheduledReel.extra_data["variant"].astext, SAString) == "post"
+            )
+        elif variant == "reel":
+            query = query.filter(
+                cast(ScheduledReel.extra_data["variant"].astext, SAString) != "post"
+            )
+        count = query.delete(synchronize_session="fetch")
         db.commit()
-        return {"status": "deleted", "deleted": count, "date": date}
+        return {"status": "deleted", "deleted": count, "date": date, "variant": variant}
     except Exception as e:
         db.rollback()
         return {"status": "error", "error": str(e)}
@@ -708,6 +730,8 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
             variant="post",
             post_title=request.title,
             slide_texts=request.slide_texts,
+            carousel_paths=carousel_paths,
+            job_id=request.job_id,
         )
         
         # Store carousel metadata alongside the schedule

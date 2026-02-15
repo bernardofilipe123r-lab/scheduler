@@ -78,6 +78,8 @@ export interface ScheduledPost {
     variant?: string
     title?: string
     slide_texts?: string[]
+    carousel_image_paths?: string[]
+    job_id?: string
     post_ids?: Record<string, string>
     publish_results?: Record<string, {
       success: boolean

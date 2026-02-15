@@ -40,7 +40,7 @@ import {
   type PlatformMetrics,
   type AnalyticsSnapshot,
 } from '@/features/analytics'
-import { FullPageLoader } from '@/shared/components'
+import { PageLoader } from '@/shared/components'
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -505,7 +505,7 @@ export function AnalyticsPage() {
 
   // ── Render ──
 
-  if (isLoading) return <FullPageLoader text="Loading analytics..." />
+  if (isLoading) return <PageLoader page="analytics" />
 
   if (error) {
     return (

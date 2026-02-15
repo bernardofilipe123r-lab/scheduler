@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   ChevronLeft, 
@@ -38,8 +38,7 @@ import {
 } from 'date-fns'
 import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, useDynamicBrands } from '@/features/brands'
-import { FullPageLoader, Modal } from '@/shared/components'
-import { PostCanvas, getBrandConfig, loadGeneralSettings } from '@/shared/components/PostCanvas'
+import { PageLoader, Modal } from '@/shared/components'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 
 // Time slot configuration per brand
@@ -120,11 +119,6 @@ export function ScheduledPage() {
   const [isCleaningReels, setIsCleaningReels] = useState(false)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
 
-  // Anton font loading for PostCanvas (post-type detail modal)
-  const [fontLoaded, setFontLoaded] = useState(false)
-  useEffect(() => {
-    document.fonts.load('1em Anton').then(() => setFontLoaded(true))
-  }, [])
   
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate)
@@ -370,7 +364,7 @@ export function ScheduledPage() {
   }, [posts, statsFilter, contentTypeFilter])
   
   if (isLoading) {
-    return <FullPageLoader text="Loading scheduled posts..." />
+    return <PageLoader page="scheduled" />
   }
   
   return (
@@ -836,31 +830,63 @@ export function ScheduledPage() {
       >
         {selectedDay && (
           <div className="space-y-3">
-            {/* Delete All Posts for this day */}
+            {/* Delete buttons for this day */}
             {getPostsForDay(selectedDay).length > 0 && (
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2 flex-wrap">
                 <button
                   onClick={async () => {
                     const dayStr = format(selectedDay, 'yyyy-MM-dd')
-                    const count = getPostsForDay(selectedDay).length
-                    if (!confirm(`Delete all ${count} posts for ${format(selectedDay, 'MMMM d, yyyy')}?`)) return
+                    if (!confirm(`Delete all REELS for ${format(selectedDay, 'MMMM d, yyyy')}?`)) return
                     try {
-                      await deleteScheduledForDay.mutateAsync(dayStr)
-                      toast.success(`Deleted all posts for ${format(selectedDay, 'MMM d')}`)
+                      await deleteScheduledForDay.mutateAsync({ date: dayStr, variant: 'reel' })
+                      toast.success(`Deleted reels for ${format(selectedDay, 'MMM d')}`)
+                      setSelectedDay(null)
+                    } catch {
+                      toast.error('Failed to delete reels')
+                    }
+                  }}
+                  disabled={deleteScheduledForDay.isPending}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {deleteScheduledForDay.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🎬</span>}
+                  Delete Reels
+                </button>
+                <button
+                  onClick={async () => {
+                    const dayStr = format(selectedDay, 'yyyy-MM-dd')
+                    if (!confirm(`Delete all POSTS for ${format(selectedDay, 'MMMM d, yyyy')}?`)) return
+                    try {
+                      await deleteScheduledForDay.mutateAsync({ date: dayStr, variant: 'post' })
+                      toast.success(`Deleted posts for ${format(selectedDay, 'MMM d')}`)
                       setSelectedDay(null)
                     } catch {
                       toast.error('Failed to delete posts')
                     }
                   }}
                   disabled={deleteScheduledForDay.isPending}
-                  className="btn btn-danger text-sm"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {deleteScheduledForDay.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                  Delete All Posts
+                  {deleteScheduledForDay.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🖼️</span>}
+                  Delete Posts
+                </button>
+                <button
+                  onClick={async () => {
+                    const dayStr = format(selectedDay, 'yyyy-MM-dd')
+                    const count = getPostsForDay(selectedDay).length
+                    if (!confirm(`Delete ALL ${count} entries for ${format(selectedDay, 'MMMM d, yyyy')}?`)) return
+                    try {
+                      await deleteScheduledForDay.mutateAsync({ date: dayStr })
+                      toast.success(`Deleted everything for ${format(selectedDay, 'MMM d')}`)
+                      setSelectedDay(null)
+                    } catch {
+                      toast.error('Failed to delete')
+                    }
+                  }}
+                  disabled={deleteScheduledForDay.isPending}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-red-300 bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {deleteScheduledForDay.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🗑️</span>}
+                  Delete All
                 </button>
               </div>
             )}
@@ -1064,11 +1090,10 @@ export function ScheduledPage() {
       >
         {selectedPost && (() => {
           const slideTexts = selectedPost.metadata?.slide_texts || []
+          const carouselPaths = selectedPost.metadata?.carousel_image_paths || []
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
           const totalSlides = isPost ? 1 + slideTexts.length : 1
           const brandColor = getBrandColor(selectedPost.brand)
-          const brandCfg = getBrandConfig(selectedPost.brand)
-          const savedSettings = loadGeneralSettings()
 
           return (
           <div className="space-y-4">
@@ -1113,23 +1138,20 @@ export function ScheduledPage() {
                   <div className="relative" style={{ width: 320 }}>
                     {/* Slide content */}
                     <div className="rounded-lg overflow-hidden shadow-lg" style={{ width: 320, height: 400 }}>
-                      {detailSlideIndex === 0 && fontLoaded ? (
-                        <PostCanvas
-                          brand={selectedPost.brand}
-                          title={selectedPost.title}
-                          backgroundImage={selectedPost.thumbnail_path}
-                          settings={savedSettings}
-                          scale={320 / 1080}
-                          autoFitMaxLines={3}
-                        />
-                      ) : detailSlideIndex === 0 ? (
+                      {detailSlideIndex === 0 ? (
                         <img
                           src={selectedPost.thumbnail_path}
                           alt="Cover"
                           className="w-full h-full object-cover object-top"
                         />
+                      ) : carouselPaths[detailSlideIndex - 1] ? (
+                        <img
+                          src={carouselPaths[detailSlideIndex - 1]}
+                          alt={`Slide ${detailSlideIndex}`}
+                          className="w-full h-full object-cover object-top"
+                        />
                       ) : (
-                        /* CSS-based text slide preview */
+                        /* Fallback CSS-based text slide preview */
                         <div
                           style={{
                             width: 320,
@@ -1152,7 +1174,7 @@ export function ScheduledPage() {
                             }}
                           >
                             <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, fontFamily: 'Inter, sans-serif', letterSpacing: '0.05em' }}>
-                              {brandCfg.name.toUpperCase()}
+                              {getBrandLabel(selectedPost.brand).toUpperCase()}
                             </span>
                           </div>
                           {/* Body text */}
@@ -1389,10 +1411,7 @@ export function ScheduledPage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => {
-                  const jobId = selectedPost.job_id?.includes('_') 
-                    ? selectedPost.job_id.split('_')[0]
-                    : selectedPost.job_id
-                  navigate(`/job/${jobId}`)
+                  navigate(`/job/${selectedPost.job_id}`)
                   setSelectedPost(null)
                 }}
                 className="btn btn-secondary flex-1"

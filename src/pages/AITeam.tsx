@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { get, post } from '@/shared/api/client'
 import {
   Dna, Trophy, Skull, Sparkles, Zap, Shield, AlertTriangle, ChevronDown,
@@ -499,6 +500,18 @@ function LeaderboardTab({
 }
 
 function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; quotasLoading: boolean }) {
+  const [retrying, setRetrying] = useState(false)
+  const queryClient = useQueryClient()
+
+  const handleRetry = async () => {
+    setRetrying(true)
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['ai-team', 'quotas'] })
+    } finally {
+      setTimeout(() => setRetrying(false), 2000)
+    }
+  }
+
   if (quotasLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -510,6 +523,10 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
 
   const deapi = quotas.deapi
   const deepseek = quotas.deepseek
+
+  // Debug logging
+  if (deapi?.error) console.warn('[QuotasTab] deAPI error:', deapi.error)
+  if (deepseek?.error) console.warn('[QuotasTab] DeepSeek error:', deepseek.error)
 
   return (
     <div className="space-y-6">
@@ -531,11 +548,21 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
               )}
             </div>
             {deapi.error ? (
-              <p className="text-sm text-red-600">⚠️ {deapi.error}</p>
+              <div className="text-center py-3 space-y-2">
+                <p className="text-sm text-red-600">⚠️ {deapi.error}</p>
+                <button
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 transition-colors disabled:opacity-50"
+                >
+                  {retrying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  Retry
+                </button>
+              </div>
             ) : (
               <div className="space-y-4">
                 {/* Balance — prominent display */}
-                {deapi.balance !== undefined ? (
+                {deapi.balance != null ? (
                   <div className="text-center py-3">
                     <p className={`text-4xl font-bold font-mono ${
                       Number(deapi.balance) > 5 ? 'text-emerald-600' :
@@ -561,8 +588,19 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-3">
-                    <p className="text-sm text-gray-500">Balance unavailable</p>
+                  <div className="text-center py-3 space-y-2">
+                    <div className="flex items-center justify-center gap-2 text-gray-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <p className="text-sm">Checking balance...</p>
+                    </div>
+                    <button
+                      onClick={handleRetry}
+                      disabled={retrying}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 transition-colors disabled:opacity-50"
+                    >
+                      {retrying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                      Retry
+                    </button>
                   </div>
                 )}
 
@@ -613,11 +651,24 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
               <p className="text-sm text-red-600">⚠️ {deepseek.error}</p>
             ) : (
               <div className="space-y-4">
-                {/* Billing model */}
-                <div className="text-center py-3">
-                  <p className="text-sm text-gray-600">Pay-per-token billing</p>
-                  <p className="text-xs text-gray-400 mt-1">No fixed daily limit — charged per API call</p>
-                </div>
+                {/* Balance if available */}
+                {deepseek.balance != null ? (
+                  <div className="text-center py-3">
+                    <p className={`text-4xl font-bold font-mono ${
+                      Number(deepseek.balance) > 5 ? 'text-emerald-600' :
+                      Number(deepseek.balance) > 1 ? 'text-amber-600' :
+                      'text-red-600'
+                    }`}>
+                      {deepseek.currency === 'CNY' ? '¥' : '$'}{Number(deepseek.balance).toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">available balance{deepseek.currency ? ` (${deepseek.currency})` : ''}</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-3">
+                    <p className="text-sm text-gray-600">Pay-per-token billing</p>
+                    <p className="text-xs text-gray-400 mt-1">No fixed daily limit — charged per API call</p>
+                  </div>
+                )}
 
                 {/* Stats row */}
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-blue-200/50">
@@ -629,11 +680,6 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
                     <div className="bg-white/60 rounded-lg p-3 text-center">
                       <p className="text-xs text-gray-500">Rate Limit</p>
                       <p className="text-sm font-bold text-gray-900">{deepseek.requests_limit} req/min</p>
-                    </div>
-                  ) : deepseek.rpm_limit !== undefined ? (
-                    <div className="bg-white/60 rounded-lg p-3 text-center">
-                      <p className="text-xs text-gray-500">Rate Limit</p>
-                      <p className="text-sm font-bold text-gray-900">{deepseek.rpm_limit} req/min</p>
                     </div>
                   ) : (
                     <div className="bg-white/60 rounded-lg p-3 text-center">
@@ -698,25 +744,36 @@ function OverviewTab({
   totalProposals: number
   onRefresh: () => void
 }) {
-  const [pauseLoading, setPauseLoading] = useState(false)
+  const [maestroToggling, setMaestroToggling] = useState(false)
   const isRunning = maestroStatus?.is_running ?? false
   const isPaused = maestroStatus?.is_paused ?? false
 
   const handlePauseResume = async () => {
-    setPauseLoading(true)
+    setMaestroToggling(true)
+    const wasPaused = isPaused
     try {
-      if (isPaused) {
+      if (wasPaused) {
         await post('/api/maestro/resume', {})
         toast.success('Maestro resumed')
       } else {
         await post('/api/maestro/pause', {})
         toast.success('Maestro paused')
       }
+      // Poll until the status actually changes
+      const maxAttempts = 15
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(r => setTimeout(r, 1000))
+        try {
+          const updated = await get<MaestroStatus>('/api/maestro/status')
+          if (wasPaused && !updated.is_paused) break
+          if (!wasPaused && updated.is_paused) break
+        } catch { /* ignore polling errors */ }
+      }
       onRefresh()
     } catch {
-      toast.error(isPaused ? 'Failed to resume Maestro' : 'Failed to pause Maestro')
+      toast.error(wasPaused ? 'Failed to resume Maestro' : 'Failed to pause Maestro')
     }
-    setPauseLoading(false)
+    setMaestroToggling(false)
   }
 
   return (
@@ -752,21 +809,25 @@ function OverviewTab({
             {(isRunning || isPaused) && (
               <button
                 onClick={handlePauseResume}
-                disabled={pauseLoading}
+                disabled={maestroToggling}
                 className={`ml-auto flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 ${
-                  isPaused
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                    : 'bg-amber-600 text-white hover:bg-amber-500'
+                  maestroToggling
+                    ? 'bg-gray-500 text-white cursor-wait'
+                    : isPaused
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                      : 'bg-amber-600 text-white hover:bg-amber-500'
                 }`}
               >
-                {pauseLoading ? (
+                {maestroToggling ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : isPaused ? (
                   <Play className="w-4 h-4" />
                 ) : (
                   <Pause className="w-4 h-4" />
                 )}
-                {isPaused ? 'Resume' : 'Pause'}
+                {maestroToggling
+                  ? (isPaused ? 'Starting...' : 'Stopping...')
+                  : (isPaused ? 'Resume' : 'Pause')}
               </button>
             )}
           </div>

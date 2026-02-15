@@ -43,6 +43,7 @@ export interface QuotaService {
   requests_limit?: number
   tokens_used?: number
   tokens_limit?: number
+  is_available?: boolean
 }
 
 export interface QuotaData {

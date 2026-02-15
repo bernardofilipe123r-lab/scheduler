@@ -448,6 +448,7 @@ export function PostJobDetail({ job, refetch }: Props) {
             carousel_images: carouselImages,
             slide_texts: slideTexts,
             schedule_time: scheduleTime.toISOString(),
+            job_id: job.id,
           })
           scheduled++
           // Mark this slot as occupied for the rest of this batch
