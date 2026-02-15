@@ -1,19 +1,29 @@
 """Supabase Auth middleware for FastAPI."""
 
 import os
+import logging
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
 
+logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
+# Cached Supabase client — avoid creating a new client per request
+_supabase_client: Client | None = None
+
+
 def get_supabase_client() -> Client:
-    """Create a Supabase client with service role key."""
+    """Get or create a cached Supabase client with service role key."""
+    global _supabase_client
+    if _supabase_client is not None:
+        return _supabase_client
     url = os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not url or not key:
         raise HTTPException(status_code=503, detail="Supabase not configured")
-    return create_client(url, key)
+    _supabase_client = create_client(url, key)
+    return _supabase_client
 
 
 async def get_current_user(
@@ -42,7 +52,8 @@ async def get_current_user(
         }
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.warning("Auth validation failed: %s", e)
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
