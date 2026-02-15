@@ -671,7 +671,7 @@ function OverviewTab({
             <p className="text-lg font-bold text-gray-900">
               {isRunning && !isPaused ? 'Running' : isPaused ? 'Paused' : 'Offline'}
             </p>
-            {isRunning && (
+            {(isRunning || isPaused) && (
               <button
                 onClick={handlePauseResume}
                 disabled={pauseLoading}
@@ -749,9 +749,6 @@ function OverviewTab({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900">{agent.display_name}</span>
-                    {agent.created_for_brand && (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{agent.created_for_brand}</span>
-                    )}
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5 truncate">{agent.personality?.split('.')[0]}</p>
                 </div>

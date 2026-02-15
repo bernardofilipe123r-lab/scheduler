@@ -425,22 +425,27 @@ class ImageGenerator:
         
         # Check for manual line breaks (\n) in title
         if '\n' in title_upper:
-            # User specified manual line breaks - use specified font size (default 56px)
-            title_font = load_font(FONT_BOLD, title_font_size)
+            # User specified manual line breaks — auto-reduce font if any line overflows
             title_wrapped = [line.strip() for line in title_upper.split('\n') if line.strip()]
+            current_title_font_size = title_font_size
             
-            # Validate each line fits at specified font size (using title max width)
-            for i, line in enumerate(title_wrapped, 1):
-                bbox = title_font.getbbox(line)
-                line_width = bbox[2] - bbox[0]
-                if line_width > max_title_width:
-                    raise ValueError(
-                        f"Title line {i} doesn't fit: '{line}' is {line_width}px wide "
-                        f"(max: {max_title_width}px at {title_font_size}px font). "
-                        f"Try shorter text, different line break position, or smaller font size."
-                    )
+            while current_title_font_size >= 30:
+                title_font = load_font(FONT_BOLD, current_title_font_size)
+                all_fit = True
+                for line in title_wrapped:
+                    bbox = title_font.getbbox(line)
+                    line_width = bbox[2] - bbox[0]
+                    if line_width > max_title_width:
+                        all_fit = False
+                        break
+                if all_fit:
+                    break
+                current_title_font_size -= 2
             
-            print(f"📝 Using manual line breaks: {len(title_wrapped)} lines at {title_font_size}px")
+            if current_title_font_size != title_font_size:
+                print(f"📝 Auto-reduced font: {title_font_size}px → {current_title_font_size}px to fit manual line breaks")
+            else:
+                print(f"📝 Using manual line breaks: {len(title_wrapped)} lines at {current_title_font_size}px")
         else:
             # No manual breaks - use stepped auto-scaling: 56 → 46 → 40 → 36 (minimum)
             font_size_steps = [s for s in [56, 46, 40, 36] if s <= title_font_size]
