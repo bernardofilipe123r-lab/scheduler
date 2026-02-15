@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { Layers, Plus } from 'lucide-react'
 import { BrandsTabBar, type BrandsTab } from '@/features/brands/components/BrandsTabBar'
 import { MyBrandsTab } from '@/features/brands/components/MyBrandsTab'
-import { TemplatesTab } from '@/features/brands/components/TemplatesTab'
 import { ConnectionsTab } from '@/features/brands/components/ConnectionsTab'
 import { SettingsTab } from '@/features/brands/components/SettingsTab'
 
@@ -55,7 +54,6 @@ export function BrandsPage() {
       {activeTab === 'brands' && (
         <MyBrandsTab showCreateModal={showCreateModal} setShowCreateModal={setShowCreateModal} />
       )}
-      {activeTab === 'templates' && <TemplatesTab />}
       {activeTab === 'connections' && <ConnectionsTab />}
       {activeTab === 'settings' && <SettingsTab />}
     </div>

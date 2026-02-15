@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Optional
 from PIL import Image, ImageDraw
 from app.services.media.ai_background import AIBackgroundGenerator
-from app.services.media.template_loader import load_template_image
 from app.core.config import get_brand_config, BrandType
 from app.core.brand_colors import get_brand_colors, get_brand_display_name
 from app.core.constants import (
@@ -230,10 +229,10 @@ class ImageGenerator:
         
         # Load or generate thumbnail background based on variant
         if self.variant == "light":
-            # Light mode: use template images (Supabase Storage → cache → local fallback)
-            print(f"      📂 Loading thumbnail template for {self.brand_name}", flush=True)
-            image = load_template_image(self.brand_name, "thumbnail_template")
-            print(f"      ✓ Template loaded", flush=True)
+            # Light mode: dynamic solid-color background with brand text
+            print(f"      🎨 Generating dynamic light mode thumbnail for {self.brand_name}", flush=True)
+            image = Image.new('RGB', (self.width, self.height), (244, 244, 244))  # #f4f4f4
+            print(f"      ✓ Light mode background created", flush=True)
         else:
             # Dark mode: use AI background with content context
             print(f"      🌙 Using AI background for dark mode", flush=True)
@@ -319,14 +318,14 @@ class ImageGenerator:
             draw.text((x, title_y), line, font=title_font, fill=text_color)
             title_y += line_height + LINE_SPACING
         
-        # Dark mode: Add brand name in white text below the title (like light mode template)
-        if self.variant == "dark":
-            brand_text = get_brand_display_name(self.brand_name)
-            brand_font = load_font(FONT_BOLD, 28)  # 28px font size - larger and more visible
-            brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
-            brand_x = (self.width - brand_width) // 2
-            brand_y = title_y + 254  # 254px spacing below the title
-            draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
+        # Add brand name below the title
+        brand_text = get_brand_display_name(self.brand_name)
+        brand_font = load_font(FONT_BOLD, 28)
+        brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
+        brand_x = (self.width - brand_width) // 2
+        brand_y = title_y + 254
+        brand_text_color = self.brand_colors.thumbnail_text_color if self.variant == "light" else (255, 255, 255)
+        draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=brand_text_color)
         
         # Save thumbnail
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -371,8 +370,8 @@ class ImageGenerator:
         
         # Load or generate content background based on variant
         if self.variant == "light":
-            # Light mode: use template images (Supabase Storage → cache → local fallback)
-            image = load_template_image(self.brand_name, "content_template")
+            # Light mode: dynamic solid-color background
+            image = Image.new('RGB', (self.width, self.height), (244, 244, 244))  # #f4f4f4
         else:
             # Dark mode: use AI background with content context
             ai_bg = self._get_or_generate_ai_background(title=title, lines=lines)
@@ -639,14 +638,14 @@ class ImageGenerator:
             # Add spacing between bullet points (reduced for tighter layout)
             current_y += int(content_font_size * 0.6)  # Reduced from full line_spacing_multiplier
         
-        # Dark mode: Add brand name in white text at bottom (12px from edge, 15px font size)
-        if self.variant == "dark":
-            brand_text = get_brand_display_name(self.brand_name)
-            brand_font = load_font(FONT_BOLD, 15)  # 15px font size
-            brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
-            brand_x = (self.width - brand_width) // 2
-            brand_y = self.height - brand_height - 12  # 12px from bottom
-            draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=(255, 255, 255))
+        # Add brand name at bottom
+        brand_text = get_brand_display_name(self.brand_name)
+        brand_font = load_font(FONT_BOLD, 15)
+        brand_width, brand_height = get_text_dimensions(brand_text, brand_font)
+        brand_x = (self.width - brand_width) // 2
+        brand_y = self.height - brand_height - 12
+        brand_text_color = self.brand_colors.thumbnail_text_color if self.variant == "light" else (255, 255, 255)
+        draw.text((brand_x, brand_y), brand_text, font=brand_font, fill=brand_text_color)
         
         # Save the image
         output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -11,8 +11,6 @@ import { ScheduledPage } from '@/pages/Scheduled'
 import { BrandsPage } from '@/pages/Brands'
 import { PostsPage } from '@/pages/Posts'
 import { AnalyticsPage } from '@/pages/Analytics'
-import { TobyPage } from '@/pages/Toby'
-import { MaestroPage } from '@/pages/Maestro'
 import { AITeamPage } from '@/pages/AITeam'
 import { AboutPage } from '@/pages/About'
 import { LogsPage } from '@/pages/Logs'
@@ -68,8 +66,8 @@ export function AppRoutes() {
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings" element={<Navigate to="/brands?tab=settings" replace />} />
-        <Route path="toby" element={<TobyPage />} />
-        <Route path="maestro" element={<MaestroPage />} />
+        <Route path="toby" element={<Navigate to="/ai-team" replace />} />
+        <Route path="maestro" element={<Navigate to="/ai-team?tab=orchestrator" replace />} />
         <Route path="ai-team" element={<AITeamPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="logs" element={<LogsPage />} />

@@ -456,8 +456,6 @@ function OverviewTab({
   maestroStatus: MaestroStatus | null
   totalProposals: number
 }) {
-  const builtinAgents = agents.filter(a => a.is_builtin)
-  const dynamicAgents = agents.filter(a => !a.is_builtin)
   const isRunning = maestroStatus?.is_running ?? false
   const isPaused = maestroStatus?.is_paused ?? false
 
@@ -471,7 +469,7 @@ function OverviewTab({
             <span className="text-sm font-medium text-gray-500">Active Agents</span>
           </div>
           <p className="text-2xl font-bold text-gray-900">{agents.length}</p>
-          <p className="text-xs text-gray-400 mt-1">{builtinAgents.length} core + {dynamicAgents.length} dynamic</p>
+          <p className="text-xs text-gray-400 mt-1">Competing in generation {Math.max(...agents.map(a => a.generation || 1), 1)}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -623,9 +621,6 @@ function OverviewTab({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900">{agent.display_name}</span>
-                    {agent.is_builtin && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">CORE</span>
-                    )}
                     {agent.created_for_brand && (
                       <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{agent.created_for_brand}</span>
                     )}
@@ -703,9 +698,6 @@ function AgentCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-gray-900">{agent.display_name}</span>
-            {agent.is_builtin && (
-              <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">CORE</span>
-            )}
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tier.bg} ${tier.color} flex items-center gap-1`}>
               <TierIcon className="w-3 h-3" />
               {tier.label}
@@ -866,16 +858,14 @@ function AgentCard({
               {actionLoading === agent.agent_id + '-clone' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
               Clone DNA
             </button>
-            {!agent.is_builtin && (
-              <button
-                onClick={onRetire}
-                disabled={!!actionLoading}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-              >
-                {actionLoading === agent.agent_id + '-retire' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Skull className="w-4 h-4" />}
-                Retire
-              </button>
-            )}
+            <button
+              onClick={onRetire}
+              disabled={!!actionLoading}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
+              {actionLoading === agent.agent_id + '-retire' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Skull className="w-4 h-4" />}
+              Retire
+            </button>
           </div>
         </div>
       )}
