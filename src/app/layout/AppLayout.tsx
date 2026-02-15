@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, Sliders, ScrollText, User, LogOut, Info, Dna } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, ScrollText, User, LogOut, Info, Dna } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
