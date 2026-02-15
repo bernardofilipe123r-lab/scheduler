@@ -13,15 +13,66 @@ export interface BrandThemeModalProps {
   onSave?: () => void
 }
 
-const DARK_BG_GRADIENT =
-  'linear-gradient(135deg, #1a3a2a 0%, #0d1f15 40%, #2d1a0a 70%, #1a0a1a 100%)'
+/* ── Proportional scale: 1080px canvas → 240px preview ────────── */
+const CANVAS_W = 1080
+const CANVAS_H = 1920
+const PREVIEW_W = 240
+const S = PREVIEW_W / CANVAS_W // 0.2222
+const PREVIEW_H = Math.round(CANVAS_H * S) // 427
 
+/* Pixel-accurate scaled values from image_generator.py constants */
+const PX = {
+  /* Thumbnail */
+  thumbTitleFont: Math.round(80 * S),               // 18
+  thumbSideMargin: Math.round(80 * S),              // 18
+  thumbLineSpacing: Math.round(20 * S),             // 4
+  thumbBrandFont: Math.max(6, Math.round(28 * S)),  // 6
+  thumbBrandGap: Math.round(254 * S),               // 56
+
+  /* Content slide — title bars */
+  barStartY: Math.round(280 * S),                   // 62
+  barHeight: Math.round(100 * S),                    // 22
+  barRadius: Math.round(20 * S),                     // 4
+  barTitleFont: Math.round(56 * S),                  // 12
+
+  /* Content slide — body */
+  titleContentGap: Math.round(70 * S),               // 16
+  contentSidePad: Math.round(108 * S),               // 24
+  contentFont: Math.round(44 * S),                   // 10
+  contentLineH: Math.round(44 * 1.5 * S),            // 15
+  bulletSpacing: Math.round(44 * 0.6 * S),           // 6
+
+  /* Brand name at bottom of content slide */
+  brandFont: Math.max(4, Math.round(15 * S)),        // 4
+  brandBottom: Math.round(12 * S),                    // 3
+}
+
+/* Dark-mode AI-image placeholder (gradient simulating a dark photo) */
+const DARK_BG =
+  'linear-gradient(145deg, #1a3a2a 0%, #0d1f15 25%, #1a2030 50%, #2d1a0a 75%, #1a0a1a 100%)'
+
+/* Sample data for preview */
 const SAMPLE_TITLE = 'SURPRISING TRUTHS ABOUT DETOXIFICATION'
+const TITLE_LINES = ['SURPRISING TRUTHS', 'ABOUT', 'DETOXIFICATION']
+/* Stepped bar widths proportional to text length, centered (like PIL renderer) */
+const BAR_WIDTHS = ['80%', '30%', '62%']
 const SAMPLE_CONTENT = [
-  'Your liver already does an incredible job filtering toxins',
-  'Drinking more water supports natural detox processes',
+  'Your liver does an incredible job filtering toxins',
+  'Drinking more water supports natural detox',
   'Sleep is the most underrated detox mechanism',
 ]
+
+/** Convert #rrggbb → rgba(r,g,b,opacity) */
+function hexToRgba(hex: string, opacity: number): string {
+  const h = hex.replace('#', '')
+  if (h.length < 6) return `rgba(0,0,0,${opacity})`
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  return `rgba(${r},${g},${b},${opacity})`
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
 
 export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps) {
   const [mode, setMode] = useState<'light' | 'dark'>('light')
@@ -48,10 +99,12 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
   const [darkContentTitleTextColor, setDarkContentTitleTextColor] = useState(defaults.darkContentTitleTextColor)
   const [darkContentTitleBgColor, setDarkContentTitleBgColor] = useState(defaults.darkContentTitleBgColor)
 
-  // Derived for current mode
-  const thumbnailTextColor = mode === 'light' ? lightThumbnailTextColor : darkThumbnailTextColor
-  const contentTitleTextColor = mode === 'light' ? lightContentTitleTextColor : darkContentTitleTextColor
+  /* Derived for current mode */
+  const thumbnailTextColor = mode === 'light' ? lightThumbnailTextColor : '#ffffff'
+  const contentTitleTextColor = mode === 'light' ? lightContentTitleTextColor : '#ffffff'
   const contentTitleBgColor = mode === 'light' ? lightContentTitleBgColor : darkContentTitleBgColor
+  const contentTextColor = mode === 'light' ? '#000000' : '#ffffff'
+  const brandNameColor = mode === 'light' ? lightThumbnailTextColor : '#ffffff'
 
   useEffect(() => {
     const fetchTheme = async () => {
@@ -86,12 +139,10 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
     try {
       const formData = new FormData()
       formData.append('brand_color', brandColor)
-      // Legacy fields (backend still requires them)
       formData.append('light_title_color', lightThumbnailTextColor)
       formData.append('light_bg_color', lightContentTitleBgColor)
       formData.append('dark_title_color', darkThumbnailTextColor)
       formData.append('dark_bg_color', darkContentTitleBgColor)
-      // Rendering color fields
       formData.append('light_thumbnail_text_color', lightThumbnailTextColor)
       formData.append('light_content_title_text_color', lightContentTitleTextColor)
       formData.append('light_content_title_bg_color', lightContentTitleBgColor)
@@ -135,13 +186,14 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
     )
   }
 
-  // Split title into three lines for the content bars (shows stepped bar widths)
-  const titleLines = ['SURPRISING TRUTHS', 'ABOUT', 'DETOXIFICATION']
-  const barWidths = ['89%', '42%', '75%']
+  /* Content start Y = barStartY + N bars × barHeight + titleContentGap */
+  const contentStartY =
+    PX.barStartY + TITLE_LINES.length * PX.barHeight + PX.titleContentGap
 
+  /* ──────────────────────── RENDER ──────────────────────── */
   return (
     <div className="flex flex-col gap-5">
-      {/* Mode Toggle - top level */}
+      {/* ── Mode Toggle ── */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
         <button
           onClick={() => setMode('light')}
@@ -162,90 +214,141 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
       </div>
 
       <div className="flex gap-6">
-        {/* LEFT: Previews (60%) */}
-        <div className="flex-[3] space-y-3">
-          <div className="flex gap-3">
-            {/* Thumbnail Preview - 9:16 */}
-            <div className="flex-1 min-w-0">
+        {/* ══════ LEFT: Pixel-accurate Previews (60%) ══════ */}
+        <div className="flex-[3]">
+          <div style={{ display: 'flex', gap: 12 }}>
+
+            {/* ════ THUMBNAIL PREVIEW (9:16) ════ */}
+            <div>
               <p className="text-xs font-medium text-gray-500 mb-1.5">Thumbnail</p>
               <div
-                className="w-full rounded-xl overflow-hidden border border-gray-200 relative"
                 style={{
-                  aspectRatio: '9/16',
+                  width: PREVIEW_W,
+                  height: PREVIEW_H,
+                  position: 'relative',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  border: '1px solid #e5e7eb',
                   backgroundColor: mode === 'light' ? '#f4f4f4' : undefined,
-                  ...(mode === 'dark' ? { background: DARK_BG_GRADIENT } : {}),
+                  background: mode === 'dark' ? DARK_BG : undefined,
                 }}
               >
-                {/* Dark overlay 55% */}
+                {/* Dark overlay — fixed 55% */}
                 {mode === 'dark' && (
-                  <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }} />
+                  <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' }} />
                 )}
 
-                {/* Centered title */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center px-3 z-10">
-                  <h2
-                    className="text-sm font-extrabold text-center uppercase tracking-wide leading-tight"
+                {/* Title — vertically centered (only title affects centering) */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1,
+                  }}
+                >
+                  <div
                     style={{
-                      color: mode === 'light' ? thumbnailTextColor : '#ffffff',
-                      fontFamily: '"Poppins", system-ui, sans-serif',
+                      paddingLeft: PX.thumbSideMargin,
+                      paddingRight: PX.thumbSideMargin,
+                      textAlign: 'center',
+                      position: 'relative',
                     }}
                   >
-                    {SAMPLE_TITLE}
-                  </h2>
-                </div>
+                    {/* Title text — Poppins Bold 700, uppercase */}
+                    <div
+                      style={{
+                        fontFamily: "'Poppins', sans-serif",
+                        fontWeight: 700,
+                        fontSize: PX.thumbTitleFont,
+                        lineHeight: `${PX.thumbTitleFont + PX.thumbLineSpacing}px`,
+                        color: thumbnailTextColor,
+                        textTransform: 'uppercase',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {SAMPLE_TITLE}
+                    </div>
 
-                {/* Brand name below center */}
-                <div className="absolute left-0 right-0 z-10" style={{ bottom: '30%' }}>
-                  <p
-                    className="text-center uppercase font-bold tracking-wider"
-                    style={{
-                      color: mode === 'light' ? thumbnailTextColor : '#ffffff',
-                      fontFamily: '"Poppins", system-ui, sans-serif',
-                      fontSize: '5px',
-                    }}
-                  >
-                    {brand.name}
-                  </p>
+                    {/* Brand name — absolute so it doesn't shift title centering */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        marginTop: PX.thumbBrandGap,
+                        fontFamily: "'Poppins', sans-serif",
+                        fontWeight: 700,
+                        fontSize: PX.thumbBrandFont,
+                        color: thumbnailTextColor,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        textAlign: 'center',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {brand.name}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Content/Reel Preview - 9:16 */}
-            <div className="flex-1 min-w-0">
+            {/* ════ CONTENT / REEL PREVIEW (9:16) ════ */}
+            <div>
               <p className="text-xs font-medium text-gray-500 mb-1.5">Content</p>
               <div
-                className="w-full rounded-xl overflow-hidden border border-gray-200 relative"
                 style={{
-                  aspectRatio: '9/16',
+                  width: PREVIEW_W,
+                  height: PREVIEW_H,
+                  position: 'relative',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  border: '1px solid #e5e7eb',
                   backgroundColor: mode === 'light' ? '#f4f4f4' : undefined,
-                  ...(mode === 'dark' ? { background: DARK_BG_GRADIENT } : {}),
+                  background: mode === 'dark' ? DARK_BG : undefined,
                 }}
               >
-                {/* Dark overlay 85% */}
+                {/* Dark overlay — fixed 85% */}
                 {mode === 'dark' && (
-                  <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }} />
+                  <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)' }} />
                 )}
 
-                {/* Title bars - stepped widths */}
-                <div className="relative z-10" style={{ paddingTop: '14.6%', paddingLeft: '8.3%', paddingRight: '8.3%' }}>
-                  {titleLines.map((line, i) => (
+                {/* Title bars — stacked, 0 gap, stepped widths */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: PX.barStartY,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1,
+                  }}
+                >
+                  {TITLE_LINES.map((line, i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-center"
                       style={{
-                        backgroundColor: contentTitleBgColor + 'c8',
-                        height: '18px',
-                        width: barWidths[i],
+                        width: BAR_WIDTHS[i],
+                        height: PX.barHeight,
                         margin: '0 auto',
-                        borderRadius: '3px',
+                        backgroundColor: hexToRgba(contentTitleBgColor, 200 / 255),
+                        borderRadius: PX.barRadius,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
                       <span
-                        className="font-extrabold uppercase text-center tracking-wide"
                         style={{
+                          fontFamily: "'Poppins', sans-serif",
+                          fontWeight: 700,
+                          fontSize: PX.barTitleFont,
                           color: contentTitleTextColor,
-                          fontFamily: '"Poppins", system-ui, sans-serif',
-                          fontSize: '5.5px',
+                          textTransform: 'uppercase',
+                          lineHeight: 1,
                         }}
                       >
                         {line}
@@ -254,52 +357,81 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
                   ))}
                 </div>
 
-                {/* Content lines */}
-                <div className="relative z-10 space-y-1" style={{ paddingTop: '3.6%', paddingLeft: '10%', paddingRight: '10%' }}>
+                {/* Content lines — numbered, left-aligned */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: contentStartY,
+                    left: PX.contentSidePad,
+                    right: PX.contentSidePad,
+                    zIndex: 1,
+                  }}
+                >
                   {SAMPLE_CONTENT.map((line, i) => (
-                    <div key={i} className="flex items-start gap-1">
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        gap: 3,
+                        marginBottom: PX.bulletSpacing,
+                        lineHeight: `${PX.contentLineH}px`,
+                      }}
+                    >
                       <span
-                        className="font-medium flex-shrink-0"
                         style={{
-                          color: mode === 'light' ? '#000000' : '#ffffff',
-                          fontSize: '5px',
+                          fontFamily: "'Inter', sans-serif",
+                          fontWeight: 500,
+                          fontSize: PX.contentFont,
+                          color: contentTextColor,
+                          flexShrink: 0,
                         }}
                       >
                         {i + 1}.
                       </span>
-                      <p
-                        className="font-medium leading-tight"
+                      <span
                         style={{
-                          color: mode === 'light' ? '#000000' : '#ffffff',
-                          fontFamily: '"Inter", system-ui, sans-serif',
-                          fontSize: '5px',
+                          fontFamily: "'Inter', sans-serif",
+                          fontWeight: 500,
+                          fontSize: PX.contentFont,
+                          color: contentTextColor,
                         }}
                       >
                         {line}
-                      </p>
+                      </span>
                     </div>
                   ))}
                 </div>
 
-                {/* Brand name at bottom */}
-                <div className="absolute bottom-1.5 left-0 right-0 text-center z-10">
-                  <p
-                    className="font-bold uppercase"
+                {/* Brand name — bottom center */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: PX.brandBottom,
+                    left: 0,
+                    right: 0,
+                    textAlign: 'center',
+                    zIndex: 1,
+                  }}
+                >
+                  <span
                     style={{
-                      color: mode === 'light' ? thumbnailTextColor : '#ffffff',
-                      fontFamily: '"Poppins", system-ui, sans-serif',
-                      fontSize: '4px',
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 700,
+                      fontSize: PX.brandFont,
+                      color: brandNameColor,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em',
                     }}
                   >
                     {brand.name}
-                  </p>
+                  </span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT: Controls (40%) */}
+        {/* ══════ RIGHT: Color Controls (40%) ══════ */}
         <div className="flex-[2] space-y-4">
           {/* Logo Upload */}
           <div>
@@ -313,51 +445,70 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
               <span className="text-sm text-gray-500">{logoFile ? logoFile.name : 'Upload logo'}</span>
               <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
             </label>
-            <p className="text-[10px] text-gray-400 mt-1">Logo is stored for branding but not shown on generated reels/thumbnails.</p>
+            <p className="text-[10px] text-gray-400 mt-1">
+              Logo is stored for branding but not rendered on reels/thumbnails.
+            </p>
           </div>
 
-          {/* Brand Color */}
+          {/* Brand Color (always visible) */}
           <ColorPicker label="Brand Color" value={brandColor} onChange={setBrandColor} />
 
           {/* Mode-specific rendering colors */}
           <div className="border-t border-gray-200 pt-3">
             <h4 className="text-sm font-semibold text-gray-800 mb-3">
-              {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Colors
+              {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Render Colors
             </h4>
 
-            {/* Thumbnail section */}
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Thumbnail</p>
-            <ColorPicker
-              label="Text Color"
-              value={thumbnailTextColor}
-              onChange={(v) =>
-                mode === 'light' ? setLightThumbnailTextColor(v) : setDarkThumbnailTextColor(v)
-              }
-            />
+            {mode === 'light' ? (
+              <>
+                {/* Light mode: 3 editable color fields */}
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Thumbnail
+                </p>
+                <ColorPicker
+                  label="Text Color"
+                  value={lightThumbnailTextColor}
+                  onChange={setLightThumbnailTextColor}
+                />
 
-            {/* Content section */}
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-4">Content Title</p>
-            <div className="space-y-3">
-              <ColorPicker
-                label="Text Color"
-                value={contentTitleTextColor}
-                onChange={(v) =>
-                  mode === 'light' ? setLightContentTitleTextColor(v) : setDarkContentTitleTextColor(v)
-                }
-              />
-              <ColorPicker
-                label="Bar Background"
-                value={contentTitleBgColor}
-                onChange={(v) =>
-                  mode === 'light' ? setLightContentTitleBgColor(v) : setDarkContentTitleBgColor(v)
-                }
-              />
-            </div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-4">
+                  Content Title
+                </p>
+                <div className="space-y-3">
+                  <ColorPicker
+                    label="Text Color"
+                    value={lightContentTitleTextColor}
+                    onChange={setLightContentTitleTextColor}
+                  />
+                  <ColorPicker
+                    label="Bar Background"
+                    value={lightContentTitleBgColor}
+                    onChange={setLightContentTitleBgColor}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Dark mode: only bar bg is editable (text always white, bg is AI image) */}
+                <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+                  Text is always white. Background is an AI-generated image
+                  with fixed dark overlays (55% thumbnail, 85% content).
+                </p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Content Title
+                </p>
+                <ColorPicker
+                  label="Bar Background"
+                  value={darkContentTitleBgColor}
+                  onChange={setDarkContentTitleBgColor}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Actions */}
+      {/* ── Actions ── */}
       <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
         <button
           onClick={onClose}
@@ -378,6 +529,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
   )
 }
 
+/* ── Reusable color picker ───────────────────────────────────── */
 function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>

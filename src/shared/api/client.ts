@@ -4,6 +4,7 @@
 import { supabase } from './supabase'
 
 const BASE_URL = import.meta.env.VITE_API_URL || ''
+const REQUEST_TIMEOUT_MS = 30_000
 
 export interface ApiError {
   message: string
@@ -12,6 +13,19 @@ export interface ApiError {
 
 export interface RequestOptions {
   headers?: Record<string, string>
+}
+
+function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  return fetch(url, { ...init, signal: controller.signal })
+    .catch((err) => {
+      if (err.name === 'AbortError') {
+        throw { message: `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`, status: 408 } as ApiError
+      }
+      throw err
+    })
+    .finally(() => clearTimeout(timer))
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -39,7 +53,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 export async function get<T>(endpoint: string, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     headers: { ...auth, ...options?.headers },
   })
   return handleResponse<T>(response)
@@ -47,7 +61,7 @@ export async function get<T>(endpoint: string, options?: RequestOptions): Promis
 
 export async function post<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -61,7 +75,7 @@ export async function post<T>(endpoint: string, data?: unknown, options?: Reques
 
 export async function put<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -75,7 +89,7 @@ export async function put<T>(endpoint: string, data?: unknown, options?: Request
 
 export async function del<T>(endpoint: string, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'DELETE',
     headers: { ...auth, ...options?.headers },
   })
@@ -84,7 +98,7 @@ export async function del<T>(endpoint: string, options?: RequestOptions): Promis
 
 export async function patch<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',

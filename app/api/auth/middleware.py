@@ -2,6 +2,7 @@
 
 import os
 import logging
+import asyncio
 import jwt as pyjwt
 from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, Request
@@ -29,7 +30,7 @@ def _get_jwks_client() -> PyJWKClient | None:
     if not supabase_url:
         return None
     jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
-    _jwks_client = PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
+    _jwks_client = PyJWKClient(jwks_url, cache_keys=True, lifespan=3600, timeout=5)
     return _jwks_client
 
 
@@ -104,10 +105,13 @@ async def get_current_user(
         except pyjwt.InvalidTokenError as e:
             logger.debug("HS256 validation failed: %s", e)
 
-    # --- 3. Fallback: call Supabase API ---
+    # --- 3. Fallback: call Supabase API (with 5s timeout) ---
     try:
         supabase = get_supabase_client()
-        response = supabase.auth.get_user(token)
+        response = await asyncio.wait_for(
+            asyncio.to_thread(supabase.auth.get_user, token),
+            timeout=5.0,
+        )
         user = response.user
         if not user:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -118,6 +122,8 @@ async def get_current_user(
         }
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Auth service timeout")
     except Exception:
         raise HTTPException(status_code=401, detail="Authentication failed")
 

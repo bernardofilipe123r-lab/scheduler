@@ -20,6 +20,7 @@ from app.api.system.logs_routes import router as logs_router
 from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
 from app.api.system.ai_logs_routes import router as ai_logs_router
+from app.api.system.health_routes import router as health_router
 from app.api.maestro.routes import router as maestro_router
 from app.api.agents.routes import router as agents_router
 from app.api.ai_team.routes import router as ai_team_router
@@ -92,6 +93,7 @@ app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(ai_logs_router)  # AI logs at /ai-logs, /maestro-logs, /ai-about
+app.include_router(health_router)  # Deep health check at /api/system/health-check
 app.include_router(maestro_router)  # Maestro orchestrator (Toby + Lexi)
 app.include_router(agents_router)  # Dynamic AI agents CRUD at /api/agents
 app.include_router(ai_team_router)  # AI Team dashboard at /api/ai-team
