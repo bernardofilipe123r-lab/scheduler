@@ -7,7 +7,7 @@ import {
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
-  Bot, Brain, Calendar, Info, Gauge, Pause, Play, Clock, Timer, ExternalLink
+  Bot, Brain, Calendar, Info, Gauge, Pause, Play, Clock, Timer, ExternalLink, ChevronRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQuotas, useAgentStatuses, type AgentStatus, type QuotaData } from '@/features/ai-team'
@@ -359,14 +359,11 @@ export function AITeamPage() {
           </p>
         </div>
         <button
-          onClick={() => navigate('/mission-control')}
-          className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-white rounded-xl shadow-lg transition-all group border border-gray-700"
+          onClick={() => navigate('/observatory')}
+          className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg shadow-md transition-all border border-gray-700 text-sm font-medium"
         >
-          <span className="text-xl group-hover:scale-110 transition-transform">🎯</span>
-          <div className="text-left">
-            <span className="font-semibold text-sm block">Watch Your AI Agents Live</span>
-            <span className="text-[11px] text-gray-400 block">Real-time Mission Control</span>
-          </div>
+          I want to know more
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </button>
       </div>
 

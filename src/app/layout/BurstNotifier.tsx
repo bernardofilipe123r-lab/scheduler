@@ -35,21 +35,20 @@ export function BurstNotifier() {
 
     if (wasIdle && isActive && !toastShown.current) {
       // Don't show toast if already on Mission Control
-      if (location.pathname !== '/mission-control') {
+      if (location.pathname !== '/observatory') {
         toastShown.current = true
 
         toast(
           (t) => (
             <div className="flex items-center gap-3">
-              <span className="text-lg">🚀</span>
               <div className="flex-1">
-                <p className="font-semibold text-sm">Daily Burst Started!</p>
+                <p className="font-semibold text-sm">Operation in Progress</p>
                 <p className="text-xs text-gray-300">Your AI agents are generating content</p>
               </div>
               <button
                 onClick={() => {
                   toast.dismiss(t.id)
-                  navigate('/mission-control')
+                  navigate('/observatory')
                 }}
                 className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-md transition-colors whitespace-nowrap"
               >

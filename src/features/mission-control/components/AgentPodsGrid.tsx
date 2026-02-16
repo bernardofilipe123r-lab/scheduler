@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { Users } from 'lucide-react'
 import type { Agent } from '../api/useAgents'
 import { AgentPod } from './AgentPod'
 
@@ -12,7 +13,7 @@ export function AgentPodsGrid({ agents, logs }: AgentPodsGridProps) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center text-gray-500">
-          <div className="text-4xl mb-2">🤖</div>
+          <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p className="font-mono">No active agents detected</p>
         </div>
       </div>

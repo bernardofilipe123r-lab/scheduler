@@ -136,7 +136,7 @@ export function AppLayout() {
               </NavLink>
 
               <NavLink
-                to="/mission-control"
+                to="/observatory"
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${
                     isActive
@@ -144,7 +144,7 @@ export function AppLayout() {
                       : 'text-gray-600 hover:bg-gray-100'
                   }`
                 }
-                title="Mission Control"
+                title="Observatory"
               >
                 <Crosshair className="w-4 h-4" />
               </NavLink>
