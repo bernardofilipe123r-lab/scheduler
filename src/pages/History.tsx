@@ -23,7 +23,7 @@ import { BrandBadge } from '@/features/brands'
 import { StatusBadge, PageLoader, Modal } from '@/shared/components'
 import type { Job, Variant, BrandName } from '@/shared/types'
 
-type ViewFilter = 'all' | 'to-schedule' | 'scheduled' | 'in-progress' | 'other'
+type ViewFilter = 'all' | 'to-schedule' | 'published' | 'scheduled' | 'in-progress' | 'other'
 
 export function HistoryPage() {
   const navigate = useNavigate()
@@ -69,7 +69,8 @@ export function HistoryPage() {
   // Categorize jobs based on their scheduling state
   const categorizedJobs = useMemo(() => {
     const toSchedule: Job[] = []    // Completed jobs with brands ready to schedule
-    const scheduled: Job[] = []      // Jobs with all brands scheduled
+    const published: Job[] = []      // Jobs with all brands published
+    const scheduled: Job[] = []      // Jobs with all brands scheduled (not yet published)
     const inProgress: Job[] = []     // Generating or pending jobs
     const other: Job[] = []          // Failed, cancelled, etc.
     
@@ -78,16 +79,21 @@ export function HistoryPage() {
       const totalBrands = job.brands?.length || 0
       
       // Count different states
+      const publishedCount = outputs.filter(o => o.status === 'published').length
       const scheduledCount = outputs.filter(o => o.status === 'scheduled').length
       const completedCount = outputs.filter(o => o.status === 'completed').length
       const pendingOrGenerating = outputs.filter(o => o.status === 'pending' || o.status === 'generating').length
+      const scheduledOrPublished = scheduledCount + publishedCount
       
       if (job.status === 'generating' || job.status === 'pending' || pendingOrGenerating > 0) {
         inProgress.push(job)
-      } else if (scheduledCount === totalBrands && totalBrands > 0) {
-        // All brands are scheduled
+      } else if (publishedCount === totalBrands && totalBrands > 0) {
+        // All brands published
+        published.push(job)
+      } else if (scheduledOrPublished === totalBrands && totalBrands > 0) {
+        // All brands scheduled (some may be published, but not all)
         scheduled.push(job)
-      } else if (completedCount > 0 || (scheduledCount > 0 && scheduledCount < totalBrands)) {
+      } else if (completedCount > 0 || (scheduledOrPublished > 0 && scheduledOrPublished < totalBrands)) {
         // Has completed brands ready to schedule, or partially scheduled
         toSchedule.push(job)
       } else {
@@ -95,16 +101,17 @@ export function HistoryPage() {
       }
     })
     
-    return { toSchedule, scheduled, inProgress, other }
+    return { toSchedule, published, scheduled, inProgress, other }
   }, [jobsArray])
   
   // Get job scheduling info
   const getSchedulingInfo = (job: Job) => {
     const outputs = Object.entries(job.brand_outputs || {}) as [BrandName, { status: string; scheduled_time?: string }][]
+    const published = outputs.filter(([, o]) => o.status === 'published')
     const scheduled = outputs.filter(([, o]) => o.status === 'scheduled')
     const readyToSchedule = outputs.filter(([, o]) => o.status === 'completed')
     
-    return { scheduled, readyToSchedule, total: job.brands?.length || 0 }
+    return { published, scheduled, readyToSchedule, total: job.brands?.length || 0 }
   }
   
   // Filter jobs based on view filter and search
@@ -114,6 +121,9 @@ export function HistoryPage() {
     switch (viewFilter) {
       case 'to-schedule':
         baseJobs = categorizedJobs.toSchedule
+        break
+      case 'published':
+        baseJobs = categorizedJobs.published
         break
       case 'scheduled':
         baseJobs = categorizedJobs.scheduled
@@ -150,7 +160,7 @@ export function HistoryPage() {
   const getProgress = (job: Job) => {
     const total = job.brands?.length || 0
     const completed = Object.values(job.brand_outputs || {})
-      .filter(o => o.status === 'completed' || o.status === 'scheduled')
+      .filter(o => o.status === 'completed' || o.status === 'scheduled' || o.status === 'published')
       .length
     return total > 0 ? Math.round((completed / total) * 100) : 0
   }
@@ -206,6 +216,17 @@ export function HistoryPage() {
       description: 'Completed, awaiting scheduling'
     },
     {
+      key: 'published' as ViewFilter,
+      label: 'Published',
+      count: categorizedJobs.published.length,
+      icon: CheckCircle2,
+      color: 'bg-emerald-500',
+      bgColor: 'bg-emerald-50',
+      textColor: 'text-emerald-700',
+      borderColor: 'border-emerald-200',
+      description: 'Successfully published'
+    },
+    {
       key: 'scheduled' as ViewFilter,
       label: 'Scheduled',
       count: categorizedJobs.scheduled.length,
@@ -214,7 +235,7 @@ export function HistoryPage() {
       bgColor: 'bg-green-50',
       textColor: 'text-green-700',
       borderColor: 'border-green-200',
-      description: 'All brands scheduled'
+      description: 'Awaiting publication'
     },
     {
       key: 'in-progress' as ViewFilter,
@@ -245,13 +266,13 @@ export function HistoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">History</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
           <p className="text-gray-500">{jobs.length} total jobs</p>
         </div>
       </div>
       
       {/* Status Cards - Visual Workflow */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {stats.map(stat => {
           const Icon = stat.icon
           const isActive = viewFilter === stat.key
@@ -426,7 +447,8 @@ export function HistoryPage() {
             const isGenerating = job.status === 'generating' || job.status === 'pending'
             const schedulingInfo = getSchedulingInfo(job)
             
-            const isFullyScheduled = schedulingInfo.scheduled.length === schedulingInfo.total && schedulingInfo.total > 0
+            const isFullyPublished = schedulingInfo.published.length === schedulingInfo.total && schedulingInfo.total > 0
+            const isFullyScheduled = (schedulingInfo.scheduled.length + schedulingInfo.published.length) === schedulingInfo.total && schedulingInfo.total > 0 && !isFullyPublished
             const hasReadyToSchedule = schedulingInfo.readyToSchedule.length > 0
             
             return (
@@ -434,10 +456,11 @@ export function HistoryPage() {
                 key={job.id}
                 className={clsx(
                   'card p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 group',
-                  isFullyScheduled && 'border-l-green-500',
-                  hasReadyToSchedule && !isFullyScheduled && 'border-l-amber-500',
+                  isFullyPublished && 'border-l-emerald-500',
+                  isFullyScheduled && !isFullyPublished && 'border-l-green-500',
+                  hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && 'border-l-amber-500',
                   isGenerating && 'border-l-blue-500',
-                  !isFullyScheduled && !hasReadyToSchedule && !isGenerating && 'border-l-gray-300'
+                  !isFullyPublished && !isFullyScheduled && !hasReadyToSchedule && !isGenerating && 'border-l-gray-300'
                 )}
                 onClick={() => navigate(`/job/${job.id}`)}
               >
@@ -447,13 +470,19 @@ export function HistoryPage() {
                       <span className="text-xs font-mono text-gray-400">#{job.id}</span>
                       <StatusBadge status={job.status} />
                       
+                      {isFullyPublished && (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Published
+                        </span>
+                      )}
                       {isFullyScheduled && (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                           <CalendarCheck className="w-3 h-3" />
                           All Scheduled
                         </span>
                       )}
-                      {hasReadyToSchedule && !isFullyScheduled && (
+                      {hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 animate-pulse">
                           <Clock className="w-3 h-3" />
                           {schedulingInfo.readyToSchedule.length} to schedule
@@ -484,6 +513,7 @@ export function HistoryPage() {
                     <div className="flex flex-wrap gap-1 mb-2">
                       {job.brands?.map(brand => {
                         const output = job.brand_outputs?.[brand]
+                        const isPublished = output?.status === 'published'
                         const isScheduled = output?.status === 'scheduled'
                         const isReady = output?.status === 'completed'
                         
@@ -492,12 +522,18 @@ export function HistoryPage() {
                             key={brand} 
                             className={clsx(
                               'relative',
-                              isScheduled && 'ring-2 ring-green-400 ring-offset-1 rounded-full',
+                              isPublished && 'ring-2 ring-emerald-400 ring-offset-1 rounded-full',
+                              isScheduled && !isPublished && 'ring-2 ring-green-400 ring-offset-1 rounded-full',
                               isReady && 'ring-2 ring-amber-400 ring-offset-1 rounded-full'
                             )}
                           >
                             <BrandBadge brand={brand} size="sm" />
-                            {isScheduled && (
+                            {isPublished && (
+                              <CheckCircle2 
+                                className="absolute -top-1 -right-1 w-3 h-3 text-emerald-600 bg-white rounded-full" 
+                              />
+                            )}
+                            {isScheduled && !isPublished && (
                               <CalendarCheck 
                                 className="absolute -top-1 -right-1 w-3 h-3 text-green-600 bg-white rounded-full" 
                               />

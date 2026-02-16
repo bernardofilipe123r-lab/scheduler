@@ -1093,8 +1093,11 @@ export function ScheduledPage() {
       >
         {selectedPost && (() => {
           const carouselPaths = selectedPost.metadata?.carousel_image_paths || []
+          const slideTexts: string[] = selectedPost.metadata?.slide_texts || []
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
-          const totalSlides = isPost ? 1 + carouselPaths.length : 1
+          // Total slides = cover + max(carousel images, text slides)
+          const textSlideCount = Math.max(carouselPaths.length, slideTexts.length)
+          const totalSlides = isPost ? 1 + textSlideCount : 1
 
           return (
           <div className="space-y-4">
@@ -1140,22 +1143,104 @@ export function ScheduledPage() {
                     {/* Slide content */}
                     <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100" style={{ width: 320, height: 400 }}>
                       {(() => {
-                        const imgSrc = detailSlideIndex === 0
-                          ? selectedPost.thumbnail_path
-                          : carouselPaths[detailSlideIndex - 1]
+                        // Cover slide
+                        if (detailSlideIndex === 0) {
+                          const coverSrc = selectedPost.thumbnail_path
+                          const postTitle = selectedPost.metadata?.title || selectedPost.title || ''
+                          
+                          // Render cover with background image + title overlay
+                          if (coverSrc && !slideImageErrors.has(0)) {
+                            return (
+                              <div className="relative w-full h-full">
+                                <img
+                                  src={coverSrc}
+                                  alt="Cover"
+                                  className="w-full h-full object-cover"
+                                  onError={() => setSlideImageErrors(prev => new Set(prev).add(0))}
+                                />
+                                {/* Title overlay — always show to ensure cover looks complete */}
+                                <div className="absolute inset-0 flex flex-col justify-end">
+                                  {/* Gradient */}
+                                  <div className="absolute inset-0" style={{
+                                    background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.5) 65%, rgba(0,0,0,0.92) 100%)'
+                                  }} />
+                                  {/* Brand bar + title */}
+                                  <div className="relative px-4 pb-6 pt-8 space-y-2">
+                                    {/* Brand abbreviation with lines */}
+                                    <div className="flex items-center gap-2 justify-center opacity-90">
+                                      <div className="h-px flex-1 bg-white/60 max-w-[80px]" />
+                                      <span className="text-[10px] font-medium text-white/80 tracking-wider uppercase">
+                                        {getBrandLabel(selectedPost.brand).replace(/^The\s+/i, '').split(' ').map(w => w[0]).join('')}
+                                      </span>
+                                      <div className="h-px flex-1 bg-white/60 max-w-[80px]" />
+                                    </div>
+                                    <h4 className="text-white text-center font-bold uppercase leading-tight" style={{ fontSize: postTitle.length > 50 ? 13 : 16 }}>
+                                      {postTitle}
+                                    </h4>
+                                    <p className="text-white/70 text-center text-[10px] tracking-wider">Swipe</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div className="flex items-center justify-center h-full text-zinc-500">
+                              Cover image not available
+                            </div>
+                          )
+                        }
+                        
+                        // Text slides (index 1+)
+                        const slideIdx = detailSlideIndex - 1
+                        const imgSrc = carouselPaths[slideIdx]
+                        const slideText = slideTexts[slideIdx]
+                        
+                        // Try server-composed image first
                         if (imgSrc && !slideImageErrors.has(detailSlideIndex)) {
                           return (
                             <img
                               src={imgSrc}
-                              alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
+                              alt={`Slide ${detailSlideIndex}`}
                               className="w-full h-full object-contain"
                               onError={() => setSlideImageErrors(prev => new Set(prev).add(detailSlideIndex))}
                             />
                           )
                         }
+                        
+                        // Fallback: render text slide as styled HTML
+                        if (slideText) {
+                          const isLast = slideIdx === slideTexts.length - 1
+                          const brandColor = getBrandColor(selectedPost.brand)
+                          const brandLabel = getBrandLabel(selectedPost.brand)
+                          return (
+                            <div className="flex flex-col h-full" style={{ backgroundColor: '#f8f5f0' }}>
+                              {/* Header */}
+                              <div className="flex items-center gap-2 px-4 pt-5 pb-3">
+                                <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: brandColor }} />
+                                <div className="min-w-0">
+                                  <p className="text-[10px] font-semibold text-gray-900 truncate">{brandLabel}</p>
+                                  <p className="text-[8px] text-gray-500">@the{selectedPost.brand}</p>
+                                </div>
+                              </div>
+                              {/* Body text */}
+                              <div className="flex-1 px-4 overflow-hidden">
+                                <p className="text-[11px] leading-relaxed text-gray-800" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+                                  {slideText}
+                                </p>
+                              </div>
+                              {/* Bottom bar */}
+                              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200/50 text-[9px] text-gray-400 font-medium tracking-wider uppercase">
+                                <span>Share</span>
+                                <span>{isLast ? 'Follow' : 'Swipe'}</span>
+                                <span>Save</span>
+                              </div>
+                            </div>
+                          )
+                        }
+                        
                         return (
                           <div className="flex items-center justify-center h-full text-zinc-500">
-                            Image not available
+                            Slide not available
                           </div>
                         )
                       })()}

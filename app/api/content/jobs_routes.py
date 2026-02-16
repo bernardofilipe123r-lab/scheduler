@@ -426,7 +426,7 @@ async def regenerate_all(
     summary="List all jobs (history)"
 )
 async def list_jobs(
-    limit: int = 50,
+    limit: int = 100,
     user: dict = Depends(get_current_user),
 ):
     """
@@ -436,10 +436,41 @@ async def list_jobs(
         with get_db_session() as db:
             manager = JobManager(db)
             jobs = manager.get_all_jobs(limit=limit, user_id=user["id"])
-            
+
+            # Cross-reference with ScheduledReel to enrich brand_outputs
+            # with published/publishing status
+            from app.models import ScheduledReel
+            reel_ids = []
+            for job in jobs:
+                for output in (job.brand_outputs or {}).values():
+                    rid = output.get("reel_id")
+                    if rid:
+                        reel_ids.append(rid)
+
+            published_map: dict[str, str] = {}  # reel_id -> status
+            if reel_ids:
+                scheduled_rows = (
+                    db.query(ScheduledReel.reel_id, ScheduledReel.status)
+                    .filter(ScheduledReel.reel_id.in_(reel_ids))
+                    .all()
+                )
+                for rid, sr_status in scheduled_rows:
+                    published_map[rid] = sr_status
+
+            results = []
+            for job in jobs:
+                d = job.to_dict()
+                for brand, output in d.get("brand_outputs", {}).items():
+                    rid = output.get("reel_id")
+                    if rid and rid in published_map:
+                        sr_status = published_map[rid]
+                        if sr_status in ("published", "partial"):
+                            output["status"] = "published"
+                results.append(d)
+
             return {
-                "jobs": [job.to_dict() for job in jobs],
-                "total": len(jobs)
+                "jobs": results,
+                "total": len(results)
             }
             
     except Exception as e:
