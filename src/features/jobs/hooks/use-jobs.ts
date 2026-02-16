@@ -68,6 +68,7 @@ export function useDeleteJob() {
     mutationFn: jobsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: ['scheduled'] })
     },
   })
 }

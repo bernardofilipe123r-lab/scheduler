@@ -644,13 +644,83 @@ async def startup_event():
         except Exception as e:
             print(f"⚠️ Log cleanup failed: {e}", flush=True)
     
+    # Auto-cleanup published jobs/reels older than 1 day
+    def cleanup_published_jobs():
+        """Delete jobs and scheduled reels that were published more than 1 day ago."""
+        from app.db_connection import SessionLocal
+        from app.models import GenerationJob, ScheduledReel
+        from datetime import timedelta
+
+        db = SessionLocal()
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=1)
+
+            # Delete scheduled reels published more than 1 day ago
+            old_published_reels = db.query(ScheduledReel).filter(
+                ScheduledReel.status == "published",
+                ScheduledReel.published_at < cutoff
+            ).all()
+
+            deleted_reels = 0
+            for reel in old_published_reels:
+                db.delete(reel)
+                deleted_reels += 1
+
+            # Delete jobs where ALL brand outputs are published and created > 1 day ago
+            old_jobs = db.query(GenerationJob).filter(
+                GenerationJob.created_at < cutoff
+            ).all()
+
+            deleted_jobs = 0
+            for job in old_jobs:
+                outputs = job.brand_outputs or {}
+                brands = job.brands or []
+                if not brands or not outputs:
+                    continue
+                # Check if ALL brands are published
+                all_published = all(
+                    isinstance(outputs.get(b), dict) and outputs.get(b, {}).get("status") == "published"
+                    for b in brands
+                )
+                if all_published:
+                    # Clean up any remaining scheduled reels
+                    for brand, output in outputs.items():
+                        reel_id = output.get("reel_id") if isinstance(output, dict) else None
+                        if reel_id:
+                            db.query(ScheduledReel).filter(
+                                ScheduledReel.reel_id == reel_id
+                            ).delete(synchronize_session=False)
+                    db.query(ScheduledReel).filter(
+                        ScheduledReel.extra_data["job_id"].astext == job.job_id
+                    ).delete(synchronize_session=False)
+                    # Clean up files (best-effort)
+                    try:
+                        from app.services.content.job_manager import JobManager
+                        manager = JobManager(db)
+                        manager.cleanup_job_files(job.job_id)
+                    except Exception:
+                        pass
+                    db.delete(job)
+                    deleted_jobs += 1
+
+            if deleted_reels > 0 or deleted_jobs > 0:
+                db.commit()
+                print(f"🧹 Published cleanup: {deleted_jobs} jobs + {deleted_reels} scheduled reels (>1 day old)", flush=True)
+        except Exception as e:
+            db.rollback()
+            print(f"⚠️ Published cleanup failed: {e}", flush=True)
+        finally:
+            db.close()
+    
     scheduler.add_job(cleanup_old_logs, 'interval', hours=24, id='log_cleanup')
+    scheduler.add_job(cleanup_published_jobs, 'interval', hours=6, id='published_cleanup')
     
     scheduler.start()
     
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
     print("✅ Analytics auto-refresh scheduled (every 6 hours)", flush=True)
     print("✅ Log cleanup scheduled (every 24 hours, 7-day retention)", flush=True)
+    print("✅ Published content cleanup scheduled (every 6 hours, 1-day retention)", flush=True)
     
     # Store scheduler for shutdown
     app.state.scheduler = scheduler

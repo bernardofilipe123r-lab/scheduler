@@ -502,12 +502,16 @@ async def delete_jobs_by_status(job_status: str = "completed", user: dict = Depe
 
         deleted_count = 0
         for job in jobs:
-            # Delete associated scheduled reels
+            # Delete associated scheduled reels by reel_id
             brand_outputs = job.brand_outputs or {}
             for brand, output in brand_outputs.items():
                 reel_id = output.get("reel_id")
                 if reel_id:
                     db.query(ScheduledReel).filter(ScheduledReel.reel_id == reel_id).delete()
+            # Also delete any scheduled reels linked via extra_data->job_id
+            db.query(ScheduledReel).filter(
+                ScheduledReel.extra_data["job_id"].astext == job.job_id
+            ).delete(synchronize_session=False)
             # Delete the job
             db.delete(job)
             deleted_count += 1
@@ -547,7 +551,7 @@ async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest, user: dict = Depen
                     if not job:
                         continue  # Skip missing jobs silently
 
-                    # Delete associated scheduled reels
+                    # Delete associated scheduled reels by reel_id
                     brand_outputs = job.brand_outputs or {}
                     for brand, output in brand_outputs.items():
                         reel_id = output.get("reel_id") if isinstance(output, dict) else None
@@ -555,6 +559,11 @@ async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest, user: dict = Depen
                             db.query(ScheduledReel).filter(
                                 ScheduledReel.reel_id == reel_id
                             ).delete(synchronize_session=False)
+
+                    # Also delete any scheduled reels linked via extra_data->job_id
+                    db.query(ScheduledReel).filter(
+                        ScheduledReel.extra_data["job_id"].astext == job_id
+                    ).delete(synchronize_session=False)
 
                     # Clean up files (best-effort, don't fail on file errors)
                     try:
@@ -602,7 +611,7 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
                     detail=f"Job not found: {job_id}"
                 )
 
-            # Delete associated scheduled reels
+            # Delete associated scheduled reels by reel_id
             brand_outputs = job.brand_outputs or {}
             for brand, output in brand_outputs.items():
                 reel_id = output.get("reel_id") if isinstance(output, dict) else None
@@ -610,6 +619,11 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
                     db.query(ScheduledReel).filter(
                         ScheduledReel.reel_id == reel_id
                     ).delete(synchronize_session=False)
+
+            # Also delete any scheduled reels linked via extra_data->job_id
+            db.query(ScheduledReel).filter(
+                ScheduledReel.extra_data["job_id"].astext == job_id
+            ).delete(synchronize_session=False)
 
             # Clean up files (best-effort)
             try:
