@@ -785,13 +785,13 @@ class SelectionEngine:
         80% chance: inherit from gene pool (crossover of best DNA)
         20% chance: fully random DNA (genetic diversity)
 
-        The new agent inherits the dead agent's brand linkage.
+        The new agent inherits the dead agent's user ID.
         """
         import json
         import random
         from app.models import AIAgent, AgentLearning, GenePool
 
-        brand_id = dead_agent.created_for_brand or "unknown"
+        brand_id = "auto"
 
         # Decide: inherit or random?
         use_gene_pool = random.random() < GENE_POOL_INHERIT_CHANCE
@@ -880,7 +880,6 @@ class SelectionEngine:
             content_types=json.dumps(["reel", "post"]),
             active=True,
             is_builtin=False,
-            created_for_brand=brand_id,
             generation=1,
             parent_agent_id=inheritance_source or dead_agent.agent_id,
         )

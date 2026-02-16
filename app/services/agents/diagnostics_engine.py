@@ -437,15 +437,6 @@ class DiagnosticsEngine:
             if orphan_count > 5:
                 issues.append(f"{orphan_count} proposals from unknown agents (7d)")
 
-            # Check for agents with no brand (shouldn't happen)
-            no_brand = db.query(AIAgent).filter(
-                AIAgent.active == True,
-                AIAgent.created_for_brand == None,
-                AIAgent.is_builtin == False
-            ).count()
-            if no_brand > 0:
-                issues.append(f"{no_brand} non-builtin agents with no brand")
-
             if issues:
                 return CheckResult("data_consistency", "warn", "; ".join(issues))
 

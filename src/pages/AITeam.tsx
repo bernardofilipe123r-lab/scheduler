@@ -35,7 +35,6 @@ interface Agent {
   content_types: string[]
   active: boolean
   is_builtin: boolean
-  created_for_brand: string | null
   survival_score: number
   lifetime_views: number
   lifetime_proposals: number
@@ -485,9 +484,6 @@ function LeaderboardTab({
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-bold text-gray-400">{agent.display_name}</span>
                   <span className="text-xs text-gray-400">Gen {agent.generation || 1}</span>
-                  {agent.created_for_brand && (
-                    <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">{agent.created_for_brand}</span>
-                  )}
                 </div>
                 <span className="text-sm text-gray-400">Score: {Math.round(agent.survival_score || 0)}</span>
               </div>
@@ -758,18 +754,20 @@ function OverviewTab({
     try {
       if (wasPaused) {
         await post('/api/maestro/resume', {})
-        toast.success('Maestro resumed')
       } else {
         await post('/api/maestro/pause', {})
-        toast.success('Maestro paused')
       }
-      // Optimistic update — flip immediately, sync in background
+      // Optimistic update — flip immediately
       setLocalPausedOverride(!wasPaused)
-      onRefresh()
+      // Await refresh to sync state
+      await onRefresh()
+      // Show toast AFTER everything completes
+      toast.success(wasPaused ? 'Maestro resumed' : 'Maestro paused')
     } catch {
       toast.error(wasPaused ? 'Failed to resume Maestro' : 'Failed to pause Maestro')
+    } finally {
+      setMaestroToggling(false)
     }
-    setMaestroToggling(false)
   }
 
   return (
@@ -972,7 +970,6 @@ function AgentCard({
             )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-            {agent.created_for_brand && <span className="bg-gray-100 px-2 py-0.5 rounded">{agent.created_for_brand}</span>}
             <span className="flex items-center gap-1">
               <Flame className="w-3 h-3" />
               {agent.temperature}

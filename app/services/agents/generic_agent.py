@@ -9,15 +9,10 @@ instances of GenericAgent.
 ┌─────────────────────────────────────────────────────────────────────┐
 │  ARCHITECTURE RULE — Agent ↔ Brand relationship:                    │
 │                                                                     │
-│  • Number of AI agents MUST equal number of brands (5 brands = 5    │
-│    agents). Each agent is organisationally "born from" one brand     │
-│    (created_for_brand), but that's just for tracking lineage.       │
-│                                                                     │
 │  • Every agent generates content for EVERY brand — they all work    │
-│    across all brands in the daily burst. The 1:1 mapping is purely  │
-│    organizational, not a content restriction.                       │
+│    across all brands in the daily burst.                            │
 │                                                                     │
-│  • seed_builtin_agents() enforces this on startup.                  │
+│  • seed_builtin_agents() enforces base agents on startup.           │
 │  • Maestro's healing cycle re-checks every 15 minutes.              │
 │  • Brand creation auto-provisions a new agent (brand_manager.py).   │
 └─────────────────────────────────────────────────────────────────────┘
@@ -1052,7 +1047,6 @@ def seed_builtin_agents(user_id: str | None = None):
                 content_types=json.dumps(["reel"]),
                 active=True,
                 is_builtin=True,
-                created_for_brand="healthycollege",
             ))
             print("✅ Seeded AI agent: Toby (builtin)", flush=True)
 
@@ -1073,7 +1067,6 @@ def seed_builtin_agents(user_id: str | None = None):
                 content_types=json.dumps(["reel"]),
                 active=True,
                 is_builtin=True,
-                created_for_brand="vitalitycollege",
             ))
             print("✅ Seeded AI agent: Lexi (builtin)", flush=True)
 
@@ -1092,15 +1085,15 @@ def seed_builtin_agents(user_id: str | None = None):
 
 def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
     """
-    Check all active brands — if any brand has no agent assigned
-    (created_for_brand), spawn a new agent with randomized DNA and a cool name.
+    Ensure we have enough agents for the number of brands.
+    Simple rule: total active agents should match total active brands.
 
     This is called:
       - On startup (from seed_builtin_agents)
       - Every 15 min (from Maestro healing cycle)
 
-    ARCHITECTURE: agents = brands. Each agent works across ALL brands,
-    but is organisationally born from one specific brand.
+    ARCHITECTURE: Each agent works across ALL brands.
+    When brands outnumber agents, spawn new agents until balanced.
     """
     from app.db_connection import SessionLocal
     from app.models import Brand
@@ -1112,31 +1105,32 @@ def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
         close_db = True
 
     try:
-        # Get all active brands
+        # Count active brands
         try:
-            all_brands = db.query(Brand.id, Brand.display_name, Brand.user_id).filter(Brand.active == True).all()
+            total_brands = db.query(Brand).filter(Brand.active == True)
+            if user_id:
+                total_brands = total_brands.filter(Brand.user_id == user_id)
+            brand_count = total_brands.count()
         except Exception:
             # Fallback if Brand table doesn't exist yet
-            all_brands = []
+            brand_count = 0
 
-        if not all_brands:
+        if brand_count == 0:
             return []
 
-        # Get brands that already have an agent
-        existing = (
-            db.query(AIAgent.created_for_brand)
-            .filter(AIAgent.active == True, AIAgent.created_for_brand != None)
-            .all()
-        )
-        covered_brands = {row[0] for row in existing}
+        # Count active agents
+        agent_query = db.query(AIAgent).filter(AIAgent.active == True)
+        if user_id:
+            agent_query = agent_query.filter(AIAgent.user_id == user_id)
+        agent_count = agent_query.count()
 
-        # Find uncovered brands
-        uncovered = [(bid, bname, buid) for bid, bname, buid in all_brands if bid not in covered_brands]
+        # Calculate how many agents we need to spawn
+        needed = brand_count - agent_count
 
-        if not uncovered:
+        if needed <= 0:
             return []
 
-        print(f"🧬 Found {len(uncovered)} brands without agents: {[b[0] for b in uncovered]}", flush=True)
+        print(f"🧬 Need {needed} more agents ({agent_count} agents vs {brand_count} brands)", flush=True)
 
         spawned = []
         archetypes = [
@@ -1148,24 +1142,24 @@ def _ensure_agents_for_all_brands(db=None, user_id: str | None = None):
             "Consistency engine. Reliable, methodical, builds trust through steady valuable content.",
         ]
 
-        for brand_id, brand_display, brand_user_id in uncovered:
+        for i in range(needed):
             try:
                 from app.services.agents.evolution_engine import pick_agent_name
                 agent_name = pick_agent_name()
                 archetype = random.choice(archetypes)
-                personality = f"{archetype} Specialized for {brand_display or brand_id}."
+                personality = f"{archetype} Multi-brand content strategist."
 
                 agent = create_agent_for_brand(
-                    brand_id=brand_id,
+                    brand_id="auto",
                     agent_name=agent_name,
                     randomize=True,
                     personality=personality,
-                    user_id=brand_user_id or user_id,
+                    user_id=user_id,
                 )
-                print(f"🧬 Auto-spawned agent '{agent.display_name}' (temp={agent.temperature}) for brand {brand_id}", flush=True)
+                print(f"🧬 Auto-spawned agent '{agent.display_name}' (temp={agent.temperature})", flush=True)
                 spawned.append(agent)
             except Exception as e:
-                print(f"⚠️ Could not spawn agent for {brand_id}: {e}", flush=True)
+                print(f"⚠️ Could not spawn agent: {e}", flush=True)
 
         return spawned
     finally:
@@ -1271,7 +1265,6 @@ def create_agent_for_brand(
             content_types=_json.dumps(["reel", "post"]),
             active=True,
             is_builtin=False,
-            created_for_brand=brand_id,
         )
         db.add(agent)
         db.commit()

@@ -36,9 +36,6 @@ class AIAgent(Base):
     active = Column(Boolean, nullable=False, default=True)
     is_builtin = Column(Boolean, nullable=False, default=False)  # True for Toby/Lexi (cannot delete)
 
-    # Linked brand (the brand that caused this agent's creation)
-    created_for_brand = Column(String(100), nullable=True)
-
     # ── Evolution tracking ──
     survival_score = Column(Float, nullable=True, default=0.0)       # 0-100 composite fitness
     lifetime_views = Column(Integer, nullable=True, default=0)       # Total views across all content
@@ -90,7 +87,6 @@ class AIAgent(Base):
             "content_types": self.get_content_types(),
             "active": self.active,
             "is_builtin": self.is_builtin,
-            "created_for_brand": self.created_for_brand,
             "survival_score": self.survival_score or 0.0,
             "lifetime_views": self.lifetime_views or 0,
             "lifetime_proposals": self.lifetime_proposals or 0,

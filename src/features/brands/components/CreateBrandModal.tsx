@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Palette,
   Check,
@@ -7,8 +7,6 @@ import {
   Facebook,
   Youtube,
   Sparkles,
-  Sun,
-  Moon,
   ArrowRight,
   Upload,
   X,
@@ -16,6 +14,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { useBrands, useCreateBrand, type CreateBrandInput, type BrandColors } from '@/features/brands/api/use-brands'
+import { apiClient } from '@/shared/api/client'
 import { supabase } from '@/shared/api/supabase'
 import {
   COLOR_PRESETS,
@@ -28,45 +27,127 @@ export interface CreateBrandModalProps {
   onSuccess?: () => void
 }
 
+/* ── Proportional scale: 1080px canvas → 240px preview ────────── */
+const CANVAS_W = 1080
+const CANVAS_H = 1920
+const PREVIEW_W = 240
+const S = PREVIEW_W / CANVAS_W
+const PREVIEW_H = Math.round(CANVAS_H * S)
+
+const PX = {
+  thumbTitleFont: Math.round(80 * S),
+  thumbSideMargin: Math.round(80 * S),
+  thumbLineSpacing: Math.round(20 * S),
+  thumbBrandFont: Math.max(6, Math.round(28 * S)),
+  thumbBrandGap: Math.round(254 * S),
+  barStartY: Math.round(280 * S),
+  barHeight: Math.round(100 * S),
+  hPadding: Math.round(20 * S),
+  barTitleFont: Math.round(56 * S),
+  titleContentGap: Math.round(70 * S),
+  contentSidePad: Math.round(108 * S),
+  contentFont: Math.round(44 * S),
+  contentLineH: Math.round(44 * 1.5 * S),
+  bulletSpacing: Math.round(44 * 0.6 * S),
+  brandFont: Math.max(4, Math.round(15 * S)),
+  brandBottom: Math.round(12 * S),
+}
+
+const DARK_BG =
+  'linear-gradient(145deg, #1a3a2a 0%, #0d1f15 25%, #1a2030 50%, #2d1a0a 75%, #1a0a1a 100%)'
+
+const SAMPLE_TITLE = 'SURPRISING TRUTHS ABOUT DETOXIFICATION'
+const SAMPLE_CONTENT = [
+  'Your liver does an incredible job filtering toxins',
+  'Drinking more water supports natural detox',
+  'Sleep is the most underrated detox mechanism',
+]
+
+function hexToRgba(hex: string, opacity: number): string {
+  const h = hex.replace('#', '')
+  if (h.length < 6) return `rgba(0,0,0,${opacity})`
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  return `rgba(${r},${g},${b},${opacity})`
+}
+
 export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) {
   const createBrandMutation = useCreateBrand()
   const { data: existingBrands } = useBrands()
-  
+
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Step 1: Brand Identity
   const [displayName, setDisplayName] = useState('')
   const [brandId, setBrandId] = useState('')
   const [shortName, setShortName] = useState('')
-  
-  // Step 2: Colors
+
+  // Logo
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+
+  // Step 2: Colors & Preview
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
   const [primaryColor, setPrimaryColor] = useState('#6366f1')
   const [accentColor, setAccentColor] = useState('#818cf8')
   const [colorName, setColorName] = useState('indigo')
   const [useCustomColors, setUseCustomColors] = useState(false)
-  
-  // Logo
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
 
-  // Step 4: Platform credentials (optional)
+  // Step 3: Platform credentials (all required)
   const [instagramHandle, setInstagramHandle] = useState('')
   const [facebookPageId, setFacebookPageId] = useState('')
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
   const [metaAccessToken, setMetaAccessToken] = useState('')
+  const [step3Attempted, setStep3Attempted] = useState(false)
+
+  // Pre-fill Meta token from existing brands
+  useEffect(() => {
+    const prefillToken = async () => {
+      try {
+        const data = await apiClient.get<{
+          brands: Array<{
+            meta_access_token?: string
+            facebook_page_id?: string
+            instagram_business_account_id?: string
+          }>
+        }>('/api/v2/brands/credentials')
+        const existing = data.brands?.find(b => b.meta_access_token)
+        if (existing?.meta_access_token) setMetaAccessToken(existing.meta_access_token)
+      } catch { /* ignore — first brand or no creds */ }
+    }
+    prefillToken()
+  }, [])
+
+  // Title lines for preview (split into ~3 lines)
+  const titleLines = useMemo(() => {
+    const words = SAMPLE_TITLE.split(/\s+/).filter(Boolean)
+    if (words.length <= 2) return [SAMPLE_TITLE]
+    const third = Math.ceil(words.length / 3)
+    return [
+      words.slice(0, third).join(' '),
+      words.slice(third, third * 2).join(' '),
+      words.slice(third * 2).join(' '),
+    ].filter(l => l.trim())
+  }, [])
+
+  // Preview colors derived from primaryColor
+  const thumbnailTextColor = previewMode === 'light' ? primaryColor : '#ffffff'
+  const contentTitleTextColor = '#ffffff'
+  const contentTitleBgColor = primaryColor
+  const contentTextColor = previewMode === 'light' ? '#000000' : '#ffffff'
+  const brandNameColor = previewMode === 'light' ? primaryColor : '#ffffff'
+
+  const contentStartY = PX.barStartY + titleLines.length * PX.barHeight + PX.titleContentGap
 
   // Auto-generate ID and short name from display name
   const handleNameChange = (name: string) => {
     setDisplayName(name)
     setError(null)
-    
-    // Auto-generate ID (lowercase, no spaces/special chars)
     const genId = name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')
     setBrandId(genId)
-    
-    // Auto-generate short name (first letters of each word, max 4 chars)
     const words = name.split(/\s+/).filter(w => w.length > 0)
     let abbrev = ''
     if (words.length === 1) {
@@ -77,7 +158,6 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
     setShortName(abbrev)
   }
 
-  // Apply color preset
   const applyPreset = (index: number) => {
     const preset = COLOR_PRESETS[index]
     setSelectedPreset(index)
@@ -87,58 +167,48 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
     setUseCustomColors(false)
   }
 
-  // Validate current step before proceeding
+  // Validation helpers
+  const isStep1Valid =
+    displayName.trim().length > 0 &&
+    brandId.trim().length >= 3 &&
+    /^[a-z0-9]+$/.test(brandId) &&
+    shortName.trim().length > 0 &&
+    !existingBrands?.some(b => b.id === brandId)
+
+  const isStep3Valid =
+    instagramHandle.trim().length > 0 &&
+    facebookPageId.trim().length > 0 &&
+    instagramBusinessAccountId.trim().length > 0 &&
+    metaAccessToken.trim().length > 0
+
   const validateStep = (): boolean => {
     setError(null)
-    
     if (step === 1) {
-      if (!displayName.trim()) {
-        setError('Brand name is required')
-        return false
-      }
-      if (!brandId.trim()) {
-        setError('Brand ID is required')
-        return false
-      }
-      if (brandId.length < 3) {
-        setError('Brand ID must be at least 3 characters')
-        return false
-      }
-      // Check for duplicate ID
-      if (existingBrands?.some(b => b.id === brandId)) {
-        setError('A brand with this ID already exists')
-        return false
-      }
-      if (!shortName.trim()) {
-        setError('Short name is required (used for logo fallback)')
+      if (!displayName.trim()) { setError('Brand name is required'); return false }
+      if (!brandId.trim()) { setError('Brand ID is required'); return false }
+      if (brandId.length < 3) { setError('Brand ID must be at least 3 characters'); return false }
+      if (!/^[a-z0-9]+$/.test(brandId)) { setError('Brand ID must be alphanumeric (lowercase)'); return false }
+      if (existingBrands?.some(b => b.id === brandId)) { setError('A brand with this ID already exists'); return false }
+      if (!shortName.trim()) { setError('Short name is required'); return false }
+    }
+    if (step === 3) {
+      if (!isStep3Valid) {
+        setError('All platform fields are required')
+        setStep3Attempted(true)
         return false
       }
     }
-    
-    if (step === 2) {
-      if (!primaryColor || !accentColor) {
-        setError('Colors are required')
-        return false
-      }
-    }
-    
     return true
   }
 
-  // Handle next step
   const handleNext = () => {
-    if (validateStep()) {
-      setStep(step + 1)
-    }
+    if (validateStep()) setStep(step + 1)
   }
 
-  // Handle brand creation
   const handleCreate = async () => {
     if (!validateStep()) return
-    
     setError(null)
-    
-    // Build colors object with auto-generated mode colors
+
     const modeColors = generateModeColors(primaryColor, accentColor)
     const colors: BrandColors = {
       primary: primaryColor,
@@ -146,7 +216,7 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
       color_name: colorName,
       ...modeColors,
     }
-    
+
     const input: CreateBrandInput = {
       id: brandId,
       display_name: displayName,
@@ -154,21 +224,18 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
       instagram_handle: instagramHandle || undefined,
       posts_per_day: 2,
       colors,
-      // Platform credentials
       facebook_page_id: facebookPageId || undefined,
       instagram_business_account_id: instagramBusinessAccountId || undefined,
       meta_access_token: metaAccessToken || undefined,
     }
-    
+
     try {
       await createBrandMutation.mutateAsync(input)
 
-      // Upload logo if provided
       if (logoFile) {
         try {
           const formData = new FormData()
           formData.append('logo', logoFile)
-          // Theme endpoint requires color fields too
           formData.append('brand_color', primaryColor)
           formData.append('light_title_color', '#000000')
           formData.append('light_bg_color', adjustColorBrightness(primaryColor, 180))
@@ -196,16 +263,16 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
   const totalSteps = 3
 
   return (
-    <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+    <div className="space-y-6 max-h-[80vh] overflow-y-auto">
       {/* Progress steps */}
       <div className="flex items-center justify-center gap-2 mb-4">
         {[1, 2, 3].map(s => (
           <div key={s} className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                s === step 
-                  ? 'bg-primary-500 text-white' 
-                  : s < step 
+                s === step
+                  ? 'bg-primary-500 text-white'
+                  : s < step
                     ? 'bg-green-500 text-white'
                     : 'bg-gray-200 text-gray-500'
               }`}
@@ -225,9 +292,9 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
         </div>
       )}
 
-      {/* Step 1: Brand Identity */}
+      {/* ═══ Step 1: Brand Identity ═══ */}
       {step === 1 && (
-        <div className="space-y-4">
+        <div className="max-w-xl mx-auto space-y-4">
           <div className="text-center mb-6">
             <Sparkles className="w-12 h-12 text-primary-500 mx-auto mb-2" />
             <h3 className="text-lg font-semibold">Brand Identity</h3>
@@ -259,7 +326,7 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
                 placeholder="fitnesscollege"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
               />
-              <p className="text-xs text-gray-500 mt-1">Unique identifier</p>
+              <p className="text-xs text-gray-500 mt-1">Unique identifier (≥3 chars, alphanumeric)</p>
             </div>
 
             <div>
@@ -346,223 +413,345 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
         </div>
       )}
 
-      {/* Step 2: Colors */}
+      {/* ═══ Step 2: Colors — Two-column layout ═══ */}
       {step === 2 && (
         <div className="space-y-4">
-          <div className="text-center mb-6">
-            <Palette className="w-12 h-12 text-primary-500 mx-auto mb-2" />
+          <div className="text-center mb-4">
+            <Palette className="w-10 h-10 text-primary-500 mx-auto mb-2" />
             <h3 className="text-lg font-semibold">Brand Colors</h3>
             <p className="text-sm text-gray-500">Choose your brand's color scheme</p>
           </div>
 
-          {/* Color presets */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Color Presets</label>
-            <div className="grid grid-cols-4 gap-2">
-              {COLOR_PRESETS.map((preset, index) => (
+          <div className="flex gap-6">
+            {/* ── Left: Color Controls ── */}
+            <div className="flex-1 space-y-4 min-w-0">
+              {/* Color presets */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Color Presets</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {COLOR_PRESETS.map((preset, index) => (
+                    <button
+                      key={preset.name}
+                      onClick={() => applyPreset(index)}
+                      className={`relative p-2 rounded-lg border-2 transition-all ${
+                        selectedPreset === index && !useCustomColors
+                          ? 'border-primary-500 ring-2 ring-primary-200'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex gap-1 mb-1">
+                        <div className="w-6 h-6 rounded-full" style={{ backgroundColor: preset.primary }} />
+                        <div className="w-6 h-6 rounded-full" style={{ backgroundColor: preset.accent }} />
+                      </div>
+                      <p className="text-xs text-gray-600 truncate">{preset.name}</p>
+                      {selectedPreset === index && !useCustomColors && (
+                        <Check className="absolute top-1 right-1 w-4 h-4 text-primary-500" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom colors toggle */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="customColors"
+                  checked={useCustomColors}
+                  onChange={(e) => {
+                    setUseCustomColors(e.target.checked)
+                    if (e.target.checked) setSelectedPreset(null)
+                  }}
+                  className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                />
+                <label htmlFor="customColors" className="text-sm text-gray-700">
+                  Use custom colors
+                </label>
+              </div>
+
+              {/* Custom color pickers */}
+              {useCustomColors && (
+                <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Primary Color</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={primaryColor}
+                          onChange={(e) => setPrimaryColor(e.target.value)}
+                          className="w-10 h-10 rounded cursor-pointer border-0"
+                        />
+                        <input
+                          type="text"
+                          value={primaryColor}
+                          onChange={(e) => setPrimaryColor(e.target.value)}
+                          className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Accent Color</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={accentColor}
+                          onChange={(e) => setAccentColor(e.target.value)}
+                          className="w-10 h-10 rounded cursor-pointer border-0"
+                        />
+                        <input
+                          type="text"
+                          value={accentColor}
+                          onChange={(e) => setAccentColor(e.target.value)}
+                          className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Color Name (for AI prompts)
+                    </label>
+                    <input
+                      type="text"
+                      value={colorName}
+                      onChange={(e) => setColorName(e.target.value)}
+                      placeholder="e.g., vibrant blue"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Right: Pixel-Accurate Preview ── */}
+            <div className="flex-shrink-0">
+              {/* Mode toggle */}
+              <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-3">
                 <button
-                  key={preset.name}
-                  onClick={() => applyPreset(index)}
-                  className={`relative p-2 rounded-lg border-2 transition-all ${
-                    selectedPreset === index && !useCustomColors
-                      ? 'border-primary-500 ring-2 ring-primary-200'
-                      : 'border-gray-200 hover:border-gray-300'
+                  onClick={() => setPreviewMode('light')}
+                  className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors ${
+                    previewMode === 'light'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <div className="flex gap-1 mb-1">
-                    <div 
-                      className="w-6 h-6 rounded-full"
-                      style={{ backgroundColor: preset.primary }}
-                    />
-                    <div 
-                      className="w-6 h-6 rounded-full"
-                      style={{ backgroundColor: preset.accent }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-600 truncate">{preset.name}</p>
-                  {selectedPreset === index && !useCustomColors && (
-                    <Check className="absolute top-1 right-1 w-4 h-4 text-primary-500" />
-                  )}
+                  ☀️ Light
                 </button>
-              ))}
-            </div>
-          </div>
+                <button
+                  onClick={() => setPreviewMode('dark')}
+                  className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors ${
+                    previewMode === 'dark'
+                      ? 'bg-gray-800 text-white shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  🌙 Dark
+                </button>
+              </div>
 
-          {/* Custom colors toggle */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="customColors"
-              checked={useCustomColors}
-              onChange={(e) => {
-                setUseCustomColors(e.target.checked)
-                if (e.target.checked) setSelectedPreset(null)
-              }}
-              className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
-            />
-            <label htmlFor="customColors" className="text-sm text-gray-700">
-              Use custom colors
-            </label>
-          </div>
-
-          {/* Custom color pickers */}
-          {useCustomColors && (
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-              <div className="grid grid-cols-2 gap-4">
+              <div style={{ display: 'flex', gap: 12 }}>
+                {/* ── Thumbnail Preview (9:16) ── */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Primary Color</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={primaryColor}
-                      onChange={(e) => setPrimaryColor(e.target.value)}
-                      className="w-10 h-10 rounded cursor-pointer border-0"
-                    />
-                    <input
-                      type="text"
-                      value={primaryColor}
-                      onChange={(e) => setPrimaryColor(e.target.value)}
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
-                    />
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Thumbnail</p>
+                  <div
+                    style={{
+                      width: PREVIEW_W,
+                      height: PREVIEW_H,
+                      position: 'relative',
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: previewMode === 'light' ? '#f4f4f4' : undefined,
+                      background: previewMode === 'dark' ? DARK_BG : undefined,
+                    }}
+                  >
+                    {previewMode === 'dark' && (
+                      <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' }} />
+                    )}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1,
+                      }}
+                    >
+                      <div
+                        style={{
+                          paddingLeft: PX.thumbSideMargin,
+                          paddingRight: PX.thumbSideMargin,
+                          textAlign: 'center',
+                          position: 'relative',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontFamily: "'Poppins', sans-serif",
+                            fontWeight: 700,
+                            fontSize: PX.thumbTitleFont,
+                            lineHeight: `${PX.thumbTitleFont + PX.thumbLineSpacing}px`,
+                            color: thumbnailTextColor,
+                            textTransform: 'uppercase',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {SAMPLE_TITLE}
+                        </div>
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            marginTop: PX.thumbBrandGap,
+                            fontFamily: "'Poppins', sans-serif",
+                            fontWeight: 700,
+                            fontSize: PX.thumbBrandFont,
+                            color: thumbnailTextColor,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            textAlign: 'center',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {displayName || 'BRAND NAME'}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Accent Color</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={accentColor}
-                      onChange={(e) => setAccentColor(e.target.value)}
-                      className="w-10 h-10 rounded cursor-pointer border-0"
-                    />
-                    <input
-                      type="text"
-                      value={accentColor}
-                      onChange={(e) => setAccentColor(e.target.value)}
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Color Name (for AI prompts)
-                </label>
-                <input
-                  type="text"
-                  value={colorName}
-                  onChange={(e) => setColorName(e.target.value)}
-                  placeholder="e.g., vibrant blue"
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm"
-                />
-              </div>
-            </div>
-          )}
 
-          {/* Color preview — Reel Mockups */}
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            {/* Light Mode Reel */}
-            <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-              <div className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 text-xs text-gray-600 font-medium">
-                <Sun className="w-3 h-3" /> Light Mode Reel
-              </div>
-              <div
-                className="relative"
-                style={{
-                  aspectRatio: '9/16',
-                  background: `linear-gradient(180deg, ${adjustColorBrightness(primaryColor, 180)} 0%, ${adjustColorBrightness(accentColor, 150)} 100%)`,
-                }}
-              >
-                {/* Brand logo / abbreviation */}
-                <div className="absolute top-3 left-0 right-0 flex justify-center">
-                  {logoPreview ? (
-                    <img src={logoPreview} alt="" className="h-4 object-contain opacity-70" />
-                  ) : (
-                    <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: primaryColor }}>
-                      {shortName || 'BRD'}
-                    </span>
-                  )}
-                </div>
-                {/* Title */}
-                <div className="absolute top-7 left-3 right-3 flex justify-center">
-                  <p className="text-[9px] font-black text-center leading-tight uppercase" style={{ color: '#000000' }}>
-                    YOUR BRAIN HAS A CLEANING SYSTEM
-                  </p>
-                </div>
-                {/* Content lines */}
-                <div className="absolute top-[42%] left-2 right-2 space-y-1">
-                  {['Sleep cycles — Reset every 90 minutes', 'Cold showers — Activate brown fat', 'Fasting — Triggers autophagy'].map((line, i) => (
-                    <div
-                      key={i}
-                      className="rounded-md px-1.5 py-0.5"
-                      style={{ backgroundColor: 'rgba(0,0,0,0.06)' }}
-                    >
-                      <p className="text-[6px] font-medium" style={{ color: '#000000' }}>
-                        {i + 1}. {line}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                {/* CTA */}
-                <div className="absolute bottom-3 left-3 right-3">
+                {/* ── Content Preview (9:16) ── */}
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Content</p>
                   <div
-                    className="rounded-md py-1 text-center"
-                    style={{ backgroundColor: primaryColor }}
+                    style={{
+                      width: PREVIEW_W,
+                      height: PREVIEW_H,
+                      position: 'relative',
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: previewMode === 'light' ? '#f4f4f4' : undefined,
+                      background: previewMode === 'dark' ? DARK_BG : undefined,
+                    }}
                   >
-                    <p className="text-[5px] font-bold text-white">Follow for more health tips!</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Dark Mode Reel */}
-            <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-              <div className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 text-xs text-gray-300 font-medium">
-                <Moon className="w-3 h-3" /> Dark Mode Reel
-              </div>
-              <div
-                className="relative"
-                style={{
-                  aspectRatio: '9/16',
-                  background: `linear-gradient(180deg, ${adjustColorBrightness(primaryColor, -40)} 0%, ${adjustColorBrightness(primaryColor, -20)} 100%)`,
-                }}
-              >
-                {/* Brand logo / abbreviation */}
-                <div className="absolute top-3 left-0 right-0 flex justify-center">
-                  {logoPreview ? (
-                    <img src={logoPreview} alt="" className="h-4 object-contain opacity-70" />
-                  ) : (
-                    <span className="text-[10px] font-bold tracking-wider opacity-60" style={{ color: accentColor }}>
-                      {shortName || 'BRD'}
-                    </span>
-                  )}
-                </div>
-                {/* Title */}
-                <div className="absolute top-7 left-3 right-3 flex justify-center">
-                  <p className="text-[9px] font-black text-center leading-tight uppercase text-white">
-                    YOUR BRAIN HAS A CLEANING SYSTEM
-                  </p>
-                </div>
-                {/* Content lines */}
-                <div className="absolute top-[42%] left-2 right-2 space-y-1">
-                  {['Sleep cycles — Reset every 90 minutes', 'Cold showers — Activate brown fat', 'Fasting — Triggers autophagy'].map((line, i) => (
+                    {previewMode === 'dark' && (
+                      <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)' }} />
+                    )}
+                    {/* Title bars */}
                     <div
-                      key={i}
-                      className="rounded-md px-1.5 py-0.5"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
+                      style={{
+                        position: 'absolute',
+                        top: PX.barStartY,
+                        left: 0,
+                        right: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        zIndex: 1,
+                      }}
                     >
-                      <p className="text-[6px] font-medium text-white">
-                        {i + 1}. {line}
-                      </p>
+                      {titleLines.map((line, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            height: PX.barHeight,
+                            paddingLeft: PX.hPadding,
+                            paddingRight: PX.hPadding,
+                            backgroundColor: hexToRgba(contentTitleBgColor, 200 / 255),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: "'Poppins', sans-serif",
+                              fontWeight: 700,
+                              fontSize: PX.barTitleFont,
+                              color: contentTitleTextColor,
+                              textTransform: 'uppercase',
+                              lineHeight: 1,
+                            }}
+                          >
+                            {line}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                {/* CTA */}
-                <div className="absolute bottom-3 left-3 right-3">
-                  <div
-                    className="rounded-md py-1 text-center"
-                    style={{ backgroundColor: accentColor }}
-                  >
-                    <p className="text-[5px] font-bold text-white">Follow for more health tips!</p>
+                    {/* Content lines */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: contentStartY,
+                        left: PX.contentSidePad,
+                        right: PX.contentSidePad,
+                        zIndex: 1,
+                      }}
+                    >
+                      {SAMPLE_CONTENT.map((line, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            display: 'flex',
+                            gap: 3,
+                            marginBottom: PX.bulletSpacing,
+                            lineHeight: `${PX.contentLineH}px`,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: "'Inter', sans-serif",
+                              fontWeight: 500,
+                              fontSize: PX.contentFont,
+                              color: contentTextColor,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {i + 1}.
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: "'Inter', sans-serif",
+                              fontWeight: 500,
+                              fontSize: PX.contentFont,
+                              color: contentTextColor,
+                            }}
+                          >
+                            {line}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Brand name — bottom center */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: PX.brandBottom,
+                        left: 0,
+                        right: 0,
+                        textAlign: 'center',
+                        zIndex: 1,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "'Poppins', sans-serif",
+                          fontWeight: 700,
+                          fontSize: PX.brandFont,
+                          color: brandNameColor,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.03em',
+                        }}
+                      >
+                        {displayName || 'BRAND NAME'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -571,9 +760,9 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
         </div>
       )}
 
-      {/* Step 3: Platform Connections */}
+      {/* ═══ Step 3: Platform Connections ═══ */}
       {step === 3 && (
-        <div className="space-y-4">
+        <div className="max-w-xl mx-auto space-y-4">
           <div className="text-center mb-4">
             <Link2 className="w-12 h-12 text-primary-500 mx-auto mb-2" />
             <h3 className="text-lg font-semibold">Platform Connections</h3>
@@ -597,56 +786,75 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                Instagram Handle
+                Instagram Handle <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={instagramHandle}
                 onChange={(e) => setInstagramHandle(e.target.value)}
                 placeholder="@yourbrand"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className={`w-full px-3 py-2 rounded-lg text-sm border ${
+                  step3Attempted && !instagramHandle.trim()
+                    ? 'border-red-500'
+                    : 'border-gray-300'
+                }`}
               />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                Facebook Page ID <span className="text-gray-400 font-normal">— found in Page Settings → Transparency</span>
+                Facebook Page ID <span className="text-red-500">*</span>
+                <span className="text-gray-400 font-normal"> — found in Page Settings → Transparency</span>
               </label>
               <input
                 type="text"
                 value={facebookPageId}
                 onChange={(e) => setFacebookPageId(e.target.value)}
                 placeholder="e.g., 421725411022067"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${
+                  step3Attempted && !facebookPageId.trim()
+                    ? 'border-red-500'
+                    : 'border-gray-300'
+                }`}
               />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                Instagram Business Account ID <span className="text-gray-400 font-normal">— from Graph API Explorer</span>
+                Instagram Business Account ID <span className="text-red-500">*</span>
+                <span className="text-gray-400 font-normal"> — from Graph API Explorer</span>
               </label>
               <input
                 type="text"
                 value={instagramBusinessAccountId}
                 onChange={(e) => setInstagramBusinessAccountId(e.target.value)}
                 placeholder="e.g., 17841468847801005"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${
+                  step3Attempted && !instagramBusinessAccountId.trim()
+                    ? 'border-red-500'
+                    : 'border-gray-300'
+                }`}
               />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                Meta Access Token <span className="text-gray-400 font-normal">— long-lived page token</span>
+                Meta Access Token <span className="text-red-500">*</span>
+                <span className="text-gray-400 font-normal"> — long-lived page token</span>
               </label>
               <input
-                type="password"
+                type="text"
                 value={metaAccessToken}
                 onChange={(e) => setMetaAccessToken(e.target.value)}
                 placeholder="EAAx..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${
+                  step3Attempted && !metaAccessToken.trim()
+                    ? 'border-red-500'
+                    : 'border-gray-300'
+                }`}
               />
               <p className="text-[10px] text-gray-400 mt-1">
-                Shared across all brands — only needed once. Leave blank if already set globally.
+                Shared across all brands — pre-filled from existing brands if available.
               </p>
             </div>
           </div>
@@ -692,7 +900,7 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
         {step < totalSteps ? (
           <button
             onClick={handleNext}
-            disabled={step === 1 && !displayName}
+            disabled={step === 1 && !isStep1Valid}
             className="flex-1 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             Next <ArrowRight className="w-4 h-4" />
@@ -700,8 +908,8 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
         ) : (
           <button
             onClick={handleCreate}
-            disabled={createBrandMutation.isPending}
-            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+            disabled={!isStep3Valid || createBrandMutation.isPending}
+            className="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {createBrandMutation.isPending ? (
               <>

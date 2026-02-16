@@ -412,20 +412,6 @@ class BrandManager:
             return False
         
         brand.active = False
-        
-        # 🧬 Retire any AI agent linked to this brand
-        try:
-            from app.models import AIAgent
-            linked_agents = self.db.query(AIAgent).filter(
-                AIAgent.created_for_brand == brand_id,
-                AIAgent.active == True
-            ).all()
-            for agent in linked_agents:
-                agent.active = False
-                logger.info(f"🧬 Retired agent '{agent.display_name}' (was linked to {brand_id})")
-        except Exception as e:
-            logger.warning(f"⚠️ Could not retire agents for {brand_id}: {e}")
-        
         self.db.commit()
         
         self._invalidate_cache()

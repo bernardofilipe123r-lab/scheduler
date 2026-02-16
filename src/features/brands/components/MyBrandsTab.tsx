@@ -179,6 +179,7 @@ export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTab
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         title="Create New Brand"
+        size="2xl"
       >
         <CreateBrandModal
           onClose={() => setShowCreateModal(false)}

@@ -44,7 +44,6 @@ class CreateAgentRequest(BaseModel):
     strategy_weights: Optional[Dict[str, float]] = None
     proposals_per_brand: int = 3
     content_types: Optional[List[str]] = None
-    created_for_brand: Optional[str] = None  # Which brand triggered this
 
 
 class UpdateAgentRequest(BaseModel):
@@ -128,7 +127,7 @@ def create_agent(req: CreateAgentRequest, db: Session = Depends(get_db), user: d
     from app.services.agents.generic_agent import create_agent_for_brand
 
     agent = create_agent_for_brand(
-        brand_id=req.created_for_brand or "manual",
+        brand_id="manual",
         agent_name=req.agent_name,
         personality=req.personality,
         temperature=req.temperature,
@@ -317,7 +316,7 @@ def clone_agent(agent_id: str, db: Session = Depends(get_db), user: dict = Depen
 
     clone_name = pick_agent_name()
     clone = create_agent_for_brand(
-        brand_id=source.created_for_brand or "clone",
+        brand_id="clone",
         agent_name=clone_name,
         personality=source.personality,
         temperature=source.temperature,
