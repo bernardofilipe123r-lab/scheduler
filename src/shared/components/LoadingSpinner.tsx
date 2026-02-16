@@ -33,10 +33,7 @@ export function CardLoader() {
     <div className="card p-8">
       <div className="flex flex-col items-center justify-center gap-4">
         <LoadingSpinner size="md" />
-        <div className="space-y-2 w-full max-w-xs">
-          <div className="h-4 skeleton rounded" />
-          <div className="h-4 skeleton rounded w-3/4 mx-auto" />
-        </div>
+        <p className="text-sm text-gray-400">Loading...</p>
       </div>
     </div>
   )

@@ -150,7 +150,7 @@ async def health_check():
 
 
 def _repair_missing_carousel_images():
-    """Re-compose carousel slides for scheduled posts that are missing them."""
+    """Re-compose carousel slides for all scheduled posts to ensure correct rendering."""
     from app.db_connection import SessionLocal
     from app.models import ScheduledReel
     from sqlalchemy.orm.attributes import flag_modified
@@ -170,8 +170,6 @@ def _repair_missing_carousel_images():
             slide_texts = ed.get("slide_texts") or []
             if not slide_texts:
                 continue
-            if ed.get("carousel_paths"):
-                continue  # already has carousel images
 
             brand = ed.get("brand", "unknown")
             title = ed.get("title", "")

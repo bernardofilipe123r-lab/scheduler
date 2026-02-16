@@ -1,7 +1,7 @@
 import { useYouTubeStatus, useDisconnectYouTube, getYouTubeConnectUrl } from '../hooks'
 import { getBrandLabel, getBrandColor } from '@/features/brands'
 import type { BrandName } from '@/shared/types'
-import { ExternalLink, Youtube, Check, RefreshCw, Unlink, AlertTriangle } from 'lucide-react'
+import { ExternalLink, Youtube, Check, RefreshCw, Unlink, AlertTriangle, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 
 interface YouTubeStatusCardProps {
@@ -14,12 +14,9 @@ export function YouTubeStatusCard({ onRefresh }: YouTubeStatusCardProps) {
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="animate-pulse flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
-          <div className="flex-1">
-            <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
-            <div className="h-3 bg-gray-100 rounded w-48"></div>
-          </div>
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="w-6 h-6 text-red-500 animate-spin" />
+          <span className="ml-2 text-sm text-gray-500">Loading YouTube status...</span>
         </div>
       </div>
     )
