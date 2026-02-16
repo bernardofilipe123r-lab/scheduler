@@ -149,6 +149,82 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
+def _repair_missing_carousel_images():
+    """Re-compose carousel slides for scheduled posts that are missing them."""
+    from app.db_connection import SessionLocal
+    from app.models import ScheduledReel
+    from sqlalchemy.orm.attributes import flag_modified
+    from pathlib import Path
+
+    db = SessionLocal()
+    try:
+        posts = db.query(ScheduledReel).filter(
+            ScheduledReel.status.in_(["scheduled", "publishing"]),
+        ).all()
+
+        repaired = 0
+        for post in posts:
+            ed = post.extra_data or {}
+            if ed.get("variant") != "post":
+                continue
+            slide_texts = ed.get("slide_texts") or []
+            if not slide_texts:
+                continue
+            if ed.get("carousel_paths"):
+                continue  # already has carousel images
+
+            brand = ed.get("brand", "unknown")
+            title = ed.get("title", "")
+            reel_id = post.reel_id or ""
+            uid8 = reel_id[:8] if reel_id else "unknown"
+            bg_path = ed.get("thumbnail_path", "")
+
+            # Find raw background image
+            raw_bg = None
+            for candidate in [
+                f"output/posts/post_{brand}_{uid8}_background.png",
+                bg_path.lstrip("/") if bg_path else "",
+            ]:
+                if candidate and Path(candidate).exists():
+                    raw_bg = candidate
+                    break
+
+            if not raw_bg:
+                print(f"  ⚠️ [{post.schedule_id}] No background found for {brand}/{reel_id}", flush=True)
+                continue
+
+            try:
+                from app.services.media.post_compositor import compose_cover_slide
+                from app.services.media.text_slide_compositor import compose_text_slide
+
+                cover_out = f"output/posts/post_{brand}_{uid8}.png"
+                compose_cover_slide(raw_bg, title, brand, cover_out)
+
+                carousel_paths = []
+                for idx, stxt in enumerate(slide_texts):
+                    is_last = idx == len(slide_texts) - 1
+                    slide_out = f"output/posts/post_{brand}_{uid8}_slide{idx}.png"
+                    compose_text_slide(brand, stxt, slide_texts, is_last, slide_out)
+                    carousel_paths.append(slide_out)
+
+                ed["thumbnail_path"] = cover_out
+                ed["carousel_paths"] = carousel_paths
+                post.extra_data = dict(ed)
+                flag_modified(post, "extra_data")
+                repaired += 1
+                print(f"  ✅ [{post.schedule_id}] Composed {1 + len(carousel_paths)} slides for {brand}", flush=True)
+            except Exception as e:
+                print(f"  ❌ [{post.schedule_id}] Composition failed for {brand}: {e}", flush=True)
+
+        if repaired > 0:
+            db.commit()
+            print(f"🔧 Repaired carousel images for {repaired} post(s)", flush=True)
+        else:
+            print("✅ All scheduled posts have carousel images", flush=True)
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 async def startup_event():
     """Run startup tasks."""
@@ -236,6 +312,13 @@ async def startup_event():
             print(f"⚠️ Reset {reset_count} stuck post(s) from previous run", flush=True)
     except Exception as e:
         print(f"⚠️ Could not check stuck posts: {e}", flush=True)
+    
+    # Re-compose carousel images for scheduled posts that are missing them
+    print("🔄 Checking for posts with missing carousel images...", flush=True)
+    try:
+        _repair_missing_carousel_images()
+    except Exception as e:
+        print(f"⚠️ Carousel repair failed: {e}", flush=True)
     
     # Initialize auto-publishing scheduler
     print("⏰ Starting auto-publishing scheduler...")

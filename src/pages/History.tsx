@@ -85,7 +85,9 @@ export function HistoryPage() {
       const pendingOrGenerating = outputs.filter(o => o.status === 'pending' || o.status === 'generating').length
       const scheduledOrPublished = scheduledCount + publishedCount
       
-      if (job.status === 'generating' || job.status === 'pending' || pendingOrGenerating > 0) {
+      if (job.status === 'failed' || job.status === 'cancelled') {
+        other.push(job)
+      } else if (job.status === 'generating' || job.status === 'pending' || pendingOrGenerating > 0) {
         inProgress.push(job)
       } else if (publishedCount === totalBrands && totalBrands > 0) {
         // All brands published
