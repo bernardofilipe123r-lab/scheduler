@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from sqlalchemy import type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.api.routes import router as reels_router
 from app.api.content.jobs_routes import router as jobs_router
@@ -300,6 +302,27 @@ async def startup_event():
         print(f"      Token:        {token_status}", flush=True)
     print("", flush=True)
     
+    # Reset any stuck "generating" jobs from previous crashes/deploys
+    print("🔄 Checking for stuck generating jobs...", flush=True)
+    try:
+        from app.models import GenerationJob
+        db_stuck = SessionLocal()
+        try:
+            stuck_jobs = db_stuck.query(GenerationJob).filter(
+                GenerationJob.status == "generating"
+            ).all()
+            if stuck_jobs:
+                for job in stuck_jobs:
+                    job.status = "failed"
+                    job.error_message = "Reset on startup — interrupted by deploy"
+                    job.completed_at = datetime.utcnow()
+                db_stuck.commit()
+                print(f"⚠️ Reset {len(stuck_jobs)} stuck generating job(s) from previous run", flush=True)
+        finally:
+            db_stuck.close()
+    except Exception as e:
+        print(f"⚠️ Could not check stuck jobs: {e}", flush=True)
+
     # Reset any stuck "publishing" posts from previous crashes
     print("🔄 Checking for stuck publishing posts...", flush=True)
     try:
@@ -691,7 +714,7 @@ async def startup_event():
                                 ScheduledReel.reel_id == reel_id
                             ).delete(synchronize_session=False)
                     db.query(ScheduledReel).filter(
-                        ScheduledReel.extra_data["job_id"].astext == job.job_id
+                        type_coerce(ScheduledReel.extra_data, JSONB)["job_id"].astext == job.job_id
                     ).delete(synchronize_session=False)
                     # Clean up files (best-effort)
                     try:

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy import type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.brands.resolver import brand_resolver
 from app.api.auth.middleware import get_current_user
@@ -444,7 +446,6 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
     from app.db_connection import SessionLocal
     from app.models import ScheduledReel, GenerationJob
     from datetime import datetime, timedelta
-    from sqlalchemy import cast, String as SAString
     from sqlalchemy.orm.attributes import flag_modified
 
     db = SessionLocal()
@@ -458,11 +459,11 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
         )
         if variant == "post":
             query = query.filter(
-                cast(ScheduledReel.extra_data["variant"].astext, SAString) == "post"
+                type_coerce(ScheduledReel.extra_data, JSONB)["variant"].astext == "post"
             )
         elif variant == "reel":
             query = query.filter(
-                cast(ScheduledReel.extra_data["variant"].astext, SAString) != "post"
+                type_coerce(ScheduledReel.extra_data, JSONB)["variant"].astext != "post"
             )
 
         entries = query.all()

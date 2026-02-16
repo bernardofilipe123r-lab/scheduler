@@ -18,6 +18,8 @@ import re
 from collections import Counter
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
+from sqlalchemy import type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
 
@@ -406,21 +408,21 @@ class AgentLearningEngine:
         if 'structure' in pattern.get('data', {}):
             existing = self.db.query(LearnedPattern).filter(
                 LearnedPattern.pattern_type == pattern['type'],
-                LearnedPattern.pattern_data['structure'].astext == pattern['data']['structure']
+                type_coerce(LearnedPattern.pattern_data, JSONB)['structure'].astext == pattern['data']['structure']
             ).first()
 
         # Fallback: check by keyword
         if not existing and pattern['type'] == 'keyword_combo':
             existing = self.db.query(LearnedPattern).filter(
                 LearnedPattern.pattern_type == 'keyword_combo',
-                LearnedPattern.pattern_data['keyword'].astext == pattern['data'].get('keyword', '__none__')
+                type_coerce(LearnedPattern.pattern_data, JSONB)['keyword'].astext == pattern['data'].get('keyword', '__none__')
             ).first()
 
         # Fallback: check by hour
         if not existing and pattern['type'] == 'posting_time':
             existing = self.db.query(LearnedPattern).filter(
                 LearnedPattern.pattern_type == 'posting_time',
-                LearnedPattern.pattern_data['hour_utc'].astext == str(pattern['data'].get('hour_utc', -1))
+                type_coerce(LearnedPattern.pattern_data, JSONB)['hour_utc'].astext == str(pattern['data'].get('hour_utc', -1))
             ).first()
 
         if existing:

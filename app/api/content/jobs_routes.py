@@ -8,6 +8,8 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Depends
 
+from sqlalchemy import type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from app.db_connection import get_db_session
 from app.services.content.job_manager import JobManager
 from app.services.content.job_processor import JobProcessor
@@ -510,7 +512,7 @@ async def delete_jobs_by_status(job_status: str = "completed", user: dict = Depe
                     db.query(ScheduledReel).filter(ScheduledReel.reel_id == reel_id).delete()
             # Also delete any scheduled reels linked via extra_data->job_id
             db.query(ScheduledReel).filter(
-                ScheduledReel.extra_data["job_id"].astext == job.job_id
+                type_coerce(ScheduledReel.extra_data, JSONB)["job_id"].astext == job.job_id
             ).delete(synchronize_session=False)
             # Delete the job
             db.delete(job)
@@ -562,7 +564,7 @@ async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest, user: dict = Depen
 
                     # Also delete any scheduled reels linked via extra_data->job_id
                     db.query(ScheduledReel).filter(
-                        ScheduledReel.extra_data["job_id"].astext == job_id
+                        type_coerce(ScheduledReel.extra_data, JSONB)["job_id"].astext == job_id
                     ).delete(synchronize_session=False)
 
                     # Clean up files (best-effort, don't fail on file errors)
@@ -622,7 +624,7 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
 
             # Also delete any scheduled reels linked via extra_data->job_id
             db.query(ScheduledReel).filter(
-                ScheduledReel.extra_data["job_id"].astext == job_id
+                type_coerce(ScheduledReel.extra_data, JSONB)["job_id"].astext == job_id
             ).delete(synchronize_session=False)
 
             # Clean up files (best-effort)

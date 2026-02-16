@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   ChevronLeft, 
@@ -39,6 +39,14 @@ import {
 import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, useDynamicBrands } from '@/features/brands'
 import { PageLoader, Modal } from '@/shared/components'
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  PostCanvas,
+  loadGeneralSettings,
+} from '@/shared/components/PostCanvas'
+import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
+import { apiClient } from '@/shared/api/client'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 
 // Time slot configuration per brand
@@ -118,7 +126,29 @@ export function ScheduledPage() {
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
-  const [slideImageErrors, setSlideImageErrors] = useState<Set<number>>(new Set())
+
+  // Post preview: brand logos + layout settings (mirrors PostJobDetail)
+  const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
+  const postSettings = useMemo(() => loadGeneralSettings(), [])
+  const DETAIL_PREVIEW_SCALE = 320 / CANVAS_WIDTH
+
+  // Fetch brand logo when a post is selected
+  useEffect(() => {
+    if (!selectedPost) return
+    const brand = selectedPost.brand
+    if (brandLogos[brand]) return
+    const fetchLogo = async () => {
+      try {
+        const d = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand}/theme`)
+        if (d.theme?.logo) {
+          const url = `/brand-logos/${d.theme.logo}`
+          const check = await fetch(url, { method: 'HEAD' })
+          if (check.ok) setBrandLogos(prev => ({ ...prev, [brand]: url }))
+        }
+      } catch { /* ignore */ }
+    }
+    fetchLogo()
+  }, [selectedPost?.brand])
 
   
   const calendarDays = useMemo(() => {
@@ -798,7 +828,7 @@ export function ScheduledPage() {
                       dayPosts.map(post => (
                         <div
                           key={post.id}
-                          onClick={() => { setDetailSlideIndex(0); setSlideImageErrors(new Set()); setSelectedPost(post) }}
+                          onClick={() => { setDetailSlideIndex(0); setSelectedPost(post) }}
                           className="p-2 rounded cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ 
                             backgroundColor: `${getBrandColor(post.brand)}15`,
@@ -896,7 +926,6 @@ export function ScheduledPage() {
                 key={post.id}
                 onClick={() => {
                   setDetailSlideIndex(0)
-                  setSlideImageErrors(new Set())
                   setSelectedPost(post)
                   setSelectedDay(null)
                 }}
@@ -1041,7 +1070,6 @@ export function ScheduledPage() {
                         key={post.id}
                         onClick={() => {
                           setDetailSlideIndex(0)
-                          setSlideImageErrors(new Set())
                           setSelectedPost(post)
                           setSelectedDayForMissing(null)
                         }}
@@ -1087,14 +1115,18 @@ export function ScheduledPage() {
       {/* Post Detail Modal */}
       <Modal
         isOpen={!!selectedPost}
-        onClose={() => { setSelectedPost(null); setDetailSlideIndex(0); setSlideImageErrors(new Set()) }}
+        onClose={() => { setSelectedPost(null); setDetailSlideIndex(0) }}
         title="Post Details"
         size="lg"
       >
         {selectedPost && (() => {
           const carouselPaths = selectedPost.metadata?.carousel_image_paths || []
+          const slideTexts = selectedPost.metadata?.slide_texts || []
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
-          const totalSlides = isPost ? 1 + carouselPaths.length : 1
+          const totalSlides = isPost ? 1 + Math.max(carouselPaths.length, slideTexts.length) : 1
+          // Derive raw AI background URL from reel_id
+          const bgUrl = selectedPost.reel_id ? `/output/posts/${selectedPost.reel_id}_background.png` : null
+          const logoUrl = brandLogos[selectedPost.brand] || null
 
           return (
           <div className="space-y-4">
@@ -1133,32 +1165,48 @@ export function ScheduledPage() {
             </h3>
             
             <div className={isPost ? '' : 'grid grid-cols-2 gap-4'}>
-              {/* Post carousel: cover + text slides */}
+              {/* Post carousel: cover + text slides — uses same Konva components as PostJobDetail */}
               {isPost ? (
                 <div className="flex flex-col items-center">
-                  <div className="relative" style={{ width: 320 }}>
-                    {/* Slide content */}
-                    <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100" style={{ width: 320, height: 400 }}>
-                      {(() => {
-                        const imgSrc = detailSlideIndex === 0
-                          ? selectedPost.thumbnail_path
-                          : carouselPaths[detailSlideIndex - 1]
-                        if (imgSrc && !slideImageErrors.has(detailSlideIndex)) {
-                          return (
-                            <img
-                              src={imgSrc}
-                              alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
-                              className="w-full h-full object-contain"
-                              onError={() => setSlideImageErrors(prev => new Set(prev).add(detailSlideIndex))}
-                            />
-                          )
-                        }
-                        return (
-                          <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+                  <div className="relative" style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}>
+                    {/* Slide content — Konva canvas for cover, CarouselTextSlide for text slides */}
+                    <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100">
+                      {detailSlideIndex === 0 ? (
+                        <PostCanvas
+                          brand={selectedPost.brand}
+                          title={selectedPost.title}
+                          backgroundImage={bgUrl}
+                          settings={postSettings}
+                          scale={DETAIL_PREVIEW_SCALE}
+                          logoUrl={logoUrl}
+                          autoFitMaxLines={3}
+                        />
+                      ) : slideTexts.length > 0 ? (
+                        <CarouselTextSlide
+                          brand={selectedPost.brand}
+                          text={slideTexts[detailSlideIndex - 1] || ''}
+                          allSlideTexts={slideTexts}
+                          isLastSlide={detailSlideIndex === slideTexts.length}
+                          scale={DETAIL_PREVIEW_SCALE}
+                          logoUrl={logoUrl}
+                          fontFamily={postSettings.slideFontFamily}
+                        />
+                      ) : (
+                        /* Fallback to pre-rendered image if no slide_texts available */
+                        carouselPaths[detailSlideIndex - 1] ? (
+                          <img
+                            src={carouselPaths[detailSlideIndex - 1]}
+                            alt={`Slide ${detailSlideIndex}`}
+                            style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                            className="w-full object-contain"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center text-zinc-500 text-sm"
+                               style={{ height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}>
                             Image not available
                           </div>
                         )
-                      })()}
+                      )}
                     </div>
 
                     {/* Prev/Next arrows overlaid */}
