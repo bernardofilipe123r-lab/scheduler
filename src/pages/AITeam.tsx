@@ -1111,9 +1111,6 @@ function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, Cycle
       }
       
       toast.success(res.message || 'Daily Burst triggered!')
-      
-      // Redirect to Mission Control
-      navigate('/mission-control')
     } catch (e: any) {
       toast.error(e?.message || 'Failed to trigger burst')
     } finally {

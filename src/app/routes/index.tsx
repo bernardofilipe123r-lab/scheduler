@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '../layout'
+import { BurstNotifier } from '../layout/BurstNotifier'
 import { useAuth } from '@/features/auth'
 import { LoginPage } from '@/pages/Login'
 import { ProfilePage } from '@/pages/Profile'
@@ -54,11 +55,15 @@ function LoginGuard() {
 }
 
 export function AppRoutes() {
+  const { isAuthenticated } = useAuth()
+
   return (
-    <Routes>
-      <Route path="/mission-control" element={<AuthGuard><MissionControlPage /></AuthGuard>} />
-      <Route path="/login" element={<LoginGuard />} />
-      <Route path="/" element={<AuthGuard><AppLayout /></AuthGuard>}>
+    <>
+      {isAuthenticated && <BurstNotifier />}
+      <Routes>
+        <Route path="/mission-control" element={<AuthGuard><MissionControlPage /></AuthGuard>} />
+        <Route path="/login" element={<LoginGuard />} />
+        <Route path="/" element={<AuthGuard><AppLayout /></AuthGuard>}>
         <Route index element={<GeneratorPage />} />
         <Route path="jobs" element={<HistoryPage />} />
         <Route path="history" element={<Navigate to="/jobs" replace />} />
@@ -78,5 +83,6 @@ export function AppRoutes() {
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>
+    </>
   )
 }
