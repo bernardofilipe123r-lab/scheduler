@@ -421,6 +421,53 @@ class MaestroState:
                 "items_collected": self.bootstrap_items_collected,
                 "cycle_minutes": BOOTSTRAP_CYCLE_MINUTES,
             },
+            "cycles": {
+                "check": {
+                    "interval_minutes": CHECK_CYCLE_MINUTES,
+                    "description": "Auto-publish check",
+                },
+                "daily_burst": {
+                    "schedule": "12:00 Lisbon",
+                    "description": "Main content generation",
+                    "last_run": last_run.isoformat() if last_run else None,
+                },
+                "healing": {
+                    "interval_minutes": HEALING_CYCLE_MINUTES,
+                    "description": "Fix stuck jobs & ensure agents",
+                    "last_run": self.last_healing_at.isoformat() if self.last_healing_at else None,
+                },
+                "observe": {
+                    "interval_minutes": METRICS_CYCLE_MINUTES,
+                    "description": "Fetch post metrics",
+                    "last_run": self.last_metrics_at.isoformat() if self.last_metrics_at else None,
+                },
+                "scout": {
+                    "interval_minutes": SCAN_CYCLE_MINUTES,
+                    "description": "Discover trending content",
+                    "last_run": self.last_scan_at.isoformat() if self.last_scan_at else None,
+                },
+                "feedback": {
+                    "interval_minutes": FEEDBACK_CYCLE_MINUTES,
+                    "description": "Mutate agent DNA based on performance",
+                    "last_run": self.last_feedback_at.isoformat() if self.last_feedback_at else None,
+                },
+                "evolution": {
+                    "schedule": f"{EVOLUTION_DAY} @ {EVOLUTION_HOUR}:00",
+                    "description": "Weekly natural selection",
+                    "last_run": self.last_evolution_at.isoformat() if self.last_evolution_at else None,
+                },
+                "diagnostics": {
+                    "interval_minutes": DIAGNOSTICS_CYCLE_MINUTES,
+                    "description": "System health checks",
+                    "last_run": self.last_diagnostics_at.isoformat() if self.last_diagnostics_at else None,
+                },
+                "bootstrap": {
+                    "interval_minutes": BOOTSTRAP_CYCLE_MINUTES,
+                    "description": "Cold-start research",
+                    "last_run": self.last_bootstrap_at.isoformat() if self.last_bootstrap_at else None,
+                    "is_complete": self.bootstrap_complete,
+                },
+            },
             "recent_activity": self.activity_log[:30],
             "daily_config": self._get_daily_config(),
         }

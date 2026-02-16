@@ -261,7 +261,7 @@ export function SettingsPage() {
                               value={getValue(setting)}
                               onChange={(e) => handleChange(setting.key, e.target.value)}
                               placeholder="Enter value..."
-                              className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                              className="w-full pl-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
                             />
                             <button
                               type="button"

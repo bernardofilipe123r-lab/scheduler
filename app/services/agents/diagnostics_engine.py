@@ -137,7 +137,7 @@ class DiagnosticsEngine:
     def _check_agent_population(self) -> CheckResult:
         """Verify enough agents are alive and not all struggling."""
         from app.db_connection import SessionLocal
-        from app.models import AIAgent
+        from app.models import AIAgent, AgentProposal
 
         db = SessionLocal()
         try:
@@ -150,10 +150,25 @@ class DiagnosticsEngine:
             if count < 2:
                 return CheckResult("agent_population", "warn", f"Only {count} active agent — below minimum for evolution")
 
-            # Check if all are struggling (survival < 30)
             avg_score = sum(a.survival_score or 0 for a in active) / count
-            struggling = sum(1 for a in active if (a.survival_score or 0) < 30)
 
+            # Check if agents are still in trial phase (no proposals or very few)
+            total_proposals = db.query(AgentProposal).filter(
+                AgentProposal.agent_name.in_([a.agent_id for a in active])
+            ).count()
+
+            # Trial phase: agents with < 2 feedback cycles worth of data
+            # (need published content + 48-72h for metrics before scoring is meaningful)
+            has_scored_agents = any((a.survival_score or 0) > 0 for a in active)
+
+            if not has_scored_agents and total_proposals < count * 2:
+                return CheckResult("agent_population", "pass", f"{count} active agents in trial phase — awaiting first performance data")
+
+            if not has_scored_agents:
+                return CheckResult("agent_population", "pass", f"{count} active agents warming up — no performance data yet (avg survival={avg_score:.0f})")
+
+            # Only flag struggling after agents have had a chance to accumulate scores
+            struggling = sum(1 for a in active if (a.survival_score or 0) < 30)
             if struggling == count:
                 return CheckResult("agent_population", "warn", f"All {count} agents struggling (avg survival={avg_score:.0f})")
 
@@ -250,14 +265,29 @@ class DiagnosticsEngine:
         """Verify APScheduler is running and no jobs are stuck."""
         from app.db_connection import SessionLocal
         from app.models import GenerationJob
+        from sqlalchemy import or_
 
-        # Check for stuck jobs
+        # Check for stuck jobs — only truly active jobs that are stalled
         db = SessionLocal()
         try:
             stuck_threshold = datetime.utcnow() - timedelta(minutes=60)
+            # A job is stuck if:
+            # - Status "generating" and started_at > 1h ago (actually stalled mid-process)
+            # - Status "pending" and created_at > 1h ago (never picked up)
             stuck = db.query(GenerationJob).filter(
-                GenerationJob.status.in_(["generating", "pending"]),
-                GenerationJob.created_at <= stuck_threshold,
+                or_(
+                    # Generating but started over 1h ago
+                    (GenerationJob.status == "generating") &
+                    (GenerationJob.started_at != None) &
+                    (GenerationJob.started_at <= stuck_threshold),
+                    # Generating but never marked as started (shouldn't happen, but check created_at)
+                    (GenerationJob.status == "generating") &
+                    (GenerationJob.started_at == None) &
+                    (GenerationJob.created_at <= stuck_threshold),
+                    # Pending and created over 1h ago (never picked up)
+                    (GenerationJob.status == "pending") &
+                    (GenerationJob.created_at <= stuck_threshold),
+                )
             ).count()
 
             if stuck > 3:
@@ -295,11 +325,15 @@ class DiagnosticsEngine:
             gene_pool_size = db.query(GenePool).count()
 
             if perf_count == 0 and mutations_2w == 0:
-                # System might be new, check if there are enough posts
-                from app.models import AgentProposal
+                # System might be new — check if there are enough published posts
+                # Feedback cycle needs published content + 48-72h to gather metrics
+                from app.models import AgentProposal, ScheduledReel
                 total_proposals = db.query(AgentProposal).count()
-                if total_proposals < 10:
-                    return CheckResult("evolution_integrity", "warn", "Evolution not started — too few proposals yet (expected for new system)")
+                published_count = db.query(ScheduledReel).filter(
+                    ScheduledReel.status == "published"
+                ).count()
+                if total_proposals < 10 or published_count < 5:
+                    return CheckResult("evolution_integrity", "pass", f"Evolution not started yet — {total_proposals} proposals, {published_count} published (need more data)")
                 return CheckResult("evolution_integrity", "warn", "No performance snapshots or mutations yet — feedback cycle may not be running")
 
             detail = f"2w: {mutations_2w} mutations, {perf_count} perf snapshots, {gene_pool_size} gene pool entries"
@@ -469,7 +503,8 @@ class DiagnosticsEngine:
             gene_pool = db.query(GenePool).count()
 
             pending = db.query(GenerationJob).filter(
-                GenerationJob.status.in_(["pending", "generating"])
+                GenerationJob.status.in_(["pending", "generating"]),
+                GenerationJob.created_at >= day_ago
             ).count()
 
             failed_24h = db.query(GenerationJob).filter(

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { get, post } from '@/shared/api/client'
 import {
@@ -6,7 +6,7 @@ import {
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
-  Bot, Brain, Calendar, Info, Gauge, Pause, Play
+  Bot, Brain, Calendar, Info, Gauge, Pause, Play, Clock, Timer
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQuotas, useAgentStatuses, type AgentStatus, type QuotaData } from '@/features/ai-team'
@@ -122,6 +122,14 @@ interface DiagnosticReport {
   created_at: string | null
 }
 
+interface CycleInfo {
+  interval_minutes?: number
+  schedule?: string
+  description: string
+  last_run: string | null
+  is_complete?: boolean
+}
+
 interface MaestroStatus {
   is_running: boolean
   is_paused: boolean
@@ -130,6 +138,8 @@ interface MaestroStatus {
   total_proposals_generated: number
   current_phase: string | null
   errors: number
+  started_at: string | null
+  cycles?: Record<string, CycleInfo>
 }
 
 // ── Helpers ──
@@ -839,6 +849,11 @@ function OverviewTab({
         </div>
       </div>
 
+      {/* Maestro Operations */}
+      {maestroStatus?.cycles && (
+        <MaestroOperations cycles={maestroStatus.cycles} startedAt={maestroStatus.started_at} />
+      )}
+
       {/* Scheduling System */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -899,6 +914,173 @@ function OverviewTab({
     </div>
   )
 }
+
+
+// ── Maestro Operations Countdown ──
+
+const CYCLE_DISPLAY: Record<string, { label: string; icon: typeof Clock; color: string }> = {
+  daily_burst: { label: 'Daily Burst', icon: Sparkles, color: 'text-amber-600 bg-amber-50' },
+  check: { label: 'Auto-Publish Check', icon: Clock, color: 'text-blue-600 bg-blue-50' },
+  healing: { label: 'Healing', icon: Heart, color: 'text-pink-600 bg-pink-50' },
+  observe: { label: 'Observe (Metrics)', icon: Eye, color: 'text-cyan-600 bg-cyan-50' },
+  scout: { label: 'Scout (Trends)', icon: Target, color: 'text-emerald-600 bg-emerald-50' },
+  feedback: { label: 'Feedback (DNA Mutation)', icon: FlaskConical, color: 'text-purple-600 bg-purple-50' },
+  evolution: { label: 'Evolution (Selection)', icon: Dna, color: 'text-indigo-600 bg-indigo-50' },
+  diagnostics: { label: 'Diagnostics', icon: Stethoscope, color: 'text-gray-600 bg-gray-50' },
+  bootstrap: { label: 'Bootstrap (Cold-start)', icon: Zap, color: 'text-orange-600 bg-orange-50' },
+}
+
+const CYCLE_ORDER = ['daily_burst', 'check', 'healing', 'bootstrap', 'observe', 'scout', 'feedback', 'diagnostics', 'evolution']
+
+function useCountdown(cycles: Record<string, CycleInfo> | undefined, startedAt: string | null | undefined) {
+  const [now, setNow] = useState(Date.now())
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => setNow(Date.now()), 1000)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [])
+
+  if (!cycles) return []
+
+  const started = startedAt ? new Date(startedAt).getTime() : now
+
+  return CYCLE_ORDER.filter(key => {
+    const cycle = cycles[key]
+    if (!cycle) return false
+    if (key === 'bootstrap' && cycle.is_complete) return false
+    return true
+  }).map(key => {
+    const cycle = cycles[key]
+    const display = CYCLE_DISPLAY[key]
+
+    let nextRunMs: number | null = null
+    let nextRunLabel = ''
+
+    if (key === 'daily_burst') {
+      // Next noon Lisbon — approximate: compute next 12:00 in Europe/Lisbon
+      const nowDate = new Date(now)
+      // Use Intl to get Lisbon offset
+      const lisbonNow = new Date(nowDate.toLocaleString('en-US', { timeZone: 'Europe/Lisbon' }))
+      const todayNoon = new Date(lisbonNow)
+      todayNoon.setHours(12, 0, 0, 0)
+      if (lisbonNow >= todayNoon) {
+        todayNoon.setDate(todayNoon.getDate() + 1)
+      }
+      // Convert back: difference in local equivalent
+      const diff = todayNoon.getTime() - lisbonNow.getTime()
+      nextRunMs = diff
+      nextRunLabel = 'Daily @ 12:00 Lisbon'
+    } else if (key === 'evolution') {
+      // Weekly — next Sunday 2AM Lisbon
+      const nowDate = new Date(now)
+      const lisbonNow = new Date(nowDate.toLocaleString('en-US', { timeZone: 'Europe/Lisbon' }))
+      const daysUntilSunday = (7 - lisbonNow.getDay()) % 7 || 7
+      const nextSun = new Date(lisbonNow)
+      nextSun.setDate(lisbonNow.getDate() + daysUntilSunday)
+      nextSun.setHours(2, 0, 0, 0)
+      if (daysUntilSunday === 0 && lisbonNow.getHours() < 2) {
+        nextSun.setDate(lisbonNow.getDate()) // today
+      }
+      const diff = nextSun.getTime() - lisbonNow.getTime()
+      nextRunMs = diff > 0 ? diff : diff + 7 * 24 * 3600 * 1000
+      nextRunLabel = `Weekly ${cycle.schedule}`
+    } else if (cycle.interval_minutes) {
+      // Interval-based: last_run + interval
+      if (cycle.last_run) {
+        const lastRun = new Date(cycle.last_run).getTime()
+        const nextAt = lastRun + cycle.interval_minutes * 60 * 1000
+        nextRunMs = nextAt - now
+      } else {
+        // If never ran, count from startup + initial stagger (~30-330s, approximate as interval)
+        const startupPlus = started + cycle.interval_minutes * 60 * 1000
+        nextRunMs = startupPlus - now
+      }
+      nextRunLabel = `Every ${cycle.interval_minutes >= 60 ? `${cycle.interval_minutes / 60}h` : `${cycle.interval_minutes}m`}`
+    }
+
+    // Clamp if past due
+    if (nextRunMs !== null && nextRunMs < 0) nextRunMs = 0
+
+    return {
+      key,
+      label: display?.label || key,
+      icon: display?.icon || Clock,
+      color: display?.color || 'text-gray-600 bg-gray-50',
+      description: cycle.description,
+      nextRunMs,
+      nextRunLabel,
+      lastRun: cycle.last_run,
+    }
+  })
+}
+
+function formatCountdown(ms: number | null): string {
+  if (ms === null) return '--:--'
+  if (ms <= 0) return 'now'
+  const totalSecs = Math.floor(ms / 1000)
+  const d = Math.floor(totalSecs / 86400)
+  const h = Math.floor((totalSecs % 86400) / 3600)
+  const m = Math.floor((totalSecs % 3600) / 60)
+  const s = totalSecs % 60
+  if (d > 0) return `${d}d ${h}h ${m}m`
+  if (h > 0) return `${h}h ${m}m ${s}s`
+  return `${m}m ${s}s`
+}
+
+function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, CycleInfo>; startedAt: string | null | undefined }) {
+  const items = useCountdown(cycles, startedAt)
+
+  if (items.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <Timer className="w-5 h-5 text-indigo-500" />
+        Maestro Operations
+      </h3>
+      <p className="text-sm text-gray-600 mb-4">
+        Live countdown for each Maestro cycle. All cycles run independently in the background.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {items.map(item => {
+          const Icon = item.icon
+          const isImminent = item.nextRunMs !== null && item.nextRunMs <= 60_000
+          return (
+            <div
+              key={item.key}
+              className={`rounded-lg border p-3 flex items-start gap-3 transition-colors ${
+                isImminent ? 'border-indigo-300 bg-indigo-50/50' : 'border-gray-100 bg-gray-50'
+              }`}
+            >
+              <div className={`p-2 rounded-lg flex-shrink-0 ${item.color}`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-gray-900 truncate">{item.label}</span>
+                  <span className={`text-sm font-mono font-bold tabular-nums ${
+                    isImminent ? 'text-indigo-600' : 'text-gray-700'
+                  }`}>
+                    {formatCountdown(item.nextRunMs)}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[10px] text-gray-400">{item.nextRunLabel}</span>
+                  {item.lastRun && (
+                    <span className="text-[10px] text-gray-400">last: {timeAgo(item.lastRun)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 
 function StatCard({ icon: Icon, label, value, suffix, color }: { icon: any; label: string; value: string | number; suffix?: string; color: string }) {
   const colorMap: Record<string, string> = {
@@ -1284,6 +1466,7 @@ function GenePoolView({ entries }: { entries: GenePoolEntry[] }) {
 function SystemHealthView({ report, onRefresh }: { report: DiagnosticReport | null; onRefresh: () => void }) {
   const [runningManual, setRunningManual] = useState(false)
   const [manualReport, setManualReport] = useState<DiagnosticReport | null>(null)
+  const hasAutoRun = useRef(false)
 
   const displayReport = manualReport || report
 
@@ -1292,13 +1475,21 @@ function SystemHealthView({ report, onRefresh }: { report: DiagnosticReport | nu
     try {
       const data = await post<{ report: DiagnosticReport }>('/api/agents/diagnostics/run', {})
       setManualReport(data.report)
-      toast.success('Diagnostics complete!')
+      if (!hasAutoRun.current) hasAutoRun.current = true
       onRefresh()
     } catch {
       toast.error('Diagnostics run failed')
     }
     setRunningManual(false)
   }
+
+  // Auto-run fresh diagnostics when tab is first opened
+  useEffect(() => {
+    if (!hasAutoRun.current) {
+      hasAutoRun.current = true
+      handleRunNow()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!displayReport) {
     return (

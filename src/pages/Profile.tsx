@@ -121,7 +121,7 @@ export function ProfilePage() {
                 value={newPw}
                 onChange={(e) => setNewPw(e.target.value)}
                 placeholder="Min 8 characters"
-                className="w-full px-4 pr-12 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
               <button
                 type="button"
