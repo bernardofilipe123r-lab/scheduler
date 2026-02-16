@@ -1051,7 +1051,7 @@ function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, Cycle
     if (burstCooldownLeft && burstCooldownLeft > 0) return
     setBurstLoading(true)
     try {
-      const res = await post<{ status: string; message: string }>('/api/maestro/trigger-burst', {})
+      const res = await post<{ status: string; message: string }>('/api/maestro/trigger-burst?force=true', {})
       localStorage.setItem(BURST_LS_KEY, String(Date.now()))
       setBurstCooldownLeft(BURST_COOLDOWN_MS)
       toast.success(res.message || 'Daily Burst triggered!')

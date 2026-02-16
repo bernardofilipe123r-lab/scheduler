@@ -201,16 +201,40 @@ async def resume_maestro(background_tasks: BackgroundTasks, user: dict = Depends
 
 
 @router.post("/trigger-burst")
-async def trigger_burst(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+async def trigger_burst(
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False, description="Force a full burst regardless of today's proposal count"),
+    user: dict = Depends(get_current_user),
+):
     """Smart burst — counts existing proposals today and generates only the remaining.
-    If all proposals for today are complete, returns 'complete' status."""
+    With force=true, runs a full daily burst regardless."""
     from app.services.maestro.maestro import get_maestro, maestro_log, schedule_all_ready_reels
     from app.db_connection import SessionLocal
     from app.models import AgentProposal
     from datetime import datetime
 
     maestro = get_maestro()
-    config = maestro.state._get_daily_config(user_id=user.get("id"))
+    user_id = user.get("id")
+
+    # Schedule any ready reels first
+    ready_scheduled = 0
+    try:
+        ready_scheduled = schedule_all_ready_reels()
+        if ready_scheduled > 0:
+            maestro_log("maestro", "Pre-burst: Scheduled ready reels", f"{ready_scheduled} brand-reels", "📅", "action")
+    except Exception:
+        pass
+
+    if force:
+        maestro_log("maestro", "Manual Burst", f"User triggered full daily burst (force)", "🔘", "action")
+        background_tasks.add_task(maestro._run_daily_burst_for_user, user_id)
+        return {
+            "status": "triggered",
+            "message": "Full daily burst triggered — generating all proposals.",
+            "ready_scheduled": ready_scheduled,
+        }
+
+    config = maestro.state._get_daily_config(user_id=user_id)
     target_reels = config.get("total_reels", 30)
     target_posts = config.get("total_posts", 10)
 
@@ -221,12 +245,12 @@ async def trigger_burst(background_tasks: BackgroundTasks, user: dict = Depends(
         today_reels = db.query(AgentProposal).filter(
             AgentProposal.created_at >= today,
             AgentProposal.content_type == "reel",
-            AgentProposal.user_id == user.get("id"),
+            AgentProposal.user_id == user_id,
         ).count()
         today_posts = db.query(AgentProposal).filter(
             AgentProposal.created_at >= today,
             AgentProposal.content_type == "post",
-            AgentProposal.user_id == user.get("id"),
+            AgentProposal.user_id == user_id,
         ).count()
     finally:
         db.close()
