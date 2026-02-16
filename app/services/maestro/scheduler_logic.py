@@ -61,6 +61,26 @@ def auto_schedule_job(job_id: str):
                     if not thumb_abs.exists():
                         print(f"[AUTO-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
                         continue
+
+                # ── Compose cover + text slides for the post ──
+                try:
+                    from app.services.media.post_compositor import compose_cover_slide
+                    from app.services.media.text_slide_compositor import compose_text_slide
+
+                    uid8 = reel_id[:8] if reel_id else "unknown"
+                    cover_out = f"output/posts/post_{brand}_{uid8}.png"
+                    compose_cover_slide(thumbnail_path, post_title, brand, cover_out)
+                    thumbnail_path = cover_out
+
+                    carousel_paths = []
+                    for idx, stxt in enumerate(slide_texts):
+                        is_last = idx == len(slide_texts) - 1
+                        slide_out = f"output/posts/post_{brand}_{uid8}_slide{idx}.png"
+                        compose_text_slide(brand, stxt, slide_texts, is_last, slide_out)
+                        carousel_paths.append(slide_out)
+                except Exception as comp_err:
+                    print(f"[AUTO-SCHEDULE] ⚠️ Slide composition failed for {brand}: {comp_err}", flush=True)
+                    carousel_paths = []
             else:
                 # Reels need reel_id + video_path
                 if not reel_id or not video_path:
@@ -101,6 +121,7 @@ def auto_schedule_job(job_id: str):
                     variant=variant,
                     post_title=post_title if is_post else None,
                     slide_texts=slide_texts if is_post else None,
+                    carousel_paths=carousel_paths if is_post else None,
                     job_id=job_id,
                 )
 
@@ -171,6 +192,9 @@ def schedule_all_ready_reels() -> int:
                 reel_id = output.get("reel_id")
                 video_path = output.get("video_path")
                 thumbnail_path = output.get("thumbnail_path")
+                post_title = output.get("title", "")
+                slide_texts = output.get("slide_texts", [])
+                carousel_paths = []
 
                 if is_post:
                     # Posts only need reel_id (image-based, no video)
@@ -183,6 +207,25 @@ def schedule_all_ready_reels() -> int:
                         if not thumb_abs.exists():
                             print(f"[READY-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
                             continue
+
+                    # ── Compose cover + text slides for the post ──
+                    try:
+                        from app.services.media.post_compositor import compose_cover_slide
+                        from app.services.media.text_slide_compositor import compose_text_slide
+
+                        uid8 = reel_id[:8] if reel_id else "unknown"
+                        cover_out = f"output/posts/post_{brand}_{uid8}.png"
+                        compose_cover_slide(thumbnail_path, post_title, brand, cover_out)
+                        thumbnail_path = cover_out
+
+                        for idx, stxt in enumerate(slide_texts):
+                            is_last_slide = idx == len(slide_texts) - 1
+                            slide_out = f"output/posts/post_{brand}_{uid8}_slide{idx}.png"
+                            compose_text_slide(brand, stxt, slide_texts, is_last_slide, slide_out)
+                            carousel_paths.append(slide_out)
+                    except Exception as comp_err:
+                        print(f"[READY-SCHEDULE] ⚠️ Slide composition failed for {brand}: {comp_err}", flush=True)
+                        carousel_paths = []
                 else:
                     # Reels need reel_id + video_path
                     if not reel_id or not video_path:
@@ -223,11 +266,12 @@ def schedule_all_ready_reels() -> int:
                         yt_title=output.get("yt_title") if not is_post else None,
                         platforms=sched_platforms,
                         video_path=video_path,
-                        thumbnail_path=output.get("thumbnail_path"),
+                        thumbnail_path=thumbnail_path,
                         yt_thumbnail_path=output.get("yt_thumbnail_path") if not is_post else None,
                         user_name="Maestro",
                         brand=brand,
                         variant=variant,
+                        carousel_paths=carousel_paths if is_post else None,
                         job_id=job.job_id,
                     )
                     brand_outputs[brand]["status"] = "scheduled"
