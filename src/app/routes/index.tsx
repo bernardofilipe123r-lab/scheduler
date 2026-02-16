@@ -12,6 +12,7 @@ import { BrandsPage } from '@/pages/Brands'
 import { PostsPage } from '@/pages/Posts'
 import { AnalyticsPage } from '@/pages/Analytics'
 import { AITeamPage } from '@/pages/AITeam'
+import { MissionControlPage } from '@/pages/MissionControl'
 import { AboutPage } from '@/pages/About'
 import { LogsPage } from '@/pages/Logs'
 import { Loader2 } from 'lucide-react'
@@ -55,6 +56,7 @@ function LoginGuard() {
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/mission-control" element={<AuthGuard><MissionControlPage /></AuthGuard>} />
       <Route path="/login" element={<LoginGuard />} />
       <Route path="/" element={<AuthGuard><AppLayout /></AuthGuard>}>
         <Route index element={<GeneratorPage />} />

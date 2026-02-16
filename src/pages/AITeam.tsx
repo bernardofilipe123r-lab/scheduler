@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { get, post } from '@/shared/api/client'
 import {
   Dna, Trophy, Skull, Sparkles, Zap, Shield, AlertTriangle, ChevronDown,
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
-  Bot, Brain, Calendar, Info, Gauge, Pause, Play, Clock, Timer
+  Bot, Brain, Calendar, Info, Gauge, Pause, Play, Clock, Timer, ExternalLink
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQuotas, useAgentStatuses, type AgentStatus, type QuotaData } from '@/features/ai-team'
@@ -1032,6 +1033,7 @@ const BURST_LS_KEY_ADMIN = 'maestro-admin-burst-timestamps'
 
 function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, CycleInfo>; startedAt: string | null | undefined }) {
   const items = useCountdown(cycles, startedAt)
+  const navigate = useNavigate()
   const [burstLoading, setBurstLoading] = useState(false)
   const [burstCooldownLeft, setBurstCooldownLeft] = useState<number | null>(null)
   const [usageText, setUsageText] = useState<string>('')
@@ -1109,6 +1111,9 @@ function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, Cycle
       }
       
       toast.success(res.message || 'Daily Burst triggered!')
+      
+      // Redirect to Mission Control
+      navigate('/mission-control')
     } catch (e: any) {
       toast.error(e?.message || 'Failed to trigger burst')
     } finally {
@@ -1181,6 +1186,15 @@ function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, Cycle
                       <div className="mt-1 text-[10px] text-amber-600 text-center font-medium">
                         {usageText}
                       </div>
+                    )}
+                    {isImminent && item.nextRunMs !== null && item.nextRunMs <= 300_000 && (
+                      <button
+                        onClick={() => navigate('/mission-control')}
+                        className="mt-1 w-full flex items-center justify-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors bg-indigo-100 hover:bg-indigo-200 text-indigo-700"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Watch AI Agents Work Live
+                      </button>
                     )}
                   </>
                 )}
