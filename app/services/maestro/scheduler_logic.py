@@ -67,7 +67,9 @@ def auto_schedule_job(job_id: str):
 
                     uid8 = reel_id[:8] if reel_id else "unknown"
                     cover_out = f"output/posts/post_{brand}_{uid8}.png"
-                    compose_cover_slide(thumbnail_path, post_title, brand, cover_out)
+                    # Normalize path: strip leading '/' so Image.open resolves relative to CWD
+                    bg_path = thumbnail_path.lstrip('/') if thumbnail_path else thumbnail_path
+                    compose_cover_slide(bg_path, post_title, brand, cover_out)
                     thumbnail_path = cover_out
 
                     carousel_paths = []
@@ -77,7 +79,9 @@ def auto_schedule_job(job_id: str):
                         compose_text_slide(brand, stxt, slide_texts, is_last, slide_out)
                         carousel_paths.append(slide_out)
                 except Exception as comp_err:
+                    import traceback
                     print(f"[AUTO-SCHEDULE] ⚠️ Slide composition failed for {brand}: {comp_err}", flush=True)
+                    traceback.print_exc()
                     carousel_paths = []
             else:
                 # Reels need reel_id + video_path
@@ -103,6 +107,14 @@ def auto_schedule_job(job_id: str):
                 else:
                     slot = scheduler.get_next_available_slot(brand, variant)
                     sched_platforms = job.platforms or ["instagram", "facebook", "youtube"]
+
+                # Strip YouTube from platforms if not connected for this brand
+                if "youtube" in sched_platforms:
+                    from app.services.youtube.publisher import get_youtube_credentials_for_brand
+                    yt_creds = get_youtube_credentials_for_brand(brand, db)
+                    if not yt_creds:
+                        sched_platforms = [p for p in sched_platforms if p != "youtube"]
+                        print(f"[AUTO-SCHEDULE] ℹ️ YouTube not connected for {brand} — scheduling without YouTube", flush=True)
 
                 scheduler.schedule_reel(
                     user_id=job.user_id,
@@ -213,7 +225,9 @@ def schedule_all_ready_reels() -> int:
 
                         uid8 = reel_id[:8] if reel_id else "unknown"
                         cover_out = f"output/posts/post_{brand}_{uid8}.png"
-                        compose_cover_slide(thumbnail_path, post_title, brand, cover_out)
+                        # Normalize path: strip leading '/' so Image.open resolves relative to CWD
+                        bg_path = thumbnail_path.lstrip('/') if thumbnail_path else thumbnail_path
+                        compose_cover_slide(bg_path, post_title, brand, cover_out)
                         thumbnail_path = cover_out
 
                         for idx, stxt in enumerate(slide_texts):
@@ -222,7 +236,9 @@ def schedule_all_ready_reels() -> int:
                             compose_text_slide(brand, stxt, slide_texts, is_last_slide, slide_out)
                             carousel_paths.append(slide_out)
                     except Exception as comp_err:
+                        import traceback
                         print(f"[READY-SCHEDULE] ⚠️ Slide composition failed for {brand}: {comp_err}", flush=True)
+                        traceback.print_exc()
                         carousel_paths = []
                 else:
                     # Reels need reel_id + video_path
@@ -255,6 +271,14 @@ def schedule_all_ready_reels() -> int:
                     else:
                         slot = scheduler.get_next_available_slot(brand, variant)
                         sched_platforms = job.platforms or ["instagram", "facebook", "youtube"]
+
+                    # Strip YouTube from platforms if not connected for this brand
+                    if "youtube" in sched_platforms:
+                        from app.services.youtube.publisher import get_youtube_credentials_for_brand
+                        yt_creds = get_youtube_credentials_for_brand(brand, db)
+                        if not yt_creds:
+                            sched_platforms = [p for p in sched_platforms if p != "youtube"]
+                            print(f"[READY-SCHEDULE] ℹ️ YouTube not connected for {brand} — scheduling without YouTube", flush=True)
 
                     scheduler.schedule_reel(
                         user_id=job.user_id,

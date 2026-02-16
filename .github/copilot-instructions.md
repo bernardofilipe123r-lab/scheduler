@@ -465,3 +465,52 @@ Each domain follows: `api/` (React Query hooks) + `model/` (types/config) + `hoo
 - **Credentials:** `ConnectionsTab` → `PUT /api/v2/brands/{id}/credentials` (Meta token, IG/FB IDs)
 - **Delete:** Soft delete (`active=false`), reactivate available
 - **Runtime cache:** `registerBrand(id, label, color)` inserts into `BRAND_CONFIG` map; `getBrandLabel()`/`getBrandColor()` provide lookups with smart fallbacks
+
+---
+
+## Infrastructure & CLI Access
+
+### Railway CLI
+The project is deployed on Railway. The CLI is installed and linked to the project.
+
+```bash
+# Check project status
+railway status
+# → Project: responsible-mindfulness, Environment: production, Service: scheduler
+
+# Run a command with production env vars (DATABASE_URL, API keys, etc.)
+railway run -- python3 scripts/my_script.py
+
+# View logs
+railway logs
+
+# Get environment variables
+railway variables
+```
+
+**Important:** When running Python scripts via `railway run`, the script must NOT use `from app.xxx import ...` (module not on path). Instead, use `sqlalchemy.create_engine(os.environ["DATABASE_URL"])` with raw SQL via `text()`.
+
+### Database Access (Supabase-hosted PostgreSQL)
+
+The database is hosted on Supabase. Access it via:
+
+1. **Railway CLI** (preferred for scripts): `railway run -- python3 scripts/my_script.py` injects `DATABASE_URL` automatically
+2. **Supabase Dashboard**: Direct SQL editor at the project's Supabase console
+
+**One-time cleanup scripts** go in `scripts/` and use raw SQLAlchemy:
+```python
+import os
+from sqlalchemy import create_engine, text
+
+engine = create_engine(os.environ["DATABASE_URL"])
+with engine.connect() as conn:
+    result = conn.execute(text("UPDATE ... WHERE ..."))
+    print(f"Rows affected: {result.rowcount}")
+    conn.commit()
+```
+
+### Key Production Values
+- **Railway service:** `scheduler` in project `responsible-mindfulness`
+- **Public URL:** `scheduler-production-29d5.up.railway.app`
+- **Docker working dir:** `/app` (paths stored as `/output/...` resolve to `/app/output/...`)
+- **Default user UUID:** Set via `DEFAULT_USER_ID` env var (used for initial seeding)
