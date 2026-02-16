@@ -271,10 +271,13 @@ class DiagnosticsEngine:
         db = SessionLocal()
         try:
             stuck_threshold = datetime.utcnow() - timedelta(minutes=60)
+            recency_bound = datetime.utcnow() - timedelta(hours=48)
             # A job is stuck if:
             # - Status "generating" and started_at > 1h ago (actually stalled mid-process)
             # - Status "pending" and created_at > 1h ago (never picked up)
+            # Only consider jobs created in the last 48h to ignore ancient orphans
             stuck = db.query(GenerationJob).filter(
+                GenerationJob.created_at >= recency_bound,
                 or_(
                     # Generating but started over 1h ago
                     (GenerationJob.status == "generating") &

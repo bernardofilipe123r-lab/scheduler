@@ -61,7 +61,8 @@ export function AppRoutes() {
         <Route path="jobs" element={<HistoryPage />} />
         <Route path="history" element={<Navigate to="/jobs" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />
-        <Route path="scheduled" element={<ScheduledPage />} />
+        <Route path="calendar" element={<ScheduledPage />} />
+        <Route path="scheduled" element={<Navigate to="/calendar" replace />} />
         <Route path="connected" element={<Navigate to="/brands?tab=connections" replace />} />
         <Route path="brands" element={<BrandsPage />} />
         <Route path="posts" element={<PostsPage />} />

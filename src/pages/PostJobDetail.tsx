@@ -593,7 +593,7 @@ export function PostJobDetail({ job, refetch }: Props) {
             All brands scheduled!
           </span>
           <button
-            onClick={() => navigate('/scheduled')}
+            onClick={() => navigate('/calendar')}
             className="ml-auto text-sm text-green-700 hover:underline"
           >
             View Scheduled →

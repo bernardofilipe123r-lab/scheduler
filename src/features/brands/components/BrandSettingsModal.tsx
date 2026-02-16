@@ -266,7 +266,7 @@ export function BrandSettingsModal({ brand, connections, allBrands, onClose }: B
           </button>
         )}
         <button
-          onClick={() => { onClose(); navigate('/scheduled'); }}
+          onClick={() => { onClose(); navigate('/calendar'); }}
           className="flex-1 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium min-w-[140px] whitespace-nowrap"
         >
           View Schedule

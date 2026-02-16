@@ -365,7 +365,7 @@ export function ScheduledPage() {
   }, [posts, statsFilter, contentTypeFilter])
   
   if (isLoading) {
-    return <PageLoader page="scheduled" />
+    return <PageLoader page="calendar" />
   }
   
   return (

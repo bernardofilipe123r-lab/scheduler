@@ -439,7 +439,7 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, u
             # Posts don't go to YouTube
             job_platforms = ["instagram", "facebook"] if is_post else ["instagram", "facebook", "youtube"]
             job = manager.create_job(
-                user_id=proposal_id,
+                user_id=user["id"],
                 title=title,
                 content_lines=job_content,
                 brands=brands,

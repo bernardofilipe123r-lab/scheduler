@@ -213,7 +213,7 @@ export function JobDetailPage() {
       toast.success(message, { duration: 4000 })
       
       setTimeout(() => {
-        navigate('/scheduled')
+        navigate('/calendar')
       }, 1500)
     } else if (failed > 0) {
       toast.error('Failed to schedule brands')
@@ -298,7 +298,7 @@ export function JobDetailPage() {
       toast.success(message, { duration: 4000 })
       
       setTimeout(() => {
-        navigate('/scheduled')
+        navigate('/calendar')
       }, 1500)
     } else if (failed > 0) {
       toast.error('Failed to schedule brands')

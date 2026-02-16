@@ -94,7 +94,7 @@ export function AppLayout() {
               </NavLink>
               
               <NavLink
-                to="/scheduled"
+                to="/calendar"
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                     isActive
@@ -104,7 +104,7 @@ export function AppLayout() {
                 }
               >
                 <Calendar className="w-4 h-4" />
-                Scheduled
+                Calendar
               </NavLink>
               
               <NavLink

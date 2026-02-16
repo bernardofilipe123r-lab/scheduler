@@ -211,9 +211,18 @@ class ProposalsMixin:
 
         # Create ONE job for this brand
         with get_db_session() as jdb:
+            # Get the actual user_id — from maestro state or from the proposal itself
+            actual_user_id = getattr(self, '_current_user_id', None)
+            if not actual_user_id:
+                prop = jdb.query(AgentProposal).filter(
+                    AgentProposal.proposal_id == proposal_id
+                ).first()
+                if prop:
+                    actual_user_id = prop.user_id
+
             manager = JobManager(jdb)
             job_kwargs = dict(
-                user_id=proposal_id,
+                user_id=actual_user_id or proposal_id,
                 title=title,
                 content_lines=slide_texts if is_post and slide_texts else content_lines,
                 brands=[brand],

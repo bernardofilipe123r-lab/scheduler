@@ -1,10 +1,10 @@
-type PageTheme = 'ai-team' | 'videos' | 'posts' | 'scheduled' | 'analytics' | 'brands' | 'jobs' | 'connections' | 'default'
+type PageTheme = 'ai-team' | 'videos' | 'posts' | 'calendar' | 'analytics' | 'brands' | 'jobs' | 'connections' | 'default'
 
 const themes: Record<PageTheme, { emoji: string; message: string; accents: string[] }> = {
   'ai-team':     { emoji: '🤖', message: 'Agents are thinking',      accents: ['🧠', '⚡', '💭'] },
   'videos':      { emoji: '🎬', message: 'Rolling the cameras',      accents: ['🎥', '🎞️', '🎬'] },
   'posts':       { emoji: '📝', message: 'Crafting content',         accents: ['✏️', '💡', '📄'] },
-  'scheduled':   { emoji: '📅', message: 'Checking your calendar',   accents: ['🗓️', '⏰', '📆'] },
+  'calendar':    { emoji: '📅', message: 'Checking your calendar',   accents: ['🗓️', '⏰', '📆'] },
   'analytics':   { emoji: '📊', message: 'Crunching numbers',        accents: ['📈', '🔢', '📉'] },
   'brands':      { emoji: '🎨', message: 'Loading your brands',      accents: ['🖌️', '🌈', '✨'] },
   'jobs':        { emoji: '⚙️', message: 'Processing jobs',          accents: ['🔧', '🛠️', '⚡'] },

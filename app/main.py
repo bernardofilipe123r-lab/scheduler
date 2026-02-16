@@ -117,7 +117,7 @@ print(f"🎨 Brand logos directory: {logos_dir.absolute()}")
 app.mount("/brand-logos", StaticFiles(directory=str(logos_dir)), name="brand-logos")
 
 
-# Serve React frontend
+# Serve React frontend (SPA catch-all)
 if FRONTEND_DIR.exists():
     print(f"⚛️ React frontend: {FRONTEND_DIR}")
     
@@ -130,59 +130,9 @@ if FRONTEND_DIR.exists():
         """Serve React app."""
         return FileResponse(FRONTEND_DIR / "index.html")
     
-    @app.get("/history", tags=["frontend"])
-    async def serve_history():
-        """Serve React app for history route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/scheduled", tags=["frontend"])
-    async def serve_scheduled():
-        """Serve React app for scheduled route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/connected", tags=["frontend"])
-    async def serve_connected():
-        """Serve React app for connected pages route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/brands", tags=["frontend"])
-    async def serve_brands():
-        """Serve React app for brands route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/posts", tags=["frontend"])
-    async def serve_posts():
-        """Serve React app for posts route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/analytics", tags=["frontend"])
-    async def serve_analytics():
-        """Serve React app for analytics route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/settings", tags=["frontend"])
-    async def serve_settings():
-        """Serve React app for settings route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/test", tags=["frontend"])
-    async def serve_test():
-        """Serve React app for test route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/about", tags=["frontend"])
-    async def serve_about():
-        """Serve React app for about route."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/maestro", tags=["frontend"])
-    async def serve_maestro():
-        """Serve React app for Maestro orchestrator page."""
-        return FileResponse(FRONTEND_DIR / "index.html")
-    
-    @app.get("/job/{job_id}", tags=["frontend"])
-    async def serve_job_detail(job_id: str):
-        """Serve React app for job detail route."""
+    @app.get("/{full_path:path}", tags=["frontend"])
+    async def serve_spa(full_path: str):
+        """Catch-all: serve React app for any non-API route (SPA client-side routing)."""
         return FileResponse(FRONTEND_DIR / "index.html")
 else:
     print(f"⚠️ React frontend not found at {FRONTEND_DIR}. Run 'npm run build' to build.")

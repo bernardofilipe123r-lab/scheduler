@@ -12,6 +12,7 @@ import {
   X,
   Loader2,
   AlertCircle,
+  Type,
 } from 'lucide-react'
 import { useBrands, useCreateBrand, type CreateBrandInput, type BrandColors } from '@/features/brands/api/use-brands'
 import { apiClient } from '@/shared/api/client'
@@ -95,6 +96,8 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
   const [colorName, setColorName] = useState('indigo')
   const [useCustomColors, setUseCustomColors] = useState(false)
   const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
+  const [previewTitle, setPreviewTitle] = useState(SAMPLE_TITLE)
+  const [previewContent, setPreviewContent] = useState(SAMPLE_CONTENT.join('\n'))
 
   // Step 3: Platform credentials (all required)
   const [instagramHandle, setInstagramHandle] = useState('')
@@ -123,15 +126,20 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
 
   // Title lines for preview (split into ~3 lines)
   const titleLines = useMemo(() => {
-    const words = SAMPLE_TITLE.split(/\s+/).filter(Boolean)
-    if (words.length <= 2) return [SAMPLE_TITLE]
+    const words = previewTitle.split(/\s+/).filter(Boolean)
+    if (words.length <= 2) return [previewTitle]
     const third = Math.ceil(words.length / 3)
     return [
       words.slice(0, third).join(' '),
       words.slice(third, third * 2).join(' '),
       words.slice(third * 2).join(' '),
     ].filter(l => l.trim())
-  }, [])
+  }, [previewTitle])
+
+  // Content lines for preview
+  const contentLines = useMemo(() => {
+    return previewContent.split('\n').filter(l => l.trim())
+  }, [previewContent])
 
   // Preview colors derived from primaryColor
   const thumbnailTextColor = previewMode === 'light' ? primaryColor : '#ffffff'
@@ -263,7 +271,7 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
   const totalSteps = 3
 
   return (
-    <div className="space-y-6 max-h-[80vh] overflow-y-auto">
+    <div className="space-y-6">
       {/* Progress steps */}
       <div className="flex items-center justify-center gap-2 mb-4">
         {[1, 2, 3].map(s => (
@@ -522,6 +530,34 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
                   </div>
                 </div>
               )}
+
+              {/* Preview text editing */}
+              <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <Type className="w-4 h-4 text-gray-500" />
+                  <label className="text-sm font-medium text-gray-700">Preview Text</label>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={previewTitle}
+                    onChange={(e) => setPreviewTitle(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Content Lines</label>
+                  <textarea
+                    value={previewContent}
+                    onChange={(e) => setPreviewContent(e.target.value)}
+                    rows={3}
+                    placeholder="One line per row"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm resize-none"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-0.5">One bullet point per line</p>
+                </div>
+              </div>
             </div>
 
             {/* ── Right: Pixel-Accurate Preview ── */}
@@ -598,7 +634,7 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
                             wordBreak: 'break-word',
                           }}
                         >
-                          {SAMPLE_TITLE}
+                          {previewTitle}
                         </div>
                         <div
                           style={{
@@ -694,7 +730,7 @@ export function CreateBrandModal({ onClose, onSuccess }: CreateBrandModalProps) 
                         zIndex: 1,
                       }}
                     >
-                      {SAMPLE_CONTENT.map((line, i) => (
+                      {contentLines.map((line, i) => (
                         <div
                           key={i}
                           style={{
