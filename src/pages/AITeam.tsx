@@ -218,6 +218,7 @@ function StrategyWeights({ weights }: { weights: Record<string, number> }) {
 // ── Main Page ──
 
 export function AITeamPage() {
+  const navigate = useNavigate()
   const [agents, setAgents] = useState<Agent[]>([])
   const [events, setEvents] = useState<EvolutionEvent[]>([])
   const [genePool, setGenePool] = useState<GenePoolEntry[]>([])
@@ -357,6 +358,16 @@ export function AITeamPage() {
             {activeAgents.length} active agents competing • Generation {Math.max(...activeAgents.map(a => a.generation || 1), 1)} • {genePool.length} DNA archived
           </p>
         </div>
+        <button
+          onClick={() => navigate('/mission-control')}
+          className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-white rounded-xl shadow-lg transition-all group border border-gray-700"
+        >
+          <span className="text-xl group-hover:scale-110 transition-transform">🎯</span>
+          <div className="text-left">
+            <span className="font-semibold text-sm block">Watch Your AI Agents Live</span>
+            <span className="text-[11px] text-gray-400 block">Real-time Mission Control</span>
+          </div>
+        </button>
       </div>
 
       {/* Stats Banner */}

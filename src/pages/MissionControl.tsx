@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { AgentPodsGrid } from '@/features/mission-control/components/AgentPodsGrid'
 import { StatsPanel } from '@/features/mission-control/components/StatsPanel'
 import { ActivityFeed } from '@/features/mission-control/components/ActivityFeed'
+import { CyclesGrid } from '@/features/mission-control/components/CyclesGrid'
 import { useLiveLogs } from '@/features/mission-control/api/useLiveLogs'
 import { useAgents } from '@/features/mission-control/api/useAgents'
 import { useMaestroLive, type MaestroLiveStatus } from '@/features/mission-control/api/useMaestroLive'
@@ -16,24 +17,36 @@ import toast from 'react-hot-toast'
 export type MissionMode = 'idle' | 'active' | 'complete'
 
 function detectMode(logs: any[], maestro: MaestroLiveStatus | undefined): MissionMode {
+  // If maestro is actively running a phase, it's active
+  if (maestro?.current_phase) return 'active'
+
   if (!maestro || !logs || logs.length === 0) return 'idle'
 
   const now = Date.now()
   const recentCutoff = now - 5 * 60 * 1000 // 5 min window
-  const burstKeywords = ['generating', 'planning', 'saved:', 'examiner', 'auto-accepting', 'smart burst', 'manual burst', 'daily burst', 'burst for user']
+  // Detect activity from any Maestro cycle
+  const activityKeywords = [
+    // Daily burst
+    'generating', 'planning', 'saved:', 'examiner', 'auto-accepting',
+    'smart burst', 'manual burst', 'daily burst', 'burst for user',
+    // Other cycles
+    'healing', 'auto-publish', 'publishing', 'scout', 'trending',
+    'observe', 'metrics', 'feedback', 'mutation', 'evolution',
+    'diagnostic', 'bootstrap', 'cold-start',
+  ]
 
-  const recentBurstLogs = logs.filter(log => {
+  const recentActivityLogs = logs.filter(log => {
     const logTime = new Date(log.timestamp).getTime()
     if (logTime < recentCutoff) return false
     const msgLower = log.message.toLowerCase()
-    return burstKeywords.some(kw => msgLower.includes(kw))
+    return activityKeywords.some(kw => msgLower.includes(kw))
   })
 
-  if (recentBurstLogs.length > 0) {
-    const latestBurstTime = Math.max(...recentBurstLogs.map((l: any) => new Date(l.timestamp).getTime()))
-    const timeSinceLatest = now - latestBurstTime
+  if (recentActivityLogs.length > 0) {
+    const latestTime = Math.max(...recentActivityLogs.map((l: any) => new Date(l.timestamp).getTime()))
+    const timeSinceLatest = now - latestTime
 
-    // If last burst activity was 60+ seconds ago, check for completion signals
+    // Check for burst completion signals
     if (timeSinceLatest > 60000) {
       const veryRecent = logs.slice(0, 5).map((l: any) => l.message.toLowerCase()).join(' ')
       if (veryRecent.includes('burst complete') || veryRecent.includes('all proposals') || veryRecent.includes('daily burst finished')) {
@@ -334,6 +347,23 @@ export function MissionControlPage() {
                   )}
                 </div>
 
+                {/* All Maestro Operations */}
+                <div className="px-6 pb-6">
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                  >
+                    <h3 className="text-sm font-bold text-gray-500 font-mono mb-3 uppercase tracking-wider">
+                      All Operations — Live Countdown
+                    </h3>
+                    <p className="text-xs text-gray-600 mb-4">
+                      Content generation, health checks, competitor analysis, performance tracking, trend discovery, and more — all running autonomously.
+                    </p>
+                    <CyclesGrid maestro={maestroData} />
+                  </motion.div>
+                </div>
+
                 {/* Agent Pods (standby mode) */}
                 <div className="px-6 pb-6">
                   <h3 className="text-sm font-bold text-gray-500 font-mono mb-3 uppercase tracking-wider">
@@ -391,6 +421,14 @@ export function MissionControlPage() {
             mode={mode}
             maestro={maestroData}
           />
+          {mode !== 'idle' && (
+            <div className="px-4 pb-4">
+              <h3 className="text-xs font-bold text-gray-500 font-mono mb-2 uppercase tracking-wider">
+                Operations
+              </h3>
+              <CyclesGrid maestro={maestroData} compact />
+            </div>
+          )}
         </div>
       </div>
     </div>
