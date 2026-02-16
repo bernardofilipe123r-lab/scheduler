@@ -118,6 +118,7 @@ export function ScheduledPage() {
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
+  const [slideImageErrors, setSlideImageErrors] = useState<Set<number>>(new Set())
 
   
   const calendarDays = useMemo(() => {
@@ -797,7 +798,7 @@ export function ScheduledPage() {
                       dayPosts.map(post => (
                         <div
                           key={post.id}
-                          onClick={() => { setDetailSlideIndex(0); setSelectedPost(post) }}
+                          onClick={() => { setDetailSlideIndex(0); setSlideImageErrors(new Set()); setSelectedPost(post) }}
                           className="p-2 rounded cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ 
                             backgroundColor: `${getBrandColor(post.brand)}15`,
@@ -895,6 +896,7 @@ export function ScheduledPage() {
                 key={post.id}
                 onClick={() => {
                   setDetailSlideIndex(0)
+                  setSlideImageErrors(new Set())
                   setSelectedPost(post)
                   setSelectedDay(null)
                 }}
@@ -1039,6 +1041,7 @@ export function ScheduledPage() {
                         key={post.id}
                         onClick={() => {
                           setDetailSlideIndex(0)
+                          setSlideImageErrors(new Set())
                           setSelectedPost(post)
                           setSelectedDayForMissing(null)
                         }}
@@ -1084,7 +1087,7 @@ export function ScheduledPage() {
       {/* Post Detail Modal */}
       <Modal
         isOpen={!!selectedPost}
-        onClose={() => { setSelectedPost(null); setDetailSlideIndex(0) }}
+        onClose={() => { setSelectedPost(null); setDetailSlideIndex(0); setSlideImageErrors(new Set()) }}
         title="Post Details"
         size="lg"
       >
@@ -1092,7 +1095,7 @@ export function ScheduledPage() {
           const slideTexts = selectedPost.metadata?.slide_texts || []
           const carouselPaths = selectedPost.metadata?.carousel_image_paths || []
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
-          const totalSlides = isPost ? 1 + slideTexts.length : 1
+          const totalSlides = isPost ? 1 + Math.max(slideTexts.length, carouselPaths.length) : 1
           const brandColor = getBrandColor(selectedPost.brand)
 
           return (
@@ -1139,16 +1142,37 @@ export function ScheduledPage() {
                     {/* Slide content */}
                     <div className="rounded-lg overflow-hidden shadow-lg" style={{ width: 320, height: 400 }}>
                       {detailSlideIndex === 0 ? (
-                        <img
-                          src={selectedPost.thumbnail_path}
-                          alt="Cover"
-                          className="w-full h-full object-cover object-top"
-                        />
-                      ) : carouselPaths[detailSlideIndex - 1] ? (
+                        slideImageErrors.has(0) ? (
+                          /* Cover fallback: show title over dark gradient */
+                          <div
+                            style={{
+                              width: 320,
+                              height: 400,
+                              background: `linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.85))`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 24,
+                            }}
+                          >
+                            <p style={{ color: '#fff', fontSize: 18, fontWeight: 700, textAlign: 'center', fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1.4 }}>
+                              {selectedPost.title?.split('\n')[0] || 'Cover'}
+                            </p>
+                          </div>
+                        ) : (
+                          <img
+                            src={selectedPost.thumbnail_path}
+                            alt="Cover"
+                            className="w-full h-full object-cover object-top"
+                            onError={() => setSlideImageErrors(prev => new Set(prev).add(0))}
+                          />
+                        )
+                      ) : carouselPaths[detailSlideIndex - 1] && !slideImageErrors.has(detailSlideIndex) ? (
                         <img
                           src={carouselPaths[detailSlideIndex - 1]}
                           alt={`Slide ${detailSlideIndex}`}
                           className="w-full h-full object-cover object-top"
+                          onError={() => setSlideImageErrors(prev => new Set(prev).add(detailSlideIndex))}
                         />
                       ) : (
                         /* Fallback CSS-based text slide preview */

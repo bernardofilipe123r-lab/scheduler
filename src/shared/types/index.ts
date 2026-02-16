@@ -76,6 +76,8 @@ export interface ScheduledPost {
     platforms?: string[]
     brand?: string
     variant?: string
+    video_path?: string
+    thumbnail_path?: string
     title?: string
     slide_texts?: string[]
     carousel_image_paths?: string[]

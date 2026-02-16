@@ -175,7 +175,7 @@ class APIQuotaManager:
     async def fetch_deapi_balance(self) -> dict:
         """Fetch deAPI account balance. Endpoint: GET https://api.deapi.ai/api/v1/client/balance"""
         import os
-        import aiohttp
+        import httpx
 
         api_key = os.getenv('DEAPI_API_KEY')
         if not api_key:
@@ -183,28 +183,27 @@ class APIQuotaManager:
             return {'error': 'No DEAPI_API_KEY configured'}
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
                     'https://api.deapi.ai/api/v1/client/balance',
                     headers={'Authorization': f'Bearer {api_key}'},
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    body = await resp.text()
-                    if resp.status == 200:
-                        data = await resp.json(content_type=None) if body else {}
-                        balance = data.get('balance', 0)
-                        account_type = data.get('account_type', 'basic')
-                        rpm_limit = 300 if account_type == 'premium' else 3
-                        rpd_limit = None if account_type == 'premium' else 100
-                        return {
-                            'balance': balance,
-                            'account_type': account_type,
-                            'rpm_limit': rpm_limit,
-                            'rpd_limit': rpd_limit,
-                            'currency': data.get('currency', 'USD'),
-                        }
-                    logger.error(f'deAPI balance fetch failed: HTTP {resp.status} — {body[:200]}')
-                    return {'error': f'HTTP {resp.status}'}
+                )
+                body = resp.text
+                if resp.status_code == 200:
+                    data = resp.json() if body else {}
+                    balance = data.get('balance', 0)
+                    account_type = data.get('account_type', 'basic')
+                    rpm_limit = 300 if account_type == 'premium' else 3
+                    rpd_limit = None if account_type == 'premium' else 100
+                    return {
+                        'balance': balance,
+                        'account_type': account_type,
+                        'rpm_limit': rpm_limit,
+                        'rpd_limit': rpd_limit,
+                        'currency': data.get('currency', 'USD'),
+                    }
+                logger.error(f'deAPI balance fetch failed: HTTP {resp.status_code} — {body[:200]}')
+                return {'error': f'HTTP {resp.status_code}'}
         except Exception as e:
             logger.error(f'deAPI balance fetch exception: {e}')
             return {'error': str(e)[:200]}
@@ -212,7 +211,7 @@ class APIQuotaManager:
     async def fetch_deepseek_balance(self) -> dict:
         """Fetch DeepSeek account balance. Endpoint: GET https://api.deepseek.com/user/balance"""
         import os
-        import aiohttp
+        import httpx
 
         api_key = os.getenv('DEEPSEEK_API_KEY')
         if not api_key:
@@ -220,36 +219,35 @@ class APIQuotaManager:
             return {'error': 'No DEEPSEEK_API_KEY configured'}
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
                     'https://api.deepseek.com/user/balance',
                     headers={'Authorization': f'Bearer {api_key}'},
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    body = await resp.text()
-                    if resp.status == 200:
-                        data = await resp.json(content_type=None) if body else {}
-                        # DeepSeek returns {"is_available": true, "balance_infos": [{"currency": "CNY", "total_balance": "...", "granted_balance": "...", "topped_up_balance": "..."}]}
-                        is_available = data.get('is_available', True)
-                        balance_infos = data.get('balance_infos', [])
-                        # Find USD or CNY balance
-                        balance = None
-                        currency = 'USD'
-                        for info in balance_infos:
-                            if info.get('currency') == 'USD':
-                                balance = float(info.get('total_balance', 0))
-                                currency = 'USD'
-                                break
-                            elif info.get('currency') == 'CNY':
-                                balance = float(info.get('total_balance', 0))
-                                currency = 'CNY'
-                        return {
-                            'balance': balance,
-                            'currency': currency,
-                            'is_available': is_available,
-                        }
-                    logger.error(f'DeepSeek balance fetch failed: HTTP {resp.status} — {body[:200]}')
-                    return {'error': f'HTTP {resp.status}'}
+                )
+                body = resp.text
+                if resp.status_code == 200:
+                    data = resp.json() if body else {}
+                    # DeepSeek returns {"is_available": true, "balance_infos": [{"currency": "CNY", "total_balance": "...", "granted_balance": "...", "topped_up_balance": "..."}]}
+                    is_available = data.get('is_available', True)
+                    balance_infos = data.get('balance_infos', [])
+                    # Find USD or CNY balance
+                    balance = None
+                    currency = 'USD'
+                    for info in balance_infos:
+                        if info.get('currency') == 'USD':
+                            balance = float(info.get('total_balance', 0))
+                            currency = 'USD'
+                            break
+                        elif info.get('currency') == 'CNY':
+                            balance = float(info.get('total_balance', 0))
+                            currency = 'CNY'
+                    return {
+                        'balance': balance,
+                        'currency': currency,
+                        'is_available': is_available,
+                    }
+                logger.error(f'DeepSeek balance fetch failed: HTTP {resp.status_code} — {body[:200]}')
+                return {'error': f'HTTP {resp.status_code}'}
         except Exception as e:
             logger.error(f'DeepSeek balance fetch exception: {e}')
             return {'error': str(e)[:200]}
@@ -257,34 +255,33 @@ class APIQuotaManager:
     async def fetch_deepseek_info(self) -> dict:
         """Fetch DeepSeek API rate limit info from response headers."""
         import os
-        import aiohttp
+        import httpx
 
         api_key = os.getenv('DEEPSEEK_API_KEY')
         if not api_key:
             return {'error': 'No DEEPSEEK_API_KEY configured'}
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
                     'https://api.deepseek.com/models',
                     headers={'Authorization': f'Bearer {api_key}'},
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    if resp.status == 200:
-                        headers = resp.headers
-                        rpm_limit = int(headers.get('x-ratelimit-limit-requests', '0'))
-                        rpm_remaining = int(headers.get('x-ratelimit-remaining-requests', str(rpm_limit)))
-                        tpm_limit = int(headers.get('x-ratelimit-limit-tokens', '0'))
-                        tpm_remaining = int(headers.get('x-ratelimit-remaining-tokens', str(tpm_limit)))
-                        result = {}
-                        if rpm_limit > 0:
-                            result['requests_used'] = rpm_limit - rpm_remaining
-                            result['requests_limit'] = rpm_limit
-                        if tpm_limit > 0:
-                            result['tokens_used'] = tpm_limit - tpm_remaining
-                            result['tokens_limit'] = tpm_limit
-                        return result if result else {'error': 'No rate limit headers found'}
-                    return {'error': f'HTTP {resp.status}'}
+                )
+                if resp.status_code == 200:
+                    headers = resp.headers
+                    rpm_limit = int(headers.get('x-ratelimit-limit-requests', '0'))
+                    rpm_remaining = int(headers.get('x-ratelimit-remaining-requests', str(rpm_limit)))
+                    tpm_limit = int(headers.get('x-ratelimit-limit-tokens', '0'))
+                    tpm_remaining = int(headers.get('x-ratelimit-remaining-tokens', str(tpm_limit)))
+                    result = {}
+                    if rpm_limit > 0:
+                        result['requests_used'] = rpm_limit - rpm_remaining
+                        result['requests_limit'] = rpm_limit
+                    if tpm_limit > 0:
+                        result['tokens_used'] = tpm_limit - tpm_remaining
+                        result['tokens_limit'] = tpm_limit
+                    return result if result else {'error': 'No rate limit headers found'}
+                return {'error': f'HTTP {resp.status_code}'}
         except Exception as e:
             logger.error(f'DeepSeek rate-limit fetch exception: {e}')
             return {'error': str(e)[:200]}

@@ -87,7 +87,7 @@ export const schedulingApi = {
     return response.schedules.map(s => ({
       id: s.schedule_id,
       brand: (s.metadata?.brand || s.brand) as BrandName,
-      job_id: s.metadata?.job_id || s.reel_id,
+      job_id: s.metadata?.job_id || s.reel_id?.split('_').slice(0, -1).join('_') || s.reel_id,
       reel_id: s.reel_id,
       title: s.metadata?.title || s.caption?.split('\n')[0]?.slice(0, 80) || 'Scheduled Post',
       scheduled_time: s.scheduled_time,

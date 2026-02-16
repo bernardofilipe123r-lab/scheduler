@@ -112,6 +112,10 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
         else:
             print(f"⚠️  Warning: Thumbnail not found (will work without it)")
         
+        # Extract job_id from reel_id (format: {job_id}_{brand})
+        parts = request.reel_id.rsplit('_', 1)
+        extracted_job_id = parts[0] if len(parts) > 1 else request.reel_id
+        
         # Schedule the reel
         print("\n💾 Saving to database...")
         result = scheduler_service.schedule_reel(
@@ -122,7 +126,8 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
             thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
             caption=request.caption,
             platforms=["instagram"],
-            user_name="Web Interface User"
+            user_name="Web Interface User",
+            job_id=extracted_job_id,
         )
         
         print(f"✅ Successfully saved to database!")
@@ -260,6 +265,11 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
         if request.yt_title:
             print(f"📺 YouTube title: {request.yt_title}")
         
+        # Extract job_id from reel_id (format: {job_id}_{brand})
+        # e.g. "GEN-990797_vitalitycollege" → "GEN-990797"
+        parts = request.reel_id.rsplit('_', 1)
+        extracted_job_id = parts[0] if len(parts) > 1 else request.reel_id
+        
         # Schedule the reel
         result = scheduler_service.schedule_reel(
             user_id=user["id"],
@@ -273,7 +283,8 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             platforms=platforms,
             user_name=request.user_id,
             brand=request.brand,
-            variant=request.variant
+            variant=request.variant,
+            job_id=extracted_job_id,
         )
         
         print(f"✅ Scheduled successfully!")
