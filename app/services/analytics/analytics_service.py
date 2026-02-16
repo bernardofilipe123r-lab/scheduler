@@ -23,8 +23,8 @@ from app.services.brands.resolver import brand_resolver
 logger = logging.getLogger(__name__)
 
 
-# Auto-refresh interval (12 hours)
-AUTO_REFRESH_INTERVAL_HOURS = 12
+# Auto-refresh interval (6 hours)
+AUTO_REFRESH_INTERVAL_HOURS = 6
 
 
 class AnalyticsService:
@@ -764,13 +764,27 @@ class AnalyticsService:
             if not config:
                 continue
             
-            # Instagram historical data - ONLY VIEWS, not followers
+            # Instagram historical data
             if config.instagram_business_account_id and config.meta_access_token:
                 try:
+                    # Fetch current follower count to use for the most recent entry
+                    current_followers = 0
+                    try:
+                        acct_url = f"{self.META_API_BASE}/{config.instagram_business_account_id}"
+                        acct_resp = requests.get(acct_url, params={
+                            "fields": "followers_count",
+                            "access_token": config.meta_access_token,
+                        })
+                        if acct_resp.status_code == 200:
+                            current_followers = acct_resp.json().get("followers_count", 0)
+                    except Exception as e:
+                        logger.warning(f"Could not fetch current followers for {brand_name}: {e}")
+
                     daily_data = self._fetch_instagram_historical(
                         config.instagram_business_account_id,
                         config.meta_access_token,
-                        days_back
+                        days_back,
+                        current_followers=current_followers,
                     )
                     
                     for day_data in daily_data:
@@ -785,15 +799,13 @@ class AnalyticsService:
                         existing = existing.first()
                         
                         if not existing:
-                            # Only store ACTUAL data from API
-                            # Followers set to 0 because we can't get historical follower data
                             snapshot = AnalyticsSnapshot(
                                 brand=brand_name,
                                 platform="instagram",
                                 snapshot_at=day_data["date"],
-                                followers_count=0,  # Historical followers NOT available from API
-                                views_last_7_days=day_data["impressions"],  # ACTUAL data from API
-                                likes_last_7_days=day_data["likes"],  # ACTUAL data from API
+                                followers_count=day_data.get("followers", 0),
+                                views_last_7_days=day_data["impressions"],
+                                likes_last_7_days=day_data["likes"],
                                 user_id=user_id
                             )
                             self.db.add(snapshot)
@@ -840,13 +852,14 @@ class AnalyticsService:
         self, 
         account_id: str, 
         access_token: str, 
-        days_back: int = 28
+        days_back: int = 28,
+        current_followers: int = 0,
     ) -> List[Dict[str, Any]]:
         """
         Fetch historical daily Instagram insights.
         
         Returns a list of daily data with ACTUAL impressions and likes from API.
-        NOTE: Follower historical data is NOT available from Instagram API.
+        The most recent entry uses current_followers for the follower count.
         """
         now = datetime.now(timezone.utc)
         since_date = now - timedelta(days=days_back)
@@ -936,8 +949,13 @@ class AnalyticsService:
                 daily_data.append({
                     "date": date,
                     "impressions": impressions,
-                    "likes": likes
+                    "likes": likes,
+                    "followers": 0,  # Historical followers unknown
                 })
+        
+        # Use current follower count for the most recent entry
+        if daily_data and current_followers > 0:
+            daily_data[-1]["followers"] = current_followers
         
         logger.info(f"Instagram historical: fetched {len(daily_data)} days of ACTUAL data")
         return daily_data

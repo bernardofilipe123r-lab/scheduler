@@ -387,7 +387,7 @@ function EmptyChart({ message }: { message: string }) {
       <div className="text-center">
         <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-40" />
         <p className="text-sm">{message}</p>
-        <p className="text-xs mt-1">Refresh or backfill to start tracking</p>
+        <p className="text-xs mt-1">Analytics auto-refresh every 6 hours</p>
       </div>
     </div>
   )
@@ -715,7 +715,7 @@ export function AnalyticsPage() {
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyChart message="Need at least 2 days of data to show growth" />
+            <EmptyChart message="Tracking started — daily growth chart will appear after 2 days of data collection" />
           )}
         </div>
 
@@ -761,7 +761,7 @@ export function AnalyticsPage() {
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyChart message="Need at least 2 days of data to show views" />
+            <EmptyChart message="Tracking started — daily views chart will appear after 2 days of data collection" />
           )}
         </div>
 

@@ -6,9 +6,7 @@ Provides endpoints for:
 - Refreshing analytics data (rate limited to 3/hour)
 - Getting rate limit status
 """
-import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,8 +15,6 @@ from app.db_connection import get_db
 from app.services.analytics.analytics_service import AnalyticsService
 from app.api.auth.middleware import get_current_user
 
-
-logger = logging.getLogger(__name__)
 
 # Create router for analytics endpoints
 router = APIRouter(prefix="/analytics", tags=["analytics"])

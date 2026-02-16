@@ -494,6 +494,378 @@ class SocialPublisher:
             "overall_success": instagram_result.get("success") and facebook_result.get("success")
         }
 
+    # ==================== CAROUSEL PUBLISHING ====================
+
+    def publish_instagram_carousel(
+        self,
+        image_urls: list[str],
+        caption: str = "CHANGE ME",
+    ) -> Dict[str, Any]:
+        """
+        Publish a carousel post to Instagram using the Content Publishing API.
+
+        Steps:
+        1. Create a container for each image with is_carousel_item=true
+        2. Wait for each item to finish processing
+        3. Create carousel container with children IDs
+        4. Publish the carousel container
+
+        Args:
+            image_urls: List of public HTTPS URLs for carousel images (2-10)
+            caption: Caption text for the post
+
+        Returns:
+            Dict with publish status and Instagram post ID
+        """
+        if not self.ig_access_token or not self.ig_business_account_id:
+            return {
+                "success": False,
+                "error": "Instagram credentials not configured",
+                "platform": "instagram",
+            }
+
+        if len(image_urls) < 2:
+            # Carousels require at least 2 items; fall back to single image
+            return self.publish_instagram_image_post(
+                image_url=image_urls[0], caption=caption
+            )
+
+        if len(image_urls) > 10:
+            image_urls = image_urls[:10]  # Instagram max 10 carousel items
+
+        try:
+            container_url = (
+                f"https://graph.facebook.com/{self.api_version}"
+                f"/{self.ig_business_account_id}/media"
+            )
+
+            # Step 1: Create a container for each carousel item
+            children_ids = []
+            for idx, url in enumerate(image_urls):
+                print(f"   📸 Creating carousel item {idx + 1}/{len(image_urls)}: {url}")
+
+                item_resp = requests.post(
+                    container_url,
+                    data={
+                        "image_url": url,
+                        "is_carousel_item": "true",
+                        "access_token": self.ig_access_token,
+                    },
+                    timeout=30,
+                )
+                item_data = item_resp.json()
+
+                if "error" in item_data:
+                    error_msg = item_data["error"].get("message", "Unknown error")
+                    print(f"   ❌ Carousel item {idx + 1} failed: {error_msg}")
+                    return {
+                        "success": False,
+                        "error": f"Carousel item {idx + 1} failed: {error_msg}",
+                        "platform": "instagram",
+                        "step": "create_item",
+                    }
+
+                item_id = item_data.get("id")
+                if not item_id:
+                    return {
+                        "success": False,
+                        "error": f"No ID returned for carousel item {idx + 1}",
+                        "platform": "instagram",
+                    }
+
+                children_ids.append(item_id)
+                print(f"   ✅ Carousel item {idx + 1} created: {item_id}")
+
+            # Step 2: Wait for all items to finish processing
+            print(f"   ⏳ Waiting for {len(children_ids)} carousel items to process...")
+            for item_id in children_ids:
+                status_url = f"https://graph.facebook.com/{self.api_version}/{item_id}"
+                max_wait = 60
+                waited = 0
+                while waited < max_wait:
+                    sr = requests.get(
+                        status_url,
+                        params={
+                            "fields": "status_code",
+                            "access_token": self.ig_access_token,
+                        },
+                        timeout=10,
+                    )
+                    sc = sr.json().get("status_code")
+                    if sc == "FINISHED":
+                        break
+                    elif sc == "ERROR":
+                        return {
+                            "success": False,
+                            "error": f"Carousel item {item_id} processing failed",
+                            "platform": "instagram",
+                            "step": "item_processing",
+                        }
+                    time.sleep(3)
+                    waited += 3
+                if waited >= max_wait:
+                    return {
+                        "success": False,
+                        "error": f"Carousel item {item_id} processing timeout",
+                        "platform": "instagram",
+                        "step": "item_processing_timeout",
+                    }
+
+            print("   ✅ All carousel items processed")
+
+            # Step 3: Create carousel container
+            print(
+                f"   📚 Creating carousel container with "
+                f"{len(children_ids)} children..."
+            )
+            carousel_resp = requests.post(
+                container_url,
+                data={
+                    "media_type": "CAROUSEL",
+                    "children": ",".join(children_ids),
+                    "caption": caption,
+                    "access_token": self.ig_access_token,
+                },
+                timeout=30,
+            )
+            carousel_data = carousel_resp.json()
+
+            if "error" in carousel_data:
+                error_msg = carousel_data["error"].get("message", "Unknown error")
+                print(f"   ❌ Carousel container error: {error_msg}")
+                return {
+                    "success": False,
+                    "error": f"Carousel container failed: {error_msg}",
+                    "platform": "instagram",
+                    "step": "create_carousel",
+                }
+
+            carousel_id = carousel_data.get("id")
+            if not carousel_id:
+                return {
+                    "success": False,
+                    "error": "No carousel container ID returned",
+                    "platform": "instagram",
+                }
+
+            print(f"   ✅ Carousel container created: {carousel_id}")
+
+            # Wait for carousel container to finish processing
+            status_url = f"https://graph.facebook.com/{self.api_version}/{carousel_id}"
+            max_wait = 60
+            waited = 0
+            while waited < max_wait:
+                sr = requests.get(
+                    status_url,
+                    params={
+                        "fields": "status_code",
+                        "access_token": self.ig_access_token,
+                    },
+                    timeout=10,
+                )
+                sc = sr.json().get("status_code")
+                if sc == "FINISHED":
+                    break
+                elif sc == "ERROR":
+                    return {
+                        "success": False,
+                        "error": "Carousel container processing failed",
+                        "platform": "instagram",
+                        "step": "carousel_processing",
+                    }
+                time.sleep(3)
+                waited += 3
+
+            # Step 4: Publish
+            publish_url = (
+                f"https://graph.facebook.com/{self.api_version}"
+                f"/{self.ig_business_account_id}/media_publish"
+            )
+            print("   🚀 Publishing Instagram carousel...")
+            publish_resp = requests.post(
+                publish_url,
+                data={
+                    "creation_id": carousel_id,
+                    "access_token": self.ig_access_token,
+                },
+                timeout=30,
+            )
+            publish_data = publish_resp.json()
+
+            if "error" in publish_data:
+                return {
+                    "success": False,
+                    "error": publish_data["error"].get("message", "Unknown error"),
+                    "platform": "instagram",
+                    "step": "publish",
+                    "creation_id": carousel_id,
+                }
+
+            post_id = publish_data.get("id")
+            print(f"   🎉 Instagram carousel published! Post ID: {post_id}")
+
+            return {
+                "success": True,
+                "platform": "instagram",
+                "post_id": post_id,
+                "creation_id": carousel_id,
+                "carousel_items": len(children_ids),
+            }
+
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "error": "Request timed out",
+                "platform": "instagram",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "platform": "instagram",
+            }
+
+    def publish_facebook_carousel(
+        self,
+        image_urls: list[str],
+        caption: str = "CHANGE ME",
+    ) -> Dict[str, Any]:
+        """
+        Publish a multi-photo (carousel) post to a Facebook Page.
+
+        Steps:
+        1. Upload each photo as unpublished: POST /{page_id}/photos
+        2. Create a feed post with attached_media referencing all photos
+
+        Args:
+            image_urls: List of public HTTPS URLs for carousel images
+            caption: Caption text (will be shortened for Facebook)
+
+        Returns:
+            Dict with publish status and Facebook post ID
+        """
+        fb_caption = create_facebook_caption(caption, max_length=400)
+
+        if not self._system_user_token or not self.fb_page_id:
+            return {
+                "success": False,
+                "error": "Facebook credentials not configured",
+                "platform": "facebook",
+            }
+
+        if len(image_urls) < 2:
+            return self.publish_facebook_image_post(
+                image_url=image_urls[0], caption=caption
+            )
+
+        try:
+            page_access_token = self._get_page_access_token(self.fb_page_id)
+            if not page_access_token:
+                return {
+                    "success": False,
+                    "error": "Failed to get Page Access Token",
+                    "platform": "facebook",
+                    "step": "auth",
+                }
+
+            # Step 1: Upload each photo as unpublished
+            photo_ids = []
+            photos_url = (
+                f"https://graph.facebook.com/{self.api_version}"
+                f"/{self.fb_page_id}/photos"
+            )
+
+            for idx, url in enumerate(image_urls):
+                print(
+                    f"   📘 Uploading FB carousel photo "
+                    f"{idx + 1}/{len(image_urls)}: {url}"
+                )
+
+                resp = requests.post(
+                    photos_url,
+                    data={
+                        "url": url,
+                        "published": "false",
+                        "access_token": page_access_token,
+                    },
+                    timeout=30,
+                )
+                data = resp.json()
+
+                if "error" in data:
+                    error_msg = data["error"].get("message", "Unknown error")
+                    print(f"   ❌ FB photo {idx + 1} upload failed: {error_msg}")
+                    return {
+                        "success": False,
+                        "error": f"FB carousel photo {idx + 1} failed: {error_msg}",
+                        "platform": "facebook",
+                        "step": "upload_photo",
+                    }
+
+                photo_id = data.get("id")
+                if not photo_id:
+                    return {
+                        "success": False,
+                        "error": f"No ID returned for FB photo {idx + 1}",
+                        "platform": "facebook",
+                    }
+
+                photo_ids.append(photo_id)
+                print(f"   ✅ FB photo {idx + 1} uploaded: {photo_id}")
+
+            # Step 2: Create feed post with attached_media
+            feed_url = (
+                f"https://graph.facebook.com/{self.api_version}"
+                f"/{self.fb_page_id}/feed"
+            )
+
+            post_data = {
+                "message": fb_caption,
+                "access_token": page_access_token,
+            }
+            for i, pid in enumerate(photo_ids):
+                post_data[f"attached_media[{i}]"] = f'{{"media_fbid":"{pid}"}}'
+
+            print(f"   🚀 Publishing Facebook carousel with {len(photo_ids)} photos...")
+            resp = requests.post(feed_url, data=post_data, timeout=30)
+            data = resp.json()
+
+            if "error" in data:
+                error_msg = data["error"].get("message", "Unknown error")
+                print(f"   ❌ FB carousel publish failed: {error_msg}")
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "platform": "facebook",
+                    "step": "publish",
+                }
+
+            post_id = data.get("id")
+            print(f"   🎉 Facebook carousel published! Post ID: {post_id}")
+
+            return {
+                "success": True,
+                "platform": "facebook",
+                "post_id": post_id,
+                "page_id": self.fb_page_id,
+                "brand_used": self.brand_name,
+                "carousel_items": len(photo_ids),
+            }
+
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "error": "Request timed out",
+                "platform": "facebook",
+            }
+        except Exception as e:
+            print(f"   ❌ Exception: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "platform": "facebook",
+            }
+
     # ==================== REEL (VIDEO) PUBLISHING ====================
 
     def publish_instagram_reel(

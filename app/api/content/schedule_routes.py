@@ -396,19 +396,39 @@ async def delete_scheduled_from_date(from_date: str, user: dict = Depends(get_cu
     """Delete all scheduled reels from a given date onwards (inclusive).
     from_date format: YYYY-MM-DD"""
     from app.db_connection import SessionLocal
-    from app.models import ScheduledReel
+    from app.models import ScheduledReel, GenerationJob
     from datetime import datetime
+    from sqlalchemy.orm.attributes import flag_modified
 
     db = SessionLocal()
     try:
         cutoff = datetime.fromisoformat(from_date)
-        count = (
+        entries = (
             db.query(ScheduledReel)
             .filter(ScheduledReel.scheduled_time >= cutoff)
-            .delete()
+            .all()
         )
+
+        # Cancel corresponding job brand outputs so Maestro won't re-schedule
+        job_cache = {}
+        for entry in entries:
+            extra = entry.extra_data or {}
+            job_id = extra.get("job_id")
+            brand = extra.get("brand")
+            if not job_id or not brand:
+                continue
+            if job_id not in job_cache:
+                job_cache[job_id] = db.query(GenerationJob).filter(GenerationJob.job_id == job_id).first()
+            job = job_cache[job_id]
+            if job and job.brand_outputs and brand in job.brand_outputs:
+                job.brand_outputs[brand]["status"] = "cancelled"
+                flag_modified(job, "brand_outputs")
+
+        for entry in entries:
+            db.delete(entry)
+
         db.commit()
-        return {"status": "deleted", "deleted": count, "from_date": from_date}
+        return {"status": "deleted", "deleted": len(entries), "from_date": from_date}
     except Exception as e:
         db.rollback()
         return {"status": "error", "error": str(e)}
@@ -422,9 +442,10 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
     date format: YYYY-MM-DD
     variant: 'reel' (only reels), 'post' (only posts), or omit for all."""
     from app.db_connection import SessionLocal
-    from app.models import ScheduledReel
+    from app.models import ScheduledReel, GenerationJob
     from datetime import datetime, timedelta
     from sqlalchemy import cast, String as SAString
+    from sqlalchemy.orm.attributes import flag_modified
 
     db = SessionLocal()
     try:
@@ -443,9 +464,29 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
             query = query.filter(
                 cast(ScheduledReel.extra_data["variant"].astext, SAString) != "post"
             )
-        count = query.delete(synchronize_session="fetch")
+
+        entries = query.all()
+
+        # Cancel corresponding job brand outputs so Maestro won't re-schedule
+        job_cache = {}
+        for entry in entries:
+            extra = entry.extra_data or {}
+            job_id = extra.get("job_id")
+            brand = extra.get("brand")
+            if not job_id or not brand:
+                continue
+            if job_id not in job_cache:
+                job_cache[job_id] = db.query(GenerationJob).filter(GenerationJob.job_id == job_id).first()
+            job = job_cache[job_id]
+            if job and job.brand_outputs and brand in job.brand_outputs:
+                job.brand_outputs[brand]["status"] = "cancelled"
+                flag_modified(job, "brand_outputs")
+
+        for entry in entries:
+            db.delete(entry)
+
         db.commit()
-        return {"status": "deleted", "deleted": count, "date": date, "variant": variant}
+        return {"status": "deleted", "deleted": len(entries), "date": date, "variant": variant}
     except Exception as e:
         db.rollback()
         return {"status": "error", "error": str(e)}
@@ -456,19 +497,32 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
 @router.delete("/scheduled/{schedule_id}")
 async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_current_user)):
     """
-    Delete a scheduled post.
-    
-    Optional: Provide user_id to ensure only the owner can delete.
+    Delete a scheduled post and mark the job brand output as cancelled
+    so Maestro won't re-schedule it.
     """
+    from app.db_connection import SessionLocal
+    from app.models import ScheduledReel, GenerationJob
+    from sqlalchemy.orm.attributes import flag_modified
+
+    db = SessionLocal()
     try:
-        success = scheduler_service.delete_scheduled(schedule_id)
-        
-        if not success:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Scheduled post {schedule_id} not found"
-            )
-        
+        entry = db.query(ScheduledReel).filter(ScheduledReel.schedule_id == schedule_id).first()
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Scheduled post {schedule_id} not found")
+
+        # Cancel the corresponding job brand output so Maestro won't re-schedule
+        extra = entry.extra_data or {}
+        job_id = extra.get("job_id")
+        brand = extra.get("brand")
+        if job_id and brand:
+            job = db.query(GenerationJob).filter(GenerationJob.job_id == job_id).first()
+            if job and job.brand_outputs and brand in job.brand_outputs:
+                job.brand_outputs[brand]["status"] = "cancelled"
+                flag_modified(job, "brand_outputs")
+
+        db.delete(entry)
+        db.commit()
+
         return {
             "success": True,
             "message": f"Scheduled post {schedule_id} deleted successfully"
@@ -476,10 +530,13 @@ async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_curre
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete scheduled post: {str(e)}"
         )
+    finally:
+        db.close()
 
 
 @router.post("/scheduled/{schedule_id}/retry")
@@ -691,9 +748,9 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
         # Generate unique post ID
         post_id = f"post_{request.brand}_{str(uuid.uuid4())[:8]}"
         
-        # Decode and save image
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        posts_dir = base_dir / "output" / "posts"
+        # Use canonical output directory (Docker: /app/output, local: output/)
+        _out_base = Path("/app/output") if Path("/app/output").exists() else Path("output")
+        posts_dir = _out_base / "posts"
         posts_dir.mkdir(parents=True, exist_ok=True)
         
         image_path = posts_dir / f"{post_id}.png"
@@ -716,7 +773,7 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
                 s_b64 = s_b64.split(',', 1)[1]
             slide_bytes = base64.b64decode(s_b64)
             slide_path.write_bytes(slide_bytes)
-            carousel_paths.append(str(slide_path))
+            carousel_paths.append(f"output/posts/{post_id}_slide{slide_i + 1}.png")
             print(f"   💾 Saved slide {slide_i + 1}: {slide_path} ({len(slide_bytes)} bytes)")
         
         total_slides = 1 + len(carousel_paths)
@@ -727,13 +784,16 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
         if schedule_dt.tzinfo is not None:
             schedule_dt = schedule_dt.replace(tzinfo=None)
         
+        # Store relative path for consistent handling across Docker/local
+        thumbnail_path_rel = f"output/posts/{post_id}.png"
+        
         # Schedule using existing scheduler (post = image only, no video)
         result = scheduler_service.schedule_reel(
             user_id=user["id"],
             reel_id=post_id,
             scheduled_time=schedule_dt,
             video_path=None,
-            thumbnail_path=image_path,
+            thumbnail_path=thumbnail_path_rel,
             caption=request.caption or request.title,
             platforms=["instagram", "facebook"],
             user_name="Web Interface User",

@@ -745,8 +745,12 @@ function OverviewTab({
   onRefresh: () => void
 }) {
   const [maestroToggling, setMaestroToggling] = useState(false)
+  const [localPausedOverride, setLocalPausedOverride] = useState<boolean | null>(null)
   const isRunning = maestroStatus?.is_running ?? false
-  const isPaused = maestroStatus?.is_paused ?? false
+  const isPaused = localPausedOverride !== null ? localPausedOverride : (maestroStatus?.is_paused ?? false)
+
+  // Reset local override when parent state syncs
+  useEffect(() => { setLocalPausedOverride(null) }, [maestroStatus?.is_paused])
 
   const handlePauseResume = async () => {
     setMaestroToggling(true)
@@ -759,16 +763,8 @@ function OverviewTab({
         await post('/api/maestro/pause', {})
         toast.success('Maestro paused')
       }
-      // Poll until the status actually changes
-      const maxAttempts = 15
-      for (let i = 0; i < maxAttempts; i++) {
-        await new Promise(r => setTimeout(r, 1000))
-        try {
-          const updated = await get<MaestroStatus>('/api/maestro/status')
-          if (wasPaused && !updated.is_paused) break
-          if (!wasPaused && updated.is_paused) break
-        } catch { /* ignore polling errors */ }
-      }
+      // Optimistic update — flip immediately, sync in background
+      setLocalPausedOverride(!wasPaused)
       onRefresh()
     } catch {
       toast.error(wasPaused ? 'Failed to resume Maestro' : 'Failed to pause Maestro')

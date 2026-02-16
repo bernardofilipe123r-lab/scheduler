@@ -1,7 +1,5 @@
 """Maestro scheduling helpers — auto_schedule_job and schedule_all_ready_reels."""
 
-import copy
-
 
 def auto_schedule_job(job_id: str):
     """

@@ -336,12 +336,16 @@ async def startup_event():
                         def _resolve_output_path(raw: str | None) -> str | None:
                             if not raw:
                                 return None
+                            clean = raw.strip()
                             # Strip cache-bust query params (e.g. ?t=12345)
-                            clean = raw.split('?')[0] if '?' in raw else raw
-                            # /output/... → /app/output/...
-                            if clean.startswith('/output/'):
-                                clean = '/app' + clean
-                            return clean
+                            clean = clean.split('?')[0] if '?' in clean else clean
+                            # Normalize: strip all leading /app or app/ segments
+                            # to prevent /app/app/... doubling
+                            clean = clean.lstrip('/')
+                            while clean.startswith('app/'):
+                                clean = clean[4:]
+                            # clean is now relative like 'output/posts/...'
+                            return f'/app/{clean}'
 
                         # Get paths from metadata or use defaults
                         video_path_str = _resolve_output_path(metadata.get('video_path'))
@@ -356,11 +360,9 @@ async def startup_event():
                         
                         if is_post:
                             # ── IMAGE POST PUBLISHING ──
-                            # Posts use thumbnail_path as the image (video_path is None)
+                            # thumbnail_path_str is already absolute from _resolve_output_path
                             if thumbnail_path_str:
                                 image_path = Path(thumbnail_path_str)
-                                if not image_path.is_absolute():
-                                    image_path = Path("/app") / image_path.as_posix().lstrip('/')
                             else:
                                 # Try common post paths
                                 image_path = Path(f"/app/output/posts/{reel_id}_background.png")
@@ -372,46 +374,22 @@ async def startup_event():
                             if not image_path.exists():
                                 raise FileNotFoundError(f"Post image not found: {image_path}")
                             
-                            # ── Compose cover slide (title + gradient + brand on background) ──
-                            post_title = metadata.get('title') or ''
-                            if post_title:
-                                try:
-                                    from app.services.media.post_compositor import compose_cover_slide
-                                    composed_name = image_path.stem.replace('_background', '_cover') + '.png'
-                                    composed_path = image_path.parent / composed_name
-                                    compose_cover_slide(
-                                        background_path=str(image_path),
-                                        title=post_title,
-                                        brand=brand,
-                                        output_path=str(composed_path),
-                                    )
-                                    image_path = composed_path
-                                    print(f"      ✅ Cover slide composed: {composed_path}")
-                                except Exception as comp_err:
-                                    print(f"      ⚠️ Cover compositing failed, using raw background: {comp_err}")
-                            else:
-                                print(f"      ⚠️ No title in metadata — publishing raw background")
+                            # Cover slide was already composed during scheduling — no re-composition
                             
-                            # Build public image URL
+                            # Build public URL base
                             railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
                             if railway_domain:
                                 public_url_base = f"https://{railway_domain}"
                             else:
                                 public_url_base = os.getenv("PUBLIC_URL_BASE", "")
                             
-                            # Determine URL path based on where image is stored
-                            image_rel = image_path.as_posix()
-                            if '/output/posts/' in image_rel:
-                                image_url = f"{public_url_base}/output/posts/{image_path.name}"
-                            elif '/output/thumbnails/' in image_rel:
-                                image_url = f"{public_url_base}/output/thumbnails/{image_path.name}"
-                            else:
-                                image_url = f"{public_url_base}/output/posts/{image_path.name}"
+                            # Cover image URL
+                            image_url = f"{public_url_base}/output/posts/{image_path.name}"
                             
-                            print(f"      🌐 Image URL: {image_url}")
+                            print(f"      🌐 Cover image URL: {image_url}")
                             print(f"      🏷️ Publishing IMAGE POST with brand: {brand}")
                             
-                            # Resolve brand credentials and publish image
+                            # Resolve brand credentials
                             from app.services.publishing.social_publisher import SocialPublisher
                             from app.services.brands.resolver import brand_resolver
                             
@@ -422,19 +400,50 @@ async def startup_event():
                             else:
                                 publisher = SocialPublisher()
                             
+                            # Check for carousel slides
+                            carousel_paths_raw = metadata.get('carousel_paths') or []
+                            carousel_image_urls = []
+                            for cp in carousel_paths_raw:
+                                cp_abs = _resolve_output_path(cp)
+                                if cp_abs and Path(cp_abs).exists():
+                                    carousel_image_urls.append(
+                                        f"{public_url_base}/output/posts/{Path(cp_abs).name}"
+                                    )
+                                else:
+                                    print(f"      ⚠️ Carousel slide not found: {cp} → {cp_abs}")
+                            
                             result = {}
-                            if "instagram" in platforms:
-                                print("📸 Publishing image post to Instagram...")
-                                result["instagram"] = publisher.publish_instagram_image_post(
-                                    image_url=image_url,
-                                    caption=caption,
-                                )
-                            if "facebook" in platforms:
-                                print("📘 Publishing image post to Facebook...")
-                                result["facebook"] = publisher.publish_facebook_image_post(
-                                    image_url=image_url,
-                                    caption=caption,
-                                )
+                            if carousel_image_urls:
+                                # ── CAROUSEL PUBLISH (cover + text slides) ──
+                                all_urls = [image_url] + carousel_image_urls
+                                print(f"      📚 Carousel with {len(all_urls)} slides")
+                                
+                                if "instagram" in platforms:
+                                    print("📸 Publishing carousel to Instagram...")
+                                    result["instagram"] = publisher.publish_instagram_carousel(
+                                        image_urls=all_urls,
+                                        caption=caption,
+                                    )
+                                if "facebook" in platforms:
+                                    print("📘 Publishing carousel to Facebook...")
+                                    result["facebook"] = publisher.publish_facebook_carousel(
+                                        image_urls=all_urls,
+                                        caption=caption,
+                                    )
+                            else:
+                                # ── SINGLE IMAGE PUBLISH ──
+                                if "instagram" in platforms:
+                                    print("📸 Publishing image post to Instagram...")
+                                    result["instagram"] = publisher.publish_instagram_image_post(
+                                        image_url=image_url,
+                                        caption=caption,
+                                    )
+                                if "facebook" in platforms:
+                                    print("📘 Publishing image post to Facebook...")
+                                    result["facebook"] = publisher.publish_facebook_image_post(
+                                        image_url=image_url,
+                                        caption=caption,
+                                    )
                         else:
                             # ── REEL (VIDEO) PUBLISHING ──
                             # If paths stored in metadata, use those
@@ -565,7 +574,7 @@ async def startup_event():
             print(f"❌ Auto-publish check failed: {str(e)}")
     
     def refresh_analytics():
-        """Auto-refresh analytics data every 12 hours."""
+        """Auto-refresh analytics data every 6 hours."""
         try:
             from app.services.analytics.analytics_service import AnalyticsService
             from app.db_connection import get_db_session
@@ -587,8 +596,8 @@ async def startup_event():
     # Run check every 60 seconds
     scheduler.add_job(check_and_publish, 'interval', seconds=60, id='auto_publish')
     
-    # Run analytics refresh every 12 hours
-    scheduler.add_job(refresh_analytics, 'interval', hours=12, id='analytics_refresh')
+    # Run analytics refresh every 6 hours
+    scheduler.add_job(refresh_analytics, 'interval', hours=6, id='analytics_refresh')
     
     # Also run analytics refresh once on startup (after a short delay)
     scheduler.add_job(refresh_analytics, 'date', run_date=datetime.now(), id='analytics_startup')
@@ -609,7 +618,7 @@ async def startup_event():
     scheduler.start()
     
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
-    print("✅ Analytics auto-refresh scheduled (every 12 hours)", flush=True)
+    print("✅ Analytics auto-refresh scheduled (every 6 hours)", flush=True)
     print("✅ Log cleanup scheduled (every 24 hours, 7-day retention)", flush=True)
     
     # Store scheduler for shutdown
