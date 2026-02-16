@@ -1025,8 +1025,42 @@ function formatCountdown(ms: number | null): string {
   return `${m}m ${s}s`
 }
 
+const BURST_COOLDOWN_MS = 12 * 60 * 60 * 1000 // 12 hours
+const BURST_LS_KEY = 'maestro-last-manual-burst'
+
 function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, CycleInfo>; startedAt: string | null | undefined }) {
   const items = useCountdown(cycles, startedAt)
+  const [burstLoading, setBurstLoading] = useState(false)
+  const [burstCooldownLeft, setBurstCooldownLeft] = useState<number | null>(null)
+
+  // Calculate cooldown remaining
+  useEffect(() => {
+    const check = () => {
+      const raw = localStorage.getItem(BURST_LS_KEY)
+      if (!raw) { setBurstCooldownLeft(null); return }
+      const lastTs = parseInt(raw, 10)
+      const remaining = (lastTs + BURST_COOLDOWN_MS) - Date.now()
+      setBurstCooldownLeft(remaining > 0 ? remaining : null)
+    }
+    check()
+    const id = setInterval(check, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const handleTriggerBurst = async () => {
+    if (burstCooldownLeft && burstCooldownLeft > 0) return
+    setBurstLoading(true)
+    try {
+      const res = await post<{ status: string; message: string }>('/api/maestro/trigger-burst', {})
+      localStorage.setItem(BURST_LS_KEY, String(Date.now()))
+      setBurstCooldownLeft(BURST_COOLDOWN_MS)
+      toast.success(res.message || 'Daily Burst triggered!')
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to trigger burst')
+    } finally {
+      setBurstLoading(false)
+    }
+  }
 
   if (items.length === 0) return null
 
@@ -1043,6 +1077,7 @@ function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, Cycle
         {items.map(item => {
           const Icon = item.icon
           const isImminent = item.nextRunMs !== null && item.nextRunMs <= 60_000
+          const isDailyBurst = item.key === 'daily_burst'
           return (
             <div
               key={item.key}
@@ -1069,6 +1104,21 @@ function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, Cycle
                     <span className="text-[10px] text-gray-400">last: {timeAgo(item.lastRun)}</span>
                   )}
                 </div>
+                {isDailyBurst && (
+                  <button
+                    onClick={handleTriggerBurst}
+                    disabled={burstLoading || (burstCooldownLeft !== null && burstCooldownLeft > 0)}
+                    className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 text-white"
+                  >
+                    {burstLoading ? (
+                      <><Loader2 className="w-3 h-3 animate-spin" /> Running...</>
+                    ) : burstCooldownLeft !== null && burstCooldownLeft > 0 ? (
+                      <><Clock className="w-3 h-3" /> Available in {formatCountdown(burstCooldownLeft)}</>
+                    ) : (
+                      <><Play className="w-3 h-3" /> Run Now</>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           )
