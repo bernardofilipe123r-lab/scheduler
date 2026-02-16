@@ -36,7 +36,7 @@ export function PageLoader({ page = 'default' }: PageLoaderProps) {
         </div>
 
         {/* Main emoji */}
-        <span className="text-5xl animate-pulse">{theme.emoji}</span>
+        <span className="text-5xl animate-bounce" style={{ animationDuration: '1.5s' }}>{theme.emoji}</span>
 
         {/* Message with animated dots */}
         <p className="text-sm text-gray-500 flex items-center gap-0.5">
