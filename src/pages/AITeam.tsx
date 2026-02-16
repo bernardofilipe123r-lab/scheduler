@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import { useQuotas, useAgentStatuses, type AgentStatus, type QuotaData } from '@/features/ai-team'
 import { CompetitorSection } from '@/features/ai-team/components/CompetitorSection'
 import { PageLoader } from '@/shared/components'
+import { useAuth } from '@/features/auth/AuthContext'
 
 // ── Types ──
 
@@ -1027,33 +1028,86 @@ function formatCountdown(ms: number | null): string {
 
 const BURST_COOLDOWN_MS = 12 * 60 * 60 * 1000 // 12 hours
 const BURST_LS_KEY = 'maestro-last-manual-burst'
+const BURST_LS_KEY_ADMIN = 'maestro-admin-burst-timestamps'
 
 function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, CycleInfo>; startedAt: string | null | undefined }) {
   const items = useCountdown(cycles, startedAt)
   const [burstLoading, setBurstLoading] = useState(false)
   const [burstCooldownLeft, setBurstCooldownLeft] = useState<number | null>(null)
+  const [usageText, setUsageText] = useState<string>('')
+  const { user } = useAuth()
 
-  // Calculate cooldown remaining
+  // Admin check: user with id '7c7bdcc7-ad79-4554-8d32-e5ef02608e84' or matching email
+  const isAdmin = user?.id === '7c7bdcc7-ad79-4554-8d32-e5ef02608e84' || user?.email === 'filipe@healthycollege.co'
+
+  // Calculate cooldown and usage remaining
   useEffect(() => {
     const check = () => {
-      const raw = localStorage.getItem(BURST_LS_KEY)
-      if (!raw) { setBurstCooldownLeft(null); return }
-      const lastTs = parseInt(raw, 10)
-      const remaining = (lastTs + BURST_COOLDOWN_MS) - Date.now()
-      setBurstCooldownLeft(remaining > 0 ? remaining : null)
+      if (isAdmin) {
+        // Admin: max 3 requests per 24h, no spacing required
+        const raw = localStorage.getItem(BURST_LS_KEY_ADMIN)
+        let timestamps: number[] = raw ? JSON.parse(raw) : []
+        const now = Date.now()
+        const dayAgo = now - (24 * 60 * 60 * 1000)
+        
+        // Filter to last 24h only
+        timestamps = timestamps.filter(ts => ts > dayAgo)
+        localStorage.setItem(BURST_LS_KEY_ADMIN, JSON.stringify(timestamps))
+        
+        const remaining = 3 - timestamps.length
+        setUsageText(`${remaining}/3 available today`)
+        setBurstCooldownLeft(timestamps.length >= 3 ? 1 : null) // Show as disabled if exhausted
+      } else {
+        // Normal user: max 2 requests with 12h spacing
+        const raw = localStorage.getItem(BURST_LS_KEY)
+        if (!raw) {
+          setBurstCooldownLeft(null)
+          setUsageText('')
+          return
+        }
+        const lastTs = parseInt(raw, 10)
+        const remaining = (lastTs + BURST_COOLDOWN_MS) - Date.now()
+        setBurstCooldownLeft(remaining > 0 ? remaining : null)
+        setUsageText('')
+      }
     }
     check()
     const id = setInterval(check, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [isAdmin])
 
   const handleTriggerBurst = async () => {
-    if (burstCooldownLeft && burstCooldownLeft > 0) return
+    if (isAdmin) {
+      // Admin: check if < 3 in last 24h
+      const raw = localStorage.getItem(BURST_LS_KEY_ADMIN)
+      let timestamps: number[] = raw ? JSON.parse(raw) : []
+      const now = Date.now()
+      const dayAgo = now - (24 * 60 * 60 * 1000)
+      timestamps = timestamps.filter(ts => ts > dayAgo)
+      
+      if (timestamps.length >= 3) {
+        toast.error('Max 3 manual bursts per day reached')
+        return
+      }
+    } else {
+      // Normal user: check 12h cooldown
+      if (burstCooldownLeft && burstCooldownLeft > 0) return
+    }
+
     setBurstLoading(true)
     try {
       const res = await post<{ status: string; message: string }>('/api/maestro/trigger-burst?force=true', {})
-      localStorage.setItem(BURST_LS_KEY, String(Date.now()))
-      setBurstCooldownLeft(BURST_COOLDOWN_MS)
+      
+      if (isAdmin) {
+        const raw = localStorage.getItem(BURST_LS_KEY_ADMIN)
+        let timestamps: number[] = raw ? JSON.parse(raw) : []
+        timestamps.push(Date.now())
+        localStorage.setItem(BURST_LS_KEY_ADMIN, JSON.stringify(timestamps))
+      } else {
+        localStorage.setItem(BURST_LS_KEY, String(Date.now()))
+        setBurstCooldownLeft(BURST_COOLDOWN_MS)
+      }
+      
       toast.success(res.message || 'Daily Burst triggered!')
     } catch (e: any) {
       toast.error(e?.message || 'Failed to trigger burst')
@@ -1105,19 +1159,30 @@ function MaestroOperations({ cycles, startedAt }: { cycles: Record<string, Cycle
                   )}
                 </div>
                 {isDailyBurst && (
-                  <button
-                    onClick={handleTriggerBurst}
-                    disabled={burstLoading || (burstCooldownLeft !== null && burstCooldownLeft > 0)}
-                    className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 text-white"
-                  >
-                    {burstLoading ? (
-                      <><Loader2 className="w-3 h-3 animate-spin" /> Running...</>
-                    ) : burstCooldownLeft !== null && burstCooldownLeft > 0 ? (
-                      <><Clock className="w-3 h-3" /> Available in {formatCountdown(burstCooldownLeft)}</>
-                    ) : (
-                      <><Play className="w-3 h-3" /> Run Now</>
+                  <>
+                    <button
+                      onClick={handleTriggerBurst}
+                      disabled={burstLoading || (burstCooldownLeft !== null && burstCooldownLeft > 0)}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 text-white"
+                    >
+                      {burstLoading ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> Running...</>
+                      ) : burstCooldownLeft !== null && burstCooldownLeft > 0 ? (
+                        isAdmin ? (
+                          <><Clock className="w-3 h-3" /> {usageText}</>
+                        ) : (
+                          <><Clock className="w-3 h-3" /> Available in {formatCountdown(burstCooldownLeft)}</>
+                        )
+                      ) : (
+                        <><Play className="w-3 h-3" /> Run Now</>
+                      )}
+                    </button>
+                    {isAdmin && usageText && !burstLoading && (
+                      <div className="mt-1 text-[10px] text-amber-600 text-center font-medium">
+                        {usageText}
+                      </div>
                     )}
-                  </button>
+                  </>
                 )}
               </div>
             </div>
