@@ -186,13 +186,19 @@ class APIQuotaManager:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     'https://api.deapi.ai/api/v1/client/balance',
-                    headers={'Authorization': f'Bearer {api_key}'},
+                    headers={
+                        'Authorization': f'Bearer {api_key}',
+                        'Accept': 'application/json'
+                    },
                 )
                 body = resp.text
                 if resp.status_code == 200:
-                    data = resp.json() if body else {}
-                    balance = data.get('balance', 0)
-                    account_type = data.get('account_type', 'basic')
+                    response_data = resp.json() if body else {}
+                    # New format: {"data": {"balance": 7.924416}}
+                    # Backward compatibility: check nested data first, then root
+                    nested_data = response_data.get('data', {})
+                    balance = nested_data.get('balance') or response_data.get('balance', 0)
+                    account_type = nested_data.get('account_type') or response_data.get('account_type', 'basic')
                     rpm_limit = 300 if account_type == 'premium' else 3
                     rpd_limit = None if account_type == 'premium' else 100
                     return {
@@ -200,7 +206,7 @@ class APIQuotaManager:
                         'account_type': account_type,
                         'rpm_limit': rpm_limit,
                         'rpd_limit': rpd_limit,
-                        'currency': data.get('currency', 'USD'),
+                        'currency': nested_data.get('currency') or response_data.get('currency', 'USD'),
                     }
                 logger.error(f'deAPI balance fetch failed: HTTP {resp.status_code} — {body[:200]}')
                 return {'error': f'HTTP {resp.status_code}'}

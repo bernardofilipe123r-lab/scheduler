@@ -1092,11 +1092,9 @@ export function ScheduledPage() {
         size="lg"
       >
         {selectedPost && (() => {
-          const slideTexts = selectedPost.metadata?.slide_texts || []
           const carouselPaths = selectedPost.metadata?.carousel_image_paths || []
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
-          const totalSlides = isPost ? 1 + Math.max(slideTexts.length, carouselPaths.length) : 1
-          const brandColor = getBrandColor(selectedPost.brand)
+          const totalSlides = isPost ? 1 + carouselPaths.length : 1
 
           return (
           <div className="space-y-4">
@@ -1136,100 +1134,31 @@ export function ScheduledPage() {
             
             <div className={isPost ? '' : 'grid grid-cols-2 gap-4'}>
               {/* Post carousel: cover + text slides */}
-              {isPost && selectedPost.thumbnail_path ? (
+              {isPost ? (
                 <div className="flex flex-col items-center">
                   <div className="relative" style={{ width: 320 }}>
                     {/* Slide content */}
-                    <div className="rounded-lg overflow-hidden shadow-lg" style={{ width: 320, height: 400 }}>
-                      {detailSlideIndex === 0 ? (
-                        slideImageErrors.has(0) ? (
-                          /* Cover fallback: show title over dark gradient */
-                          <div
-                            style={{
-                              width: 320,
-                              height: 400,
-                              background: `linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.85))`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: 24,
-                            }}
-                          >
-                            <p style={{ color: '#fff', fontSize: 18, fontWeight: 700, textAlign: 'center', fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1.4 }}>
-                              {selectedPost.title?.split('\n')[0] || 'Cover'}
-                            </p>
+                    <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100" style={{ width: 320, height: 400 }}>
+                      {(() => {
+                        const imgSrc = detailSlideIndex === 0
+                          ? selectedPost.thumbnail_path
+                          : carouselPaths[detailSlideIndex - 1]
+                        if (imgSrc && !slideImageErrors.has(detailSlideIndex)) {
+                          return (
+                            <img
+                              src={imgSrc}
+                              alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
+                              className="w-full h-full object-contain"
+                              onError={() => setSlideImageErrors(prev => new Set(prev).add(detailSlideIndex))}
+                            />
+                          )
+                        }
+                        return (
+                          <div className="flex items-center justify-center h-full text-zinc-500">
+                            Image not available
                           </div>
-                        ) : (
-                          <img
-                            src={selectedPost.thumbnail_path}
-                            alt="Cover"
-                            className="w-full h-full object-cover object-top"
-                            onError={() => setSlideImageErrors(prev => new Set(prev).add(0))}
-                          />
                         )
-                      ) : carouselPaths[detailSlideIndex - 1] && !slideImageErrors.has(detailSlideIndex) ? (
-                        <img
-                          src={carouselPaths[detailSlideIndex - 1]}
-                          alt={`Slide ${detailSlideIndex}`}
-                          className="w-full h-full object-cover object-top"
-                          onError={() => setSlideImageErrors(prev => new Set(prev).add(detailSlideIndex))}
-                        />
-                      ) : (
-                        /* Fallback CSS-based text slide preview */
-                        <div
-                          style={{
-                            width: 320,
-                            height: 400,
-                            backgroundColor: '#f8f5f0',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            position: 'relative',
-                            fontFamily: "Georgia, 'Times New Roman', serif",
-                          }}
-                        >
-                          {/* Brand header bar */}
-                          <div
-                            style={{
-                              backgroundColor: brandColor,
-                              padding: '6px 12px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, fontFamily: 'Inter, sans-serif', letterSpacing: '0.05em' }}>
-                              {getBrandLabel(selectedPost.brand).toUpperCase()}
-                            </span>
-                          </div>
-                          {/* Body text */}
-                          <div style={{ flex: 1, padding: '16px 20px 8px', overflow: 'hidden' }}>
-                            <p style={{
-                              fontSize: 11,
-                              lineHeight: 1.65,
-                              color: '#2d2a26',
-                              whiteSpace: 'pre-wrap',
-                              margin: 0,
-                            }}>
-                              {slideTexts[detailSlideIndex - 1] || ''}
-                            </p>
-                          </div>
-                          {/* Bottom share/save bar */}
-                          <div style={{
-                            padding: '6px 20px 10px',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            opacity: 0.5,
-                          }}>
-                            <span style={{ fontSize: 8, color: '#888', fontFamily: 'Inter, sans-serif' }}>
-                              {detailSlideIndex < slideTexts.length ? '← Swipe →' : '🔖 Save this post'}
-                            </span>
-                            <span style={{ fontSize: 8, color: '#888', fontFamily: 'Inter, sans-serif' }}>
-                              {detailSlideIndex}/{slideTexts.length}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      })()}
                     </div>
 
                     {/* Prev/Next arrows overlaid */}
