@@ -105,7 +105,7 @@ def auto_schedule_job(job_id: str):
                     sched_platforms = job.platforms or ["instagram", "facebook", "youtube"]
 
                 scheduler.schedule_reel(
-                    user_id="maestro",
+                    user_id=job.user_id,
                     reel_id=reel_id,
                     scheduled_time=slot,
                     caption=caption,
@@ -257,7 +257,7 @@ def schedule_all_ready_reels() -> int:
                         sched_platforms = job.platforms or ["instagram", "facebook", "youtube"]
 
                     scheduler.schedule_reel(
-                        user_id="maestro",
+                        user_id=job.user_id,
                         reel_id=reel_id,
                         scheduled_time=slot,
                         caption=output.get("caption", ""),

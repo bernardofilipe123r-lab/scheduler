@@ -57,31 +57,26 @@ async def maestro_status(user: dict = Depends(get_current_user)):
     db = SessionLocal()
     try:
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        user_id = user.get("id")
 
-        # Global stats
-        total = db.query(AgentProposal).count()
-        pending = db.query(AgentProposal).filter(AgentProposal.status == "pending").count()
-        accepted = db.query(AgentProposal).filter(AgentProposal.status == "accepted").count()
-        rejected = db.query(AgentProposal).filter(AgentProposal.status == "rejected").count()
+        # Global stats scoped to this user
+        base_q = db.query(AgentProposal).filter(AgentProposal.user_id == user_id)
+        total = base_q.count()
+        pending = base_q.filter(AgentProposal.status == "pending").count()
+        accepted = base_q.filter(AgentProposal.status == "accepted").count()
+        rejected = base_q.filter(AgentProposal.status == "rejected").count()
 
-        # Per-agent stats — dynamic, all active agents
+        # Per-agent stats — dynamic, this user's active agents
         agent_stats = {}
-        agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True).all()]
+        agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True, AIAgent.user_id == user_id).all()]
 
         for agent_name in agent_ids:
-            a_total = db.query(AgentProposal).filter(AgentProposal.agent_name == agent_name).count()
-            a_pending = db.query(AgentProposal).filter(
-                AgentProposal.agent_name == agent_name, AgentProposal.status == "pending"
-            ).count()
-            a_accepted = db.query(AgentProposal).filter(
-                AgentProposal.agent_name == agent_name, AgentProposal.status == "accepted"
-            ).count()
-            a_rejected = db.query(AgentProposal).filter(
-                AgentProposal.agent_name == agent_name, AgentProposal.status == "rejected"
-            ).count()
-            a_today = db.query(AgentProposal).filter(
-                AgentProposal.agent_name == agent_name, AgentProposal.created_at >= today
-            ).count()
+            a_q = base_q.filter(AgentProposal.agent_name == agent_name)
+            a_total = a_q.count()
+            a_pending = a_q.filter(AgentProposal.status == "pending").count()
+            a_accepted = a_q.filter(AgentProposal.status == "accepted").count()
+            a_rejected = a_q.filter(AgentProposal.status == "rejected").count()
+            a_today = a_q.filter(AgentProposal.created_at >= today).count()
 
             agent_stats[agent_name] = {
                 "total": a_total,
@@ -101,11 +96,11 @@ async def maestro_status(user: dict = Depends(get_current_user)):
         }
 
         # Count today's reel vs post proposals for smart burst button
-        today_reels = db.query(AgentProposal).filter(
+        today_reels = base_q.filter(
             AgentProposal.created_at >= today,
             AgentProposal.content_type == "reel",
         ).count()
-        today_posts = db.query(AgentProposal).filter(
+        today_posts = base_q.filter(
             AgentProposal.created_at >= today,
             AgentProposal.content_type == "post",
         ).count()
@@ -128,19 +123,20 @@ async def maestro_status(user: dict = Depends(get_current_user)):
 
 @router.post("/pause")
 async def pause_maestro(user: dict = Depends(get_current_user)):
-    """Pause Maestro — stops daily burst generation. State persisted in DB."""
+    """Pause Maestro for this user — stops daily burst generation. State persisted in DB."""
     from app.services.maestro.maestro import set_paused, is_paused, maestro_log
 
-    if is_paused():
+    user_id = user["id"]
+    if is_paused(user_id=user_id):
         return {"status": "already_paused", "message": "Maestro is already paused"}
 
-    persisted = set_paused(True)
+    persisted = set_paused(True, user_id=user_id)
     if not persisted:
         return {
             "status": "error",
             "message": "Failed to persist pause state to database. Check DB connection.",
         }
-    maestro_log("maestro", "PAUSED", "User paused Maestro — no more daily bursts until resumed", "⏸️", "action")
+    maestro_log("maestro", "PAUSED", f"User {user_id} paused Maestro — no more daily bursts until resumed", "⏸️", "action")
     return {"status": "paused", "message": "Maestro paused. Daily burst generation stopped."}
 
 
@@ -148,7 +144,7 @@ async def pause_maestro(user: dict = Depends(get_current_user)):
 @router.post("/resume")
 async def resume_maestro(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """
-    Resume Maestro — re-enables daily burst generation.
+    Resume Maestro for this user — re-enables daily burst generation.
     First schedules any ready-to-schedule reels, then triggers burst if needed.
     """
     from app.services.maestro.maestro import (
@@ -157,16 +153,17 @@ async def resume_maestro(background_tasks: BackgroundTasks, user: dict = Depends
     )
     from datetime import datetime
 
-    if not is_paused():
+    user_id = user["id"]
+    if not is_paused(user_id=user_id):
         return {"status": "already_running", "message": "Maestro is already running"}
 
-    persisted = set_paused(False)
+    persisted = set_paused(False, user_id=user_id)
     if not persisted:
         return {
             "status": "error",
             "message": "Failed to persist resume state to database. Check DB connection.",
         }
-    maestro_log("maestro", "RESUMED", "User resumed Maestro — daily burst generation enabled", "▶️", "action")
+    maestro_log("maestro", "RESUMED", f"User {user_id} resumed Maestro — daily burst generation enabled", "▶️", "action")
 
     # First: schedule any completed reels that are sitting in "Ready"
     ready_scheduled = 0
@@ -181,15 +178,15 @@ async def resume_maestro(background_tasks: BackgroundTasks, user: dict = Depends
     except Exception as e:
         maestro_log("maestro", "Resume: Schedule-ready error", str(e)[:200], "❌", "action")
 
-    # Then: check if daily burst should run
-    last_run = get_last_daily_run()
+    # Then: check if daily burst should run for this user
+    last_run = get_last_daily_run(user_id=user_id)
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     trigger_now = not last_run or last_run < today
 
     if trigger_now:
-        maestro_log("maestro", "Resume Trigger", "Daily burst hasn't run today — triggering now", "🌅", "action")
+        maestro_log("maestro", "Resume Trigger", f"Daily burst hasn't run today for user {user_id} — triggering now", "🌅", "action")
         maestro = get_maestro()
-        background_tasks.add_task(maestro._run_daily_burst)
+        background_tasks.add_task(maestro._run_daily_burst_for_user, user_id)
 
     return {
         "status": "resumed",
@@ -217,17 +214,19 @@ async def trigger_burst(background_tasks: BackgroundTasks, user: dict = Depends(
     target_reels = config.get("total_reels", 30)
     target_posts = config.get("total_posts", 10)
 
-    # Count today's existing proposals by type
+    # Count today's existing proposals by type for this user
     db = SessionLocal()
     try:
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         today_reels = db.query(AgentProposal).filter(
             AgentProposal.created_at >= today,
             AgentProposal.content_type == "reel",
+            AgentProposal.user_id == user.get("id"),
         ).count()
         today_posts = db.query(AgentProposal).filter(
             AgentProposal.created_at >= today,
             AgentProposal.content_type == "post",
+            AgentProposal.user_id == user.get("id"),
         ).count()
     finally:
         db.close()
@@ -275,11 +274,12 @@ async def trigger_burst(background_tasks: BackgroundTasks, user: dict = Depends(
 
 @router.get("/feedback")
 async def get_feedback(user: dict = Depends(get_current_user)):
-    """Get latest agent performance feedback data."""
+    """Get latest agent performance feedback data for this user."""
     import json
     from app.services.maestro.maestro import _db_get
 
-    raw = _db_get("last_feedback_data", "")
+    user_id = user["id"]
+    raw = _db_get("last_feedback_data", "", user_id=user_id)
     if not raw:
         return {"feedback": None, "message": "No feedback data yet — runs every 6h after reels are published 48-72h"}
 
@@ -291,12 +291,12 @@ async def get_feedback(user: dict = Depends(get_current_user)):
 
 @router.post("/reset-daily-run")
 async def reset_daily_run(user: dict = Depends(get_current_user)):
-    """Reset today's daily burst limit so it can be triggered again."""
+    """Reset today's daily burst limit for this user so it can be triggered again."""
     from app.services.maestro.maestro import _db_set
-    # Set last_daily_run to yesterday so the burst check passes
     from datetime import datetime, timedelta
+    user_id = user["id"]
     yesterday = (datetime.utcnow() - timedelta(days=1)).isoformat()
-    _db_set("last_daily_run", yesterday)
+    _db_set("last_daily_run", yesterday, user_id=user_id)
     return {"status": "reset", "message": "Daily burst limit reset. You can now trigger a burst."}
 
 
@@ -316,7 +316,7 @@ async def list_proposals(
 
     db = SessionLocal()
     try:
-        q = db.query(AgentProposal)
+        q = db.query(AgentProposal).filter(AgentProposal.user_id == user["id"])
 
         if status:
             q = q.filter(AgentProposal.status == status)
@@ -345,6 +345,7 @@ async def get_proposal(proposal_id: str, user: dict = Depends(get_current_user))
         proposal = (
             db.query(AgentProposal)
             .filter(AgentProposal.proposal_id == proposal_id)
+            .filter(AgentProposal.user_id == user["id"])
             .first()
         )
         if not proposal:
@@ -358,14 +359,7 @@ async def get_proposal(proposal_id: str, user: dict = Depends(get_current_user))
 async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """
     Accept a proposal — creates 1 generation job for the proposal's assigned brand.
-
-    Flow:
-      1. Mark proposal as accepted
-      2. Read brand + variant from proposal (assigned at generation time)
-      3. Create 1 GenerationJob for that specific brand
-      4. Fire background processing
-      5. Auto-schedule on completion
-      6. Return job_id
+    Validates user ownership.
     """
     from app.db_connection import SessionLocal, get_db_session
     from app.models import AgentProposal
@@ -373,13 +367,14 @@ async def accept_proposal(proposal_id: str, background_tasks: BackgroundTasks, u
     from app.services.content.job_processor import JobProcessor
     from datetime import datetime
 
-    ALL_BRANDS = brand_resolver.get_all_brand_ids()
+    ALL_BRANDS = brand_resolver.get_all_brand_ids(user_id=user["id"])
 
     db = SessionLocal()
     try:
         proposal = (
             db.query(AgentProposal)
             .filter(AgentProposal.proposal_id == proposal_id)
+            .filter(AgentProposal.user_id == user["id"])
             .first()
         )
         if not proposal:
@@ -523,6 +518,7 @@ async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()
         proposal = (
             db.query(AgentProposal)
             .filter(AgentProposal.proposal_id == proposal_id)
+            .filter(AgentProposal.user_id == user["id"])
             .first()
         )
         if not proposal:
@@ -544,14 +540,14 @@ async def reject_proposal(proposal_id: str, req: RejectRequest = RejectRequest()
 
 @router.delete("/proposals/clear")
 async def clear_proposals(user: dict = Depends(get_current_user)):
-    """Delete ALL proposals from the database."""
+    """Delete ALL proposals for the current user."""
     from app.db_connection import SessionLocal
     from app.models import AgentProposal
 
     db = SessionLocal()
     try:
-        count = db.query(AgentProposal).count()
-        db.query(AgentProposal).delete()
+        count = db.query(AgentProposal).filter(AgentProposal.user_id == user["id"]).count()
+        db.query(AgentProposal).filter(AgentProposal.user_id == user["id"]).delete()
         db.commit()
         return {"status": "cleared", "deleted": count}
     except Exception as e:
@@ -565,28 +561,30 @@ async def clear_proposals(user: dict = Depends(get_current_user)):
 
 @router.get("/stats")
 async def maestro_stats(user: dict = Depends(get_current_user)):
-    """Per-agent and global stats."""
+    """Per-agent and global stats for the current user."""
     from app.db_connection import SessionLocal
-    from app.models import AgentProposal
+    from app.models import AgentProposal, AIAgent
     from sqlalchemy import func
     from datetime import datetime
 
+    user_id = user["id"]
     db = SessionLocal()
     try:
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         result = {"global": {}, "agents": {}}
 
-        # Global
-        result["global"]["total"] = db.query(AgentProposal).count()
-        result["global"]["pending"] = db.query(AgentProposal).filter(AgentProposal.status == "pending").count()
-        result["global"]["accepted"] = db.query(AgentProposal).filter(AgentProposal.status == "accepted").count()
-        result["global"]["rejected"] = db.query(AgentProposal).filter(AgentProposal.status == "rejected").count()
-        result["global"]["today"] = db.query(AgentProposal).filter(AgentProposal.created_at >= today).count()
+        # Global scoped to user
+        base_q = db.query(AgentProposal).filter(AgentProposal.user_id == user_id)
+        result["global"]["total"] = base_q.count()
+        result["global"]["pending"] = base_q.filter(AgentProposal.status == "pending").count()
+        result["global"]["accepted"] = base_q.filter(AgentProposal.status == "accepted").count()
+        result["global"]["rejected"] = base_q.filter(AgentProposal.status == "rejected").count()
+        result["global"]["today"] = base_q.filter(AgentProposal.created_at >= today).count()
 
-        # Per agent — dynamic from DB
-        agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True).all()]
+        # Per agent — dynamic from DB, scoped to user
+        agent_ids = [a_id for (a_id,) in db.query(AIAgent.agent_id).filter(AIAgent.active == True, AIAgent.user_id == user_id).all()]
         for name in agent_ids:
-            aq = db.query(AgentProposal).filter(AgentProposal.agent_name == name)
+            aq = base_q.filter(AgentProposal.agent_name == name)
             total = aq.count()
             accepted = aq.filter(AgentProposal.status == "accepted").count()
             rejected = aq.filter(AgentProposal.status == "rejected").count()
@@ -594,7 +592,7 @@ async def maestro_stats(user: dict = Depends(get_current_user)):
             # Per-strategy breakdown
             strategies = (
                 db.query(AgentProposal.strategy, func.count(AgentProposal.id))
-                .filter(AgentProposal.agent_name == name)
+                .filter(AgentProposal.agent_name == name, AgentProposal.user_id == user_id)
                 .group_by(AgentProposal.strategy)
                 .all()
             )
@@ -726,7 +724,7 @@ async def maestro_healing_status(user: dict = Depends(get_current_user)):
     from datetime import datetime, timedelta
 
     maestro = get_maestro()
-    status = maestro.state.to_dict()
+    status = maestro.state.to_dict(user_id=user["id"])
 
     # Get current failed jobs
     db = SessionLocal()
@@ -739,6 +737,7 @@ async def maestro_healing_status(user: dict = Depends(get_current_user)):
             .filter(
                 GenerationJob.status == "failed",
                 GenerationJob.created_at >= lookback,
+                GenerationJob.user_id == user["id"],
             )
             .order_by(GenerationJob.created_at.desc())
             .all()
@@ -816,6 +815,16 @@ async def retry_specific_job(job_id: str, background_tasks: BackgroundTasks, use
         if not job:
             return {"success": False, "error": f"Job {job_id} not found"}
 
+        # Verify ownership: check job's user_id or linked proposal's user_id
+        if job.user_id != user["id"]:
+            proposal_check = (
+                db.query(AgentProposal)
+                .filter(AgentProposal.accepted_job_id == job.job_id, AgentProposal.user_id == user["id"])
+                .first()
+            )
+            if not proposal_check:
+                return {"success": False, "error": f"Job {job_id} not found"}
+
         if job.status != "failed":
             return {"success": False, "error": f"Job {job_id} is not failed (status={job.status})"}
 
@@ -854,12 +863,13 @@ def get_examiner_stats(days: int = 7, user: dict = Depends(get_current_user)):
     try:
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        # All examined proposals (have examiner_score)
+        # All examined proposals for this user (have examiner_score)
         examined = (
             db.query(AgentProposal)
             .filter(
                 AgentProposal.examiner_score.isnot(None),
                 AgentProposal.created_at >= cutoff,
+                AgentProposal.user_id == user["id"],
             )
             .all()
         )
@@ -958,6 +968,7 @@ def get_rejected_proposals(
         query = (
             db.query(AgentProposal)
             .filter(AgentProposal.examiner_verdict == "reject")
+            .filter(AgentProposal.user_id == user["id"])
         )
 
         if brand:

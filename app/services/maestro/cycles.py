@@ -359,7 +359,7 @@ class CyclesMixin:
                 "agents": results,
                 "mutations_applied": total_mutations,
             }
-            _db_set("last_feedback_data", json.dumps(feedback_data, default=str))
+            _db_set("last_feedback_data", json.dumps(feedback_data, default=str), user_id=self._current_user_id or "__system__")
 
             self.state.last_feedback_at = datetime.utcnow()
 
@@ -465,7 +465,7 @@ class CyclesMixin:
                 "timestamp": datetime.utcnow().isoformat(),
                 "result": result,
             }
-            _db_set("last_evolution_data", json.dumps(evolution_data, default=str))
+            _db_set("last_evolution_data", json.dumps(evolution_data, default=str), user_id=self._current_user_id or "__system__")
 
             self.state.last_evolution_at = datetime.utcnow()
 
@@ -480,25 +480,34 @@ class CyclesMixin:
     # ──────────────────────────────────────────────────────────
 
     def _learning_analysis_cycle(self):
-        """Staggered own-brand analysis for each agent."""
+        """Staggered own-brand analysis for each agent, per user."""
         try:
-            if is_paused():
+            from app.services.agent_learning_engine import AgentLearningEngine
+            from app.db_connection import SessionLocal
+
+            user_ids = _get_active_user_ids()
+            if not user_ids:
                 return
 
-            from app.services.agent_learning_engine import AgentLearningEngine
-            from app.db_connection import get_db
+            db = SessionLocal()
+            try:
+                total_agents = 0
+                for uid in user_ids:
+                    if is_paused(user_id=uid):
+                        continue
 
-            db = next(get_db())
-            engine = AgentLearningEngine(db)
+                    engine = AgentLearningEngine(db)
+                    agents = db.query(AIAgent).filter(AIAgent.active == True, AIAgent.user_id == uid).all()
+                    for agent in agents:
+                        try:
+                            engine.run_own_brand_analysis(agent.agent_id)
+                            total_agents += 1
+                        except Exception as e:
+                            self.state.log("maestro", "Learning analysis failed", f"{agent.agent_id}: {str(e)[:150]}", "❌", "detail")
 
-            agents = db.query(AIAgent).filter(AIAgent.active == True).all()
-            for agent in agents:
-                try:
-                    engine.run_own_brand_analysis(agent.agent_id)
-                except Exception as e:
-                    self.state.log("maestro", "Learning analysis failed", f"{agent.agent_id}: {str(e)[:150]}", "❌", "detail")
-
-            self.state.log("maestro", "Learning analysis", f"Cycle complete — {len(agents)} agents analyzed", "🧠")
+                self.state.log("maestro", "Learning analysis", f"Cycle complete — {total_agents} agents analyzed", "🧠")
+            finally:
+                db.close()
 
         except Exception as e:
             self.state.errors += 1
@@ -509,17 +518,24 @@ class CyclesMixin:
     # ──────────────────────────────────────────────────────────
 
     def _pattern_consolidation_cycle(self):
-        """Apply pattern decay and prune stale patterns."""
+        """Apply pattern decay and prune stale patterns, per user."""
         try:
-            if is_paused():
+            from app.services.agent_learning_engine import AgentLearningEngine
+            from app.db_connection import SessionLocal
+
+            user_ids = _get_active_user_ids()
+            if not user_ids:
                 return
 
-            from app.services.agent_learning_engine import AgentLearningEngine
-            from app.db_connection import get_db
-
-            db = next(get_db())
-            engine = AgentLearningEngine(db)
-            engine.consolidate_patterns()
+            db = SessionLocal()
+            try:
+                for uid in user_ids:
+                    if is_paused(user_id=uid):
+                        continue
+                    engine = AgentLearningEngine(db)
+                    engine.consolidate_patterns()
+            finally:
+                db.close()
 
             self.state.log("maestro", "Pattern consolidation", "Complete", "🔄")
 

@@ -66,9 +66,6 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
 
     def start(self):
         """Start Maestro background jobs. Called on every deployment."""
-        # Ensure posts are never paused (legacy cleanup)
-        _db_set("posts_paused", "false")
-
         self.scheduler = BackgroundScheduler()
 
         # Check cycle — checks if daily burst should run
@@ -196,14 +193,14 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
         )
 
     def get_status(self, user_id: Optional[str] = None) -> Dict:
-        """Get full orchestrator status, optionally scoped to a user."""
+        """Get full orchestrator status, scoped to a user."""
         # Refresh today's proposal counts from DB
         try:
             self._refresh_agent_counts(user_id=user_id)
         except Exception:
             pass
 
-        return self.state.to_dict()
+        return self.state.to_dict(user_id=user_id)
 
     def _refresh_agent_counts(self, user_id: Optional[str] = None):
         """Refresh per-agent today's proposal counts from DB (dynamic)."""
@@ -231,10 +228,10 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
 
     def _check_cycle(self):
         """
-        Runs every 10 minutes. Checks:
+        Runs every 10 minutes. For EACH active user, checks:
           1. Schedule any ready-to-schedule reels first
-          2. Is Maestro paused? → skip burst
-          3. Has the daily burst already run today? → skip burst
+          2. Is Maestro paused for this user? → skip burst
+          3. Has the daily burst already run today for this user? → skip burst
           4. Is it past 12PM Lisbon time? → run burst
           5. Otherwise → wait until noon
         """
@@ -246,32 +243,50 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
         except Exception as e:
             self.state.log("maestro", "Schedule-ready error", str(e)[:200], "❌")
 
-        if is_paused():
-            return  # Silent — don't spam logs when paused
+        # Get all active users
+        user_ids = self._get_active_user_ids()
+        if not user_ids:
+            return
 
-        # Use Lisbon timezone for daily scheduling
         now_lisbon = datetime.now(LISBON_TZ)
         today_lisbon = now_lisbon.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        last_run = get_last_daily_run()
-        if last_run:
-            # Convert last_run to Lisbon timezone for comparison
-            if last_run.tzinfo is None:
-                last_run_aware = last_run.replace(tzinfo=timezone.utc)
-            else:
-                last_run_aware = last_run
-            last_run_lisbon = last_run_aware.astimezone(LISBON_TZ)
-            if last_run_lisbon >= today_lisbon:
-                # Already ran today (Lisbon time)
-                return
 
         # Wait until 12PM Lisbon time before bursting
         if now_lisbon.hour < 12:
             return  # Not noon yet in Lisbon — wait
 
-        # Time to run the daily burst!
-        self.state.log("maestro", "Daily burst triggered", f"12PM Lisbon ({now_lisbon.strftime('%H:%M %Z')}) — generating for tomorrow", "🌅")
-        self._run_daily_burst()
+        for uid in user_ids:
+            if is_paused(user_id=uid):
+                continue  # This user's Maestro is paused
+
+            last_run = get_last_daily_run(user_id=uid)
+            if last_run:
+                if last_run.tzinfo is None:
+                    last_run_aware = last_run.replace(tzinfo=timezone.utc)
+                else:
+                    last_run_aware = last_run
+                last_run_lisbon = last_run_aware.astimezone(LISBON_TZ)
+                if last_run_lisbon >= today_lisbon:
+                    continue  # Already ran today for this user
+
+            # Time to run the daily burst for this user!
+            self.state.log("maestro", "Daily burst triggered", f"12PM Lisbon ({now_lisbon.strftime('%H:%M %Z')}) — user {uid}", "🌅")
+            self._run_daily_burst_for_user(uid)
+
+    def _get_active_user_ids(self) -> List[str]:
+        """Get all active user IDs from DB."""
+        try:
+            from app.db_connection import SessionLocal
+            from app.models import UserProfile
+            db = SessionLocal()
+            try:
+                users = db.query(UserProfile).filter(UserProfile.active == True).all()
+                return [u.user_id for u in users]
+            finally:
+                db.close()
+        except Exception as e:
+            self.state.log("maestro", "User query error", str(e)[:200], "❌")
+            return []
 
 
     # ──────────────────────────────────────────────────────────
@@ -279,55 +294,33 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
     def _run_daily_burst(self):
         """
         Generate proposals for ALL active users.
-
-        Multi-user: iterates over all UserProfile records and runs a burst
-        for each user's brands/agents. Falls back to unscoped burst if no
-        users exist (initial setup / transition period).
+        Per-user: each user's pause/last_daily_run state is independent.
         """
+        user_ids = self._get_active_user_ids()
+        if not user_ids:
+            self.state.log("maestro", "Burst skipped", "No active users found", "⚠️")
+            return
+
+        self.state.log("maestro", "Multi-user burst", f"Running burst for {len(user_ids)} active users", "👥")
+        for uid in user_ids:
+            self._run_daily_burst_for_user(uid)
+
+    def _run_daily_burst_for_user(self, user_id: str):
+        """Run the daily burst for a single user. Thread-safe via lock."""
         if not self._daily_burst_lock.acquire(blocking=False):
-            self.state.log("maestro", "Burst skipped", "Already running", "⏳")
+            self.state.log("maestro", "Burst skipped", f"Already running (user={user_id})", "⏳")
             return
 
         try:
-            from app.db_connection import SessionLocal
-            from app.models import UserProfile
-
-            db = SessionLocal()
-            try:
-                users = db.query(UserProfile).filter(UserProfile.active == True).all()
-                user_ids = [u.user_id for u in users]
-            finally:
-                db.close()
-
-            if user_ids:
-                self.state.log(
-                    "maestro", "Multi-user burst",
-                    f"Running burst for {len(user_ids)} active users",
-                    "👥"
-                )
-                for uid in user_ids:
-                    try:
-                        self._current_user_id = uid
-                        self.state.log("maestro", f"User burst: {uid}", f"Starting burst for user {uid}", "👤")
-                        self._run_burst_for_user(uid)
-                    except Exception as e:
-                        self.state.errors += 1
-                        self.state.log("maestro", "User burst error", f"user={uid}: {str(e)[:200]}", "❌")
-                        traceback.print_exc()
-                    finally:
-                        self._current_user_id = None
-            else:
-                # No users in DB yet — run unscoped for backward compat
-                self.state.log("maestro", "Burst (unscoped)", "No UserProfile records — running legacy unscoped burst", "⚠️")
-                self._run_burst_for_user(None)
-
-            set_last_daily_run(datetime.utcnow())
-
+            self._current_user_id = user_id
+            self.state.log("maestro", f"User burst: {user_id}", f"Starting burst for user {user_id}", "👤")
+            self._run_burst_for_user(user_id)
+            set_last_daily_run(datetime.utcnow(), user_id=user_id)
         except Exception as e:
             self.state.errors += 1
-            self.state.log("maestro", "Burst error", f"{str(e)[:200]}", "❌")
+            self.state.log("maestro", "User burst error", f"user={user_id}: {str(e)[:200]}", "❌")
             traceback.print_exc()
-            set_last_daily_run(datetime.utcnow())
+            set_last_daily_run(datetime.utcnow(), user_id=user_id)
         finally:
             self._current_user_id = None
             self._daily_burst_lock.release()
@@ -525,22 +518,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
 
         def _run():
             if user_id:
-                if not self._daily_burst_lock.acquire(blocking=False):
-                    self.state.log("maestro", "Burst skipped", "Already running", "⏳")
-                    return
-                try:
-                    self._current_user_id = user_id
-                    self._run_burst_for_user(user_id)
-                    set_last_daily_run(datetime.utcnow())
-                except Exception as e:
-                    self.state.errors += 1
-                    self.state.log("maestro", "Burst error", f"{str(e)[:200]}", "❌")
-                    traceback.print_exc()
-                finally:
-                    self._current_user_id = None
-                    self.state.current_agent = None
-                    self.state.current_phase = None
-                    self._daily_burst_lock.release()
+                self._run_daily_burst_for_user(user_id)
             else:
                 self._run_daily_burst()
 
@@ -666,7 +644,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
 
             if not all_proposals:
                 self.state.log("maestro", "Smart burst empty", f"No proposals generated{user_label}", "⚠️")
-                set_last_daily_run(datetime.utcnow())
+                set_last_daily_run(datetime.utcnow(), user_id=user_id or "__system__")
                 return
 
             # Schedule any existing ready reels
@@ -681,7 +659,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
             self.state.current_phase = "processing"
             self._auto_accept_and_process(all_proposals)
 
-            set_last_daily_run(datetime.utcnow())
+            set_last_daily_run(datetime.utcnow(), user_id=user_id or "__system__")
             elapsed = (datetime.utcnow() - burst_start).total_seconds()
             self.state.log(
                 "maestro", f"🏁 Smart Burst Complete{user_label}",
@@ -692,7 +670,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
             self.state.errors += 1
             self.state.log("maestro", "Smart burst error", f"{str(e)[:200]}", "❌")
             traceback.print_exc()
-            set_last_daily_run(datetime.utcnow())
+            set_last_daily_run(datetime.utcnow(), user_id=user_id or "__system__")
         finally:
             self._current_user_id = None
             self.state.current_agent = None

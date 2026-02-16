@@ -123,77 +123,77 @@ ALL_BRANDS = _get_all_brands()
 
 # ── DB-Persisted State ───────────────────────────────────────
 
-def _db_get(key: str, default: str = "") -> str:
-    """Read a config value from DB (survives redeploys)."""
+def _db_get(key: str, default: str = "", user_id: str = "__system__") -> str:
+    """Read a config value from DB (survives redeploys). Scoped per user."""
     try:
         from app.db_connection import SessionLocal
         from app.models import MaestroConfig
         db = SessionLocal()
         try:
-            return MaestroConfig.get(db, key, default)
+            return MaestroConfig.get(db, key, default, user_id=user_id)
         finally:
             db.close()
     except Exception as e:
-        print(f"[MAESTRO] _db_get({key}) failed, using default '{default}': {e}", flush=True)
+        print(f"[MAESTRO] _db_get({key}, user={user_id}) failed, using default '{default}': {e}", flush=True)
         return default
 
 
-def _db_set(key: str, value: str) -> bool:
-    """Write a config value to DB (survives redeploys). Returns True if persisted."""
+def _db_set(key: str, value: str, user_id: str = "__system__") -> bool:
+    """Write a config value to DB (survives redeploys). Scoped per user. Returns True if persisted."""
     try:
         from app.db_connection import SessionLocal
         from app.models import MaestroConfig
         db = SessionLocal()
         try:
-            MaestroConfig.set(db, key, value)
+            MaestroConfig.set(db, key, value, user_id=user_id)
         finally:
             db.close()
         return True
     except Exception as e:
-        print(f"[MAESTRO] Failed to persist {key}: {e}", flush=True)
+        print(f"[MAESTRO] Failed to persist {key} for user={user_id}: {e}", flush=True)
         return False
 
 
-def is_paused() -> bool:
-    """Check if Maestro is paused (DB-persisted). Default: paused on first-ever run."""
-    return _db_get("is_paused", "true") == "true"
+def is_paused(user_id: str = "__system__") -> bool:
+    """Check if Maestro is paused for a specific user (DB-persisted). Default: paused on first-ever run."""
+    return _db_get("is_paused", "true", user_id=user_id) == "true"
 
 
-def set_paused(paused: bool) -> bool:
-    """Set paused state (DB-persisted). Returns True if successfully persisted."""
+def set_paused(paused: bool, user_id: str = "__system__") -> bool:
+    """Set paused state for a specific user (DB-persisted). Returns True if successfully persisted."""
     value = "true" if paused else "false"
-    if not _db_set("is_paused", value):
-        print(f"[MAESTRO] CRITICAL: set_paused({paused}) failed to persist!", flush=True)
+    if not _db_set("is_paused", value, user_id=user_id):
+        print(f"[MAESTRO] CRITICAL: set_paused({paused}) for user={user_id} failed to persist!", flush=True)
         return False
     # Verify the write by reading back
-    actual = _db_get("is_paused", "")
+    actual = _db_get("is_paused", "", user_id=user_id)
     if actual != value:
-        print(f"[MAESTRO] CRITICAL: set_paused({paused}) verify failed! Wrote '{value}' but read back '{actual}'", flush=True)
+        print(f"[MAESTRO] CRITICAL: set_paused({paused}) verify failed for user={user_id}! Wrote '{value}' but read back '{actual}'", flush=True)
         return False
     return True
 
 
-def is_posts_paused() -> bool:
-    """Check if post generation is paused (DB-persisted). Default: not paused."""
-    return _db_get("posts_paused", "false") == "true"
+def is_posts_paused(user_id: str = "__system__") -> bool:
+    """Check if post generation is paused for a specific user (DB-persisted). Default: not paused."""
+    return _db_get("posts_paused", "false", user_id=user_id) == "true"
 
 
-def set_posts_paused(paused: bool) -> bool:
-    """Set posts-paused state (DB-persisted). Returns True if successfully persisted."""
+def set_posts_paused(paused: bool, user_id: str = "__system__") -> bool:
+    """Set posts-paused state for a specific user (DB-persisted). Returns True if successfully persisted."""
     value = "true" if paused else "false"
-    if not _db_set("posts_paused", value):
-        print(f"[MAESTRO] CRITICAL: set_posts_paused({paused}) failed to persist!", flush=True)
+    if not _db_set("posts_paused", value, user_id=user_id):
+        print(f"[MAESTRO] CRITICAL: set_posts_paused({paused}) for user={user_id} failed to persist!", flush=True)
         return False
-    actual = _db_get("posts_paused", "")
+    actual = _db_get("posts_paused", "", user_id=user_id)
     if actual != value:
-        print(f"[MAESTRO] CRITICAL: set_posts_paused({paused}) verify failed!", flush=True)
+        print(f"[MAESTRO] CRITICAL: set_posts_paused({paused}) for user={user_id} verify failed!", flush=True)
         return False
     return True
 
 
-def get_last_daily_run() -> Optional[datetime]:
-    """Get the last time the daily burst ran."""
-    val = _db_get("last_daily_run", "")
+def get_last_daily_run(user_id: str = "__system__") -> Optional[datetime]:
+    """Get the last time the daily burst ran for a specific user."""
+    val = _db_get("last_daily_run", "", user_id=user_id)
     if val:
         try:
             return datetime.fromisoformat(val)
@@ -202,9 +202,9 @@ def get_last_daily_run() -> Optional[datetime]:
     return None
 
 
-def set_last_daily_run(dt: datetime):
-    """Record when the daily burst ran."""
-    _db_set("last_daily_run", dt.isoformat())
+def set_last_daily_run(dt: datetime, user_id: str = "__system__"):
+    """Record when the daily burst ran for a specific user."""
+    _db_set("last_daily_run", dt.isoformat(), user_id=user_id)
 
 
 # ── Maestro State (in-memory, rebuilt on deploy) ──────────────
@@ -369,11 +369,12 @@ class MaestroState:
         tag = agent.upper()
         print(f"   {prefix} [{tag}] {action} — {detail}", flush=True)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self, user_id: Optional[str] = None) -> Dict:
         now = datetime.utcnow()
         uptime = (now - self.started_at).total_seconds() if self.started_at else 0
-        paused = is_paused()
-        last_run = get_last_daily_run()
+        uid = user_id or "__system__"
+        paused = is_paused(user_id=uid)
+        last_run = get_last_daily_run(user_id=uid)
 
         return {
             "is_running": not paused,

@@ -225,9 +225,12 @@ class DiagnosticsEngine:
             ).count()
 
             if proposals_48h == 0 and jobs_48h == 0:
-                # Check if Maestro is paused
+                # Check if Maestro is paused for all users
                 from app.services.maestro.maestro import is_paused
-                if is_paused():
+                from app.models import UserProfile
+                users = db.query(UserProfile).filter(UserProfile.active == True).all()
+                all_paused = all(is_paused(user_id=u.user_id) for u in users) if users else True
+                if all_paused:
                     return CheckResult("content_pipeline", "warn", "Maestro is paused — no content generated in 48h (expected)")
                 return CheckResult("content_pipeline", "fail", "No proposals or jobs in 48h — pipeline may be broken")
 
@@ -349,7 +352,10 @@ class DiagnosticsEngine:
 
             if upcoming == 0:
                 from app.services.maestro.maestro import is_paused
-                if is_paused():
+                from app.models import UserProfile
+                users = db.query(UserProfile).filter(UserProfile.active == True).all()
+                all_paused = all(is_paused(user_id=u.user_id) for u in users) if users else True
+                if all_paused:
                     return CheckResult("publishing_pipeline", "warn", "No upcoming reels scheduled — Maestro is paused")
                 return CheckResult("publishing_pipeline", "warn", f"No reels scheduled for next 24h (published {published_week} this week)")
 

@@ -225,24 +225,30 @@ class HealingMixin:
             self.state.log("maestro", "🩺 Healing Error", f"{str(e)[:200]}", "❌")
             traceback.print_exc()
 
-        # ── POPULATION GUARD: ensure agents == brands ──
-        # RULE: Number of agents must equal number of brands.
-        # Each agent is born from one brand but generates content for ALL brands.
-        # If a brand was added before the evolution engine, it has no agent — fix it.
+        # ── POPULATION GUARD: ensure agents == brands (per user) ──
         try:
             from app.services.agents.generic_agent import _ensure_agents_for_all_brands
-            user_id = getattr(self, '_current_user_id', None)
-            spawned = _ensure_agents_for_all_brands(user_id=user_id)
-            if spawned:
-                names = ", ".join(a.display_name for a in spawned)
-                self.state.log(
-                    "maestro", "🧬 Population Guard",
-                    f"Auto-spawned {len(spawned)} new agents: {names}",
-                    "🧬"
-                )
-                # Refresh cache so daily burst picks them up
-                from app.services.agents.generic_agent import refresh_agent_cache
-                refresh_agent_cache()
+            from app.db_connection import SessionLocal as _SessionLocal
+            from app.models import UserProfile
+
+            _db = _SessionLocal()
+            try:
+                users = _db.query(UserProfile).filter(UserProfile.active == True).all()
+                user_ids = [u.user_id for u in users]
+            finally:
+                _db.close()
+
+            for uid in user_ids:
+                spawned = _ensure_agents_for_all_brands(user_id=uid)
+                if spawned:
+                    names = ", ".join(a.display_name for a in spawned)
+                    self.state.log(
+                        "maestro", "🧬 Population Guard",
+                        f"Auto-spawned {len(spawned)} new agents for user {uid}: {names}",
+                        "🧬"
+                    )
+                    from app.services.agents.generic_agent import refresh_agent_cache
+                    refresh_agent_cache()
         except Exception as e:
             self.state.log("maestro", "🧬 Population Guard Error", str(e)[:200], "⚠️")
 

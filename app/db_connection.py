@@ -154,6 +154,65 @@ def run_migrations():
 
         conn.commit()
 
+        # Migration: MaestroConfig — add user_id column and make composite PK
+        # This migrates the table from single PK (key) to composite PK (key, user_id)
+        # Existing rows get user_id set to the DEFAULT_USER_ID or first active user
+        _migrate_maestro_config_per_user(conn)
+        conn.commit()
+
+
+def _migrate_maestro_config_per_user(conn):
+    """Add user_id to maestro_config table if not present, migrate existing data."""
+    # Check if user_id column already exists
+    result = conn.execute(text("""
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'maestro_config' AND column_name = 'user_id'
+    """))
+    if result.fetchone():
+        return  # Already migrated
+
+    print("🔄 Migrating maestro_config to per-user schema...", flush=True)
+
+    # Determine the admin user_id to assign to existing rows
+    admin_user_id = os.getenv("DEFAULT_USER_ID", "__system__")
+    if admin_user_id == "__system__":
+        # Try to find the first active user
+        user_row = conn.execute(text(
+            "SELECT user_id FROM user_profiles WHERE active = true ORDER BY created_at ASC LIMIT 1"
+        )).fetchone()
+        if user_row:
+            admin_user_id = user_row[0]
+
+    # 1. Add user_id column (nullable temporarily)
+    conn.execute(text(
+        "ALTER TABLE maestro_config ADD COLUMN user_id VARCHAR(100)"
+    ))
+
+    # 2. Set existing rows to admin user_id
+    conn.execute(text(
+        "UPDATE maestro_config SET user_id = :uid WHERE user_id IS NULL"
+    ), {"uid": admin_user_id})
+
+    # 3. Make user_id NOT NULL
+    conn.execute(text(
+        "ALTER TABLE maestro_config ALTER COLUMN user_id SET NOT NULL"
+    ))
+
+    # 4. Set default for new rows
+    conn.execute(text(
+        "ALTER TABLE maestro_config ALTER COLUMN user_id SET DEFAULT '__system__'"
+    ))
+
+    # 5. Drop old PK and create composite PK
+    conn.execute(text(
+        "ALTER TABLE maestro_config DROP CONSTRAINT IF EXISTS maestro_config_pkey"
+    ))
+    conn.execute(text(
+        "ALTER TABLE maestro_config ADD PRIMARY KEY (key, user_id)"
+    ))
+
+    print(f"✅ maestro_config migrated to per-user (existing rows → user_id={admin_user_id})", flush=True)
+
 
 def get_db() -> Session:
     """
