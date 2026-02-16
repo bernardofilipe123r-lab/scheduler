@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Loader2, AlertCircle, Clock } from 'lucide-react'
+import { CheckCircle2, Loader2, AlertCircle, Clock, Moon } from 'lucide-react'
 import type { Agent } from '../api/useAgents'
 import { ProgressRing } from './ProgressRing'
 
@@ -9,7 +9,7 @@ interface AgentPodProps {
   logs: any[]
 }
 
-type AgentStatus = 'active' | 'waiting' | 'completed' | 'error'
+type AgentStatus = 'active' | 'waiting' | 'completed' | 'error' | 'standby'
 
 interface AgentProgress {
   status: AgentStatus
@@ -24,12 +24,27 @@ interface AgentProgress {
 
 function calculateAgentProgress(agent: Agent, logs: any[]): AgentProgress {
   const agentName = agent.agent_id.toUpperCase()
-  
+
   // Filter logs for this agent
-  const agentLogs = logs.filter(log => 
+  const agentLogs = logs.filter(log =>
     log.message.toUpperCase().includes(`[${agentName}]`)
   )
 
+  // No logs at all — standby (idle mode, not waiting for a turn during burst)
+  if (logs.length === 0) {
+    return {
+      status: 'standby',
+      currentBrand: null,
+      progress: 0,
+      reelsGenerated: 0,
+      postsGenerated: 0,
+      totalReels: 0,
+      totalPosts: 0,
+      lastActivity: null,
+    }
+  }
+
+  // Burst is happening but this agent has no logs yet — waiting
   if (agentLogs.length === 0) {
     return {
       status: 'waiting',
@@ -37,8 +52,8 @@ function calculateAgentProgress(agent: Agent, logs: any[]): AgentProgress {
       progress: 0,
       reelsGenerated: 0,
       postsGenerated: 0,
-      totalReels: 6,
-      totalPosts: 2,
+      totalReels: 0,
+      totalPosts: 0,
       lastActivity: null,
     }
   }
@@ -47,27 +62,40 @@ function calculateAgentProgress(agent: Agent, logs: any[]): AgentProgress {
   const recentMessages = recentLogs.map(l => l.message.toLowerCase()).join(' ')
 
   // Count saved proposals
-  const reels = agentLogs.filter(l => 
-    l.message.toLowerCase().includes('saved:') && 
+  const reels = agentLogs.filter(l =>
+    l.message.toLowerCase().includes('saved:') &&
     l.message.toLowerCase().includes('reel')
   ).length
-  
-  const posts = agentLogs.filter(l => 
-    l.message.toLowerCase().includes('saved:') && 
+
+  const posts = agentLogs.filter(l =>
+    l.message.toLowerCase().includes('saved:') &&
     l.message.toLowerCase().includes('post')
   ).length
 
-  const totalReels = 6
-  const totalPosts = 2
+  // Try to detect totals from logs (e.g. "generating 6 reels and 2 posts")
+  let totalReels = 0
+  let totalPosts = 0
+  for (const log of agentLogs) {
+    const planMatch = log.message.match(/generating\s+(\d+)\s+reels?\s+.*?(\d+)\s+posts?/i)
+    if (planMatch) {
+      totalReels = parseInt(planMatch[1])
+      totalPosts = parseInt(planMatch[2])
+      break
+    }
+  }
+  // Fallback: at least as many as we've seen
+  if (totalReels === 0 && reels > 0) totalReels = Math.max(reels, 6)
+  if (totalPosts === 0 && posts > 0) totalPosts = Math.max(posts, 2)
+
   const totalTasks = totalReels + totalPosts
   const completedTasks = Math.min(reels, totalReels) + Math.min(posts, totalPosts)
-  const progress = Math.round((completedTasks / totalTasks) * 100)
+  const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
   // Determine status
   let status: AgentStatus = 'waiting'
   if (recentMessages.includes('error') || recentMessages.includes('failed')) {
     status = 'error'
-  } else if (progress >= 100) {
+  } else if (totalTasks > 0 && progress >= 100) {
     status = 'completed'
   } else if (recentMessages.includes('generating') || recentMessages.includes('planning') || recentMessages.includes('saved:')) {
     status = 'active'
@@ -87,8 +115,8 @@ function calculateAgentProgress(agent: Agent, logs: any[]): AgentProgress {
     status,
     currentBrand,
     progress,
-    reelsGenerated: Math.min(reels, totalReels),
-    postsGenerated: Math.min(posts, totalPosts),
+    reelsGenerated: Math.min(reels, totalReels || reels),
+    postsGenerated: Math.min(posts, totalPosts || posts),
     totalReels,
     totalPosts,
     lastActivity,
@@ -111,6 +139,13 @@ export function AgentPod({ agent, logs }: AgentPodProps) {
       badgeClass: 'bg-gray-800 text-gray-400 border-gray-700',
       borderClass: 'border-gray-700',
       icon: <Clock className="w-4 h-4" />,
+      pulse: false,
+    },
+    standby: {
+      badge: 'STANDBY',
+      badgeClass: 'bg-gray-800 text-gray-500 border-gray-700',
+      borderClass: 'border-gray-800',
+      icon: <Moon className="w-4 h-4" />,
       pulse: false,
     },
     completed: {
@@ -144,6 +179,7 @@ export function AgentPod({ agent, logs }: AgentPodProps) {
           progress.status === 'active' ? 'bg-gradient-to-br from-cyan-500 to-blue-600' :
           progress.status === 'completed' ? 'bg-green-600' :
           progress.status === 'error' ? 'bg-red-600' :
+          progress.status === 'standby' ? 'bg-gray-800' :
           'bg-gray-800'
         }`}>
           {progress.status === 'completed' ? '✓' : initials}
@@ -163,7 +199,7 @@ export function AgentPod({ agent, logs }: AgentPodProps) {
       </div>
 
       {/* Progress Ring */}
-      {progress.status !== 'waiting' && (
+      {progress.status !== 'waiting' && progress.status !== 'standby' && progress.totalReels + progress.totalPosts > 0 && (
         <div className="flex justify-center mb-3">
           <ProgressRing value={progress.progress} size={80} />
         </div>
@@ -178,7 +214,7 @@ export function AgentPod({ agent, logs }: AgentPodProps) {
           </div>
         )}
         
-        {progress.status !== 'waiting' && (
+        {progress.status !== 'waiting' && progress.status !== 'standby' && progress.totalReels + progress.totalPosts > 0 && (
           <>
             <div className="text-center text-gray-400">
               <span className="text-cyan-400 font-bold">{progress.reelsGenerated}</span>/{progress.totalReels} Reels

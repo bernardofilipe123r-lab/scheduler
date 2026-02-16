@@ -50,8 +50,10 @@ export function ActivityFeed({ logs, agents }: ActivityFeedProps) {
       >
         <AnimatePresence mode="popLayout">
           {parsedLogs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Waiting for activity...
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2">
+              <span className="text-2xl">📡</span>
+              <p className="font-mono text-xs">No recent activity in the last hour</p>
+              <p className="font-mono text-[10px] text-gray-600">Logs will appear here when a burst runs</p>
             </div>
           ) : (
             parsedLogs.map((event) => (
