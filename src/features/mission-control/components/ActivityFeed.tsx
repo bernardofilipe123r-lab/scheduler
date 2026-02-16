@@ -2,14 +2,16 @@ import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Radio } from 'lucide-react'
 import { parseLogsToEvents } from '../utils/logParser'
+import type { Agent } from '../api/useAgents'
 
 interface ActivityFeedProps {
   logs: any[]
+  agents: Agent[]
 }
 
-export function ActivityFeed({ logs }: ActivityFeedProps) {
+export function ActivityFeed({ logs, agents }: ActivityFeedProps) {
   const feedRef = useRef<HTMLDivElement>(null)
-  const parsedLogs = parseLogsToEvents(logs).slice(0, 50) // Show last 50 logs
+  const parsedLogs = parseLogsToEvents(logs, agents).slice(0, 50) // Show last 50 logs
 
   useEffect(() => {
     // Auto-scroll to bottom when new logs arrive

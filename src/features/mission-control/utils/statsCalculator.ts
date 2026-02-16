@@ -16,7 +16,12 @@ export interface MissionStats {
   scheduled: number
 }
 
-export function calculateStats(logs: LogEntry[], startTime: number): MissionStats {
+interface Agent {
+  agent_id: string
+  [key: string]: any
+}
+
+export function calculateStats(logs: LogEntry[], startTime: number, agents: Agent[]): MissionStats {
   const now = Date.now()
   const elapsed = Math.floor((now - startTime) / 1000)
 
@@ -26,12 +31,18 @@ export function calculateStats(logs: LogEntry[], startTime: number): MissionStat
   let jobs = 0
   let scheduled = 0
 
+  // Build dynamic agent pattern from actual agents in DB
+  const agentNames = agents.map(a => a.agent_id.toUpperCase())
+  const hasAgentProposal = (msg: string) => {
+    if (!msg.includes('saved:')) return false
+    return agentNames.some(name => msg.includes(`${name.toLowerCase()}-`))
+  }
+
   logs.forEach(log => {
     const msg = log.message.toLowerCase()
     
-    // Count proposals saved
-    if (msg.includes('saved:') && (msg.includes('toby-') || msg.includes('lexi-') || msg.includes('raven-') || 
-        msg.includes('apex-') || msg.includes('hex-') || msg.includes('nova-') || msg.includes('cipher-'))) {
+    // Count proposals saved (dynamic - checks actual agent names)
+    if (hasAgentProposal(msg)) {
       proposals++
     }
     

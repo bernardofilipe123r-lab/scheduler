@@ -16,10 +16,22 @@ export interface ParsedLogEvent {
   agentName?: string
 }
 
-const AGENT_PATTERN = /\[(TOBY|LEXI|RAVEN|APEX|HEX|NOVA|CIPHER|ATLAS|ORION|ZENITH|PHOENIX|QUANTUM|ECHO|STORM|BLAZE|FROST|VIPER|SHADOW|NEXUS|OMEGA|SIGMA)\]/i
+interface Agent {
+  agent_id: string
+  [key: string]: any
+}
+
 const MAESTRO_PATTERN = /\[MAESTRO\]/i
 
-export function parseLog(log: LogEntry): ParsedLogEvent {
+// Build dynamic agent pattern from actual agents
+function buildAgentPattern(agents: Agent[]): RegExp {
+  if (agents.length === 0) return /\[AGENT_NEVER_MATCH\]/i
+  const names = agents.map(a => a.agent_id.toUpperCase()).join('|')
+  return new RegExp(`\\[(${names})\\]`, 'i')
+}
+
+export function parseLog(log: LogEntry, agents: Agent[]): ParsedLogEvent {
+  const AGENT_PATTERN = buildAgentPattern(agents)
   const msg = log.message
   const msgLower = msg.toLowerCase()
 
@@ -124,6 +136,6 @@ export function parseLog(log: LogEntry): ParsedLogEvent {
   }
 }
 
-export function parseLogsToEvents(logs: LogEntry[]): ParsedLogEvent[] {
-  return logs.map(parseLog)
+export function parseLogsToEvents(logs: LogEntry[], agents: Agent[]): ParsedLogEvent[] {
+  return logs.map(log => parseLog(log, agents))
 }

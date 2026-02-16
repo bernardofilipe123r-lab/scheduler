@@ -17,7 +17,7 @@ export function MissionControlPage() {
 
   const logs = logsData?.logs || []
   const agents = agentsData?.agents || []
-  const stats = calculateStats(logs, startTime)
+  const stats = calculateStats(logs, startTime, agents)
   const currentPhase = calculatePhase(logs)
 
   useEffect(() => {
@@ -121,7 +121,7 @@ export function MissionControlPage() {
 
           {/* Activity Feed */}
           <div className="h-64 border-t border-cyan-500/30">
-            <ActivityFeed logs={logs} />
+            <ActivityFeed logs={logs} agents={agents} />
           </div>
         </div>
 
