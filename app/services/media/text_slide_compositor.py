@@ -105,16 +105,19 @@ def _replace_handle(text: str, brand: str) -> str:
 
 
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    """Word-wrap text respecting explicit \n line breaks."""
-    paragraphs = text.split('\n')
+    """Word-wrap text respecting explicit paragraph breaks (\n\n)."""
+    # Split by double-newline for paragraph breaks; single \n treated as space
+    paragraphs = text.split('\n\n')
     all_lines: list[str] = []
     for p_idx, paragraph in enumerate(paragraphs):
         if p_idx > 0:
-            # Insert empty string to represent a paragraph break
+            # Single empty string = one blank line between paragraphs
             all_lines.append('')
-        if not paragraph.strip():
+        # Collapse any remaining single newlines into spaces
+        cleaned = paragraph.replace('\n', ' ').strip()
+        if not cleaned:
             continue
-        words = paragraph.split()
+        words = cleaned.split()
         current = ""
         for word in words:
             test = f"{current} {word}" if current else word

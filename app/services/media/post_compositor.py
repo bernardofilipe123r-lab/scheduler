@@ -72,15 +72,16 @@ def _load_font(name: str, size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-# ── Text layout helpers (replicate PostCanvas.tsx logic) ───────────────
+# ── Text layout helpers (use actual Pillow font metrics) ──────────────
 
-def _count_lines(text: str, max_width: int, font_size: int) -> int:
-    """
-    Count how many lines `text` needs at `font_size` using the
-    same character-count estimation as PostCanvas.tsx.
-    """
-    avg_char_width = font_size * 0.48
-    max_chars = int(max_width / avg_char_width)
+def _measure_text_width(text: str, font: ImageFont.FreeTypeFont) -> int:
+    """Measure actual pixel width of text using Pillow font metrics."""
+    bbox = font.getbbox(text)
+    return bbox[2] - bbox[0]
+
+
+def _count_lines_real(text: str, max_width: int, font: ImageFont.FreeTypeFont) -> int:
+    """Count how many lines `text` needs using real font measurements."""
     words = text.upper().split()
     if not words:
         return 1
@@ -88,7 +89,7 @@ def _count_lines(text: str, max_width: int, font_size: int) -> int:
     current = ""
     for word in words:
         test = f"{current} {word}" if current else word
-        if len(test) > max_chars and current:
+        if _measure_text_width(test, font) > max_width and current:
             line_count += 1
             current = word
         else:
@@ -99,29 +100,29 @@ def _count_lines(text: str, max_width: int, font_size: int) -> int:
 def _auto_fit_font_size(text: str, max_width: int) -> int:
     """
     Find the LARGEST font size that produces the best layout.
-    Matches autoFitFontSize() in PostCanvas.tsx:
-      1. Try 3 lines: 90px → 64px
-      2. Try 2 lines: 90px → 30px
-      3. 1 line: largest that fits
+    Uses actual Pillow font measurements for accuracy with Anton font.
     """
     # Try 3 lines: 90px → 64px
     for fs in range(AUTO_FIT_MAX, THREE_LINE_FLOOR - 1, -2):
-        if _count_lines(text, max_width, fs) == 3:
+        font = _load_font("Anton-Regular.ttf", fs)
+        if _count_lines_real(text, max_width, font) == 3:
             return fs
     # Try 2 lines: 90px → 30px
     for fs in range(AUTO_FIT_MAX, AUTO_FIT_MIN - 1, -2):
-        if _count_lines(text, max_width, fs) == 2:
+        font = _load_font("Anton-Regular.ttf", fs)
+        if _count_lines_real(text, max_width, font) == 2:
             return fs
     # 1 line: largest that fits
     for fs in range(AUTO_FIT_MAX, AUTO_FIT_MIN - 1, -2):
-        if _count_lines(text, max_width, fs) <= 1:
+        font = _load_font("Anton-Regular.ttf", fs)
+        if _count_lines_real(text, max_width, font) <= 1:
             return fs
     return AUTO_FIT_MIN
 
 
 def _balance_title(text: str, max_width: int, font_size: int) -> Tuple[List[str], int]:
     """
-    Balance title text across lines, matching balanceTitleText() in PostCanvas.tsx.
+    Balance title text across lines using actual Pillow font metrics.
     Returns (lines, font_size).
     """
     upper = text.upper().strip()
@@ -129,15 +130,17 @@ def _balance_title(text: str, max_width: int, font_size: int) -> Tuple[List[str]
     if not words:
         return ([""], font_size)
 
-    avg_char_width = font_size * 0.48
-    max_chars = int(max_width / avg_char_width)
+    font = _load_font("Anton-Regular.ttf", font_size)
+
+    def _fits(line: str) -> bool:
+        return _measure_text_width(line, font) <= max_width
 
     # ── Step 1: Greedy wrap ──
     greedy: List[str] = []
     current = ""
     for word in words:
         test = f"{current} {word}" if current else word
-        if len(test) > max_chars and current:
+        if not _fits(test) and current:
             greedy.append(current)
             current = word
         else:
@@ -156,9 +159,9 @@ def _balance_title(text: str, max_width: int, font_size: int) -> Tuple[List[str]
         for i in range(1, len(words)):
             l1 = " ".join(words[:i])
             l2 = " ".join(words[i:])
-            if len(l1) > max_chars or len(l2) > max_chars:
+            if not _fits(l1) or not _fits(l2):
                 continue
-            diff = abs(len(l1) - len(l2))
+            diff = abs(_measure_text_width(l1, font) - _measure_text_width(l2, font))
             if diff < best_diff:
                 best_diff = diff
                 best_lines = [l1, l2]
@@ -174,9 +177,12 @@ def _balance_title(text: str, max_width: int, font_size: int) -> Tuple[List[str]
                 l1 = " ".join(words[:i])
                 l2 = " ".join(words[i:j])
                 l3 = " ".join(words[j:])
-                if len(l1) > max_chars or len(l2) > max_chars or len(l3) > max_chars:
+                if not _fits(l1) or not _fits(l2) or not _fits(l3):
                     continue
-                diff = max(abs(len(l1) - len(l2)), abs(len(l2) - len(l3)), abs(len(l1) - len(l3)))
+                w1 = _measure_text_width(l1, font)
+                w2 = _measure_text_width(l2, font)
+                w3 = _measure_text_width(l3, font)
+                diff = max(abs(w1 - w2), abs(w2 - w3), abs(w1 - w3))
                 if diff < best_diff:
                     best_diff = diff
                     best_lines = [l1, l2, l3]
