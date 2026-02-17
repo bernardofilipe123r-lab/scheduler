@@ -60,29 +60,8 @@ def auto_schedule_job(job_id: str):
                         print(f"[AUTO-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
                         continue
 
-                # ── Compose cover + text slides for the post ──
-                try:
-                    from app.services.media.post_compositor import compose_cover_slide
-                    from app.services.media.text_slide_compositor import compose_text_slide
-
-                    uid8 = reel_id[:8] if reel_id else "unknown"
-                    cover_out = f"output/posts/post_{brand}_{uid8}.png"
-                    # Normalize path: strip leading '/' so Image.open resolves relative to CWD
-                    bg_path = thumbnail_path.lstrip('/') if thumbnail_path else thumbnail_path
-                    compose_cover_slide(bg_path, post_title, brand, cover_out)
-                    thumbnail_path = cover_out
-
-                    carousel_paths = []
-                    for idx, stxt in enumerate(slide_texts):
-                        is_last = idx == len(slide_texts) - 1
-                        slide_out = f"output/posts/post_{brand}_{uid8}_slide{idx}.png"
-                        compose_text_slide(brand, stxt, slide_texts, is_last, slide_out)
-                        carousel_paths.append(slide_out)
-                except Exception as comp_err:
-                    import traceback
-                    print(f"[AUTO-SCHEDULE] ⚠️ Slide composition failed for {brand}: {comp_err}", flush=True)
-                    traceback.print_exc()
-                    carousel_paths = []
+                # Composition deferred to publish time — pass raw paths
+                carousel_paths = []
             else:
                 # Reels need reel_id + video_path
                 if not reel_id or not video_path:
@@ -217,28 +196,8 @@ def schedule_all_ready_reels() -> int:
                             print(f"[READY-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
                             continue
 
-                    # ── Compose cover + text slides for the post ──
-                    try:
-                        from app.services.media.post_compositor import compose_cover_slide
-                        from app.services.media.text_slide_compositor import compose_text_slide
-
-                        uid8 = reel_id[:8] if reel_id else "unknown"
-                        cover_out = f"output/posts/post_{brand}_{uid8}.png"
-                        # Normalize path: strip leading '/' so Image.open resolves relative to CWD
-                        bg_path = thumbnail_path.lstrip('/') if thumbnail_path else thumbnail_path
-                        compose_cover_slide(bg_path, post_title, brand, cover_out)
-                        thumbnail_path = cover_out
-
-                        for idx, stxt in enumerate(slide_texts):
-                            is_last_slide = idx == len(slide_texts) - 1
-                            slide_out = f"output/posts/post_{brand}_{uid8}_slide{idx}.png"
-                            compose_text_slide(brand, stxt, slide_texts, is_last_slide, slide_out)
-                            carousel_paths.append(slide_out)
-                    except Exception as comp_err:
-                        import traceback
-                        print(f"[READY-SCHEDULE] ⚠️ Slide composition failed for {brand}: {comp_err}", flush=True)
-                        traceback.print_exc()
-                        carousel_paths = []
+                    # Composition deferred to publish time — pass raw paths
+                    carousel_paths = []
                 else:
                     # Reels need reel_id + video_path
                     if not reel_id or not video_path:

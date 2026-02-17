@@ -428,7 +428,34 @@ async def startup_event():
                             if not image_path.exists():
                                 raise FileNotFoundError(f"Post image not found: {image_path}")
                             
-                            # Cover slide was already composed during scheduling — no re-composition
+                            # ── Just-in-time composition at publish time ──
+                            post_title = metadata.get('title', '')
+                            slide_texts = metadata.get('slide_texts') or []
+                            carousel_paths_composed = []
+
+                            if post_title or slide_texts:
+                                try:
+                                    from app.services.media.post_compositor import compose_cover_slide
+                                    from app.services.media.text_slide_compositor import compose_text_slide
+
+                                    uid8 = reel_id[:8] if reel_id else "unknown"
+                                    cover_out = f"/app/output/posts/post_{brand}_{uid8}.png"
+                                    bg_path = str(image_path)
+                                    compose_cover_slide(bg_path, post_title, brand, cover_out)
+                                    image_path = Path(cover_out)
+                                    print(f"      ✅ Cover slide composed: {cover_out}")
+
+                                    for idx, stxt in enumerate(slide_texts):
+                                        is_last = idx == len(slide_texts) - 1
+                                        slide_out = f"/app/output/posts/post_{brand}_{uid8}_slide{idx}.png"
+                                        compose_text_slide(brand, stxt, slide_texts, is_last, slide_out)
+                                        carousel_paths_composed.append(slide_out)
+                                    print(f"      ✅ {len(carousel_paths_composed)} text slides composed")
+                                except Exception as comp_err:
+                                    import traceback
+                                    print(f"      ⚠️ JIT composition failed: {comp_err}", flush=True)
+                                    traceback.print_exc()
+                                    carousel_paths_composed = []
                             
                             # Build public URL base
                             railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
@@ -454,17 +481,23 @@ async def startup_event():
                             else:
                                 publisher = SocialPublisher()
                             
-                            # Check for carousel slides
-                            carousel_paths_raw = metadata.get('carousel_paths') or []
-                            carousel_image_urls = []
-                            for cp in carousel_paths_raw:
-                                cp_abs = _resolve_output_path(cp)
-                                if cp_abs and Path(cp_abs).exists():
-                                    carousel_image_urls.append(
-                                        f"{public_url_base}/output/posts/{Path(cp_abs).name}"
-                                    )
-                                else:
-                                    print(f"      ⚠️ Carousel slide not found: {cp} → {cp_abs}")
+                            # Check for carousel slides — prefer JIT-composed, fall back to metadata
+                            if carousel_paths_composed:
+                                carousel_image_urls = [
+                                    f"{public_url_base}/output/posts/{Path(cp).name}"
+                                    for cp in carousel_paths_composed
+                                ]
+                            else:
+                                carousel_paths_raw = metadata.get('carousel_paths') or []
+                                carousel_image_urls = []
+                                for cp in carousel_paths_raw:
+                                    cp_abs = _resolve_output_path(cp)
+                                    if cp_abs and Path(cp_abs).exists():
+                                        carousel_image_urls.append(
+                                            f"{public_url_base}/output/posts/{Path(cp_abs).name}"
+                                        )
+                                    else:
+                                        print(f"      ⚠️ Carousel slide not found: {cp} → {cp_abs}")
                             
                             result = {}
                             if carousel_image_urls:
