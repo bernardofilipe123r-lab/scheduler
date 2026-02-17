@@ -14,7 +14,7 @@ import {
 import { 
   useBrandConnections, 
   useDisconnectYouTube,
-  getYouTubeConnectUrl,
+  connectYouTube,
   type BrandConnectionStatus,
   type PlatformConnection
 } from '@/features/brands'
@@ -58,11 +58,19 @@ interface ConnectionCardProps {
 
 function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardProps) {
   const [disconnectingYouTube, setDisconnectingYouTube] = useState(false)
+  const [connectingYouTube, setConnectingYouTube] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
   const disconnectYouTube = useDisconnectYouTube()
 
-  const handleYouTubeConnect = () => {
-    window.location.href = getYouTubeConnectUrl(brand.brand as BrandName)
+  const handleYouTubeConnect = async () => {
+    setConnectingYouTube(true)
+    try {
+      const authUrl = await connectYouTube(brand.brand as BrandName)
+      window.location.href = authUrl
+    } catch (error) {
+      console.error('Failed to start YouTube connection:', error)
+      setConnectingYouTube(false)
+    }
   }
 
   const handleYouTubeDisconnect = async () => {
@@ -194,9 +202,10 @@ function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardProps) {
               {isYouTube && (
                 <button
                   onClick={handleYouTubeConnect}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  disabled={connectingYouTube}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
                 >
-                  Connect
+                  {connectingYouTube ? 'Connecting...' : 'Connect'}
                 </button>
               )}
             </div>
@@ -268,11 +277,8 @@ export function ConnectedPage() {
           if (response.ok) {
             const themeData = await response.json()
             if (themeData.theme?.logo) {
-              const logoUrl = `/brand-logos/${themeData.theme.logo}`
-              const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
-              if (logoCheck.ok) {
-                logos[brand.brand] = logoUrl
-              }
+              const logoUrl = themeData.theme.logo.startsWith('http') ? themeData.theme.logo : `/brand-logos/${themeData.theme.logo}`
+              logos[brand.brand] = logoUrl
             }
           }
         } catch (error) {

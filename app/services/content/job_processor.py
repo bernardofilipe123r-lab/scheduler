@@ -1,6 +1,7 @@
 """Job processing pipeline — content generation, video creation, post compositing."""
 import os
 import re
+import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,9 @@ from app.services.media.image_generator import ImageGenerator
 from app.services.media.video_generator import VideoGenerator
 from app.services.content.differentiator import ContentDifferentiator
 from app.services.brands.resolver import brand_resolver
+from app.services.storage.supabase_storage import (
+    upload_from_path, storage_path, StorageError,
+)
 
 # Per-brand generation timeout (in seconds). Default: 10 minutes.
 BRAND_GENERATION_TIMEOUT = int(os.getenv("BRAND_GENERATION_TIMEOUT_SECONDS", "600"))
@@ -119,25 +123,24 @@ class JobProcessor:
         })
 
         try:
-            # Get output paths
-            output_dir = Path("output")
             reel_id = job.brand_outputs.get(brand, {}).get("reel_id", f"{job_id}_{brand}")
+            brand_slug = brand
+            user_id = job.user_id
 
-            thumbnail_path = output_dir / "thumbnails" / f"{reel_id}_thumbnail.png"
-            reel_path = output_dir / "reels" / f"{reel_id}_reel.png"
-            video_path = output_dir / "videos" / f"{reel_id}_video.mp4"
+            # Use temp files (FFmpeg/PIL need paths); upload to Supabase then delete
+            tmp_thumbnail = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            tmp_reel = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            tmp_video = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+            tmp_thumbnail.close(); tmp_reel.close(); tmp_video.close()
+            thumbnail_path = Path(tmp_thumbnail.name)
+            reel_path = Path(tmp_reel.name)
+            video_path = Path(tmp_video.name)
 
-            print(f"📁 Output paths:", flush=True)
+            print(f"📁 Temp output paths:", flush=True)
             print(f"   Thumbnail: {thumbnail_path}", flush=True)
             print(f"   Reel: {reel_path}", flush=True)
             print(f"   Video: {video_path}", flush=True)
             sys.stdout.flush()
-
-            # Ensure directories exist
-            thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
-            reel_path.parent.mkdir(parents=True, exist_ok=True)
-            video_path.parent.mkdir(parents=True, exist_ok=True)
-            print(f"   ✓ Directories created/verified", flush=True)
 
             # Create image generator
             print(f"🔧 Getting brand type for: {brand}", flush=True)
@@ -256,7 +259,9 @@ class JobProcessor:
 
             # Generate YouTube thumbnail (clean AI image, no text)
             print(f"   📺 Generating YouTube thumbnail...", flush=True)
-            yt_thumbnail_path = output_dir / "thumbnails" / f"{reel_id}_yt_thumbnail.png"
+            tmp_yt_thumb = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            tmp_yt_thumb.close()
+            yt_thumbnail_path = Path(tmp_yt_thumb.name)
             # generate_youtube_thumbnail returns the actual saved path (may be .jpg)
             actual_yt_thumb_path = generator.generate_youtube_thumbnail(
                 title=use_title,
@@ -271,19 +276,51 @@ class JobProcessor:
                 "progress_percent": 95
             })
 
-            # Update brand output - use web-friendly paths with leading slash
-            # Use the actual file name (may be .jpg instead of .png)
-            yt_thumb_filename = actual_yt_thumb_path.name
+            # Upload to Supabase Storage (Supabase-only, no local persistence)
+            try:
+                thumb_remote = storage_path(user_id, brand_slug, "thumbnails", f"{reel_id}_thumbnail.png")
+                thumb_url = upload_from_path("media", thumb_remote, str(thumbnail_path))
+            except StorageError as e:
+                print(f"   ⚠️ Thumbnail upload failed: {e}", flush=True)
+                thumb_url = ""
+            try:
+                reel_remote = storage_path(user_id, brand_slug, "reels", f"{reel_id}_reel.png")
+                reel_url = upload_from_path("media", reel_remote, str(reel_path))
+            except StorageError as e:
+                print(f"   ⚠️ Reel upload failed: {e}", flush=True)
+                reel_url = ""
+            try:
+                video_remote = storage_path(user_id, brand_slug, "videos", f"{reel_id}_video.mp4")
+                video_url = upload_from_path("media", video_remote, str(video_path))
+            except StorageError as e:
+                print(f"   ⚠️ Video upload failed: {e}", flush=True)
+                video_url = ""
+            try:
+                yt_thumb_filename = Path(str(actual_yt_thumb_path)).name
+                yt_remote = storage_path(user_id, brand_slug, "thumbnails", yt_thumb_filename)
+                yt_thumb_url = upload_from_path("media", yt_remote, str(actual_yt_thumb_path))
+            except StorageError as e:
+                print(f"   ⚠️ YT thumbnail upload failed: {e}", flush=True)
+                yt_thumb_url = ""
+
+            # Clean up temp files
+            for tmp in [thumbnail_path, reel_path, video_path, Path(str(actual_yt_thumb_path))]:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+
+            # Update brand output with Supabase URLs
             self._manager.update_brand_output(job_id, brand, {
                 "status": "completed",
                 "reel_id": reel_id,
-                "thumbnail_path": f"/output/thumbnails/{reel_id}_thumbnail.png",
-                "yt_thumbnail_path": f"/output/thumbnails/{yt_thumb_filename}",  # Clean AI image for YouTube
-                "reel_path": f"/output/reels/{reel_id}_reel.png",
-                "video_path": f"/output/videos/{reel_id}_video.mp4",
+                "thumbnail_path": thumb_url,
+                "yt_thumbnail_path": yt_thumb_url,
+                "reel_path": reel_url,
+                "video_path": video_url,
                 "caption": caption,
-                "yt_title": yt_title,  # YouTube-optimized title (no numbers)
-                "content_lines": use_lines,  # Store differentiated content for this brand
+                "yt_title": yt_title,
+                "content_lines": use_lines,
                 "regenerated_at": datetime.utcnow().isoformat()
             })
 
@@ -296,8 +333,8 @@ class JobProcessor:
                 "success": True,
                 "brand": brand,
                 "reel_id": reel_id,
-                "thumbnail_path": f"/output/thumbnails/{reel_id}_thumbnail.png",
-                "video_path": f"/output/videos/{reel_id}_video.mp4"
+                "thumbnail_path": thumb_url,
+                "video_path": video_url
             }
 
         except Exception as e:
@@ -358,11 +395,9 @@ class JobProcessor:
         try:
             from app.services.media.ai_background import AIBackgroundGenerator
 
-            output_dir = Path("output")
-            posts_dir = output_dir / "posts"
-            posts_dir.mkdir(parents=True, exist_ok=True)
-
             reel_id = f"{job_id}_{brand}"
+            brand_slug = brand
+            user_id = job.user_id
 
             # Generate AI background using per-brand prompt
             ai_prompt = brand_ai_prompt
@@ -380,18 +415,32 @@ class JobProcessor:
                 user_prompt=ai_prompt,
             )
 
-            # Save as file
-            bg_path = posts_dir / f"{reel_id}_background.png"
+            # Save to temp file, upload to Supabase, delete temp
+            tmp_bg = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            tmp_bg.close()
+            bg_path = Path(tmp_bg.name)
             image.save(str(bg_path), format="PNG")
-            print(f"   ✓ Background saved: {bg_path}", flush=True)
+            print(f"   ✓ Background saved to temp: {bg_path}", flush=True)
+
+            try:
+                bg_remote = storage_path(user_id, brand_slug, "posts", f"{reel_id}_background.png")
+                bg_url = upload_from_path("media", bg_remote, str(bg_path))
+            except StorageError as e:
+                print(f"   ⚠️ Post background upload failed: {e}", flush=True)
+                bg_url = ""
+            finally:
+                try:
+                    os.unlink(bg_path)
+                except OSError:
+                    pass
 
             import time as _time
             cache_bust = int(_time.time())
             self._manager.update_brand_output(job_id, brand, {
                 "status": "completed",
                 "reel_id": reel_id,
-                "thumbnail_path": f"/output/posts/{reel_id}_background.png",
-                "thumbnail_url": f"/output/posts/{reel_id}_background.png?t={cache_bust}",
+                "thumbnail_path": bg_url,
+                "thumbnail_url": f"{bg_url}?t={cache_bust}" if bg_url else "",
                 "regenerated_at": datetime.utcnow().isoformat(),
             })
 

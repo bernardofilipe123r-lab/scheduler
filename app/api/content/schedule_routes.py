@@ -11,6 +11,9 @@ from sqlalchemy import type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.brands.resolver import brand_resolver
+from app.services.storage.supabase_storage import (
+    upload_bytes, storage_path, StorageError,
+)
 from app.api.auth.middleware import get_current_user
 
 
@@ -90,42 +93,60 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
         )
         print(f"✅ Parsed datetime: {scheduled_datetime.isoformat()}")
         
-        # Get base directory
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        video_path = base_dir / "output" / "videos" / f"{request.reel_id}.mp4"
-        thumbnail_path = base_dir / "output" / "thumbnails" / f"{request.reel_id}.png"
-        
-        print(f"\n🎬 Video path: {video_path}")
-        print(f"🖼️  Thumbnail path: {thumbnail_path}")
-        
-        # Check if video exists
-        if not video_path.exists():
-            print(f"❌ ERROR: Video file not found!")
-            print(f"   Expected location: {video_path}")
+        # Extract job_id from reel_id (format: {job_id}_{brand})
+        parts = request.reel_id.rsplit('_', 1)
+        extracted_job_id = parts[0] if len(parts) > 1 else request.reel_id
+        extracted_brand = parts[1] if len(parts) > 1 else None
+
+        # Look up media URLs from job database (Supabase storage)
+        video_url = None
+        thumbnail_url = None
+        if extracted_brand:
+            from app.db_connection import SessionLocal
+            from app.models.jobs import GenerationJob
+            lookup_db = SessionLocal()
+            try:
+                job = lookup_db.query(GenerationJob).filter(
+                    GenerationJob.job_id == extracted_job_id
+                ).first()
+                if job and job.brand_outputs:
+                    brand_output = job.brand_outputs.get(extracted_brand, {})
+                    video_url = brand_output.get("video_path")
+                    thumbnail_url = brand_output.get("thumbnail_path")
+            finally:
+                lookup_db.close()
+
+        # Fall back to local file paths for backward compatibility
+        if not video_url:
+            base_dir = Path(__file__).resolve().parent.parent.parent
+            local_video = base_dir / "output" / "videos" / f"{request.reel_id}.mp4"
+            if local_video.exists():
+                video_url = str(local_video)
+
+        if not thumbnail_url:
+            base_dir = Path(__file__).resolve().parent.parent.parent
+            local_thumb = base_dir / "output" / "thumbnails" / f"{request.reel_id}.png"
+            if local_thumb.exists():
+                thumbnail_url = str(local_thumb)
+
+        print(f"\n🎬 Video: {video_url or 'NOT FOUND'}")
+        print(f"🖼️  Thumbnail: {thumbnail_url or 'NOT FOUND'}")
+
+        if not video_url:
+            print(f"❌ ERROR: Video not found in Supabase or locally!")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Video not found for reel ID: {request.reel_id}"
             )
-        
-        print(f"✅ Video file exists ({video_path.stat().st_size / 1024 / 1024:.2f} MB)")
-        
-        if thumbnail_path.exists():
-            print(f"✅ Thumbnail exists ({thumbnail_path.stat().st_size / 1024:.2f} KB)")
-        else:
-            print(f"⚠️  Warning: Thumbnail not found (will work without it)")
-        
-        # Extract job_id from reel_id (format: {job_id}_{brand})
-        parts = request.reel_id.rsplit('_', 1)
-        extracted_job_id = parts[0] if len(parts) > 1 else request.reel_id
-        
+
         # Schedule the reel
         print("\n💾 Saving to database...")
         result = scheduler_service.schedule_reel(
             user_id=user["id"],
             reel_id=request.reel_id,
             scheduled_time=scheduled_datetime,
-            video_path=video_path,
-            thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
+            video_path=video_url,
+            thumbnail_path=thumbnail_url,
             caption=request.caption,
             platforms=["instagram"],
             user_name="Web Interface User",
@@ -221,37 +242,45 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             )
             print(f"📅 Next available slot: {next_slot.isoformat()}")
         
-        # Get file paths
+        # Resolve media paths — Supabase URLs pass through directly, local paths for backward compat
+        def _is_url(v):
+            return v and v.startswith("http")
+
         base_dir = Path(__file__).resolve().parent.parent.parent
-        
-        if request.video_path:
-            video_path = Path(request.video_path)
-            if not video_path.is_absolute():
-                video_path = base_dir / request.video_path.lstrip('/')
+
+        if _is_url(request.video_path):
+            video_path_str = request.video_path
+        elif request.video_path:
+            p = Path(request.video_path)
+            if not p.is_absolute():
+                p = base_dir / request.video_path.lstrip('/')
+            video_path_str = str(p) if p.exists() else None
         else:
-            video_path = base_dir / "output" / "videos" / f"{request.reel_id}_video.mp4"
-        
-        if request.thumbnail_path:
-            thumbnail_path = Path(request.thumbnail_path)
-            if not thumbnail_path.is_absolute():
-                thumbnail_path = base_dir / request.thumbnail_path.lstrip('/')
+            video_path_str = None
+
+        if _is_url(request.thumbnail_path):
+            thumbnail_path_str = request.thumbnail_path
+        elif request.thumbnail_path:
+            p = Path(request.thumbnail_path)
+            if not p.is_absolute():
+                p = base_dir / request.thumbnail_path.lstrip('/')
+            thumbnail_path_str = str(p) if p.exists() else None
         else:
-            thumbnail_path = base_dir / "output" / "thumbnails" / f"{request.reel_id}_thumbnail.png"
-        
-        # Handle YouTube thumbnail path (clean AI image, no text)
-        yt_thumbnail_path = None
-        if request.yt_thumbnail_path:
-            yt_thumbnail_path = Path(request.yt_thumbnail_path)
-            if not yt_thumbnail_path.is_absolute():
-                yt_thumbnail_path = base_dir / request.yt_thumbnail_path.lstrip('/')
-            if not yt_thumbnail_path.exists():
-                yt_thumbnail_path = None
-                print(f"⚠️  YT thumbnail not found: {request.yt_thumbnail_path}")
-        
-        print(f"🎬 Video path: {video_path}")
-        print(f"🖼️  Thumbnail path: {thumbnail_path}")
-        if yt_thumbnail_path:
-            print(f"📺 YT thumbnail path: {yt_thumbnail_path}")
+            thumbnail_path_str = None
+
+        yt_thumbnail_str = None
+        if _is_url(request.yt_thumbnail_path):
+            yt_thumbnail_str = request.yt_thumbnail_path
+        elif request.yt_thumbnail_path:
+            p = Path(request.yt_thumbnail_path)
+            if not p.is_absolute():
+                p = base_dir / request.yt_thumbnail_path.lstrip('/')
+            yt_thumbnail_str = str(p) if p.exists() else None
+
+        print(f"🎬 Video: {video_path_str}")
+        print(f"🖼️  Thumbnail: {thumbnail_path_str}")
+        if yt_thumbnail_str:
+            print(f"📺 YT thumbnail: {yt_thumbnail_str}")
         
         # Determine platforms - use request.platforms if provided, otherwise fall back to legacy logic
         if request.platforms:
@@ -277,11 +306,11 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             user_id=user["id"],
             reel_id=request.reel_id,
             scheduled_time=next_slot,
-            video_path=video_path if video_path.exists() else None,
-            thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
-            yt_thumbnail_path=yt_thumbnail_path,  # Clean AI image for YouTube
+            video_path=video_path_str,
+            thumbnail_path=thumbnail_path_str,
+            yt_thumbnail_path=yt_thumbnail_str,
             caption=request.caption,
-            yt_title=request.yt_title,  # Pass YouTube title
+            yt_title=request.yt_title,
             platforms=platforms,
             user_name=request.user_id,
             brand=request.brand,
@@ -328,32 +357,10 @@ async def get_scheduled_posts(user: dict = Depends(get_current_user)):
         for schedule in schedules:
             metadata = schedule.get("metadata", {})
             
-            # Convert filesystem paths to URL paths
-            raw_thumb = metadata.get("thumbnail_path")
-            thumb_url = None
-            if raw_thumb:
-                # Extract '/output/...' portion from full filesystem path
-                if "/output/" in raw_thumb:
-                    thumb_url = "/output/" + raw_thumb.split("/output/", 1)[1]
-                else:
-                    thumb_url = raw_thumb  # Already a relative URL
-            
-            raw_video = metadata.get("video_path")
-            video_url = None
-            if raw_video:
-                if "/output/" in raw_video:
-                    video_url = "/output/" + raw_video.split("/output/", 1)[1]
-                else:
-                    video_url = raw_video
-            
-            # Convert carousel image paths to URLs
-            raw_carousel = metadata.get("carousel_paths", [])
-            carousel_urls = []
-            for cp in (raw_carousel or []):
-                if cp and "/output/" in cp:
-                    carousel_urls.append("/output/" + cp.split("/output/", 1)[1])
-                elif cp:
-                    carousel_urls.append(cp)
+            # All paths are now Supabase URLs — pass as-is
+            thumb_url = metadata.get("thumbnail_path")
+            video_url = metadata.get("video_path")
+            carousel_urls = metadata.get("carousel_paths") or []
             
             formatted_schedules.append({
                 "schedule_id": schedule.get("schedule_id"),
@@ -748,13 +755,8 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
         
         # Generate unique post ID
         post_id = f"post_{request.brand}_{str(uuid.uuid4())[:8]}"
-        
-        # Use canonical output directory (Docker: /app/output, local: output/)
-        _out_base = Path("/app/output") if Path("/app/output").exists() else Path("output")
-        posts_dir = _out_base / "posts"
-        posts_dir.mkdir(parents=True, exist_ok=True)
-        
-        image_path = posts_dir / f"{post_id}.png"
+        user_id = user["id"]
+        brand_slug = request.brand
         
         # Remove data URL prefix if present
         image_b64 = request.image_data
@@ -762,20 +764,31 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
             image_b64 = image_b64.split(',', 1)[1]
         
         image_bytes = base64.b64decode(image_b64)
-        image_path.write_bytes(image_bytes)
-        print(f"   💾 Saved cover image: {image_path} ({len(image_bytes)} bytes)")
         
-        # Save carousel text slide images (if any)
+        # Upload cover image directly to Supabase (no local write)
+        cover_remote = storage_path(user_id, brand_slug, "posts", f"{post_id}.png")
+        try:
+            cover_url = upload_bytes("media", cover_remote, image_bytes, "image/png")
+        except StorageError as e:
+            print(f"   ⚠️ Cover upload failed: {e}", flush=True)
+            cover_url = ""
+        print(f"   ☁️  Supabase cover: {cover_url}")
+        
+        # Upload carousel text slide images (if any)
         carousel_paths = []
         for slide_i, slide_b64 in enumerate(request.carousel_images):
-            slide_path = posts_dir / f"{post_id}_slide{slide_i + 1}.png"
             s_b64 = slide_b64
             if ',' in s_b64:
                 s_b64 = s_b64.split(',', 1)[1]
             slide_bytes = base64.b64decode(s_b64)
-            slide_path.write_bytes(slide_bytes)
-            carousel_paths.append(f"output/posts/{post_id}_slide{slide_i + 1}.png")
-            print(f"   💾 Saved slide {slide_i + 1}: {slide_path} ({len(slide_bytes)} bytes)")
+            slide_remote = storage_path(user_id, brand_slug, "posts", f"{post_id}_slide{slide_i + 1}.png")
+            try:
+                slide_url = upload_bytes("media", slide_remote, slide_bytes, "image/png")
+            except StorageError as e:
+                print(f"   ⚠️ Slide {slide_i + 1} upload failed: {e}", flush=True)
+                slide_url = ""
+            carousel_paths.append(slide_url)
+            print(f"   ☁️  Supabase slide {slide_i + 1}: {slide_url}")
         
         total_slides = 1 + len(carousel_paths)
         print(f"   📄 Total carousel slides: {total_slides}")
@@ -785,8 +798,8 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
         if schedule_dt.tzinfo is not None:
             schedule_dt = schedule_dt.replace(tzinfo=None)
         
-        # Store relative path for consistent handling across Docker/local
-        thumbnail_path_rel = f"output/posts/{post_id}.png"
+        # Use Supabase URL for thumbnail path
+        thumbnail_path_rel = cover_url
         
         # Schedule using existing scheduler (post = image only, no video)
         result = scheduler_service.schedule_reel(
@@ -805,17 +818,6 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
             carousel_paths=carousel_paths,
             job_id=request.job_id,
         )
-        
-        # Store carousel metadata alongside the schedule
-        if carousel_paths:
-            carousel_meta_path = posts_dir / f"{post_id}_carousel.json"
-            import json as json_mod
-            carousel_meta_path.write_text(json_mod.dumps({
-                "cover": str(image_path),
-                "slides": carousel_paths,
-                "slide_texts": request.slide_texts,
-                "total_slides": total_slides,
-            }, indent=2))
         
         print(f"   ✅ Scheduled successfully! ID: {result.get('schedule_id')}")
         print(f"{'='*80}\n")

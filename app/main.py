@@ -100,24 +100,6 @@ app.include_router(maestro_router)  # Maestro orchestrator (Toby + Lexi)
 app.include_router(agents_router)  # Dynamic AI agents CRUD at /api/agents
 app.include_router(ai_team_router)  # AI Team dashboard at /api/ai-team
 
-# Mount static files - use absolute path for Railway volume support
-# The output directory is at /app/output when running in Docker
-output_dir = Path("/app/output") if Path("/app/output").exists() else Path("output")
-output_dir.mkdir(parents=True, exist_ok=True)
-(output_dir / "videos").mkdir(exist_ok=True)
-(output_dir / "thumbnails").mkdir(exist_ok=True)
-(output_dir / "posts").mkdir(exist_ok=True)
-print(f"📁 Static files directory: {output_dir.absolute()}")
-app.mount("/output", StaticFiles(directory=str(output_dir)), name="output")
-
-# Mount brand logos directory for theme customization - use persistent volume
-brand_data_dir = output_dir / "brand-data"
-brand_data_dir.mkdir(parents=True, exist_ok=True)
-logos_dir = brand_data_dir / "logos"
-logos_dir.mkdir(parents=True, exist_ok=True)
-print(f"🎨 Brand logos directory: {logos_dir.absolute()}")
-app.mount("/brand-logos", StaticFiles(directory=str(logos_dir)), name="brand-logos")
-
 
 # Serve React frontend (SPA catch-all)
 if FRONTEND_DIR.exists():
@@ -151,16 +133,19 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
-def _render_slides_node(brand: str, title: str, background_image: str, slide_texts: list, reel_id: str) -> dict | None:
+def _render_slides_node(brand: str, title: str, background_image: str, slide_texts: list, reel_id: str, user_id: str = "system") -> dict | None:
     """Render carousel slides using Node.js Konva (pixel-perfect match to frontend)."""
     import json
     import subprocess
     import tempfile
 
     uid8 = reel_id[:8] if reel_id else "unknown"
-    cover_out = f"/app/output/posts/post_{brand}_{uid8}.png"
+
+    # Render to a temp directory
+    tmp_dir = tempfile.mkdtemp(prefix="slides_")
+    cover_out = os.path.join(tmp_dir, f"post_{brand}_{uid8}.png")
     slide_outputs = [
-        f"/app/output/posts/post_{brand}_{uid8}_slide{idx}.png"
+        os.path.join(tmp_dir, f"post_{brand}_{uid8}_slide{idx}.png")
         for idx in range(len(slide_texts))
     ]
 
@@ -197,6 +182,23 @@ def _render_slides_node(brand: str, title: str, background_image: str, slide_tex
             return None
         output = json.loads(result.stdout.strip())
         if output.get("success"):
+            # Upload rendered slides to Supabase Storage
+            try:
+                from app.services.storage.supabase_storage import upload_from_path, storage_path
+                cover_path = output.get("coverPath", "")
+                if cover_path and Path(cover_path).exists():
+                    cover_name = Path(cover_path).name
+                    cover_remote = storage_path(user_id, brand, "posts", cover_name)
+                    output["coverUrl"] = upload_from_path("media", cover_remote, cover_path)
+                slide_urls = []
+                for sp in output.get("slidePaths", []):
+                    if sp and Path(sp).exists():
+                        slide_name = Path(sp).name
+                        slide_remote = storage_path(user_id, brand, "posts", slide_name)
+                        slide_urls.append(upload_from_path("media", slide_remote, sp))
+                output["slideUrls"] = slide_urls
+            except Exception as upload_err:
+                print(f"[NODE-RENDER] Supabase upload warning: {upload_err}", flush=True)
             return output
         else:
             print(f"[NODE-RENDER] Error: {output.get('error')}", flush=True)
@@ -208,16 +210,22 @@ def _render_slides_node(brand: str, title: str, background_image: str, slide_tex
         print(f"[NODE-RENDER] Exception: {e}", flush=True)
         return None
     finally:
-        import os
+        import shutil as _shutil
         os.unlink(json_path)
+        # Clean up temp rendered slides directory
+        try:
+            _shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 def _repair_missing_carousel_images():
     """Re-compose carousel slides for all scheduled posts to ensure correct rendering."""
+    import tempfile
+    import requests as _req
     from app.db_connection import SessionLocal
     from app.models import ScheduledReel
     from sqlalchemy.orm.attributes import flag_modified
-    from pathlib import Path
 
     db = SessionLocal()
     try:
@@ -237,42 +245,47 @@ def _repair_missing_carousel_images():
             brand = ed.get("brand", "unknown")
             title = ed.get("title", "")
             reel_id = post.reel_id or ""
-            uid8 = reel_id[:8] if reel_id else "unknown"
-            bg_path = ed.get("thumbnail_path", "")
+            bg_url = ed.get("thumbnail_path", "")
 
-            # Find raw background image
-            raw_bg = None
-            for candidate in [
-                f"output/posts/post_{brand}_{uid8}_background.png",
-                bg_path.lstrip("/") if bg_path else "",
-            ]:
-                if candidate and Path(candidate).exists():
-                    raw_bg = candidate
-                    break
-
-            if not raw_bg:
-                print(f"  ⚠️ [{post.schedule_id}] No background found for {brand}/{reel_id}", flush=True)
+            if not bg_url or not bg_url.startswith("https://"):
+                print(f"  ⚠️ [{post.schedule_id}] No Supabase background URL for {brand}/{reel_id}", flush=True)
                 continue
 
+            tmp_bg_path = None
             try:
+                # Download background image from Supabase to temp file
+                resp = _req.get(bg_url, timeout=60)
+                resp.raise_for_status()
+                tmp_bg = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                tmp_bg.write(resp.content)
+                tmp_bg.close()
+                tmp_bg_path = tmp_bg.name
+
                 composed = _render_slides_node(
                     brand=brand,
                     title=title,
-                    background_image=raw_bg,
+                    background_image=tmp_bg_path,
                     slide_texts=slide_texts,
                     reel_id=reel_id,
+                    user_id=getattr(post, 'user_id', 'system'),
                 )
                 if composed:
-                    ed["thumbnail_path"] = composed["coverPath"]
-                    ed["carousel_paths"] = composed["slidePaths"]
+                    ed["thumbnail_path"] = composed.get("coverUrl") or composed["coverPath"]
+                    ed["carousel_paths"] = composed.get("slideUrls") or composed["slidePaths"]
                     post.extra_data = dict(ed)
                     flag_modified(post, "extra_data")
                     repaired += 1
-                    print(f"  ✅ [{post.schedule_id}] Rendered {1 + len(composed['slidePaths'])} slides for {brand}", flush=True)
+                    print(f"  ✅ [{post.schedule_id}] Rendered {1 + len(composed.get('slidePaths', []))} slides for {brand}", flush=True)
                 else:
                     print(f"  ❌ [{post.schedule_id}] Node renderer failed for {brand}", flush=True)
             except Exception as e:
                 print(f"  ❌ [{post.schedule_id}] Composition failed for {brand}: {e}", flush=True)
+            finally:
+                if tmp_bg_path:
+                    try:
+                        os.unlink(tmp_bg_path)
+                    except Exception:
+                        pass
 
         if repaired > 0:
             db.commit()
@@ -442,26 +455,9 @@ async def startup_event():
                             platforms = metadata.get('platforms', ['instagram'])
                             print(f"   📋 [PUBLISH] Using platforms from metadata: {platforms}", flush=True)
                         
-                        # ── Normalize output paths ──
-                        # brand_outputs stores paths like /output/videos/... but
-                        # the Docker WORKDIR is /app, so files live at /app/output/...
-                        def _resolve_output_path(raw: str | None) -> str | None:
-                            if not raw:
-                                return None
-                            clean = raw.strip()
-                            # Strip cache-bust query params (e.g. ?t=12345)
-                            clean = clean.split('?')[0] if '?' in clean else clean
-                            # Normalize: strip all leading /app or app/ segments
-                            # to prevent /app/app/... doubling
-                            clean = clean.lstrip('/')
-                            while clean.startswith('app/'):
-                                clean = clean[4:]
-                            # clean is now relative like 'output/posts/...'
-                            return f'/app/{clean}'
-
-                        # Get paths from metadata or use defaults
-                        video_path_str = _resolve_output_path(metadata.get('video_path'))
-                        thumbnail_path_str = _resolve_output_path(metadata.get('thumbnail_path'))
+                        # All paths in metadata are now Supabase URLs
+                        video_path_str = metadata.get('video_path')
+                        thumbnail_path_str = metadata.get('thumbnail_path')
                         brand = metadata.get('brand', '')
                         variant = metadata.get('variant', 'light')
                         
@@ -472,54 +468,57 @@ async def startup_event():
                         
                         if is_post:
                             # ── IMAGE POST PUBLISHING ──
-                            # thumbnail_path_str is already absolute from _resolve_output_path
-                            if thumbnail_path_str:
-                                image_path = Path(thumbnail_path_str)
-                            else:
-                                # Try common post paths
-                                image_path = Path(f"/app/output/posts/{reel_id}_background.png")
-                                if not image_path.exists():
-                                    image_path = Path(f"/app/output/posts/{reel_id}.png")
+                            # thumbnail_path_str is a Supabase URL
+                            image_url = thumbnail_path_str
+                            if not image_url:
+                                raise ValueError(f"No thumbnail/cover URL found in metadata for post {reel_id}")
                             
-                            print(f"      🖼️  Image post: {image_path} (exists: {image_path.exists()})")
-                            
-                            if not image_path.exists():
-                                raise FileNotFoundError(f"Post image not found: {image_path}")
+                            print(f"      🖼️  Image post cover URL: {image_url}")
                             
                             # ── Just-in-time composition at publish time (Node.js Konva) ──
+                            # Note: JIT composition needs a local background image.
+                            # If slide_texts are present, download the background from Supabase
+                            # to a temp file, render slides, and use the resulting Supabase URLs.
                             post_title = metadata.get('title', '')
                             slide_texts = metadata.get('slide_texts') or []
-                            carousel_paths_composed = []
+                            supabase_slide_urls = []
 
-                            if post_title or slide_texts:
+                            if (post_title or slide_texts) and image_url.startswith("https://"):
                                 try:
+                                    import tempfile
+                                    import requests as _req
+                                    # Download background image to temp file for node renderer
+                                    resp = _req.get(image_url, timeout=60)
+                                    resp.raise_for_status()
+                                    tmp_bg = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                                    tmp_bg.write(resp.content)
+                                    tmp_bg.close()
+                                    
                                     composed = _render_slides_node(
                                         brand=brand,
                                         title=post_title,
-                                        background_image=str(image_path),
+                                        background_image=tmp_bg.name,
                                         slide_texts=slide_texts,
                                         reel_id=reel_id,
+                                        user_id=schedule.get('user_id', 'system'),
                                     )
                                     if composed:
-                                        image_path = Path(composed["coverPath"])
-                                        carousel_paths_composed = composed["slidePaths"]
-                                        print(f"      ✅ Konva rendered: cover + {len(carousel_paths_composed)} slides")
+                                        if composed.get("coverUrl"):
+                                            image_url = composed["coverUrl"]
+                                        supabase_slide_urls = composed.get("slideUrls", [])
+                                        print(f"      ✅ Konva rendered: cover + {len(supabase_slide_urls)} slides")
                                     else:
                                         print(f"      ⚠️ Node renderer returned no result", flush=True)
+                                    
+                                    # Clean up temp file
+                                    try:
+                                        os.unlink(tmp_bg.name)
+                                    except Exception:
+                                        pass
                                 except Exception as comp_err:
                                     import traceback
                                     print(f"      ⚠️ JIT composition failed: {comp_err}", flush=True)
                                     traceback.print_exc()
-                            
-                            # Build public URL base
-                            railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
-                            if railway_domain:
-                                public_url_base = f"https://{railway_domain}"
-                            else:
-                                public_url_base = os.getenv("PUBLIC_URL_BASE", "")
-                            
-                            # Cover image URL
-                            image_url = f"{public_url_base}/output/posts/{image_path.name}"
                             
                             print(f"      🌐 Cover image URL: {image_url}")
                             print(f"      🏷️ Publishing IMAGE POST with brand: {brand}")
@@ -536,22 +535,11 @@ async def startup_event():
                                 publisher = SocialPublisher()
                             
                             # Check for carousel slides — prefer JIT-composed, fall back to metadata
-                            if carousel_paths_composed:
-                                carousel_image_urls = [
-                                    f"{public_url_base}/output/posts/{Path(cp).name}"
-                                    for cp in carousel_paths_composed
-                                ]
+                            if supabase_slide_urls:
+                                carousel_image_urls = supabase_slide_urls
                             else:
                                 carousel_paths_raw = metadata.get('carousel_paths') or []
-                                carousel_image_urls = []
-                                for cp in carousel_paths_raw:
-                                    cp_abs = _resolve_output_path(cp)
-                                    if cp_abs and Path(cp_abs).exists():
-                                        carousel_image_urls.append(
-                                            f"{public_url_base}/output/posts/{Path(cp_abs).name}"
-                                        )
-                                    else:
-                                        print(f"      ⚠️ Carousel slide not found: {cp} → {cp_abs}")
+                                carousel_image_urls = [url for url in carousel_paths_raw if url]
                             
                             result = {}
                             if carousel_image_urls:
@@ -587,42 +575,20 @@ async def startup_event():
                                     )
                         else:
                             # ── REEL (VIDEO) PUBLISHING ──
-                            # If paths stored in metadata, use those
-                            if video_path_str:
-                                video_path = Path(video_path_str)
-                                if not video_path.is_absolute():
-                                    video_path = Path("/app") / video_path.as_posix().lstrip('/')
-                            else:
-                                # Try with _video suffix first (new naming), then without
-                                video_path = Path(f"/app/output/videos/{reel_id}_video.mp4")
-                                if not video_path.exists():
-                                    video_path = Path(f"/app/output/videos/{reel_id}.mp4")
+                            # All paths are now Supabase URLs
+                            if not video_path_str:
+                                raise ValueError(f"No video URL found in metadata for reel {reel_id}")
+                            if not thumbnail_path_str:
+                                raise ValueError(f"No thumbnail URL found in metadata for reel {reel_id}")
                             
-                            if thumbnail_path_str:
-                                thumbnail_path = Path(thumbnail_path_str)
-                                if not thumbnail_path.is_absolute():
-                                    thumbnail_path = Path("/app") / thumbnail_path.as_posix().lstrip('/')
-                            else:
-                                # Try with _thumbnail suffix first, then without
-                                thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}_thumbnail.png")
-                                if not thumbnail_path.exists():
-                                    thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.png")
-                                if not thumbnail_path.exists():
-                                    thumbnail_path = Path(f"/app/output/thumbnails/{reel_id}.jpg")
+                            print(f"      🎬 Video URL: {video_path_str}")
+                            print(f"      🖼️  Thumbnail URL: {thumbnail_path_str}")
                             
-                            print(f"      🎬 Video: {video_path} (exists: {video_path.exists()})")
-                            print(f"      🖼️  Thumbnail: {thumbnail_path} (exists: {thumbnail_path.exists()})")
-                            
-                            if not video_path.exists():
-                                raise FileNotFoundError(f"Video not found: {video_path}")
-                            if not thumbnail_path.exists():
-                                raise FileNotFoundError(f"Thumbnail not found: {thumbnail_path}")
-                            
-                            # Publish now - CRITICAL: pass brand name for correct credentials!
+                            # Publish now - pass URLs directly
                             print(f"      🏷️ Publishing REEL with brand: {brand}")
                             result = scheduler_service.publish_now(
-                                video_path=video_path,
-                                thumbnail_path=thumbnail_path,
+                                video_url=video_path_str,
+                                thumbnail_url=thumbnail_path_str,
                                 caption=caption,
                                 platforms=platforms,
                                 brand_name=brand,

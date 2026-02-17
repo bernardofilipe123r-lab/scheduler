@@ -7,7 +7,7 @@ import {
   ChevronUp, TrendingUp, FlaskConical, Copy, Eye,
   Heart, Activity, Loader2, Crown,
   Flame, Target, Swords, Stethoscope, CheckCircle2, XCircle, AlertCircle,
-  Bot, Brain, Calendar, Info, Gauge, Pause, Play, Clock, Timer, ExternalLink, ChevronRight
+  Bot, Brain, Calendar, Info, Gauge, Pause, Play, Clock, Timer, ExternalLink, ChevronRight, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQuotas, useAgentStatuses, type AgentStatus, type QuotaData } from '@/features/ai-team'
@@ -219,6 +219,8 @@ function StrategyWeights({ weights }: { weights: Record<string, number> }) {
 
 export function AITeamPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.id === '7c7bdcc7-ad79-4554-8d32-e5ef02608e84' || user?.email === 'filipe@healthycollege.co'
   const [agents, setAgents] = useState<Agent[]>([])
   const [events, setEvents] = useState<EvolutionEvent[]>([])
   const [genePool, setGenePool] = useState<GenePoolEntry[]>([])
@@ -230,6 +232,14 @@ export function AITeamPage() {
   const [agentLearnings, setAgentLearnings] = useState<Record<string, EvolutionEvent[]>>({})
   const [activeTab, setActiveTab] = useState<'overview' | 'leaderboard' | 'timeline' | 'gene-pool' | 'health' | 'quotas' | 'competitors'>('overview')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Test Maestro modal state
+  const [testModalOpen, setTestModalOpen] = useState(false)
+  const [testContentType, setTestContentType] = useState<'posts' | 'reels' | 'both'>('both')
+  const [testPosts, setTestPosts] = useState(2)
+  const [testReels, setTestReels] = useState(2)
+  const [testBrands, setTestBrands] = useState(1)
+  const [testRunning, setTestRunning] = useState(false)
 
   const { data: agentStatusesData } = useAgentStatuses(activeTab === 'leaderboard')
   const { data: quotasData, isLoading: quotasLoading } = useQuotas(activeTab === 'quotas')
@@ -358,14 +368,140 @@ export function AITeamPage() {
             {activeAgents.length} active agents competing • Generation {Math.max(...activeAgents.map(a => a.generation || 1), 1)} • {genePool.length} DNA archived
           </p>
         </div>
-        <button
-          onClick={() => navigate('/observatory')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg shadow-md transition-all border border-gray-700 text-sm font-medium"
-        >
-          I want to know more
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-        </button>
+        <div className="flex items-center gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => setTestModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-md transition-all border border-indigo-500 text-sm font-medium"
+            >
+              <FlaskConical className="w-4 h-4" />
+              Test Maestro
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/observatory')}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg shadow-md transition-all border border-gray-700 text-sm font-medium"
+          >
+            I want to know more
+            <ChevronRight className="w-4 h-4 text-gray-400" />
+          </button>
+        </div>
       </div>
+
+      {/* Test Maestro Modal */}
+      {testModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !testRunning && setTestModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <FlaskConical className="w-5 h-5 text-indigo-600" />
+                Test Maestro
+              </h3>
+              <button onClick={() => !testRunning && setTestModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              {/* Content type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Content Type</label>
+                <div className="flex gap-3">
+                  {(['posts', 'reels', 'both'] as const).map(opt => (
+                    <label key={opt} className={`flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors text-sm font-medium ${
+                      testContentType === opt
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="contentType"
+                        value={opt}
+                        checked={testContentType === opt}
+                        onChange={() => setTestContentType(opt)}
+                        className="sr-only"
+                      />
+                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Posts count */}
+              {(testContentType === 'posts' || testContentType === 'both') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">How many posts?</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={testPosts}
+                    onChange={e => setTestPosts(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              )}
+
+              {/* Reels count */}
+              {(testContentType === 'reels' || testContentType === 'both') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">How many reels?</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={testReels}
+                    onChange={e => setTestReels(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              )}
+
+              {/* Brands count */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">How many brands?</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={testBrands}
+                  onChange={e => setTestBrands(Math.min(5, Math.max(1, parseInt(e.target.value) || 1)))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Start button */}
+              <button
+                onClick={async () => {
+                  setTestRunning(true)
+                  try {
+                    await post('/api/maestro/trigger-burst?force=true', {
+                      test_mode: true,
+                      posts: testContentType === 'reels' ? 0 : testPosts,
+                      reels: testContentType === 'posts' ? 0 : testReels,
+                      brands: testBrands,
+                    })
+                    toast.success('Test burst triggered successfully!')
+                    setTestModalOpen(false)
+                  } catch (e: any) {
+                    toast.error(e?.message || 'Failed to trigger test burst')
+                  } finally {
+                    setTestRunning(false)
+                  }
+                }}
+                disabled={testRunning}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {testRunning ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Running Test...</>
+                ) : (
+                  <><FlaskConical className="w-4 h-4" /> Start Test</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Banner */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -527,8 +663,43 @@ function QuotasTab({ quotas, quotasLoading }: { quotas: QuotaData | undefined; q
 
   if (quotasLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* deAPI skeleton */}
+          <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6 animate-pulse">
+            <div className="flex items-center gap-3 mb-5">
+              <span className="text-3xl">🎨</span>
+              <div className="h-5 w-20 bg-purple-200 rounded" />
+            </div>
+            <div className="flex flex-col items-center py-6 gap-3">
+              <div className="h-10 w-32 bg-purple-200 rounded-lg" />
+              <div className="h-4 w-24 bg-purple-100 rounded" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-purple-200/50">
+              <div className="bg-white/60 rounded-lg p-3"><div className="h-4 w-full bg-purple-100 rounded" /></div>
+              <div className="bg-white/60 rounded-lg p-3"><div className="h-4 w-full bg-purple-100 rounded" /></div>
+            </div>
+          </div>
+          {/* DeepSeek skeleton */}
+          <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-6 animate-pulse">
+            <div className="flex items-center gap-3 mb-5">
+              <span className="text-3xl">🧠</span>
+              <div className="h-5 w-24 bg-blue-200 rounded" />
+            </div>
+            <div className="flex flex-col items-center py-6 gap-3">
+              <div className="h-10 w-32 bg-blue-200 rounded-lg" />
+              <div className="h-4 w-24 bg-blue-100 rounded" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-blue-200/50">
+              <div className="bg-white/60 rounded-lg p-3"><div className="h-4 w-full bg-blue-100 rounded" /></div>
+              <div className="bg-white/60 rounded-lg p-3"><div className="h-4 w-full bg-blue-100 rounded" /></div>
+            </div>
+          </div>
+        </div>
+        <div className="text-center text-sm text-gray-400 flex items-center justify-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Checking API quotas...
+        </div>
       </div>
     )
   }
@@ -1236,7 +1407,7 @@ function StatCard({ icon: Icon, label, value, suffix, color }: { icon: any; labe
 
 
 function AgentCard({
-  agent, rank, expanded, onToggle, perfHistory, learnings, onMutate, onClone, onRetire, actionLoading, status
+  agent, rank, expanded, onToggle, perfHistory, learnings, onMutate: _onMutate, onClone: _onClone, onRetire: _onRetire, actionLoading: _actionLoading, status
 }: {
   agent: Agent
   rank: number
@@ -1417,31 +1588,34 @@ function AgentCard({
             </div>
           )}
 
-          {/* Actions */}
+          {/* Actions — disabled for future release */}
           <div className="flex items-center gap-2">
             <button
-              onClick={onMutate}
-              disabled={!!actionLoading}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
+              disabled
+              title="Future release"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded-lg cursor-not-allowed opacity-60"
             >
-              {actionLoading === agent.agent_id + '-mutate' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
+              <FlaskConical className="w-4 h-4" />
               Force Mutate
+              <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full ml-1">Soon</span>
             </button>
             <button
-              onClick={onClone}
-              disabled={!!actionLoading}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+              disabled
+              title="Future release"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded-lg cursor-not-allowed opacity-60"
             >
-              {actionLoading === agent.agent_id + '-clone' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+              <Copy className="w-4 h-4" />
               Clone DNA
+              <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full ml-1">Soon</span>
             </button>
             <button
-              onClick={onRetire}
-              disabled={!!actionLoading}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+              disabled
+              title="Future release"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded-lg cursor-not-allowed opacity-60"
             >
-              {actionLoading === agent.agent_id + '-retire' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Skull className="w-4 h-4" />}
+              <Skull className="w-4 h-4" />
               Retire
+              <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full ml-1">Soon</span>
             </button>
           </div>
         </div>

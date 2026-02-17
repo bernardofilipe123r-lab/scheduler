@@ -324,7 +324,12 @@ export function saveGeneralSettings(settings: GeneralSettings) {
 /** Full-canvas background image. */
 export function BackgroundImageLayer({ imageUrl }: { imageUrl: string }) {
   const [image] = useImage(imageUrl, 'anonymous')
-  if (!image) return null
+  if (!image) {
+    // Show placeholder while image loads to prevent blank canvas caching
+    return (
+      <Rect x={0} y={0} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="#1a1a2e" />
+    )
+  }
   return (
     <KonvaImage
       image={image}

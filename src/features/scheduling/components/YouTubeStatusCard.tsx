@@ -1,4 +1,4 @@
-import { useYouTubeStatus, useDisconnectYouTube, getYouTubeConnectUrl } from '../hooks'
+import { useYouTubeStatus, useDisconnectYouTube, connectYouTube } from '../hooks'
 import { getBrandLabel, getBrandColor } from '@/features/brands'
 import type { BrandName } from '@/shared/types'
 import { ExternalLink, Youtube, Check, RefreshCw, Unlink, AlertTriangle, Loader2 } from 'lucide-react'
@@ -117,9 +117,17 @@ function BrandYouTubeRow({ brand, status, oauthConfigured, onStatusChange }: Bra
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
   const disconnectMutation = useDisconnectYouTube()
   
-  const handleConnect = () => {
-    // Open connect URL in same window (OAuth redirect)
-    window.location.href = getYouTubeConnectUrl(brand)
+  const [connecting, setConnecting] = useState(false)
+
+  const handleConnect = async () => {
+    setConnecting(true)
+    try {
+      const authUrl = await connectYouTube(brand)
+      window.location.href = authUrl
+    } catch (error) {
+      console.error('Failed to start YouTube connection:', error)
+      setConnecting(false)
+    }
   }
   
   const handleDisconnect = async () => {
@@ -225,14 +233,14 @@ function BrandYouTubeRow({ brand, status, oauthConfigured, onStatusChange }: Bra
         ) : (
           <button
             onClick={handleConnect}
-            disabled={!oauthConfigured}
+            disabled={!oauthConfigured || connecting}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              oauthConfigured
+              oauthConfigured && !connecting
                 ? 'bg-red-500 text-white hover:bg-red-600'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
-            Connect
+            {connecting ? 'Connecting...' : 'Connect'}
           </button>
         )}
       </div>

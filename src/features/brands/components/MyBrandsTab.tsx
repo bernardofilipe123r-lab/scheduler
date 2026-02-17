@@ -46,11 +46,8 @@ export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTab
         try {
           const data = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand.id}/theme`)
           if (data.theme?.logo) {
-            const logoUrl = `/brand-logos/${data.theme.logo}`
-            const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
-            if (logoCheck.ok) {
-              logos[brand.id] = logoUrl
-            }
+            const logoUrl = data.theme.logo.startsWith('http') ? data.theme.logo : `/brand-logos/${data.theme.logo}`
+            logos[brand.id] = logoUrl
           }
         } catch {
           // ignore
@@ -65,11 +62,8 @@ export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTab
     try {
       const data = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brandId}/theme`)
       if (data.theme?.logo) {
-        const logoUrl = `/brand-logos/${data.theme.logo}?t=${Date.now()}`
-        const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
-        if (logoCheck.ok) {
-          setBrandLogos((prev) => ({ ...prev, [brandId]: logoUrl }))
-        }
+        const logoUrl = data.theme.logo.startsWith('http') ? `${data.theme.logo}?t=${Date.now()}` : `/brand-logos/${data.theme.logo}?t=${Date.now()}`
+        setBrandLogos((prev) => ({ ...prev, [brandId]: logoUrl }))
       }
     } catch {
       // ignore

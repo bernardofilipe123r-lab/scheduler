@@ -69,7 +69,7 @@ async def youtube_connect(brand: str = Query(..., description="Brand to connect 
     auth_url = youtube_publisher.get_authorization_url(state=brand)
     
     logger.info(f"Starting YouTube OAuth flow for brand: {brand}")
-    return RedirectResponse(url=auth_url)
+    return {"auth_url": auth_url, "brand": brand}
 
 
 @router.get("/callback")

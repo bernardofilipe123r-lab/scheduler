@@ -20,11 +20,8 @@ export function ConnectionsTab() {
         try {
           const themeData = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand.brand}/theme`)
           if (themeData.theme?.logo) {
-            const logoUrl = `/brand-logos/${themeData.theme.logo}`
-            const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
-            if (logoCheck.ok) {
-              logos[brand.brand] = logoUrl
-            }
+            const logoUrl = themeData.theme.logo.startsWith('http') ? themeData.theme.logo : `/brand-logos/${themeData.theme.logo}`
+            logos[brand.brand] = logoUrl
           }
         } catch {
           // ignore

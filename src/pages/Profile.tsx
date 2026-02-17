@@ -1,8 +1,8 @@
 /**
- * Profile Page — view profile info, change password via Supabase.
+ * Profile Page — view/edit profile info, change password & email via Supabase.
  */
 import { useState, useEffect } from 'react'
-import { User, Mail, KeyRound, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react'
+import { User, Mail, KeyRound, Loader2, ArrowLeft, Pencil, Send, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/features/auth'
@@ -12,37 +12,72 @@ export function ProfilePage() {
   const { user, refreshUser } = useAuth()
   const navigate = useNavigate()
 
-  const [newPw, setNewPw] = useState('')
-  const [confirmPw, setConfirmPw] = useState('')
-  const [showNewPw, setShowNewPw] = useState(false)
-  const [pwSaving, setPwSaving] = useState(false)
+  // Display name editing
+  const [displayName, setDisplayName] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
+
+  // Password reset
+  const [resetSending, setResetSending] = useState(false)
+
+  // Email change
+  const [newEmail, setNewEmail] = useState('')
+  const [emailSaving, setEmailSaving] = useState(false)
 
   useEffect(() => {
     refreshUser()
   }, [])
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (newPw !== confirmPw) {
-      toast.error('Passwords do not match')
-      return
-    }
-    if (newPw.length < 8) {
-      toast.error('New password must be at least 8 characters')
-      return
-    }
+  useEffect(() => {
+    if (user?.name) setDisplayName(user.name)
+  }, [user?.name])
 
-    setPwSaving(true)
+  const nameChanged = displayName !== (user?.name || '')
+
+  const handleSaveName = async () => {
+    if (!nameChanged) return
+    setNameSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPw })
+      const { error } = await supabase.auth.updateUser({ data: { name: displayName } })
       if (error) throw new Error(error.message)
-      toast.success('Password changed successfully')
-      setNewPw('')
-      setConfirmPw('')
+      await refreshUser()
+      toast.success('Display name updated')
     } catch {
-      toast.error('Failed to change password')
+      toast.error('Failed to update display name')
     } finally {
-      setPwSaving(false)
+      setNameSaving(false)
+    }
+  }
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) {
+      toast.error('No email address found')
+      return
+    }
+    setResetSending(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email)
+      if (error) throw new Error(error.message)
+      toast.success('Password reset email sent — check your inbox')
+    } catch {
+      toast.error('Failed to send password reset email')
+    } finally {
+      setResetSending(false)
+    }
+  }
+
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newEmail) return
+    setEmailSaving(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail })
+      if (error) throw new Error(error.message)
+      toast.success('A confirmation email has been sent to your new email address. The change will take effect once confirmed.')
+      setNewEmail('')
+    } catch {
+      toast.error('Failed to initiate email change')
+    } finally {
+      setEmailSaving(false)
     }
   }
 
@@ -65,7 +100,7 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Profile Info Card (read-only) */}
+      {/* Profile Info Card */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -75,21 +110,41 @@ export function ProfilePage() {
         </div>
 
         <div className="p-6 space-y-5">
+          {/* Editable Display Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Display Name</label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={user?.name || ''}
-                readOnly
-                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Pencil className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              {nameChanged && (
+                <button
+                  type="button"
+                  onClick={handleSaveName}
+                  disabled={nameSaving}
+                  className="flex items-center gap-2 px-5 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors whitespace-nowrap"
+                >
+                  {nameSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Save
+                </button>
+              )}
             </div>
           </div>
 
+          {/* Email (read-only with badge) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
+              Email Address
+              <span className="text-xs bg-primary-50 text-primary-600 px-2 py-0.5 rounded-full font-normal">
+                Change email below
+              </span>
+            </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -103,7 +158,52 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Change Password Card */}
+      {/* Change Email Card */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Mail className="w-5 h-5 text-primary-500" />
+            Change Email Address
+          </h2>
+        </div>
+
+        <form onSubmit={handleChangeEmail} className="p-6 space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl text-sm text-blue-700">
+            <ShieldCheck className="w-5 h-5 mt-0.5 flex-shrink-0" />
+            <p>
+              For security, confirmation links will be sent to both your current and new email addresses.
+              The change takes effect only after both are confirmed.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">New Email Address</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="Enter new email address"
+                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={!newEmail || emailSaving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            >
+              {emailSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Change Email
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Password Reset Card */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -112,49 +212,27 @@ export function ProfilePage() {
           </h2>
         </div>
 
-        <form onSubmit={handleChangePassword} className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">New Password</label>
-            <div className="relative">
-              <input
-                type={showNewPw ? 'text' : 'password'}
-                value={newPw}
-                onChange={(e) => setNewPw(e.target.value)}
-                placeholder="Min 8 characters"
-                className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNewPw(!showNewPw)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-              >
-                {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm New Password</label>
-            <input
-              type="password"
-              value={confirmPw}
-              onChange={(e) => setConfirmPw(e.target.value)}
-              placeholder="Confirm new password"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
+        <div className="p-6 space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl text-sm text-amber-700">
+            <ShieldCheck className="w-5 h-5 mt-0.5 flex-shrink-0" />
+            <p>
+              For security, password changes require email verification.
+              Click the button below and we'll send a password reset link to your email.
+            </p>
           </div>
 
           <div className="flex justify-end">
             <button
-              type="submit"
-              disabled={!newPw || !confirmPw || pwSaving}
+              type="button"
+              onClick={handlePasswordReset}
+              disabled={resetSending}
               className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
-              {pwSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-              Change Password
+              {resetSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Send Password Reset Email
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )

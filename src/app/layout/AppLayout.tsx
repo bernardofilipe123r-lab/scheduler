@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, ScrollText, User, LogOut, Info, Dna, Crosshair } from 'lucide-react'
+import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, ScrollText, User, LogOut, Info, Dna } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 
@@ -135,20 +135,6 @@ export function AppLayout() {
                 AI Team
               </NavLink>
 
-              <NavLink
-                to="/observatory"
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    isActive
-                      ? 'bg-cyan-50 text-cyan-600'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`
-                }
-                title="Observatory"
-              >
-                <Crosshair className="w-4 h-4" />
-              </NavLink>
-              
               {/* Settings Dropdown */}
               <div className="relative" ref={settingsRef}>
                 <button

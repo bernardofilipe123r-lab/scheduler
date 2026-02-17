@@ -141,9 +141,8 @@ export function ScheduledPage() {
       try {
         const d = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand}/theme`)
         if (d.theme?.logo) {
-          const url = `/brand-logos/${d.theme.logo}`
-          const check = await fetch(url, { method: 'HEAD' })
-          if (check.ok) setBrandLogos(prev => ({ ...prev, [brand]: url }))
+          const url = d.theme.logo.startsWith('http') ? d.theme.logo : `/brand-logos/${d.theme.logo}`
+          setBrandLogos(prev => ({ ...prev, [brand]: url }))
         }
       } catch { /* ignore */ }
     }
@@ -1125,7 +1124,7 @@ export function ScheduledPage() {
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
           const totalSlides = isPost ? 1 + Math.max(carouselPaths.length, slideTexts.length) : 1
           // Derive raw AI background URL from reel_id
-          const bgUrl = selectedPost.reel_id ? `/output/posts/${selectedPost.reel_id}_background.png` : null
+          const bgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
           const logoUrl = brandLogos[selectedPost.brand] || null
 
           return (

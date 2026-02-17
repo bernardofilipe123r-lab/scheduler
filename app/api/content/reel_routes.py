@@ -1,8 +1,9 @@
 """
 Reel creation API routes.
 """
+import os
 import uuid
-import shutil
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel
@@ -17,9 +18,10 @@ from app.services.brands.resolver import brand_resolver
 from app.db_connection import get_db
 from app.models.jobs import GenerationJob
 from app.core.config import BrandType
-
-
-# Pydantic models
+from app.services.storage.supabase_storage import (
+    upload_from_path, storage_path, StorageError,
+)
+from app.api.auth.middleware import get_current_user
 class SimpleReelRequest(BaseModel):
     title: str
     content_lines: List[str]
@@ -53,7 +55,7 @@ scheduler_service = DatabaseSchedulerService()
         500: {"model": ErrorResponse, "description": "Internal server error"},
     }
 )
-async def create_reel(request: ReelCreateRequest) -> ReelCreateResponse:
+async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_current_user)) -> ReelCreateResponse:
     """
     Create a complete Instagram Reel package.
     
@@ -68,14 +70,17 @@ async def create_reel(request: ReelCreateRequest) -> ReelCreateResponse:
     try:
         # Generate unique ID for this reel
         reel_id = str(uuid.uuid4())
+        user_id = user["id"]
+        brand_slug = request.brand.value if hasattr(request.brand, 'value') else str(request.brand)
         
-        # Get project root for file paths
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        
-        # Define output paths
-        thumbnail_path = base_dir / "output" / "thumbnails" / f"{reel_id}.png"
-        reel_image_path = base_dir / "output" / "reels" / f"{reel_id}.png"
-        video_path = base_dir / "output" / "videos" / f"{reel_id}.mp4"
+        # Create temp files for generators that need paths
+        tmp_thumb = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        tmp_reel = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        tmp_video = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        tmp_thumb.close(); tmp_reel.close(); tmp_video.close()
+        thumbnail_path = Path(tmp_thumb.name)
+        reel_image_path = Path(tmp_reel.name)
+        video_path = Path(tmp_video.name)
         
         # Initialize services for this request
         image_generator = ImageGenerator(request.brand)
@@ -139,32 +144,52 @@ async def create_reel(request: ReelCreateRequest) -> ReelCreateResponse:
                 detail=f"Failed to generate caption: {str(e)}"
             )
         
+        # Upload to Supabase Storage
+        try:
+            thumb_remote = storage_path(user_id, brand_slug, "thumbnails", f"{reel_id}.png")
+            thumbnail_url = upload_from_path("media", thumb_remote, str(thumbnail_path))
+        except StorageError as e:
+            print(f"Thumbnail upload failed: {e}"); thumbnail_url = ""
+        try:
+            reel_remote = storage_path(user_id, brand_slug, "reels", f"{reel_id}.png")
+            reel_image_url = upload_from_path("media", reel_remote, str(reel_image_path))
+        except StorageError as e:
+            print(f"Reel image upload failed: {e}"); reel_image_url = ""
+        try:
+            video_remote = storage_path(user_id, brand_slug, "videos", f"{reel_id}.mp4")
+            video_url = upload_from_path("media", video_remote, str(video_path))
+        except StorageError as e:
+            print(f"Video upload failed: {e}"); video_url = ""
+
+        # Clean up temp files
+        for tmp in [thumbnail_path, reel_image_path, video_path]:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
         # Step 5: Handle scheduling if provided
         if request.schedule_at:
             try:
                 scheduler_service.schedule_reel(
+                    user_id=user_id,
                     reel_id=reel_id,
                     scheduled_time=request.schedule_at,
-                    video_path=video_path,
+                    video_path=video_url,
+                    thumbnail_path=thumbnail_url,
                     caption=caption,
-                    metadata={
-                        "title": request.title,
-                        "brand": request.brand.value,
-                        "cta_type": request.cta_type.value,
-                        "thumbnail_path": str(thumbnail_path),
-                        "reel_image_path": str(reel_image_path),
-                    }
+                    brand=brand_slug,
                 )
             except Exception as e:
                 # Scheduling failure shouldn't fail the entire request
                 # Log the error but continue
                 print(f"Warning: Failed to schedule reel: {str(e)}")
         
-        # Return response with relative paths
+        # Return response with Supabase URLs
         return ReelCreateResponse(
-            thumbnail_path=str(thumbnail_path.relative_to(base_dir)),
-            reel_image_path=str(reel_image_path.relative_to(base_dir)),
-            video_path=str(video_path.relative_to(base_dir)),
+            thumbnail_path=thumbnail_url,
+            reel_image_path=reel_image_url,
+            video_path=video_url,
             caption=caption,
             reel_id=reel_id,
             scheduled_at=request.schedule_at
@@ -186,7 +211,7 @@ async def create_reel(request: ReelCreateRequest) -> ReelCreateResponse:
     summary="Generate reel (simple interface)",
     description="Simplified endpoint for web interface - generates thumbnail, reel image, and video"
 )
-async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db)):
+async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Generate reel images and video from title and content lines.
     
@@ -195,11 +220,13 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
     try:
         # Generate unique ID
         reel_id = str(uuid.uuid4())[:8]
+        user_id = user["id"]
+        brand_slug = request.brand
         
         # Create database record
         job = GenerationJob(
             job_id=reel_id,
-            user_id="web",
+            user_id=user_id,
             title=request.title,
             content_lines=request.content_lines,
             brands=[request.brand],
@@ -210,13 +237,14 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
         db.add(job)
         db.commit()
         
-        # Get base directory
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        
-        # Define output paths
-        thumbnail_path = base_dir / "output" / "thumbnails" / f"{reel_id}.png"
-        reel_image_path = base_dir / "output" / "reels" / f"{reel_id}.png"
-        video_path = base_dir / "output" / "videos" / f"{reel_id}.mp4"
+        # Create temp files for generators
+        tmp_thumb = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        tmp_reel = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        tmp_video = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        tmp_thumb.close(); tmp_reel.close(); tmp_video.close()
+        thumbnail_path = Path(tmp_thumb.name)
+        reel_image_path = Path(tmp_reel.name)
+        video_path = Path(tmp_video.name)
         
         # Parse brand - resolve dynamically from DB
         brand_id = brand_resolver.resolve_brand_name(request.brand)
@@ -275,6 +303,30 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             lines=request.content_lines
         )
         
+        # Upload to Supabase Storage
+        try:
+            thumb_remote = storage_path(user_id, brand_slug, "thumbnails", f"{reel_id}.png")
+            thumbnail_url = upload_from_path("media", thumb_remote, str(thumbnail_path))
+        except StorageError as e:
+            print(f"Thumbnail upload failed: {e}"); thumbnail_url = ""
+        try:
+            video_remote = storage_path(user_id, brand_slug, "videos", f"{reel_id}.mp4")
+            video_url = upload_from_path("media", video_remote, str(video_path))
+        except StorageError as e:
+            print(f"Video upload failed: {e}"); video_url = ""
+        try:
+            reel_remote = storage_path(user_id, brand_slug, "reels", f"{reel_id}.png")
+            reel_image_url = upload_from_path("media", reel_remote, str(reel_image_path))
+        except StorageError as e:
+            print(f"Reel image upload failed: {e}"); reel_image_url = ""
+
+        # Clean up temp files
+        for tmp in [thumbnail_path, reel_image_path, video_path]:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        
         # Update database with completion
         job.status = "completed"
         job.current_step = "completed"
@@ -282,18 +334,18 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
         job.brand_outputs = {
             request.brand: {
                 "reel_id": reel_id,
-                "thumbnail": f"/output/thumbnails/{reel_id}.png",
-                "video": f"/output/videos/{reel_id}.mp4",
+                "thumbnail": thumbnail_url,
+                "video": video_url,
                 "status": "completed",
             }
         }
         db.commit()
         
-        # Return web-friendly paths
+        # Return Supabase URLs
         return {
-            "thumbnail_path": f"/output/thumbnails/{reel_id}.png",
-            "reel_image_path": f"/output/reels/{reel_id}.png",
-            "video_path": f"/output/videos/{reel_id}.mp4",
+            "thumbnail_path": thumbnail_url,
+            "reel_image_path": reel_image_url,
+            "video_path": video_url,
             "caption": caption,
             "reel_id": reel_id
         }
@@ -314,65 +366,12 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
 
 @router.post(
     "/download",
-    summary="Download reel to numbered folder",
-    description="Download generated reel (video and thumbnail) to reels folder with auto-incrementing numbers"
+    summary="Download reel (deprecated)",
+    description="This endpoint is deprecated. Reel files are stored in Supabase Storage."
 )
 async def download_reel(request: DownloadRequest):
-    """
-    Download reel files to a reels folder with auto-incrementing numbering.
-    Saves as 1.mp4/1.png, 2.mp4/2.png, etc.
-    """
-    try:
-        # Get base directory
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        
-        # Source paths
-        video_path = base_dir / "output" / "videos" / f"{request.reel_id}.mp4"
-        thumbnail_path = base_dir / "output" / "thumbnails" / f"{request.reel_id}.png"
-        
-        # Check if source files exist
-        if not video_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Video not found for reel ID: {request.reel_id}"
-            )
-        
-        if not thumbnail_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Thumbnail not found for reel ID: {request.reel_id}"
-            )
-        
-        # Create reels folder for specific brand
-        reels_folder = base_dir / "reels" / request.brand
-        reels_folder.mkdir(parents=True, exist_ok=True)
-        
-        # Find next available number
-        next_number = 1
-        while True:
-            dest_video = reels_folder / f"{next_number}.mp4"
-            dest_thumbnail = reels_folder / f"{next_number}.png"
-            
-            if not dest_video.exists() and not dest_thumbnail.exists():
-                break
-            next_number += 1
-        
-        # Copy files
-        shutil.copy2(video_path, dest_video)
-        shutil.copy2(thumbnail_path, dest_thumbnail)
-        
-        return {
-            "status": "success",
-            "message": f"Reel downloaded as {next_number}.mp4 and {next_number}.png to reels/{request.brand}/ folder",
-            "number": next_number,
-            "video_path": str(dest_video.relative_to(base_dir)),
-            "thumbnail_path": str(dest_thumbnail.relative_to(base_dir))
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to download reel: {str(e)}"
-        )
+    """Deprecated: Reels are now stored exclusively in Supabase Storage."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Local download is no longer supported. Access reels via their Supabase Storage URLs."
+    )

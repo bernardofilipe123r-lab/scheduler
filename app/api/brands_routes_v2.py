@@ -18,8 +18,11 @@ from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
 from app.models import Brand, YouTubeChannel
-from app.services.brand_manager import get_brand_manager, BrandManager
-from app.services.brand_resolver import brand_resolver
+from app.services.brands.manager import get_brand_manager, BrandManager
+from app.services.brands.resolver import brand_resolver
+from app.services.storage.supabase_storage import (
+    upload_bytes, storage_path, StorageError,
+)
 from app.api.auth.middleware import get_current_user
 
 
@@ -263,7 +266,7 @@ async def create_brand(
         # Auto-provision an AI agent for this brand
         agent_info = None
         try:
-            from app.services.generic_agent import create_agent_for_brand
+            from app.services.agents.generic_agent import create_agent_for_brand
             agent_name = request.agent_name  # User-defined name, or None for auto
             new_agent = create_agent_for_brand(
                 brand_id=request.id.lower(),
@@ -634,18 +637,19 @@ async def update_brand_theme(
     
     # Handle logo upload
     if logo and logo.filename:
-        logo_dir = Path("/app/output/brand-data/logos") if Path("/app/output").exists() else Path("output/brand-data/logos")
-        logo_dir.mkdir(parents=True, exist_ok=True)
-        
         extension = Path(logo.filename).suffix.lower() or '.png'
-        logo_filename = f"{brand_id}_logo{extension}"
-        logo_path = logo_dir / logo_filename
+        ext = extension.lstrip('.')
+        logo_filename = f"{brand_id}_logo.{ext}"
+        content = await logo.read()
         
-        with open(logo_path, 'wb') as f:
-            content = await logo.read()
-            f.write(content)
+        user_id = user["id"]
+        remote_path = storage_path(user_id, brand_id, "logos", logo_filename)
+        try:
+            logo_url = upload_bytes("brand-assets", remote_path, content, f"image/{ext}")
+        except StorageError as e:
+            print(f"Logo upload failed: {e}"); logo_url = logo_filename
         
-        updates["logo_path"] = logo_filename
+        updates["logo_path"] = logo_url
     
     # Update brand
     updated_brand = manager.update_brand(brand_id, updates, user_id=user["id"])

@@ -3,10 +3,12 @@ Rejection feedback API routes.
 """
 import uuid
 import base64
-from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
+from app.services.storage.supabase_storage import (
+    upload_bytes, StorageError,
+)
 
 
 # Pydantic models
@@ -27,30 +29,27 @@ router = APIRouter()
 
 @router.post("/rejection-feedback")
 async def save_rejection_feedback(request: RejectionFeedbackRequest):
-    """Save rejection feedback permanently to server filesystem (output/feedback/).
-    Stores JSON metadata + PNG image side by side for later manual review."""
+    """Save rejection feedback to Supabase Storage (feedback bucket).
+    Stores JSON metadata + PNG image for later manual review."""
     import json
     from datetime import datetime
     try:
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        feedback_dir = base_dir / "output" / "feedback"
-        feedback_dir.mkdir(parents=True, exist_ok=True)
-
         feedback_id = f"fb_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
 
-        # Save image if provided
-        image_filename = None
+        # Upload image if provided
+        image_url = None
         if request.image_data:
             image_b64 = request.image_data
             if ',' in image_b64:
                 image_b64 = image_b64.split(',', 1)[1]
             image_bytes = base64.b64decode(image_b64)
-            image_path = feedback_dir / f"{feedback_id}.png"
-            image_path.write_bytes(image_bytes)
-            image_filename = f"{feedback_id}.png"
-            print(f"💾 Feedback image saved: {image_path} ({len(image_bytes)} bytes)")
+            try:
+                image_url = upload_bytes("feedback", f"{feedback_id}.png", image_bytes, "image/png")
+            except StorageError as e:
+                print(f"⚠️ Feedback image upload failed: {e}", flush=True)
+            print(f"💾 Feedback image uploaded ({len(image_bytes)} bytes)")
 
-        # Save metadata JSON
+        # Upload metadata JSON
         metadata = {
             "id": feedback_id,
             "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -61,13 +60,16 @@ async def save_rejection_feedback(request: RejectionFeedbackRequest):
             "caption": request.caption,
             "image_prompt": request.image_prompt,
             "brand": request.brand,
-            "image_file": image_filename,
+            "image_url": image_url,
         }
-        json_path = feedback_dir / f"{feedback_id}.json"
-        json_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False))
-        print(f"📝 Feedback metadata saved: {json_path}")
+        json_bytes = json.dumps(metadata, indent=2, ensure_ascii=False).encode("utf-8")
+        try:
+            upload_bytes("feedback", f"{feedback_id}.json", json_bytes, "application/json")
+        except StorageError as e:
+            print(f"⚠️ Feedback metadata upload failed: {e}", flush=True)
+        print(f"📝 Feedback metadata uploaded")
 
-        return {"status": "saved", "id": feedback_id}
+        return {"status": "saved", "id": feedback_id, "image_url": image_url}
 
     except Exception as e:
         print(f"❌ Failed to save rejection feedback: {str(e)}")
@@ -76,22 +78,26 @@ async def save_rejection_feedback(request: RejectionFeedbackRequest):
 
 @router.get("/rejection-feedback")
 async def list_rejection_feedback():
-    """List all stored rejection feedback entries."""
+    """List all stored rejection feedback entries from Supabase Storage."""
     import json
     try:
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        feedback_dir = base_dir / "output" / "feedback"
-        if not feedback_dir.exists():
-            return {"feedback": [], "count": 0}
+        from app.services.storage.supabase_storage import list_files, download_file
 
+        files = list_files("feedback", "")
         entries = []
-        for json_file in sorted(feedback_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        for f in files:
+            name = f.get("name", "")
+            if not name.endswith(".json"):
+                continue
             try:
-                data = json.loads(json_file.read_text())
+                data_bytes = download_file("feedback", name)
+                data = json.loads(data_bytes.decode("utf-8"))
                 entries.append(data)
             except Exception:
                 continue
 
+        # Sort by timestamp descending
+        entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
         return {"feedback": entries, "count": len(entries)}
 
     except Exception as e:

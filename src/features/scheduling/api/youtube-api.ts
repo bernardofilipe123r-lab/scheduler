@@ -27,8 +27,11 @@ export const youtubeApi = {
   // Get connection status for all brands
   getStatus: () => get<YouTubeStatusResponse>('/api/youtube/status'),
   
-  // Get the connect URL for a brand (returns redirect URL)
-  getConnectUrl: (brand: string) => `/api/youtube/connect?brand=${brand}`,
+  // Start YouTube OAuth flow for a brand (authenticated)
+  connectBrand: async (brand: string) => {
+    const data = await get<{ auth_url: string }>(`/api/youtube/connect?brand=${brand}`)
+    return data.auth_url
+  },
   
   // Get quota status
   getQuota: () => get<YouTubeStatusResponse['quota']>('/api/youtube/quota'),

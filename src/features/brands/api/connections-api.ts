@@ -60,11 +60,11 @@ export async function fetchBrandsList(): Promise<BrandsListResponse> {
 }
 
 /**
- * Get YouTube connect URL for a brand
+ * Start YouTube OAuth flow for a brand (authenticated)
  */
-export function getYouTubeConnectUrl(brand: BrandName): string {
-  const baseUrl = window.location.origin
-  return `${baseUrl}/api/youtube/connect?brand=${brand}`
+export async function connectYouTube(brand: BrandName): Promise<string> {
+  const data = await get<{ auth_url: string }>(`/api/youtube/connect?brand=${brand}`)
+  return data.auth_url
 }
 
 /**

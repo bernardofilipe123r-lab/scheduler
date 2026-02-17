@@ -2,7 +2,6 @@
 PostgreSQL-based scheduler service with multi-user support.
 """
 import os
-from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from sqlalchemy import and_
@@ -26,9 +25,9 @@ class DatabaseSchedulerService:
         caption: str = "CHANGE ME",
         yt_title: Optional[str] = None,
         platforms: list[str] = ["instagram"],
-        video_path: Optional[Path] = None,
-        thumbnail_path: Optional[Path] = None,
-        yt_thumbnail_path: Optional[Path] = None,  # Clean AI image for YouTube
+        video_path: Optional[str] = None,
+        thumbnail_path: Optional[str] = None,
+        yt_thumbnail_path: Optional[str] = None,  # Clean AI image for YouTube
         user_name: Optional[str] = None,
         brand: Optional[str] = None,
         variant: Optional[str] = None,
@@ -516,8 +515,8 @@ class DatabaseSchedulerService:
     
     def publish_now(
         self,
-        video_path: Path,
-        thumbnail_path: Path,
+        video_url: str,
+        thumbnail_url: str,
         caption: str = "CHANGE ME",
         platforms: list[str] = ["instagram"],
         user_id: Optional[str] = None,
@@ -529,8 +528,8 @@ class DatabaseSchedulerService:
         Publish a reel immediately using user's credentials or brand credentials.
         
         Args:
-            video_path: Path to video file
-            thumbnail_path: Path to thumbnail
+            video_url: Supabase public URL for the video
+            thumbnail_url: Supabase public URL for the thumbnail
             caption: Caption for the post
             platforms: List of platforms
             user_id: User ID to use credentials from
@@ -624,27 +623,8 @@ class DatabaseSchedulerService:
             # Use default credentials
             publisher = SocialPublisher()
         
-        # Get public URL - auto-detect Railway or use configured value
-        # Railway sets RAILWAY_PUBLIC_DOMAIN automatically
-        railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
-        if railway_domain:
-            public_url_base = f"https://{railway_domain}"
-            print(f"🌐 Using Railway domain: {railway_domain}")
-        else:
-            public_url_base = os.getenv("PUBLIC_URL_BASE", "")
-            print(f"🌐 Using PUBLIC_URL_BASE: {public_url_base}")
-        
-        video_url = f"{public_url_base}/output/videos/{video_path.name}"
-        thumbnail_url = f"{public_url_base}/output/thumbnails/{thumbnail_path.name}"
-        
         print(f"🎬 Video URL: {video_url}")
         print(f"🖼️  Thumbnail URL: {thumbnail_url}")
-        
-        # Verify video file exists
-        if not video_path.exists():
-            print(f"❌ ERROR: Video file not found at {video_path}")
-        else:
-            print(f"✅ Video file exists: {video_path} ({video_path.stat().st_size} bytes)")
         
         results = {}
         
@@ -670,28 +650,13 @@ class DatabaseSchedulerService:
             # Get yt_title from metadata if available
             yt_title = metadata.get("yt_title") if metadata else None
             # Get yt_thumbnail_path from metadata - clean AI image without text
-            yt_thumbnail_path = metadata.get("yt_thumbnail_path") if metadata else None
-            if yt_thumbnail_path:
-                yt_thumbnail_path = Path(yt_thumbnail_path)
-                # Resolve relative paths (e.g., /output/thumbnails/...) to absolute (e.g., /app/output/...)
-                if not yt_thumbnail_path.is_absolute() or not yt_thumbnail_path.exists():
-                    resolved = Path("/app") / yt_thumbnail_path.as_posix().lstrip('/')
-                    if resolved.exists():
-                        yt_thumbnail_path = resolved
-                if not yt_thumbnail_path.exists():
-                    # Also try without /app prefix (local dev)
-                    local_path = Path(yt_thumbnail_path.as_posix().lstrip('/'))
-                    if local_path.exists():
-                        yt_thumbnail_path = local_path
-                if not yt_thumbnail_path.exists():
-                    print(f"   ⚠️ YT thumbnail not found, using regular thumbnail: {yt_thumbnail_path}", flush=True)
-                    yt_thumbnail_path = thumbnail_path
-            else:
-                yt_thumbnail_path = thumbnail_path
+            yt_thumbnail_url = metadata.get("yt_thumbnail_path") if metadata else None
+            if not yt_thumbnail_url:
+                yt_thumbnail_url = thumbnail_url
             
             results["youtube"] = self._publish_to_youtube(
-                video_path=video_path,
-                thumbnail_path=yt_thumbnail_path,  # Use YT-specific thumbnail (clean AI image)
+                video_url=video_url,
+                thumbnail_url=yt_thumbnail_url,
                 caption=caption,
                 brand_name=brand_name,
                 yt_title=yt_title
@@ -701,25 +666,20 @@ class DatabaseSchedulerService:
     
     def _publish_to_youtube(
         self,
-        video_path: Path,
-        thumbnail_path: Path,
+        video_url: str,
+        thumbnail_url: str,
         caption: str,
         brand_name: Optional[str] = None,
         yt_title: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Publish a video to YouTube as a Short.
-        
-        Architecture:
-        1. Load refresh_token from database
-        2. Publisher uses refresh_token to get fresh access_token
-        3. Upload video using access_token
-        4. Discard access_token (it's short-lived anyway)
-        5. Update channel status in DB
+        Downloads video and thumbnail from Supabase URLs to temp files,
+        uploads to YouTube, then cleans up.
         
         Args:
-            video_path: Path to the video file
-            thumbnail_path: Path to the thumbnail
+            video_url: Supabase public URL for the video
+            thumbnail_url: Supabase public URL for the thumbnail
             caption: Caption/description for the video
             brand_name: Brand name for loading credentials
             yt_title: YouTube-optimized title (searchable, clickable)
@@ -730,10 +690,12 @@ class DatabaseSchedulerService:
         from app.services.youtube.publisher import get_youtube_credentials_for_brand, update_youtube_channel_status
         from app.services.youtube.publisher import YouTubePublisher
         from datetime import datetime
+        import tempfile
+        import requests as _requests
         
         print(f"\n📺 [YT PUBLISH] _publish_to_youtube() called", flush=True)
-        print(f"   📺 [YT PUBLISH] video_path: {video_path} (exists: {video_path.exists() if hasattr(video_path, 'exists') else 'N/A'})", flush=True)
-        print(f"   📺 [YT PUBLISH] thumbnail_path: {thumbnail_path}", flush=True)
+        print(f"   📺 [YT PUBLISH] video_url: {video_url}", flush=True)
+        print(f"   📺 [YT PUBLISH] thumbnail_url: {thumbnail_url}", flush=True)
         print(f"   📺 [YT PUBLISH] brand_name: {brand_name}", flush=True)
         print(f"   📺 [YT PUBLISH] yt_title: {yt_title}", flush=True)
         
@@ -741,97 +703,117 @@ class DatabaseSchedulerService:
             print(f"   ❌ [YT PUBLISH] No brand_name provided!", flush=True)
             return {"success": False, "error": "Brand name required for YouTube publishing"}
         
-        # Get credentials for this brand from database
-        print(f"   📺 [YT PUBLISH] Getting credentials from database for brand: {brand_name}", flush=True)
-        with get_db_session() as db:
-            credentials = get_youtube_credentials_for_brand(brand_name, db)
+        # Download video from Supabase to temp file
+        tmp_video = None
+        tmp_thumb = None
+        try:
+            print(f"   📺 [YT PUBLISH] Downloading video from Supabase...", flush=True)
+            resp = _requests.get(video_url, timeout=120)
+            resp.raise_for_status()
+            tmp_video = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+            tmp_video.write(resp.content)
+            tmp_video.close()
+            print(f"   ✅ [YT PUBLISH] Video downloaded to {tmp_video.name} ({len(resp.content)} bytes)", flush=True)
             
-            if not credentials:
-                print(f"   ❌ [YT PUBLISH] No credentials found for {brand_name}!", flush=True)
-                return {"success": False, "error": f"YouTube not configured for {brand_name}. Click 'Connect YouTube' in the app."}
-            
-            print(f"   ✅ [YT PUBLISH] Credentials found: channel_id={credentials.channel_id}, channel_name={credentials.channel_name}", flush=True)
-            print(f"   📺 [YT PUBLISH] refresh_token present: {bool(credentials.refresh_token)}", flush=True)
-            
-            # Create publisher with credentials
-            # The publisher will use the refresh_token to get a fresh access_token
-            print(f"   📺 [YT PUBLISH] Creating YouTubePublisher with credentials...", flush=True)
-            yt_publisher = YouTubePublisher(credentials=credentials)
-            
-            # Use provided yt_title or extract from caption as fallback
-            if yt_title:
-                title = yt_title[:100]  # Ensure max 100 chars
-                print(f"   📺 [YT PUBLISH] Using stored YouTube title: {title}", flush=True)
-            else:
-                # Fallback: extract from caption (first line or first sentence)
-                lines = caption.split('\n')
-                title = lines[0][:100] if lines else "Health & Wellness Tips"
-                print(f"   📺 [YT PUBLISH] Using fallback title from caption: {title}", flush=True)
-            
-            # Upload as a Short
-            # Resolve thumbnail path to absolute (handle /output/... → /app/output/...)
-            thumb_resolved = thumbnail_path
-            if hasattr(thumbnail_path, 'exists'):
-                if not thumbnail_path.exists():
-                    # Try with /app prefix
-                    resolved = Path("/app") / thumbnail_path.as_posix().lstrip('/')
-                    if resolved.exists():
-                        thumb_resolved = resolved
-                    else:
-                        # Try local dev path
-                        local = Path(thumbnail_path.as_posix().lstrip('/'))
-                        if local.exists():
-                            thumb_resolved = local
-            
-            thumbnail_exists = thumb_resolved.exists() if hasattr(thumb_resolved, 'exists') else False
-            print(f"   📺 [YT PUBLISH] Calling upload_youtube_short()...", flush=True)
-            print(f"      video_path={video_path}", flush=True)
-            print(f"      title={title}", flush=True)
-            print(f"      thumbnail_path={thumb_resolved} (exists: {thumbnail_exists})", flush=True)
-            
-            result = yt_publisher.upload_youtube_short(
-                video_path=str(video_path),
-                title=title,
-                description=caption,
-                thumbnail_path=str(thumb_resolved) if thumbnail_exists else None
-            )
-            
-            print(f"   📺 [YT PUBLISH] upload_youtube_short result: {result}", flush=True)
-            
-            # Log thumbnail status specifically
-            if result.get("success"):
-                if result.get("thumbnail_set"):
-                    print(f"   ✅ [YT PUBLISH] Custom thumbnail applied successfully!", flush=True)
+            # Download thumbnail
+            print(f"   📺 [YT PUBLISH] Downloading thumbnail from Supabase...", flush=True)
+            resp_thumb = _requests.get(thumbnail_url, timeout=60)
+            resp_thumb.raise_for_status()
+            tmp_thumb = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            tmp_thumb.write(resp_thumb.content)
+            tmp_thumb.close()
+            print(f"   ✅ [YT PUBLISH] Thumbnail downloaded to {tmp_thumb.name}", flush=True)
+        except Exception as dl_err:
+            print(f"   ❌ [YT PUBLISH] Download failed: {dl_err}", flush=True)
+            # Clean up any temp files created
+            for f in [tmp_video, tmp_thumb]:
+                if f:
+                    try:
+                        os.unlink(f.name)
+                    except Exception:
+                        pass
+            return {"success": False, "error": f"Failed to download media from Supabase: {dl_err}"}
+        
+        try:
+            # Get credentials for this brand from database
+            print(f"   📺 [YT PUBLISH] Getting credentials from database for brand: {brand_name}", flush=True)
+            with get_db_session() as db:
+                credentials = get_youtube_credentials_for_brand(brand_name, db)
+                
+                if not credentials:
+                    print(f"   ❌ [YT PUBLISH] No credentials found for {brand_name}!", flush=True)
+                    return {"success": False, "error": f"YouTube not configured for {brand_name}. Click 'Connect YouTube' in the app."}
+                
+                print(f"   ✅ [YT PUBLISH] Credentials found: channel_id={credentials.channel_id}, channel_name={credentials.channel_name}", flush=True)
+                print(f"   📺 [YT PUBLISH] refresh_token present: {bool(credentials.refresh_token)}", flush=True)
+                
+                yt_publisher = YouTubePublisher(credentials=credentials)
+                
+                # Use provided yt_title or extract from caption as fallback
+                if yt_title:
+                    title = yt_title[:100]
+                    print(f"   📺 [YT PUBLISH] Using stored YouTube title: {title}", flush=True)
                 else:
-                    thumb_err = result.get("thumbnail_error", "unknown")
-                    print(f"   ⚠️ [YT PUBLISH] Video uploaded but THUMBNAIL FAILED: {thumb_err}", flush=True)
-            
-            # Update channel status in database
-            if result.get("success"):
-                update_youtube_channel_status(
-                    brand=brand_name,
-                    db=db,
-                    last_upload_at=datetime.utcnow()
+                    lines = caption.split('\n')
+                    title = lines[0][:100] if lines else "Health & Wellness Tips"
+                    print(f"   📺 [YT PUBLISH] Using fallback title from caption: {title}", flush=True)
+                
+                print(f"   📺 [YT PUBLISH] Calling upload_youtube_short()...", flush=True)
+                print(f"      video_path={tmp_video.name}", flush=True)
+                print(f"      title={title}", flush=True)
+                print(f"      thumbnail_path={tmp_thumb.name}", flush=True)
+                
+                result = yt_publisher.upload_youtube_short(
+                    video_path=tmp_video.name,
+                    title=title,
+                    description=caption,
+                    thumbnail_path=tmp_thumb.name
                 )
-            else:
-                error_msg = result.get("error", "Unknown error")
-                # Check if this is a token revocation error
-                if "401" in str(error_msg) or "403" in str(error_msg) or "invalid_grant" in str(error_msg):
+            
+                print(f"   📺 [YT PUBLISH] upload_youtube_short result: {result}", flush=True)
+                
+                # Log thumbnail status specifically
+                if result.get("success"):
+                    if result.get("thumbnail_set"):
+                        print(f"   ✅ [YT PUBLISH] Custom thumbnail applied successfully!", flush=True)
+                    else:
+                        thumb_err = result.get("thumbnail_error", "unknown")
+                        print(f"   ⚠️ [YT PUBLISH] Video uploaded but THUMBNAIL FAILED: {thumb_err}", flush=True)
+                
+                # Update channel status in database
+                if result.get("success"):
                     update_youtube_channel_status(
                         brand=brand_name,
                         db=db,
-                        status="revoked",
-                        last_error="Access revoked. Please reconnect YouTube."
+                        last_upload_at=datetime.utcnow()
                     )
                 else:
-                    update_youtube_channel_status(
-                        brand=brand_name,
-                        db=db,
-                        status="error",
-                        last_error=error_msg
-                    )
-            
-            return result
+                    error_msg = result.get("error", "Unknown error")
+                    # Check if this is a token revocation error
+                    if "401" in str(error_msg) or "403" in str(error_msg) or "invalid_grant" in str(error_msg):
+                        update_youtube_channel_status(
+                            brand=brand_name,
+                            db=db,
+                            status="revoked",
+                            last_error="Access revoked. Please reconnect YouTube."
+                        )
+                    else:
+                        update_youtube_channel_status(
+                            brand=brand_name,
+                            db=db,
+                            status="error",
+                            last_error=error_msg
+                        )
+                
+                return result
+        finally:
+            # Clean up temp files
+            for f in [tmp_video, tmp_thumb]:
+                if f:
+                    try:
+                        os.unlink(f.name)
+                    except Exception:
+                        pass
 
     def get_or_create_user(
         self,

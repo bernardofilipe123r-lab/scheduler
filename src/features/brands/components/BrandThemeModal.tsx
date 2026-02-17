@@ -136,9 +136,8 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
           if (t.dark_content_title_text_color) setDarkContentTitleTextColor(t.dark_content_title_text_color)
           if (t.dark_content_title_bg_color) setDarkContentTitleBgColor(t.dark_content_title_bg_color)
           if (t.logo) {
-            const logoUrl = `/brand-logos/${t.logo}?t=${Date.now()}`
-            const logoCheck = await fetch(logoUrl, { method: 'HEAD' })
-            if (logoCheck.ok) setLogoPreview(logoUrl)
+            const logoUrl = t.logo.startsWith('http') ? `${t.logo}?t=${Date.now()}` : `/brand-logos/${t.logo}?t=${Date.now()}`
+            setLogoPreview(logoUrl)
           }
         }
       } catch { /* use defaults */ }

@@ -140,9 +140,8 @@ export function PostJobDetail({ job, refetch }: Props) {
         try {
           const d = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand}/theme`)
           if (d.theme?.logo) {
-            const url = `/brand-logos/${d.theme.logo}`
-            const check = await fetch(url, { method: 'HEAD' })
-            if (check.ok) logos[brand] = url
+            const url = d.theme.logo.startsWith('http') ? d.theme.logo : `/brand-logos/${d.theme.logo}`
+            logos[brand] = url
           }
         } catch { /* ignore */ }
       }

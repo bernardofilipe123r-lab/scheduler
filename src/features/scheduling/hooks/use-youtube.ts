@@ -31,8 +31,8 @@ export function useDisconnectYouTube() {
 }
 
 /**
- * Get the URL to connect a brand to YouTube
+ * Start YouTube OAuth flow for a brand (authenticated)
  */
-export function getYouTubeConnectUrl(brand: string): string {
-  return youtubeApi.getConnectUrl(brand)
+export async function connectYouTube(brand: string): Promise<string> {
+  return youtubeApi.connectBrand(brand)
 }

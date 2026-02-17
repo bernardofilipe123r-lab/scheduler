@@ -2,7 +2,6 @@
 import random
 import string
 from datetime import datetime
-from pathlib import Path
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 
@@ -202,37 +201,43 @@ class JobManager:
         return job
     
     def cleanup_job_files(self, job_id: str) -> bool:
-        """Clean up all files associated with a job."""
+        """Clean up all files associated with a job from Supabase Storage."""
         job = self.get_job(job_id)
         if not job:
             return False
         
-        output_dir = Path("output")
+        from app.services.storage.supabase_storage import delete_file
+        
+        def _parse_supabase_url(url: str) -> tuple[str, str] | None:
+            """Extract (bucket, path) from a Supabase Storage public URL."""
+            if not url or not isinstance(url, str):
+                return None
+            marker = "/storage/v1/object/public/"
+            idx = url.find(marker)
+            if idx == -1:
+                return None
+            remainder = url[idx + len(marker):]
+            parts = remainder.split("/", 1)
+            if len(parts) != 2:
+                return None
+            return (parts[0], parts[1])
         
         # Clean up files for each brand
         for brand, output in (job.brand_outputs or {}).items():
-            reel_id = output.get("reel_id")
-            if reel_id:
-                # Remove thumbnail
-                thumbnail = output_dir / "thumbnails" / f"{reel_id}_thumbnail.png"
-                if thumbnail.exists():
-                    thumbnail.unlink()
-                
-                # Remove reel image
-                reel_img = output_dir / "reels" / f"{reel_id}_reel.png"
-                if reel_img.exists():
-                    reel_img.unlink()
-                
-                # Remove video
-                video = output_dir / "videos" / f"{reel_id}_video.mp4"
-                if video.exists():
-                    video.unlink()
-        
-        # Clean up AI background if exists
-        if job.ai_background_path:
-            ai_bg = Path(job.ai_background_path)
-            if ai_bg.exists():
-                ai_bg.unlink()
+            if not isinstance(output, dict):
+                continue
+            # Collect all URL fields that might contain Supabase URLs
+            url_keys = ["video_url", "thumbnail_url", "yt_thumbnail_url",
+                        "video_path", "thumbnail_path", "yt_thumbnail_path"]
+            for key in url_keys:
+                url = output.get(key)
+                parsed = _parse_supabase_url(url)
+                if parsed:
+                    bucket, path = parsed
+                    try:
+                        delete_file(bucket, path)
+                    except Exception:
+                        pass
         
         return True
     
