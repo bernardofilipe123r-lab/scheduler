@@ -48,35 +48,29 @@ def auto_schedule_job(job_id: str):
             slide_texts = output.get("slide_texts", [])
 
             if is_post:
-                # Posts only need reel_id + thumbnail_path (no video)
+                # Posts only need reel_id (thumbnail is a Supabase URL)
                 if not reel_id:
                     continue
-                # Verify thumbnail exists (strip query string from URL-style paths)
-                from pathlib import Path as _Path
-                if thumbnail_path:
-                    clean_thumb = thumbnail_path.split('?')[0]
-                    thumb_abs = _Path(clean_thumb.lstrip('/'))
-                    if not thumb_abs.exists():
-                        print(f"[AUTO-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
-                        continue
 
-                # Composition deferred to publish time — pass raw paths
                 carousel_paths = []
             else:
                 # Reels need reel_id + video_path
                 if not reel_id or not video_path:
                     continue
 
-                # Verify files actually exist before scheduling (prevents "Video not found" errors)
-                from pathlib import Path as _Path
-                video_abs = _Path(video_path.lstrip('/'))
-                thumbnail_abs = _Path(thumbnail_path.lstrip('/')) if thumbnail_path else None
-                if not video_abs.exists():
-                    print(f"[AUTO-SCHEDULE] ⚠️ Video file missing for {brand}: {video_abs} — skipping", flush=True)
-                    continue
-                if thumbnail_abs and not thumbnail_abs.exists():
-                    print(f"[AUTO-SCHEDULE] ⚠️ Thumbnail missing for {brand}: {thumbnail_abs} — skipping", flush=True)
-                    continue
+                # Verify files exist (skip check for Supabase URLs)
+                if not video_path.startswith(("http://", "https://")):
+                    from pathlib import Path as _Path
+                    video_abs = _Path(video_path.lstrip('/'))
+                    if not video_abs.exists():
+                        print(f"[AUTO-SCHEDULE] ⚠️ Video file missing for {brand}: {video_abs} — skipping", flush=True)
+                        continue
+                if thumbnail_path and not thumbnail_path.startswith(("http://", "https://")):
+                    from pathlib import Path as _Path
+                    thumbnail_abs = _Path(thumbnail_path.lstrip('/'))
+                    if not thumbnail_abs.exists():
+                        print(f"[AUTO-SCHEDULE] ⚠️ Thumbnail missing for {brand}: {thumbnail_abs} — skipping", flush=True)
+                        continue
 
             try:
                 # Use post-specific slots for posts
@@ -135,6 +129,8 @@ def auto_schedule_job(job_id: str):
 
         print(f"[AUTO-SCHEDULE] Job {job_id}: {scheduled_count}/{len(job.brand_outputs or {})} brands scheduled", flush=True)
 
+        return scheduled_count
+
 
 def schedule_all_ready_reels() -> int:
     """
@@ -185,29 +181,22 @@ def schedule_all_ready_reels() -> int:
                 carousel_paths = []
 
                 if is_post:
-                    # Posts only need reel_id (image-based, no video)
+                    # Posts only need reel_id (thumbnail is a Supabase URL)
                     if not reel_id:
                         continue
-                    if thumbnail_path:
-                        from pathlib import Path as _Path
-                        clean_thumb = thumbnail_path.split('?')[0]
-                        thumb_abs = _Path(clean_thumb.lstrip('/'))
-                        if not thumb_abs.exists():
-                            print(f"[READY-SCHEDULE] ⚠️ Post image missing for {brand}: {thumb_abs} — skipping", flush=True)
-                            continue
 
-                    # Composition deferred to publish time — pass raw paths
                     carousel_paths = []
                 else:
                     # Reels need reel_id + video_path
                     if not reel_id or not video_path:
                         continue
-                    # Verify video file actually exists before scheduling
-                    from pathlib import Path as _Path
-                    video_abs = _Path(video_path.lstrip('/'))
-                    if not video_abs.exists():
-                        print(f"[READY-SCHEDULE] ⚠️ Video missing for {brand}: {video_abs} — skipping", flush=True)
-                        continue
+                    # Verify video file exists (skip check for Supabase URLs)
+                    if not video_path.startswith(("http://", "https://")):
+                        from pathlib import Path as _Path
+                        video_abs = _Path(video_path.lstrip('/'))
+                        if not video_abs.exists():
+                            print(f"[READY-SCHEDULE] ⚠️ Video missing for {brand}: {video_abs} — skipping", flush=True)
+                            continue
 
                 # Check if already in scheduled_reels (safety check)
                 from app.models import ScheduledReel

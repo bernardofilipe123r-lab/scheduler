@@ -358,13 +358,20 @@ class ProposalsMixin:
                 p.process_job(job_id)
 
             # Auto-schedule
-            auto_schedule_job(job_id)
+            scheduled = auto_schedule_job(job_id)
 
-            self.state.log(
-                agent_name, "Job complete + scheduled",
-                f"Job {job_id} (from {proposal_id})",
-                "📅"
-            )
+            if scheduled:
+                self.state.log(
+                    agent_name, "Job complete + scheduled",
+                    f"Job {job_id} (from {proposal_id})",
+                    "📅"
+                )
+            else:
+                self.state.log(
+                    agent_name, "Job complete — scheduling failed",
+                    f"Job {job_id} (from {proposal_id}) — 0 brands scheduled",
+                    "⚠️"
+                )
         except Exception as e:
             self.state.log(
                 "maestro", "Job error",

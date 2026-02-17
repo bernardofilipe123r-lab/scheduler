@@ -16,7 +16,7 @@ import math
 import logging
 import re
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy import type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
@@ -157,7 +157,7 @@ class AgentLearningEngine:
                             total_scraped += 1
 
                     # Update competitor metadata
-                    comp.last_scraped_at = datetime.utcnow()
+                    comp.last_scraped_at = datetime.now(timezone.utc)
                     comp.posts_scraped_count = (comp.posts_scraped_count or 0) + len(posts)
 
                 except Exception as e:
@@ -192,7 +192,7 @@ class AgentLearningEngine:
         Runs twice daily (6 AM, 6 PM).
         """
         patterns = self.db.query(LearnedPattern).all()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         pruned = 0
         updated = 0
 
@@ -428,7 +428,7 @@ class AgentLearningEngine:
         if existing:
             # Update confidence and reset decay
             existing.confidence_score = min(1.0, existing.confidence_score + 0.05)
-            existing.last_validated_at = datetime.utcnow()
+            existing.last_validated_at = datetime.now(timezone.utc)
             existing.decay_weight = 1.0
             existing.validation_count = (existing.validation_count or 0) + 1
             existing.sample_size = (existing.sample_size or 0) + pattern.get('sample_size', 1)
@@ -456,8 +456,8 @@ class AgentLearningEngine:
                 sample_size=pattern['sample_size'],
                 learned_from_brands=[pattern['brand']],
                 learned_from_agents=[pattern['agent']],
-                first_seen_at=datetime.utcnow(),
-                last_validated_at=datetime.utcnow(),
+                first_seen_at=datetime.now(timezone.utc),
+                last_validated_at=datetime.now(timezone.utc),
                 validation_count=1,
                 decay_weight=1.0
             )
@@ -533,7 +533,7 @@ class AgentLearningEngine:
         memory.best_posting_hours = [h for h, _ in best_hours]
 
         memory.total_reels_analyzed = len(reels)
-        memory.last_analysis_at = datetime.utcnow()
+        memory.last_analysis_at = datetime.now(timezone.utc)
         memory.analysis_version = (memory.analysis_version or 0) + 1
 
         self.db.commit()
@@ -565,7 +565,7 @@ class AgentLearningEngine:
             agent_id=agent_id,
             cycle_type=cycle_type,
             status='running',
-            started_at=datetime.utcnow()
+            started_at=datetime.now(timezone.utc)
         )
         self.db.add(cycle)
         try:
@@ -579,7 +579,7 @@ class AgentLearningEngine:
                        api_calls_used: int = 0):
         """Log cycle completion."""
         cycle.status = 'completed'
-        cycle.completed_at = datetime.utcnow()
+        cycle.completed_at = datetime.now(timezone.utc)
         cycle.duration_seconds = int((cycle.completed_at - cycle.started_at).total_seconds())
         cycle.items_processed = items_processed
         cycle.patterns_discovered = patterns_discovered
@@ -593,7 +593,7 @@ class AgentLearningEngine:
     def _fail_cycle(self, cycle: AgentLearningCycle, error: str):
         """Log cycle failure."""
         cycle.status = 'failed'
-        cycle.completed_at = datetime.utcnow()
+        cycle.completed_at = datetime.now(timezone.utc)
         cycle.duration_seconds = int((cycle.completed_at - cycle.started_at).total_seconds())
         cycle.error_message = error[:500]  # Truncate long errors
         try:
