@@ -7,7 +7,6 @@ import {
   History as HistoryIcon, FileText,
   Filter, Star,
 } from 'lucide-react'
-import { useLiveLogs } from '@/features/mission-control/api/useLiveLogs'
 import { useAgents, type Agent } from '@/features/mission-control/api/useAgents'
 import { useMaestroLive, type MaestroLiveStatus } from '@/features/mission-control/api/useMaestroLive'
 import { AgentPodsGrid } from '@/features/mission-control/components/AgentPodsGrid'
@@ -266,11 +265,21 @@ export function ObservatoryPage() {
   const [selectedOp, setSelectedOp] = useState<string | null>(null)
   const [startTime] = useState(Date.now())
 
-  const { data: logsData, isLoading: logsLoading } = useLiveLogs()
   const { data: agentsData } = useAgents()
   const { data: maestro, isLoading: maestroLoading } = useMaestroLive()
 
-  const logs = logsData?.logs || []
+  // Transform Maestro activity logs to match the expected format
+  const logs = useMemo(() => {
+    const activity = maestro?.recent_activity || []
+    return activity.map((entry, idx) => ({
+      id: idx,
+      timestamp: entry.time,
+      message: `${entry.emoji} [${entry.agent}] ${entry.action}${entry.detail ? `: ${entry.detail}` : ''}`,
+      level: entry.level === 'action' ? 'INFO' : 'DEBUG',
+      category: 'app',
+    }))
+  }, [maestro?.recent_activity])
+
   const agents = agentsData?.agents || []
 
   useEffect(() => {
@@ -290,7 +299,7 @@ export function ObservatoryPage() {
     if (forcedMode && forcedMode !== 'history' && mode !== forcedMode) setForcedMode(null)
   }, [mode, forcedMode])
 
-  const isInitialLoad = (logsLoading || maestroLoading) && !logsData && !maestro
+  const isInitialLoad = maestroLoading && !maestro
   const nearestOp = upcoming[0] || null
 
   const statusLabel = mode === 'live' ? 'LIVE' : mode === 'recap' ? 'COMPLETE' : 'STANDBY'

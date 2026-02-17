@@ -9,6 +9,15 @@ interface CycleInfo {
   is_complete?: boolean
 }
 
+export interface MaestroActivityLog {
+  time: string
+  agent: string
+  action: string
+  detail: string
+  emoji: string
+  level: string
+}
+
 export interface MaestroLiveStatus {
   is_running: boolean
   is_paused: boolean
@@ -19,6 +28,7 @@ export interface MaestroLiveStatus {
   errors: number
   started_at: string | null
   cycles?: Record<string, CycleInfo>
+  recent_activity?: MaestroActivityLog[]
   daily_config?: {
     total_reels: number
     total_posts: number
