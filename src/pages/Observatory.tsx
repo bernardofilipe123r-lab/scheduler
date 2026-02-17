@@ -540,9 +540,9 @@ export function ObservatoryPage() {
           ) : mode === 'live' ? (
             <LiveMode key="lv" activeCycle={activeCycle} logs={logs} agents={agents} stats={stats} />
           ) : mode === 'recap' ? (
-            <RecapMode key="rc" activeCycle={activeCycle} logs={logs} stats={stats} maestro={maestro} agents={agents} />
+            <RecapMode key="rc" activeCycle={activeCycle} stats={stats} maestro={maestro} />
           ) : mode === 'history' ? (
-            <HistoryMode key="hi" logs={logs} agents={agents} />
+            <HistoryMode key="hi" logs={logs} />
           ) : null}
         </AnimatePresence>
       </div>
@@ -871,12 +871,10 @@ function LiveMode({ activeCycle, logs, agents, stats }: {
 // MODE 4: RECAP — Just completed (<2 min ago)
 // ═══════════════════════════════════════════════════════════════
 
-function RecapMode({ activeCycle, stats, maestro, logs, agents }: {
+function RecapMode({ activeCycle, stats, maestro }: {
   activeCycle: string | null
-  logs: any[]
   stats: ReturnType<typeof calculateStats>
   maestro: MaestroLiveStatus | undefined
-  agents: Agent[]
 }) {
   const cfg = activeCycle ? getCycleConfig(activeCycle) : null
   const isBurst = activeCycle === 'daily_burst'
@@ -945,7 +943,7 @@ function RecapMode({ activeCycle, stats, maestro, logs, agents }: {
 // MODE 5: HISTORY — Deep archive
 // ═══════════════════════════════════════════════════════════════
 
-function HistoryMode({ logs, agents }: { logs: any[]; agents: Agent[] }) {
+function HistoryMode({ logs }: { logs: any[] }) {
   const [filter, setFilter] = useState<string>('all')
 
   const filtered = useMemo(() => {
