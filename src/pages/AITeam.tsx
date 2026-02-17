@@ -475,11 +475,15 @@ export function AITeamPage() {
                 onClick={async () => {
                   setTestRunning(true)
                   try {
+                    // Convert brand count to array of brand names
+                    const allBrands = ['healthycollege', 'holisticcollege', 'longevitycollege', 'vitalitycollege', 'wellbeingcollege']
+                    const selectedBrands = allBrands.slice(0, testBrands)
+
                     await post('/api/maestro/trigger-burst?force=true', {
                       test_mode: true,
                       posts: testContentType === 'reels' ? 0 : testPosts,
                       reels: testContentType === 'posts' ? 0 : testReels,
-                      brands: testBrands,
+                      brands: selectedBrands,
                     })
                     toast.success('Test burst triggered successfully!')
                     setTestModalOpen(false)
