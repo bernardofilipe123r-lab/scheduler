@@ -105,20 +105,28 @@ def _replace_handle(text: str, brand: str) -> str:
 
 
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    words = text.split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        test = f"{current} {word}" if current else word
-        bbox = font.getbbox(test)
-        if bbox[2] - bbox[0] > max_width and current:
-            lines.append(current)
-            current = word
-        else:
-            current = test
-    if current:
-        lines.append(current)
-    return lines or [""]
+    """Word-wrap text respecting explicit \n line breaks."""
+    paragraphs = text.split('\n')
+    all_lines: list[str] = []
+    for p_idx, paragraph in enumerate(paragraphs):
+        if p_idx > 0:
+            # Insert empty string to represent a paragraph break
+            all_lines.append('')
+        if not paragraph.strip():
+            continue
+        words = paragraph.split()
+        current = ""
+        for word in words:
+            test = f"{current} {word}" if current else word
+            bbox = font.getbbox(test)
+            if bbox[2] - bbox[0] > max_width and current:
+                all_lines.append(current)
+                current = word
+            else:
+                current = test
+        if current:
+            all_lines.append(current)
+    return all_lines or [""]
 
 
 def _estimate_text_height(

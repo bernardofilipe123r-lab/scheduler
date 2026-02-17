@@ -259,7 +259,7 @@ def _draw_title(draw: ImageDraw.Draw, lines: List[str], font_size: int, y: int) 
     """
     Draw the title lines centered, matching TitleLayer in PostCanvas.tsx.
     """
-    font = _load_font("Poppins-Bold.ttf", font_size)
+    font = _load_font("Anton-Regular.ttf", font_size)
     line_height = font_size * 1.1
     text_width = CANVAS_WIDTH - TITLE_PADDING_X * 2
 
