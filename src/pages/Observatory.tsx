@@ -168,7 +168,8 @@ function computeRecentOps(cycles: Record<string, CycleInfo> | undefined, now: nu
 }
 
 function detectActiveCycle(logs: any[]): string | null {
-  if (!logs.length) return null
+  console.log('🔄 detectActiveCycle called:', { 'logs type': typeof logs, 'logs is array': Array.isArray(logs), 'logs length': logs?.length })
+  if (!logs || !logs.length) return null
   const text = logs.slice(0, 15).map(l => l.message.toLowerCase()).join(' ')
   for (const [key, keywords] of Object.entries(CYCLE_KEYWORDS)) {
     if (keywords.some(kw => text.includes(kw))) return key
@@ -182,10 +183,21 @@ function detectMode(
   upcoming: UpcomingOp[],
   forced: ObservatoryMode | null,
 ): ObservatoryMode {
+  console.log('🎭 detectMode called:', {
+    'logs type': typeof logs,
+    'logs is array': Array.isArray(logs),
+    'logs length': logs?.length,
+    'upcoming type': typeof upcoming,
+    'upcoming is array': Array.isArray(upcoming),
+    'upcoming length': upcoming?.length,
+    'maestro defined': maestro ? 'yes' : 'no',
+    'maestro.current_phase': maestro?.current_phase
+  })
+
   if (forced === 'history') return 'history'
   if (maestro?.current_phase) return 'live'
 
-  if (logs.length > 0) {
+  if (logs && logs.length > 0) {
     const now = Date.now()
     const activityKw = [
       'generating', 'planning', 'saved:', 'examiner', 'auto-accepting',
@@ -205,7 +217,7 @@ function detectMode(
     }
   }
 
-  if (upcoming.length > 0 && upcoming[0].nextRunMs > 0 && upcoming[0].nextRunMs <= 300_000) {
+  if (upcoming && upcoming.length > 0 && upcoming[0].nextRunMs > 0 && upcoming[0].nextRunMs <= 300_000) {
     return 'countdown'
   }
   return 'overview'
