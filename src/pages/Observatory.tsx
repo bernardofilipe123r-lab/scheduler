@@ -538,7 +538,7 @@ export function ObservatoryPage() {
           ) : mode === 'countdown' ? (
             <CountdownMode key="cd" op={nearestOp!} upcoming={upcoming} now={now} onSelectOp={setSelectedOp} />
           ) : mode === 'live' ? (
-            <LiveMode key="lv" activeCycle={activeCycle} logs={logs} agents={agents} stats={stats} maestro={maestro} />
+            <LiveMode key="lv" activeCycle={activeCycle} logs={logs} agents={agents} stats={stats} />
           ) : mode === 'recap' ? (
             <RecapMode key="rc" activeCycle={activeCycle} logs={logs} stats={stats} maestro={maestro} agents={agents} />
           ) : mode === 'history' ? (
@@ -803,12 +803,11 @@ function CountdownMode({ op, upcoming, onSelectOp }: {
 // MODE 3: LIVE — Active execution
 // ═══════════════════════════════════════════════════════════════
 
-function LiveMode({ activeCycle, logs, agents, stats, maestro }: {
+function LiveMode({ activeCycle, logs, agents, stats }: {
   activeCycle: string | null
   logs: any[]
   agents: Agent[]
   stats: ReturnType<typeof calculateStats>
-  maestro: MaestroLiveStatus | undefined
 }) {
   const cfg = activeCycle ? getCycleConfig(activeCycle) : null
   const isBurst = activeCycle === 'daily_burst'
