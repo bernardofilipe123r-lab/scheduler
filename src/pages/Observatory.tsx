@@ -349,9 +349,43 @@ export function ObservatoryPage() {
 
       // Burst/Pause/Resume
       if (action.includes('burst') || action.includes('Burst')) {
-        if (detail.includes('proposals')) {
-          return `Daily content generation started`
+        // Test Burst (user-requested specific content)
+        if (action.includes('Test Burst')) {
+          const reelsMatch = detail.match(/(\d+)\s+reels/)
+          const postsMatch = detail.match(/(\d+)\s+posts/)
+          const brandsMatch = detail.match(/for\s+([\w\s,]+)$/)
+
+          const reels = reelsMatch ? parseInt(reelsMatch[1]) : 0
+          const posts = postsMatch ? parseInt(postsMatch[1]) : 0
+          const brands = brandsMatch ? brandsMatch[1] : 'selected brand(s)'
+
+          const items = []
+          if (reels > 0) items.push(`${reels} reel${reels > 1 ? 's' : ''}`)
+          if (posts > 0) items.push(`${posts} post${posts > 1 ? 's' : ''}`)
+
+          return `🧪 Test Mode: Creating ${items.join(' + ')} for ${brands}`
         }
+
+        // Smart Burst (partial daily generation)
+        if (action.includes('Smart Burst')) {
+          const reelsMatch = detail.match(/(\d+)\s+reels/)
+          const postsMatch = detail.match(/(\d+)\s+posts/)
+
+          const reels = reelsMatch ? parseInt(reelsMatch[1]) : 0
+          const posts = postsMatch ? parseInt(postsMatch[1]) : 0
+
+          const items = []
+          if (reels > 0) items.push(`${reels} reels`)
+          if (posts > 0) items.push(`${posts} posts`)
+
+          return `Generating remaining content for today: ${items.join(' + ')}`
+        }
+
+        // Full Daily Burst
+        if (detail.includes('proposals') || detail.includes('Phase')) {
+          return `Daily content generation: Creating proposals for all brands`
+        }
+
         return detail
       }
 
