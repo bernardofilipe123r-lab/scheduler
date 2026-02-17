@@ -526,7 +526,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
         thread.start()
         return {"status": "triggered", "message": f"Daily burst started in background{label}"}
 
-    def run_smart_burst(self, remaining_reels: int, remaining_posts: int, user_id: Optional[str] = None):
+    def run_smart_burst(self, remaining_reels: int, remaining_posts: int, user_id: Optional[str] = None, target_brands: Optional[list[str]] = None):
         """Generate only the REMAINING proposals for the day.
         Unlike _run_daily_burst which always generates the full quota,
         this method generates exactly remaining_reels reels and remaining_posts posts,
@@ -534,6 +534,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
 
         Args:
             user_id: If provided, scope brands/agents to this user.
+            target_brands: If provided, only generate for these specific brands (test mode).
         """
         if not self._daily_burst_lock.acquire(blocking=False):
             self.state.log("maestro", "Smart burst skipped", "Already running", "⏳")
@@ -560,14 +561,20 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
                 self.state.log("maestro", "No agents", f"Cannot run smart burst without agents{user_label}", "❌")
                 return
 
-            brands = _get_all_brands(user_id=user_id)
+            # Use target_brands if specified (test mode), otherwise all brands
+            if target_brands:
+                brands = target_brands
+            else:
+                brands = _get_all_brands(user_id=user_id)
+
             n_brands = len(brands)
             n_agents = len(active_agents)
 
+            burst_type = "Test Burst" if target_brands else "🚀 Smart Burst"
             self.state.log(
-                "maestro", "🚀 Smart Burst",
-                f"Generating {remaining_reels} reels + {remaining_posts} posts across {n_brands} brands",
-                "🚀"
+                "maestro", burst_type,
+                f"Generating {remaining_reels} reels + {remaining_posts} posts for {', '.join(brands[:3])}{'...' if n_brands > 3 else ''}",
+                "🚀" if not target_brands else "🧪"
             )
 
             all_proposals = []

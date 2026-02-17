@@ -200,14 +200,23 @@ async def resume_maestro(background_tasks: BackgroundTasks, user: dict = Depends
     }
 
 
+class TriggerBurstRequest(BaseModel):
+    test_mode: bool = False
+    posts: int = 0
+    reels: int = 0
+    brands: Optional[list[str]] = None
+
+
 @router.post("/trigger-burst")
 async def trigger_burst(
     background_tasks: BackgroundTasks,
+    request: Optional[TriggerBurstRequest] = None,
     force: bool = Query(False, description="Force a full burst regardless of today's proposal count"),
     user: dict = Depends(get_current_user),
 ):
     """Smart burst — counts existing proposals today and generates only the remaining.
-    With force=true, runs a full daily burst regardless."""
+    With force=true and no request body, runs a full daily burst.
+    With request body, generates exactly what's specified (test mode)."""
     from app.services.maestro.maestro import get_maestro, maestro_log, schedule_all_ready_reels
     from app.db_connection import SessionLocal
     from app.models import AgentProposal
@@ -225,6 +234,36 @@ async def trigger_burst(
     except Exception:
         pass
 
+    # Test mode with specific configuration (e.g., "1 post for 1 brand")
+    if request and (request.posts > 0 or request.reels > 0):
+        target_brands = request.brands or ["healthycollege"]  # Default to healthycollege if none specified
+
+        maestro_log(
+            "maestro", "Test Burst",
+            f"User requested {request.reels} reels + {request.posts} posts for {len(target_brands)} brand(s)",
+            "🧪", "action"
+        )
+
+        # Run smart burst with exact counts specified
+        background_tasks.add_task(
+            maestro.run_smart_burst,
+            request.reels,
+            request.posts,
+            user_id,
+            target_brands  # Pass brands to limit generation
+        )
+
+        return {
+            "status": "triggered",
+            "message": f"Test burst: generating {request.reels} reels + {request.posts} posts for {', '.join(target_brands)}",
+            "test_mode": True,
+            "reels": request.reels,
+            "posts": request.posts,
+            "brands": target_brands,
+            "ready_scheduled": ready_scheduled,
+        }
+
+    # Full daily burst (force mode, no specific request)
     if force:
         maestro_log("maestro", "Manual Burst", f"User triggered full daily burst (force)", "🔘", "action")
         background_tasks.add_task(maestro._run_daily_burst_for_user, user_id)
