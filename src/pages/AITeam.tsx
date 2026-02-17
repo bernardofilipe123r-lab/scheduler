@@ -382,7 +382,7 @@ export function AITeamPage() {
             onClick={() => navigate('/observatory')}
             className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg shadow-md transition-all border border-gray-700 text-sm font-medium"
           >
-            I want to know more
+            I want to see AI working...
             <ChevronRight className="w-4 h-4 text-gray-400" />
           </button>
         </div>

@@ -44,7 +44,7 @@ def _get_credentials() -> tuple[str, str]:
 
 
 def _headers(key: str, content_type: Optional[str] = None, upsert: bool = False) -> dict:
-    h: dict[str, str] = {"Authorization": f"Bearer {key}"}
+    h: dict[str, str] = {"Authorization": f"Bearer {key}", "apikey": key}
     if content_type:
         h["Content-Type"] = content_type
     if upsert:
@@ -55,6 +55,61 @@ def _headers(key: str, content_type: Optional[str] = None, upsert: bool = False)
 def _guess_content_type(path: str) -> str:
     ct, _ = mimetypes.guess_type(path)
     return ct or "application/octet-stream"
+
+
+# Set of bucket names already verified to exist (once per process lifetime)
+_verified_buckets: set[str] = set()
+
+
+def _ensure_bucket(bucket: str) -> None:
+    """Ensure *bucket* exists in Supabase Storage, creating it if needed.
+
+    Results are cached in ``_verified_buckets`` so each bucket is checked at
+    most once per process lifetime.  Errors are logged but never raised —
+    the subsequent upload call will surface the real failure.
+    """
+    if bucket in _verified_buckets:
+        return
+
+    try:
+        url, key = _get_credentials()
+    except StorageError:
+        return  # credentials missing — let upload_file raise later
+
+    headers = {"Authorization": f"Bearer {key}", "apikey": key}
+
+    # Check whether the bucket already exists
+    try:
+        resp = requests.get(
+            f"{url}/storage/v1/bucket/{bucket}",
+            headers=headers,
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            _verified_buckets.add(bucket)
+            return
+    except requests.RequestException as exc:
+        logger.warning("Bucket check for '%s' failed: %s", bucket, exc)
+        return
+
+    # Bucket does not exist — try to create it
+    try:
+        resp = requests.post(
+            f"{url}/storage/v1/bucket",
+            headers={**headers, "Content-Type": "application/json"},
+            json={"id": bucket, "name": bucket, "public": True},
+            timeout=15,
+        )
+        if resp.status_code in (200, 201):
+            logger.info("Created storage bucket '%s'", bucket)
+            _verified_buckets.add(bucket)
+        else:
+            logger.warning(
+                "Failed to create bucket '%s': HTTP %s — %s",
+                bucket, resp.status_code, resp.text[:300],
+            )
+    except requests.RequestException as exc:
+        logger.warning("Bucket creation for '%s' failed: %s", bucket, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +150,7 @@ def upload_file(
 
     Raises ``StorageError`` on failure.
     """
+    _ensure_bucket(bucket)
     url, key = _get_credentials()
     ct = content_type or _guess_content_type(path)
     endpoint = f"{url}/storage/v1/object/{bucket}/{path}"
@@ -108,8 +164,14 @@ def upload_file(
         )
         resp.raise_for_status()
         return get_public_url(bucket, path)
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        body = exc.response.text[:500] if exc.response is not None else "no response"
+        raise StorageError(
+            f"Failed to upload {bucket}/{path}: HTTP {status} — {body}"
+        ) from exc
     except requests.RequestException as exc:
-        raise StorageError(f"Failed to upload {bucket}/{path}") from exc
+        raise StorageError(f"Failed to upload {bucket}/{path}: {exc}") from exc
 
 
 def upload_bytes(
@@ -122,6 +184,7 @@ def upload_bytes(
 
     Raises ``StorageError`` on failure.
     """
+    _ensure_bucket(bucket)
     return upload_file(bucket, remote_path, data, content_type=content_type)
 
 
@@ -152,8 +215,13 @@ def delete_file(bucket: str, path: str) -> bool:
         )
         resp.raise_for_status()
         return True
-    except requests.RequestException:
-        logger.exception("Failed to delete %s/%s from Supabase Storage", bucket, path)
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        body = exc.response.text[:500] if exc.response is not None else "no response"
+        logger.error("Failed to delete %s/%s: HTTP %s — %s", bucket, path, status, body)
+        return False
+    except requests.RequestException as exc:
+        logger.exception("Failed to delete %s/%s from Supabase Storage: %s", bucket, path, exc)
         return False
 
 
@@ -179,8 +247,14 @@ def download_file(bucket: str, path: str) -> bytes:
         )
         resp.raise_for_status()
         return resp.content
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        body = exc.response.text[:500] if exc.response is not None else "no response"
+        raise StorageError(
+            f"Failed to download {bucket}/{path}: HTTP {status} — {body}"
+        ) from exc
     except requests.RequestException as exc:
-        raise StorageError(f"Failed to download {bucket}/{path}") from exc
+        raise StorageError(f"Failed to download {bucket}/{path}: {exc}") from exc
 
 
 def file_exists(bucket: str, path: str) -> bool:
@@ -195,8 +269,12 @@ def file_exists(bucket: str, path: str) -> bool:
             timeout=15,
         )
         return resp.status_code == 200
-    except requests.RequestException:
-        logger.exception("Failed to check existence of %s/%s", bucket, path)
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        logger.error("Failed to check existence of %s/%s: HTTP %s", bucket, path, status)
+        return False
+    except requests.RequestException as exc:
+        logger.exception("Failed to check existence of %s/%s: %s", bucket, path, exc)
         return False
 
 
@@ -220,5 +298,11 @@ def list_files(bucket: str, prefix: str) -> list[dict]:
         )
         resp.raise_for_status()
         return resp.json()
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        body = exc.response.text[:500] if exc.response is not None else "no response"
+        raise StorageError(
+            f"Failed to list files in {bucket}/{prefix}: HTTP {status} — {body}"
+        ) from exc
     except requests.RequestException as exc:
-        raise StorageError(f"Failed to list files in {bucket}/{prefix}") from exc
+        raise StorageError(f"Failed to list files in {bucket}/{prefix}: {exc}") from exc
