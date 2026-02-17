@@ -416,7 +416,8 @@ export function ObservatoryPage() {
   const week = useMemo(() => computeWeekSchedule(now), [now])
   const recentOps = useMemo(() => computeRecentOps(maestro?.cycles, now), [maestro, now])
   const mode = useMemo(() => detectMode(logs, maestro, upcoming, forcedMode), [logs, maestro, upcoming, forcedMode])
-  const activeCycle = useMemo(() => detectActiveCycle(logs), [logs])
+  // Use backend's current_phase instead of detecting from logs (more accurate)
+  const activeCycle = maestro?.current_phase || useMemo(() => detectActiveCycle(logs), [logs])
   const stats = calculateStats(logs, startTime, agents)
   const phase = calculatePhase(logs)
 
