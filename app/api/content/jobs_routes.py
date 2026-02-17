@@ -16,6 +16,9 @@ from app.services.content.job_processor import JobProcessor
 from app.services.brands.resolver import brand_resolver
 from app.api.auth.middleware import get_current_user
 
+import threading
+_job_semaphore = threading.Semaphore(2)
+
 
 # Request/Response models
 class JobCreateRequest(BaseModel):
@@ -53,7 +56,6 @@ def process_job_async(job_id: str):
     """Background task to process a job (with concurrency control)."""
     import traceback
     import sys
-    from app.services.maestro.maestro import _job_semaphore
     
     # Force flush ALL print statements
     print(f"\n{'='*60}", flush=True)

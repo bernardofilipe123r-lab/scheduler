@@ -26,12 +26,8 @@ from app.models import TrendingContent
 
 
 def _log(action: str, detail: str = "", emoji: str = "🤖", level: str = "detail"):
-    """Log to Maestro's activity feed."""
-    try:
-        from app.services.maestro.maestro import maestro_log
-        maestro_log("scout", action, detail, emoji, level)
-    except Exception:
-        print(f"   [SCOUT] {action} — {detail}", flush=True)
+    """Log scout activity."""
+    print(f"   [SCOUT] {emoji} {action} — {detail}", flush=True)
 
 
 class TrendScout:

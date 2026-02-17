@@ -34,12 +34,8 @@ METRIC_WINDOWS = {
 
 
 def _log(action: str, detail: str = "", emoji: str = "🤖", level: str = "detail"):
-    """Log to Maestro's activity feed."""
-    try:
-        from app.services.maestro.maestro import maestro_log
-        maestro_log("metrics", action, detail, emoji, level)
-    except Exception:
-        print(f"   [METRICS] {action} — {detail}", flush=True)
+    """Log metrics activity."""
+    print(f"   [METRICS] {emoji} {action} — {detail}", flush=True)
 
 
 class MetricsCollector:
