@@ -25,13 +25,27 @@ interface AgentProgress {
 function calculateAgentProgress(agent: Agent, logs: any[]): AgentProgress {
   const agentName = agent.agent_id.toUpperCase()
 
+  // Handle undefined or null logs
+  if (!logs || logs.length === 0) {
+    return {
+      status: 'standby',
+      currentBrand: null,
+      progress: 0,
+      reelsGenerated: 0,
+      postsGenerated: 0,
+      totalReels: 0,
+      totalPosts: 0,
+      lastActivity: null,
+    }
+  }
+
   // Filter logs for this agent
   const agentLogs = logs.filter(log =>
     log.message.toUpperCase().includes(`[${agentName}]`)
   )
 
-  // No logs at all — standby (idle mode, not waiting for a turn during burst)
-  if (logs.length === 0) {
+  // Burst is happening but this agent has no logs yet — waiting
+  if (agentLogs.length === 0) {
     return {
       status: 'standby',
       currentBrand: null,

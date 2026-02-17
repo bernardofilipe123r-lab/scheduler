@@ -1088,14 +1088,16 @@ function ActivityLog({ logs }: { logs: any[] }) {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight
   }, [logs])
 
+  const safeLength = logs?.length || 0
+
   return (
     <div className="h-full flex flex-col">
       <div className="border-b border-gray-800 px-6 py-2 flex items-center justify-between">
         <span className="text-[11px] font-mono text-gray-500 tracking-wider">ACTIVITY LOG</span>
-        <span className="text-[10px] text-gray-600 font-mono">{logs.length} entries</span>
+        <span className="text-[10px] text-gray-600 font-mono">{safeLength} entries</span>
       </div>
       <div ref={feedRef} className="flex-1 overflow-y-auto px-6 py-3 space-y-0.5 font-mono text-xs">
-        {logs.length === 0 ? (
+        {!logs || logs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-600">
             <p className="text-xs font-mono">No activity in the last hour</p>
           </div>
