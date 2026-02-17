@@ -422,15 +422,25 @@ class JobProcessor:
             image.save(str(bg_path), format="PNG")
             print(f"   ✓ Background saved to temp: {bg_path}", flush=True)
 
+            # Upload to Supabase - CRITICAL: must succeed for post to be valid
             try:
                 bg_remote = storage_path(user_id, brand_slug, "posts", f"{reel_id}_background.png")
                 bg_url = upload_from_path("media", bg_remote, str(bg_path))
+                print(f"   ☁️  Background uploaded: {bg_url}", flush=True)
             except StorageError as e:
-                print(f"   ⚠️ Post background upload failed: {e}", flush=True)
-                bg_url = ""
-            finally:
+                print(f"   ❌ Post background upload failed: {e}", flush=True)
+                # Clean up temp file before raising
                 try:
                     os.unlink(bg_path)
+                except OSError:
+                    pass
+                # Re-raise to fail the job instead of creating broken post
+                raise Exception(f"Failed to upload background image to storage: {str(e)}")
+            finally:
+                # Clean up temp file if upload succeeded
+                try:
+                    if os.path.exists(bg_path):
+                        os.unlink(bg_path)
                 except OSError:
                     pass
 
