@@ -269,9 +269,45 @@ export function ObservatoryPage() {
   const { data: maestro, isLoading: maestroLoading } = useMaestroLive()
 
   // Transform Maestro activity logs to match the expected format
+  // Filter out background maintenance - only show content generation activity
   const logs = useMemo(() => {
     const activity = maestro?.recent_activity || []
-    return activity.map((entry, idx) => ({
+
+    // Background tasks to hide (system maintenance)
+    const backgroundActions = [
+      'Scouting', 'Diagnostics', 'Metrics', 'Observing', 'Healing',
+      'Feedback', 'Hashtag scan', 'Data:', 'Metrics:',
+    ]
+
+    const filtered = activity.filter(entry => {
+      const action = entry.action.toLowerCase()
+      const detail = entry.detail.toLowerCase()
+
+      // Hide background maintenance
+      if (backgroundActions.some(bg => entry.action.includes(bg) || entry.detail.includes(bg))) {
+        return false
+      }
+
+      // Show only content generation (proposals, jobs, scheduling, publishing)
+      return (
+        action.includes('generating') ||
+        action.includes('done') ||
+        action.includes('accept') ||
+        action.includes('job') ||
+        action.includes('schedul') ||
+        action.includes('publish') ||
+        action.includes('burst') ||
+        action.includes('paused') ||
+        action.includes('resumed') ||
+        action.includes('trigger') ||
+        detail.includes('proposal') ||
+        detail.includes('reel') ||
+        detail.includes('post') ||
+        detail.includes('brand')
+      )
+    })
+
+    return filtered.map((entry, idx) => ({
       id: idx,
       timestamp: entry.time,
       message: `${entry.emoji} [${entry.agent}] ${entry.action}${entry.detail ? `: ${entry.detail}` : ''}`,
