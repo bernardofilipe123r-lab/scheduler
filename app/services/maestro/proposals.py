@@ -253,6 +253,7 @@ class ProposalsMixin:
         )
 
         self.state.total_jobs_dispatched += 1
+        self.state.job_started()
 
         # Process in background thread
         import time as _time
@@ -373,3 +374,4 @@ class ProposalsMixin:
             traceback.print_exc()
         finally:
             _job_semaphore.release()
+            self.state.job_finished()

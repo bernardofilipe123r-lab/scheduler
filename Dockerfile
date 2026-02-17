@@ -73,9 +73,6 @@ COPY assets/ assets/
 COPY scripts/ scripts/
 COPY railway.json ./
 
-# Create output directories
-RUN mkdir -p output/videos output/thumbnails output/reels output/schedules output/posts
-
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
 

@@ -277,38 +277,47 @@ class JobProcessor:
             })
 
             # Upload to Supabase Storage (Supabase-only, no local persistence)
+            _tmp_files = [thumbnail_path, reel_path, video_path, Path(str(actual_yt_thumb_path))]
+
+            def _cleanup_temps():
+                for tmp in _tmp_files:
+                    try:
+                        os.unlink(tmp)
+                    except OSError:
+                        pass
+
             try:
                 thumb_remote = storage_path(user_id, brand_slug, "thumbnails", f"{reel_id}_thumbnail.png")
                 thumb_url = upload_from_path("media", thumb_remote, str(thumbnail_path))
             except StorageError as e:
-                print(f"   ⚠️ Thumbnail upload failed: {e}", flush=True)
-                thumb_url = ""
+                print(f"   ❌ Thumbnail upload failed: {e}", flush=True)
+                _cleanup_temps()
+                raise Exception(f"Failed to upload thumbnail: {str(e)}")
             try:
                 reel_remote = storage_path(user_id, brand_slug, "reels", f"{reel_id}_reel.png")
                 reel_url = upload_from_path("media", reel_remote, str(reel_path))
             except StorageError as e:
-                print(f"   ⚠️ Reel upload failed: {e}", flush=True)
-                reel_url = ""
+                print(f"   ❌ Reel image upload failed: {e}", flush=True)
+                _cleanup_temps()
+                raise Exception(f"Failed to upload reel image: {str(e)}")
             try:
                 video_remote = storage_path(user_id, brand_slug, "videos", f"{reel_id}_video.mp4")
                 video_url = upload_from_path("media", video_remote, str(video_path))
             except StorageError as e:
-                print(f"   ⚠️ Video upload failed: {e}", flush=True)
-                video_url = ""
+                print(f"   ❌ Video upload failed: {e}", flush=True)
+                _cleanup_temps()
+                raise Exception(f"Failed to upload video: {str(e)}")
             try:
                 yt_thumb_filename = Path(str(actual_yt_thumb_path)).name
                 yt_remote = storage_path(user_id, brand_slug, "thumbnails", yt_thumb_filename)
                 yt_thumb_url = upload_from_path("media", yt_remote, str(actual_yt_thumb_path))
             except StorageError as e:
-                print(f"   ⚠️ YT thumbnail upload failed: {e}", flush=True)
-                yt_thumb_url = ""
+                print(f"   ❌ YouTube thumbnail upload failed: {e}", flush=True)
+                _cleanup_temps()
+                raise Exception(f"Failed to upload YouTube thumbnail: {str(e)}")
 
-            # Clean up temp files
-            for tmp in [thumbnail_path, reel_path, video_path, Path(str(actual_yt_thumb_path))]:
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
+            # Clean up temp files after successful uploads
+            _cleanup_temps()
 
             # Update brand output with Supabase URLs
             self._manager.update_brand_output(job_id, brand, {

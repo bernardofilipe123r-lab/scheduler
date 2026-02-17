@@ -21,7 +21,7 @@ interface Agent {
   [key: string]: any
 }
 
-export function calculateStats(logs: LogEntry[], startTime: number, agents: Agent[]): MissionStats {
+export function calculateStats(logs: LogEntry[], startTime: number, _agents: Agent[]): MissionStats {
   const now = Date.now()
   const elapsed = Math.floor((now - startTime) / 1000)
 
@@ -31,62 +31,41 @@ export function calculateStats(logs: LogEntry[], startTime: number, agents: Agen
   let jobs = 0
   let scheduled = 0
 
-  // Handle undefined/null arrays
-  if (!logs || !agents) {
-    return {
-      elapsed_seconds: elapsed,
-      total_proposals: 0,
-      accepted: 0,
-      rejected: 0,
-      jobs_created: 0,
-      scheduled: 0,
-    }
-  }
-
-  // Build dynamic agent pattern from actual agents in DB
-  const agentNames = agents.map(a => a.agent_id.toUpperCase())
-  const hasAgentProposal = (msg: string) => {
-    if (!msg.includes('saved:')) return false
-    return agentNames.some(name => msg.includes(`${name.toLowerCase()}-`))
+  if (!logs) {
+    return { elapsed_seconds: elapsed, total_proposals: 0, accepted: 0, rejected: 0, jobs_created: 0, scheduled: 0 }
   }
 
   logs.forEach(log => {
     const msg = log.message.toLowerCase()
     
-    // Count proposals saved (dynamic - checks actual agent names)
-    if (hasAgentProposal(msg)) {
-      proposals++
+    // Count proposals generated (matches "✓ Generated N proposal(s)")
+    const genMatch = msg.match(/generated (\d+) proposal/)
+    if (genMatch) {
+      proposals += parseInt(genMatch[1])
     }
     
-    // Count accepted proposals
-    if (msg.includes('auto-accepting') || msg.includes('examiner: accept')) {
+    // Count accepted (matches "Accepted" action from examiner)
+    if (msg.includes('accepted') && (msg.includes('✅') || msg.includes('/10 ✓'))) {
       accepted++
     }
     
-    // Count rejected proposals
-    if (msg.includes('examiner: reject') || msg.includes('rejected')) {
+    // Count rejected (matches "Rejected" action from examiner)
+    if (msg.includes('rejected') || msg.includes('🚫')) {
       rejected++
     }
     
-    // Count jobs created
-    if (msg.includes('created generation job') || msg.includes('job id: gen-')) {
+    // Count jobs created (matches "Job created" or "⚙️")
+    if (msg.includes('job created') || (msg.includes('⚙️') && msg.includes('job'))) {
       jobs++
     }
     
-    // Count scheduled
-    if (msg.includes('scheduled reel') || msg.includes('scheduled post') || msg.includes('auto-scheduled')) {
+    // Count scheduled (matches "Job complete + scheduled")
+    if (msg.includes('complete + scheduled') || msg.includes('📅')) {
       scheduled++
     }
   })
 
-  return {
-    elapsed_seconds: elapsed,
-    total_proposals: proposals,
-    accepted,
-    rejected,
-    jobs_created: jobs,
-    scheduled,
-  }
+  return { elapsed_seconds: elapsed, total_proposals: proposals, accepted, rejected, jobs_created: jobs, scheduled }
 }
 
 export function calculatePhase(logs: LogEntry[]): string {

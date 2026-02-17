@@ -132,9 +132,9 @@ class ReelCreateResponse(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "thumbnail_path": "output/thumbnails/a1b2c3d4-e5f6-7890-abcd-ef1234567890.png",
-                "reel_image_path": "output/reels/a1b2c3d4-e5f6-7890-abcd-ef1234567890.png",
-                "video_path": "output/videos/a1b2c3d4-e5f6-7890-abcd-ef1234567890.mp4",
+                "thumbnail_path": "https://<project>.supabase.co/storage/v1/object/public/media/<user_id>/<brand>/thumbnails/thumb.png",
+                "reel_image_path": "https://<project>.supabase.co/storage/v1/object/public/media/<user_id>/<brand>/reels/reel.png",
+                "video_path": "https://<project>.supabase.co/storage/v1/object/public/media/<user_id>/<brand>/videos/video.mp4",
                 "caption": "HOW TO EARN RESPECT\n\n1. Talk less...",
                 "reel_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "scheduled_at": "2026-01-10T18:00:00Z"

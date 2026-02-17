@@ -167,42 +167,24 @@ function computeRecentOps(cycles: Record<string, CycleInfo> | undefined, now: nu
     .slice(0, 8)
 }
 
-function detectActiveCycle(logs: any[]): string | null {
-  if (!logs || !logs.length) return null
-  const text = logs.slice(0, 15).map(l => l.message.toLowerCase()).join(' ')
-  for (const [key, keywords] of Object.entries(CYCLE_KEYWORDS)) {
-    if (keywords.some(kw => text.includes(kw))) return key
-  }
-  return null
-}
-
 function detectMode(
-  logs: any[],
   maestro: MaestroLiveStatus | undefined,
   upcoming: UpcomingOp[],
   forced: ObservatoryMode | null,
 ): ObservatoryMode {
   if (forced === 'history') return 'history'
+  
+  // Backend is sole source of truth for active phase
   if (maestro?.current_phase) return 'live'
+  if (maestro?.active_jobs && maestro.active_jobs > 0) return 'live'
 
-  if (logs && logs.length > 0) {
-    const now = Date.now()
-    const activityKw = [
-      'generating', 'planning', 'saved:', 'examiner', 'auto-accepting',
-      'burst', 'healing', 'publishing', 'scout', 'observe',
-      'feedback', 'mutation', 'evolution', 'diagnostic', 'bootstrap',
-    ]
-    const recent = logs.filter(l => {
-      const t = new Date(l.timestamp).getTime()
-      if (t < now - 300_000) return false
-      const m = l.message.toLowerCase()
-      return activityKw.some(kw => m.includes(kw))
-    })
-    if (recent.length > 0) {
-      const latest = Math.max(...recent.map((l: any) => new Date(l.timestamp).getTime()))
-      if (now - latest < 30_000) return 'live'
-      if (now - latest < 120_000) return 'recap'
-    }
+  // Show recap briefly after burst completion (burst_started_at was set but phase is now null)
+  if (maestro?.burst_started_at) {
+    const burstEnd = Date.now()
+    const burstStart = new Date(maestro.burst_started_at).getTime()
+    const elapsed = burstEnd - burstStart
+    // Show recap for bursts that completed in the last 2 minutes
+    if (elapsed < 120_000) return 'recap'
   }
 
   if (upcoming && upcoming.length > 0 && upcoming[0].nextRunMs > 0 && upcoming[0].nextRunMs <= 300_000) {
@@ -447,12 +429,11 @@ export function ObservatoryPage() {
   const upcoming = useMemo(() => computeUpcoming(maestro?.cycles, maestro?.started_at, now), [maestro, now])
   const week = useMemo(() => computeWeekSchedule(now), [now])
   const recentOps = useMemo(() => computeRecentOps(maestro?.cycles, now), [maestro, now])
-  const mode = useMemo(() => detectMode(logs, maestro, upcoming, forcedMode), [logs, maestro, upcoming, forcedMode])
-  // Always use backend's current_phase as single source of truth
-  const detectedCycle = useMemo(() => detectActiveCycle(logs), [logs])
-  const activeCycle = maestro?.current_phase || detectedCycle
+  const mode = useMemo(() => detectMode(maestro, upcoming, forcedMode), [maestro, upcoming, forcedMode])
+  const activeCycle = maestro?.current_phase || null
 
-  const stats = calculateStats(logs, startTime, agents)
+  const burstStart = maestro?.burst_started_at ? new Date(maestro.burst_started_at).getTime() : startTime
+  const stats = calculateStats(logs, burstStart, agents)
 
   useEffect(() => {
     if (forcedMode && forcedMode !== 'history' && mode !== forcedMode) setForcedMode(null)
@@ -540,7 +521,7 @@ export function ObservatoryPage() {
           ) : mode === 'countdown' ? (
             <CountdownMode key="cd" op={nearestOp!} upcoming={upcoming} now={now} onSelectOp={setSelectedOp} />
           ) : mode === 'live' ? (
-            <LiveMode key="lv" activeCycle={activeCycle} logs={logs} agents={agents} stats={stats} />
+            <LiveMode key="lv" activeCycle={activeCycle} logs={logs} agents={agents} stats={stats} maestro={maestro} />
           ) : mode === 'recap' ? (
             <RecapMode key="rc" activeCycle={activeCycle} stats={stats} maestro={maestro} />
           ) : mode === 'history' ? (
@@ -805,11 +786,12 @@ function CountdownMode({ op, upcoming, onSelectOp }: {
 // MODE 3: LIVE — Active execution
 // ═══════════════════════════════════════════════════════════════
 
-function LiveMode({ activeCycle, logs, agents, stats }: {
+function LiveMode({ activeCycle, logs, agents, stats, maestro }: {
   activeCycle: string | null
   logs: any[]
   agents: Agent[]
   stats: ReturnType<typeof calculateStats>
+  maestro: MaestroLiveStatus | undefined
 }) {
   const cfg = activeCycle ? getCycleConfig(activeCycle) : null
   const isBurst = activeCycle === 'daily_burst'
@@ -837,6 +819,9 @@ function LiveMode({ activeCycle, logs, agents, stats }: {
               <span>Jobs: <span className="text-purple-400">{stats.jobs_created}</span></span>
               <span>Scheduled: <span className="text-emerald-400">{stats.scheduled}</span></span>
             </>
+          )}
+          {maestro?.active_jobs !== undefined && maestro.active_jobs > 0 && (
+            <span>Active Jobs: <span className="text-orange-400">{maestro.active_jobs}</span></span>
           )}
           <span>Elapsed: <span className="text-gray-300">{formatElapsed(stats.elapsed_seconds)}</span></span>
         </div>
@@ -878,7 +863,6 @@ function RecapMode({ activeCycle, stats, maestro }: {
   stats: ReturnType<typeof calculateStats>
   maestro: MaestroLiveStatus | undefined
 }) {
-  const cfg = activeCycle ? getCycleConfig(activeCycle) : null
   const isBurst = activeCycle === 'daily_burst'
 
   return (
@@ -891,9 +875,9 @@ function RecapMode({ activeCycle, stats, maestro }: {
             <span className="text-xs font-mono font-semibold text-green-400 tracking-wider">COMPLETE</span>
           </div>
           <h2 className="text-xl font-semibold text-gray-200 mb-1">
-            {cfg?.label || 'Operation'} Complete
+            Session Complete
           </h2>
-          <p className="text-xs text-gray-500">All tasks finished successfully</p>
+          <p className="text-xs text-gray-500">All content generation tasks have finished</p>
         </div>
 
         <div className="h-px bg-gray-800 mb-8" />

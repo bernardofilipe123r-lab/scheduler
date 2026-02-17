@@ -3,7 +3,6 @@ Scheduling API routes.
 """
 import uuid
 import base64
-from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -116,24 +115,11 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
             finally:
                 lookup_db.close()
 
-        # Fall back to local file paths for backward compatibility
-        if not video_url:
-            base_dir = Path(__file__).resolve().parent.parent.parent
-            local_video = base_dir / "output" / "videos" / f"{request.reel_id}.mp4"
-            if local_video.exists():
-                video_url = str(local_video)
-
-        if not thumbnail_url:
-            base_dir = Path(__file__).resolve().parent.parent.parent
-            local_thumb = base_dir / "output" / "thumbnails" / f"{request.reel_id}.png"
-            if local_thumb.exists():
-                thumbnail_url = str(local_thumb)
-
         print(f"\n🎬 Video: {video_url or 'NOT FOUND'}")
         print(f"🖼️  Thumbnail: {thumbnail_url or 'NOT FOUND'}")
 
         if not video_url:
-            print(f"❌ ERROR: Video not found in Supabase or locally!")
+            print(f"❌ ERROR: Video not found in Supabase!")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Video not found for reel ID: {request.reel_id}"
@@ -242,40 +228,10 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             )
             print(f"📅 Next available slot: {next_slot.isoformat()}")
         
-        # Resolve media paths — Supabase URLs pass through directly, local paths for backward compat
-        def _is_url(v):
-            return v and v.startswith("http")
-
-        base_dir = Path(__file__).resolve().parent.parent.parent
-
-        if _is_url(request.video_path):
-            video_path_str = request.video_path
-        elif request.video_path:
-            p = Path(request.video_path)
-            if not p.is_absolute():
-                p = base_dir / request.video_path.lstrip('/')
-            video_path_str = str(p) if p.exists() else None
-        else:
-            video_path_str = None
-
-        if _is_url(request.thumbnail_path):
-            thumbnail_path_str = request.thumbnail_path
-        elif request.thumbnail_path:
-            p = Path(request.thumbnail_path)
-            if not p.is_absolute():
-                p = base_dir / request.thumbnail_path.lstrip('/')
-            thumbnail_path_str = str(p) if p.exists() else None
-        else:
-            thumbnail_path_str = None
-
-        yt_thumbnail_str = None
-        if _is_url(request.yt_thumbnail_path):
-            yt_thumbnail_str = request.yt_thumbnail_path
-        elif request.yt_thumbnail_path:
-            p = Path(request.yt_thumbnail_path)
-            if not p.is_absolute():
-                p = base_dir / request.yt_thumbnail_path.lstrip('/')
-            yt_thumbnail_str = str(p) if p.exists() else None
+        # All media paths are Supabase URLs — pass through directly
+        video_path_str = request.video_path or None
+        thumbnail_path_str = request.thumbnail_path or None
+        yt_thumbnail_str = request.yt_thumbnail_path or None
 
         print(f"🎬 Video: {video_path_str}")
         print(f"🖼️  Thumbnail: {thumbnail_path_str}")

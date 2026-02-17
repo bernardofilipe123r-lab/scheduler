@@ -323,6 +323,11 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
             set_last_daily_run(datetime.utcnow(), user_id=user_id)
         finally:
             self._current_user_id = None
+            # Phase will auto-clear when last job finishes via job_finished()
+            # But if no jobs were dispatched, clear it now
+            if self.state._active_jobs == 0:
+                self.state.current_phase = None
+                self.state.current_agent = None
             self._daily_burst_lock.release()
 
     def _run_burst_for_user(self, user_id: Optional[str]):
@@ -342,7 +347,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
             user_id: The user to generate for. None = unscoped (legacy).
         """
         self.state.total_cycles += 1
-        self.state.current_phase = "generating"
+        self.state.begin_phase("generating")
         burst_start = datetime.utcnow()
         user_label = f" [user={user_id}]" if user_id else ""
 
@@ -495,7 +500,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
             self.state.log("maestro", "Pre-burst schedule error", str(e)[:200], "❌")
 
         # Auto-accept each proposal and create its single job
-        self.state.current_phase = "processing"
+        self.state.begin_phase("processing")
         self._auto_accept_and_process(all_proposals)
 
         elapsed = (datetime.utcnow() - burst_start).total_seconds()
@@ -542,7 +547,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
 
         try:
             self.state.total_cycles += 1
-            self.state.current_phase = "generating"
+            self.state.begin_phase("generating")
             burst_start = datetime.utcnow()
             user_label = f" [user={user_id}]" if user_id else ""
 
@@ -663,7 +668,7 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
                 pass
 
             # Auto-accept and process
-            self.state.current_phase = "processing"
+            self.state.begin_phase("processing")
             self._auto_accept_and_process(all_proposals)
 
             set_last_daily_run(datetime.utcnow(), user_id=user_id or "__system__")
@@ -680,8 +685,11 @@ class MaestroDaemon(ProposalsMixin, CyclesMixin, HealingMixin):
             set_last_daily_run(datetime.utcnow(), user_id=user_id or "__system__")
         finally:
             self._current_user_id = None
-            self.state.current_agent = None
-            self.state.current_phase = None
+            # Phase will auto-clear when last job finishes via job_finished()
+            # But if no jobs were dispatched, clear it now
+            if self.state._active_jobs == 0:
+                self.state.current_phase = None
+                self.state.current_agent = None
             self._daily_burst_lock.release()
 
 

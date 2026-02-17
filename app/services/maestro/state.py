@@ -252,6 +252,9 @@ class MaestroState:
         # What's happening right now
         self.current_agent: Optional[str] = None
         self.current_phase: Optional[str] = None  # "generating", "processing", "scheduling"
+        self._active_jobs: int = 0  # Count of background jobs still running
+        self._phase_lock = threading.Lock()  # Thread-safe phase transitions
+        self.burst_started_at: Optional[datetime] = None  # When current burst started
 
         # Timestamps
         self.last_metrics_at: Optional[datetime] = None
@@ -296,6 +299,34 @@ class MaestroState:
         """Lazily create an AgentState if a new agent appears."""
         if agent_id not in self.agents:
             self.agents[agent_id] = AgentState(agent_id)
+
+    def begin_phase(self, phase: str):
+        """Set the current phase and record burst start time."""
+        with self._phase_lock:
+            self.current_phase = phase
+            if phase == "generating":
+                self.burst_started_at = datetime.utcnow()
+
+    def job_started(self):
+        """Increment active job count (called when a job thread is spawned)."""
+        with self._phase_lock:
+            self._active_jobs += 1
+
+    def job_finished(self):
+        """Decrement active job count. Clear phase when all jobs are done."""
+        with self._phase_lock:
+            self._active_jobs = max(0, self._active_jobs - 1)
+            if self._active_jobs == 0 and self.current_phase is not None:
+                self.current_phase = None
+                self.current_agent = None
+
+    @property
+    def effective_phase(self) -> Optional[str]:
+        """Return the current phase only if there's actually work happening."""
+        with self._phase_lock:
+            if self._active_jobs > 0:
+                return self.current_phase or "processing"
+            return self.current_phase
 
     def _get_daily_config(self, user_id: str | None = None) -> Dict:
         """Build daily config dict dynamically from DB agents + brands.
@@ -383,7 +414,9 @@ class MaestroState:
             "uptime_seconds": int(uptime),
             "uptime_human": _format_uptime(uptime),
             "current_agent": self.current_agent,
-            "current_phase": self.current_phase,
+            "current_phase": self.effective_phase,
+            "active_jobs": self._active_jobs,
+            "burst_started_at": self.burst_started_at.isoformat() if self.burst_started_at else None,
             "last_daily_run": last_run.isoformat() if last_run else None,
             "last_daily_run_human": _time_ago(last_run) if last_run else "never",
             "total_cycles": self.total_cycles,

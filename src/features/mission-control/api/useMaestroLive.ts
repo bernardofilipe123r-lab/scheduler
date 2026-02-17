@@ -25,6 +25,8 @@ export interface MaestroLiveStatus {
   total_cycles: number
   total_proposals_generated: number
   current_phase: string | null
+  active_jobs: number
+  burst_started_at: string | null
   errors: number
   started_at: string | null
   cycles?: Record<string, CycleInfo>

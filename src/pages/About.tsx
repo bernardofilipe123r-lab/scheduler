@@ -290,7 +290,7 @@ function generatePDF() {
         <tr><td>Video Engine</td><td>FFmpeg + MoviePy</td><td>Image‑to‑video with background music</td></tr>
         <tr><td>Publishing</td><td>Meta Graph API + YouTube Data API</td><td>Cross-platform publishing</td></tr>
         <tr><td>Scheduling</td><td>APScheduler</td><td>Background job scheduling &amp; daemon cycles</td></tr>
-        <tr><td>Deployment</td><td>Docker + Railway</td><td>Cloud hosting with persistent volumes</td></tr>
+        <tr><td>Deployment</td><td>Docker + Railway</td><td>Cloud hosting with Supabase Storage</td></tr>
         <tr><td>UI Framework</td><td>TailwindCSS + Recharts + Lucide</td><td>Modern, responsive admin interface</td></tr>
       </tbody>
     </table>
@@ -474,7 +474,7 @@ function generatePDF() {
       <li><strong>Authentication</strong> — Session-based user authentication with role-based access control</li>
       <li><strong>Credential Security</strong> — All API keys and tokens stored in environment variables, never committed</li>
       <li><strong>System User Tokens</strong> — Meta Business Suite system user tokens that never expire for uninterrupted publishing</li>
-      <li><strong>Docker Deployment</strong> — Containerized deployment on Railway with persistent volume support</li>
+      <li><strong>Docker Deployment</strong> — Containerized deployment on Railway with Supabase Storage for all media</li>
       <li><strong>Database Migrations</strong> — Alembic-managed schema migrations for zero-downtime updates</li>
       <li><strong>Request Logging</strong> — Full HTTP request/response logging middleware with automatic log rotation</li>
       <li><strong>Auto-Recovery</strong> — Stuck publishing posts automatically reset on application restart</li>
@@ -736,7 +736,7 @@ export function AboutPage() {
               <TechRow layer="Video Engine" tech="FFmpeg + MoviePy" purpose="Image-to-video with background music" />
               <TechRow layer="Publishing" tech="Meta Graph API + YouTube API" purpose="Cross-platform social publishing" />
               <TechRow layer="Scheduling" tech="APScheduler" purpose="Background jobs & daemon cycles" />
-              <TechRow layer="Deployment" tech="Docker + Railway" purpose="Cloud hosting with persistent volumes" />
+              <TechRow layer="Deployment" tech="Docker + Railway" purpose="Cloud hosting with Supabase Storage" />
               <TechRow layer="UI Framework" tech="TailwindCSS + Recharts + Lucide" purpose="Modern admin interface" />
             </tbody>
           </table>
@@ -1031,7 +1031,7 @@ export function AboutPage() {
           <FeatureCard
             icon={Server}
             title="Docker + Railway"
-            description="Containerized deployment on Railway with persistent volume support and Alembic-managed schema migrations."
+            description="Containerized deployment on Railway with Supabase Storage for all media and Alembic-managed schema migrations."
           />
           <FeatureCard
             icon={Cpu}
