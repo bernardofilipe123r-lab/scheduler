@@ -151,6 +151,67 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
+def _render_slides_node(brand: str, title: str, background_image: str, slide_texts: list, reel_id: str) -> dict | None:
+    """Render carousel slides using Node.js Konva (pixel-perfect match to frontend)."""
+    import json
+    import subprocess
+    import tempfile
+
+    uid8 = reel_id[:8] if reel_id else "unknown"
+    cover_out = f"/app/output/posts/post_{brand}_{uid8}.png"
+    slide_outputs = [
+        f"/app/output/posts/post_{brand}_{uid8}_slide{idx}.png"
+        for idx in range(len(slide_texts))
+    ]
+
+    input_data = {
+        "brand": brand,
+        "title": title,
+        "backgroundImage": background_image,
+        "slideTexts": slide_texts,
+        "coverOutput": cover_out,
+        "slideOutputs": slide_outputs,
+        "logoPath": None,
+        "shareIconPath": "/app/assets/icons/share.png",
+        "saveIconPath": "/app/assets/icons/save.png",
+        "fontPaths": {
+            "anton": "/app/assets/fonts/Anton-Regular.ttf",
+            "inter": "/app/assets/fonts/InterVariable.ttf",
+        },
+    }
+
+    # Write input JSON to temp file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(input_data, f)
+        json_path = f.name
+
+    try:
+        result = subprocess.run(
+            ["node", "/app/scripts/render-slides.cjs", json_path],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            print(f"[NODE-RENDER] stderr: {result.stderr}", flush=True)
+            return None
+        output = json.loads(result.stdout.strip())
+        if output.get("success"):
+            return output
+        else:
+            print(f"[NODE-RENDER] Error: {output.get('error')}", flush=True)
+            return None
+    except subprocess.TimeoutExpired:
+        print("[NODE-RENDER] Timeout after 60s", flush=True)
+        return None
+    except Exception as e:
+        print(f"[NODE-RENDER] Exception: {e}", flush=True)
+        return None
+    finally:
+        import os
+        os.unlink(json_path)
+
+
 def _repair_missing_carousel_images():
     """Re-compose carousel slides for all scheduled posts to ensure correct rendering."""
     from app.db_connection import SessionLocal
@@ -194,25 +255,22 @@ def _repair_missing_carousel_images():
                 continue
 
             try:
-                from app.services.media.post_compositor import compose_cover_slide
-                from app.services.media.text_slide_compositor import compose_text_slide
-
-                cover_out = f"output/posts/post_{brand}_{uid8}.png"
-                compose_cover_slide(raw_bg, title, brand, cover_out)
-
-                carousel_paths = []
-                for idx, stxt in enumerate(slide_texts):
-                    is_last = idx == len(slide_texts) - 1
-                    slide_out = f"output/posts/post_{brand}_{uid8}_slide{idx}.png"
-                    compose_text_slide(brand, stxt, slide_texts, is_last, slide_out)
-                    carousel_paths.append(slide_out)
-
-                ed["thumbnail_path"] = cover_out
-                ed["carousel_paths"] = carousel_paths
-                post.extra_data = dict(ed)
-                flag_modified(post, "extra_data")
-                repaired += 1
-                print(f"  ✅ [{post.schedule_id}] Composed {1 + len(carousel_paths)} slides for {brand}", flush=True)
+                composed = _render_slides_node(
+                    brand=brand,
+                    title=title,
+                    background_image=raw_bg,
+                    slide_texts=slide_texts,
+                    reel_id=reel_id,
+                )
+                if composed:
+                    ed["thumbnail_path"] = composed["coverPath"]
+                    ed["carousel_paths"] = composed["slidePaths"]
+                    post.extra_data = dict(ed)
+                    flag_modified(post, "extra_data")
+                    repaired += 1
+                    print(f"  ✅ [{post.schedule_id}] Rendered {1 + len(composed['slidePaths'])} slides for {brand}", flush=True)
+                else:
+                    print(f"  ❌ [{post.schedule_id}] Node renderer failed for {brand}", flush=True)
             except Exception as e:
                 print(f"  ❌ [{post.schedule_id}] Composition failed for {brand}: {e}", flush=True)
 
@@ -428,34 +486,30 @@ async def startup_event():
                             if not image_path.exists():
                                 raise FileNotFoundError(f"Post image not found: {image_path}")
                             
-                            # ── Just-in-time composition at publish time ──
+                            # ── Just-in-time composition at publish time (Node.js Konva) ──
                             post_title = metadata.get('title', '')
                             slide_texts = metadata.get('slide_texts') or []
                             carousel_paths_composed = []
 
                             if post_title or slide_texts:
                                 try:
-                                    from app.services.media.post_compositor import compose_cover_slide
-                                    from app.services.media.text_slide_compositor import compose_text_slide
-
-                                    uid8 = reel_id[:8] if reel_id else "unknown"
-                                    cover_out = f"/app/output/posts/post_{brand}_{uid8}.png"
-                                    bg_path = str(image_path)
-                                    compose_cover_slide(bg_path, post_title, brand, cover_out)
-                                    image_path = Path(cover_out)
-                                    print(f"      ✅ Cover slide composed: {cover_out}")
-
-                                    for idx, stxt in enumerate(slide_texts):
-                                        is_last = idx == len(slide_texts) - 1
-                                        slide_out = f"/app/output/posts/post_{brand}_{uid8}_slide{idx}.png"
-                                        compose_text_slide(brand, stxt, slide_texts, is_last, slide_out)
-                                        carousel_paths_composed.append(slide_out)
-                                    print(f"      ✅ {len(carousel_paths_composed)} text slides composed")
+                                    composed = _render_slides_node(
+                                        brand=brand,
+                                        title=post_title,
+                                        background_image=str(image_path),
+                                        slide_texts=slide_texts,
+                                        reel_id=reel_id,
+                                    )
+                                    if composed:
+                                        image_path = Path(composed["coverPath"])
+                                        carousel_paths_composed = composed["slidePaths"]
+                                        print(f"      ✅ Konva rendered: cover + {len(carousel_paths_composed)} slides")
+                                    else:
+                                        print(f"      ⚠️ Node renderer returned no result", flush=True)
                                 except Exception as comp_err:
                                     import traceback
                                     print(f"      ⚠️ JIT composition failed: {comp_err}", flush=True)
                                     traceback.print_exc()
-                                    carousel_paths_composed = []
                             
                             # Build public URL base
                             railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")

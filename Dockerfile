@@ -14,11 +14,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Second batch: image processing libraries
+# Second batch: image processing libraries + node-canvas (Cairo/Pango)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
     libfreetype6-dev \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg62-turbo-dev \
+    libgif-dev \
+    librsvg2-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Third batch: ffmpeg
@@ -64,10 +70,11 @@ RUN npm run build
 # Copy application code (Python backend)
 COPY app/ app/
 COPY assets/ assets/
+COPY scripts/ scripts/
 COPY railway.json ./
 
 # Create output directories
-RUN mkdir -p output/videos output/thumbnails output/reels output/schedules
+RUN mkdir -p output/videos output/thumbnails output/reels output/schedules output/posts
 
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
