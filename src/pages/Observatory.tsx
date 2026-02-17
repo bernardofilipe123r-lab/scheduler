@@ -803,7 +803,7 @@ function CountdownMode({ op, upcoming, onSelectOp }: {
 // MODE 3: LIVE — Active execution
 // ═══════════════════════════════════════════════════════════════
 
-function LiveMode({ activeCycle, logs, agents, stats }: {
+function LiveMode({ activeCycle, logs, agents, stats, maestro }: {
   activeCycle: string | null
   logs: any[]
   agents: Agent[]
