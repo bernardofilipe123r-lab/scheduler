@@ -769,10 +769,13 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
         cover_remote = storage_path(user_id, brand_slug, "posts", f"{post_id}.png")
         try:
             cover_url = upload_bytes("media", cover_remote, image_bytes, "image/png")
+            print(f"   ☁️  Supabase cover: {cover_url}")
         except StorageError as e:
-            print(f"   ⚠️ Cover upload failed: {e}", flush=True)
-            cover_url = ""
-        print(f"   ☁️  Supabase cover: {cover_url}")
+            print(f"   ❌ Cover upload failed: {e}", flush=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upload cover image to storage: {str(e)}"
+            )
         
         # Upload carousel text slide images (if any)
         carousel_paths = []
@@ -784,11 +787,12 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
             slide_remote = storage_path(user_id, brand_slug, "posts", f"{post_id}_slide{slide_i + 1}.png")
             try:
                 slide_url = upload_bytes("media", slide_remote, slide_bytes, "image/png")
+                carousel_paths.append(slide_url)
+                print(f"   ☁️  Supabase slide {slide_i + 1}: {slide_url}")
             except StorageError as e:
                 print(f"   ⚠️ Slide {slide_i + 1} upload failed: {e}", flush=True)
-                slide_url = ""
-            carousel_paths.append(slide_url)
-            print(f"   ☁️  Supabase slide {slide_i + 1}: {slide_url}")
+                # Skip failed slides instead of appending empty strings
+                print(f"   ⚠️ Skipping slide {slide_i + 1} (upload failed)")
         
         total_slides = 1 + len(carousel_paths)
         print(f"   📄 Total carousel slides: {total_slides}")

@@ -1124,7 +1124,9 @@ export function ScheduledPage() {
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
           const totalSlides = isPost ? 1 + Math.max(carouselPaths.length, slideTexts.length) : 1
           // Derive raw AI background URL from reel_id
-          const bgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
+          // Ensure we have a valid URL, not an empty string
+          const rawBgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
+          const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
           const logoUrl = brandLogos[selectedPost.brand] || null
 
           return (

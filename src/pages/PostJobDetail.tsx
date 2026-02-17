@@ -611,7 +611,9 @@ export function PostJobDetail({ job, refetch }: Props) {
       >
         {job.brands.map((brand) => {
           const output: BrandOutput | undefined = job.brand_outputs[brand as BrandName]
-          const bgUrl = output?.thumbnail_path || null
+          // Ensure we have a valid URL, not an empty string
+          const rawBgUrl = output?.thumbnail_path || null
+          const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
           const status = output?.status || 'pending'
           const brandTitle = getBrandTitle(brand)
           const brandCaption = output?.caption || ''
@@ -1193,7 +1195,9 @@ export function PostJobDetail({ job, refetch }: Props) {
       {/* Full-quality preview modal */}
       {expandedBrand && (() => {
         const output = job.brand_outputs[expandedBrand as BrandName]
-        const bgUrl = output?.thumbnail_path || null
+        // Ensure we have a valid URL, not an empty string
+        const rawBgUrl = output?.thumbnail_path || null
+        const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
         const slideTexts = output?.slide_texts || []
         const brandTitle = getBrandTitle(expandedBrand)
         const logoUrl = brandLogos[expandedBrand] || null
