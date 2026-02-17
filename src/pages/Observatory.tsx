@@ -168,7 +168,6 @@ function computeRecentOps(cycles: Record<string, CycleInfo> | undefined, now: nu
 }
 
 function detectActiveCycle(logs: any[]): string | null {
-  console.log('🔄 detectActiveCycle called:', { 'logs type': typeof logs, 'logs is array': Array.isArray(logs), 'logs length': logs?.length })
   if (!logs || !logs.length) return null
   const text = logs.slice(0, 15).map(l => l.message.toLowerCase()).join(' ')
   for (const [key, keywords] of Object.entries(CYCLE_KEYWORDS)) {
@@ -183,17 +182,6 @@ function detectMode(
   upcoming: UpcomingOp[],
   forced: ObservatoryMode | null,
 ): ObservatoryMode {
-  console.log('🎭 detectMode called:', {
-    'logs type': typeof logs,
-    'logs is array': Array.isArray(logs),
-    'logs length': logs?.length,
-    'upcoming type': typeof upcoming,
-    'upcoming is array': Array.isArray(upcoming),
-    'upcoming length': upcoming?.length,
-    'maestro defined': maestro ? 'yes' : 'no',
-    'maestro.current_phase': maestro?.current_phase
-  })
-
   if (forced === 'history') return 'history'
   if (maestro?.current_phase) return 'live'
 
@@ -451,19 +439,6 @@ export function ObservatoryPage() {
 
   const agents = agentsData?.agents || []
 
-  // DEBUG LOGGING
-  console.log('🔍 Observatory render:', {
-    'logs type': typeof logs,
-    'logs is array': Array.isArray(logs),
-    'logs length': logs?.length,
-    'logs value': logs,
-    'agents type': typeof agents,
-    'agents is array': Array.isArray(agents),
-    'agents length': agents?.length,
-    'maestro': maestro ? 'defined' : 'undefined',
-    'agentsData': agentsData ? 'defined' : 'undefined'
-  })
-
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
@@ -474,14 +449,10 @@ export function ObservatoryPage() {
   const recentOps = useMemo(() => computeRecentOps(maestro?.cycles, now), [maestro, now])
   const mode = useMemo(() => detectMode(logs, maestro, upcoming, forcedMode), [logs, maestro, upcoming, forcedMode])
   // Always use backend's current_phase as single source of truth
-  const activeCycle = maestro?.current_phase || useMemo(() => detectActiveCycle(logs), [logs])
+  const detectedCycle = useMemo(() => detectActiveCycle(logs), [logs])
+  const activeCycle = maestro?.current_phase || detectedCycle
 
-  console.log('🎯 About to call calculateStats:', {
-    'logs': Array.isArray(logs) ? `array[${logs.length}]` : typeof logs,
-    'agents': Array.isArray(agents) ? `array[${agents.length}]` : typeof agents
-  })
   const stats = calculateStats(logs, startTime, agents)
-  console.log('✅ calculateStats completed:', stats)
 
   useEffect(() => {
     if (forcedMode && forcedMode !== 'history' && mode !== forcedMode) setForcedMode(null)
