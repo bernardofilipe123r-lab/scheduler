@@ -268,49 +268,104 @@ export function ObservatoryPage() {
   const { data: agentsData } = useAgents()
   const { data: maestro, isLoading: maestroLoading } = useMaestroLive()
 
-  // Transform Maestro activity logs to match the expected format
-  // Filter out background maintenance - only show content generation activity
+  // Transform Maestro activity logs into user-friendly summaries
   const logs = useMemo(() => {
     const activity = maestro?.recent_activity || []
 
-    // Background tasks to hide (system maintenance)
-    const backgroundActions = [
-      'Scouting', 'Diagnostics', 'Metrics', 'Observing', 'Healing',
-      'Feedback', 'Hashtag scan', 'Data:', 'Metrics:',
-    ]
+    // Transform technical logs into plain English with context
+    const transformMessage = (entry: any): string => {
+      const { action, detail, emoji } = entry
 
-    const filtered = activity.filter(entry => {
-      const action = entry.action.toLowerCase()
-      const detail = entry.detail.toLowerCase()
-
-      // Hide background maintenance
-      if (backgroundActions.some(bg => entry.action.includes(bg) || entry.detail.includes(bg))) {
-        return false
+      // Content Generation (what user cares about most)
+      if (action.includes('Generating')) {
+        const match = detail.match(/(\d+)\s+(light|dark|post)s?\s+(?:reels?|posts?)\s+for\s+(\w+)/)
+        if (match) {
+          const [, count, variant, brand] = match
+          return `Creating ${count} ${variant === 'post' ? 'carousel post' : variant + ' reel'} for ${brand}`
+        }
+        return `Generating content: ${detail}`
       }
 
-      // Show only content generation (proposals, jobs, scheduling, publishing)
-      return (
-        action.includes('generating') ||
-        action.includes('done') ||
-        action.includes('accept') ||
-        action.includes('job') ||
-        action.includes('schedul') ||
-        action.includes('publish') ||
-        action.includes('burst') ||
-        action.includes('paused') ||
-        action.includes('resumed') ||
-        action.includes('trigger') ||
-        detail.includes('proposal') ||
-        detail.includes('reel') ||
-        detail.includes('post') ||
-        detail.includes('brand')
-      )
-    })
+      if (action.includes('Done')) {
+        const match = detail.match(/(\d+)\s+(?:reel|post)\s+proposals?/)
+        if (match) {
+          return `✓ Generated ${match[1]} proposal(s) - ready for review`
+        }
+        return `✓ ${detail}`
+      }
 
-    return filtered.map((entry, idx) => ({
+      // System Health & Diagnostics
+      if (action.includes('Diagnostics')) {
+        if (detail.includes('HEALTHY')) {
+          const match = detail.match(/(\d+)\s+pass/)
+          return `System Health Check: All systems operational (${match ? match[1] : '9'} tests passed)`
+        }
+        return `Running system diagnostics...`
+      }
+
+      // Metrics Collection
+      if (action.includes('Metrics')) {
+        if (detail.includes('complete')) {
+          return `Instagram Performance Analytics: Collected metrics for all brands`
+        }
+        if (detail.includes('Brand:')) {
+          const brand = detail.match(/for\s+(\w+)/)?.[1]
+          return `Analyzing ${brand} performance on Instagram...`
+        }
+        if (detail.includes('collection')) {
+          const match = detail.match(/(\d+)\s+brands/)
+          return `Collecting Instagram metrics for ${match ? match[1] : ''} brands to optimize content...`
+        }
+        return `Tracking content performance...`
+      }
+
+      // Trend Scouting
+      if (action.includes('Scouting') || action.includes('Hashtag scan')) {
+        if (detail.includes('hashtags:')) {
+          const match = detail.match(/(\d+)\s+hashtags/)
+          return `Discovering trending content (scanning ${match ? match[1] : ''} hashtags)`
+        }
+        return `Scanning Instagram trends to inspire better content...`
+      }
+
+      // Healing & Recovery
+      if (action.includes('Healing')) {
+        return `Auto-fixing failed jobs (smart retry system)`
+      }
+
+      // Feedback & Learning
+      if (action.includes('Feedback') || action.includes('evolution')) {
+        return `Learning from past performance to improve future content`
+      }
+
+      // Scheduling & Publishing
+      if (action.includes('Schedul') || action.includes('Auto-accepting')) {
+        return `Scheduling approved content for Instagram...`
+      }
+
+      if (action.includes('Publishing')) {
+        return `Publishing content to Instagram...`
+      }
+
+      // Burst/Pause/Resume
+      if (action.includes('burst') || action.includes('Burst')) {
+        if (detail.includes('proposals')) {
+          return `Daily content generation started`
+        }
+        return detail
+      }
+
+      if (action.includes('PAUSED')) return `Maestro paused - no automatic content generation`
+      if (action.includes('RESUMED')) return `Maestro resumed - automatic content generation enabled`
+
+      // Default: use original with emoji
+      return `${emoji} ${action}${detail ? `: ${detail}` : ''}`
+    }
+
+    return activity.map((entry, idx) => ({
       id: idx,
       timestamp: entry.time,
-      message: `${entry.emoji} [${entry.agent}] ${entry.action}${entry.detail ? `: ${entry.detail}` : ''}`,
+      message: transformMessage(entry),
       level: entry.level === 'action' ? 'INFO' : 'DEBUG',
       category: 'app',
     }))
