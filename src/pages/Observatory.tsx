@@ -871,7 +871,7 @@ function LiveMode({ activeCycle, logs, agents, stats }: {
 // MODE 4: RECAP — Just completed (<2 min ago)
 // ═══════════════════════════════════════════════════════════════
 
-function RecapMode({ activeCycle, stats, maestro }: {
+function RecapMode({ activeCycle, stats, maestro, logs, agents }: {
   activeCycle: string | null
   logs: any[]
   stats: ReturnType<typeof calculateStats>
@@ -945,7 +945,7 @@ function RecapMode({ activeCycle, stats, maestro }: {
 // MODE 5: HISTORY — Deep archive
 // ═══════════════════════════════════════════════════════════════
 
-function HistoryMode({ logs }: { logs: any[]; agents: Agent[] }) {
+function HistoryMode({ logs, agents }: { logs: any[]; agents: Agent[] }) {
   const [filter, setFilter] = useState<string>('all')
 
   const filtered = useMemo(() => {
