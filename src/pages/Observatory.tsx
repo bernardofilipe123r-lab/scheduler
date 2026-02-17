@@ -499,7 +499,7 @@ export function ObservatoryPage() {
             </div>
             {mode === 'live' && activeCycle && (
               <span className="text-[11px] text-gray-500 font-mono">
-                Phase: <span className="text-cyan-400">{phase}</span>
+                Phase: <span className="text-cyan-400">{activeCycle.toUpperCase()}</span>
               </span>
             )}
           </div>
