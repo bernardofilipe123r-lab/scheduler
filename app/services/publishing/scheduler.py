@@ -986,14 +986,17 @@ class DatabaseSchedulerService:
         
         Args:
             brands: List of brand names
-            variant: "light" or "dark"
+            variant: "light", "dark", or "post"
             
         Returns:
             Dict mapping brand name to next available slot datetime
         """
         result = {}
         for brand in brands:
-            result[brand] = self.get_next_available_slot(brand, variant)
+            if variant == "post":
+                result[brand] = self.get_next_available_post_slot(brand)
+            else:
+                result[brand] = self.get_next_available_slot(brand, variant)
         return result
 
     def get_scheduled_slots_for_brand(

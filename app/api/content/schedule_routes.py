@@ -303,7 +303,7 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
 @router.get("/scheduled")
 async def get_scheduled_posts(user: dict = Depends(get_current_user)):
     """
-    Get all scheduled posts (reels and posts from all sources including Maestro).
+    Get all scheduled posts (reels and posts from all sources).
     """
     try:
         schedules = scheduler_service.get_all_scheduled()
@@ -374,7 +374,7 @@ async def delete_scheduled_from_date(from_date: str, user: dict = Depends(get_cu
             .all()
         )
 
-        # Cancel corresponding job brand outputs so Maestro won't re-schedule
+        # Cancel corresponding job brand outputs so they won't be re-scheduled
         job_cache = {}
         for entry in entries:
             extra = entry.extra_data or {}
@@ -431,7 +431,7 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
 
         entries = query.all()
 
-        # Cancel corresponding job brand outputs so Maestro won't re-schedule
+        # Cancel corresponding job brand outputs so they won't be re-scheduled
         job_cache = {}
         for entry in entries:
             extra = entry.extra_data or {}
@@ -462,7 +462,7 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
 async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_current_user)):
     """
     Delete a scheduled post and mark the job brand output as cancelled
-    so Maestro won't re-schedule it.
+    so it won't be re-scheduled.
     """
     from app.db_connection import SessionLocal
     from app.models import ScheduledReel, GenerationJob
@@ -474,7 +474,7 @@ async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_curre
         if not entry:
             raise HTTPException(status_code=404, detail=f"Scheduled post {schedule_id} not found")
 
-        # Cancel the corresponding job brand output so Maestro won't re-schedule
+        # Cancel the corresponding job brand output so it won't be re-scheduled
         extra = entry.extra_data or {}
         job_id = extra.get("job_id")
         brand = extra.get("brand")

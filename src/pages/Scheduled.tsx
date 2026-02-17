@@ -42,7 +42,6 @@ import { PageLoader, Modal } from '@/shared/components'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
-  PostCanvas,
   loadGeneralSettings,
 } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
@@ -118,7 +117,7 @@ export function ScheduledPage() {
   const [showRescheduleModal, setShowRescheduleModal] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleTime, setRescheduleTime] = useState('')
-  const [statsFilter, setStatsFilter] = useState<'future' | 'all'>('future')
+  const [statsFilter] = useState<'future' | 'all'>('future')
   const [brandFilter, setBrandFilter] = useState<BrandName | null>(null)
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<ContentTypeFilter>('all')
@@ -453,51 +452,6 @@ export function ScheduledPage() {
           </button>
         </div>
         </div>
-      </div>
-      
-      {/* Stats */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">Statistics</span>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-          <button
-            onClick={() => setStatsFilter('future')}
-            className={clsx(
-              'px-3 py-1 rounded-md text-xs font-medium transition-colors',
-              statsFilter === 'future'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'text-gray-600 hover:text-gray-900'
-            )}
-          >
-            Upcoming
-          </button>
-          <button
-            onClick={() => setStatsFilter('all')}
-            className={clsx(
-              'px-3 py-1 rounded-md text-xs font-medium transition-colors',
-              statsFilter === 'all'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'text-gray-600 hover:text-gray-900'
-            )}
-          >
-            All Time
-          </button>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <div className="card p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-          <p className="text-sm text-gray-500">Total</p>
-        </div>
-        {dynamicBrands.map(brand => (
-          <div 
-            key={brand.id}
-            className="card p-4 text-center"
-            style={{ borderLeftColor: brand.color, borderLeftWidth: '3px' }}
-          >
-            <p className="text-2xl font-bold text-gray-900">{stats.byBrand[brand.id] || 0}</p>
-            <p className="text-sm text-gray-500">{brand.shortName}</p>
-          </div>
-        ))}
       </div>
       
       {/* Calendar Navigation */}
@@ -1173,15 +1127,19 @@ export function ScheduledPage() {
                     {/* Slide content — Konva canvas for cover, CarouselTextSlide for text slides */}
                     <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100">
                       {detailSlideIndex === 0 ? (
-                        <PostCanvas
-                          brand={selectedPost.brand}
-                          title={selectedPost.title}
-                          backgroundImage={bgUrl}
-                          settings={postSettings}
-                          scale={DETAIL_PREVIEW_SCALE}
-                          logoUrl={logoUrl}
-                          autoFitMaxLines={3}
-                        />
+                        bgUrl ? (
+                          <img
+                            src={bgUrl}
+                            alt="Cover"
+                            className="w-full"
+                            style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center text-zinc-500 text-sm"
+                               style={{ height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE), width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}>
+                            Cover not available
+                          </div>
+                        )
                       ) : slideTexts.length > 0 ? (
                         <CarouselTextSlide
                           brand={selectedPost.brand}
@@ -1249,7 +1207,7 @@ export function ScheduledPage() {
                         ))}
                       </div>
                       <span className="text-xs text-gray-400 ml-1">
-                        {detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`} / {totalSlides}
+                        {detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex} of ${totalSlides - 1}`}
                       </span>
                     </div>
                   )}

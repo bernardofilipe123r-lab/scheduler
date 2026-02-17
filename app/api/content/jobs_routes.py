@@ -742,8 +742,14 @@ async def get_next_slots(job_id: str, user: dict = Depends(get_current_user)):
                 variant=job.variant
             )
             
-            # Convert to ISO format
-            return {brand: slot.isoformat() for brand, slot in slots.items()}
+            # Convert to format expected by frontend
+            result = {}
+            for brand, slot in slots.items():
+                result[brand] = {
+                    "next_slot": slot.isoformat(),
+                    "formatted": slot.strftime("%b %d, %Y at %I:%M %p")
+                }
+            return result
             
     except HTTPException:
         raise

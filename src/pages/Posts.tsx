@@ -243,8 +243,8 @@ export function PostsPage() {
             </div>
           </div>
 
-          {/* Brands + Settings side by side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Brands + Layout Settings stacked */}
+          <div className="space-y-4">
             {/* Brands */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <label className="block text-sm font-semibold text-gray-900 mb-3">

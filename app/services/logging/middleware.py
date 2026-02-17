@@ -23,14 +23,6 @@ from app.services.logging.service import get_logging_service, set_request_id, cl
 _SKIP_PATHS = (
     '/logs',
     '/api/logs',
-    '/toby-logs',
-    '/lexi-logs',
-    '/maestro-logs',
-    '/ai-logs',
-    '/ai-about',
-    '/api/ai-logs',
-    '/api/toby-logs',
-    '/api/toby/status',
     '/health',
     '/favicon.ico',
 )

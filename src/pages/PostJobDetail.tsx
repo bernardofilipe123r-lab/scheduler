@@ -335,6 +335,7 @@ export function PostJobDetail({ job, refetch }: Props) {
 
     let scheduled = 0
     let failed = 0
+    const scheduledBrands: string[] = []
 
     try {
       // 1) Fetch already-occupied post slots from the backend
@@ -450,6 +451,7 @@ export function PostJobDetail({ job, refetch }: Props) {
             job_id: job.id,
           })
           scheduled++
+          scheduledBrands.push(getBrandConfig(brand).name)
           // Mark this slot as occupied for the rest of this batch
           markOccupied(brand, scheduleTime)
           try {
@@ -466,12 +468,16 @@ export function PostJobDetail({ job, refetch }: Props) {
       }
 
       if (scheduled > 0) {
+        const names = scheduledBrands.join(', ')
         const msg =
           failed > 0
-            ? `${scheduled} brand(s) scheduled! ${failed} failed.`
-            : `All ${scheduled} brand(s) scheduled!`
+            ? `${names} scheduled! ${failed} failed.`
+            : scheduledBrands.length === 1
+              ? `${scheduledBrands[0]} was scheduled successfully!`
+              : `All ${scheduled} brands scheduled: ${names}`
         toast.success(msg, { id: 'sched', duration: 5000 })
-        refetch()
+        await refetch()
+        setBrandSlideIndex({})
       } else {
         toast.error('Failed to schedule posts', { id: 'sched' })
       }
@@ -589,7 +595,9 @@ export function PostJobDetail({ job, refetch }: Props) {
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
           <Check className="w-5 h-5 text-green-600" />
           <span className="font-medium text-green-900">
-            All brands scheduled!
+            {job.brands.length === 1
+              ? `${getBrandConfig(job.brands[0]).name} was scheduled successfully`
+              : `All ${job.brands.length} brands scheduled: ${job.brands.map(b => getBrandConfig(b).name).join(', ')}`}
           </span>
           <button
             onClick={() => navigate('/calendar')}
@@ -782,7 +790,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                     <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
                   </button>
                   <span className="text-[10px] text-gray-400 ml-1">
-                    {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`}/{totalSlides}
+                    {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide} of ${totalSlides - 1}`}
                   </span>
                   <button
                     onClick={() => setExpandedBrand(brand)}
@@ -1281,7 +1289,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                     <ChevronRight className="w-5 h-5 text-white" />
                   </button>
                   <span className="text-sm text-white/60 ml-2">
-                    {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`} / {totalSlides}
+                    {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide} of ${totalSlides - 1}`}
                   </span>
                 </div>
               )}
