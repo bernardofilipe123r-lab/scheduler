@@ -10,7 +10,7 @@ import {
 import { useAgents, type Agent } from '@/features/mission-control/api/useAgents'
 import { useMaestroLive, type MaestroLiveStatus } from '@/features/mission-control/api/useMaestroLive'
 import { AgentPodsGrid } from '@/features/mission-control/components/AgentPodsGrid'
-import { calculateStats, calculatePhase, formatElapsed } from '@/features/mission-control/utils/statsCalculator'
+import { calculateStats, formatElapsed } from '@/features/mission-control/utils/statsCalculator'
 import {
   getCycleConfig, CYCLE_ORDER, OPERATION_DETAILS, CYCLE_KEYWORDS,
 } from '@/features/mission-control/utils/cycleConfig'
@@ -448,10 +448,9 @@ export function ObservatoryPage() {
   const week = useMemo(() => computeWeekSchedule(now), [now])
   const recentOps = useMemo(() => computeRecentOps(maestro?.cycles, now), [maestro, now])
   const mode = useMemo(() => detectMode(logs, maestro, upcoming, forcedMode), [logs, maestro, upcoming, forcedMode])
-  // Use backend's current_phase instead of detecting from logs (more accurate)
+  // Always use backend's current_phase as single source of truth
   const activeCycle = maestro?.current_phase || useMemo(() => detectActiveCycle(logs), [logs])
   const stats = calculateStats(logs, startTime, agents)
-  const phase = calculatePhase(logs)
 
   useEffect(() => {
     if (forcedMode && forcedMode !== 'history' && mode !== forcedMode) setForcedMode(null)
@@ -539,7 +538,7 @@ export function ObservatoryPage() {
           ) : mode === 'countdown' ? (
             <CountdownMode key="cd" op={nearestOp!} upcoming={upcoming} now={now} onSelectOp={setSelectedOp} />
           ) : mode === 'live' ? (
-            <LiveMode key="lv" activeCycle={activeCycle} logs={logs} agents={agents} stats={stats} phase={phase} maestro={maestro} />
+            <LiveMode key="lv" activeCycle={activeCycle} logs={logs} agents={agents} stats={stats} maestro={maestro} />
           ) : mode === 'recap' ? (
             <RecapMode key="rc" activeCycle={activeCycle} logs={logs} stats={stats} maestro={maestro} agents={agents} />
           ) : mode === 'history' ? (
@@ -809,7 +808,6 @@ function LiveMode({ activeCycle, logs, agents, stats }: {
   logs: any[]
   agents: Agent[]
   stats: ReturnType<typeof calculateStats>
-  phase: string
   maestro: MaestroLiveStatus | undefined
 }) {
   const cfg = activeCycle ? getCycleConfig(activeCycle) : null
