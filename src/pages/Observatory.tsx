@@ -272,6 +272,38 @@ export function ObservatoryPage() {
   const logs = useMemo(() => {
     const activity = maestro?.recent_activity || []
 
+    // Background tasks that should be hidden during active content generation
+    const isBackgroundMaintenance = (entry: any): boolean => {
+      const { action, detail } = entry
+      const text = `${action} ${detail}`.toLowerCase()
+
+      return (
+        text.includes('diagnostics') ||
+        text.includes('metrics') ||
+        text.includes('bootstrap') ||
+        text.includes('observing') ||
+        text.includes('learning') ||
+        text.includes('consolidation') ||
+        text.includes('scouting') ||
+        text.includes('hashtag') ||
+        text.includes('competitor') ||
+        text.includes('own account')
+      )
+    }
+
+    // Check if there's active content generation happening
+    const hasActiveGeneration = activity.some(e =>
+      e.action.includes('Generating') ||
+      e.action.includes('Test Burst') ||
+      e.action.includes('Smart Burst') ||
+      e.action.includes('Phase')
+    )
+
+    // Filter out background tasks when content generation is active
+    const filtered = hasActiveGeneration
+      ? activity.filter(e => !isBackgroundMaintenance(e))
+      : activity
+
     // Transform technical logs into plain English with context
     const transformMessage = (entry: any): string => {
       const { action, detail, emoji } = entry
@@ -396,7 +428,7 @@ export function ObservatoryPage() {
       return `${emoji} ${action}${detail ? `: ${detail}` : ''}`
     }
 
-    return activity.map((entry, idx) => ({
+    return filtered.map((entry, idx) => ({
       id: idx,
       timestamp: entry.time,
       message: transformMessage(entry),
