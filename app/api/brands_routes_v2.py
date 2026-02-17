@@ -56,7 +56,6 @@ class CreateBrandRequest(BaseModel):
     schedule_offset: int = 0  # Hour offset 0-23
     posts_per_day: int = 6
     colors: Optional[ColorConfig] = None
-    agent_name: Optional[str] = None  # AI agent name — auto-provisioned on brand creation
     # Platform credentials (optional — can also be set later via PUT /credentials)
     meta_access_token: Optional[str] = None
     instagram_business_account_id: Optional[str] = None
@@ -263,29 +262,10 @@ async def create_brand(
         brand = manager.create_brand(brand_data, user_id=user["id"])
         brand_resolver.invalidate_cache()
 
-        # Auto-provision an AI agent for this brand
-        agent_info = None
-        try:
-            from app.services.agents.generic_agent import create_agent_for_brand
-            agent_name = request.agent_name  # User-defined name, or None for auto
-            new_agent = create_agent_for_brand(
-                brand_id=request.id.lower(),
-                agent_name=agent_name,
-            )
-            if new_agent:
-                agent_info = {
-                    "agent_id": new_agent.agent_id,
-                    "display_name": new_agent.display_name,
-                    "variant": new_agent.variant,
-                }
-        except Exception as e:
-            print(f"[BRAND] Agent auto-provision warning: {e}")
-
         return {
             "success": True,
             "message": f"Brand '{request.id}' created successfully",
             "brand": brand,
-            "agent": agent_info,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

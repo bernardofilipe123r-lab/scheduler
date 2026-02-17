@@ -4,7 +4,6 @@ from app.models.base import Base
 from app.models.jobs import GenerationJob
 from app.models.scheduling import ScheduledReel
 from app.models.brands import Brand
-from app.models.agents import AIAgent, AgentPerformance, AgentLearning, GenePool, AgentProposal
 from app.models.auth import UserProfile
 from app.models.analytics import (
     BrandAnalytics,
@@ -15,26 +14,14 @@ from app.models.analytics import (
     TrendingContent,
 )
 from app.models.youtube import YouTubeChannel
-from app.models.logs import LogEntry, SystemDiagnostic
-from app.models.config import MaestroConfig, AppSettings
-from app.models.learning import (
-    LearnedPattern,
-    BrandPerformanceMemory,
-    CompetitorAccount,
-    APIQuotaUsage,
-    AgentLearningCycle,
-)
+from app.models.logs import LogEntry
+from app.models.config import AppSettings
 
 __all__ = [
     "Base",
     "GenerationJob",
     "ScheduledReel",
     "Brand",
-    "AIAgent",
-    "AgentPerformance",
-    "AgentLearning",
-    "GenePool",
-    "AgentProposal",
     "UserProfile",
     "BrandAnalytics",
     "AnalyticsRefreshLog",
@@ -44,12 +31,5 @@ __all__ = [
     "TrendingContent",
     "YouTubeChannel",
     "LogEntry",
-    "SystemDiagnostic",
-    "MaestroConfig",
     "AppSettings",
-    "LearnedPattern",
-    "BrandPerformanceMemory",
-    "CompetitorAccount",
-    "APIQuotaUsage",
-    "AgentLearningCycle",
 ]

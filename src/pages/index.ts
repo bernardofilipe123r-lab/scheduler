@@ -9,4 +9,5 @@ export { AnalyticsPage } from './Analytics'
 export { SettingsPage } from './Settings'
 export { AITeamPage } from './AITeam'
 export { AboutPage } from './About'
+// Observatory and MissionControl removed
 export { LogsPage } from './Logs'

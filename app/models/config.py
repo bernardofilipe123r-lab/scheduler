@@ -1,38 +1,8 @@
 """
-Configuration models: MaestroConfig, AppSettings.
+Configuration models: AppSettings.
 """
 from datetime import datetime
 from app.models.base import Base, Column, String, DateTime, Text, Boolean
-
-
-class MaestroConfig(Base):
-    """
-    Persistent Maestro state — survives Railway redeploys.
-
-    Stores key-value pairs PER USER: is_paused, last_daily_run, etc.
-    Each user has their own independent Maestro state.
-    """
-    __tablename__ = "maestro_config"
-
-    key = Column(String(100), primary_key=True)
-    user_id = Column(String(100), primary_key=True, default="__system__")
-    value = Column(Text, nullable=False, default="")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    @staticmethod
-    def get(db, key: str, default: str = "", user_id: str = "__system__") -> str:
-        row = db.query(MaestroConfig).filter_by(key=key, user_id=user_id).first()
-        return row.value if row else default
-
-    @staticmethod
-    def set(db, key: str, value: str, user_id: str = "__system__"):
-        row = db.query(MaestroConfig).filter_by(key=key, user_id=user_id).first()
-        if row:
-            row.value = value
-            row.updated_at = datetime.utcnow()
-        else:
-            db.add(MaestroConfig(key=key, user_id=user_id, value=value, updated_at=datetime.utcnow()))
-        db.commit()
 
 
 class AppSettings(Base):

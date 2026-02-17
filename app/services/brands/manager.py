@@ -23,16 +23,6 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-# ── Agent DNA archetypes for auto-provisioning ──────────────
-_AGENT_ARCHETYPES = [
-    "Bold explorer. Swings for viral moonshots with unexpected angles and surprising facts.",
-    "Precision optimizer. Compounds small wins into massive growth with data-backed patterns.",
-    "Trend surfer. Rides viral waves early, adapts hot topics to our niche before competitors.",
-    "Story weaver. Creates deep emotional connections through narrative and personal transformation.",
-    "Pattern breaker. Deliberately subverts expectations, uses contrarian takes to stop scrolling.",
-    "Consistency engine. Reliable, methodical, builds trust through steady valuable content.",
-]
-
 
 # Default brand colors (used for seeding new installs)
 DEFAULT_BRAND_COLORS = {
@@ -354,25 +344,6 @@ class BrandManager:
         
         self._invalidate_cache()
         logger.info(f"Created brand: {brand.id}")
-        
-        # 🧬 Auto-provision an AI agent for this brand with randomized DNA
-        try:
-            from app.services.agents.generic_agent import create_agent_for_brand
-            from app.services.agents.evolution_engine import pick_agent_name
-            import random
-            # Pick a cool unique name instead of deriving from brand
-            agent_name = pick_agent_name()
-            archetype = random.choice(_AGENT_ARCHETYPES)
-            personality = f"{archetype} Specialized for {brand_data['display_name']}."
-            agent = create_agent_for_brand(
-                brand_id=brand_data["id"],
-                agent_name=agent_name,
-                randomize=True,
-                personality=personality,
-            )
-            logger.info(f"🧬 Auto-provisioned agent '{agent.display_name}' (temp={agent.temperature}) for brand {brand.id}")
-        except Exception as e:
-            logger.warning(f"⚠️ Could not auto-provision agent for {brand.id}: {e}")
         
         return brand.to_dict()
     

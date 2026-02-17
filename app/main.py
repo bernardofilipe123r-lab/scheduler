@@ -21,11 +21,7 @@ from app.api.analytics.routes import router as analytics_router
 from app.api.system.logs_routes import router as logs_router
 from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
-from app.api.system.ai_logs_routes import router as ai_logs_router
 from app.api.system.health_routes import router as health_router
-from app.api.maestro.routes import router as maestro_router
-from app.api.agents.routes import router as agents_router
-from app.api.ai_team.routes import router as ai_team_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -94,11 +90,7 @@ app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
-app.include_router(ai_logs_router)  # AI logs at /ai-logs, /maestro-logs, /ai-about
 app.include_router(health_router)  # Deep health check at /api/system/health-check
-app.include_router(maestro_router)  # Maestro orchestrator (Toby + Lexi)
-app.include_router(agents_router)  # Dynamic AI agents CRUD at /api/agents
-app.include_router(ai_team_router)  # AI Team dashboard at /api/ai-team
 
 
 # Serve React frontend (SPA catch-all)
@@ -349,10 +341,6 @@ async def startup_event():
                 print(f"   ⚙️ Seeded {settings_seeded} default settings", flush=True)
             else:
                 print(f"   ⚙️ Settings already exist", flush=True)
-
-            # Seed builtin AI agents (Toby + Lexi)
-            from app.services.agents.generic_agent import seed_builtin_agents
-            seed_builtin_agents()
         finally:
             db.close()
         
@@ -801,16 +789,6 @@ async def startup_event():
     # Store scheduler for shutdown
     app.state.scheduler = scheduler
     
-    # ── Start Maestro (orchestrating Toby + Lexi) ──
-    print("🎼 Starting Maestro orchestrator...", flush=True)
-    try:
-        from app.services.maestro.maestro import start_maestro
-        maestro = start_maestro()
-        app.state.maestro = maestro
-        print("✅ Maestro active — orchestrating Toby (Explorer) + Lexi (Optimizer)", flush=True)
-    except Exception as e:
-        print(f"⚠️ Maestro failed to start: {e}", flush=True)
-    
     print("🎉 Startup complete! App is ready.", flush=True)
 
 
@@ -831,13 +809,4 @@ async def shutdown_event():
     if hasattr(app.state, 'scheduler'):
         app.state.scheduler.shutdown()
         print("⏰ Auto-publishing scheduler stopped")
-    
-    # Shutdown Maestro orchestrator
-    if hasattr(app.state, 'maestro') and app.state.maestro:
-        try:
-            if app.state.maestro.scheduler:
-                app.state.maestro.scheduler.shutdown()
-            print("🎼 Maestro stopped")
-        except Exception:
-            pass
 
