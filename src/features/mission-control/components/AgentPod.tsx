@@ -23,10 +23,17 @@ interface AgentProgress {
 }
 
 function calculateAgentProgress(agent: Agent, logs: any[]): AgentProgress {
+  console.log(`🔧 calculateAgentProgress for ${agent.agent_id}:`, {
+    'logs type': typeof logs,
+    'logs is array': Array.isArray(logs),
+    'logs length': logs?.length
+  })
+
   const agentName = agent.agent_id.toUpperCase()
 
   // Handle undefined or null logs
   if (!logs || logs.length === 0) {
+    console.log(`⚠️ ${agent.agent_id}: logs empty or undefined, returning standby`)
     return {
       status: 'standby',
       currentBrand: null,

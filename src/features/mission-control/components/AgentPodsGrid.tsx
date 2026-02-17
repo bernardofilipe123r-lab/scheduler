@@ -9,6 +9,15 @@ interface AgentPodsGridProps {
 }
 
 export function AgentPodsGrid({ agents, logs }: AgentPodsGridProps) {
+  console.log('🤖 AgentPodsGrid render:', {
+    'agents type': typeof agents,
+    'agents is array': Array.isArray(agents),
+    'agents length': agents?.length,
+    'logs type': typeof logs,
+    'logs is array': Array.isArray(logs),
+    'logs length': logs?.length
+  })
+
   if (!agents || agents.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -19,6 +28,10 @@ export function AgentPodsGrid({ agents, logs }: AgentPodsGridProps) {
       </div>
     )
   }
+
+  // Ensure logs is always an array, never undefined
+  const safeLogs = logs || []
+  console.log('✅ AgentPodsGrid safeLogs:', Array.isArray(safeLogs) ? `array[${safeLogs.length}]` : typeof safeLogs)
 
   return (
     <motion.div
@@ -34,7 +47,7 @@ export function AgentPodsGrid({ agents, logs }: AgentPodsGridProps) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: idx * 0.1, duration: 0.3 }}
         >
-          <AgentPod agent={agent} logs={logs} />
+          <AgentPod agent={agent} logs={safeLogs} />
         </motion.div>
       ))}
     </motion.div>

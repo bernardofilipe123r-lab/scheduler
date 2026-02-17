@@ -22,6 +22,15 @@ interface Agent {
 }
 
 export function calculateStats(logs: LogEntry[], startTime: number, agents: Agent[]): MissionStats {
+  console.log('📊 calculateStats called:', {
+    'logs type': typeof logs,
+    'logs is array': Array.isArray(logs),
+    'logs length': logs?.length,
+    'agents type': typeof agents,
+    'agents is array': Array.isArray(agents),
+    'agents length': agents?.length
+  })
+
   const now = Date.now()
   const elapsed = Math.floor((now - startTime) / 1000)
 
@@ -33,6 +42,7 @@ export function calculateStats(logs: LogEntry[], startTime: number, agents: Agen
 
   // Handle undefined/null arrays
   if (!logs || !agents) {
+    console.warn('⚠️ calculateStats: logs or agents is undefined, returning zeros');
     return {
       elapsed_seconds: elapsed,
       total_proposals: 0,
