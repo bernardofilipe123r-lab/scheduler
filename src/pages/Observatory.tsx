@@ -947,6 +947,7 @@ function HistoryMode({ logs }: { logs: any[] }) {
   const [filter, setFilter] = useState<string>('all')
 
   const filtered = useMemo(() => {
+    if (!logs) return []
     if (filter === 'all') return logs
     const keywords = CYCLE_KEYWORDS[filter]
     if (!keywords) return logs

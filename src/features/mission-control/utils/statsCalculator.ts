@@ -31,6 +31,18 @@ export function calculateStats(logs: LogEntry[], startTime: number, agents: Agen
   let jobs = 0
   let scheduled = 0
 
+  // Handle undefined/null arrays
+  if (!logs || !agents) {
+    return {
+      elapsed_seconds: elapsed,
+      total_proposals: 0,
+      accepted: 0,
+      rejected: 0,
+      jobs_created: 0,
+      scheduled: 0,
+    }
+  }
+
   // Build dynamic agent pattern from actual agents in DB
   const agentNames = agents.map(a => a.agent_id.toUpperCase())
   const hasAgentProposal = (msg: string) => {
@@ -78,8 +90,8 @@ export function calculateStats(logs: LogEntry[], startTime: number, agents: Agen
 }
 
 export function calculatePhase(logs: LogEntry[]): string {
-  if (logs.length === 0) return 'STANDBY'
-  
+  if (!logs || logs.length === 0) return 'STANDBY'
+
   const recent = logs.slice(0, 10).map(l => l.message.toLowerCase()).join(' ')
   
   if (recent.includes('scheduled') || recent.includes('scheduling')) {
