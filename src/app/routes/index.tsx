@@ -3,6 +3,7 @@ import { AppLayout } from '../layout'
 import { useAuth } from '@/features/auth'
 import { LoginPage } from '@/pages/Login'
 import { ProfilePage } from '@/pages/Profile'
+import { HomePage } from '@/pages/Home'
 import { GeneratorPage } from '@/pages/Generator'
 import { HistoryPage } from '@/pages/History'
 import { JobDetailPage } from '@/pages/JobDetail'
@@ -57,7 +58,8 @@ export function AppRoutes() {
       <Routes>
         <Route path="/login" element={<LoginGuard />} />
         <Route path="/" element={<AuthGuard><AppLayout /></AuthGuard>}>
-        <Route index element={<GeneratorPage />} />
+        <Route index element={<HomePage />} />
+        <Route path="reels" element={<GeneratorPage />} />
         <Route path="jobs" element={<HistoryPage />} />
         <Route path="history" element={<Navigate to="/jobs" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />
