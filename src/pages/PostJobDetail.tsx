@@ -62,9 +62,6 @@ import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanv
 import type { Job, BrandName, BrandOutput } from '@/shared/types'
 import { apiClient } from '@/shared/api/client'
 
-// ─── Font-size persistence ───────────────────────────────────────────
-const POST_BRAND_FONT_SIZES_KEY = 'post_brand_font_sizes'
-
 // ─── Logo storage helpers ────────────────────────────────────────────
 const LOGOS_STORAGE_KEY = 'post-brand-logos'
 
@@ -116,19 +113,9 @@ export function PostJobDetail({ job, refetch }: Props) {
   const [isCapturing, setIsCapturing] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
-  // Per-brand font size overrides (persisted to localStorage)
-  const [brandFontSizes, setBrandFontSizes] = useState<Record<string, number>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(POST_BRAND_FONT_SIZES_KEY) || '{}')
-    } catch {
-      return {}
-    }
-  })
-
-  // Persist font sizes to localStorage
-  useEffect(() => {
-    localStorage.setItem(POST_BRAND_FONT_SIZES_KEY, JSON.stringify(brandFontSizes))
-  }, [brandFontSizes])
+  // Per-brand font size overrides (session-only, not persisted)
+  // Auto-fit runs by default; manual +/- adjustments apply only while viewing this job
+  const [brandFontSizes, setBrandFontSizes] = useState<Record<string, number>>({})
 
   // Brand logos — start with localStorage, then overlay theme logos from server
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>(loadBrandLogos)
