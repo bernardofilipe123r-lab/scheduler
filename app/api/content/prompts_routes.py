@@ -43,7 +43,7 @@ class PromptOverviewResponse(BaseModel):
 class TestGenerateRequest(BaseModel):
     """Request to generate test images from a custom prompt."""
     prompt: str
-    brand: str = "healthycollege"
+    brand: str
     count: int = 2  # 1 or 2 images
 
 

@@ -88,7 +88,7 @@ class ReelCreateRequest(BaseModel):
                     "Do not call anyone more than twice."
                 ],
                 "cta_type": "FOLLOW_PART_2",
-                "brand": "THE_GYM_COLLEGE",
+                "brand": "mybrand",
                 "music_id": "default_01",
                 "schedule_at": "2026-01-10T18:00:00Z"
             }

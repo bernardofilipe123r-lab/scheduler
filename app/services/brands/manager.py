@@ -251,7 +251,7 @@ class BrandManager:
         data = brand.to_dict(include_credentials=True)
         
         # Fallback to environment variables if DB credentials are not set
-        env_prefix = brand_id.upper().replace("COLLEGE", "_COLLEGE")
+        env_prefix = brand_id.upper()
         
         if not data.get("instagram_access_token"):
             data["instagram_access_token"] = os.getenv(f"{env_prefix}_META_ACCESS_TOKEN") or os.getenv(f"{env_prefix}_INSTAGRAM_ACCESS_TOKEN")

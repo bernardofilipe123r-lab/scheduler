@@ -25,7 +25,7 @@ from app.api.auth.middleware import get_current_user
 class SimpleReelRequest(BaseModel):
     title: str
     content_lines: List[str]
-    brand: str = "gymcollege"
+    brand: str
     variant: str = "light"
     ai_prompt: Optional[str] = None  # Optional custom AI prompt for dark mode
     cta_type: Optional[str] = "sleep_lean"  # CTA option for caption
@@ -33,7 +33,7 @@ class SimpleReelRequest(BaseModel):
 
 class DownloadRequest(BaseModel):
     reel_id: str
-    brand: str = "gymcollege"
+    brand: str
 
 
 # Create router

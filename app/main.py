@@ -60,8 +60,7 @@ app = FastAPI(
     """,
     version="1.0.0",
     contact={
-        "name": "The Gym College",
-        "url": "https://thegymcollege.com",
+        "name": "Reels Automation",
     },
     license_info={
         "name": "Proprietary",

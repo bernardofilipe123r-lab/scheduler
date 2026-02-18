@@ -52,7 +52,7 @@ class GenerateImagePromptRequest(BaseModel):
 
 class GenerateBackgroundRequest(BaseModel):
     prompt: str
-    brand: str = "healthycollege"
+    brand: str
 
 
 # Create router
