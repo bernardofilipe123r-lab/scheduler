@@ -7,17 +7,17 @@ const FIELDS = [
   {
     key: 'reels_prompt' as const,
     label: 'Reels Prompt',
-    placeholder: 'Describe the ideas/topics for reel content...',
+    placeholder: 'Instructions for AI reel generation: topics, hooks, tone, format rules...',
   },
   {
     key: 'posts_prompt' as const,
     label: 'Posts Prompt',
-    placeholder: 'Describe the ideas/topics for carousel content...',
+    placeholder: 'Instructions for AI carousel generation: topics, title styles, slide format, references...',
   },
   {
     key: 'brand_description' as const,
     label: 'Brand Description',
-    placeholder: 'Describe your brand\'s avatar, content topic, audience...',
+    placeholder: 'Brand identity: target audience, content focus, tone of voice, content philosophy...',
   },
 ] as const
 
@@ -75,7 +75,7 @@ export function ContentPromptsCard() {
             Content Prompts
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            Global prompts shared across all brands
+            These prompts guide AI content generation for reels and posts
           </p>
         </div>
         <button

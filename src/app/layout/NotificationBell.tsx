@@ -69,10 +69,34 @@ export function NotificationBell() {
                       : totalBrands > 0
                         ? Math.round((completedBrands / totalBrands) * 100)
                         : 0
-                    // Descriptive status message
-                    const statusMsg = job.current_step
+
+                    // Build a clean, user-friendly status message
+                    const rawStep = job.current_step
                       || Object.values(job.brand_outputs || {}).find((o: any) => o.status === 'generating' && o.progress_message)?.progress_message
-                      || (job.status === 'pending' ? 'Queued...' : 'Generating...')
+                      || ''
+                    
+                    let statusMsg: string
+                    if (job.status === 'pending') {
+                      statusMsg = 'Queued'
+                    } else if (!rawStep) {
+                      statusMsg = 'Generating'
+                    } else {
+                      // Clean up backend-style messages for better UX
+                      // Remove brand name suffix like "for healthycollege..." when single brand
+                      let cleaned = rawStep
+                      if (totalBrands === 1 && job.brands?.[0]) {
+                        cleaned = cleaned.replace(new RegExp(`\\s+for\\s+${job.brands[0]}\\.{0,3}`, 'i'), '')
+                      }
+                      // Capitalize and clean trailing dots
+                      cleaned = cleaned.replace(/\.{2,}$/, '').trim()
+                      statusMsg = cleaned || 'Generating'
+                    }
+
+                    // Job type label
+                    const jobType = job.variant === 'post' ? 'Post' : 'Reel'
+                    const brandLabel = totalBrands === 1 && job.brands?.[0]
+                      ? job.brands[0].replace(/college$/i, ' College').replace(/^\w/, (c: string) => c.toUpperCase())
+                      : `${totalBrands} brands`
                     
                     return (
                       <button
@@ -89,16 +113,21 @@ export function NotificationBell() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">
-                              {job.title?.split('\n')[0] || 'Generating...'}
+                              {jobType} · {brandLabel}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              {statusMsg} — {progress}%
+                              {statusMsg}
                             </p>
-                            <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                                style={{ width: `${progress}%` }}
-                              />
+                            <div className="mt-2 flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                              <span className="text-xs font-medium text-orange-600 tabular-nums">
+                                {progress}%
+                              </span>
                             </div>
                           </div>
                         </div>

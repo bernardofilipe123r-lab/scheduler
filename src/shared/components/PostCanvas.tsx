@@ -148,15 +148,9 @@ export interface BalancedTitle {
 }
 
 /**
- * Wrap title into lines using the ORIGINAL character-count estimation,
- * then redistribute words across the SAME number of lines to minimise
- * the length difference between lines (visual balance).
- *
- * Guarantees:
- *  - Font size is NEVER changed.
- *  - Padding is ALWAYS respected (same maxCharsPerLine as original code).
- *  - Line count is determined identically to the original greedy wrap.
- *  - Only improvement: word breaks are optimised for balanced alignment.
+ * Wrap title into lines using greedy character-count estimation.
+ * Each line is filled with as many words as possible before moving
+ * to the next line. Clamped to max 4 lines.
  */
 export function balanceTitleText(
   title: string,
@@ -168,124 +162,32 @@ export function balanceTitleText(
 
   if (words.length === 0) return { lines: [''], fontSize }
 
-  // ── Same character estimation as original code ─────────────────
+  // ── Character estimation ───────────────────────────────────────
   const avgCharWidth = fontSize * 0.48
   const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth)
 
-  // ── Step 1: Greedy wrap (identical to the original TitleLayer) ──
-  const greedyLines: string[] = []
+  // ── Greedy wrap: fill each line as much as possible ────────────
+  const lines: string[] = []
   let current = ''
   for (const word of words) {
     const test = current ? `${current} ${word}` : word
     if (test.length > maxCharsPerLine && current) {
-      greedyLines.push(current)
+      lines.push(current)
       current = word
     } else {
       current = test
     }
   }
-  if (current) greedyLines.push(current)
+  if (current) lines.push(current)
 
-  const lineCount = greedyLines.length
-
-  // ── Step 2: If 1 line, nothing to balance ──────────────────────
-  if (lineCount <= 1) return { lines: greedyLines, fontSize }
-
-  // ── Step 3: For N lines, try all word splits and pick the most
-  //    balanced one (all lines must fit within maxCharsPerLine) ────
-  if (lineCount === 2) {
-    let bestLines: string[] | null = null
-    let bestDiff = Infinity
-    for (let i = 1; i < words.length; i++) {
-      const l1 = words.slice(0, i).join(' ')
-      const l2 = words.slice(i).join(' ')
-      if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine) continue
-      const diff = Math.abs(l1.length - l2.length)
-      if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2] }
-    }
-    if (bestLines) return { lines: bestLines, fontSize }
-  }
-
-  if (lineCount === 3 && words.length >= 3) {
-    let bestLines: string[] | null = null
-    let bestDiff = Infinity
-    for (let i = 1; i < words.length - 1; i++) {
-      for (let j = i + 1; j < words.length; j++) {
-        const l1 = words.slice(0, i).join(' ')
-        const l2 = words.slice(i, j).join(' ')
-        const l3 = words.slice(j).join(' ')
-        if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine || l3.length > maxCharsPerLine) continue
-        const diff = Math.max(Math.abs(l1.length - l2.length), Math.abs(l2.length - l3.length), Math.abs(l1.length - l3.length))
-        if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3] }
-      }
-    }
-    if (bestLines) return { lines: bestLines, fontSize }
-  }
-
-  if (lineCount === 4 && words.length >= 4) {
-    let bestLines: string[] | null = null
-    let bestDiff = Infinity
-    for (let i = 1; i < words.length - 2; i++) {
-      for (let j = i + 1; j < words.length - 1; j++) {
-        for (let k = j + 1; k < words.length; k++) {
-          const l1 = words.slice(0, i).join(' ')
-          const l2 = words.slice(i, j).join(' ')
-          const l3 = words.slice(j, k).join(' ')
-          const l4 = words.slice(k).join(' ')
-          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
-              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue
-          const diff = Math.max(
-            Math.abs(l1.length - l2.length),
-            Math.abs(l2.length - l3.length),
-            Math.abs(l3.length - l4.length),
-            Math.abs(l1.length - l4.length),
-          )
-          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4] }
-        }
-      }
-    }
-    if (bestLines) return { lines: bestLines, fontSize }
-  }
-
-  // ── If 5+ lines, clamp to 4 by joining overflow ───────────────
-  if (lineCount > 4) {
-    const clamped = greedyLines.slice(0, 3)
-    clamped.push(greedyLines.slice(3).join(' '))
-    // Try to balance 4 lines
-    const clampedWords = clamped.join(' ').split(/\s+/).filter(Boolean)
-    let bestLines: string[] | null = null
-    let bestDiff = Infinity
-    for (let i = 1; i < clampedWords.length - 2; i++) {
-      for (let j = i + 1; j < clampedWords.length - 1; j++) {
-        for (let k = j + 1; k < clampedWords.length; k++) {
-          const l1 = clampedWords.slice(0, i).join(' ')
-          const l2 = clampedWords.slice(i, j).join(' ')
-          const l3 = clampedWords.slice(j, k).join(' ')
-          const l4 = clampedWords.slice(k).join(' ')
-          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
-              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue
-          const diff = Math.max(
-            Math.abs(l1.length - l2.length),
-            Math.abs(l2.length - l3.length),
-            Math.abs(l3.length - l4.length),
-            Math.abs(l1.length - l4.length),
-          )
-          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4] }
-        }
-      }
-    }
-    if (bestLines) return { lines: bestLines, fontSize }
-    // If no balanced 4-line combo fits, just clamp
+  // ── Clamp to max 4 lines ───────────────────────────────────────
+  if (lines.length > 4) {
+    const clamped = lines.slice(0, 3)
+    clamped.push(lines.slice(3).join(' '))
     return { lines: clamped, fontSize }
   }
 
-  // ── Fallback: clamp to max 4 lines ─────────────────────────────
-  if (greedyLines.length > 4) {
-    const clamped = greedyLines.slice(0, 3)
-    clamped.push(greedyLines.slice(3).join(' '))
-    return { lines: clamped, fontSize }
-  }
-  return { lines: greedyLines, fontSize }
+  return { lines, fontSize }
 }
 
 // ─── Helper: calculate title height ─────────────────────────────────

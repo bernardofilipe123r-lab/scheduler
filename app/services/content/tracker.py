@@ -423,7 +423,6 @@ class ContentTracker:
         Combines:
         1. Brand-specific history (60 days) — titles this brand already used
         2. Cross-brand recent titles (7 days) — avoid same content across brands
-        3. Also pulls from agent_proposals table for titles not yet in content_history
 
         Returns a formatted string ready for prompt injection.
         """
@@ -435,13 +434,7 @@ class ContentTracker:
         # 1. Brand-specific history from content_history
         brand_titles = self.get_recent_titles(content_type, limit=60, brand=brand)
 
-        # 2. Also pull from agent_proposals for this brand (covers content not yet in content_history)
-        proposal_titles = self._get_recent_proposal_titles(brand, content_type, days=days, limit=60)
-        for t in proposal_titles:
-            if t not in brand_titles:
-                brand_titles.append(t)
-
-        # 3. Legacy job titles for backward compat
+        # 2. Legacy job titles for backward compat
         legacy_titles = self._get_legacy_job_titles(content_type, limit=30)
         for t in legacy_titles:
             if t not in brand_titles:
@@ -476,15 +469,6 @@ class ContentTracker:
             finally:
                 db.close()
 
-            # Also from proposals
-            cross_proposal = self._get_recent_proposal_titles(
-                brand=None, content_type=content_type, days=cross_brand_days,
-                limit=40, exclude_brand=brand,
-            )
-            for t in cross_proposal:
-                if t not in cross_titles:
-                    cross_titles.append(t)
-
             cross_titles = cross_titles[:40]
 
             if cross_titles:
@@ -500,42 +484,6 @@ class ContentTracker:
 
         return "\n\n" + "\n\n".join(sections) + "\n"
 
-    def _get_recent_proposal_titles(
-        self,
-        brand: str = None,
-        content_type: str = "reel",
-        days: int = 60,
-        limit: int = 60,
-        exclude_brand: str = None,
-    ) -> List[str]:
-        """Pull recent titles from agent_proposals table."""
-        try:
-            from app.models import AgentProposal
-            from sqlalchemy import desc
-
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-            db = self._get_session()
-            try:
-                query = (
-                    db.query(AgentProposal.title)
-                    .filter(
-                        AgentProposal.content_type == content_type,
-                        AgentProposal.created_at >= cutoff,
-                    )
-                )
-                if brand:
-                    query = query.filter(AgentProposal.brand == brand)
-                if exclude_brand:
-                    query = query.filter(AgentProposal.brand != exclude_brand)
-
-                rows = query.order_by(desc(AgentProposal.created_at)).limit(limit).all()
-                return [r.title for r in rows if r.title]
-            finally:
-                db.close()
-        except Exception as e:
-            print(f"⚠️ ContentTracker._get_recent_proposal_titles error: {e}", flush=True)
-            return []
-
     def is_duplicate_for_brand(
         self,
         title: str,
@@ -546,7 +494,6 @@ class ContentTracker:
         """
         Check if a title is a near-duplicate for a SPECIFIC brand.
 
-        Checks both content_history and agent_proposals tables.
         Returns True if the same keyword hash was used in the last N days.
         """
         if days is None:
@@ -568,26 +515,7 @@ class ContentTracker:
                     )
                     .count()
                 )
-                if ch_count > 0:
-                    return True
-
-                # Also check agent_proposals (content might not be in content_history yet)
-                from app.models import AgentProposal
-                # Check proposals by doing keyword comparison on title
-                proposals = (
-                    db.query(AgentProposal.title)
-                    .filter(
-                        AgentProposal.content_type == content_type,
-                        AgentProposal.brand == brand,
-                        AgentProposal.created_at >= cutoff,
-                    )
-                    .all()
-                )
-                for row in proposals:
-                    if row.title and ContentHistory.compute_keyword_hash(row.title) == keyword_hash:
-                        return True
-
-                return False
+                return ch_count > 0
             finally:
                 db.close()
         except Exception as e:

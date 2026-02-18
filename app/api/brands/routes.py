@@ -326,6 +326,36 @@ async def get_all_brand_credentials(
 
 PROMPT_KEYS = ["reels_prompt", "posts_prompt", "brand_description"]
 
+PROMPT_DEFAULTS = {
+    "brand_description": (
+        "Health & wellness content brand targeting U.S. women aged 35+. "
+        "Focus areas: healthy aging, energy optimization, hormonal balance, longevity, "
+        "evidence-based nutrition, and lifestyle habits. "
+        "Tone: calm, authoritative, educational, empowering — never clinical or salesy. "
+        "Content philosophy: 60% validating (things the audience suspects are true), "
+        "40% surprising (new revelations that feel plausible). "
+        "Use familiar foods, habits, symptoms, and body signals."
+    ),
+    "reels_prompt": (
+        "Generate viral short-form health content for Instagram Reels and TikTok. "
+        "Focus on: daily habits, body signals, food as medicine, sleep optimization, "
+        "aging markers, and hormonal health. "
+        "Use emotional hooks: curiosity, fear of missing out, authority, hope, or sense of control. "
+        "Keep language simple, confident, and non-clinical. "
+        "Each content line must be under 18 words. Titles in ALL CAPS. "
+        "Use familiar framing that feels relatable — not academic or overly creative."
+    ),
+    "posts_prompt": (
+        "Generate Instagram carousel posts about health & wellness for women 35+. "
+        "Topic categories: superfoods, supplements, sleep rituals, gut health, hormones, "
+        "blood sugar balance, cortisol management, strength training, fiber, hydration, brain health. "
+        "Titles: 8-14 words, ALL CAPS, bold impactful statements. "
+        "Mix title styles: bold statements, direct questions, educational insights. "
+        "Slide texts: 3-6 sentences each, calm authoritative tone. "
+        "Include real DOI references from PubMed/Nature/JAMA. Never use em dashes."
+    ),
+}
+
 
 class UpdatePromptsRequest(BaseModel):
     reels_prompt: Optional[str] = None
@@ -338,12 +368,26 @@ async def get_prompts(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Get the 3 global content prompt settings."""
+    """Get the 3 global content prompt settings. Auto-populates defaults on first access."""
     from app.models.config import AppSettings
     rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
-    result = {k: "" for k in PROMPT_KEYS}
-    for row in rows:
-        result[row.key] = row.value or ""
+    result = {row.key: (row.value or "") for row in rows}
+
+    # Auto-populate DB with defaults for any missing or empty keys
+    needs_commit = False
+    for key in PROMPT_KEYS:
+        if not result.get(key):
+            default_val = PROMPT_DEFAULTS.get(key, "")
+            existing = next((r for r in rows if r.key == key), None)
+            if existing:
+                existing.value = default_val
+            else:
+                db.add(AppSettings(key=key, value=default_val, category="content", value_type="string"))
+            result[key] = default_val
+            needs_commit = True
+    if needs_commit:
+        db.commit()
+
     return result
 
 

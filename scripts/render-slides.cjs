@@ -156,121 +156,28 @@ function balanceTitleText(title, maxWidth, fontSize) {
   const avgCharWidth = fontSize * 0.48;
   const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
 
-  // Greedy wrap
-  const greedyLines = [];
+  // Greedy wrap: fill each line as much as possible
+  const lines = [];
   let current = '';
   for (const word of words) {
     const test = current ? `${current} ${word}` : word;
     if (test.length > maxCharsPerLine && current) {
-      greedyLines.push(current);
+      lines.push(current);
       current = word;
     } else {
       current = test;
     }
   }
-  if (current) greedyLines.push(current);
-  const lineCount = greedyLines.length;
+  if (current) lines.push(current);
 
-  if (lineCount <= 1) return { lines: greedyLines, fontSize };
-
-  // Balance 2 lines
-  if (lineCount === 2) {
-    let bestLines = null;
-    let bestDiff = Infinity;
-    for (let i = 1; i < words.length; i++) {
-      const l1 = words.slice(0, i).join(' ');
-      const l2 = words.slice(i).join(' ');
-      if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine) continue;
-      const diff = Math.abs(l1.length - l2.length);
-      if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2]; }
-    }
-    if (bestLines) return { lines: bestLines, fontSize };
-  }
-
-  // Balance 3 lines
-  if (lineCount === 3 && words.length >= 3) {
-    let bestLines = null;
-    let bestDiff = Infinity;
-    for (let i = 1; i < words.length - 1; i++) {
-      for (let j = i + 1; j < words.length; j++) {
-        const l1 = words.slice(0, i).join(' ');
-        const l2 = words.slice(i, j).join(' ');
-        const l3 = words.slice(j).join(' ');
-        if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine || l3.length > maxCharsPerLine) continue;
-        const diff = Math.max(
-          Math.abs(l1.length - l2.length),
-          Math.abs(l2.length - l3.length),
-          Math.abs(l1.length - l3.length)
-        );
-        if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3]; }
-      }
-    }
-    if (bestLines) return { lines: bestLines, fontSize };
-  }
-
-  // Balance 4 lines
-  if (lineCount === 4 && words.length >= 4) {
-    let bestLines = null;
-    let bestDiff = Infinity;
-    for (let i = 1; i < words.length - 2; i++) {
-      for (let j = i + 1; j < words.length - 1; j++) {
-        for (let k = j + 1; k < words.length; k++) {
-          const l1 = words.slice(0, i).join(' ');
-          const l2 = words.slice(i, j).join(' ');
-          const l3 = words.slice(j, k).join(' ');
-          const l4 = words.slice(k).join(' ');
-          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
-              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue;
-          const diff = Math.max(
-            Math.abs(l1.length - l2.length),
-            Math.abs(l2.length - l3.length),
-            Math.abs(l3.length - l4.length),
-            Math.abs(l1.length - l4.length)
-          );
-          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4]; }
-        }
-      }
-    }
-    if (bestLines) return { lines: bestLines, fontSize };
-  }
-
-  // If 5+ lines, clamp to 4 by joining overflow
-  if (lineCount > 4) {
-    const clamped = greedyLines.slice(0, 3);
-    clamped.push(greedyLines.slice(3).join(' '));
-    const clampedWords = clamped.join(' ').split(/\s+/).filter(Boolean);
-    let bestLines = null;
-    let bestDiff = Infinity;
-    for (let i = 1; i < clampedWords.length - 2; i++) {
-      for (let j = i + 1; j < clampedWords.length - 1; j++) {
-        for (let k = j + 1; k < clampedWords.length; k++) {
-          const l1 = clampedWords.slice(0, i).join(' ');
-          const l2 = clampedWords.slice(i, j).join(' ');
-          const l3 = clampedWords.slice(j, k).join(' ');
-          const l4 = clampedWords.slice(k).join(' ');
-          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
-              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue;
-          const diff = Math.max(
-            Math.abs(l1.length - l2.length),
-            Math.abs(l2.length - l3.length),
-            Math.abs(l3.length - l4.length),
-            Math.abs(l1.length - l4.length)
-          );
-          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4]; }
-        }
-      }
-    }
-    if (bestLines) return { lines: bestLines, fontSize };
+  // Clamp to max 4 lines
+  if (lines.length > 4) {
+    const clamped = lines.slice(0, 3);
+    clamped.push(lines.slice(3).join(' '));
     return { lines: clamped, fontSize };
   }
 
-  // Fallback: clamp to max 4 lines
-  if (greedyLines.length > 4) {
-    const clamped = greedyLines.slice(0, 3);
-    clamped.push(greedyLines.slice(3).join(' '));
-    return { lines: clamped, fontSize };
-  }
-  return { lines: greedyLines, fontSize };
+  return { lines, fontSize };
 }
 
 // ─── Text Slide helpers ───────────────────────────────────────────────────────
