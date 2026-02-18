@@ -84,6 +84,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(reels_router)
 app.include_router(jobs_router)
 app.include_router(youtube_router, prefix="/api")
+app.include_router(niche_config_router, prefix="/api/v2/brands")  # Niche config (Content DNA) — MUST be before brands_router to avoid /{brand_id} shadowing
 app.include_router(brands_router, prefix="/api")  # Backward-compatible mount
 app.include_router(brands_router, prefix="/api/v2")  # V2 mount
 app.include_router(settings_router, prefix="/api")  # Settings management
@@ -92,7 +93,6 @@ app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(health_router)  # Deep health check at /api/system/health-check
-app.include_router(niche_config_router, prefix="/api/v2/brands")  # Niche config (Content DNA)
 
 
 # Serve React frontend (SPA catch-all)
