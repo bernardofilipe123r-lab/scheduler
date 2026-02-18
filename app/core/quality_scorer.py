@@ -22,6 +22,8 @@ from dataclasses import dataclass
 import re
 from difflib import SequenceMatcher
 
+from app.core.prompt_context import PromptContext
+
 
 @dataclass
 class QualityScore:
@@ -115,7 +117,8 @@ class QualityScorer:
     def score(
         self,
         content: Dict,
-        recent_outputs: Optional[List[Dict]] = None
+        recent_outputs: Optional[List[Dict]] = None,
+        ctx: PromptContext = None
     ) -> QualityScore:
         """
         Score generated content across all dimensions.
@@ -123,19 +126,23 @@ class QualityScorer:
         Args:
             content: Generated content dict with title, content_lines, etc.
             recent_outputs: Optional list of recent outputs for novelty comparison
+            ctx: Optional PromptContext with niche-specific keywords/config
             
         Returns:
             QualityScore with detailed breakdown
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         if recent_outputs:
             self._recent_outputs = recent_outputs[-self._max_history:]
         
         # Score each dimension
-        structure, struct_issues = self._score_structure(content)
-        familiarity, fam_issues = self._score_familiarity(content)
-        novelty, nov_issues = self._score_novelty(content)
-        hook, hook_issues = self._score_hook(content)
-        plausibility, plaus_issues = self._score_plausibility(content)
+        structure, struct_issues = self._score_structure(content, ctx)
+        familiarity, fam_issues = self._score_familiarity(content, ctx)
+        novelty, nov_issues = self._score_novelty(content, ctx)
+        hook, hook_issues = self._score_hook(content, ctx)
+        plausibility, plaus_issues = self._score_plausibility(content, ctx)
         
         # Calculate weighted total
         total = (
@@ -168,11 +175,13 @@ class QualityScorer:
             issues=all_issues
         )
     
-    def _score_structure(self, content: Dict) -> Tuple[float, List[str]]:
+    def _score_structure(self, content: Dict, ctx: PromptContext = None) -> Tuple[float, List[str]]:
         """
         Score structural compliance (0-1).
         Pure rule checks - deterministic.
         """
+        if ctx is None:
+            ctx = PromptContext()
         score = 1.0
         issues = []
         
@@ -246,11 +255,14 @@ class QualityScorer:
         
         return max(0, score), issues
     
-    def _score_familiarity(self, content: Dict) -> Tuple[float, List[str]]:
+    def _score_familiarity(self, content: Dict, ctx: PromptContext = None) -> Tuple[float, List[str]]:
         """
         Score pattern familiarity (0-1).
         Does it feel like known viral content without copying?
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         score = 1.0
         issues = []
         
@@ -281,20 +293,17 @@ class QualityScorer:
             score -= 0.3
             issues.append("Title doesn't match familiar viral patterns")
         
-        # Check 2: Familiar health framing
-        health_keywords = [
-            "body", "health", "sleep", "gut", "energy", "food", "eat",
-            "habit", "symptom", "sign", "digestion", "metabolism",
-            "immune", "inflammation", "stress", "brain", "heart",
-            "aging", "vitamin", "mineral", "hormone", "detox"
-        ]
+        # Check 2: Niche-relevant framing (only when keywords are configured)
+        keywords_to_check = ctx.topic_keywords
         
         text = (title + " " + " ".join(lines)).lower()
-        keyword_count = sum(1 for k in health_keywords if k in text)
         
-        if keyword_count < 3:
-            score -= 0.2
-            issues.append("Not enough health/wellness framing")
+        if keywords_to_check:
+            keyword_count = sum(1 for k in keywords_to_check if k in text)
+            if keyword_count < 3:
+                niche_label = ctx.niche_name.lower() if ctx.niche_name else "niche"
+                score -= 0.2
+                issues.append(f"Not enough {niche_label} framing")
         
         # Check 3: Simple, everyday language
         complex_indicators = [
@@ -308,7 +317,7 @@ class QualityScorer:
         
         return max(0, score), issues
     
-    def _score_novelty(self, content: Dict) -> Tuple[float, List[str]]:
+    def _score_novelty(self, content: Dict, ctx: PromptContext = None) -> Tuple[float, List[str]]:
         """
         Score novelty compared to recent outputs (0-1).
         Uses string similarity (Jaccard/bigram).
@@ -349,7 +358,7 @@ class QualityScorer:
         
         return max(0, score), issues
     
-    def _score_hook(self, content: Dict) -> Tuple[float, List[str]]:
+    def _score_hook(self, content: Dict, ctx: PromptContext = None) -> Tuple[float, List[str]]:
         """
         Score emotional hook strength (0-1).
         Checks for presence of hook triggers.
@@ -390,11 +399,13 @@ class QualityScorer:
         
         return min(1.0, score), issues
     
-    def _score_plausibility(self, content: Dict) -> Tuple[float, List[str]]:
+    def _score_plausibility(self, content: Dict, ctx: PromptContext = None) -> Tuple[float, List[str]]:
         """
         Score social plausibility (0-1).
         Not medical accuracy - believability for social content.
         """
+        if ctx is None:
+            ctx = PromptContext()
         score = 1.0
         issues = []
         
@@ -415,20 +426,16 @@ class QualityScorer:
         if whitelist_hits >= 2:
             score += 0.1
         
-        # Check 3: Familiar foods/habits
-        familiar_items = [
-            "water", "sleep", "walk", "stretch", "lemon", "ginger",
-            "honey", "apple", "carrot", "spinach", "almond", "banana",
-            "oat", "egg", "fish", "olive oil", "turmeric", "garlic",
-            "green tea", "vitamin", "protein", "fiber", "zinc", "magnesium"
-        ]
+        # Check 3: Familiar niche items (only when configured)
+        familiar_items = ctx.topic_keywords
         
-        familiar_count = sum(1 for f in familiar_items if f in text)
-        if familiar_count >= 3:
-            score += 0.05
-        elif familiar_count == 0 and len(lines) > 5:
-            score -= 0.1
-            issues.append("No familiar foods/habits mentioned")
+        if familiar_items:
+            familiar_count = sum(1 for f in familiar_items if f in text)
+            if familiar_count >= 3:
+                score += 0.05
+            elif familiar_count == 0 and len(lines) > 5:
+                score -= 0.1
+                issues.append("No familiar niche items mentioned")
         
         return max(0, min(1.0, score)), issues
     

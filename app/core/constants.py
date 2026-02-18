@@ -22,17 +22,7 @@ MIN_TITLE_LENGTH = 55
 MAX_LINE_LENGTH = 80
 MAX_CONTENT_LINES = 10
 
-# Default hashtags for captions
-DEFAULT_HASHTAGS = [
-    "#health",
-    "#fitness",
-    "#wellness",
-    "#mindset",
-    "#motivation",
-    "#selfimprovement",
-    "#growth",
-    "#lifestyle",
-]
+# Default hashtags — loaded dynamically from NicheConfig.\n# Empty by default; users configure their own.\nDEFAULT_HASHTAGS = []
 
 # Fonts (relative to assets/fonts/)
 FONT_BOLD = "Poppins-Bold.ttf"

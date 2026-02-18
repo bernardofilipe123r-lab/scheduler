@@ -22,6 +22,7 @@ from app.api.system.logs_routes import router as logs_router
 from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
 from app.api.system.health_routes import router as health_router
+from app.api.niche_config_routes import router as niche_config_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -91,6 +92,7 @@ app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(health_router)  # Deep health check at /api/system/health-check
+app.include_router(niche_config_router, prefix="/api/v2/brands")  # Niche config (Content DNA)
 
 
 # Serve React frontend (SPA catch-all)

@@ -5,31 +5,34 @@ import os
 import requests
 from typing import List, Dict, Optional
 
+from app.core.prompt_context import PromptContext
+
 
 class CaptionGenerator:
     """Service for generating Instagram captions using DeepSeek AI."""
     
-    # Brand Instagram handles
-    BRAND_HANDLES = {
-        "gymcollege": "@thegymcollege",
-        "healthycollege": "@thehealthycollege",
-        "vitalitycollege": "@thevitalitycollege",
-        "longevitycollege": "@thelongevitycollege",
-        "holisticcollege": "@theholisticcollege",
-        "wellbeingcollege": "@thewellbeingcollege",
-    }
+    @staticmethod
+    def _get_brand_handle(brand_name: str) -> str:
+        """Look up a brand's Instagram handle from the database."""
+        try:
+            from app.db_connection import get_db_session
+            with get_db_session() as db:
+                from app.models.brands import Brand
+                brand = db.query(Brand).filter(Brand.brand_name == brand_name).first()
+                if brand and getattr(brand, 'instagram_handle', None):
+                    handle = brand.instagram_handle
+                    return handle if handle.startswith('@') else f"@{handle}"
+                if brand and brand.brand_name:
+                    return f"@{brand.brand_name.lower().replace(' ', '')}"
+        except Exception:
+            pass
+        return f"@{brand_name}" if brand_name else "@brand"
     
-    # CTA options
-    CTA_OPTIONS = {
-        "sleep_lean": """💬 If you want to take this one step further, comment LEAN. We'll send you details about Sleep Lean, a targeted nighttime formula designed to support fat loss while you sleep by promoting deep rest, metabolic efficiency, and overnight recovery. When your body sleeps better, it burns fat more effectively. Built on ingredients rooted in traditional use and supported by modern research, Sleep Lean addresses a critical but often overlooked piece of sustainable fat loss — quality sleep. Thousands worldwide are already using it as part of their nightly routine for fat-loss and overall health support.""",
-        
-        "follow_tips": """💬 If you found this helpful, make sure to follow for more daily tips on nutrition, health, and natural wellness strategies. We share research-backed content designed to help you make better choices for your body and long-term vitality.""",
-        
-        "workout_plan": """💬 If you want to take this one step further, comment PLAN. We'll send you our complete guide to building the best workout and nutrition plan to lose fat effectively. This includes meal timing strategies, exercise protocols, and lifestyle adjustments that work together to optimize your metabolism and support sustainable fat loss.""",
-    }
+    # CTA options: empty defaults — configured dynamically via NicheConfig
+    CTA_OPTIONS = {}
     
-    # Fixed hashtags
-    HASHTAGS = "#habits #interestingfacts #naturalhealing #healthtips #holistichealth"
+    # Hashtags: empty default — configured dynamically via NicheConfig
+    HASHTAGS = ""
     
     def __init__(self):
         """Initialize the caption generator with DeepSeek API."""
@@ -41,19 +44,23 @@ class CaptionGenerator:
         else:
             print("✅ DeepSeek API key loaded")
     
-    def generate_first_paragraph(self, title: str, content_lines: List[str]) -> str:
+    def generate_first_paragraph(self, title: str, content_lines: List[str], ctx: PromptContext = None) -> str:
         """
         Generate the first paragraph of the caption using AI.
         
         Args:
             title: The post title
             content_lines: List of content bullet points
+            ctx: Optional PromptContext for niche-aware generation
             
         Returns:
             Generated first paragraph text
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         if not self.api_key:
-            return self._fallback_paragraph(title)
+            return self._fallback_paragraph(title, ctx)
         
         # Build context from content lines
         content_summary = "\n".join([f"- {line}" for line in content_lines[:5]])
@@ -70,7 +77,10 @@ class CaptionGenerator:
         ]
         style_hint = random.choice(opening_styles)
         
-        prompt = f"""You are writing the first paragraph for an Instagram health/wellness post. 
+        niche_label = ctx.niche_name.lower()
+        audience_label = ctx.target_audience
+
+        prompt = f"""You are writing the first paragraph for an Instagram {niche_label} post. 
 The post is about: {title}
 
 Key points covered:
@@ -80,7 +90,7 @@ STYLE INSTRUCTION: {style_hint}
 
 Write a compelling opening paragraph (3-4 sentences) that:
 1. Hooks the reader with an interesting fact or insight about the topic
-2. Explains why this topic matters for their health
+2. Explains why this topic matters for {audience_label}
 3. Mentions how small, consistent choices can make a difference
 4. Uses a warm, educational tone (not salesy)
 5. CRITICAL: Start with a COMPLETELY DIFFERENT opening sentence structure and words
@@ -104,7 +114,7 @@ Just write the paragraph text, nothing else."""
                 json={
                     "model": "deepseek-chat",
                     "messages": [
-                        {"role": "system", "content": "You are a health and wellness content writer. Write clear, informative content without hype or exaggeration. Always vary your opening sentences to ensure unique content - never repeat the same opening pattern."},
+                        {"role": "system", "content": f"You are a {niche_label} content writer. Write clear, informative content without hype or exaggeration. Always vary your opening sentences to ensure unique content - never repeat the same opening pattern."},
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 1.0,
@@ -121,22 +131,26 @@ Just write the paragraph text, nothing else."""
                 return paragraph
             else:
                 print(f"⚠️ DeepSeek API error: {response.status_code} - {response.text}")
-                return self._fallback_paragraph(title)
+                return self._fallback_paragraph(title, ctx)
                 
         except Exception as e:
             print(f"⚠️ Caption generation error: {e}")
-            return self._fallback_paragraph(title)
+            return self._fallback_paragraph(title, ctx)
     
-    def _fallback_paragraph(self, title: str) -> str:
+    def _fallback_paragraph(self, title: str, ctx: PromptContext = None) -> str:
         """Generate a fallback paragraph if AI fails."""
-        return f"Understanding {title.lower()} is essential for long-term health and wellness. Small, consistent choices in nutrition, movement, and lifestyle can compound over time to create meaningful improvements in how you feel and function. By paying attention to these foundational elements, you give your body the support it needs to thrive naturally."
+        if ctx is None:
+            ctx = PromptContext()
+        niche = ctx.niche_name.lower() if ctx.niche_name else "this topic"
+        return f"Understanding {title.lower()} is essential for long-term {niche}. Small, consistent choices can compound over time to create meaningful improvements. By paying attention to these foundational elements, you give yourself the support needed to thrive."
     
     def generate_caption(
         self,
         brand_name: str,
         title: str,
         content_lines: List[str],
-        cta_type: str = "sleep_lean"
+        cta_type: str = "sleep_lean",
+        ctx: PromptContext = None
     ) -> str:
         """
         Generate a complete caption for a brand.
@@ -146,25 +160,47 @@ Just write the paragraph text, nothing else."""
             title: Post title
             content_lines: List of content bullet points
             cta_type: CTA option (sleep_lean, follow_tips, workout_plan)
+            ctx: Optional PromptContext for niche-aware generation
             
         Returns:
             Complete formatted caption
         """
-        # Get brand handle
-        handle = self.BRAND_HANDLES.get(brand_name, "@thegymcollege")
+        if ctx is None:
+            ctx = PromptContext()
+        
+        # Get brand handle dynamically
+        handle = self._get_brand_handle(brand_name)
         
         # Generate AI first paragraph
-        first_paragraph = self.generate_first_paragraph(title, content_lines)
+        first_paragraph = self.generate_first_paragraph(title, content_lines, ctx=ctx)
         
-        # Build fixed sections with brand handle
-        follow_section = f"""👉🏼 Follow {handle} for daily, research-informed content on whole-body health, natural approaches to healing, digestive health support, and long-term wellness strategies centered on nutrition and prevention."""
+        # Build follow section — only include if configured
+        if ctx.follow_section_text:
+            follow_section = f"""👉🏼 Follow {handle} for daily, {ctx.follow_section_text}"""
+        else:
+            follow_section = f"""👉🏼 Follow {handle} for more content like this."""
         
-        save_section = """🩵 This post is designed to be saved and revisited. Share it with friends and family who are actively working on improving their health, energy levels, metabolic balance, and long-term vitality through natural methods."""
+        # Build save section — only include if configured
+        if ctx.save_section_text:
+            save_section = f"""🩵 This post is designed to be saved and revisited. Share it with friends and family who are actively working on {ctx.save_section_text}."""
+        else:
+            save_section = f"""🩵 Save this post and share it with someone who needs to see this."""
         
-        # Get selected CTA
-        cta_section = self.CTA_OPTIONS.get(cta_type, self.CTA_OPTIONS["sleep_lean"])
+        # Get selected CTA: prefer ctx.cta_options, fall back to hardcoded CTA_OPTIONS
+        cta_section = None
+        if ctx.cta_options:
+            for cta in ctx.cta_options:
+                if cta.get("label") == cta_type:
+                    cta_section = f"💬 {cta['text']}"
+                    break
+        if cta_section is None:
+            cta_section = self.CTA_OPTIONS.get(cta_type, "")
         
-        disclaimer = """🌱 Content provided for educational purposes. Always seek guidance from a qualified healthcare provider before adjusting your diet."""
+        # Disclaimer from PromptContext — only include if configured
+        disclaimer = f"🌱 {ctx.disclaimer_text}" if ctx.disclaimer_text else ""
+        
+        # Hashtags: prefer ctx.hashtag_string, fall back to hardcoded HASHTAGS
+        hashtags = ctx.hashtag_string if ctx.hashtags else self.HASHTAGS
         
         # Combine all sections
         caption = f"""{first_paragraph}
@@ -177,7 +213,7 @@ Just write the paragraph text, nothing else."""
 
 {disclaimer}
 
-{self.HASHTAGS}"""
+{hashtags}"""
         
         return caption
     
@@ -185,7 +221,8 @@ Just write the paragraph text, nothing else."""
         self,
         title: str,
         content_lines: List[str],
-        cta_type: str = "sleep_lean"
+        cta_type: str = "sleep_lean",
+        ctx: PromptContext = None
     ) -> Dict[str, str]:
         """
         Generate unique captions for all brands with different AI-generated first paragraphs.
@@ -194,24 +231,38 @@ Just write the paragraph text, nothing else."""
             title: Post title
             content_lines: List of content bullet points
             cta_type: CTA option for all brands
+            ctx: Optional PromptContext for niche-aware generation
             
         Returns:
             Dictionary of brand_name -> caption
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         captions = {}
         
-        for brand_name in self.BRAND_HANDLES.keys():
-            # Use the generate_caption method for each brand
+        # Load brand list dynamically from DB
+        try:
+            from app.db_connection import get_db_session
+            with get_db_session() as db:
+                from app.models.brands import Brand
+                brands = db.query(Brand.brand_name).all()
+                brand_names = [b.brand_name for b in brands if b.brand_name]
+        except Exception:
+            brand_names = []
+        
+        for brand_name in brand_names:
             captions[brand_name] = self.generate_caption(
                 brand_name=brand_name,
                 title=title,
                 content_lines=content_lines,
-                cta_type=cta_type
+                cta_type=cta_type,
+                ctx=ctx
             )
         
         return captions
     
-    def generate_youtube_title(self, title: str, content_lines: List[str]) -> str:
+    def generate_youtube_title(self, title: str, content_lines: List[str], ctx: PromptContext = None) -> str:
         """
         Generate an attractive, searchable YouTube Shorts title.
         
@@ -224,17 +275,22 @@ Just write the paragraph text, nothing else."""
         Args:
             title: The original reel title (often ALL CAPS)
             content_lines: Content points for context
+            ctx: Optional PromptContext for niche-aware generation
             
         Returns:
             YouTube-optimized title string
         """
+        if ctx is None:
+            ctx = PromptContext()
         if not self.api_key:
             return self._fallback_youtube_title(title)
         
         # Build context from content lines
         content_summary = "\n".join([f"- {line}" for line in content_lines[:3]])
         
-        prompt = f"""You are creating a YouTube Shorts title for a health/wellness video.
+        niche_label = ctx.niche_name.lower()
+
+        prompt = f"""You are creating a YouTube Shorts title for a {niche_label} video.
 
 Original reel title: {title}
 
@@ -244,7 +300,7 @@ Key points covered:
 Create a YouTube title that:
 1. Is between 40-70 characters (short but descriptive)
 2. Uses Title Case (not ALL CAPS)
-3. Includes 1-2 searchable health keywords naturally
+3. Includes 1-2 searchable {niche_label} keywords naturally
 4. Creates curiosity or urgency WITHOUT using numbers
 5. NEVER use numbers like "3 Signs...", "5 Foods...", "This 1 Habit..."
 6. Focus on intrigue and emotional hooks instead

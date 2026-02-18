@@ -260,4 +260,4 @@ def get_brand_display_name(brand_name: str) -> str:
             return brand.display_name
     except Exception:
         pass
-    return BRAND_DISPLAY_NAMES.get(brand_name, "THE GYM COLLEGE")
+    return BRAND_DISPLAY_NAMES.get(brand_name, brand_name.upper())

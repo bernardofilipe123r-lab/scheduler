@@ -34,6 +34,7 @@ from app.core.viral_patterns import (
 # Layer 2: Prompt Templates
 from app.core.prompt_templates import (
     SYSTEM_PROMPT,
+    build_system_prompt,
     build_runtime_prompt,
     build_runtime_prompt_with_history,
     build_correction_prompt,
@@ -42,6 +43,9 @@ from app.core.prompt_templates import (
     build_post_content_prompt,
     get_content_prompts,
 )
+
+# Niche Context
+from app.core.prompt_context import PromptContext
 
 # Quality Scoring
 from app.core.quality_scorer import (
@@ -134,7 +138,8 @@ class ContentGeneratorV2:
         self,
         topic_hint: Optional[str] = None,
         format_hint: Optional[str] = None,
-        hook_hint: Optional[str] = None
+        hook_hint: Optional[str] = None,
+        ctx: PromptContext = None
     ) -> Dict:
         """
         Generate viral content using 3-layer architecture.
@@ -143,10 +148,14 @@ class ContentGeneratorV2:
             topic_hint: Optional topic to focus on
             format_hint: Optional format style to use
             hook_hint: Optional psychological hook to use
+            ctx: Optional PromptContext for niche-aware prompts
             
         Returns:
             Dictionary with title, content_lines, image_prompt, and metadata
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         if not self.api_key:
             return self._fallback_content()
         
@@ -160,7 +169,7 @@ class ContentGeneratorV2:
         )
         
         # LAYER 2+3: Generate with quality loop
-        content, quality_score = self._generate_with_quality_loop(selection)
+        content, quality_score = self._generate_with_quality_loop(selection, ctx=ctx)
         
         if content:
             # Track for anti-repetition (in-memory)
@@ -189,7 +198,8 @@ class ContentGeneratorV2:
     
     def _generate_with_quality_loop(
         self,
-        selection: PatternSelection
+        selection: PatternSelection,
+        ctx: PromptContext = None
     ) -> Tuple[Optional[Dict], Optional[QualityScore]]:
         """
         Generate content with quality scoring and auto-regeneration.
@@ -220,7 +230,8 @@ class ContentGeneratorV2:
                 prompt = build_runtime_prompt_with_history(
                     selection,
                     all_titles,
-                    all_topics
+                    all_topics,
+                    ctx=ctx
                 )
             elif attempt == 2 and best_content:
                 # Second attempt: correction prompt
@@ -235,7 +246,7 @@ class ContentGeneratorV2:
                 use_example = True
             
             # Call DeepSeek
-            content = self._call_deepseek(prompt, use_example)
+            content = self._call_deepseek(prompt, use_example, ctx=ctx)
             
             if not content:
                 continue
@@ -280,18 +291,19 @@ class ContentGeneratorV2:
     def _call_deepseek(
         self,
         prompt: str,
-        include_example: bool = False
+        include_example: bool = False,
+        ctx: PromptContext = None
     ) -> Optional[Dict]:
         """
         Call DeepSeek API with the given prompt.
         
-        Uses cached system prompt for efficiency.
+        Uses build_system_prompt(ctx) for niche-aware system prompt.
         """
         try:
             messages = [
                 {
                     "role": "system",
-                    "content": SYSTEM_PROMPT
+                    "content": build_system_prompt(ctx)
                 },
                 {
                     "role": "user",
@@ -420,57 +432,22 @@ class ContentGeneratorV2:
     # ============================================================
     
     def _fallback_content(self) -> Dict:
-        """Generate fallback content if AI fails."""
-        fallback_posts = [
-            {
-                "title": "SIGNS YOUR BODY NEEDS MORE WATER",
-                "content_lines": [
-                    "Dark yellow urine — Dehydration signal",
-                    "Dry, cracked lips — Moisture deficit",
-                    "Afternoon fatigue — Low fluid levels",
-                    "Headaches without cause — Brain needs water",
-                    "Muscle cramps — Electrolyte imbalance",
-                    "Dry skin despite moisturizer — Internal dehydration",
-                    "Constipation issues — Gut needs fluids"
-                ],
-                "image_prompt": "A cinematic, full-frame wellness visualization centered on a translucent human silhouette with glowing blue water droplets flowing through the body. Blue and teal color palette. Studio-quality cinematic lighting. No text, no letters, no numbers, no symbols, no logos."
-            },
-            {
-                "title": "FOODS THAT DESTROY YOUR SLEEP QUALITY",
-                "content_lines": [
-                    "Coffee after 2pm — Blocks adenosine for 8+ hours",
-                    "Dark chocolate at night — Hidden caffeine content",
-                    "Spicy dinners — Raises body temperature",
-                    "Alcohol before bed — Disrupts REM cycles",
-                    "High-sugar snacks — Blood sugar spikes",
-                    "Aged cheese — Contains stimulating tyramine",
-                    "Processed meats — Hard to digest overnight"
-                ],
-                "image_prompt": "A cinematic, full-frame sleep and nutrition illustration with a peaceful bedroom scene overlaid with floating food elements. Deep blue and purple palette. Soft moonlit lighting. No text, no letters, no numbers, no symbols, no logos."
-            },
-            {
-                "title": "YOUR TONGUE REVEALS YOUR HEALTH",
-                "content_lines": [
-                    "White coating — Candida or dehydration",
-                    "Yellow tint — Liver or digestion issues",
-                    "Cracks on surface — Vitamin B deficiency",
-                    "Swollen edges — Nutrient malabsorption",
-                    "Red tip — Stress or heart strain",
-                    "Purple color — Poor circulation",
-                    "Pale appearance — Anemia or low iron"
-                ],
-                "image_prompt": "A cinematic medical diagnostic visualization featuring an oversized, detailed human tongue as the central focal point. Blue and teal clinical palette. Studio-quality cinematic lighting. No text, no letters, no numbers, no symbols, no logos."
-            }
-        ]
-        
-        fallback = random.choice(fallback_posts)
-        fallback["generated_at"] = datetime.now().isoformat()
-        fallback["success"] = True
-        fallback["is_fallback"] = True
-        fallback["format_style"] = "CAUSE_EFFECT"
-        fallback["topic_category"] = "Body signals"
-        fallback["generator_version"] = "v2_fallback"
-        
+        """Generic fallback content if AI fails. Uses neutral, niche-agnostic content."""
+        fallback = {
+            "title": "CONTENT GENERATION TEMPORARILY UNAVAILABLE",
+            "content_lines": [
+                "Our content engine is experiencing a brief delay",
+                "Your next piece of content will be generated shortly",
+                "Check back in a few minutes for fresh content"
+            ],
+            "image_prompt": "A cinematic lifestyle scene with soft golden sunlight and premium objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting. No text, no letters, no numbers, no symbols, no logos.",
+            "generated_at": datetime.now().isoformat(),
+            "success": True,
+            "is_fallback": True,
+            "format_style": "SHORT_FRAGMENT",
+            "topic_category": "general",
+            "generator_version": "v2_fallback"
+        }
         return fallback
     
     # ============================================================
@@ -554,7 +531,7 @@ class ContentGeneratorV2:
     # POST TITLE GENERATION (for Instagram image posts, NOT reels)
     # ============================================================
 
-    def generate_post_title(self, topic_hint: str = None) -> Dict:
+    def generate_post_title(self, topic_hint: str = None, ctx: PromptContext = None) -> Dict:
         """
         Generate a viral post title suitable for Instagram image posts.
         
@@ -567,6 +544,9 @@ class ContentGeneratorV2:
         Returns:
             Dict with 'title' and 'image_prompt' keys
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         if not self.api_key:
             return self._fallback_post_title()
         
@@ -576,104 +556,84 @@ class ContentGeneratorV2:
         # Pick topic using DB-backed cooldown rotation
         topic_bucket = self.content_tracker.pick_topic("post", topic_hint)
         
-        # Map topic bucket to descriptive topic string for the prompt
-        topic_descriptions = {
-            "superfoods": "Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)",
-            "teas_drinks": "Teas and warm drinks (green tea, chamomile, matcha, golden milk, herbal infusions)",
-            "supplements": "Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics, ashwagandha)",
-            "sleep": "Sleep rituals and evening routines",
-            "morning_routines": "Morning wellness routines (lemon water, journaling, light stretching)",
-            "skin_antiaging": "Skin health, collagen, and anti-aging nutrition",
-            "gut_health": "Gut health, digestion, and bloating relief",
-            "hormones": "Hormone balance and menopause support through nutrition",
-            "stress_mood": "Stress relief and mood-boosting foods/habits",
-            "hydration_detox": "Hydration and detox drinks",
-            "brain_memory": "Brain health and memory-supporting nutrients",
-            "heart_health": "Heart-healthy foods and natural remedies",
-            "general": "Any relevant health/wellness topic for women 35+",
-        }
-        forced_topic = topic_hint if topic_hint else topic_descriptions.get(topic_bucket, topic_descriptions["general"])
+        # Use ctx topic categories when available, fall back to topic bucket name
+        if ctx.topic_categories:
+            topic_descriptions = {cat.lower().replace(" ", "_"): cat for cat in ctx.topic_categories}
+            topic_descriptions["general"] = f"Any relevant {ctx.niche_name} topic" if ctx.niche_name else "Any relevant topic"
+        else:
+            topic_descriptions = {"general": "Any relevant topic for the target audience"}
+        forced_topic = topic_hint if topic_hint else topic_descriptions.get(topic_bucket, topic_descriptions.get("general", "general topic"))
         
-        prompt = f"""You are a health content creator for InLight — a wellness brand targeting U.S. women aged 35 and older.
+        niche_label = ctx.niche_name.lower() if ctx.niche_name else "content"
+        brand_label = ctx.parent_brand_name if ctx.parent_brand_name else "the brand"
+        audience_label = ctx.target_audience if ctx.target_audience else "the target audience"
+        audience_desc = ctx.audience_description if ctx.audience_description else audience_label
 
-Generate a SINGLE short, engaging, health-focused title and a matching Instagram caption with a real scientific reference.
+        # Build topic list from ctx
+        topic_list = ""
+        if ctx.topic_categories:
+            topic_list = "\n### OTHER VALID TOPICS (for reference only):\n"
+            topic_list += "\n".join(f"- {t}" for t in ctx.topic_categories)
+
+        # Build examples from ctx
+        examples_section = ""
+        if ctx.has_post_examples:
+            examples_section = "\n### EXAMPLE POST TITLES (learn the pattern):\n"
+            for ex in ctx.post_examples[:5]:
+                examples_section += f'- "{ex.get("title", "")}"\n'
+
+        # Build avoidance from ctx
+        avoid_topics = ""
+        if ctx.topic_avoid:
+            avoid_topics = "\n- " + "\n- ".join(ctx.topic_avoid)
+
+        disclaimer = ctx.disclaimer_text if ctx.disclaimer_text else "This content is intended for educational and informational purposes only. Individual results may vary."
+
+        prompt = f"""You are a {niche_label} content creator for {brand_label}, targeting {audience_label}.
+
+Generate a SINGLE short, engaging, {niche_label}-focused title and a matching Instagram caption with a real scientific reference.
 
 ### TARGET AUDIENCE:
-Women 35+ interested in healthy aging, energy, hormones, and longevity.
+{audience_desc}
 
 ### WHAT MAKES A GREAT POST TITLE:
-- A bold, impactful health statement written in ALL CAPS
-- TITLE MUST BE 8-14 WORDS LONG (approximately 55-90 characters) — this is critical for the cover layout
+- A bold, impactful statement written in ALL CAPS
+- TITLE MUST BE 8-14 WORDS LONG (approximately 55-90 characters)
 - Focused on one or two main benefits
 - Some titles may include percentages for extra impact
 - Positive, empowering, and slightly exaggerated to create scroll-stop engagement
-- Do NOT lie, but dramatize slightly to spark discussion (comments, shares, saves)
-- Do NOT end the title with a period (.)  — end cleanly without punctuation or with a question mark only
+- Do NOT lie, but dramatize slightly to spark discussion
+- Do NOT end the title with a period (.)
 
 ### TOPIC FOR THIS POST (mandatory — write about this topic):
 {topic_hint if topic_hint else forced_topic}
-
-### OTHER VALID TOPICS (for reference only):
-- Foods, superfoods, and healing ingredients (turmeric, ginger, berries, honey, cinnamon, etc.)
-- Teas and warm drinks (green tea, chamomile, matcha, golden milk, herbal infusions)
-- Supplements and vitamins (collagen, magnesium, vitamin D, omega-3, probiotics, ashwagandha)
-- Sleep rituals and evening routines
-- Morning wellness routines (lemon water, journaling, light stretching)
-- Skin health, collagen, and anti-aging nutrition
-- Gut health, digestion, and bloating relief
-- Hormone balance and menopause support through nutrition
-- Stress relief and mood-boosting foods/habits
-- Hydration and detox drinks
-- Brain health and memory-supporting nutrients
-- Heart-healthy foods and natural remedies
-
-### EXAMPLE POST TITLES (learn the pattern — 8-14 words, ALL CAPS):
-- "VITAMIN D AND MAGNESIUM TOGETHER MAY REDUCE DEPRESSION AND SLOW BRAIN AGING"
-- "YOUR SKIN LOSES 1% OF ITS COLLAGEN EVERY YEAR AFTER AGE 30"
-- "MAGNESIUM IS THE MINERAL MOST WOMEN DON'T GET ENOUGH OF, AND IT AFFECTS EVERYTHING"
-- "A SIMPLE CUP OF CHAMOMILE TEA BEFORE BED MAY IMPROVE YOUR SLEEP BY 30%"
-- "PROBIOTICS DO MORE THAN FIX DIGESTION. THEY SUPPORT YOUR IMMUNE SYSTEM TOO"
-- "OMEGA-3 FROM SALMON AND WALNUTS MAY REDUCE CHRONIC INFLAMMATION BY 25%"
-- "ADDING TURMERIC TO YOUR DAILY MEALS MAY LOWER JOINT PAIN AND INFLAMMATION"
-- "DRINKING WARM LEMON WATER EACH MORNING SUPPORTS DIGESTION, ENERGY, AND METABOLISM"
-- "HOW YOUR SLEEP SCHEDULE IS QUIETLY DESTROYING YOUR MUSCLE RECOVERY"
-- "THE HIDDEN REASON YOUR PROTEIN INTAKE ISN'T ACTUALLY BUILDING MUSCLE"
-- "CHRONIC STRESS DOESN'T JUST FEEL BAD. IT LITERALLY AGES YOUR CELLS FASTER"
-- "STABLE BLOOD SUGAR ISN'T JUST FOR DIABETICS. IT'S THE KEY TO STEADY ENERGY"
-- "95% OF AMERICAN WOMEN DON'T EAT ENOUGH FIBER. HERE'S WHY THAT MATTERS"
-- "WALKING AFTER MEALS IS ONE OF THE MOST UNDERRATED HABITS FOR HEALTH"
-- "DRINKING MORE WATER WON'T HELP IF YOU'RE LOW ON ELECTROLYTES"
-
+{topic_list}
+{examples_section}
 ### WHAT TO AVOID:
-- Reel-style titles like "5 SIGNS YOUR BODY..." or "FOODS THAT DESTROY..."
+- Reel-style titles like "5 SIGNS..." or "THINGS THAT DESTROY..."
 - Question formats
 - Lists or numbered formats (those are for reels)
-- All-caps screaming style — use sentence case
 - Vague claims without specifics
-- Content that does not resonate with women 35+
-- Intense exercise or gym/strength training topics — keep it soft, consumable, and lifestyle-oriented
-- Anything that feels intimidating or requires major lifestyle changes
+- Topics outside the configured niche{avoid_topics}
 
 ### CAPTION REQUIREMENTS:
 Write a full Instagram caption (4-5 paragraphs) that:
 - Paragraph 1: Hook — expand on the title with a surprising or counterintuitive angle
-- Paragraph 2-3: Explain the science/mechanism in accessible, wellness-friendly language. Be specific about what happens in the body (metabolism, organs, brain chemistry, skin, energy, etc.)
-- Paragraph 4: Summarize the takeaway — what the reader can expect if they take action
+- Paragraph 2-3: Explain the science/mechanism in accessible language
+- Paragraph 4: Summarize the takeaway
 - After the paragraphs, add a "Source:" section with a REAL, EXISTING academic reference:
   Author(s). (Year). Title. Journal, Volume(Issue), Pages.
   DOI: 10.xxxx/xxxxx
-  THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org. Use well-known published studies related to the topic.
-  MANDATORY: Every single post MUST include a real DOI. This is non-negotiable. Use studies from PubMed, Nature, The Lancet, JAMA, BMJ, or other reputable journals. NEVER invent or fabricate a DOI.
+  THE DOI MUST BE A REAL, VERIFIABLE DOI. NEVER invent or fabricate a DOI.
 - End with a disclaimer block:
   ⚠️ Disclaimer:
-  This content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.
-- Separate each section with a blank line for readability
+  {disclaimer}
+- Separate each section with a blank line
 
 {history_context}
 
-IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title from the PREVIOUSLY GENERATED list.
+IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title from the PREVIOUSLY GENERATED list."""
 
-### IMAGE PROMPT REQUIREMENTS:"""
         # Inject user-configured content prompts
         prompts = get_content_prompts()
         brand_desc = prompts.get('brand_description', '').strip()
@@ -683,21 +643,19 @@ IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title fro
         if posts_prompt_text:
             prompt += f"\n\n### ADDITIONAL INSTRUCTIONS:\n{posts_prompt_text}"
 
-        prompt += """
+        image_style = ctx.image_style_description if ctx.image_style_description else "High-end lifestyle photography style"
+        prompt += f"""
+
 ### IMAGE PROMPT REQUIREMENTS:
-- Soft, minimal, calming wellness aesthetic
-- Bright modern kitchen or clean lifestyle setting
-- Neutral tones, gentle morning sunlight
-- High-end lifestyle photography style
-- Fresh, soothing, natural health remedy concept
+- {image_style}
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 ### OUTPUT FORMAT (JSON only, no markdown):
-{{
-    "title": "Your health statement title here.",
-    "caption": "Hook paragraph.\\n\\nExplanation paragraphs...\\n\\nTakeaway.\\n\\nSource:\\nAuthor, A. (Year). Title. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
-    "image_prompt": "Soft cinematic close-up description matching the title theme. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere, natural health remedy concept. No text, no letters, no numbers, no symbols, no logos."
-}}
+{{{{{{
+    "title": "Your statement title here.",
+    "caption": "Hook paragraph.\\n\\nExplanation...\\n\\nTakeaway.\\n\\nSource:\\nAuthor. (Year). Title. Journal.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\n{disclaimer}",
+    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
+}}}}}}
 
 Generate now:"""
 
@@ -784,42 +742,20 @@ Generate now:"""
             return self._fallback_post_title()
     
     def _fallback_post_title(self) -> Dict:
-        """Fallback titles for posts if AI fails."""
-        fallbacks = [
-            {
-                "title": "Vitamin D and magnesium helps reduce depression and brain aging",
-                "caption": "Most people take vitamin D for bone health, but its role in brain function and mood regulation is far more significant than commonly understood. Vitamin D receptors are found throughout the brain, including regions involved in emotional processing and memory.\n\nWhen levels drop below optimal, your nervous system becomes more vulnerable to inflammation and oxidative stress — both key drivers of depressive symptoms and accelerated cognitive decline. Magnesium amplifies this effect because it's required to convert vitamin D into its active form.\n\nTogether, these two nutrients support serotonin production, reduce neuroinflammation, and help maintain synaptic plasticity — the brain's ability to form new connections and adapt.\n\nConsistent supplementation can lead to noticeable improvements in mood stability, mental clarity, and long-term brain resilience.\n\nSource:\nSarris, J., Murphy, J., Mischoulon, D., et al. (2016). Adjunctive Nutraceuticals for Depression: A Systematic Review and Meta-Analyses. American Journal of Psychiatry, 173(6), 575–587.\nDOI: 10.1176/appi.ajp.2016.15091228\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
-                "image_prompt": "Soft cinematic close-up of vitamin D supplements and magnesium capsules arranged on a clean white stone countertop in a bright modern kitchen. A glass of warm lemon water sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
-            },
-            {
-                "title": "A cup of chamomile tea before bed may improve sleep quality by 30%",
-                "caption": "Chamomile is one of the most studied herbal remedies for sleep, and the results are more impressive than most people realize. The key compound — apigenin — binds to specific receptors in the brain that reduce anxiety and initiate sedation naturally.\n\nDrinking chamomile tea 30–60 minutes before bed helps lower cortisol levels, calm the nervous system, and promote the transition into deeper sleep stages. Unlike synthetic sleep aids, chamomile doesn't suppress REM sleep or create dependency.\n\nOver time, consistent use has been shown to improve overall sleep quality scores by up to 30%, with participants reporting fewer nighttime awakenings and feeling more rested upon waking.\n\nA simple nightly ritual that costs almost nothing can fundamentally change how well you rest and recover.\n\nSource:\nSrivastava, J. K., Shankar, E., & Gupta, S. (2010). Chamomile: A herbal medicine of the past with bright future. Molecular Medicine Reports, 3(6), 895–901.\nDOI: 10.3892/mmr.2010.377\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
-                "image_prompt": "Soft cinematic close-up of a steaming cup of chamomile tea on a wooden bedside table with dried chamomile flowers scattered around. Warm evening light, cozy minimal setting. Calming wellness aesthetic, neutral tones, high-end lifestyle photography, soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
-            },
-            {
-                "title": "Collagen may improve skin elasticity by up to 20% after 8 weeks",
-                "caption": "As we age, collagen production drops by roughly 1% per year after 25. This gradual loss is what drives wrinkles, sagging, and that loss of firmness that becomes more noticeable in your 30s and beyond.\n\nOral collagen peptides work differently from topical creams — they're absorbed into the bloodstream and stimulate your body's own collagen-producing cells (fibroblasts) to increase production from within. This means the effects are systemic, not just surface-level.\n\nClinical trials show that after 8 weeks of daily supplementation, skin elasticity can improve by up to 20%, with visible reductions in fine lines and improved hydration levels across the dermis.\n\nThe key is consistency. Daily intake of hydrolyzed collagen peptides gives your body the building blocks it needs to repair and rebuild skin structure at a cellular level.\n\nSource:\nBolke, L., Schlippe, G., Gerß, J., & Voss, W. (2019). A Collagen Supplement Improves Skin Hydration, Elasticity, Roughness, and Density: Results of a Randomized, Placebo-Controlled, Blind Study. Nutrients, 11(10), 2494.\nDOI: 10.3390/nu11102494\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
-                "image_prompt": "Soft cinematic close-up of collagen powder being stirred into a glass of water on a clean marble countertop. Fresh berries and a small plant nearby in gentle morning light. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere. No text, no letters, no numbers, no symbols, no logos."
-            },
-            {
-                "title": "Adding turmeric to your meals may lower joint pain and inflammation",
-                "caption": "Turmeric's active compound — curcumin — is one of the most researched natural anti-inflammatories in modern nutrition science. It works by inhibiting NF-κB, a molecule that triggers inflammatory gene expression in nearly every cell of the body.\n\nChronic low-grade inflammation is linked to joint stiffness, fatigue, skin issues, and accelerated aging. By incorporating turmeric into daily meals — especially paired with black pepper (which increases absorption by 2000%) — you can meaningfully reduce systemic inflammatory markers.\n\nStudies show that curcumin supplementation can match the effectiveness of some over-the-counter anti-inflammatory drugs for joint pain, without the gastrointestinal side effects.\n\nWhether added to soups, smoothies, or golden milk, consistent turmeric intake supports long-term joint health and overall inflammatory balance.\n\nSource:\nHewlings, S. J., & Kalman, D. S. (2017). Curcumin: A Review of Its Effects on Human Health. Foods, 6(10), 92.\nDOI: 10.3390/foods6100092\n\n⚠️ Disclaimer:\nThis content is intended for educational and informational purposes only and should not be considered medical advice. It is not designed to diagnose, treat, cure, or prevent any medical condition. Always consult a qualified healthcare professional before making dietary, medication, or lifestyle changes, particularly if you have existing health conditions. Individual responses may vary.",
-                "image_prompt": "Soft cinematic close-up of golden turmeric powder on a small ceramic spoon beside a warm glass of golden milk on a clean white countertop. Gentle morning sunlight, a cinnamon stick and fresh turmeric root nearby. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos."
-            }
-        ]
-        
-        fallback = random.choice(fallbacks)
-        fallback["is_fallback"] = True
-        # Add empty slide_texts for fallback (carousel will skip text slides)
-        if "slide_texts" not in fallback:
-            fallback["slide_texts"] = []
-        return fallback
+        """Generic fallback when AI generation fails."""
+        return {
+            "title": "Content generation temporarily unavailable",
+            "caption": "Our AI content engine is experiencing a brief delay. Your content will be generated shortly.\n\nPlease try again in a few minutes.",
+            "image_prompt": "A cinematic lifestyle scene with soft golden sunlight and premium objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting. No text, no letters, no numbers, no symbols, no logos.",
+            "is_fallback": True,
+            "slide_texts": [],
+        }
 
     # ============================================================
     # BATCH POST GENERATION (unique post per brand)
     # ============================================================
 
-    def generate_post_titles_batch(self, count: int, topic_hint: str = None) -> List[Dict]:
+    def generate_post_titles_batch(self, count: int, topic_hint: str = None, ctx: PromptContext = None) -> List[Dict]:
         """
         Generate N completely unique posts in a single AI call.
         Each post has a different topic, title, caption, and image prompt.
@@ -828,10 +764,14 @@ Generate now:"""
         Args:
             count: Number of unique posts to generate
             topic_hint: Optional hint to guide topic selection
+            ctx: Optional PromptContext for niche-aware prompts
 
         Returns:
             List of dicts, each with 'title', 'caption', 'image_prompt', 'is_fallback'
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         if not self.api_key or count <= 0:
             return [self._fallback_post_title() for _ in range(max(count, 1))]
 
@@ -842,6 +782,7 @@ Generate now:"""
             count=count,
             history_context=history_context,
             topic_hint=topic_hint,
+            ctx=ctx,
         )
 
         try:
@@ -933,7 +874,7 @@ Generate now:"""
     # IMAGE PROMPT GENERATION (standalone, from title only)
     # ============================================================
 
-    def generate_image_prompt(self, title: str) -> Dict:
+    def generate_image_prompt(self, title: str, ctx: PromptContext = None) -> Dict:
         """
         Generate an AI image prompt based on a given title.
         
@@ -942,14 +883,21 @@ Generate now:"""
         
         Args:
             title: The content title to base the image prompt on
+            ctx: Optional PromptContext for niche-aware prompts
             
         Returns:
             Dict with 'image_prompt' and 'is_fallback' keys
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         if not self.api_key or not title.strip():
             return self._fallback_image_prompt(title)
         
-        prompt = f"""You are a visual prompt engineer specializing in wellness and health imagery for Instagram.
+        niche_label = ctx.niche_name if ctx.niche_name else "lifestyle"
+        image_style = ctx.image_style_description if ctx.image_style_description else "High-end lifestyle photography style"
+
+        prompt = f"""You are a visual prompt engineer specializing in {niche_label.lower()} imagery for Instagram.
 
 Given the following title, generate a DETAILED cinematic image prompt suitable for AI image generation (DALL-E / Flux).
 
@@ -957,20 +905,9 @@ Given the following title, generate a DETAILED cinematic image prompt suitable f
 "{title}"
 
 ### REQUIREMENTS:
-- Soft, minimal, calming wellness aesthetic
-- Bright modern kitchen or clean lifestyle setting
-- Neutral tones, gentle morning sunlight
-- High-end lifestyle photography style
-- Fresh, soothing, natural health remedy concept
+- {image_style}
 - Must end with "No text, no letters, no numbers, no symbols, no logos."
 - Should be 2-3 sentences long
-
-### EXAMPLES:
-Title: "Daily ginger consumption may reduce muscle pain by up to 25% and accelerate recovery."
-Prompt: "Soft cinematic close-up of fresh ginger root being sliced on a clean white stone countertop in a bright modern kitchen. A glass of warm ginger-infused water with a lemon slice sits nearby, glowing in gentle morning sunlight. Minimal, calming wellness aesthetic, neutral tones, high-end lifestyle photography, fresh and soothing atmosphere, natural health remedy concept. No text, no letters, no numbers, no symbols, no logos."
-
-Title: "Vitamin D and magnesium helps reduce depression and brain aging."
-Prompt: "Soft cinematic close-up of vitamin D and magnesium supplements on a clean white surface beside a fresh orange and a glass of water in a bright modern kitchen. Gentle morning sunlight, minimal calming wellness aesthetic, neutral tones, high-end lifestyle photography. No text, no letters, no numbers, no symbols, no logos."
 
 ### OUTPUT FORMAT (JSON only, no markdown):
 {{
@@ -1024,27 +961,9 @@ Generate now:"""
             return self._fallback_image_prompt(title)
     
     def _fallback_image_prompt(self, title: str = "") -> Dict:
-        """Fallback image prompt when AI fails."""
-        # Try to extract theme keywords from title for a semi-relevant fallback
-        title_lower = title.lower()
-        
-        if any(w in title_lower for w in ["vitamin", "supplement", "nutrient"]):
-            prompt = "A cinematic arrangement of colorful vitamin supplements and fresh fruits on a clean surface with warm golden sunlight. Premium wellness aesthetic with soft bokeh background. No text, no letters, no numbers, no symbols, no logos."
-        elif any(w in title_lower for w in ["sleep", "rest", "nap", "bed"]):
-            prompt = "A serene bedroom scene with soft morning light filtering through white curtains, cozy bedding and calming lavender tones. Premium minimalist wellness aesthetic. No text, no letters, no numbers, no symbols, no logos."
-        elif any(w in title_lower for w in ["walk", "step", "run", "exercise", "fitness"]):
-            prompt = "A scenic nature path through a lush green forest with golden morning sunlight streaming through the trees. Fresh, vibrant greens with cinematic depth of field. No text, no letters, no numbers, no symbols, no logos."
-        elif any(w in title_lower for w in ["food", "eat", "diet", "meal", "fruit", "berry"]):
-            prompt = "A beautiful overhead shot of colorful fresh fruits, vegetables and superfoods arranged on a clean marble surface. Bright, vibrant colors with premium food photography lighting. No text, no letters, no numbers, no symbols, no logos."
-        elif any(w in title_lower for w in ["meditat", "mind", "stress", "anxiety", "mental"]):
-            prompt = "A peaceful person in meditation pose surrounded by soft natural light and minimalist zen elements. Calming lavender and white tones with premium wellness aesthetic. No text, no letters, no numbers, no symbols, no logos."
-        elif any(w in title_lower for w in ["water", "hydrat", "drink"]):
-            prompt = "Crystal clear water droplets and a glass bottle surrounded by fresh cucumber and mint on a bright clean surface. Fresh blue and green tones with studio lighting. No text, no letters, no numbers, no symbols, no logos."
-        else:
-            prompt = "A cinematic wellness scene with fresh green elements, soft golden sunlight, and premium health-focused objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting. No text, no letters, no numbers, no symbols, no logos."
-        
+        """Generic fallback image prompt when AI fails."""
         return {
-            "image_prompt": prompt,
+            "image_prompt": "A cinematic lifestyle scene with soft golden sunlight and premium objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting. No text, no letters, no numbers, no symbols, no logos.",
             "is_fallback": True
         }
 

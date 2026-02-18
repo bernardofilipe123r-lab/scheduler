@@ -13,6 +13,8 @@ import json
 import requests
 from typing import List, Dict, Optional
 
+from app.core.prompt_context import PromptContext
+
 
 class ContentDifferentiator:
     """
@@ -27,23 +29,37 @@ class ContentDifferentiator:
     Longevity College always gets the original content as baseline.
     """
     
-    BASELINE_BRAND = "longevitycollege"  # This brand gets original content
+    BASELINE_BRAND = None  # First brand in the list gets original content
     
-    def __init__(self):
+    def __init__(self, niche_config_service=None):
         """Initialize the content differentiator with DeepSeek API."""
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
         self.base_url = "https://api.deepseek.com/v1"
+        
+        if niche_config_service is None:
+            from app.services.content.niche_config_service import get_niche_config_service
+            niche_config_service = get_niche_config_service()
+        self.niche_config_service = niche_config_service
         
         if not self.api_key:
             print("⚠️ Warning: DEEPSEEK_API_KEY not found - content differentiation disabled")
         else:
             print("✅ Content Differentiator initialized with DeepSeek API")
     
+    def _get_brand_hint(self, brand_id: str, ctx: PromptContext = None) -> str:
+        """Get brand personality hint from PromptContext."""
+        if ctx and ctx.brand_personality:
+            return ctx.brand_personality
+        if ctx and ctx.niche_description:
+            return ctx.niche_description
+        return "content creation"
+
     def differentiate_all_brands(
         self,
         title: str,
         content_lines: List[str],
-        brands: List[str]
+        brands: List[str],
+        ctx: PromptContext = None
     ) -> Dict[str, List[str]]:
         """
         Create unique content variations for ALL brands in one call.
@@ -56,19 +72,23 @@ class ContentDifferentiator:
         Returns:
             Dict mapping brand -> content_lines
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         result = {}
         
         # Separate CTA from content (last line is always CTA - never touch it)
         main_content = content_lines[:-1]
         cta_line = content_lines[-1]
         
-        # Brands that need variations (exclude baseline brand)
-        variation_brands = [b for b in brands if b.lower() != self.BASELINE_BRAND]
+        # Brands that need variations (exclude baseline brand — first brand is baseline)
+        baseline_brand = brands[0].lower() if brands else None
+        variation_brands = [b for b in brands if b.lower() != baseline_brand]
         
         # Baseline brand gets original content
-        if self.BASELINE_BRAND in [b.lower() for b in brands]:
-            result[self.BASELINE_BRAND] = content_lines.copy()
-            print(f"✅ {self.BASELINE_BRAND}: Using original content (baseline)")
+        if baseline_brand:
+            result[baseline_brand] = content_lines.copy()
+            print(f"✅ {baseline_brand}: Using original content (baseline)")
         
         # If no API key or not enough brands/content, return originals for all
         if not self.api_key or len(variation_brands) == 0 or len(main_content) < 3:
@@ -82,16 +102,17 @@ class ContentDifferentiator:
             variations = self._generate_all_variations(
                 title=title,
                 main_content=main_content,
-                brands=variation_brands
+                brands=variation_brands,
+                ctx=ctx
             )
             
             # Add CTA to each variation and store
-            for brand, lines in variations.items():
-                brand_lower = brand.lower()
-                if brand_lower != self.BASELINE_BRAND:
+            for brand_key, lines in variations.items():
+                bk = brand_key.lower()
+                if bk != baseline_brand:
                     lines.append(cta_line)
-                    result[brand_lower] = lines
-                    print(f"✅ {brand_lower}: Generated unique variation ({len(lines)} lines)")
+                    result[bk] = lines
+                    print(f"✅ {bk}: Generated unique variation ({len(lines)} lines)")
             
             # Fallback for any missing brands
             for brand in brands:
@@ -112,34 +133,31 @@ class ContentDifferentiator:
         self,
         title: str,
         main_content: List[str],
-        brands: List[str]
+        brands: List[str],
+        ctx: PromptContext = None
     ) -> Dict[str, List[str]]:
         """
         Generate variations for all brands in ONE API call.
         This ensures DeepSeek can see all variations and make them truly different.
         """
+        if ctx is None:
+            ctx = PromptContext()
+        
         num_brands = len(brands)
         num_items = len(main_content)
-        
-        # Brand personality hints
-        brand_hints = {
-            "healthycollege": "natural health, whole foods, healthy habits, wellness lifestyle",
-            "vitalitycollege": "energy, vitality, metabolism, active performance, vigor",
-            "longevitycollege": "longevity, anti-aging, cellular health, prevention, lifespan",
-            "holisticcollege": "holistic wellness, mind-body balance, natural healing, integrative health",
-            "wellbeingcollege": "overall wellbeing, mental health, life quality, balanced living"
-        }
         
         # Format original content
         content_text = "\n".join([f"{i+1}. {line}" for i, line in enumerate(main_content)])
         
-        # Build brand list with hints
+        # Build brand list with hints from PromptContext or fallback dict
         brands_info = "\n".join([
-            f"- {brand}: {brand_hints.get(brand.lower(), 'health and wellness')}"
+            f"- {brand}: {self._get_brand_hint(brand.lower(), ctx)}"
             for brand in brands
         ])
         
-        prompt = f"""You are creating {num_brands} UNIQUE variations of health content for different brands.
+        niche_label = ctx.niche_name.lower() if ctx.niche_name else "health"
+        
+        prompt = f"""You are creating {num_brands} UNIQUE variations of {niche_label} content for different brands.
 
 TITLE: {title}
 
@@ -182,7 +200,7 @@ OUTPUT FORMAT (JSON only, no explanation):
 ═══════════════════════════════════════════════════════════════════════════════
 
 {{
-  "brand1": ["item1", e "item2", "item3", ...],
+  "brand1": ["item1", "item2", "item3", ...],
   "brand2": ["item1", "item2", "item3", ...],
   ...
 }}
@@ -204,16 +222,7 @@ OUTPUT ONLY THE JSON OBJECT:"""
                 "messages": [
                     {
                         "role": "system",
-                        "content": """You are an expert content variation generator. You create multiple unique versions of health/wellness content.
-
-Your output is ALWAYS valid JSON with brand names as keys and arrays of strings as values.
-Each variation must be meaningfully different in:
-- Word order within sentences
-- Synonyms used
-- Item order in the list
-- Sentence structure (active/passive/inverted)
-
-Keep language simple, grammatically perfect, and easy to understand."""
+                        "content": f"You are an expert content variation generator. You create multiple unique versions of {ctx.niche_description or 'content'}. Your output is ALWAYS valid JSON with brand names as keys and arrays of strings as values. Each variation must be meaningfully different in: word order within sentences, synonyms used, item order in the list, sentence structure (active/passive/inverted). Keep language simple, grammatically perfect, and easy to understand."
                     },
                     {
                         "role": "user", 

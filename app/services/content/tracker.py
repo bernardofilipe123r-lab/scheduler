@@ -26,21 +26,9 @@ from app.models import ContentHistory
 # ============================================================
 # TOPIC BUCKETS (canonical list)
 # ============================================================
-TOPIC_BUCKETS = [
-    "superfoods",
-    "teas_drinks",
-    "supplements",
-    "sleep",
-    "morning_routines",
-    "skin_antiaging",
-    "gut_health",
-    "hormones",
-    "stress_mood",
-    "hydration_detox",
-    "brain_memory",
-    "heart_health",
-    "general",
-]
+# Topic buckets are loaded dynamically from NicheConfig.
+# This empty list is kept for backward compatibility.
+TOPIC_BUCKETS = []
 
 # Minimum days before the same topic bucket can be reused
 TOPIC_COOLDOWN_DAYS = 3
@@ -281,26 +269,30 @@ class ContentTracker:
         self,
         content_type: str = "post",
         cooldown_days: int = None,
+        topic_buckets: List[str] = None,
     ) -> List[str]:
         """
         Get topic buckets that are NOT on cooldown.
-
+        Uses provided topic_buckets or falls back to module-level TOPIC_BUCKETS.
         If all are on cooldown, returns all (never return empty).
         """
         if cooldown_days is None:
             cooldown_days = TOPIC_COOLDOWN_DAYS
 
+        buckets = topic_buckets or TOPIC_BUCKETS
+        if not buckets:
+            return ["general"]
+
         cooldowns = self.get_topic_cooldowns(content_type)
         cutoff = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
         available = []
-        for bucket in TOPIC_BUCKETS:
+        for bucket in buckets:
             last_used = cooldowns.get(bucket)
             if last_used is None or last_used < cutoff:
                 available.append(bucket)
 
-        # Never return empty — if all on cooldown, return all
-        return available if available else list(TOPIC_BUCKETS)
+        return available if available else list(buckets)
 
     # ──────────────────────────────────────────────────────────
     # RECENT TITLES (for prompt injection)

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from enum import Enum
 import random
 
+from app.core.prompt_context import PromptContext
+
 
 # ============================================================
 # TITLE ARCHETYPES - Learned from viral database
@@ -20,36 +22,25 @@ import random
 
 TITLE_ARCHETYPES: List[Dict] = [
     {
-        "pattern": "SIGNS YOUR BODY IS {STATE}",
-        "examples": ["SIGNS YOUR BODY IS TRYING TO WARN YOU", "SIGNS YOUR BODY IS STARVING INSIDE"],
-        "variables": {
-            "STATE": ["trying to warn you", "starving inside", "aging too fast", "begging for rest", 
-                      "fighting inflammation", "detoxing naturally", "under hidden stress"]
-        },
-        "hook_type": "curiosity"
-    },
-    {
-        "pattern": "{NUMBER} SIGNS YOUR {BODY_PART} IS {CONDITION}",
-        "examples": ["5 SIGNS YOUR LIVER IS IN TROUBLE", "8 SIGNS YOUR GUT IS DAMAGED"],
+        "pattern": "{NUMBER} SIGNS OF {ISSUE}",
+        "examples": ["5 SIGNS OF A HIDDEN PROBLEM", "8 SIGNS YOU'RE MAKING A MISTAKE"],
         "variables": {
             "NUMBER": ["4", "5", "6", "8", "9", "10", "12", "16"],
-            "BODY_PART": ["liver", "gut", "brain", "heart", "kidneys", "nervous system", "thyroid"],
-            "CONDITION": ["in trouble", "damaged", "overloaded", "struggling", "calling for help"]
+            "ISSUE": ["a hidden problem", "a critical mistake", "something wrong"]
         },
         "hook_type": "fear"
     },
     {
-        "pattern": "DOCTORS DON'T WANT YOU TO KNOW {SECRET}",
-        "examples": ["DOCTORS DON'T WANT YOU TO KNOW THIS ABOUT SLEEP"],
+        "pattern": "EXPERTS DON'T WANT YOU TO KNOW {SECRET}",
+        "examples": ["EXPERTS DON'T WANT YOU TO KNOW THIS"],
         "variables": {
-            "SECRET": ["this about sleep", "this about your gut", "these natural remedies", 
-                       "what really causes fatigue", "the truth about inflammation"]
+            "SECRET": ["this", "the real truth", "what they hide"]
         },
         "hook_type": "authority"
     },
     {
-        "pattern": "EAT THIS FOR {TIME}",
-        "examples": ["JUST EAT THIS FOR 1 WEEK", "TRY THIS FOR 5 DAYS"],
+        "pattern": "TRY THIS FOR {TIME}",
+        "examples": ["TRY THIS FOR 1 WEEK", "TRY THIS FOR 5 DAYS"],
         "variables": {
             "TIME": ["3 days", "5 days", "1 week", "7 days", "10 days", "2 weeks", "1 month"]
         },
@@ -57,62 +48,46 @@ TITLE_ARCHETYPES: List[Dict] = [
     },
     {
         "pattern": "{NUMBER} HABITS DESTROYING YOUR {TARGET}",
-        "examples": ["7 HABITS DESTROYING YOUR SLEEP", "THINGS SILENTLY DESTROYING YOUR HEALTH"],
+        "examples": ["7 HABITS DESTROYING YOUR PROGRESS", "THINGS SILENTLY HOLDING YOU BACK"],
         "variables": {
             "NUMBER": ["5", "6", "7", "8", "9", "10"],
-            "TARGET": ["sleep", "health", "energy", "metabolism", "gut", "brain", "hormones", "skin"]
+            "TARGET": ["progress", "results", "potential", "growth", "success"]
         },
         "hook_type": "fear"
     },
     {
-        "pattern": "WHAT YOUR {INDICATOR} IS TRYING TO TELL YOU",
-        "examples": ["WHAT YOUR BODY IS TRYING TO TELL YOU", "WHAT YOUR TONGUE REVEALS ABOUT YOUR HEALTH"],
-        "variables": {
-            "INDICATOR": ["body", "tongue", "skin", "nails", "eyes", "sleep patterns", "cravings"]
-        },
-        "hook_type": "curiosity"
-    },
-    {
         "pattern": "STOP DOING THIS IF YOU WANT {OUTCOME}",
-        "examples": ["STOP DOING THIS IF YOU WANT BETTER SLEEP"],
+        "examples": ["STOP DOING THIS IF YOU WANT BETTER RESULTS"],
         "variables": {
-            "OUTCOME": ["better sleep", "more energy", "clear skin", "a healthy gut", 
-                        "to lose weight", "mental clarity", "to age slower"]
+            "OUTCOME": ["better results", "real progress", "to succeed", 
+                        "to improve", "to level up"]
         },
         "hook_type": "control"
     },
     {
         "pattern": "{ADJECTIVE} TRUTHS ABOUT {TOPIC}",
-        "examples": ["8 HARSH TRUTHS", "SHOCKING TRUTHS ABOUT YOUR HEALTH"],
+        "examples": ["8 HARSH TRUTHS", "SHOCKING TRUTHS NO ONE TALKS ABOUT"],
         "variables": {
             "ADJECTIVE": ["harsh", "shocking", "strange", "uncomfortable", "brutal"],
-            "TOPIC": ["life", "your health", "success", "aging", "relationships", "self-improvement"]
+            "TOPIC": ["life", "success", "growth", "relationships", "self-improvement"]
         },
         "hook_type": "curiosity"
     },
     {
-        "pattern": "THESE {PEOPLE} AGE FASTER THAN EVERYONE ELSE",
-        "examples": ["THESE MEN AGE FASTER THAN EVERYONE ELSE"],
+        "pattern": "WHAT YOUR {INDICATOR} IS TRYING TO TELL YOU",
+        "examples": ["WHAT YOUR RESULTS ARE TRYING TO TELL YOU"],
         "variables": {
-            "PEOPLE": ["men", "women", "people", "busy professionals", "night owls", "desk workers"]
+            "INDICATOR": ["results", "habits", "routine", "mindset", "patterns"]
         },
-        "hook_type": "fear"
+        "hook_type": "curiosity"
     },
     {
-        "pattern": "EAT THIS IF YOU ARE {CONDITION}",
-        "examples": ["EAT THIS IF YOU ARE SICK", "EAT THIS IF YOU'RE TIRED"],
-        "variables": {
-            "CONDITION": ["sick", "tired", "stressed", "bloated", "inflamed", "anxious", "exhausted"]
-        },
-        "hook_type": "control"
-    },
-    {
-        "pattern": "DO THESE {NUMBER} HABITS IF YOU WANT TO {GOAL}",
-        "examples": ["DO THESE 10 HABITS IF YOU WANT TO STILL WALK AT 80"],
+        "pattern": "DO THESE {NUMBER} THINGS IF YOU WANT TO {GOAL}",
+        "examples": ["DO THESE 10 THINGS IF YOU WANT TO SUCCEED"],
         "variables": {
             "NUMBER": ["5", "7", "8", "10", "12"],
-            "GOAL": ["still walk at 80", "age gracefully", "boost your metabolism", 
-                     "sleep like a baby", "have unlimited energy"]
+            "GOAL": ["succeed", "see real change", "transform your results", 
+                     "get ahead", "reach your goals"]
         },
         "hook_type": "hope"
     }
@@ -132,10 +107,10 @@ class ContentFormat(Enum):
 
 FORMAT_DEFINITIONS: Dict[str, Dict] = {
     "SHORT_FRAGMENT": {
-        "description": "Minimalist, punchy, list-based. Habit — Consequence OR Symptom — Meaning",
+        "description": "Minimalist, punchy, list-based. Item — Explanation",
         "structure": "{subject} — {explanation}",
         "word_limit": 8,
-        "example_structure": "Cold hands — Iron deficiency",
+        "example_structure": "Mistake — Missing the real cause",
         "rules": [
             "No verbs in fragment form",
             "Em-dash separator",
@@ -146,7 +121,7 @@ FORMAT_DEFINITIONS: Dict[str, Dict] = {
         "description": "Complete sentences with time-bound challenges preferred",
         "structure": "If you {action} for {time}, {outcome} will {result}",
         "word_limit": 20,
-        "example_structure": "If you eat 1 kiwi every morning for a week, your digestion will smooth out.",
+        "example_structure": "If you try this for one week, you will notice a real difference.",
         "rules": [
             "Use conditional structure when possible",
             "Include timeframes",
@@ -157,7 +132,7 @@ FORMAT_DEFINITIONS: Dict[str, Dict] = {
         "description": "Simple cause → simple outcome. No citations, no disclaimers",
         "structure": "{action/item} — {benefit or consequence}",
         "word_limit": 15,
-        "example_structure": "Skipping sunlight daily — May lead to low vitamin D and low mood.",
+        "example_structure": "Skipping this step — May lead to slower progress and frustration.",
         "rules": [
             "Action leads to outcome",
             "No explanations beyond one clause",
@@ -166,9 +141,9 @@ FORMAT_DEFINITIONS: Dict[str, Dict] = {
     },
     "PURE_LIST": {
         "description": "One idea per line. No explanations longer than one clause",
-        "structure": "{symptom/condition} → {food/remedy}",
+        "structure": "{problem} → {solution}",
         "word_limit": 6,
-        "example_structure": "Fever → Coconut water",
+        "example_structure": "Problem → Simple fix",
         "rules": [
             "Arrow separator",
             "No explanations",
@@ -192,27 +167,27 @@ class PsychHook(Enum):
 
 HOOK_DEFINITIONS: Dict[str, Dict] = {
     "fear": {
-        "triggers": ["damage", "disease", "aging", "mistakes", "destruction", "silent killers"],
+        "triggers": ["damage", "mistakes", "destruction", "silent killers", "hidden problems"],
         "language": ["destroying", "damaging", "silently", "never ignore", "warning", "dangerous"],
         "intensity": "high"
     },
     "curiosity": {
-        "triggers": ["strange signs", "unknown facts", "hidden", "secret", "reveals", "what your body"],
+        "triggers": ["strange signs", "unknown facts", "hidden", "secret", "reveals"],
         "language": ["actually", "really", "trying to tell you", "reveals", "hidden meaning"],
         "intensity": "medium"
     },
     "authority": {
-        "triggers": ["doctors", "experts", "science", "research", "studies"],
-        "language": ["doctors don't want", "experts hide", "science proves", "research shows"],
+        "triggers": ["experts", "science", "research", "studies", "professionals"],
+        "language": ["experts don't want", "science proves", "research shows", "professionals hide"],
         "intensity": "high"
     },
     "control": {
         "triggers": ["simple actions", "daily habits", "easy steps", "quick fix"],
-        "language": ["just do this", "try this for", "eat this", "stop doing", "start today"],
+        "language": ["just do this", "try this for", "stop doing", "start today"],
         "intensity": "low"
     },
     "hope": {
-        "triggers": ["reversal", "improvement", "prevention", "healing", "recovery"],
+        "triggers": ["improvement", "prevention", "recovery", "progress", "transformation"],
         "language": ["will improve", "can reverse", "supports", "strengthens", "prevents"],
         "intensity": "medium"
     }
@@ -223,24 +198,9 @@ HOOK_DEFINITIONS: Dict[str, Dict] = {
 # TOPIC BUCKETS - Safe health categories
 # ============================================================
 
-TOPIC_BUCKETS: List[str] = [
-    "gut health",
-    "sleep optimization", 
-    "nutrition and food",
-    "aging and longevity",
-    "body signals and warnings",
-    "daily habits",
-    "mental strength and mindset",
-    "stress and nervous system",
-    "energy and metabolism",
-    "hydration and electrolytes",
-    "inflammation and immunity",
-    "hormone balance",
-    "brain health and memory",
-    "detoxification",
-    "heart and cardiovascular",
-    "nutritional deficiencies"
-]
+# Topic buckets are loaded dynamically from NicheConfig.
+# This empty list serves as a last-resort fallback.
+TOPIC_BUCKETS: List[str] = []
 
 
 # ============================================================
@@ -273,14 +233,15 @@ class PatternSelector:
         self,
         topic_hint: Optional[str] = None,
         format_hint: Optional[str] = None,
-        hook_hint: Optional[str] = None
+        hook_hint: Optional[str] = None,
+        ctx: PromptContext = None
     ) -> PatternSelection:
         """
         Select patterns for content generation.
         Ensures variety and avoids repetition.
         """
         # Select topic - avoid recent
-        topic = self._select_topic(topic_hint)
+        topic = self._select_topic(topic_hint, ctx=ctx)
         
         # Select format - never repeat consecutively
         format_style = self._select_format(format_hint)
@@ -302,14 +263,21 @@ class PatternSelector:
             point_count=point_count
         )
     
-    def _select_topic(self, hint: Optional[str] = None) -> str:
+    def _select_topic(self, hint: Optional[str] = None, ctx: PromptContext = None) -> str:
         """Select topic, avoiding recent ones."""
-        if hint and hint in TOPIC_BUCKETS:
+        if ctx is None:
+            ctx = PromptContext()
+        topics = ctx.topic_categories if ctx.topic_categories else TOPIC_BUCKETS
+        
+        if not topics:
+            return hint or "general"
+        
+        if hint and hint in topics:
             return hint
         
-        available = [t for t in TOPIC_BUCKETS if t not in self._recent_topics[-3:]]
+        available = [t for t in topics if t not in self._recent_topics[-3:]]
         if not available:
-            available = TOPIC_BUCKETS
+            available = topics
         
         selected = random.choice(available)
         self._recent_topics.append(selected)

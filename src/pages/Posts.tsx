@@ -506,7 +506,7 @@ export function PostsPage() {
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-primary-600 text-white rounded-xl hover:from-purple-700 hover:to-primary-700 font-medium disabled:opacity-50"
             >
               <Wand2 className="w-4 h-4" />
-              Auto Generate
+              Auto Generate Viral Carrousel Posts
             </button>
             <button
               onClick={handleSubmit}
@@ -522,7 +522,7 @@ export function PostsPage() {
               Generate Posts
             </button>
             <p className="text-xs text-gray-400 text-center">
-              💡 <strong>Generate Posts</strong> uses your exact title · <strong>Auto Generate</strong> lets AI create everything
+              💡 <strong>Generate Posts</strong> uses your exact title · <strong>Auto Generate Viral Carrousel Posts</strong> lets AI create everything
             </p>
           </div>
         </div>
@@ -533,7 +533,7 @@ export function PostsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900">Auto Generate Posts</h2>
+              <h2 className="text-lg font-bold text-gray-900">Auto Generate Viral Carrousel Posts</h2>
               <button
                 onClick={() => setShowAutoModal(false)}
                 className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
