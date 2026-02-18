@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
@@ -44,6 +44,14 @@ export function GeneratorPage() {
   // Loading states
   const [isAutoGenerating, setIsAutoGenerating] = useState(false)
   const [isCreatingJob, setIsCreatingJob] = useState(false)
+
+  // Auto-generate modal state
+  const [showAutoModal, setShowAutoModal] = useState(false)
+  const [autoCount, setAutoCount] = useState(0)
+  const [autoBrands, setAutoBrands] = useState<BrandName[]>([])
+  const [autoVariant, setAutoVariant] = useState<Variant>('dark')
+  const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
+  const [autoCtaType, setAutoCtaType] = useState('auto')
   
   // Refs for highlighting
   const titleRef = useRef<HTMLTextAreaElement>(null)
@@ -90,46 +98,84 @@ export function GeneratorPage() {
     return words.slice(0, bestSplit).join(' ') + '\n' + words.slice(bestSplit).join(' ')
   }
 
-  // Auto-generate viral content using AI
-  const handleAutoGenerate = async () => {
+  // ── Auto-generate modal helpers ──────────────────────────────────
+  const openAutoModal = () => {
+    setAutoCount(brandIds.length)
+    setAutoBrands([...brandIds])
+    setAutoVariant('dark')
+    setAutoPlatforms(['instagram', 'facebook', 'youtube'])
+    setAutoCtaType('auto')
+    setShowAutoModal(true)
+  }
+
+  const handleAutoCountChange = (count: number) => {
+    setAutoCount(count)
+    setAutoBrands(brandIds.slice(0, count))
+  }
+
+  const toggleAutoBrand = (brand: BrandName) => {
+    setAutoBrands((prev) => {
+      const next = prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
+      setAutoCount(next.length)
+      return next
+    })
+  }
+
+  const toggleAutoPlatform = (platform: Platform) => {
+    setAutoPlatforms(prev => {
+      if (prev.includes(platform) && prev.length === 1) return prev
+      return prev.includes(platform)
+        ? prev.filter(p => p !== platform)
+        : [...prev, platform]
+    })
+  }
+
+  const handleAutoSubmit = async () => {
+    if (autoBrands.length === 0) {
+      toast.error('Select at least one brand')
+      return
+    }
+    setShowAutoModal(false)
     setIsAutoGenerating(true)
-    
+    toast.loading('AI is generating viral content...', { id: 'auto-gen' })
+
     try {
+      // Step 1: Generate content with AI
       const response = await fetch('/reels/auto-generate-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       })
-      
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.detail || 'Failed to generate content')
       }
-      
       const data = await response.json()
-      
-      setTitle(balanceTitle(data.title))
-      setContent(data.content_lines.join('\n'))
-      
-      if (data.image_prompt) {
-        setAiPrompt(data.image_prompt)
-        setVariant('dark')
-      }
-      
-      const topicInfo = data.topic_category ? ` (${data.topic_category})` : ''
-      const formatInfo = data.format_style ? ` - ${data.format_style} style` : ''
-      toast.success(`🎉 "${data.title}"${topicInfo}${formatInfo}`, { duration: 8000 })
-      
-      titleRef.current?.classList.add('highlight-pulse')
-      contentRef.current?.classList.add('highlight-pulse')
-      setTimeout(() => {
-        titleRef.current?.classList.remove('highlight-pulse')
-        contentRef.current?.classList.remove('highlight-pulse')
-      }, 500)
-      
+
+      toast.loading('Creating job...', { id: 'auto-gen' })
+
+      // Step 2: Create job immediately with the generated content
+      const job = await createJob.mutateAsync({
+        title: balanceTitle(data.title),
+        content_lines: data.content_lines || [],
+        brands: autoBrands,
+        variant: autoVariant,
+        ai_prompt: data.image_prompt || undefined,
+        cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
+        platforms: autoPlatforms,
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      toast.success(
+        `✅ Job ${job.id.slice(0, 8)}... created and processing!`,
+        { id: 'auto-gen', duration: 6000 }
+      )
     } catch (error) {
       console.error('Auto-generate error:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to generate content')
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to auto-generate',
+        { id: 'auto-gen' }
+      )
     } finally {
       setIsAutoGenerating(false)
     }
@@ -408,7 +454,7 @@ Chicken — Let it rest after cooking`}
           </button>
           <button 
             type="button" 
-            onClick={handleAutoGenerate}
+            onClick={openAutoModal}
             disabled={isAutoGenerating}
             className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
@@ -428,6 +474,164 @@ Chicken — Let it rest after cooking`}
           💡 <strong>Auto-Generate</strong> uses AI to create a complete viral reel (title, content & image prompt) from scratch!
         </p>
       </form>
+
+      {/* Auto Generate Modal */}
+      {showAutoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-gray-900">🤖 Auto-Generate Viral Reel</h2>
+              <button
+                onClick={() => setShowAutoModal(false)}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Variant */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Variant</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setAutoVariant('light')}
+                  className={`flex-1 p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                    autoVariant === 'light'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  ☀️ Light
+                </button>
+                <button
+                  onClick={() => setAutoVariant('dark')}
+                  className={`flex-1 p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                    autoVariant === 'dark'
+                      ? 'border-purple-500 bg-purple-50 text-purple-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  🌙 Dark
+                </button>
+              </div>
+            </div>
+
+            {/* Brand count selector */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                How many brands?
+              </label>
+              <div className="flex gap-2">
+                {brandIds.map((_, i) => {
+                  const count = i + 1
+                  return (
+                    <button
+                      key={count}
+                      onClick={() => handleAutoCountChange(count)}
+                      className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
+                        autoCount === count
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {count}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Brand checkboxes */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Select brands</label>
+              <div className="space-y-2">
+                {dynamicBrands.map((brand) => {
+                  const checked = autoBrands.includes(brand.id)
+                  return (
+                    <label
+                      key={brand.id}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
+                        checked
+                          ? 'border-purple-200 bg-purple-50'
+                          : 'border-gray-100 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleAutoBrand(brand.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: brand.color || '#999' }}
+                      />
+                      <span className="text-sm font-medium text-gray-700">{brand.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Platforms */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Publish To</label>
+              <div className="flex flex-wrap gap-2">
+                {PLATFORMS.map(platform => (
+                  <label
+                    key={platform.id}
+                    className={`flex items-center px-3 py-2 border-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                      autoPlatforms.includes(platform.id)
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={autoPlatforms.includes(platform.id)}
+                      onChange={() => toggleAutoPlatform(platform.id)}
+                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                    <span className="ml-2 font-medium text-gray-900">{platform.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Call-to-Action</label>
+              <select
+                value={autoCtaType}
+                onChange={(e) => setAutoCtaType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="auto">🎲 Auto (weighted random)</option>
+                {ctaOptions.map((cta, i) => (
+                  <option key={i} value={cta.text}>{cta.text}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Modal actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAutoModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAutoSubmit}
+                disabled={autoBrands.length === 0}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-medium text-sm disabled:opacity-50"
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

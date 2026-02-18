@@ -14,7 +14,10 @@ import {
   Check,
   Clock,
   CalendarClock,
-  Youtube
+  Youtube,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -26,6 +29,7 @@ import {
   useUpdateJob,
   useJobNextSlots,
   useUpdateBrandStatus,
+  useUpdateBrandContent,
   useRetryJob
 } from '@/features/jobs'
 import { useAutoScheduleReel } from '@/features/scheduling'
@@ -47,6 +51,7 @@ export function JobDetailPage() {
   const regenerateBrand = useRegenerateBrand()
   const updateJob = useUpdateJob()
   const updateBrandStatus = useUpdateBrandStatus()
+  const updateBrandContent = useUpdateBrandContent()
   const autoSchedule = useAutoScheduleReel()
   const retryJob = useRetryJob()
   
@@ -63,6 +68,11 @@ export function JobDetailPage() {
   const [schedulingAll, setSchedulingAll] = useState(false)
   const [schedulingCustom, setSchedulingCustom] = useState(false)
 
+  // Per-brand title editing state
+  const [editingTitleBrand, setEditingTitleBrand] = useState<string | null>(null)
+  const [editingTitleValue, setEditingTitleValue] = useState('')
+  const [savingTitle, setSavingTitle] = useState(false)
+
   // Per-brand schedule modal state
   const [brandScheduleModalBrand, setBrandScheduleModalBrand] = useState<BrandName | null>(null)
   const [brandScheduleMode, setBrandScheduleMode] = useState<'auto' | 'custom'>('auto')
@@ -70,6 +80,32 @@ export function JobDetailPage() {
   const [brandCustomTime, setBrandCustomTime] = useState('')
   
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
+
+  // Per-brand title helpers
+  const startEditingTitle = (brand: string) => {
+    const output = job?.brand_outputs?.[brand as BrandName]
+    setEditingTitleValue(output?.title || job?.title || '')
+    setEditingTitleBrand(brand)
+  }
+
+  const saveBrandTitle = async () => {
+    if (!editingTitleBrand || !job) return
+    setSavingTitle(true)
+    try {
+      await updateBrandContent.mutateAsync({
+        id: job.id,
+        brand: editingTitleBrand as BrandName,
+        data: { title: editingTitleValue },
+      })
+      toast.success('Title updated!')
+      setEditingTitleBrand(null)
+      refetch()
+    } catch {
+      toast.error('Failed to update title')
+    } finally {
+      setSavingTitle(false)
+    }
+  }
   
   const allScheduled = job ? Object.entries(job.brand_outputs || {})
     .filter(([_, output]) => output.status === 'completed' || output.status === 'scheduled')
@@ -681,8 +717,64 @@ export function JobDetailPage() {
                         </div>
                       </div>
                       
-                      {/* Right side: Content Lines for this brand */}
+                      {/* Right side: Title + Content Lines for this brand */}
                       <div className="bg-gray-50 rounded-lg p-4">
+                        {/* Per-brand title */}
+                        <div className="mb-3 pb-3 border-b border-gray-200">
+                          {editingTitleBrand === brand ? (
+                            <div className="flex items-start gap-2">
+                              <textarea
+                                value={editingTitleValue}
+                                onChange={(e) => setEditingTitleValue(e.target.value)}
+                                rows={2}
+                                className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault()
+                                    saveBrandTitle()
+                                  }
+                                  if (e.key === 'Escape') setEditingTitleBrand(null)
+                                }}
+                              />
+                              <button
+                                onClick={saveBrandTitle}
+                                disabled={savingTitle}
+                                className="p-1.5 rounded hover:bg-green-100 text-green-600"
+                                title="Save title"
+                              >
+                                {savingTitle ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Save className="w-4 h-4" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setEditingTitleBrand(null)}
+                                className="p-1.5 rounded hover:bg-gray-200 text-gray-400"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-gray-900 whitespace-pre-line flex-1">
+                                {output.title || job.title}
+                              </p>
+                              {(isCompleted || isScheduled) && (
+                                <button
+                                  onClick={() => startEditingTitle(brand)}
+                                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 flex-shrink-0"
+                                  title="Edit title for this brand"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-medium text-gray-700">Content (this brand)</span>
                           <button
