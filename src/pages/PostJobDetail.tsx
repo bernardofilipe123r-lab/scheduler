@@ -55,6 +55,7 @@ import {
   loadGeneralSettings,
   saveGeneralSettings as persistSettings,
   PostCanvas,
+  autoFitFontSize,
 } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
@@ -204,12 +205,21 @@ export function PostJobDetail({ job, refetch }: Props) {
   )
 
   // ── Per-brand font size ─────────────────────────────────────────────
+  // Compute auto-fit size for a brand (what the canvas actually renders)
+  const getAutoFitSize = (brand: string) => {
+    const title = getBrandTitle(brand)
+    const maxWidth = CANVAS_WIDTH - settings.layout.titlePaddingX * 2
+    return autoFitFontSize(title || 'PLACEHOLDER', maxWidth, settings.fontSize, 3)
+  }
+
+  // Get the effective font size: manual override or auto-fit
   const getBrandFontSize = (brand: string) =>
-    brandFontSizes[brand] ?? settings.fontSize
+    brandFontSizes[brand] ?? getAutoFitSize(brand)
 
   const adjustBrandFontSize = (brand: string, delta: number) => {
     setBrandFontSizes((prev) => {
-      const current = prev[brand] ?? settings.fontSize
+      // Initialize from auto-fit value if no manual override yet
+      const current = prev[brand] ?? getAutoFitSize(brand)
       const next = Math.max(30, Math.min(120, current + delta))
       return { ...prev, [brand]: next }
     })

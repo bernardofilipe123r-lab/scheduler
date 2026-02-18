@@ -550,7 +550,8 @@ class JobProcessor:
                     # ── AUTO MODE: AI generates unique posts per brand ───
                     topic_hint = job.ai_prompt or None
                     print(f"   🧠 Generating {total_brands} unique posts...", flush=True)
-                    self._manager.update_job_status(job_id, "generating", "Generating unique content for each brand...", 5)
+                    step_msg = "Generating content..." if total_brands == 1 else f"Generating content for {total_brands} brands..."
+                    self._manager.update_job_status(job_id, "generating", step_msg, 5)
 
                     batch_posts = cg.generate_post_titles_batch(total_brands, topic_hint)
                     print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
@@ -573,7 +574,8 @@ class JobProcessor:
                     if job.status == "cancelled":
                         return {"success": False, "error": "Job was cancelled", "results": results}
                     progress = int(((i + 1) / (total_brands + 1)) * 100)
-                    self._manager.update_job_status(job_id, "generating", f"Generating image for {brand}...", progress)
+                    img_msg = "Generating image..." if total_brands == 1 else f"Generating image for {brand}..."
+                    self._manager.update_job_status(job_id, "generating", img_msg, progress)
 
                     # Timeout guard for post brand processing
                     post_result = {"success": False, "error": "Timeout"}
@@ -646,9 +648,10 @@ class JobProcessor:
 
                 progress = int((i / total_brands) * 100)
                 print(f"   📊 Progress: {progress}%", flush=True)
+                reel_msg = "Generating reel..." if total_brands == 1 else f"Generating {brand}..."
                 self._manager.update_job_status(
                     job_id, "generating",
-                    f"Generating {brand}...",
+                    reel_msg,
                     progress
                 )
 
@@ -731,7 +734,8 @@ class JobProcessor:
             sys.stdout.flush()
 
             if all_success:
-                self._manager.update_job_status(job_id, "completed", "All brands generated!", 100)
+                done_msg = "Generation complete!" if len(results) == 1 else "All brands generated!"
+                self._manager.update_job_status(job_id, "completed", done_msg, 100)
             elif any_success:
                 # Some succeeded, some failed - partial completion
                 failed_brands = [b for b, r in results.items() if not r.get("success")]
