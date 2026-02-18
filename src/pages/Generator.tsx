@@ -52,7 +52,7 @@ export function GeneratorPage() {
   const [autoVariant, setAutoVariant] = useState<Variant>('dark')
   const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
   const [autoCtaType, setAutoCtaType] = useState('auto')
-  const [imageModel, setImageModel] = useState<string>('Flux1schnell')
+  const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
   
   // Refs for highlighting
   const titleRef = useRef<HTMLTextAreaElement>(null)
@@ -539,7 +539,7 @@ Chicken — Let it rest after cooking`}
       {/* Auto Generate Modal */}
       {showAutoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-gray-900">🤖 Auto-Generate Viral Reel</h2>
               <button
@@ -550,132 +550,161 @@ Chicken — Let it rest after cooking`}
               </button>
             </div>
 
-            {/* Variant */}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Variant</label>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setAutoVariant('light')}
-                  className={`flex-1 p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                    autoVariant === 'light'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  ☀️ Light
-                </button>
-                <button
-                  onClick={() => setAutoVariant('dark')}
-                  className={`flex-1 p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                    autoVariant === 'dark'
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  🌙 Dark
-                </button>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              {/* Variant */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Variant</label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setAutoVariant('light')}
+                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                      autoVariant === 'light'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    ☀️ Light
+                  </button>
+                  <button
+                    onClick={() => setAutoVariant('dark')}
+                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                      autoVariant === 'dark'
+                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    🌙 Dark
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Brand count selector */}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                How many brands?
-              </label>
-              <div className="flex gap-2">
-                {brandIds.map((_, i) => {
-                  const count = i + 1
-                  return (
-                    <button
-                      key={count}
-                      onClick={() => handleAutoCountChange(count)}
-                      className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
-                        autoCount === count
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {count}
-                    </button>
-                  )
-                })}
+              {/* AI Image Model */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">AI Image Model</label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setImageModel('ZImageTurbo_INT8')}
+                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                      imageModel === 'ZImageTurbo_INT8'
+                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    ✨ High Quality
+                  </button>
+                  <button
+                    onClick={() => setImageModel('Flux1schnell')}
+                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                      imageModel === 'Flux1schnell'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    ⚡ Fast
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Brand checkboxes */}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Select brands</label>
-              <div className="space-y-2">
-                {dynamicBrands.map((brand) => {
-                  const checked = autoBrands.includes(brand.id)
-                  return (
+              {/* Brand count selector */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  How many brands?
+                </label>
+                <div className="flex gap-2">
+                  {brandIds.map((_, i) => {
+                    const count = i + 1
+                    return (
+                      <button
+                        key={count}
+                        onClick={() => handleAutoCountChange(count)}
+                        className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
+                          autoCount === count
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {count}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Call-to-Action</label>
+                <select
+                  value={autoCtaType}
+                  onChange={(e) => setAutoCtaType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="auto">🎲 Auto (weighted random)</option>
+                  {ctaOptions.map((cta, i) => (
+                    <option key={i} value={cta.text}>{cta.text}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Brand checkboxes — spans full width */}
+              <div className="col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Select brands</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {dynamicBrands.map((brand) => {
+                    const checked = autoBrands.includes(brand.id)
+                    return (
+                      <label
+                        key={brand.id}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
+                          checked
+                            ? 'border-purple-200 bg-purple-50'
+                            : 'border-gray-100 bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAutoBrand(brand.id)}
+                          className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        />
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: brand.color || '#999' }}
+                        />
+                        <span className="text-sm font-medium text-gray-700">{brand.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Platforms — spans full width */}
+              <div className="col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Publish To</label>
+                <div className="flex flex-wrap gap-2">
+                  {PLATFORMS.map(platform => (
                     <label
-                      key={brand.id}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
-                        checked
-                          ? 'border-purple-200 bg-purple-50'
-                          : 'border-gray-100 bg-white hover:bg-gray-50'
+                      key={platform.id}
+                      className={`flex items-center px-3 py-2 border-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                        autoPlatforms.includes(platform.id)
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
                       <input
                         type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleAutoBrand(brand.id)}
-                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        checked={autoPlatforms.includes(platform.id)}
+                        onChange={() => toggleAutoPlatform(platform.id)}
+                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
                       />
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: brand.color || '#999' }}
-                      />
-                      <span className="text-sm font-medium text-gray-700">{brand.label}</span>
+                      <span className="ml-2 font-medium text-gray-900">{platform.label}</span>
                     </label>
-                  )
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-
-            {/* Platforms */}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Publish To</label>
-              <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map(platform => (
-                  <label
-                    key={platform.id}
-                    className={`flex items-center px-3 py-2 border-2 rounded-lg cursor-pointer text-sm transition-colors ${
-                      autoPlatforms.includes(platform.id)
-                        ? 'border-green-500 bg-green-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={autoPlatforms.includes(platform.id)}
-                      onChange={() => toggleAutoPlatform(platform.id)}
-                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                    />
-                    <span className="ml-2 font-medium text-gray-900">{platform.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* CTA */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Call-to-Action</label>
-              <select
-                value={autoCtaType}
-                onChange={(e) => setAutoCtaType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="auto">🎲 Auto (weighted random)</option>
-                {ctaOptions.map((cta, i) => (
-                  <option key={i} value={cta.text}>{cta.text}</option>
-                ))}
-              </select>
             </div>
 
             {/* Modal actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-5">
               <button
                 onClick={() => setShowAutoModal(false)}
                 className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-sm"
