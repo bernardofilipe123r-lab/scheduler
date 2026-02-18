@@ -315,8 +315,8 @@ IMAGE_PROMPT_SUFFIX = "No text, no letters, no numbers, no symbols, no logos."
 
 IMAGE_PROMPT_GUIDELINES = """
 IMAGE REQUIREMENTS:
-- Full-frame composition with minimal empty space
-- Dominant focal subject related to the topic
+- CLOSE-UP, full-frame composition where the subject fills the entire image
+- Minimal background visible — think macro photography or tightly-cropped shots
 - Studio-quality cinematic lighting
 - Premium aesthetic matching brand style
 - MUST end with: "No text, no letters, no numbers, no symbols, no logos."
@@ -355,7 +355,8 @@ Given a title, generate a DETAILED cinematic image prompt suitable for AI image 
 
 ### REQUIREMENTS:
 - {ctx.image_style_description}
-- High-end lifestyle photography style
+- CLOSE-UP, full-frame composition — the subject must fill the entire image with minimal background
+- Think macro photography, tightly-cropped food/product shots — NOT wide shots with empty space
 - Must end with "No text, no letters, no numbers, no symbols, no logos."
 - Should be 2-3 sentences long
 """
@@ -536,8 +537,9 @@ If only 3 slides, the last slide should include both actionable advice AND the F
 ### IMAGE PROMPT REQUIREMENTS:
 - {ctx.image_style_description if ctx.image_style_description else 'High-end lifestyle photography style'}
 - Each image prompt MUST be visually DIFFERENT (different setting, different elements)
-- CRITICAL COMPOSITION: The main subject MUST be positioned in the CENTER and UPPER-CENTER area of the frame (top two-thirds). The BOTTOM THIRD will be covered by text overlay.
-- Camera angle: slightly overhead / 45-degree top-down perspective preferred
+- CRITICAL: Generate CLOSE-UP, full-frame images where the subject fills the ENTIRE frame with minimal background visible
+- Think macro photography or tightly-cropped food/product shots — NO wide shots, NO large empty backgrounds
+- The subject should dominate the image, edge to edge
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 {history_context}

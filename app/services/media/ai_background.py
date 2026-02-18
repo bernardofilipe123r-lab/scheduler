@@ -429,17 +429,11 @@ class AIBackgroundGenerator:
             progress_callback("Preparing HQ image prompt...", 10)
         
         # For posts, we use the user prompt directly (already wellness-styled from AI)
-        # Add a quality-boosting suffix — no composition rules (we handle framing via crop)
-        quality_suffix = (
-            "Ultra high quality, 8K, sharp focus, professional photography, "
-            "soft natural lighting, premium lifestyle aesthetic. "
-            "Photorealistic, detailed textures, beautiful composition. "
-            "Close-up, full-frame, subject fills the entire image. "
-            "Portrait orientation 4:5 aspect ratio."
-        )
+        # Quality suffix imported from prompt_templates (single source of truth)
+        from app.core.prompt_templates import POST_QUALITY_SUFFIX
         
         prompt = user_prompt or "Soft cinematic wellness still life with natural ingredients on white countertop in morning light."
-        prompt = f"{prompt} {quality_suffix}"
+        prompt = f"{prompt} {POST_QUALITY_SUFFIX}"
         
         # Add unique identifier
         unique_id = str(uuid.uuid4())[:8]
@@ -567,7 +561,7 @@ class AIBackgroundGenerator:
                     if progress_callback:
                         progress_callback(f"HQ background generated in {total_duration:.1f}s", 100)
                     
-                    print(f"✅ HQ post background: {POST_WIDTH}x{POST_HEIGHT} for {brand_name} (20% top-crop applied)")
+                    print(f"✅ HQ post background: {POST_WIDTH}x{POST_HEIGHT} for {brand_name}")
                     print(f"⏱️  Total: {total_duration:.1f}s (API: {api_duration:.1f}s)")
                     
                     return image

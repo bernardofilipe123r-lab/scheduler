@@ -104,7 +104,7 @@ async def get_prompt_overview(user: dict = Depends(get_current_user)):
         {
             "id": "quality_suffix",
             "name": "4. Quality & Composition Suffix (Posts)",
-            "description": "Appended to the final prompt when sending to deAPI for post images. Controls quality and composition (subject in upper half, bottom third clean for text overlay).",
+            "description": "Appended to the final prompt when sending to deAPI for post images. Controls quality keywords and close-up framing.",
             "content": POST_QUALITY_SUFFIX,
             "type": "suffix",
         },

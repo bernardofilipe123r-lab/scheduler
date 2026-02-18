@@ -620,6 +620,8 @@ IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title fro
 
 ### IMAGE PROMPT REQUIREMENTS:
 - {image_style}
+- CRITICAL: Generate CLOSE-UP, full-frame images where the subject fills the ENTIRE frame with minimal background
+- Think macro photography or tightly-cropped food/product shots — NOT wide shots with empty space
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 ### OUTPUT FORMAT (JSON only, no markdown):
@@ -878,6 +880,8 @@ Given the following title, generate a DETAILED cinematic image prompt suitable f
 
 ### REQUIREMENTS:
 - {image_style}
+- CRITICAL: Generate CLOSE-UP, full-frame images where the subject fills the ENTIRE frame with minimal background
+- Think macro photography or tightly-cropped food/product shots — NO wide shots, NO large empty backgrounds
 - Must end with "No text, no letters, no numbers, no symbols, no logos."
 - Should be 2-3 sentences long
 
