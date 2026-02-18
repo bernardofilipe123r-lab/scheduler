@@ -279,75 +279,54 @@ class ImageGenerator:
                 print(f"      📏 Thumbnail title scaled: {TITLE_FONT_SIZE}px → {current_font_size}px", flush=True)
         else:
             # No manual breaks - auto-fit with new algorithm
-            max_font = 90
-            base_font = 80
-            current_font_size = base_font
+            # Auto-fit: range 75-98, prefer 3 lines over 4, maximize font
+            min_font = 75
+            max_font = 98
+
+            # Short text: fits in ≤2 lines at max
+            tf_max = get_title_font(max_font)
+            if len(wrap_text(title_upper, tf_max, max_title_width)) <= 2:
+                current_font_size = max_font
+            else:
+                # Find largest font in 75-98 that gives exactly 3 lines (preferred)
+                found = False
+                for fs in range(max_font, min_font - 1, -1):
+                    tf = get_title_font(fs)
+                    if len(wrap_text(title_upper, tf, max_title_width)) == 3:
+                        current_font_size = fs
+                        found = True
+                        break
+
+                if not found:
+                    # Can't get 3 lines at >=75 — find largest font in 75-98 for 4 lines
+                    for fs in range(max_font, min_font - 1, -1):
+                        tf = get_title_font(fs)
+                        if len(wrap_text(title_upper, tf, max_title_width)) == 4:
+                            current_font_size = fs
+                            found = True
+                            break
+
+                if not found:
+                    # Even 75px gives 5+ lines — go below until 4 lines
+                    for fs in range(min_font - 1, 39, -1):
+                        tf = get_title_font(fs)
+                        if len(wrap_text(title_upper, tf, max_title_width)) <= 4:
+                            current_font_size = fs
+                            found = True
+                            break
+
+                if not found:
+                    current_font_size = min_font
+
             title_font = get_title_font(current_font_size)
             title_lines = wrap_text(title_upper, title_font, max_title_width)
-            base_line_count = len(title_lines)
-
-            if base_line_count == 3:
-                # Try increasing font while still 3 lines
-                best_fs = base_font
-                for fs in range(base_font + 1, max_font + 1):
-                    tf = get_title_font(fs)
-                    candidate = wrap_text(title_upper, tf, max_title_width)
-                    if len(candidate) == 3:
-                        best_fs = fs
-                    else:
-                        break
-                current_font_size = best_fs
-                title_font = get_title_font(current_font_size)
-                title_lines = wrap_text(title_upper, title_font, max_title_width)
-
-            elif base_line_count <= 2:
-                # Try increasing font while still <= 2 lines
-                best_fs = base_font
-                for fs in range(base_font + 1, max_font + 1):
-                    tf = get_title_font(fs)
-                    candidate = wrap_text(title_upper, tf, max_title_width)
-                    if len(candidate) <= 2:
-                        best_fs = fs
-                    else:
-                        break
-                current_font_size = best_fs
-                title_font = get_title_font(current_font_size)
-                title_lines = wrap_text(title_upper, title_font, max_title_width)
-
-            elif base_line_count == 4:
-                # Try increasing font while still 4 lines
-                best_fs = base_font
-                for fs in range(base_font + 1, max_font + 1):
-                    tf = get_title_font(fs)
-                    candidate = wrap_text(title_upper, tf, max_title_width)
-                    if len(candidate) == 4:
-                        best_fs = fs
-                    else:
-                        break
-                current_font_size = best_fs
-                title_font = get_title_font(current_font_size)
-                title_lines = wrap_text(title_upper, title_font, max_title_width)
-
-            else:
-                # 5+ lines at 80 — reduce font to get 4 lines
-                for fs in range(base_font - 1, 39, -1):
-                    tf = get_title_font(fs)
-                    candidate = wrap_text(title_upper, tf, max_title_width)
-                    if len(candidate) <= 4:
-                        current_font_size = fs
-                        title_font = tf
-                        title_lines = candidate
-                        break
-                else:
-                    # Ultimate fallback
-                    title_lines = wrap_text(title_upper, title_font, max_title_width)
 
             # Safety clamp: NEVER more than 4 lines
             if len(title_lines) > 4:
                 title_lines = title_lines[:3] + [' '.join(title_lines[3:])]
 
-            if current_font_size != base_font:
-                print(f"      📏 Thumbnail title scaled: {base_font}px → {current_font_size}px", flush=True)
+            if current_font_size != 80:
+                print(f"      📏 Thumbnail title auto-fit: {current_font_size}px ({len(title_lines)} lines)", flush=True)
         
         # Calculate vertical center position for title
         title_height = sum(

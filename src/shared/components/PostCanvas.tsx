@@ -224,13 +224,17 @@ function countLines(text: string, maxWidth: number, fontSize: number): number {
   return lineCount
 }
 
-const AUTO_FIT_BASE = 80  // Starting font size
-const AUTO_FIT_MAX = 90   // Max we'll try bumping to
+const AUTO_FIT_MIN = 75   // Minimum preferred font size
+const AUTO_FIT_MAX = 98   // Maximum font size
 
 /**
- * Find the best font size using the base-80 algorithm.
- * Acceptable line counts: 2, 3, or 4. NEVER 1, NEVER 5+.
- * Priority: 3 lines preferred > 4 lines > 2 lines.
+ * Find the best font size.
+ * Rules:
+ *  1. Range 75–98px.
+ *  2. Prefer 3 lines over 4. Find the LARGEST font in 75–98 that gives 3 lines.
+ *  3. If no font in 75–98 gives 3 lines → find LARGEST font in 75–98 that gives 4 lines (cap 98).
+ *  4. If even 75px gives 5+ lines → go below 75 until 4 lines.
+ *  5. Short text (≤2 lines at 98) → use 98.
  */
 export function autoFitFontSize(
   text: string,
@@ -238,56 +242,25 @@ export function autoFitFontSize(
   _startSize: number,
   _maxLines: number,
 ): number {
-  // Step 1: Count lines at base font size 80
-  const baseLinesCount = countLines(text, maxWidth, AUTO_FIT_BASE)
+  // Short text: fits in ≤2 lines at max size
+  if (countLines(text, maxWidth, AUTO_FIT_MAX) <= 2) return AUTO_FIT_MAX
 
-  // Step 2: If 3 lines at 80, try increasing font (81, 82...) while still 3 lines
-  if (baseLinesCount === 3) {
-    let bestFs = AUTO_FIT_BASE
-    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
-      if (countLines(text, maxWidth, fs) === 3) {
-        bestFs = fs
-      } else {
-        break  // went to 4 lines, stop
-      }
-    }
-    return bestFs
+  // Find largest font in 75–98 that gives exactly 3 lines (preferred)
+  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs--) {
+    if (countLines(text, maxWidth, fs) === 3) return fs
   }
 
-  // Step 3: If 2 lines at 80, try increasing font while still 2 lines
-  if (baseLinesCount <= 2) {
-    let bestFs = AUTO_FIT_BASE
-    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
-      if (countLines(text, maxWidth, fs) <= 2) {
-        bestFs = fs
-      } else {
-        break
-      }
-    }
-    return bestFs
+  // Can't get 3 lines at ≥75 — find largest font in 75–98 that gives 4 lines
+  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs--) {
+    if (countLines(text, maxWidth, fs) === 4) return fs
   }
 
-  // Step 4: If 4 lines at 80, that's acceptable — try increasing slightly
-  if (baseLinesCount === 4) {
-    let bestFs = AUTO_FIT_BASE
-    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
-      if (countLines(text, maxWidth, fs) === 4) {
-        bestFs = fs
-      } else {
-        break
-      }
-    }
-    return bestFs
+  // Even 75px gives 5+ lines — go below until we fit in 4 lines
+  for (let fs = AUTO_FIT_MIN - 1; fs >= 40; fs--) {
+    if (countLines(text, maxWidth, fs) <= 4) return fs
   }
 
-  // Step 5: 5+ lines at 80 — reduce font to get exactly 4 lines
-  for (let fs = AUTO_FIT_BASE - 1; fs >= 40; fs--) {
-    if (countLines(text, maxWidth, fs) <= 4) {
-      return fs
-    }
-  }
-
-  return AUTO_FIT_BASE  // ultimate fallback
+  return AUTO_FIT_MIN  // ultimate fallback
 }
 
 // ─── Load / save general settings ────────────────────────────────────

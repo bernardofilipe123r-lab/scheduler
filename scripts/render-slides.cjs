@@ -16,8 +16,8 @@ const DEFAULT_TITLE_GAP = 40;
 const DEFAULT_LOGO_GAP = 36;
 const DEFAULT_TITLE_PADDING_X = 45;
 
-const AUTO_FIT_BASE = 80;  // Starting font size
-const AUTO_FIT_MAX = 90;   // Max we'll try bumping to
+const AUTO_FIT_MIN = 75;   // Minimum preferred font size
+const AUTO_FIT_MAX = 98;   // Maximum font size
 
 // ─── Constants: Text Slide ────────────────────────────────────────────────────
 const BG_COLOR = '#f8f5f0';
@@ -106,44 +106,25 @@ function countLines(text, maxWidth, fontSize) {
 }
 
 function autoFitFontSize(text, maxWidth) {
-  const baseLinesCount = countLines(text, maxWidth, AUTO_FIT_BASE);
+  // Short text: fits in ≤2 lines at max
+  if (countLines(text, maxWidth, AUTO_FIT_MAX) <= 2) return AUTO_FIT_MAX;
 
-  // If 3 lines at 80, try increasing font while still 3 lines
-  if (baseLinesCount === 3) {
-    let bestFs = AUTO_FIT_BASE;
-    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
-      if (countLines(text, maxWidth, fs) === 3) bestFs = fs;
-      else break;
-    }
-    return bestFs;
+  // Find largest font in 75-98 that gives exactly 3 lines (preferred)
+  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs--) {
+    if (countLines(text, maxWidth, fs) === 3) return fs;
   }
 
-  // If 2 lines at 80, try increasing font while still 2 lines
-  if (baseLinesCount <= 2) {
-    let bestFs = AUTO_FIT_BASE;
-    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
-      if (countLines(text, maxWidth, fs) <= 2) bestFs = fs;
-      else break;
-    }
-    return bestFs;
+  // Can't get 3 lines at >=75 — find largest font in 75-98 that gives 4 lines
+  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs--) {
+    if (countLines(text, maxWidth, fs) === 4) return fs;
   }
 
-  // If 4 lines at 80, try increasing slightly
-  if (baseLinesCount === 4) {
-    let bestFs = AUTO_FIT_BASE;
-    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
-      if (countLines(text, maxWidth, fs) === 4) bestFs = fs;
-      else break;
-    }
-    return bestFs;
-  }
-
-  // 5+ lines at 80 — reduce font to get 4 lines
-  for (let fs = AUTO_FIT_BASE - 1; fs >= 40; fs--) {
+  // Even 75px gives 5+ lines — go below until 4 lines
+  for (let fs = AUTO_FIT_MIN - 1; fs >= 40; fs--) {
     if (countLines(text, maxWidth, fs) <= 4) return fs;
   }
 
-  return AUTO_FIT_BASE;
+  return AUTO_FIT_MIN;
 }
 
 // ─── Balance Title Text (exact copy from PostCanvas.tsx) ──────────────────────
