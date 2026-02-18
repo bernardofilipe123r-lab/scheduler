@@ -329,7 +329,7 @@ export function GeneratorPage() {
             >
               <option value="auto">🎲 Auto (weighted random from settings)</option>
               {ctaOptions.map((cta, i) => (
-                <option key={i} value={cta.text}>{cta.text} ({cta.weight}%)</option>
+                <option key={i} value={cta.text}>{cta.text}</option>
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-2">
