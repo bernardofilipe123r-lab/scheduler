@@ -648,32 +648,31 @@ export function HistoryPage() {
                 <Clock className="w-3 h-3" />
                 Hide &gt;2h Ago
               </button>
-              <button
-                onClick={() => {
-                  const hasViewFilter = viewFilter !== 'all'
-                  const hasSearchFilter = searchQuery.trim() !== ''
-                  const hasVariantFilter = variantFilter !== 'all'
-                  const isFiltered = hasViewFilter || hasSearchFilter || hasVariantFilter
-                  const filterName = hasViewFilter
-                    ? (stats.find(s => s.key === viewFilter)?.label || viewFilter)
-                    : hasSearchFilter
-                      ? `search "${searchQuery}"`
-                      : hasVariantFilter
-                        ? variantFilter
-                        : ''
-                  setBulkDeleteModal({
-                    label,
-                    jobs: sectionJobs,
-                    isFiltered,
-                    filterName,
-                  })
-                }}
-                disabled={isDeletingSection || sectionJobs.length === 0}
-                className="text-xs px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
-              >
-                {isDeletingSection ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                Delete All ({sectionJobs.length})
-              </button>
+              {viewFilter === 'all' && (
+                <button
+                  onClick={() => {
+                    const hasSearchFilter = searchQuery.trim() !== ''
+                    const hasVariantFilter = variantFilter !== 'all'
+                    const isFiltered = hasSearchFilter || hasVariantFilter
+                    const filterName = hasSearchFilter
+                        ? `search "${searchQuery}"`
+                        : hasVariantFilter
+                          ? variantFilter
+                          : ''
+                    setBulkDeleteModal({
+                      label,
+                      jobs: sectionJobs,
+                      isFiltered,
+                      filterName,
+                    })
+                  }}
+                  disabled={isDeletingSection || sectionJobs.length === 0}
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                >
+                  {isDeletingSection ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  Delete All
+                </button>
+              )}
             </div>
             {sectionJobs.map(renderJobCard)}
           </div>
@@ -726,13 +725,16 @@ export function HistoryPage() {
               <div className="p-3 bg-red-50 rounded-lg border border-red-200">
                 <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4" />
-                  Be careful — you are deleting everything!
+                  ⚠️ Are you absolutely sure?
                 </p>
                 <p className="text-sm text-red-600 mt-2">
-                  No filter is selected. This will permanently delete <strong>all {bulkDeleteModal.jobs.length} {bulkDeleteModal.label.toLowerCase()}</strong>, including scheduled, in-progress, completed, and failed jobs.
+                  No filter is selected. This will permanently delete <strong>all {bulkDeleteModal.jobs.length} {bulkDeleteModal.label.toLowerCase()}</strong>.
+                </p>
+                <p className="text-sm text-red-700 font-medium mt-2">
+                  All reels and carousels that are already scheduled for future publishing will be permanently deleted and will NOT be published.
                 </p>
                 <p className="text-sm text-red-600 mt-1">
-                  This action cannot be undone.
+                  This includes jobs that are scheduled, in-progress, completed, and failed. This action cannot be undone.
                 </p>
               </div>
             ) : (
