@@ -31,6 +31,7 @@ import {
   Search,
   CheckCircle2,
   ArrowRight,
+  User,
   Loader2,
 } from 'lucide-react'
 
@@ -43,7 +44,7 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Healveth — Platform Overview</title>
+  <title>Viral App — Platform Overview</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
@@ -245,33 +246,28 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     
     <!-- Cover -->
     <div class="cover">
-      <div class="cover-brand">Healveth</div>
-      <div class="cover-sub">AI-Powered Social Media Content Automation Platform</div>
+      <div class="cover-brand">Viral App</div>
+      <div class="cover-sub">Social Media Content Operations Platform</div>
       <div class="cover-tagline">
-        The enterprise-grade platform that automates the entire lifecycle of short-form 
-        video content — from AI-driven ideation to multi-platform publishing across 
-        Instagram, Facebook, and YouTube.
+        Viral App centralizes short-form content operations — content setup, media rendering,
+        scheduling, and multi-platform publishing across Instagram, Facebook, and YouTube.
       </div>
       <div class="cover-date">Platform Overview — ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-      <div class="cover-badge">Proprietary Technology by Healveth</div>
+      <div class="cover-badge">Proprietary Technology by Viral App</div>
     </div>
 
     <!-- Executive Summary -->
     <h2>Executive Summary</h2>
     <p>
-      Healveth is a full-stack, AI-powered social media content automation platform built to operate 
-      an <strong>unlimited number</strong> of health &amp; wellness brands at scale. The platform manages the complete 
-      content lifecycle: from AI-driven content ideation based on viral pattern analysis, through automated 
-      image and video generation with brand-specific visual identities, to scheduled multi-platform 
-      publishing across Instagram Reels, Facebook Reels, and YouTube Shorts.
+      Viral App is a full-stack social media content operations platform built to manage multiple brands
+      from one dashboard. The system covers the full lifecycle: content configuration, image and video
+      generation, scheduling, and multi-platform publishing for Instagram Reels, Facebook Reels, and
+      YouTube Shorts.
     </p>
     <p>
-      The architecture is designed for infinite scalability — every brand tackles the same core health &amp; wellness 
-      topics (nutrition, mental health, physical fitness, anti-aging, mind-body wellness, energy) but presents 
-      them under a completely independent identity with its own voice, visual style, and audience. Currently 
-      operating ${dynamicBrands.length} brands, the platform generates unique, differentiated content for each from a single 
-      pipeline — ensuring no two brands ever post identical content while maintaining consistent quality 
-      and viral potential.
+      Each brand keeps independent identity settings (name, handles, colors, prompts, and credentials)
+      while using the same operational pipeline. The workspace currently manages ${dynamicBrands.length} brands,
+      with separate schedules and publish metadata tracked per brand.
     </p>
 
     <!-- Platform Architecture -->
@@ -284,9 +280,9 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
         <tr><td>Backend API</td><td>FastAPI (Python) + Uvicorn</td><td>REST API, job management, scheduling</td></tr>
         <tr><td>Frontend</td><td>React 18 + TypeScript + Vite</td><td>Admin dashboard &amp; content management</td></tr>
         <tr><td>Database</td><td>PostgreSQL + SQLAlchemy</td><td>Jobs, schedules, analytics, brand configs</td></tr>
-        <tr><td>AI — Content</td><td>DeepSeek API</td><td>Content generation, captions, differentiation</td></tr>
-        <tr><td>AI — Images</td><td>deAPI</td><td>AI-generated branded backgrounds</td></tr>
-        <tr><td>AI — Strategy</td><td>Toby Agent (custom)</td><td>Autonomous content strategist</td></tr>
+        <tr><td>Content Services</td><td>Python service layer</td><td>Job creation, prompt/context assembly, CTA and brand logic</td></tr>
+        <tr><td>Media Engine</td><td>Pillow + FFmpeg + MoviePy</td><td>Template image rendering and video generation</td></tr>
+        <tr><td>Storage</td><td>Supabase Storage + local output paths</td><td>Generated images, videos, thumbnails, and assets</td></tr>
         <tr><td>Video Engine</td><td>FFmpeg + MoviePy</td><td>Image‑to‑video with background music</td></tr>
         <tr><td>Publishing</td><td>Meta Graph API + YouTube Data API</td><td>Cross-platform publishing</td></tr>
         <tr><td>Scheduling</td><td>APScheduler</td><td>Background job scheduling &amp; daemon cycles</td></tr>
@@ -297,17 +293,17 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
 
     <!-- Content Generation Pipeline -->
     <h2>Content Generation Pipeline</h2>
-    <p>The platform employs a sophisticated 10-stage pipeline to produce viral-quality content:</p>
+    <p>The platform follows a practical 10-stage pipeline from configuration to publishing:</p>
     <div class="pipeline">
       <span class="pipeline-step">1. Pattern Selection</span>
       <span class="pipeline-arrow">→</span>
       <span class="pipeline-step">2. Prompt Build</span>
       <span class="pipeline-arrow">→</span>
-      <span class="pipeline-step">3. AI Generation</span>
+      <span class="pipeline-step">3. Content Assembly</span>
       <span class="pipeline-arrow">→</span>
-      <span class="pipeline-step">4. Quality Scoring</span>
+      <span class="pipeline-step">4. Validation</span>
       <span class="pipeline-arrow">→</span>
-      <span class="pipeline-step">5. Anti-Repetition</span>
+      <span class="pipeline-step">5. Brand Variation</span>
       <span class="pipeline-arrow">→</span>
       <span class="pipeline-step">6. Brand Differentiation</span>
       <span class="pipeline-arrow">→</span>
@@ -322,51 +318,48 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     
     <div class="grid-2">
       <div class="card">
-        <div class="card-title">V2 3-Layer Architecture</div>
-        <div class="card-text">Layer 1: Static pattern brain with title archetypes &amp; topic buckets. Layer 2: Cached system prompts. Layer 3: Minimal runtime prompts (&lt;500 tokens). Achieves ~80% token reduction per request.</div>
+        <div class="card-title">Modular Pipeline</div>
+        <div class="card-text">The workflow is split across focused backend services so job creation, media rendering, and publishing can evolve independently.</div>
       </div>
       <div class="card">
-        <div class="card-title">Quality Scoring Engine</div>
-        <div class="card-text">5-dimension scoring: structure, familiarity, novelty, hook strength, and plausibility. Scores ≥80 publish immediately; 65–79 auto-regenerate with tweaks; &lt;65 are rejected entirely.</div>
+        <div class="card-title">Validation Checks</div>
+        <div class="card-text">Input and scheduling checks protect publishing flows and ensure required fields are present before jobs run.</div>
       </div>
       <div class="card">
-        <div class="card-title">Anti-Repetition System</div>
-        <div class="card-text">Content fingerprinting with topic rotation (3-day cooldown per bucket), per-brand history tracking, and structural quality gates backed by PostgreSQL.</div>
+        <div class="card-title">Brand Separation</div>
+        <div class="card-text">Each brand keeps independent settings, credentials, and scheduling state to avoid cross-brand conflicts.</div>
       </div>
       <div class="card">
-        <div class="card-title">Viral Pattern Database</div>
-        <div class="card-text">Trained on 59 proven viral posts (1M+ views each) with title patterns, content structures, format styles, and hook templates — the system learns patterns, never copies.</div>
+        <div class="card-title">Reusable Templates</div>
+        <div class="card-text">Shared templates and formatting utilities keep output consistent while allowing per-brand customization.</div>
       </div>
     </div>
 
-    <!-- AI Agent: Toby -->
-    <h2>Toby — Autonomous AI Content Strategist</h2>
+    <!-- Operations Workflow -->
+    <h2>Operations Workflow</h2>
     <p>
-      Toby is a first-of-its-kind autonomous AI agent that operates as a dedicated content strategist. 
-      Running as a background daemon, Toby continuously analyzes performance data, scans trending topics, 
-      and generates content proposals — without human intervention.
+      Viral App is designed for repeatable operations: prepare content inputs, generate media,
+      queue publishing, and monitor results from one place.
     </p>
-    <h3>Four Strategic Modes</h3>
+    <h3>Four Core Modes</h3>
     <ul>
-      <li><strong>EXPLORE</strong> — Discovers new topic territories and untested content angles</li>
-      <li><strong>ITERATE</strong> — Analyzes underperforming posts and generates improved variations</li>
-      <li><strong>DOUBLE DOWN</strong> — Amplifies winning content patterns with strategic variations</li>
-      <li><strong>TRENDING</strong> — Adapts external viral content to the brand's health/wellness niche</li>
+      <li><strong>CREATE</strong> — Build reels and posts with brand-specific settings</li>
+      <li><strong>SCHEDULE</strong> — Queue immediate or timed publishing jobs</li>
+      <li><strong>PUBLISH</strong> — Send content to connected platforms per brand</li>
+      <li><strong>REVIEW</strong> — Track job status and analytics in dashboard views</li>
     </ul>
     <p>
-      Toby generates up to 15 content proposals daily, each with full reasoning explanations. The daemon 
-      cycles continuously: metrics collection → trend scanning → proposal generation, with thinking cycles 
-      every 45 minutes, observation cycles every 3 hours, and trend scouting every 4 hours.
+      Background services continuously process job queues and scheduled posts, with retries and status
+      updates visible in the jobs and calendar pages.
     </p>
 
     <!-- Multi-Brand System -->
     <h2>Scalable Multi-Brand Ecosystem</h2>
     <p>
-      The platform is architected to support an <strong>unlimited number of brands</strong> — each with completely 
+      The platform is architected to support <strong>multiple brands</strong> — each with completely 
       independent visual identities, social media accounts, and API credentials. Every brand covers the same 
-      core health &amp; wellness topics (nutrition, mental health, physical fitness, anti-aging, mind-body wellness, 
-      energy) but presents them under a distinct face, voice, and audience strategy. Adding a new brand is as 
-      simple as configuring credentials, colors, and templates — the content pipeline scales automatically.
+      content workflow but with distinct identity settings. Adding a new brand is a matter of configuring
+      credentials, colors, and content settings.
     </p>
     <h3>Currently Active</h3>
     <table class="tech-table">
@@ -378,21 +371,19 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
       </tbody>
     </table>
     <h3>Shared Topic Coverage</h3>
-    <p>All brands address the same wellness domains — presented through each brand's unique lens:</p>
+    <p>Teams can organize content themes per brand and keep a consistent publishing cadence:</p>
     <div class="pipeline">
-      <span class="pipeline-step">Nutrition</span>
-      <span class="pipeline-step">Mental Health</span>
-      <span class="pipeline-step">Physical Fitness</span>
-      <span class="pipeline-step">Anti-Aging</span>
-      <span class="pipeline-step">Mind-Body Wellness</span>
-      <span class="pipeline-step">Energy &amp; Vitality</span>
-      <span class="pipeline-step">Self-Care</span>
+      <span class="pipeline-step">Education</span>
+      <span class="pipeline-step">Tips</span>
+      <span class="pipeline-step">Lifestyle</span>
+      <span class="pipeline-step">Motivation</span>
+      <span class="pipeline-step">Product Highlights</span>
+      <span class="pipeline-step">Community</span>
+      <span class="pipeline-step">Promotions</span>
     </div>
     <p>
-      Content differentiation ensures each brand receives a unique variation of every piece of content — 
-      complete reordering, synonym replacement, and topic swaps — all generated in a single AI call. 
-      The system is designed so that no two brands ever publish identical content, regardless of how 
-      many brands are connected.
+      Content differentiation is managed through brand-specific templates, settings, and scheduling.
+      This keeps each brand timeline independent while still using one shared platform.
     </p>
 
     <!-- Publishing & Distribution -->
@@ -400,11 +391,11 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     <div class="grid-2">
       <div class="card">
         <div class="card-title">Instagram Reels</div>
-        <div class="card-text">Two-step Meta Graph API flow: container creation → publish. Supports 9:16 vertical format with automatic thumbnail handling, AI-generated captions, and brand CTAs.</div>
+        <div class="card-text">Two-step Meta Graph API flow: container creation → publish. Supports 9:16 vertical format with thumbnail handling and brand CTAs.</div>
       </div>
       <div class="card">
         <div class="card-title">Facebook Reels</div>
-        <div class="card-text">Single-step video upload via Pages API. Auto-surfaces as Reel when vertical. Optimized shorter captions for Facebook's audience with separate engagement CTAs.</div>
+        <div class="card-text">Single-step video upload via Pages API. Vertical videos can surface as Reels, with per-brand caption and CTA settings.</div>
       </div>
       <div class="card">
         <div class="card-title">YouTube Shorts</div>
@@ -423,9 +414,9 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     </p>
     <ul>
       <li><strong>Post-Level Metrics</strong> — Plays, reach, likes, saves, shares collected at 24h, 48h, and 7-day windows after publishing</li>
-      <li><strong>Engagement Scoring</strong> — Automated engagement rate calculation and performance scoring for Toby's strategic analysis</li>
+      <li><strong>Engagement Scoring</strong> — Aggregated engagement indicators for quick performance review</li>
       <li><strong>Brand-Level Analytics</strong> — Cross-platform followers, views, and engagement tracked with historical snapshot data</li>
-      <li><strong>Trend Scouting</strong> — Monitors 12 curated hashtags and 5 competitor accounts via Meta Graph API for emerging trends</li>
+      <li><strong>Trend Monitoring</strong> — Historical snapshots to compare periods and identify movement over time</li>
       <li><strong>Auto-Refresh</strong> — Analytics data refreshed automatically every 12 hours with PostgreSQL-backed caching</li>
     </ul>
 
@@ -433,10 +424,10 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     <h2>Visual Content Engine</h2>
     <ul>
       <li><strong>Image Rendering</strong> — Pillow-based branded reel images with custom text layout, title bars, and numbered content lines (1080×1920 px)</li>
-      <li><strong>Light &amp; Dark Modes</strong> — Traditional templates or AI-generated backgrounds using deAPI with brand-specific visual tuning</li>
+      <li><strong>Light &amp; Dark Modes</strong> — Template-based visual variants with brand-specific styling</li>
       <li><strong>Video Production</strong> — FFmpeg-powered conversion from static images to MP4 Reels with randomized background music (3 tracks, 7–8s duration)</li>
-      <li><strong>AI Backgrounds</strong> — deAPI integration with FIFO request queuing and exponential backoff for rate-limit handling</li>
-      <li><strong>Caption AI</strong> — DeepSeek-powered captions with contextual first paragraphs, brand-specific CTAs, product mentions, and optimized hashtags</li>
+      <li><strong>Background Variants</strong> — Configurable assets and rendering settings for visual consistency</li>
+      <li><strong>Caption Formatting</strong> — Structured captions with CTA options and platform-specific publishing metadata</li>
     </ul>
 
     <!-- Scheduling System -->
@@ -459,8 +450,8 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
       <li><strong>Scheduling Calendar</strong> — Visual scheduling with date/time pickers and platform selection</li>
       <li><strong>Analytics Dashboard</strong> — Interactive charts (Recharts) with cross-platform performance data</li>
       <li><strong>Brand Management</strong> — CRUD operations for brand configurations, colors, and credentials</li>
-      <li><strong>Toby Console</strong> — Monitor AI agent activity, review proposals, and control daemon lifecycle</li>
-      <li><strong>Prompt Lab</strong> — Transparency into content and caption prompt templates with live testing</li>
+      <li><strong>About &amp; Docs</strong> — Internal platform overview and exportable PDF snapshot</li>
+      <li><strong>User Profile</strong> — Account-level settings and session controls</li>
       <li><strong>System Logs</strong> — Request/response logging with middleware-based capture and 7-day retention</li>
     </ul>
 
@@ -478,7 +469,7 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
 
     <!-- Footer -->
     <div class="footer">
-      <p><span class="footer-brand">Healveth</span> — AI-Powered Social Media Automation</p>
+      <p><span class="footer-brand">Viral App</span> — Social Media Content Operations Platform</p>
       <p style="margin-top: 4px;">Proprietary &amp; Confidential &bull; ${new Date().getFullYear()}</p>
       <p style="margin-top: 4px;">Generated on ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
     </div>
@@ -634,13 +625,13 @@ export function AboutPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold text-gray-900">About Healveth</h1>
+            <h1 className="text-2xl font-bold text-gray-900">About Viral App</h1>
             <span className="px-2.5 py-0.5 text-xs font-semibold bg-primary-50 text-primary-700 rounded-full">
               v1.0
             </span>
           </div>
           <p className="text-gray-500 text-sm">
-            AI-Powered Social Media Content Automation Platform — Proprietary technology by Healveth
+            Social Media Content Operations Platform — Proprietary technology by Viral App
           </p>
         </div>
         <button
@@ -669,17 +660,16 @@ export function AboutPage() {
             The Complete Content Automation Engine
           </h2>
           <p className="text-primary-100 text-lg max-w-3xl leading-relaxed">
-            Healveth manages the entire lifecycle of short-form video content — from AI-driven ideation 
-            to multi-platform publishing. Built to power an unlimited number of health &amp; wellness brands across 
-            Instagram, Facebook, and YouTube with fully autonomous content generation and strategic optimization.
+            Viral App manages the full lifecycle of short-form video content — from content setup and media
+            rendering to scheduling and multi-platform publishing across Instagram, Facebook, and YouTube.
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
             {[
-              { icon: Bot, label: 'AI Content Strategist' },
-              { icon: Film, label: 'Auto Video Generation' },
+              { icon: Bot, label: 'Content Operations' },
+              { icon: Film, label: 'Video Generation' },
               { icon: Globe, label: 'Multi-Platform Publishing' },
-              { icon: Layers, label: '∞ Brands, 1 Pipeline' },
-              { icon: BarChart3, label: 'Performance Intelligence' },
+              { icon: Layers, label: 'Multi-Brand Pipeline' },
+              { icon: BarChart3, label: 'Performance Tracking' },
             ].map((item) => (
               <span
                 key={item.label}
@@ -696,18 +686,14 @@ export function AboutPage() {
       {/* Executive Summary */}
       <Section icon={Info} title="Executive Summary">
         <p className="text-gray-600 leading-relaxed mb-3">
-          Healveth is a full-stack, AI-powered social media content automation platform designed to operate 
-          a network of health &amp; wellness brands at scale. The platform manages the complete content lifecycle: 
-          from AI-driven content ideation based on viral pattern analysis, through automated image and video 
-          generation with brand-specific visual identities, to scheduled multi-platform publishing across 
-          Instagram Reels, Facebook Reels, and YouTube Shorts.
+          Viral App is a full-stack social media content operations platform designed to run multiple brands
+          from one dashboard. The platform manages the content lifecycle from configuration to media generation,
+          scheduled publishing, and delivery to Instagram Reels, Facebook Reels, and YouTube Shorts.
         </p>
         <p className="text-gray-600 leading-relaxed">
-          Built for <strong className="text-gray-900">infinite scalability</strong>, every brand covers the same core health &amp; wellness 
-          topics — nutrition, mental health, physical fitness, anti-aging, mind-body wellness, and energy — but presents 
-          them under a completely independent identity with its own voice, colors, and audience. Currently operating {' '}
-          {dynamicBrands.length} brands, the platform generates unique, differentiated content for each from a single pipeline, ensuring 
-          no two brands ever post identical content regardless of how many are connected.
+          Each brand has independent identity settings (name, handles, colors, prompts, and credentials)
+          while using a shared pipeline. The workspace currently manages {dynamicBrands.length} brands with
+          separate schedules, jobs, and publish metadata per brand.
         </p>
       </Section>
 
@@ -726,9 +712,9 @@ export function AboutPage() {
               <TechRow layer="Backend API" tech="FastAPI + Uvicorn" purpose="REST API, job management, scheduling" />
               <TechRow layer="Frontend" tech="React 18 + TypeScript + Vite" purpose="Admin dashboard & content management" />
               <TechRow layer="Database" tech="PostgreSQL + SQLAlchemy" purpose="Jobs, schedules, analytics, brands" />
-              <TechRow layer="AI — Content" tech="DeepSeek API" purpose="Content generation, captions, differentiation" />
-              <TechRow layer="AI — Images" tech="deAPI" purpose="AI-generated branded backgrounds" />
-              <TechRow layer="AI — Strategy" tech="Toby Agent (custom)" purpose="Autonomous content strategist" />
+              <TechRow layer="Content Services" tech="Python service layer" purpose="Job creation, prompt/context assembly, CTA and brand logic" />
+              <TechRow layer="Media Engine" tech="Pillow + FFmpeg + MoviePy" purpose="Template image rendering and video generation" />
+              <TechRow layer="Storage" tech="Supabase Storage + local output" purpose="Images, videos, thumbnails, and generated assets" />
               <TechRow layer="Video Engine" tech="FFmpeg + MoviePy" purpose="Image-to-video with background music" />
               <TechRow layer="Publishing" tech="Meta Graph API + YouTube API" purpose="Cross-platform social publishing" />
               <TechRow layer="Scheduling" tech="APScheduler" purpose="Background jobs & daemon cycles" />
@@ -742,15 +728,15 @@ export function AboutPage() {
       {/* Content Generation Pipeline */}
       <Section icon={Zap} title="Content Generation Pipeline">
         <p className="text-gray-600 text-sm mb-4">
-          A sophisticated 10-stage pipeline transforms viral patterns into publish-ready content:
+          A practical 10-stage pipeline transforms configured inputs into publish-ready content:
         </p>
         <div className="flex flex-wrap gap-y-3 gap-x-1 mb-6">
           {[
             'Pattern Selection',
             'Prompt Build',
-            'AI Generation',
-            'Quality Scoring',
-            'Anti-Repetition',
+            'Content Assembly',
+            'Validation',
+            'Brand Variation',
             'Brand Differentiation',
             'Image Rendering',
             'Video Production',
@@ -763,60 +749,58 @@ export function AboutPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <FeatureCard
             icon={Brain}
-            title="V2 3-Layer Architecture"
-            description="Layer 1: Static pattern brain with title archetypes & topic buckets. Layer 2: Cached system prompts. Layer 3: Minimal runtime prompts (<500 tokens). Achieves ~80% token reduction per request."
+            title="Modular Pipeline"
+            description="Workflow steps are separated into focused backend services so job creation, rendering, and publishing can evolve independently."
           />
           <FeatureCard
             icon={Target}
-            title="Quality Scoring Engine"
-            description="5-dimension scoring: structure, familiarity, novelty, hook strength, and plausibility. Scores ≥80 publish immediately; 65–79 auto-regenerate; <65 are rejected."
+            title="Validation Checks"
+            description="Input, scheduling, and platform checks protect publish flows before jobs run."
           />
           <FeatureCard
             icon={Shield}
-            title="Anti-Repetition System"
-            description="Content fingerprinting with topic rotation (3-day cooldown per bucket), per-brand history tracking, and structural quality gates backed by PostgreSQL."
+            title="Brand Separation"
+            description="Each brand has isolated settings, credentials, and scheduling state to avoid cross-brand conflicts."
           />
           <FeatureCard
             icon={TrendingUp}
-            title="Viral Pattern Database"
-            description="Trained on 59 proven viral posts (1M+ views each) with patterns, formats, and hooks. The system learns the patterns but never copies content."
+            title="Reusable Templates"
+            description="Shared formatting utilities keep output consistent while still supporting brand-level customization."
           />
         </div>
       </Section>
 
-      {/* Toby Agent */}
-      <Section icon={Bot} title="Toby — Autonomous AI Content Strategist">
+      {/* Operations Workflow */}
+      <Section icon={Bot} title="Operations Workflow">
         <p className="text-gray-600 leading-relaxed mb-4">
-          Toby is a first-of-its-kind autonomous AI agent that operates as a dedicated content strategist.
-          Running as a background daemon, Toby continuously analyzes performance data, scans trending
-          topics, and generates content proposals — without human intervention. Toby generates up to
-          15 content proposals daily, each with full reasoning explanations.
+          Viral App is built for repeatable operations: create content, schedule publication,
+          publish to connected platforms, and review outcomes in one dashboard.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FeatureCard
             icon={Search}
-            title="EXPLORE"
-            description="Discovers new topic territories and untested content angles to expand audience reach and find untapped viral opportunities."
+            title="CREATE"
+            description="Build reels and posts with brand-specific settings and templates."
           />
           <FeatureCard
             icon={Target}
-            title="ITERATE"
-            description="Analyzes underperforming posts and generates improved variations with optimized hooks, structures, and engagement triggers."
+            title="SCHEDULE"
+            description="Queue immediate or timed publishing with per-platform selection."
           />
           <FeatureCard
             icon={TrendingUp}
-            title="DOUBLE DOWN"
-            description="Identifies winning content patterns and amplifies them with strategic variations to capitalize on proven formulas."
+            title="PUBLISH"
+            description="Send content to connected accounts with retries and status tracking."
           />
           <FeatureCard
             icon={Sparkles}
-            title="TRENDING"
-            description="Monitors external viral content across health/wellness and adapts trending formats and topics for the brand's audience."
+            title="REVIEW"
+            description="Track job status and analytics to monitor what has been posted."
           />
         </div>
         <div className="mt-4 bg-primary-50 rounded-lg p-4 border border-primary-100">
           <p className="text-sm text-primary-800">
-            <strong>Daemon Schedule:</strong> Thinking cycles every 45 min &bull; Observation cycles every 3 hours &bull; Trend scouting every 4 hours
+            <strong>Automation Cycle:</strong> Background checks run continuously for queued and scheduled publishing tasks.
           </p>
         </div>
       </Section>
@@ -824,17 +808,17 @@ export function AboutPage() {
       {/* Multi-Brand System */}
       <Section icon={Layers} title="Scalable Multi-Brand Ecosystem">
         <p className="text-gray-600 text-sm mb-4">
-          Architected to support an <strong className="text-gray-900">unlimited number of brands</strong>. Each brand covers the same 
-          core health &amp; wellness topics but presents them under a completely independent identity — its own face, 
-          voice, colors, and audience. Adding a new brand requires only credentials, colors, and templates.
+          Architected to support <strong className="text-gray-900">multiple brands</strong> with independent identity settings,
+          credentials, and schedules. Each brand runs through the same operational pipeline while keeping
+          separate configuration.
         </p>
 
         {/* Shared Topics */}
         <div className="mb-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Shared Topic Coverage</h3>
-          <p className="text-xs text-gray-500 mb-3">All brands address the same wellness domains — presented through each brand's unique lens:</p>
+          <p className="text-xs text-gray-500 mb-3">Typical content themes can be organized per brand while keeping one central workflow:</p>
           <div className="flex flex-wrap gap-2">
-            {['Nutrition', 'Mental Health', 'Physical Fitness', 'Anti-Aging', 'Mind-Body Wellness', 'Energy & Vitality', 'Self-Care'].map(
+            {['Education', 'Tips', 'Lifestyle', 'Motivation', 'Product Highlights', 'Community', 'Promotions'].map(
               (topic) => (
                 <span
                   key={topic}
@@ -875,9 +859,8 @@ export function AboutPage() {
 
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
           <p className="text-sm text-gray-600">
-            <strong className="text-gray-900">Content Differentiation:</strong> Each brand receives AI-generated 
-            variations of every piece of content — complete reordering, synonym replacement, and topic swaps — 
-            all in a single API call. No two brands ever publish identical content, regardless of how many are connected.
+            <strong className="text-gray-900">Content Differentiation:</strong> Brand-specific templates, settings,
+            and schedules keep each timeline independent while using the same platform.
           </p>
         </div>
       </Section>
@@ -888,12 +871,12 @@ export function AboutPage() {
           <FeatureCard
             icon={Instagram}
             title="Instagram Reels"
-            description="Two-step Meta Graph API flow: container creation → publish. 9:16 vertical format with thumbnail handling, AI captions, and brand CTAs."
+            description="Two-step Meta Graph API flow: container creation → publish. 9:16 vertical format with thumbnail handling and brand CTAs."
           />
           <FeatureCard
             icon={Facebook}
             title="Facebook Reels"
-            description="Single-step Pages API upload. Auto-surfaces as Reel when vertical. Optimized shorter captions tailored for Facebook's audience."
+            description="Single-step Pages API upload. Vertical videos can surface as Reels with per-brand caption settings."
           />
           <FeatureCard
             icon={Youtube}
@@ -919,7 +902,7 @@ export function AboutPage() {
           <FeatureCard
             icon={TrendingUp}
             title="Engagement Scoring"
-            description="Automated engagement rate calculation and performance scoring that feeds directly into Toby's strategic analysis engine."
+            description="Aggregated engagement indicators for quick performance review across brands and platforms."
           />
           <FeatureCard
             icon={BarChart3}
@@ -928,8 +911,8 @@ export function AboutPage() {
           />
           <FeatureCard
             icon={Search}
-            title="Trend Scouting"
-            description="Monitors 12 curated hashtags and 5 competitor accounts via Meta Graph API to discover emerging trends early."
+            title="Historical Tracking"
+            description="Historical snapshots support period-over-period checks and trend visibility over time."
           />
         </div>
       </Section>
@@ -944,8 +927,8 @@ export function AboutPage() {
           />
           <FeatureCard
             icon={Sparkles}
-            title="AI Background Generation"
-            description="deAPI integration for dark mode AI backgrounds with FIFO request queuing and exponential backoff for rate-limit handling."
+            title="Background Variants"
+            description="Template-based visual variants for light/dark styles with brand-specific color control."
           />
           <FeatureCard
             icon={Video}
@@ -954,8 +937,8 @@ export function AboutPage() {
           />
           <FeatureCard
             icon={Type}
-            title="AI Caption Engine"
-            description="DeepSeek-powered captions with contextual first paragraphs, brand-specific CTAs, product mentions, and optimized hashtag strategies."
+            title="Caption Formatting"
+            description="Structured captions with CTA options and platform metadata for publishing workflows."
           />
         </div>
       </Section>
@@ -995,8 +978,8 @@ export function AboutPage() {
             { icon: Calendar, title: 'Scheduling', desc: 'Visual calendar & platform selection' },
             { icon: BarChart3, title: 'Analytics', desc: 'Interactive charts & performance data' },
             { icon: Layers, title: 'Brand Manager', desc: 'CRUD for brand configs & colors' },
-            { icon: Bot, title: 'Toby Console', desc: 'AI agent monitoring & proposals' },
-            { icon: Sparkles, title: 'Prompt Lab', desc: 'Prompt transparency & testing' },
+            { icon: Info, title: 'About', desc: 'Platform overview and exportable PDF snapshot' },
+            { icon: User, title: 'Profile', desc: 'Account info and session settings' },
             { icon: Shield, title: 'System Logs', desc: '7-day retention with middleware capture' },
             { icon: Database, title: 'Connected Pages', desc: 'Social account management' },
           ].map(({ icon: Icon, title, desc }) => (
@@ -1039,9 +1022,9 @@ export function AboutPage() {
 
       {/* Footer */}
       <div className="text-center py-8 border-t border-gray-200">
-        <p className="text-sm font-bold text-primary-600">Healveth</p>
+        <p className="text-sm font-bold text-primary-600">Viral App</p>
         <p className="text-xs text-gray-400 mt-1">
-          AI-Powered Social Media Content Automation Platform &bull; Proprietary &amp; Confidential &bull; {new Date().getFullYear()}
+          Social Media Content Operations Platform &bull; Proprietary &amp; Confidential &bull; {new Date().getFullYear()}
         </p>
       </div>
     </div>
