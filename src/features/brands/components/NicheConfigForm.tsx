@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview } from '../api/use-niche-config'
 import { ConfigStrengthMeter } from './ConfigStrengthMeter'
 import { ContentExamplesSection } from './ContentExamplesSection'
 import type { NicheConfig } from '../types/niche-config'
-import { PostCanvas, DEFAULT_GENERAL_SETTINGS } from '@/shared/components/PostCanvas'
+import { PostCanvas, DEFAULT_GENERAL_SETTINGS, BRAND_CONFIGS } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 
 const CONTENT_BRIEF_PLACEHOLDER = `Viral short-form health content for women 35+ on Instagram and TikTok.
@@ -50,9 +50,13 @@ function useFontPreload() {
     const fonts = [
       new FontFace('Anton', "url(https://fonts.gstatic.com/s/anton/v25/1Ptgg87GROyAm3K8-C8.woff2)"),
       new FontFace('Inter', "url(https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjQ.woff2)"),
+      new FontFace('Georgia', 'local("Georgia")'),
     ]
     Promise.all(fonts.map(f => f.load().then(face => { document.fonts.add(face); return face }).catch(() => null)))
-      .then(() => setLoaded(true))
+      .then(() => {
+        // Small delay to let Konva pick up the fonts after they're added to document.fonts
+        setTimeout(() => setLoaded(true), 100)
+      })
   }, [])
   return loaded
 }
@@ -75,6 +79,12 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
     thumbnail_base64: string
     content_base64: string
   } | null>(null)
+
+  // Pick a random brand for carousel previews (stable per AI generation)
+  const previewBrand = useMemo(() => {
+    const available = Object.keys(BRAND_CONFIGS)
+    return available[Math.floor(Math.random() * available.length)] || 'healthycollege'
+  }, [aiResult])
 
   useEffect(() => {
     if (data) {
@@ -352,7 +362,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
             {(aiResult.example_reel || aiResult.example_post) && (
               <div className="space-y-6">
-                {/* Reel Preview — real images from ImageGenerator */}
+                {/* Reel Preview — real images from ImageGenerator (matches Job Detail layout) */}
                 {aiResult.example_reel && (
                   <div className="border border-indigo-100 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -361,52 +371,66 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                         Example Reel Preview
                       </div>
                       <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        {reelImages ? 'Real render' : 'Preview only'}
+                        {reelImages ? 'Real render (light mode)' : reelPreviewMutation.isPending ? 'Rendering...' : 'Waiting'}
                       </span>
                     </div>
-                    <div className="flex gap-4">
-                      {/* Actual rendered images from ImageGenerator */}
-                      <div className="flex gap-3 shrink-0">
-                        {reelImages ? (
-                          <>
-                            <div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Left: Media preview — 2 columns: IG/FB Thumbnail + Content */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* IG/FB Thumbnail */}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1 text-center">IG/FB Thumbnail</p>
+                          {reelImages ? (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
                               <img
                                 src={`data:image/png;base64,${reelImages.thumbnail_base64}`}
                                 alt="Reel thumbnail"
-                                className="w-[140px] rounded-lg shadow-md"
-                                style={{ aspectRatio: '9/16' }}
+                                className="w-full h-full object-cover object-top"
                               />
-                              <p className="text-[9px] text-gray-400 text-center mt-1">Thumbnail</p>
                             </div>
-                            <div>
+                          ) : reelPreviewMutation.isPending ? (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                            </div>
+                          ) : (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs">No preview</div>
+                          )}
+                        </div>
+
+                        {/* Content Slide */}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1 text-center">Content Slide</p>
+                          {reelImages ? (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
                               <img
                                 src={`data:image/png;base64,${reelImages.content_base64}`}
                                 alt="Reel content"
-                                className="w-[140px] rounded-lg shadow-md"
-                                style={{ aspectRatio: '9/16' }}
+                                className="w-full h-full object-cover object-top"
                               />
-                              <p className="text-[9px] text-gray-400 text-center mt-1">Content</p>
                             </div>
-                          </>
-                        ) : reelPreviewMutation.isPending ? (
-                          <div className="w-[140px] rounded-lg bg-gray-100 flex items-center justify-center" style={{ aspectRatio: '9/16' }}>
-                            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-                          </div>
-                        ) : null}
+                          ) : reelPreviewMutation.isPending ? (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                            </div>
+                          ) : (
+                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs">No preview</div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Script lines */}
-                      <div className="flex-1 min-w-0">
+                      {/* Right: Script lines */}
+                      <div className="bg-gray-50 rounded-lg p-4">
                         <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_reel.title}</p>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5">Script Lines</p>
-                        <ol className="space-y-1">
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
                           {aiResult.example_reel.content_lines.map((line, i) => (
-                            <li key={i} className="text-xs text-gray-600 flex gap-1.5">
-                              <span className="text-indigo-400 font-medium shrink-0">{i + 1}.</span>
-                              <span>{line}</span>
-                            </li>
+                            <div key={i} className="text-sm text-gray-700 py-1.5 px-2 bg-white rounded border-l-2 border-gray-300">
+                              <span className="font-medium text-gray-500 mr-2">{i + 1}.</span>
+                              {line}
+                            </div>
                           ))}
-                        </ol>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -420,26 +444,30 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                         <LayoutGrid className="w-3.5 h-3.5" />
                         Example Carousel Post Preview
                       </div>
-                      <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Konva render</span>
+                      <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                        Konva render · {BRAND_CONFIGS[previewBrand]?.name || previewBrand}
+                      </span>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-2">
-                      {/* Cover slide */}
+                      {/* Cover slide — uses a random brand for realistic preview */}
                       <div className="shrink-0 rounded-lg overflow-hidden shadow-md">
                         <PostCanvas
-                          brand={brandId || ''}
+                          key={`cover-${previewBrand}-${fontsReady}`}
+                          brand={previewBrand}
                           title={aiResult.example_post.title}
                           backgroundImage={null}
                           settings={DEFAULT_GENERAL_SETTINGS}
                           scale={0.2}
                         />
                       </div>
-                      {/* Text slides — strip "Slide N:" prefix from AI output */}
+                      {/* Text slides — strip "Slide N:" prefix, use same random brand */}
                       {aiResult.example_post.slides.map((slide, i) => {
                         const cleanSlide = slide.replace(/^Slide\s*\d+\s*:\s*/i, '')
                         return (
                           <div key={i} className="shrink-0 rounded-lg overflow-hidden shadow-md">
                             <CarouselTextSlide
-                              brand={brandId || ''}
+                              key={`slide-${i}-${previewBrand}-${fontsReady}`}
+                              brand={previewBrand}
                               text={cleanSlide}
                               allSlideTexts={aiResult.example_post!.slides.map(s => s.replace(/^Slide\s*\d+\s*:\s*/i, ''))}
                               isLastSlide={i === aiResult.example_post!.slides.length - 1}
