@@ -1093,6 +1093,7 @@ export function ScheduledPage() {
           const rawBgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
           const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
           const logoUrl = brandLogos[selectedPost.brand] || null
+          const selectedBrandData = dynamicBrands.find(b => b.id === selectedPost.brand)
 
           return (
           <div className="space-y-4">
@@ -1160,6 +1161,9 @@ export function ScheduledPage() {
                           scale={DETAIL_PREVIEW_SCALE}
                           logoUrl={logoUrl}
                           fontFamily={postSettings.slideFontFamily}
+                          brandHandle={selectedBrandData?.instagram_handle}
+                          brandDisplayName={selectedBrandData?.label}
+                          brandColor={selectedBrandData?.color}
                         />
                       ) : (
                         /* Fallback to pre-rendered image if no slide_texts available */

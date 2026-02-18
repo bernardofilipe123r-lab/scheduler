@@ -14,6 +14,7 @@ export interface DynamicBrandInfo {
   shortName: string
   scheduleOffset: number
   active: boolean
+  instagram_handle?: string
 }
 
 /**
@@ -40,6 +41,7 @@ export function useDynamicBrands() {
           shortName: b.short_name || b.display_name.split(' ')[0],
           scheduleOffset: b.schedule_offset,
           active: b.active,
+          instagram_handle: b.instagram_handle,
         }))
     }
 

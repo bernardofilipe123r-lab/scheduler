@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview } from '../api/use-niche-config'
+import { useBrands } from '../api/use-brands'
 import { ConfigStrengthMeter } from './ConfigStrengthMeter'
 import { ContentExamplesSection } from './ContentExamplesSection'
 import type { NicheConfig } from '../types/niche-config'
@@ -66,6 +67,7 @@ function useFontPreload() {
 
 export function NicheConfigForm({ brandId }: { brandId?: string }) {
   const { data, isLoading } = useNicheConfig(brandId)
+  const { data: brandsData } = useBrands()
   const updateMutation = useUpdateNicheConfig()
   const aiMutation = useAiUnderstanding()
   const reelPreviewMutation = useReelPreview()
@@ -91,6 +93,12 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   // Effective brand for reel preview API — previewBrand fallback when no brandId selected
   const effectiveBrand = brandId || previewBrand
+
+  // Brand data from DB for the effective brand (handle, display name, color)
+  const effectiveBrandData = useMemo(
+    () => brandsData?.find(b => b.id === effectiveBrand),
+    [brandsData, effectiveBrand]
+  )
 
   useEffect(() => {
     if (data) {
@@ -533,6 +541,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                               allSlideTexts={aiResult.example_post!.slides.map(s => s.replace(/^Slide\s*\d+\s*:\s*/i, ''))}
                               isLastSlide={i === aiResult.example_post!.slides.length - 1}
                               scale={0.2}
+                              brandHandle={effectiveBrandData?.instagram_handle}
+                              brandDisplayName={effectiveBrandData?.display_name}
+                              brandColor={effectiveBrandData?.colors?.primary}
                             />
                           </div>
                         )

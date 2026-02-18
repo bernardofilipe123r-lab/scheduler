@@ -18,30 +18,8 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './PostCanvas'
 import shareIconSrc from '@/assets/icons/share.png'
 import saveIconSrc from '@/assets/icons/save.png'
 
-// ─── Brand handle mapping ───────────────────────────────────────────
-export const BRAND_HANDLES: Record<string, string> = {
-  healthycollege: '@thehealthycollege',
-  longevitycollege: '@thelongevitycollege',
-  wellbeingcollege: '@thewellbeingcollege',
-  vitalitycollege: '@thevitalitycollege',
-  holisticcollege: '@theholisticcollege',
-}
-
-export const BRAND_DISPLAY_NAMES: Record<string, string> = {
-  healthycollege: 'The Healthy College',
-  longevitycollege: 'The Longevity College',
-  wellbeingcollege: 'The Wellbeing College',
-  vitalitycollege: 'The Vitality College',
-  holisticcollege: 'The Holistic College',
-}
-
-const BRAND_COLORS: Record<string, string> = {
-  healthycollege: '#22c55e',
-  longevitycollege: '#0ea5e9',
-  wellbeingcollege: '#eab308',
-  vitalitycollege: '#14b8a6',
-  holisticcollege: '#f97316',
-}
+// Brand data is no longer hardcoded here.
+// Callers must pass brandHandle, brandDisplayName, brandColor from their brand API/DB data.
 
 const BG_COLOR = '#f8f5f0'
 const TEXT_COLOR = '#1a1a1a'
@@ -110,6 +88,10 @@ interface CarouselTextSlideProps {
   stageRef?: (node: Konva.Stage | null) => void
   /** Font family for main body text (slides 2+). Defaults to Georgia. */
   fontFamily?: string
+  /** Brand data from the API/DB — must not be hardcoded in this component */
+  brandHandle?: string
+  brandDisplayName?: string
+  brandColor?: string
 }
 
 export function CarouselTextSlide({
@@ -121,10 +103,14 @@ export function CarouselTextSlide({
   logoUrl,
   stageRef,
   fontFamily = "Georgia, 'Times New Roman', serif",
+  brandHandle,
+  brandDisplayName,
+  brandColor: brandColorProp,
 }: CarouselTextSlideProps) {
-  const brandColor = BRAND_COLORS[brand] || '#0ea5e9'
-  const brandName = BRAND_DISPLAY_NAMES[brand] || brand
-  const handle = BRAND_HANDLES[brand] || `@the${brand}`
+  // Use props from DB/API; fall back to generic derived values — never hardcode per-brand data
+  const brandColor = brandColorProp || '#6b7280'
+  const brandName = brandDisplayName || brand
+  const handle = brandHandle || `@${brand}`
 
   // Load PNG icons
   const [shareImg] = useImage(shareIconSrc)

@@ -42,6 +42,7 @@ import {
   useRegenerateBrandImage,
 } from '@/features/jobs'
 import { StatusBadge, Modal } from '@/shared/components'
+import { useDynamicBrands } from '@/features/brands'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -91,6 +92,7 @@ export function PostJobDetail({ job, refetch }: Props) {
   const updateBrandStatus = useUpdateBrandStatus()
   const updateBrandContent = useUpdateBrandContent()
   const regenerateBrandImage = useRegenerateBrandImage()
+  const { brands: dynamicBrands } = useDynamicBrands()
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -737,6 +739,9 @@ export function PostJobDetail({ job, refetch }: Props) {
                       scale={GRID_PREVIEW_SCALE}
                       logoUrl={logoUrl}
                       fontFamily={settings.slideFontFamily}
+                      brandHandle={dynamicBrands.find(b => b.id === brand)?.instagram_handle}
+                      brandDisplayName={dynamicBrands.find(b => b.id === brand)?.label}
+                      brandColor={dynamicBrands.find(b => b.id === brand)?.color}
                       stageRef={(node) => {
                         if (node) textSlideRefs.current.set(brand, node)
                       }}
@@ -1085,6 +1090,9 @@ export function PostJobDetail({ job, refetch }: Props) {
                     scale={FULL_SCALE}
                     logoUrl={logoUrl}
                     fontFamily={settings.slideFontFamily}
+                    brandHandle={dynamicBrands.find(b => b.id === expandedBrand)?.instagram_handle}
+                    brandDisplayName={dynamicBrands.find(b => b.id === expandedBrand)?.label}
+                    brandColor={dynamicBrands.find(b => b.id === expandedBrand)?.color}
                   />
                 )}
               </div>
