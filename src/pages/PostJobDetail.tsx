@@ -107,6 +107,7 @@ export function PostJobDetail({ job, refetch }: Props) {
   const [isScheduling, setIsScheduling] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [schedulingBrand, setSchedulingBrand] = useState<string | null>(null)
 
   // Per-brand font size overrides (session-only, not persisted)
   // Auto-fit runs by default; manual +/- adjustments apply only while viewing this job
@@ -130,7 +131,7 @@ export function PostJobDetail({ job, refetch }: Props) {
         } catch { /* ignore */ }
       }
       if (Object.keys(logos).length > 0) {
-        setBrandLogos(prev => ({ ...logos, ...prev }))
+        setBrandLogos(prev => ({ ...prev, ...logos }))
       }
     }
     fetchThemeLogos()
@@ -361,6 +362,9 @@ export function PostJobDetail({ job, refetch }: Props) {
       for (const brand of job.brands) {
         const output = job.brand_outputs[brand as BrandName]
 
+        // Skip already-scheduled brands
+        if (output?.status === 'scheduled') continue
+
         // Ensure we're on cover slide for primary capture
         setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
         await new Promise((r) => setTimeout(r, 300))
@@ -484,6 +488,139 @@ export function PostJobDetail({ job, refetch }: Props) {
     }
   }
 
+  // ── Schedule single brand ────────────────────────────────────────────
+  const scheduleSingleBrand = async (brand: string) => {
+    const output = job.brand_outputs[brand as BrandName]
+    if (!output || output.status !== 'completed') {
+      toast.error('Brand must be completed before scheduling')
+      return
+    }
+
+    setSchedulingBrand(brand)
+    setIsCapturing(true)
+    toast.loading(`Scheduling ${getBrandConfig(brand).name}...`, { id: `sched-${brand}` })
+
+    try {
+      // Fetch occupied post slots
+      let occupiedByBrand: Record<string, string[]> = {}
+      try {
+        const occData = await apiClient.get<{ occupied?: Record<string, string[]> }>('/reels/scheduled/occupied-post-slots')
+        occupiedByBrand = occData.occupied || {}
+      } catch {
+        console.warn('Could not fetch occupied post slots')
+      }
+
+      const isSlotOccupied = (b: string, dt: Date): boolean => {
+        const brandSlots = occupiedByBrand[b.toLowerCase()] || []
+        const dtMinute = dt.toISOString().slice(0, 16)
+        return brandSlots.some(s => s.slice(0, 16) === dtMinute)
+      }
+
+      // Ensure cover slide for capture
+      setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+      await new Promise((r) => setTimeout(r, 300))
+
+      let stage = stageRefs.current.get(brand)
+      if (!stage) {
+        setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+        await new Promise((r) => setTimeout(r, 500))
+        stage = stageRefs.current.get(brand)
+      }
+      if (!stage) {
+        toast.error(`Failed to capture image for ${getBrandConfig(brand).name}`, { id: `sched-${brand}` })
+        return
+      }
+
+      const imageData = stage.toDataURL({
+        pixelRatio: 1 / GRID_PREVIEW_SCALE,
+        mimeType: 'image/png',
+      })
+
+      // Capture carousel text slides
+      const slideTexts = output?.slide_texts || []
+      const carouselImages: string[] = []
+      for (let s = 0; s < slideTexts.length; s++) {
+        setBrandSlideIndex((prev) => ({ ...prev, [brand]: s + 1 }))
+        await new Promise((r) => setTimeout(r, 400))
+        let textStage = textSlideRefs.current.get(brand)
+        if (!textStage) {
+          await new Promise((r) => setTimeout(r, 300))
+          textStage = textSlideRefs.current.get(brand)
+        }
+        if (textStage) {
+          carouselImages.push(
+            textStage.toDataURL({ pixelRatio: 1 / GRID_PREVIEW_SCALE, mimeType: 'image/png' })
+          )
+        }
+      }
+      setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+
+      const offset = POST_BRAND_OFFSETS[brand] || 0
+      const brandTitle = output?.title || job.title
+
+      // Find next free slot
+      const now = new Date()
+      let scheduleTime: Date | null = null
+      for (let dayOffset = 0; dayOffset < 30 && !scheduleTime; dayOffset++) {
+        for (const baseHour of [0, 12]) {
+          const slot = new Date(now)
+          slot.setDate(slot.getDate() + dayOffset)
+          slot.setHours(baseHour + offset, 0, 0, 0)
+          if (slot <= now) continue
+          if (isSlotOccupied(brand, slot)) continue
+          scheduleTime = slot
+          break
+        }
+      }
+
+      if (!scheduleTime) {
+        scheduleTime = new Date(now)
+        scheduleTime.setDate(scheduleTime.getDate() + 30)
+        scheduleTime.setHours(offset, 0, 0, 0)
+      }
+
+      await apiClient.post('/reels/schedule-post-image', {
+        brand,
+        title: brandTitle,
+        caption: output?.caption || '',
+        image_data: imageData,
+        carousel_images: carouselImages,
+        slide_texts: slideTexts,
+        schedule_time: scheduleTime.toISOString(),
+        job_id: job.id,
+      })
+
+      await updateBrandStatus.mutateAsync({
+        id: job.id,
+        brand: brand as BrandName,
+        status: 'scheduled',
+      })
+
+      toast.success(`${getBrandConfig(brand).name} scheduled!`, { id: `sched-${brand}` })
+      refetch()
+    } catch {
+      toast.error(`Failed to schedule ${getBrandConfig(brand).name}`, { id: `sched-${brand}` })
+    } finally {
+      setIsCapturing(false)
+      setSchedulingBrand(null)
+    }
+  }
+
+  // ── Refresh brand slides ───────────────────────────────────────────
+  const refreshBrandSlides = async (brand: string) => {
+    try {
+      const d = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand}/theme`)
+      if (d.theme?.logo) {
+        const url = d.theme.logo.startsWith('http') ? d.theme.logo : `/brand-logos/${d.theme.logo}`
+        setBrandLogos(prev => ({ ...prev, [brand]: url }))
+        saveBrandLogo(brand, url)
+      }
+      toast.success('Slides refreshed with latest brand settings!')
+    } catch {
+      toast.error('Failed to refresh brand settings')
+    }
+  }
+
   // Helper: get per-brand title
   const getBrandTitle = (brand: string): string => {
     const output = job.brand_outputs[brand as BrandName]
@@ -582,7 +719,7 @@ export function PostJobDetail({ job, refetch }: Props) {
             ) : (
               <Calendar className="w-4 h-4" />
             )}
-            Auto Schedule
+            Auto Schedule All
           </button>
         </div>
       )}
@@ -809,6 +946,22 @@ export function PostJobDetail({ job, refetch }: Props) {
                 </div>
               )}
 
+              {/* Per-brand schedule button */}
+              {status === 'completed' && (
+                <button
+                  onClick={() => scheduleSingleBrand(brand)}
+                  disabled={schedulingBrand === brand || isScheduling}
+                  className="w-full flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600 disabled:opacity-50"
+                >
+                  {schedulingBrand === brand ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Calendar className="w-3 h-3" />
+                  )}
+                  Schedule
+                </button>
+              )}
+
               {/* Caption preview */}
               {brandCaption && (status === 'completed' || status === 'scheduled') && (
                 <div className="mt-2">
@@ -925,6 +1078,15 @@ export function PostJobDetail({ job, refetch }: Props) {
                 <Save className="w-4 h-4" />
               )}
               Save Content
+            </button>
+
+            {/* Refresh slides with latest brand settings */}
+            <button
+              onClick={() => editingBrand && refreshBrandSlides(editingBrand)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Slides
             </button>
 
             <hr className="border-gray-200" />
