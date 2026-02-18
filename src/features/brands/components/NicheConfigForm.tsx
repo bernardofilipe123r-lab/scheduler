@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2 } from 'lucide-react'
+import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview } from '../api/use-niche-config'
 import { ConfigStrengthMeter } from './ConfigStrengthMeter'
@@ -80,18 +80,48 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
     content_base64: string
   } | null>(null)
 
-  // Pick a random brand for carousel previews (stable per AI generation)
+  // Pick a random brand for carousel previews — stable for the whole component lifetime
   const previewBrand = useMemo(() => {
     const available = Object.keys(BRAND_CONFIGS)
     return available[Math.floor(Math.random() * available.length)] || 'healthycollege'
-  }, [aiResult])
+  }, []) // empty deps = computed once per mount
+
+  // Effective brand for reel preview API — previewBrand fallback when no brandId selected
+  const effectiveBrand = brandId || previewBrand
 
   useEffect(() => {
     if (data) {
-      setValues({ ...DEFAULT_CONFIG, ...data })
-      setDirty(false)
+      const brief = data.content_brief || CONTENT_BRIEF_PLACEHOLDER
+      setValues({ ...DEFAULT_CONFIG, ...data, content_brief: brief })
+      setDirty(!data.content_brief) // dirty if we pre-filled the template
     }
   }, [data])
+
+  // On mount / brandId change: restore persisted AI result from localStorage
+  useEffect(() => {
+    const storageKey = `ai-understanding-${brandId || 'global'}`
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      setAiResult(parsed)
+      setReelImages(null)
+      // Re-render reel images from cached result (fast, no AI call needed)
+      if (parsed.example_reel) {
+        reelPreviewMutation.mutate(
+          {
+            brand_id: effectiveBrand,
+            title: parsed.example_reel.title,
+            content_lines: parsed.example_reel.content_lines,
+          },
+          { onSuccess: setReelImages },
+        )
+      }
+    } catch {
+      localStorage.removeItem(storageKey)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId])
 
   const update = <K extends keyof NicheConfig>(key: K, value: NicheConfig[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -109,29 +139,45 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   }
 
   const handleAiUnderstanding = useCallback(async () => {
+    setAiResult(null)
+    setReelImages(null)
     try {
+      // Step 1: AI text generation (~15–30s)
       const result = await aiMutation.mutateAsync(brandId)
-      setAiResult(result)
-      setReelImages(null)
 
-      // After AI generates examples, render actual reel images via ImageGenerator
-      if (result.example_reel && brandId) {
+      // Step 2: Reel image rendering — wait for both before showing any results
+      let preview = null
+      if (result.example_reel) {
         try {
-          const preview = await reelPreviewMutation.mutateAsync({
-            brand_id: brandId,
+          preview = await reelPreviewMutation.mutateAsync({
+            brand_id: effectiveBrand,
             title: result.example_reel.title,
             content_lines: result.example_reel.content_lines,
           })
-          setReelImages(preview)
         } catch {
-          // Reel preview is non-critical
+          toast.error('Reel render failed — showing text results only')
         }
       }
+
+      // Set both at once so partial state is never visible to the user
+      setAiResult(result)
+      setReelImages(preview)
+
+      // Persist so results survive page navigation
+      localStorage.setItem(`ai-understanding-${brandId || 'global'}`, JSON.stringify(result))
     } catch {
       toast.error('Failed to generate AI understanding')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId])
+  }, [brandId, effectiveBrand])
+
+  const handleRegenerate = useCallback(() => {
+    localStorage.removeItem(`ai-understanding-${brandId || 'global'}`)
+    setAiResult(null)
+    setReelImages(null)
+    handleAiUnderstanding()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId, handleAiUnderstanding])
 
   if (isLoading) {
     return (
@@ -339,18 +385,30 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                 Ask the AI to describe how it interprets your Content DNA configuration
               </p>
             </div>
-            <button
-              onClick={handleAiUnderstanding}
-              disabled={aiMutation.isPending || reelPreviewMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            >
-              {(aiMutation.isPending || reelPreviewMutation.isPending) ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4" />
+            <div className="flex items-center gap-2">
+              {aiResult && (
+                <button
+                  onClick={handleRegenerate}
+                  disabled={aiMutation.isPending || reelPreviewMutation.isPending}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Regenerate
+                </button>
               )}
-              {aiMutation.isPending ? 'Generating...' : reelPreviewMutation.isPending ? 'Rendering images...' : 'Generate'}
-            </button>
+              <button
+                onClick={handleAiUnderstanding}
+                disabled={aiMutation.isPending || reelPreviewMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {(aiMutation.isPending || reelPreviewMutation.isPending) ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                {aiMutation.isPending ? 'Analyzing brand...' : reelPreviewMutation.isPending ? 'Rendering images...' : 'Generate'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -489,7 +547,19 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           </div>
         )}
 
-        {!aiResult && !aiMutation.isPending && (
+        {(aiMutation.isPending || (reelPreviewMutation.isPending && !aiResult)) && (
+          <div className="px-6 py-10 flex flex-col items-center gap-4">
+            <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+            <div className="text-center">
+              <p className="text-sm font-medium text-gray-800">
+                {aiMutation.isPending ? 'Analyzing your brand configuration...' : 'Rendering reel images...'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">This may take 20–40 seconds</p>
+            </div>
+          </div>
+        )}
+
+        {!aiResult && !aiMutation.isPending && !reelPreviewMutation.isPending && (
           <div className="px-6 py-6 text-center text-sm text-gray-400">
             Click "Generate" to see how the AI interprets your brand configuration
           </div>
