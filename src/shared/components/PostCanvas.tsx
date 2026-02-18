@@ -14,7 +14,7 @@ export const PREVIEW_SCALE = 0.4
 export const GRID_PREVIEW_SCALE = 0.25
 
 export const DEFAULT_READ_CAPTION_BOTTOM = 45
-export const DEFAULT_TITLE_GAP = 80
+export const DEFAULT_TITLE_GAP = 40
 export const DEFAULT_LOGO_GAP = 36
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
@@ -247,7 +247,44 @@ export function balanceTitleText(
     if (bestLines) return { lines: bestLines, fontSize }
   }
 
-  // ── Fallback: original greedy wrap ─────────────────────────────
+  // ── If 5+ lines, clamp to 4 by joining overflow ───────────────
+  if (lineCount > 4) {
+    const clamped = greedyLines.slice(0, 3)
+    clamped.push(greedyLines.slice(3).join(' '))
+    // Try to balance 4 lines
+    const clampedWords = clamped.join(' ').split(/\s+/).filter(Boolean)
+    let bestLines: string[] | null = null
+    let bestDiff = Infinity
+    for (let i = 1; i < clampedWords.length - 2; i++) {
+      for (let j = i + 1; j < clampedWords.length - 1; j++) {
+        for (let k = j + 1; k < clampedWords.length; k++) {
+          const l1 = clampedWords.slice(0, i).join(' ')
+          const l2 = clampedWords.slice(i, j).join(' ')
+          const l3 = clampedWords.slice(j, k).join(' ')
+          const l4 = clampedWords.slice(k).join(' ')
+          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
+              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue
+          const diff = Math.max(
+            Math.abs(l1.length - l2.length),
+            Math.abs(l2.length - l3.length),
+            Math.abs(l3.length - l4.length),
+            Math.abs(l1.length - l4.length),
+          )
+          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4] }
+        }
+      }
+    }
+    if (bestLines) return { lines: bestLines, fontSize }
+    // If no balanced 4-line combo fits, just clamp
+    return { lines: clamped, fontSize }
+  }
+
+  // ── Fallback: clamp to max 4 lines ─────────────────────────────
+  if (greedyLines.length > 4) {
+    const clamped = greedyLines.slice(0, 3)
+    clamped.push(greedyLines.slice(3).join(' '))
+    return { lines: clamped, fontSize }
+  }
   return { lines: greedyLines, fontSize }
 }
 
@@ -285,14 +322,13 @@ function countLines(text: string, maxWidth: number, fontSize: number): number {
   return lineCount
 }
 
-const AUTO_FIT_MAX = 90
-const AUTO_FIT_MIN = 80
+const AUTO_FIT_BASE = 80  // Starting font size
+const AUTO_FIT_MAX = 90   // Max we'll try bumping to
 
 /**
- * Find the LARGEST font size that produces the best layout.
- * Priority order: 3 lines → 4 lines → 2 lines.
- * Min font size is 80; if no line count works at ≥ 80,
- * fall back to 3 lines with the largest possible font.
+ * Find the best font size using the base-80 algorithm.
+ * Acceptable line counts: 2, 3, or 4. NEVER 1, NEVER 5+.
+ * Priority: 3 lines preferred > 4 lines > 2 lines.
  */
 export function autoFitFontSize(
   text: string,
@@ -300,20 +336,56 @@ export function autoFitFontSize(
   _startSize: number,
   _maxLines: number,
 ): number {
-  // ── Try preferred line counts: 3 → 4 → 2 with font ≥ 80 ──────
-  for (const target of [3, 4, 2]) {
-    for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2) {
-      if (countLines(text, maxWidth, fs) === target) return fs
+  // Step 1: Count lines at base font size 80
+  const baseLinesCount = countLines(text, maxWidth, AUTO_FIT_BASE)
+
+  // Step 2: If 3 lines at 80, try increasing font (81, 82...) while still 3 lines
+  if (baseLinesCount === 3) {
+    let bestFs = AUTO_FIT_BASE
+    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
+      if (countLines(text, maxWidth, fs) === 3) {
+        bestFs = fs
+      } else {
+        break  // went to 4 lines, stop
+      }
+    }
+    return bestFs
+  }
+
+  // Step 3: If 2 lines at 80, try increasing font while still 2 lines
+  if (baseLinesCount <= 2) {
+    let bestFs = AUTO_FIT_BASE
+    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
+      if (countLines(text, maxWidth, fs) <= 2) {
+        bestFs = fs
+      } else {
+        break
+      }
+    }
+    return bestFs
+  }
+
+  // Step 4: If 4 lines at 80, that's acceptable — try increasing slightly
+  if (baseLinesCount === 4) {
+    let bestFs = AUTO_FIT_BASE
+    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
+      if (countLines(text, maxWidth, fs) === 4) {
+        bestFs = fs
+      } else {
+        break
+      }
+    }
+    return bestFs
+  }
+
+  // Step 5: 5+ lines at 80 — reduce font to get exactly 4 lines
+  for (let fs = AUTO_FIT_BASE - 1; fs >= 40; fs--) {
+    if (countLines(text, maxWidth, fs) <= 4) {
+      return fs
     }
   }
 
-  // ── Fallback: 3 lines at any font size (rare long titles) ─────
-  for (let fs = AUTO_FIT_MAX; fs >= 30; fs -= 2) {
-    if (countLines(text, maxWidth, fs) === 3) return fs
-  }
-
-  // ── Short text that stays ≤ 2 lines at max font ───────────────
-  return AUTO_FIT_MAX
+  return AUTO_FIT_BASE  // ultimate fallback
 }
 
 // ─── Load / save general settings ────────────────────────────────────

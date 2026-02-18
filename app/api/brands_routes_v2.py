@@ -128,6 +128,45 @@ class UpdatePromptsRequest(BaseModel):
 PROMPT_KEYS = ["reels_prompt", "posts_prompt", "brand_description"]
 
 
+# ============================================================================
+# LAYOUT SETTINGS ENDPOINTS
+# ============================================================================
+
+@router.get("/settings/layout")
+async def get_layout_settings(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Get user's layout settings from app_settings."""
+    key = f"layout_settings_{user['id']}"
+    row = db.query(AppSettings).filter(AppSettings.key == key).first()
+    if row and row.value:
+        return json.loads(row.value)
+    return {}
+
+
+@router.put("/settings/layout")
+async def update_layout_settings(
+    settings: Dict[str, Any],
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Save user's layout settings to app_settings."""
+    key = f"layout_settings_{user['id']}"
+    row = db.query(AppSettings).filter(AppSettings.key == key).first()
+    if row:
+        row.value = json.dumps(settings)
+    else:
+        db.add(AppSettings(
+            key=key,
+            value=json.dumps(settings),
+            category="layout",
+            value_type="json",
+        ))
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.get("/prompts")
 async def get_prompts(
     db: Session = Depends(get_db),

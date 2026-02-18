@@ -1,7 +1,8 @@
-import { Layers, Link2, Settings } from 'lucide-react'
+import { FileText, Layers, Link2, Settings } from 'lucide-react'
 
 const TABS = [
   { key: 'brands', label: 'My Brands', icon: Layers },
+  { key: 'prompts', label: 'Content Prompts', icon: FileText },
   { key: 'connections', label: 'Connections', icon: Link2 },
   { key: 'settings', label: 'Settings', icon: Settings },
 ] as const

@@ -16,7 +16,7 @@ export function useJobs() {
   return useQuery({
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     refetchOnMount: 'always', // Always refetch when component mounts
     staleTime: 0, // Data is always considered stale
   })
@@ -32,7 +32,7 @@ export function useJob(id: string) {
       if (job?.status === 'generating' || job?.status === 'pending') {
         return 3000
       }
-      return 30000
+      return 5000
     },
   })
 }

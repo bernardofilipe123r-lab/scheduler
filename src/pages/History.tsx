@@ -160,11 +160,27 @@ export function HistoryPage() {
   
   // Calculate job progress
   const getProgress = (job: Job) => {
-    const total = job.brands?.length || 0
-    const completed = Object.values(job.brand_outputs || {})
-      .filter(o => o.status === 'completed' || o.status === 'scheduled' || o.status === 'published')
-      .length
-    return total > 0 ? Math.round((completed / total) * 100) : 0
+    // For actively generating jobs, use the backend's real-time progress
+    if (job.status === 'generating' && job.progress_percent != null) {
+      return job.progress_percent;
+    }
+    // For completed/other jobs, calculate from brand completion
+    const brands = Object.keys(job.brand_outputs || {});
+    if (!brands.length) return 0;
+    const done = brands.filter(b => job.brand_outputs[b]?.status === 'completed' || job.brand_outputs[b]?.status === 'scheduled' || job.brand_outputs[b]?.status === 'published').length;
+    return Math.round((done / brands.length) * 100);
+  }
+
+  // Get descriptive status message for generating jobs
+  const getStatusMessage = (job: Job): string | null => {
+    if (job.status !== 'generating' && job.status !== 'pending') return null;
+    // Check job-level current_step first
+    if (job.current_step) return job.current_step;
+    // Fall back to brand-level progress_message
+    const outputs = Object.values(job.brand_outputs || {});
+    const generating = outputs.find(o => o.status === 'generating' && o.progress_message);
+    if (generating?.progress_message) return generating.progress_message;
+    return job.status === 'pending' ? 'Queued...' : 'Generating...';
   }
   
   // Handle delete
@@ -563,7 +579,8 @@ export function HistoryPage() {
                           />
                         </div>
                         <p className="text-xs text-blue-600 mt-1">
-                          {progress}% complete
+                          {getStatusMessage(job) || `${progress}% complete`}
+                          {progress > 0 && ` — ${progress}%`}
                         </p>
                       </div>
                     )}

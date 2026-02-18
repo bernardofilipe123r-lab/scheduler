@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5000,
+      staleTime: 2000,
       retry: 1,
     },
   },

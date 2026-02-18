@@ -121,6 +121,7 @@ export function ProfilePage() {
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  style={{ paddingLeft: "42px" }}
                 />
               </div>
               {nameChanged && (
@@ -186,6 +187,7 @@ export function ProfilePage() {
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="Enter new email address"
                 className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                style={{ paddingLeft: "42px" }}
               />
             </div>
           </div>

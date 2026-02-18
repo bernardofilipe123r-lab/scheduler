@@ -327,6 +327,26 @@ export function PostJobDetail({ job, refetch }: Props) {
 
   // ── Auto Schedule ──────────────────────────────────────────────────
   const handleAutoSchedule = async () => {
+    // Auto-save any pending edits before scheduling
+    if (editingBrand) {
+      try {
+        await updateBrandContent.mutateAsync({
+          id: job.id,
+          brand: editingBrand as BrandName,
+          data: {
+            title: editTitle,
+            caption: editCaption,
+            slide_texts: editSlideTexts,
+          },
+        })
+        await refetch()
+        setEditingBrand(null)
+      } catch {
+        toast.error('Failed to save edits before scheduling')
+        return
+      }
+    }
+
     if (!allCompleted) {
       toast.error('Wait for all backgrounds to finish generating')
       return
@@ -614,9 +634,9 @@ export function PostJobDetail({ job, refetch }: Props) {
       <div
         className="grid gap-4"
         style={{
-          gridTemplateColumns: `repeat(auto-fill, minmax(${
-            CANVAS_WIDTH * GRID_PREVIEW_SCALE + 30
-          }px, 1fr))`,
+          gridTemplateColumns: `repeat(auto-fill, ${
+            CANVAS_WIDTH * GRID_PREVIEW_SCALE + 24
+          }px)`,
         }}
       >
         {job.brands.map((brand) => {

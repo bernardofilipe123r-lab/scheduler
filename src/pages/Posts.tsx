@@ -19,7 +19,6 @@ import { useCreateJob } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDynamicBrands } from '@/features/brands'
 import {
-  PREVIEW_SCALE,
   DEFAULT_GENERAL_SETTINGS,
   SLIDE_FONT_OPTIONS,
   loadGeneralSettings,
@@ -27,12 +26,17 @@ import {
   PostCanvas,
 } from '@/shared/components/PostCanvas'
 import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
+import { useLayoutSettings, useUpdateLayoutSettings } from '@/shared/api/use-layout-settings'
 import type { BrandName } from '@/shared/types'
+
+const POSTS_PREVIEW_SCALE = 0.2
 
 export function PostsPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
   const { brands: dynamicBrands, brandIds } = useDynamicBrands()
+  const { data: dbSettings } = useLayoutSettings()
+  const updateDbSettings = useUpdateLayoutSettings()
   const brandMap = useMemo(() => {
     const map: Record<string, { name: string; color: string }> = {}
     dynamicBrands.forEach(b => { map[b.id] = { name: b.label, color: b.color } })
@@ -58,6 +62,22 @@ export function PostsPage() {
   useEffect(() => {
     document.fonts.load('1em Anton').then(() => setFontLoaded(true))
   }, [])
+
+  // Merge DB settings when they arrive (API takes priority over localStorage)
+  useEffect(() => {
+    if (dbSettings && Object.keys(dbSettings).length > 0) {
+      setSettings((prev) => ({
+        ...DEFAULT_GENERAL_SETTINGS,
+        ...prev,
+        ...dbSettings,
+        layout: {
+          ...DEFAULT_GENERAL_SETTINGS.layout,
+          ...prev.layout,
+          ...(dbSettings.layout || {}),
+        },
+      }))
+    }
+  }, [dbSettings])
 
   // Select first brand when brands load
   useEffect(() => {
@@ -171,11 +191,13 @@ export function PostsPage() {
   // ── Settings persistence ───────────────────────────────────────────
   const handleSaveSettings = () => {
     saveGeneralSettings(settings)
+    updateDbSettings.mutate(settings)
     toast.success('Settings saved!')
   }
   const handleResetSettings = () => {
     setSettings(DEFAULT_GENERAL_SETTINGS)
     localStorage.removeItem('posts-general-settings')
+    updateDbSettings.mutate(DEFAULT_GENERAL_SETTINGS)
     toast.success('Settings reset to default')
   }
 
@@ -191,7 +213,7 @@ export function PostsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] lg:grid-cols-[1fr_auto] gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-5">
         {/* Col 1: Inputs */}
         <div className="space-y-4 min-w-0">
           {/* Topic Hint + AI Image Prompt side by side on desktop */}
@@ -441,8 +463,30 @@ export function PostsPage() {
             </div>
           </div>
 
-          {/* Action buttons — horizontal row */}
-          <div className="flex items-center gap-3 flex-wrap">
+        </div>
+
+        {/* Right: Preview + Actions */}
+        <div className="self-start space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Preview</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Layout preview · backgrounds generated after job creation
+            </p>
+            <div className="flex justify-center">
+              {fontLoaded && (
+                <PostCanvas
+                  brand={previewBrand}
+                  title={title || 'YOUR TITLE\nGOES HERE'}
+                  backgroundImage={null}
+                  settings={settings}
+                  scale={POSTS_PREVIEW_SCALE}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-3">
             <button
               onClick={() => {
                 setAutoCount(brandIds.length)
@@ -468,28 +512,9 @@ export function PostsPage() {
               )}
               Generate Posts
             </button>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 text-center">
               💡 <strong>Generate Posts</strong> uses your exact title · <strong>Auto Generate</strong> lets AI create everything
             </p>
-          </div>
-        </div>
-
-        {/* Right: Preview */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 self-start">
-          <h3 className="text-sm font-semibold text-gray-900 mb-2">Preview</h3>
-          <p className="text-xs text-gray-400 mb-3">
-            Layout preview · backgrounds generated after job creation
-          </p>
-          <div className="flex justify-center">
-            {fontLoaded && (
-              <PostCanvas
-                brand={previewBrand}
-                title={title || 'YOUR TITLE\nGOES HERE'}
-                backgroundImage={null}
-                settings={settings}
-                scale={PREVIEW_SCALE}
-              />
-            )}
           </div>
         </div>
       </div>

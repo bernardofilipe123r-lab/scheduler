@@ -21,6 +21,33 @@ from app.core.viral_patterns import (
 
 
 # ============================================================
+# CONTENT PROMPTS (loaded from app_settings table)
+# ============================================================
+
+def get_content_prompts() -> Dict[str, str]:
+    """Load content prompts from the app_settings table.
+
+    Returns a dict with keys 'reels_prompt', 'posts_prompt',
+    'brand_description' mapped to their stored values (or empty string).
+    """
+    try:
+        from app.db_connection import get_db_session
+        with get_db_session() as db:
+            from app.models.config import AppSettings
+            rows = (
+                db.query(AppSettings.key, AppSettings.value)
+                .filter(AppSettings.key.in_([
+                    'posts_prompt', 'reels_prompt', 'brand_description',
+                ]))
+                .all()
+            )
+            return {row.key: (row.value or '') for row in rows}
+    except Exception as e:
+        print(f"⚠️ Could not load content prompts: {e}", flush=True)
+        return {}
+
+
+# ============================================================
 # SYSTEM PROMPT (CACHED - SENT ONCE PER SESSION)
 # ============================================================
 
@@ -99,6 +126,15 @@ OUTPUT (JSON only):
     "topic_category": "{selection.topic}",
     "hook_type": "{selection.primary_hook}"
 }}"""
+
+    # Inject user-configured content prompts from DB
+    prompts = get_content_prompts()
+    brand_desc = prompts.get('brand_description', '').strip()
+    reels_prompt = prompts.get('reels_prompt', '').strip()
+    if brand_desc:
+        prompt += f"\n\nBRAND CONTEXT:\n{brand_desc}"
+    if reels_prompt:
+        prompt += f"\n\nADDITIONAL INSTRUCTIONS:\n{reels_prompt}"
     
     return prompt
 
@@ -649,7 +685,21 @@ If only 3 slides, the last slide should include both actionable advice AND the F
 
 {"Topic hint: " + topic_hint if topic_hint else ""}
 
-### OUTPUT FORMAT (JSON array, no markdown):
+### OUTPUT FORMAT (JSON array, no markdown):"""
+
+    # Inject user-configured content prompts from DB
+    prompts = get_content_prompts()
+    brand_desc = prompts.get('brand_description', '').strip()
+    posts_prompt = prompts.get('posts_prompt', '').strip()
+    extra_context = ""
+    if brand_desc:
+        extra_context += f"\n\n### BRAND CONTEXT (use this to shape content tone and audience):\n{brand_desc}"
+    if posts_prompt:
+        extra_context += f"\n\n### ADDITIONAL INSTRUCTIONS (follow these carefully):\n{posts_prompt}"
+
+    prompt += extra_context
+
+    prompt += f"""
 [
   {{{{
     "title": "TITLE IN ALL CAPS FOR SLIDE 1",

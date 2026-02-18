@@ -12,13 +12,12 @@ const Konva = require('konva');
 const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1350;
 const DEFAULT_READ_CAPTION_BOTTOM = 45;
-const DEFAULT_TITLE_GAP = 80;
+const DEFAULT_TITLE_GAP = 40;
 const DEFAULT_LOGO_GAP = 36;
 const DEFAULT_TITLE_PADDING_X = 45;
 
-const AUTO_FIT_MAX = 90;
-const AUTO_FIT_MIN = 30;
-const THREE_LINE_FLOOR = 64;
+const AUTO_FIT_BASE = 80;  // Starting font size
+const AUTO_FIT_MAX = 90;   // Max we'll try bumping to
 
 // ─── Constants: Text Slide ────────────────────────────────────────────────────
 const BG_COLOR = '#f8f5f0';
@@ -107,13 +106,44 @@ function countLines(text, maxWidth, fontSize) {
 }
 
 function autoFitFontSize(text, maxWidth) {
-  for (let fs = AUTO_FIT_MAX; fs >= THREE_LINE_FLOOR; fs -= 2)
-    if (countLines(text, maxWidth, fs) === 3) return fs;
-  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2)
-    if (countLines(text, maxWidth, fs) === 2) return fs;
-  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2)
-    if (countLines(text, maxWidth, fs) <= 1) return fs;
-  return AUTO_FIT_MIN;
+  const baseLinesCount = countLines(text, maxWidth, AUTO_FIT_BASE);
+
+  // If 3 lines at 80, try increasing font while still 3 lines
+  if (baseLinesCount === 3) {
+    let bestFs = AUTO_FIT_BASE;
+    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
+      if (countLines(text, maxWidth, fs) === 3) bestFs = fs;
+      else break;
+    }
+    return bestFs;
+  }
+
+  // If 2 lines at 80, try increasing font while still 2 lines
+  if (baseLinesCount <= 2) {
+    let bestFs = AUTO_FIT_BASE;
+    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
+      if (countLines(text, maxWidth, fs) <= 2) bestFs = fs;
+      else break;
+    }
+    return bestFs;
+  }
+
+  // If 4 lines at 80, try increasing slightly
+  if (baseLinesCount === 4) {
+    let bestFs = AUTO_FIT_BASE;
+    for (let fs = AUTO_FIT_BASE + 1; fs <= AUTO_FIT_MAX; fs++) {
+      if (countLines(text, maxWidth, fs) === 4) bestFs = fs;
+      else break;
+    }
+    return bestFs;
+  }
+
+  // 5+ lines at 80 — reduce font to get 4 lines
+  for (let fs = AUTO_FIT_BASE - 1; fs >= 40; fs--) {
+    if (countLines(text, maxWidth, fs) <= 4) return fs;
+  }
+
+  return AUTO_FIT_BASE;
 }
 
 // ─── Balance Title Text (exact copy from PostCanvas.tsx) ──────────────────────
@@ -178,6 +208,68 @@ function balanceTitleText(title, maxWidth, fontSize) {
     if (bestLines) return { lines: bestLines, fontSize };
   }
 
+  // Balance 4 lines
+  if (lineCount === 4 && words.length >= 4) {
+    let bestLines = null;
+    let bestDiff = Infinity;
+    for (let i = 1; i < words.length - 2; i++) {
+      for (let j = i + 1; j < words.length - 1; j++) {
+        for (let k = j + 1; k < words.length; k++) {
+          const l1 = words.slice(0, i).join(' ');
+          const l2 = words.slice(i, j).join(' ');
+          const l3 = words.slice(j, k).join(' ');
+          const l4 = words.slice(k).join(' ');
+          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
+              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue;
+          const diff = Math.max(
+            Math.abs(l1.length - l2.length),
+            Math.abs(l2.length - l3.length),
+            Math.abs(l3.length - l4.length),
+            Math.abs(l1.length - l4.length)
+          );
+          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4]; }
+        }
+      }
+    }
+    if (bestLines) return { lines: bestLines, fontSize };
+  }
+
+  // If 5+ lines, clamp to 4 by joining overflow
+  if (lineCount > 4) {
+    const clamped = greedyLines.slice(0, 3);
+    clamped.push(greedyLines.slice(3).join(' '));
+    const clampedWords = clamped.join(' ').split(/\s+/).filter(Boolean);
+    let bestLines = null;
+    let bestDiff = Infinity;
+    for (let i = 1; i < clampedWords.length - 2; i++) {
+      for (let j = i + 1; j < clampedWords.length - 1; j++) {
+        for (let k = j + 1; k < clampedWords.length; k++) {
+          const l1 = clampedWords.slice(0, i).join(' ');
+          const l2 = clampedWords.slice(i, j).join(' ');
+          const l3 = clampedWords.slice(j, k).join(' ');
+          const l4 = clampedWords.slice(k).join(' ');
+          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
+              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue;
+          const diff = Math.max(
+            Math.abs(l1.length - l2.length),
+            Math.abs(l2.length - l3.length),
+            Math.abs(l3.length - l4.length),
+            Math.abs(l1.length - l4.length)
+          );
+          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4]; }
+        }
+      }
+    }
+    if (bestLines) return { lines: bestLines, fontSize };
+    return { lines: clamped, fontSize };
+  }
+
+  // Fallback: clamp to max 4 lines
+  if (greedyLines.length > 4) {
+    const clamped = greedyLines.slice(0, 3);
+    clamped.push(greedyLines.slice(3).join(' '));
+    return { lines: clamped, fontSize };
+  }
   return { lines: greedyLines, fontSize };
 }
 

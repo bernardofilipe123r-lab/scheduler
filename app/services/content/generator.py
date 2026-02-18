@@ -40,6 +40,7 @@ from app.core.prompt_templates import (
     build_prompt_with_example,
     build_style_anchor,
     build_post_content_prompt,
+    get_content_prompts,
 )
 
 # Quality Scoring
@@ -672,6 +673,17 @@ Write a full Instagram caption (4-5 paragraphs) that:
 
 IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title from the PREVIOUSLY GENERATED list.
 
+### IMAGE PROMPT REQUIREMENTS:"""
+        # Inject user-configured content prompts
+        prompts = get_content_prompts()
+        brand_desc = prompts.get('brand_description', '').strip()
+        posts_prompt_text = prompts.get('posts_prompt', '').strip()
+        if brand_desc:
+            prompt += f"\n\n### BRAND CONTEXT:\n{brand_desc}"
+        if posts_prompt_text:
+            prompt += f"\n\n### ADDITIONAL INSTRUCTIONS:\n{posts_prompt_text}"
+
+        prompt += """
 ### IMAGE PROMPT REQUIREMENTS:
 - Soft, minimal, calming wellness aesthetic
 - Bright modern kitchen or clean lifestyle setting
