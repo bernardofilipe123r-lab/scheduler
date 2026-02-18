@@ -38,8 +38,8 @@ export function useUpdateNicheConfig() {
 
 interface AiUnderstanding {
   understanding: string
-  example_reel_title: string | null
-  example_post_title: string | null
+  example_reel: { title: string; content_lines: string[] } | null
+  example_post: { title: string; slides: string[] } | null
 }
 
 async function fetchAiUnderstanding(brandId?: string): Promise<AiUnderstanding> {

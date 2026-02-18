@@ -267,16 +267,16 @@ async def get_ai_understanding(
     if not config_summary:
         return {
             "understanding": "I don't have enough information about this brand yet. Configure your Content DNA \u2014 add your niche, audience, topics, and tone \u2014 and I'll be able to tell you exactly how I understand your brand.",
-            "example_reel_title": None,
-            "example_post_title": None,
+            "example_reel": None,
+            "example_post": None,
         }
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         return {
             "understanding": "AI service is not configured.",
-            "example_reel_title": None,
-            "example_post_title": None,
+            "example_reel": None,
+            "example_post": None,
         }
 
     prompt = f"""Based on the following brand configuration, write a first-person summary (as the AI content engine) explaining how you understand this brand. Write 2-3 paragraphs.
@@ -285,16 +285,22 @@ Configuration:
 {chr(10).join(config_summary)}
 
 Also generate:
-1. One example reel title (ALL CAPS, 8-12 words) you would create for this brand
-2. One example post title (ALL CAPS, 8-14 words) you would create for this brand
+1. One FULL example reel with a title (ALL CAPS, 8-12 words) and 5-8 content lines (short fragments or cause-effect pairs)
+2. One FULL example carousel post with a title (ALL CAPS, 8-14 words) and 5-8 slides (each slide is one educational point, 1-2 sentences)
 
 Write in first person ("I create...", "I understand...", "My goal is..."). Be specific about the niche, not generic. Show that you deeply understand the brand identity.
 
 OUTPUT FORMAT (JSON only):
 {{{{
     "understanding": "Your 2-3 paragraph first-person summary here...",
-    "example_reel_title": "EXAMPLE REEL TITLE IN ALL CAPS",
-    "example_post_title": "EXAMPLE POST TITLE IN ALL CAPS"
+    "example_reel": {{{{
+        "title": "REEL TITLE IN ALL CAPS",
+        "content_lines": ["Line 1", "Line 2", "Line 3", "..."]
+    }}}},
+    "example_post": {{{{
+        "title": "POST TITLE IN ALL CAPS",
+        "slides": ["Slide 1 text", "Slide 2 text", "Slide 3 text", "..."]
+    }}}}
 }}}}"""
 
     try:
@@ -308,7 +314,7 @@ OUTPUT FORMAT (JSON only):
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7,
-                "max_tokens": 800,
+                "max_tokens": 1500,
             },
             timeout=30,
         )
@@ -325,14 +331,14 @@ OUTPUT FORMAT (JSON only):
             result = json.loads(content_text)
             return {
                 "understanding": result.get("understanding", ""),
-                "example_reel_title": result.get("example_reel_title"),
-                "example_post_title": result.get("example_post_title"),
+                "example_reel": result.get("example_reel"),
+                "example_post": result.get("example_post"),
             }
     except Exception as e:
         print(f"AI understanding generation failed: {e}", flush=True)
 
     return {
         "understanding": "I wasn't able to generate an understanding right now. Please try again.",
-        "example_reel_title": None,
-        "example_post_title": None,
+        "example_reel": None,
+        "example_post": None,
     }

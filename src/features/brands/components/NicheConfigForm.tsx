@@ -102,7 +102,11 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   const [values, setValues] = useState<NicheConfig>(DEFAULT_CONFIG)
   const [dirty, setDirty] = useState(false)
-  const [aiResult, setAiResult] = useState<{ understanding: string; example_reel_title: string | null; example_post_title: string | null } | null>(null)
+  const [aiResult, setAiResult] = useState<{
+    understanding: string
+    example_reel: { title: string; content_lines: string[] } | null
+    example_post: { title: string; slides: string[] } | null
+  } | null>(null)
 
   useEffect(() => {
     if (data) {
@@ -429,24 +433,40 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{aiResult.understanding}</p>
             </div>
 
-            {(aiResult.example_reel_title || aiResult.example_post_title) && (
+            {(aiResult.example_reel || aiResult.example_post) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {aiResult.example_reel_title && (
+                {aiResult.example_reel && (
                   <div className="border border-indigo-100 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 mb-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 mb-2">
                       <Film className="w-3.5 h-3.5" />
-                      Example Reel Title
+                      Example Reel
                     </div>
-                    <p className="text-sm font-medium text-gray-900">{aiResult.example_reel_title}</p>
+                    <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_reel.title}</p>
+                    <ol className="space-y-1">
+                      {aiResult.example_reel.content_lines.map((line, i) => (
+                        <li key={i} className="text-xs text-gray-600 flex gap-1.5">
+                          <span className="text-indigo-400 font-medium shrink-0">{i + 1}.</span>
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ol>
                   </div>
                 )}
-                {aiResult.example_post_title && (
+                {aiResult.example_post && (
                   <div className="border border-purple-100 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600 mb-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600 mb-2">
                       <LayoutGrid className="w-3.5 h-3.5" />
-                      Example Post Title
+                      Example Carousel Post
                     </div>
-                    <p className="text-sm font-medium text-gray-900">{aiResult.example_post_title}</p>
+                    <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_post.title}</p>
+                    <ol className="space-y-1">
+                      {aiResult.example_post.slides.map((slide, i) => (
+                        <li key={i} className="text-xs text-gray-600 flex gap-1.5">
+                          <span className="text-purple-400 font-medium shrink-0">Slide {i + 1}:</span>
+                          <span>{slide}</span>
+                        </li>
+                      ))}
+                    </ol>
                   </div>
                 )}
               </div>
