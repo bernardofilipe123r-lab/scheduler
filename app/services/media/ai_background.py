@@ -417,26 +417,17 @@ class AIBackgroundGenerator:
             progress_callback("Preparing HQ image prompt...", 10)
         
         # For posts, we use the user prompt directly (already wellness-styled from AI)
-        # Add a quality-boosting suffix with composition guidance
-        # Composition guidance goes FIRST to ensure AI model prioritizes it
-        composition_prefix = (
-            "CRITICAL LAYOUT RULE: The hero subject MUST occupy the TOP THIRD of the frame. "
-            "The top 30-40%% of the image contains ALL important visual elements — the main subject, "
-            "key details, and focal point. The bottom half should be empty space, soft bokeh, "
-            "a clean surface, subtle gradient, or negative space. "
-            "Think of it as a social media post where only the top portion is visible in the feed. "
-            "Top-heavy composition, bird's eye or slightly overhead angle. "
-        )
-        
+        # Add a quality-boosting suffix — no composition rules (we handle framing via crop)
         quality_suffix = (
             "Ultra high quality, 8K, sharp focus, professional photography, "
             "soft natural lighting, premium lifestyle aesthetic. "
             "Photorealistic, detailed textures, beautiful composition. "
+            "Close-up, full-frame, subject fills the entire image. "
             "Portrait orientation 4:5 aspect ratio."
         )
         
         prompt = user_prompt or "Soft cinematic wellness still life with natural ingredients on white countertop in morning light."
-        prompt = f"{composition_prefix} {prompt} {quality_suffix}"
+        prompt = f"{prompt} {quality_suffix}"
         
         # Add unique identifier
         unique_id = str(uuid.uuid4())[:8]
@@ -546,12 +537,19 @@ class AIBackgroundGenerator:
                     if image.size != (POST_WIDTH, POST_HEIGHT):
                         image = image.resize((POST_WIDTH, POST_HEIGHT), Image.Resampling.LANCZOS)
                     
+                    # Crop top 80% of the image and stretch to full height.
+                    # This shifts the visible content upward by 20%, ensuring the
+                    # subject stays visible above the cover slide gradient overlay.
+                    crop_bottom = int(POST_HEIGHT * 0.8)
+                    cropped = image.crop((0, 0, POST_WIDTH, crop_bottom))
+                    image = cropped.resize((POST_WIDTH, POST_HEIGHT), Image.Resampling.LANCZOS)
+                    
                     total_duration = time.time() - start_time
                     
                     if progress_callback:
                         progress_callback(f"HQ background generated in {total_duration:.1f}s", 100)
                     
-                    print(f"✅ HQ post background: {POST_WIDTH}x{POST_HEIGHT} for {brand_name}")
+                    print(f"✅ HQ post background: {POST_WIDTH}x{POST_HEIGHT} for {brand_name} (20% top-crop applied)")
                     print(f"⏱️  Total: {total_duration:.1f}s (API: {api_duration:.1f}s)")
                     
                     return image

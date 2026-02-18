@@ -331,10 +331,8 @@ POST_QUALITY_SUFFIX = (
     "Ultra high quality, 8K, sharp focus, professional photography, "
     "soft natural lighting, premium lifestyle aesthetic. "
     "Photorealistic, detailed textures, beautiful composition. "
-    "CRITICAL COMPOSITION: Subject must be centered in the UPPER HALF of the frame. "
-    "The bottom third of the image should be soft bokeh, clean surface, or subtle gradient "
-    "- NOT the main subject. Portrait orientation, slightly overhead camera angle, "
-    "hero subject positioned in center-upper area of frame."
+    "Close-up, full-frame, subject fills the entire image. "
+    "Portrait orientation 4:5 aspect ratio."
 )
 
 REEL_BASE_STYLE = (
