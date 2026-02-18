@@ -445,11 +445,12 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
             for j, slide in enumerate(ex["slides"], 2):
                 examples_text += f"Slide {j}: {slide}\n"
 
+    brief_block = ""
+    if ctx.content_brief:
+        brief_block = f"\nCONTENT BRIEF (follow this closely):\n{ctx.content_brief}\n"
+
     prompt = f"""You are a {ctx.niche_name.lower()} content creator for {ctx.parent_brand_name}, targeting {ctx.target_audience}.
-{f"""
-CONTENT BRIEF (follow this closely):
-{ctx.content_brief}
-""" if ctx.content_brief else ""}
+{brief_block}
 Generate EXACTLY {count} COMPLETELY DIFFERENT {ctx.niche_name.lower()}-focused posts. Each post MUST cover a DIFFERENT topic category.
 
 ### TARGET AUDIENCE:
