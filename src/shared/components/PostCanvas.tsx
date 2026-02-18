@@ -222,6 +222,31 @@ export function balanceTitleText(
     if (bestLines) return { lines: bestLines, fontSize }
   }
 
+  if (lineCount === 4 && words.length >= 4) {
+    let bestLines: string[] | null = null
+    let bestDiff = Infinity
+    for (let i = 1; i < words.length - 2; i++) {
+      for (let j = i + 1; j < words.length - 1; j++) {
+        for (let k = j + 1; k < words.length; k++) {
+          const l1 = words.slice(0, i).join(' ')
+          const l2 = words.slice(i, j).join(' ')
+          const l3 = words.slice(j, k).join(' ')
+          const l4 = words.slice(k).join(' ')
+          if (l1.length > maxCharsPerLine || l2.length > maxCharsPerLine ||
+              l3.length > maxCharsPerLine || l4.length > maxCharsPerLine) continue
+          const diff = Math.max(
+            Math.abs(l1.length - l2.length),
+            Math.abs(l2.length - l3.length),
+            Math.abs(l3.length - l4.length),
+            Math.abs(l1.length - l4.length),
+          )
+          if (diff < bestDiff) { bestDiff = diff; bestLines = [l1, l2, l3, l4] }
+        }
+      }
+    }
+    if (bestLines) return { lines: bestLines, fontSize }
+  }
+
   // ── Fallback: original greedy wrap ─────────────────────────────
   return { lines: greedyLines, fontSize }
 }
@@ -261,14 +286,13 @@ function countLines(text: string, maxWidth: number, fontSize: number): number {
 }
 
 const AUTO_FIT_MAX = 90
-const AUTO_FIT_MIN = 30
-const THREE_LINE_FLOOR = 64 // below this, give up on 3 lines → try 2
+const AUTO_FIT_MIN = 80
 
 /**
- * Find the LARGEST font size that produces the best layout:
- *  1. Start at 90px, try to fit in 3 lines. Reduce until it fits or hits 64px.
- *  2. If 3 lines never worked (title is too short), start at 90px for 2 lines.
- *  3. If 2 lines never worked, use 1 line at 90px (or the largest that fits).
+ * Find the LARGEST font size that produces the best layout.
+ * Priority order: 3 lines → 4 lines → 2 lines.
+ * Min font size is 80; if no line count works at ≥ 80,
+ * fall back to 3 lines with the largest possible font.
  */
 export function autoFitFontSize(
   text: string,
@@ -276,22 +300,20 @@ export function autoFitFontSize(
   _startSize: number,
   _maxLines: number,
 ): number {
-  // ── Try 3 lines: 90px → 64px ──────────────────────────────────
-  for (let fs = AUTO_FIT_MAX; fs >= THREE_LINE_FLOOR; fs -= 2) {
+  // ── Try preferred line counts: 3 → 4 → 2 with font ≥ 80 ──────
+  for (const target of [3, 4, 2]) {
+    for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2) {
+      if (countLines(text, maxWidth, fs) === target) return fs
+    }
+  }
+
+  // ── Fallback: 3 lines at any font size (rare long titles) ─────
+  for (let fs = AUTO_FIT_MAX; fs >= 30; fs -= 2) {
     if (countLines(text, maxWidth, fs) === 3) return fs
   }
 
-  // ── Try 2 lines: 90px → 30px ──────────────────────────────────
-  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2) {
-    if (countLines(text, maxWidth, fs) === 2) return fs
-  }
-
-  // ── 1 line: largest that fits ─────────────────────────────────
-  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs -= 2) {
-    if (countLines(text, maxWidth, fs) <= 1) return fs
-  }
-
-  return AUTO_FIT_MIN
+  // ── Short text that stays ≤ 2 lines at max font ───────────────
+  return AUTO_FIT_MAX
 }
 
 // ─── Load / save general settings ────────────────────────────────────

@@ -9,6 +9,7 @@ import { BrandThemeModal } from './BrandThemeModal'
 import { CreateBrandModal } from './CreateBrandModal'
 import { DeleteBrandDialog } from './DeleteBrandDialog'
 import { BrandCard } from './BrandCard'
+import { ContentPromptsCard } from './ContentPromptsCard'
 import { type BrandInfo } from '@/features/brands/constants'
 
 interface MyBrandsTabProps {
@@ -105,6 +106,9 @@ export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTab
 
   return (
     <>
+      {/* Global content prompts */}
+      <ContentPromptsCard />
+
       <div className="space-y-4">
         {sortedBrands.map((brand, index) => (
           <BrandCard

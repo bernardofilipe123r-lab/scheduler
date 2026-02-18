@@ -195,7 +195,7 @@ export function PostsPage() {
         {/* Col 1: Inputs */}
         <div className="space-y-4 min-w-0">
           {/* Topic Hint + AI Image Prompt side by side on desktop */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
             {/* Title */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <label className="block text-sm font-semibold text-gray-900 mb-2">

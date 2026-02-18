@@ -278,29 +278,57 @@ class ImageGenerator:
             if current_font_size < TITLE_FONT_SIZE:
                 print(f"      📏 Thumbnail title scaled: {TITLE_FONT_SIZE}px → {current_font_size}px", flush=True)
         else:
-            # No manual breaks - use auto-wrap with font scaling
-            current_font_size = TITLE_FONT_SIZE
+            # No manual breaks - auto-fit with line count priority: 3 → 4 → 2
+            max_font = 90
+            min_font = 80
+            current_font_size = max_font
             title_lines = []
+            found = False
             
-            while current_font_size >= 40:  # Minimum font size
+            # Try preferred line counts with font >= 80
+            for target_lines in [3, 4, 2]:
+                for fs in range(max_font, min_font - 1, -2):
+                    tf = get_title_font(fs)
+                    lines_candidate = wrap_text(title_upper, tf, max_title_width)
+                    if len(lines_candidate) == target_lines:
+                        all_fit = all(
+                            get_text_dimensions(l, tf)[0] <= max_title_width
+                            for l in lines_candidate
+                        )
+                        if all_fit:
+                            current_font_size = fs
+                            title_font = tf
+                            title_lines = lines_candidate
+                            found = True
+                            break
+                if found:
+                    break
+            
+            if not found:
+                # Fallback: 3 lines at any font size (rare long titles)
+                for fs in range(max_font, 29, -2):
+                    tf = get_title_font(fs)
+                    lines_candidate = wrap_text(title_upper, tf, max_title_width)
+                    if len(lines_candidate) == 3:
+                        all_fit = all(
+                            get_text_dimensions(l, tf)[0] <= max_title_width
+                            for l in lines_candidate
+                        )
+                        if all_fit:
+                            current_font_size = fs
+                            title_font = tf
+                            title_lines = lines_candidate
+                            found = True
+                            break
+            
+            if not found:
+                # Short text: use max font
+                current_font_size = max_font
                 title_font = get_title_font(current_font_size)
                 title_lines = wrap_text(title_upper, title_font, max_title_width)
-                
-                # Check if result is acceptable (max 2-3 lines for thumbnail)
-                if len(title_lines) <= 3:
-                    # Also verify each line actually fits
-                    all_fit = True
-                    for line in title_lines:
-                        line_width, _ = get_text_dimensions(line, title_font)
-                        if line_width > max_title_width:
-                            all_fit = False
-                            break
-                    if all_fit:
-                        break
-                current_font_size -= 2
             
-            if current_font_size < TITLE_FONT_SIZE:
-                print(f"      📏 Thumbnail title scaled: {TITLE_FONT_SIZE}px → {current_font_size}px", flush=True)
+            if current_font_size != max_font:
+                print(f"      📏 Thumbnail title scaled: {max_font}px → {current_font_size}px", flush=True)
         
         # Calculate vertical center position for title
         title_height = sum(

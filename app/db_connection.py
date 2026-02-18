@@ -41,7 +41,22 @@ def init_db():
 
 def run_migrations():
     """Run idempotent SQL migrations for indexes and constraints not handled by create_all."""
-    pass
+    with engine.connect() as conn:
+        # Seed global prompt settings if they don't exist
+        for key, desc in [
+            ("reels_prompt", "Global prompt describing topics/ideas for reel content"),
+            ("posts_prompt", "Global prompt describing topics/ideas for carousel/post content"),
+            ("brand_description", "Global brand description (avatar, content topic, audience)"),
+        ]:
+            conn.execute(
+                text(
+                    "INSERT INTO app_settings (key, value, description, category, value_type, sensitive, updated_at) "
+                    "VALUES (:key, '', :desc, 'content', 'string', false, now()) "
+                    "ON CONFLICT (key) DO NOTHING"
+                ),
+                {"key": key, "desc": desc},
+            )
+        conn.commit()
 
 
 def get_db() -> Session:

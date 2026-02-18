@@ -112,6 +112,7 @@ export function PostJobDetail({ job, refetch }: Props) {
 
   // Scheduling state
   const [isScheduling, setIsScheduling] = useState(false)
+  const [isCapturing, setIsCapturing] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   // Per-brand font size overrides (persisted to localStorage)
@@ -331,6 +332,7 @@ export function PostJobDetail({ job, refetch }: Props) {
       return
     }
     setIsScheduling(true)
+    setIsCapturing(true)
     toast.loading('Scheduling posts for all brands...', { id: 'sched' })
 
     let scheduled = 0
@@ -468,13 +470,12 @@ export function PostJobDetail({ job, refetch }: Props) {
       }
 
       if (scheduled > 0) {
-        const names = scheduledBrands.join(', ')
         const msg =
           failed > 0
-            ? `${names} scheduled! ${failed} failed.`
+            ? `${scheduled} posts scheduled, ${failed} failed`
             : scheduledBrands.length === 1
-              ? `${scheduledBrands[0]} was scheduled successfully!`
-              : `All ${scheduled} brands scheduled: ${names}`
+              ? 'Post was scheduled successfully'
+              : 'Posts were scheduled successfully for all brands'
         toast.success(msg, { id: 'sched', duration: 5000 })
         await refetch()
         setBrandSlideIndex({})
@@ -484,6 +485,7 @@ export function PostJobDetail({ job, refetch }: Props) {
     } catch {
       toast.error('Failed to schedule posts', { id: 'sched' })
     } finally {
+      setIsCapturing(false)
       setIsScheduling(false)
     }
   }
@@ -596,8 +598,8 @@ export function PostJobDetail({ job, refetch }: Props) {
           <Check className="w-5 h-5 text-green-600" />
           <span className="font-medium text-green-900">
             {job.brands.length === 1
-              ? `${getBrandConfig(job.brands[0]).name} was scheduled successfully`
-              : `All ${job.brands.length} brands scheduled: ${job.brands.map(b => getBrandConfig(b).name).join(', ')}`}
+              ? 'Post was scheduled successfully'
+              : 'Posts were scheduled successfully for all brands'}
           </span>
           <button
             onClick={() => navigate('/calendar')}
@@ -708,7 +710,15 @@ export function PostJobDetail({ job, refetch }: Props) {
               )}
 
               {/* Canvas with carousel navigation */}
-              <div className="rounded-lg overflow-hidden border border-gray-100">
+              <div className="rounded-lg overflow-hidden border border-gray-100 relative">
+                {isCapturing && (status === 'completed' || status === 'scheduled') && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                      <span className="text-sm text-gray-500">Scheduling...</span>
+                    </div>
+                  </div>
+                )}
                 {status === 'completed' || status === 'scheduled' ? (
                   currentSlide === 0 ? (
                     <PostCanvas

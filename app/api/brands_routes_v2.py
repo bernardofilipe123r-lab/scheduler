@@ -24,6 +24,7 @@ from app.services.storage.supabase_storage import (
     upload_bytes, storage_path, StorageError,
 )
 from app.api.auth.middleware import get_current_user
+from app.models.config import AppSettings
 
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,60 @@ class BrandResponse(BaseModel):
     has_facebook: bool
     created_at: Optional[str]
     updated_at: Optional[str]
+
+
+class UpdatePromptsRequest(BaseModel):
+    """Request to update global content prompts."""
+    reels_prompt: Optional[str] = None
+    posts_prompt: Optional[str] = None
+    brand_description: Optional[str] = None
+
+
+# ============================================================================
+# GLOBAL PROMPTS ENDPOINTS
+# ============================================================================
+
+PROMPT_KEYS = ["reels_prompt", "posts_prompt", "brand_description"]
+
+
+@router.get("/prompts")
+async def get_prompts(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Get the 3 global content prompt settings."""
+    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
+    result = {k: "" for k in PROMPT_KEYS}
+    for row in rows:
+        result[row.key] = row.value or ""
+    return result
+
+
+@router.put("/prompts")
+async def update_prompts(
+    request: UpdatePromptsRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Update the 3 global content prompt settings."""
+    updates = {k: v for k, v in request.dict().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    for key, value in updates.items():
+        row = db.query(AppSettings).filter(AppSettings.key == key).first()
+        if row:
+            row.value = value
+        else:
+            db.add(AppSettings(key=key, value=value, category="content", value_type="string"))
+    db.commit()
+
+    # Return current state
+    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
+    result = {k: "" for k in PROMPT_KEYS}
+    for row in rows:
+        result[row.key] = row.value or ""
+    return {"success": True, **result}
 
 
 # ============================================================================
