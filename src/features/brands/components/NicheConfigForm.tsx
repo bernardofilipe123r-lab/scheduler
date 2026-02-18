@@ -7,6 +7,8 @@ import { ContentExamplesSection } from './ContentExamplesSection'
 import { TagInput } from './TagInput'
 import { ChipSelect } from './ChipSelect'
 import type { NicheConfig } from '../types/niche-config'
+import { PostCanvas, DEFAULT_GENERAL_SETTINGS } from '@/shared/components/PostCanvas'
+import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 
 const TONE_OPTIONS = [
   'calm', 'authoritative', 'educational', 'empowering', 'casual',
@@ -434,39 +436,77 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             </div>
 
             {(aiResult.example_reel || aiResult.example_post) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-6">
+                {/* Reel Preview */}
                 {aiResult.example_reel && (
-                  <div className="border border-indigo-100 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 mb-2">
-                      <Film className="w-3.5 h-3.5" />
-                      Example Reel
+                  <div className="border border-indigo-100 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600">
+                        <Film className="w-3.5 h-3.5" />
+                        Example Reel Preview
+                      </div>
+                      <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Preview only</span>
                     </div>
-                    <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_reel.title}</p>
-                    <ol className="space-y-1">
-                      {aiResult.example_reel.content_lines.map((line, i) => (
-                        <li key={i} className="text-xs text-gray-600 flex gap-1.5">
-                          <span className="text-indigo-400 font-medium shrink-0">{i + 1}.</span>
-                          <span>{line}</span>
-                        </li>
-                      ))}
-                    </ol>
+                    <div className="flex gap-4">
+                      <div className="shrink-0 rounded-lg overflow-hidden shadow-md">
+                        <PostCanvas
+                          brand={brandId || ''}
+                          title={aiResult.example_reel.title}
+                          backgroundImage={null}
+                          settings={DEFAULT_GENERAL_SETTINGS}
+                          scale={0.2}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_reel.title}</p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5">Script Lines</p>
+                        <ol className="space-y-1">
+                          {aiResult.example_reel.content_lines.map((line, i) => (
+                            <li key={i} className="text-xs text-gray-600 flex gap-1.5">
+                              <span className="text-indigo-400 font-medium shrink-0">{i + 1}.</span>
+                              <span>{line}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {/* Carousel Post Preview */}
                 {aiResult.example_post && (
-                  <div className="border border-purple-100 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600 mb-2">
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      Example Carousel Post
+                  <div className="border border-purple-100 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600">
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        Example Carousel Post Preview
+                      </div>
+                      <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Preview only</span>
                     </div>
-                    <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_post.title}</p>
-                    <ol className="space-y-1">
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {/* Cover slide */}
+                      <div className="shrink-0 rounded-lg overflow-hidden shadow-md">
+                        <PostCanvas
+                          brand={brandId || ''}
+                          title={aiResult.example_post.title}
+                          backgroundImage={null}
+                          settings={DEFAULT_GENERAL_SETTINGS}
+                          scale={0.2}
+                        />
+                      </div>
+                      {/* Text slides */}
                       {aiResult.example_post.slides.map((slide, i) => (
-                        <li key={i} className="text-xs text-gray-600 flex gap-1.5">
-                          <span className="text-purple-400 font-medium shrink-0">Slide {i + 1}:</span>
-                          <span>{slide}</span>
-                        </li>
+                        <div key={i} className="shrink-0 rounded-lg overflow-hidden shadow-md">
+                          <CarouselTextSlide
+                            brand={brandId || ''}
+                            text={slide}
+                            allSlideTexts={aiResult.example_post!.slides}
+                            isLastSlide={i === aiResult.example_post!.slides.length - 1}
+                            scale={0.2}
+                          />
+                        </div>
                       ))}
-                    </ol>
+                    </div>
                   </div>
                 )}
               </div>
