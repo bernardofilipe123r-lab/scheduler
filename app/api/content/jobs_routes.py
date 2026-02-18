@@ -425,6 +425,86 @@ async def regenerate_all(
         )
 
 
+def _resume_job_async(job_id: str):
+    """Background task to resume an interrupted job (only incomplete brands)."""
+    import traceback
+    import sys
+
+    print(f"\n🔄 RESUME TASK STARTED for {job_id}", flush=True)
+    sys.stdout.flush()
+
+    _job_semaphore.acquire()
+    try:
+        with get_db_session() as db:
+            processor = JobProcessor(db)
+            result = processor.resume_job(job_id)
+            ok = result.get("success", False)
+            print(f"{'✅' if ok else '❌'} Resume {job_id}: {result}", flush=True)
+    except Exception as e:
+        print(f"❌ Resume {job_id} failed: {e}", flush=True)
+        traceback.print_exc()
+        try:
+            with get_db_session() as db:
+                JobManager(db).update_job_status(job_id, "failed", error_message=f"Resume failed: {e}")
+        except Exception:
+            pass
+    finally:
+        _job_semaphore.release()
+
+
+@router.post(
+    "/{job_id}/retry",
+    summary="Retry incomplete brands",
+    description="Resume a failed/interrupted job — only re-processes brands that didn't complete."
+)
+async def retry_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Retry a failed or interrupted job.
+
+    Only brands that haven't completed will be re-processed.
+    Already-completed brands (with thumbnails/videos) are kept intact.
+    """
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            job = manager.get_job(job_id, user_id=user["id"])
+
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+            if job.status == "generating":
+                raise HTTPException(status_code=409, detail="Job is already running")
+
+            outputs = job.brand_outputs or {}
+            brands = job.brands or []
+            incomplete = [b for b in brands if outputs.get(b, {}).get("status") != "completed"]
+
+            if not incomplete:
+                manager.update_job_status(job_id, "completed", "All brands already completed", 100)
+                return {"status": "already_complete", "job_id": job_id, "message": "All brands are already completed"}
+
+            # Prepare for resume
+            manager.update_job_status(job_id, "generating", f"Retrying {len(incomplete)} brand(s)...", 0)
+
+        background_tasks.add_task(_resume_job_async, job_id)
+
+        return {
+            "status": "queued",
+            "job_id": job_id,
+            "incomplete_brands": incomplete,
+            "message": f"Retrying {len(incomplete)} incomplete brand(s) in background",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retry job: {str(e)}")
+
+
 @router.get(
     "/",
     summary="List all jobs (history)"

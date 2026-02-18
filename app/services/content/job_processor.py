@@ -755,3 +755,150 @@ class JobProcessor:
         except Exception as e:
             self._manager.update_job_status(job_id, "failed", error_message=str(e))
             return {"success": False, "error": str(e)}
+
+    # ── Deploy-resilient resume ───────────────────────────────────────
+
+    def resume_job(self, job_id: str) -> Dict[str, Any]:
+        """
+        Resume a job that was interrupted by a deploy/restart.
+
+        Inspects ``brand_outputs`` to find which brands still need processing
+        and re-runs only those.  Brands that already completed are left intact.
+        """
+        import sys
+
+        job = self._manager.get_job(job_id)
+        if not job:
+            return {"success": False, "error": f"Job not found: {job_id}"}
+
+        brand_outputs = job.brand_outputs or {}
+        all_brands = job.brands or []
+
+        # Determine which brands need (re-)processing
+        incomplete_brands = [
+            b for b in all_brands
+            if brand_outputs.get(b, {}).get("status") != "completed"
+        ]
+
+        if not incomplete_brands:
+            # Every brand already finished — just fix the job status
+            self._manager.update_job_status(job_id, "completed", "Recovered — all brands were done", 100)
+            print(f"✅ Resume {job_id}: all brands already completed, marking done", flush=True)
+            return {"success": True, "resumed_brands": [], "skipped": all_brands}
+
+        print(f"🔄 Resuming {job_id}: {len(incomplete_brands)}/{len(all_brands)} brands need processing", flush=True)
+        for b in all_brands:
+            st = brand_outputs.get(b, {}).get("status", "unknown")
+            print(f"   {b}: {st}{'  ← will retry' if b in incomplete_brands else ''}", flush=True)
+        sys.stdout.flush()
+
+        # Reset incomplete brands to pending so the UI shows them correctly
+        for b in incomplete_brands:
+            self._manager.update_brand_output(job_id, b, {
+                "status": "pending",
+                "progress_message": "Queued for resume after deploy...",
+            })
+
+        self._manager.update_job_status(job_id, "generating", "Resuming after deploy...", 0)
+
+        # ── POST variant ─────────────────────────────────────────────
+        if job.variant == "post":
+            results = {}
+            for i, brand in enumerate(incomplete_brands):
+                job = self._manager.get_job(job_id)
+                if job.status == "cancelled":
+                    return {"success": False, "error": "Cancelled", "results": results}
+
+                progress = int(((i + 1) / (len(incomplete_brands) + 1)) * 100)
+                self._manager.update_job_status(job_id, "generating", f"Resuming {brand}...", progress)
+
+                post_result = {"success": False, "error": "Timeout"}
+                def _run(b=brand):
+                    nonlocal post_result
+                    try:
+                        post_result = self.process_post_brand(job_id, b)
+                    except Exception as ex:
+                        post_result = {"success": False, "error": f"{type(ex).__name__}: {ex}"}
+                t = threading.Thread(target=_run, daemon=True)
+                t.start()
+                t.join(timeout=BRAND_GENERATION_TIMEOUT)
+                if t.is_alive():
+                    self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": "Timeout on resume"})
+                    post_result = {"success": False, "error": "Timeout"}
+                results[brand] = post_result
+
+            self._finalize_job(job_id, results, all_brands, brand_outputs)
+            return {"success": any(r.get("success") for r in results.values()), "results": results}
+
+        # ── REEL variants (light / dark) ─────────────────────────────
+        results = {}
+
+        # Re-run content differentiation only for incomplete brands
+        brand_content_map: Dict[str, List[str]] = {}
+        if job.content_lines and len(job.content_lines) >= 3 and len(incomplete_brands) > 1:
+            try:
+                differentiator = ContentDifferentiator()
+                brand_content_map = differentiator.differentiate_all_brands(
+                    title=job.title,
+                    content_lines=job.content_lines,
+                    brands=incomplete_brands,
+                )
+                print(f"   ✓ Re-generated content variations for {len(brand_content_map)} brands", flush=True)
+            except Exception as e:
+                print(f"   ⚠️ Differentiation failed on resume: {e}", flush=True)
+
+        try:
+            for i, brand in enumerate(incomplete_brands):
+                job = self._manager.get_job(job_id)
+                if job.status == "cancelled":
+                    return {"success": False, "error": "Cancelled", "results": results}
+
+                progress = int((i / len(incomplete_brands)) * 100)
+                self._manager.update_job_status(job_id, "generating", f"Resuming {brand}...", progress)
+
+                brand_content = brand_content_map.get(brand.lower())
+
+                result = {"success": False, "error": "Timeout"}
+                def _run_brand():
+                    nonlocal result
+                    try:
+                        result = self.regenerate_brand(job_id, brand, content_lines=brand_content)
+                    except Exception as ex:
+                        result = {"success": False, "error": f"{type(ex).__name__}: {ex}"}
+
+                bt = threading.Thread(target=_run_brand, daemon=True)
+                bt.start()
+                bt.join(timeout=BRAND_GENERATION_TIMEOUT)
+                if bt.is_alive():
+                    self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": "Timeout on resume"})
+                    result = {"success": False, "error": "Timeout"}
+                results[brand] = result
+
+            self._finalize_job(job_id, results, all_brands, brand_outputs)
+            return {"success": any(r.get("success") for r in results.values()), "results": results}
+
+        except Exception as e:
+            self._manager.update_job_status(job_id, "failed", error_message=str(e))
+            return {"success": False, "error": str(e)}
+
+    def _finalize_job(
+        self,
+        job_id: str,
+        new_results: Dict[str, Any],
+        all_brands: List[str],
+        prior_outputs: Dict[str, Any],
+    ):
+        """Set the final job status considering both previously-completed and newly-processed brands."""
+        # Merge: brands that were already completed count as successes
+        ok_count = sum(
+            1 for b in all_brands
+            if prior_outputs.get(b, {}).get("status") == "completed"
+            or new_results.get(b, {}).get("success")
+        )
+        if ok_count == len(all_brands):
+            self._manager.update_job_status(job_id, "completed", "All brands generated!", 100)
+        elif ok_count > 0:
+            self._manager.update_job_status(job_id, "completed", "Completed with some errors", 100)
+        else:
+            errors = [r.get("error", "Unknown") for r in new_results.values() if r.get("error")]
+            self._manager.update_job_status(job_id, "failed", error_message=errors[0] if errors else "All brands failed")

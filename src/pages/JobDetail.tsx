@@ -25,7 +25,8 @@ import {
   useRegenerateBrand,
   useUpdateJob,
   useJobNextSlots,
-  useUpdateBrandStatus
+  useUpdateBrandStatus,
+  useRetryJob
 } from '@/features/jobs'
 import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
@@ -47,6 +48,7 @@ export function JobDetailPage() {
   const updateJob = useUpdateJob()
   const updateBrandStatus = useUpdateBrandStatus()
   const autoSchedule = useAutoScheduleReel()
+  const retryJob = useRetryJob()
   
   // Modal states
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -391,10 +393,29 @@ export function JobDetailPage() {
               <div className="mt-3 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium text-red-700">Error:</p>
                     <p className="text-red-600">{job.error_message}</p>
                   </div>
+                  {job.status === 'failed' && (
+                    <button
+                      onClick={() => {
+                        retryJob.mutate(id, {
+                          onSuccess: () => toast.success('Retrying incomplete brands...'),
+                          onError: (err: any) => toast.error(err?.message || 'Failed to retry job'),
+                        })
+                      }}
+                      disabled={retryJob.isPending}
+                      className="btn btn-primary btn-sm flex-shrink-0"
+                    >
+                      {retryJob.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3 h-3" />
+                      )}
+                      Retry Incomplete
+                    </button>
+                  )}
                 </div>
               </div>
             )}

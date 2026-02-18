@@ -193,3 +193,15 @@ export function useRegenerateBrandImage() {
     },
   })
 }
+
+export function useRetryJob() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: jobsApi.retry,
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
+    },
+  })
+}

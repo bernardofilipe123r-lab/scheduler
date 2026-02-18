@@ -124,4 +124,8 @@ export const jobsApi = {
       aiPrompt ? { ai_prompt: aiPrompt } : {}
     )
   },
+
+  retry: async (id: string): Promise<{ status: string; job_id: string; incomplete_brands: string[] }> => {
+    return post<{ status: string; job_id: string; incomplete_brands: string[] }>(`/jobs/${id}/retry`)
+  },
 }

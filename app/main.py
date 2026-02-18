@@ -381,8 +381,8 @@ async def startup_event():
         print(f"      Token:        {token_status}", flush=True)
     print("", flush=True)
     
-    # Reset any stuck "generating" jobs from previous crashes/deploys
-    print("🔄 Checking for stuck generating jobs...", flush=True)
+    # Resume any interrupted "generating" jobs from previous crashes/deploys
+    print("🔄 Checking for interrupted generating jobs...", flush=True)
     try:
         from app.models import GenerationJob
         db_stuck = SessionLocal()
@@ -391,16 +391,67 @@ async def startup_event():
                 GenerationJob.status == "generating"
             ).all()
             if stuck_jobs:
+                resume_ids = []
                 for job in stuck_jobs:
-                    job.status = "failed"
-                    job.error_message = "Reset on startup — interrupted by deploy"
-                    job.completed_at = datetime.utcnow()
+                    # Check which brands still need work
+                    outputs = job.brand_outputs or {}
+                    brands = job.brands or []
+                    completed = [b for b in brands if outputs.get(b, {}).get("status") == "completed"]
+                    incomplete = [b for b in brands if outputs.get(b, {}).get("status") != "completed"]
+
+                    if not incomplete:
+                        # All brands were already done — just fix status
+                        job.status = "completed"
+                        job.current_step = "Recovered — all brands were done"
+                        job.progress_percent = 100
+                        job.completed_at = datetime.utcnow()
+                        print(f"   ✅ {job.job_id}: all brands done, marked completed", flush=True)
+                    else:
+                        # Has incomplete brands — queue for background resume
+                        job.current_step = f"Queued for resume ({len(incomplete)} brands remaining)..."
+                        resume_ids.append(job.job_id)
+                        print(f"   🔄 {job.job_id}: {len(completed)}/{len(brands)} done, will resume {incomplete}", flush=True)
+
                 db_stuck.commit()
-                print(f"⚠️ Reset {len(stuck_jobs)} stuck generating job(s) from previous run", flush=True)
+
+                # Launch resume threads after committing status updates
+                if resume_ids:
+                    import threading
+                    def _resume_jobs(job_ids):
+                        """Resume interrupted jobs in background."""
+                        import time
+                        time.sleep(5)  # Give the server a moment to finish startup
+                        for jid in job_ids:
+                            try:
+                                print(f"\n🔄 Resuming interrupted job {jid}...", flush=True)
+                                from app.db_connection import get_db_session
+                                from app.services.content.job_processor import JobProcessor
+                                with get_db_session() as db:
+                                    processor = JobProcessor(db)
+                                    result = processor.resume_job(jid)
+                                    ok = result.get("success", False)
+                                    print(f"   {'✅' if ok else '❌'} Resume {jid}: {result}", flush=True)
+                            except Exception as e:
+                                print(f"   ❌ Resume {jid} failed: {e}", flush=True)
+                                try:
+                                    from app.db_connection import get_db_session
+                                    from app.services.content.job_manager import JobManager
+                                    with get_db_session() as db2:
+                                        JobManager(db2).update_job_status(jid, "failed", error_message=f"Resume failed: {e}")
+                                except Exception:
+                                    pass
+
+                    t = threading.Thread(target=_resume_jobs, args=(resume_ids,), daemon=True)
+                    t.start()
+                    print(f"⏳ {len(resume_ids)} job(s) queued for background resume", flush=True)
+                else:
+                    print(f"✅ All {len(stuck_jobs)} interrupted job(s) recovered without re-processing", flush=True)
+            else:
+                print("   No interrupted jobs found", flush=True)
         finally:
             db_stuck.close()
     except Exception as e:
-        print(f"⚠️ Could not check stuck jobs: {e}", flush=True)
+        print(f"⚠️ Could not check interrupted jobs: {e}", flush=True)
 
     # Reset any stuck "publishing" posts from previous crashes
     print("🔄 Checking for stuck publishing posts...", flush=True)
