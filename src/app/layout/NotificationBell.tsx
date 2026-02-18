@@ -95,7 +95,7 @@ export function NotificationBell() {
                     // Job type label
                     const jobType = job.variant === 'post' ? 'Post' : 'Reel'
                     const brandLabel = totalBrands === 1 && job.brands?.[0]
-                      ? job.brands[0].replace(/college$/i, ' College').replace(/^\w/, (c: string) => c.toUpperCase())
+                      ? job.brands[0]
                       : `${totalBrands} brands`
                     
                     return (

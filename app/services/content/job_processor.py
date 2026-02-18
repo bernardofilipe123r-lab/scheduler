@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 
-from app.core.config import BrandType, get_brand_config
+from app.core.config import get_brand_config
 from app.services.media.image_generator import ImageGenerator
 from app.services.media.video_generator import VideoGenerator
 from app.services.content.differentiator import ContentDifferentiator
@@ -46,10 +46,9 @@ def _strip_cta_lines(lines: List[str]) -> List[str]:
     return cleaned
 
 
-def _get_brand_type(brand_name: str) -> BrandType:
-    """Convert brand name to BrandType enum."""
-    bt = brand_resolver.get_brand_type(brand_name)
-    return bt if bt else BrandType.HEALTHY_COLLEGE
+def _get_brand_type(brand_name: str) -> str:
+    """Resolve brand name to canonical brand ID."""
+    return brand_resolver.resolve_brand_name(brand_name) or brand_name
 
 
 class JobProcessor:

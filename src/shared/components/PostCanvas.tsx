@@ -42,14 +42,8 @@ export const SLIDE_FONT_OPTIONS = [
 
 export const SETTINGS_STORAGE_KEY = 'posts-general-settings'
 
-// Post scheduling: 2 slots/day (12AM, 12PM) with brand offsets
-export const POST_BRAND_OFFSETS: Record<string, number> = {
-  healthycollege: 0,
-  longevitycollege: 1,
-  wellbeingcollege: 2,
-  vitalitycollege: 3,
-  holisticcollege: 4,
-}
+// Post scheduling offsets — loaded from DB via useDynamicBrands(), empty by default
+export const POST_BRAND_OFFSETS: Record<string, number> = {}
 
 // ─── Types ───────────────────────────────────────────────────────────
 export interface LayoutConfig {
@@ -72,72 +66,33 @@ export interface GeneralSettings {
   postsPerDay?: number
 }
 
-// ─── Brand configurations ────────────────────────────────────────────
-export const BRAND_CONFIGS: Record<
-  string,
-  { name: string; color: string; colorName: string; accentColor: string }
-> = {
-  healthycollege: {
-    name: 'Healthy College',
-    color: '#22c55e',
-    colorName: 'vibrant green',
-    accentColor: '#16a34a',
-  },
-  longevitycollege: {
-    name: 'Longevity College',
-    color: '#0ea5e9',
-    colorName: 'electric blue',
-    accentColor: '#0284c7',
-  },
-  vitalitycollege: {
-    name: 'Vitality College',
-    color: '#14b8a6',
-    colorName: 'teal',
-    accentColor: '#0d9488',
-  },
-  wellbeingcollege: {
-    name: 'Wellbeing College',
-    color: '#eab308',
-    colorName: 'golden yellow',
-    accentColor: '#ca8a04',
-  },
-  holisticcollege: {
-    name: 'Holistic College',
-    color: '#f97316',
-    colorName: 'coral orange',
-    accentColor: '#ea580c',
-  },
-}
+// ─── Brand configurations — all loaded dynamically from DB ───────────
 
 /**
  * Get brand config with dynamic fallback for unknown brands.
+ * Reads from the runtime BRAND_CONFIG cache (populated by useDynamicBrands).
  */
 export function getBrandConfig(brandId: string) {
-  if (BRAND_CONFIGS[brandId]) return BRAND_CONFIGS[brandId]
   // Check runtime cache (populated by registerBrand via useDynamicBrands)
   const cached = BRAND_CONFIG[brandId]
   if (cached) return { name: cached.label, color: cached.color, colorName: 'custom', accentColor: cached.color }
   // Generate sensible defaults for unknown (new) brands
-  const label = brandId.replace(/college$/i, ' College').replace(/^\w/, c => c.toUpperCase())
+  const label = brandId
   return { name: label, color: '#6b7280', colorName: 'gray', accentColor: '#4b5563' }
-}
-
-const BRAND_ABBREVIATIONS: Record<string, string> = {
-  healthycollege: 'HCO',
-  holisticcollege: 'HCO',
-  longevitycollege: 'LCO',
-  vitalitycollege: 'VCO',
-  wellbeingcollege: 'WCO',
 }
 
 /**
  * Get brand abbreviation with dynamic fallback.
  */
 export function getBrandAbbreviation(brandId: string): string {
-  if (BRAND_ABBREVIATIONS[brandId]) return BRAND_ABBREVIATIONS[brandId]
-  // Generate abbreviation from brand ID: take first letter of each word + 'O'
-  const parts = brandId.replace(/college$/i, '').split(/(?=[A-Z])/)
-  return (parts[0]?.charAt(0)?.toUpperCase() || 'X') + 'CO'
+  // Use short_name from BRAND_CONFIG (populated by useDynamicBrands)
+  const cached = BRAND_CONFIG[brandId]
+  if (cached?.label) {
+    const words = cached.label.split(/\s+/)
+    return (words[0]?.charAt(0)?.toUpperCase() || 'X') + 'CO'
+  }
+  // Fallback: first char of ID + 'CO'
+  return (brandId.charAt(0)?.toUpperCase() || 'X') + 'CO'
 }
 
 // ─── Text-balancing helper ───────────────────────────────────────────

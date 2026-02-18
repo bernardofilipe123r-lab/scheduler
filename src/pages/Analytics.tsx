@@ -41,24 +41,12 @@ import {
   type AnalyticsSnapshot,
 } from '@/features/analytics'
 import { PageLoader } from '@/shared/components'
+import { useDynamicBrands } from '@/features/brands'
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-const BRAND_COLORS: Record<string, string> = {
-  healthycollege: '#004f00',
-  vitalitycollege: '#028f7a',
-  longevitycollege: '#019dc8',
-  holisticcollege: '#f0836e',
-  wellbeingcollege: '#ebbe4d',
-}
-
-const BRAND_LABELS: Record<string, string> = {
-  healthycollege: 'Healthy',
-  vitalitycollege: 'Vitality',
-  longevitycollege: 'Longevity',
-  holisticcollege: 'Holistic',
-  wellbeingcollege: 'Wellbeing',
-}
+// Brand colors and labels are built dynamically from API data.
+// No hardcoded brand entries — populated at runtime from analytics response + useDynamicBrands.
 
 // ─── Utility functions ──────────────────────────────────────────────
 
@@ -402,6 +390,23 @@ export function AnalyticsPage() {
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [backfillSuccess, setBackfillSuccess] = useState<string | null>(null)
   const [hasAutoRefreshed, setHasAutoRefreshed] = useState(false)
+  const { brands: dynamicBrands } = useDynamicBrands()
+
+  // Build brand color/label maps dynamically from API data + dynamic brands
+  const BRAND_COLORS = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    for (const b of dynamicBrands) map[b.id] = b.color
+    // Also pick up any brands from analytics data not yet in dynamicBrands
+    for (const bm of data?.brands || []) if (!map[bm.brand]) map[bm.brand] = bm.color || '#888'
+    return map
+  }, [dynamicBrands, data?.brands])
+
+  const BRAND_LABELS = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {}
+    for (const b of dynamicBrands) map[b.id] = b.label
+    for (const bm of data?.brands || []) if (!map[bm.brand]) map[bm.brand] = bm.display_name || bm.brand
+    return map
+  }, [dynamicBrands, data?.brands])
 
   // Auto-refresh on page load if data is stale
   useEffect(() => {
@@ -494,7 +499,7 @@ export function AnalyticsPage() {
   const chartBrands = useMemo(() => {
     if (selectedBrand !== 'all') return [selectedBrand]
     return Object.keys(BRAND_COLORS)
-  }, [selectedBrand])
+  }, [selectedBrand, BRAND_COLORS])
 
   // Filter brand cards
   const filteredBrands = useMemo(() => {

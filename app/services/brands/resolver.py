@@ -16,7 +16,7 @@ import logging
 import threading
 from typing import Optional
 
-from app.core.config import BrandType, BrandConfig
+from app.core.config import BrandConfig
 from app.core.brand_colors import hex_to_rgb, hex_to_rgba
 from app.models import Brand
 
@@ -140,34 +140,12 @@ class BrandResolver:
 
     # ── Legacy bridges ────────────────────────────────────────
 
-    def get_brand_type(self, brand_name: str, user_id: Optional[str] = None) -> Optional[BrandType]:
+    def get_brand_type(self, brand_name: str, user_id: Optional[str] = None) -> Optional[str]:
         """
-        Resolve brand name to BrandType enum (for legacy code that still needs it).
-        Maps brand_id → BrandType by convention, e.g. 'healthycollege' → HEALTHY_COLLEGE.
+        Resolve brand name to canonical brand ID string.
+        Legacy bridge — returns the brand ID directly (BrandType is now just `str`).
         """
-        brand_id = self.resolve_brand_name(brand_name, user_id)
-        if not brand_id:
-            return None
-
-        # Try direct enum lookup using convention:
-        #   'gymcollege' → 'THE_GYM_COLLEGE'
-        #   'healthycollege' → 'HEALTHY_COLLEGE'
-        # Build candidate enum names
-        candidates = []
-
-        # Split on 'college' boundary: 'healthycollege' → 'healthy', 'college'
-        base = brand_id.replace("college", "")
-        upper = f"{base}_COLLEGE".upper()
-        candidates.append(upper)
-        candidates.append(f"THE_{upper}")
-
-        for candidate in candidates:
-            try:
-                return BrandType(candidate)
-            except ValueError:
-                continue
-
-        return None
+        return self.resolve_brand_name(brand_name, user_id)
 
     def get_brand_config(self, brand_name: str, user_id: Optional[str] = None) -> Optional[BrandConfig]:
         """
@@ -197,15 +175,11 @@ class BrandResolver:
         light_bg_rgba = hex_to_rgba(light_bg_hex)
         dark_bg_rgba = hex_to_rgba(dark_bg_hex)
 
-        # Derive a BrandType name if possible (used by BrandConfig.name)
-        brand_type = self.get_brand_type(brand_id)
-        config_name = brand_type.value if brand_type else brand_id.upper()
-
-        logo_filename = brand.logo_path or f"{brand_id.replace('college', '_college')}_logo.png"
+        logo_filename = brand.logo_path or f"{brand_id}_logo.png"
 
         return BrandConfig(
-            name=config_name,
-            display_name=brand.display_name.replace("THE ", ""),
+            name=brand_id,
+            display_name=brand.display_name or brand_id,
             primary_color=hex_to_rgb(light_bg_hex),
             secondary_color=primary_rgb,
             text_color=primary_rgb,

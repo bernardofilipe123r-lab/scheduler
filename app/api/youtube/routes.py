@@ -139,8 +139,8 @@ async def youtube_callback(
     ).first()
     
     if existing_channel:
-        existing_brand_display = existing_channel.brand.replace("college", " College").title()
-        brand_display = brand.replace("college", " College").title()
+        existing_brand_display = brand_resolver.get_brand_display_name(existing_channel.brand)
+        brand_display = brand_resolver.get_brand_display_name(brand)
         logger.warning(f"Channel {result['channel_id']} already connected to {existing_channel.brand}, attempted by {brand}")
         return HTMLResponse(f"""
         <html>
@@ -254,7 +254,7 @@ async def youtube_callback(
         """)
     
     # Success page
-    brand_display = brand.replace("college", " College").title()
+    brand_display = brand_resolver.get_brand_display_name(brand)
     return HTMLResponse(f"""
     <html>
     <head>

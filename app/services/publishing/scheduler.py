@@ -16,6 +16,13 @@ class DatabaseSchedulerService:
     def __init__(self):
         """Initialize the database scheduler service."""
         self.publisher = SocialPublisher()
+
+    @staticmethod
+    def _brands_match(brand: str, schedule_brand: str) -> bool:
+        """Check if a brand ID matches a schedule's brand string dynamically."""
+        from app.services.brands.resolver import brand_resolver
+        resolved = brand_resolver.resolve_brand_name(schedule_brand)
+        return resolved is not None and resolved == brand.lower()
     
     def schedule_reel(
         self,
@@ -1036,12 +1043,7 @@ class DatabaseSchedulerService:
                 schedule_brand = metadata.get("brand", "").lower()
                 schedule_variant = metadata.get("variant", "light")
                 
-                brand_match = (
-                    (brand.lower() == "gymcollege" and schedule_brand in ["gymcollege", "the_gym_college", "thegymcollege", ""]) or
-                    (brand.lower() == "healthycollege" and schedule_brand in ["healthycollege", "healthy_college", "thehealthycollege"]) or
-                    (brand.lower() == "vitalitycollege" and schedule_brand in ["vitalitycollege", "vitality_college", "thevitalitycollege"]) or
-                    (brand.lower() == "longevitycollege" and schedule_brand in ["longevitycollege", "longevity_college", "thelongevitycollege"])
-                )
+                brand_match = self._brands_match(brand, schedule_brand)
                 
                 if brand_match and schedule_variant == variant:
                     occupied.append(schedule.scheduled_time)

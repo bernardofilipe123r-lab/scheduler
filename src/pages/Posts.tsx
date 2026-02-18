@@ -203,7 +203,7 @@ export function PostsPage() {
     toast.success('Settings reset to default')
   }
 
-  const previewBrand = selectedBrands[0] || brandIds[0] || 'healthycollege'
+  const previewBrand = selectedBrands[0] || brandIds[0] || ''
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-4">

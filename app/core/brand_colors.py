@@ -37,157 +37,20 @@ class BrandColorConfig:
 
 
 # ============================================================================
-# BRAND COLOR CONFIGURATIONS - EDIT HEX VALUES BELOW
+# DEFAULT COLORS (used when DB has no color config for a brand)
 # ============================================================================
 
-BRAND_COLORS: Dict[str, BrandColorConfig] = {
-    
-    # ------------------------------------------------------------------------
-    # GYM COLLEGE
-    # ------------------------------------------------------------------------
-    "gymcollege": BrandColorConfig(
-        light_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#000000"),  # Black
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#000000"),  # Black
-            content_title_bg_color=hex_to_rgba("#c8e1f6"),  # Light blue
-        ),
-        dark_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#00435c"),  # Dark blue
-        ),
-    ),
-    
-    # ------------------------------------------------------------------------
-    # HEALTHY COLLEGE
-    # ------------------------------------------------------------------------
-    "healthycollege": BrandColorConfig(
-        light_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#004f00"),  # Green
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#000000"),  # Black
-            content_title_bg_color=hex_to_rgba("#dcf6c8"),  # Light green
-        ),
-        dark_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#004f00"),  # Dark green
-        ),
-    ),
-    
-    # ------------------------------------------------------------------------
-    # VITALITY COLLEGE
-    # ------------------------------------------------------------------------
-    "vitalitycollege": BrandColorConfig(
-        light_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#028f7a"),  # Teal
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # Black
-            content_title_bg_color=hex_to_rgba("#028f7a"),  # Teal
-        ),
-        dark_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#028f7a"),  # Teal
-        ),
-    ),
-    
-    # ------------------------------------------------------------------------
-    # LONGEVITY COLLEGE
-    # ------------------------------------------------------------------------
-    "longevitycollege": BrandColorConfig(
-        light_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#019dc8"),  # Cyan
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#000000"),  # Black
-            content_title_bg_color=hex_to_rgba("#c8eaf6"),  # Cyan
-        ),
-        dark_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#019dc8"),  # Cyan
-        ),
-    ),
-    
-    # ------------------------------------------------------------------------
-    # HOLISTIC COLLEGE
-    # ------------------------------------------------------------------------
-    "holisticcollege": BrandColorConfig(
-        light_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#f19b8a"),  # Coral/salmon
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#000000"),  # Black
-            content_title_bg_color=hex_to_rgba("#f9e0db"),  # Light coral
-        ),
-        dark_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#f0836e"),  # Coral
-        ),
-    ),
-    
-    # ------------------------------------------------------------------------
-    # WELLBEING COLLEGE
-    # ------------------------------------------------------------------------
-    "wellbeingcollege": BrandColorConfig(
-        light_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffcd53"),  # Yellow/gold
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#000000"),  # Black
-            content_title_bg_color=hex_to_rgba("#fff4d6"),  # Light yellow
-        ),
-        dark_mode=BrandModeColors(
-            # Thumbnail
-            thumbnail_text_color=hex_to_rgb("#ffffff"),  # White
-            
-            # Content
-            content_title_text_color=hex_to_rgb("#ffffff"),  # White
-            content_title_bg_color=hex_to_rgba("#ebbe4d"),  # Yellow
-        ),
-    ),
-}
+_DEFAULT_LIGHT = BrandModeColors(
+    thumbnail_text_color=hex_to_rgb("#000000"),
+    content_title_text_color=hex_to_rgb("#000000"),
+    content_title_bg_color=hex_to_rgba("#e5e7eb"),
+)
 
-
-# ============================================================================
-# BRAND NAME DISPLAY MAPPING
-# ============================================================================
-
-BRAND_DISPLAY_NAMES: Dict[str, str] = {
-    "gymcollege": "THE GYM COLLEGE",
-    "healthycollege": "THE HEALTHY COLLEGE",
-    "vitalitycollege": "THE VITALITY COLLEGE",
-    "longevitycollege": "THE LONGEVITY COLLEGE",
-    "holisticcollege": "THE HOLISTIC COLLEGE",
-    "wellbeingcollege": "THE WELLBEING COLLEGE",
-}
+_DEFAULT_DARK = BrandModeColors(
+    thumbnail_text_color=hex_to_rgb("#ffffff"),
+    content_title_text_color=hex_to_rgb("#ffffff"),
+    content_title_bg_color=hex_to_rgba("#374151"),
+)
 
 
 # ============================================================================
@@ -198,22 +61,19 @@ def get_brand_colors(brand_name: str, variant: str) -> BrandModeColors:
     """
     Get color configuration for a specific brand and variant.
     
-    Reads from DB first, falls back to hardcoded BRAND_COLORS.
+    Loads all color data from the database. Falls back to neutral defaults
+    if the brand has no color config yet.
     
     Args:
-        brand_name: Brand identifier (gymcollege, healthycollege, etc.)
+        brand_name: Brand identifier (any brand ID from the DB)
         variant: Mode variant ("light" or "dark")
         
     Returns:
         BrandModeColors with all color settings for the specified mode
-        
-    Raises:
-        ValueError: If brand_name or variant is invalid
     """
     if variant not in ("light", "dark"):
         raise ValueError(f"Invalid variant: {variant}. Must be 'light' or 'dark'")
 
-    # Try DB first
     try:
         from app.services.brands.resolver import brand_resolver
         brand = brand_resolver.get_brand(brand_name)
@@ -231,21 +91,15 @@ def get_brand_colors(brand_name: str, variant: str) -> BrandModeColors:
                     content_title_bg_color=hex_to_rgba(title_bg),
                 )
     except Exception:
-        pass  # Fall through to hardcoded
+        pass
 
-    # Fallback to hardcoded dict
-    if brand_name not in BRAND_COLORS:
-        raise ValueError(f"Unknown brand: {brand_name}. Available: {list(BRAND_COLORS.keys())}")
-
-    brand_config = BRAND_COLORS[brand_name]
-    return brand_config.light_mode if variant == "light" else brand_config.dark_mode
+    # Neutral defaults for brands without color config
+    return _DEFAULT_LIGHT if variant == "light" else _DEFAULT_DARK
 
 
 def get_brand_display_name(brand_name: str) -> str:
     """
-    Get the display name for a brand (used in dark mode thumbnails).
-    
-    Reads from DB first, falls back to hardcoded BRAND_DISPLAY_NAMES.
+    Get the display name for a brand from the database.
     
     Args:
         brand_name: Brand identifier
@@ -260,4 +114,5 @@ def get_brand_display_name(brand_name: str) -> str:
             return brand.display_name
     except Exception:
         pass
-    return BRAND_DISPLAY_NAMES.get(brand_name, brand_name.upper())
+    # Generate a sensible default from the ID
+    return brand_name.upper()

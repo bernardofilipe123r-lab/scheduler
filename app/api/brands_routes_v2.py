@@ -24,6 +24,7 @@ from app.services.storage.supabase_storage import (
     upload_bytes, storage_path, StorageError,
 )
 from app.api.auth.middleware import get_current_user
+from app.models.config import AppSettings
 
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ class CreateBrandRequest(BaseModel):
     instagram_handle: Optional[str] = None
     facebook_page_name: Optional[str] = None
     youtube_channel_name: Optional[str] = None
-    schedule_offset: Optional[int] = None  # Auto-assigned if not provided
+    schedule_offset: int = 0  # Hour offset 0-23
     posts_per_day: int = 6
     colors: Optional[ColorConfig] = None
     # Platform credentials (optional — can also be set later via PUT /credentials)
@@ -111,6 +112,99 @@ class BrandResponse(BaseModel):
     has_facebook: bool
     created_at: Optional[str]
     updated_at: Optional[str]
+
+
+class UpdatePromptsRequest(BaseModel):
+    """Request to update global content prompts."""
+    reels_prompt: Optional[str] = None
+    posts_prompt: Optional[str] = None
+    brand_description: Optional[str] = None
+
+
+# ============================================================================
+# GLOBAL PROMPTS ENDPOINTS
+# ============================================================================
+
+PROMPT_KEYS = ["reels_prompt", "posts_prompt", "brand_description"]
+
+
+# ============================================================================
+# LAYOUT SETTINGS ENDPOINTS
+# ============================================================================
+
+@router.get("/settings/layout")
+async def get_layout_settings(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Get user's layout settings from app_settings."""
+    key = f"layout_settings_{user['id']}"
+    row = db.query(AppSettings).filter(AppSettings.key == key).first()
+    if row and row.value:
+        return json.loads(row.value)
+    return {}
+
+
+@router.put("/settings/layout")
+async def update_layout_settings(
+    settings: Dict[str, Any],
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Save user's layout settings to app_settings."""
+    key = f"layout_settings_{user['id']}"
+    row = db.query(AppSettings).filter(AppSettings.key == key).first()
+    if row:
+        row.value = json.dumps(settings)
+    else:
+        db.add(AppSettings(
+            key=key,
+            value=json.dumps(settings),
+            category="layout",
+            value_type="json",
+        ))
+    db.commit()
+    return {"status": "ok"}
+
+
+@router.get("/prompts")
+async def get_prompts(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Get the 3 global content prompt settings."""
+    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
+    result = {k: "" for k in PROMPT_KEYS}
+    for row in rows:
+        result[row.key] = row.value or ""
+    return result
+
+
+@router.put("/prompts")
+async def update_prompts(
+    request: UpdatePromptsRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Update the 3 global content prompt settings."""
+    updates = {k: v for k, v in request.dict().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    for key, value in updates.items():
+        row = db.query(AppSettings).filter(AppSettings.key == key).first()
+        if row:
+            row.value = value
+        else:
+            db.add(AppSettings(key=key, value=value, category="content", value_type="string"))
+    db.commit()
+
+    # Return current state
+    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
+    result = {k: "" for k in PROMPT_KEYS}
+    for row in rows:
+        result[row.key] = row.value or ""
+    return {"success": True, **result}
 
 
 # ============================================================================
@@ -179,9 +273,37 @@ async def get_brand_ids(db: Session = Depends(get_db), user: dict = Depends(get_
 
 
 # ============================================================================
-# CONNECTION STATUS ENDPOINTS
-# (Must be defined BEFORE /{brand_id} to avoid being shadowed)
+# FIXED-PATH ENDPOINTS (must be registered BEFORE /{brand_id} to avoid shadowing)
 # ============================================================================
+
+@router.get("/credentials")
+async def get_all_brand_credentials(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Get credentials for all brands (for the Settings tab).
+    Returns facebook_page_id, instagram_business_account_id, meta_access_token per brand.
+    """
+    manager = get_brand_manager(db)
+    brands = manager.get_all_brands(user_id=user["id"])
+
+    result = []
+    for brand in brands:
+        brand_id = brand["id"]
+        creds = manager.get_brand_with_credentials(brand_id, user_id=user["id"])
+        if creds:
+            result.append({
+                "id": brand_id,
+                "display_name": brand["display_name"],
+                "color": brand.get("colors", {}).get("primary", "#000000"),
+                "facebook_page_id": creds.get("facebook_page_id") or "",
+                "instagram_business_account_id": creds.get("instagram_business_account_id") or "",
+                "meta_access_token": creds.get("meta_access_token") or "",
+            })
+
+    return {"brands": result}
+
 
 @router.get("/connections")
 async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
@@ -291,173 +413,9 @@ async def seed_brands(db: Session = Depends(get_db), user: dict = Depends(get_cu
         }
 
 
-@router.get("/credentials")
-async def get_all_brand_credentials(
-    db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """
-    Get credentials for all brands (for the Settings tab).
-    Returns facebook_page_id, instagram_business_account_id, meta_access_token per brand.
-    """
-    manager = get_brand_manager(db)
-    brands = manager.get_all_brands(user_id=user["id"])
-
-    result = []
-    for brand in brands:
-        brand_id = brand["id"]
-        creds = manager.get_brand_with_credentials(brand_id, user_id=user["id"])
-        if creds:
-            result.append({
-                "id": brand_id,
-                "display_name": brand["display_name"],
-                "color": brand.get("colors", {}).get("primary", "#000000"),
-                "facebook_page_id": creds.get("facebook_page_id") or "",
-                "instagram_business_account_id": creds.get("instagram_business_account_id") or "",
-                "meta_access_token": creds.get("meta_access_token") or "",
-            })
-
-    return {"brands": result}
-
-
 # ============================================================================
-# GLOBAL PROMPTS ENDPOINTS
+# PARAMETERIZED ENDPOINTS (/{brand_id} — must come AFTER all fixed paths)
 # ============================================================================
-
-PROMPT_KEYS = ["reels_prompt", "posts_prompt", "brand_description"]
-
-PROMPT_DEFAULTS = {
-    "brand_description": (
-        "Health & wellness content brand targeting U.S. women aged 35+. "
-        "Focus areas: healthy aging, energy optimization, hormonal balance, longevity, "
-        "evidence-based nutrition, and lifestyle habits. "
-        "Tone: calm, authoritative, educational, empowering — never clinical or salesy. "
-        "Content philosophy: 60% validating (things the audience suspects are true), "
-        "40% surprising (new revelations that feel plausible). "
-        "Use familiar foods, habits, symptoms, and body signals."
-    ),
-    "reels_prompt": (
-        "Generate viral short-form health content for Instagram Reels and TikTok. "
-        "Focus on: daily habits, body signals, food as medicine, sleep optimization, "
-        "aging markers, and hormonal health. "
-        "Use emotional hooks: curiosity, fear of missing out, authority, hope, or sense of control. "
-        "Keep language simple, confident, and non-clinical. "
-        "Each content line must be under 18 words. Titles in ALL CAPS. "
-        "Use familiar framing that feels relatable — not academic or overly creative."
-    ),
-    "posts_prompt": (
-        "Generate Instagram carousel posts about health & wellness for women 35+. "
-        "Topic categories: superfoods, supplements, sleep rituals, gut health, hormones, "
-        "blood sugar balance, cortisol management, strength training, fiber, hydration, brain health. "
-        "Titles: 8-14 words, ALL CAPS, bold impactful statements. "
-        "Mix title styles: bold statements, direct questions, educational insights. "
-        "Slide texts: 3-6 sentences each, calm authoritative tone. "
-        "Include real DOI references from PubMed/Nature/JAMA. Never use em dashes."
-    ),
-}
-
-
-class UpdatePromptsRequest(BaseModel):
-    reels_prompt: Optional[str] = None
-    posts_prompt: Optional[str] = None
-    brand_description: Optional[str] = None
-
-
-@router.get("/prompts")
-async def get_prompts(
-    db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Get the 3 global content prompt settings. Auto-populates defaults on first access."""
-    from app.models.config import AppSettings
-    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
-    result = {row.key: (row.value or "") for row in rows}
-
-    # Auto-populate DB with defaults for any missing or empty keys
-    needs_commit = False
-    for key in PROMPT_KEYS:
-        if not result.get(key):
-            default_val = PROMPT_DEFAULTS.get(key, "")
-            existing = next((r for r in rows if r.key == key), None)
-            if existing:
-                existing.value = default_val
-            else:
-                db.add(AppSettings(key=key, value=default_val, category="content", value_type="string"))
-            result[key] = default_val
-            needs_commit = True
-    if needs_commit:
-        db.commit()
-
-    return result
-
-
-@router.put("/prompts")
-async def update_prompts(
-    request: UpdatePromptsRequest,
-    db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Update the 3 global content prompt settings."""
-    from app.models.config import AppSettings
-    updates = {k: v for k, v in request.dict().items() if v is not None}
-    if not updates:
-        raise HTTPException(status_code=400, detail="No updates provided")
-
-    for key, value in updates.items():
-        row = db.query(AppSettings).filter(AppSettings.key == key).first()
-        if row:
-            row.value = value
-        else:
-            db.add(AppSettings(key=key, value=value, category="content", value_type="string"))
-    db.commit()
-
-    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
-    result = {k: "" for k in PROMPT_KEYS}
-    for row in rows:
-        result[row.key] = row.value or ""
-    return {"success": True, **result}
-
-
-# ============================================================================
-# LAYOUT SETTINGS ENDPOINTS
-# ============================================================================
-
-@router.get("/settings/layout")
-async def get_layout_settings(
-    db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Get user's layout settings from app_settings."""
-    from app.models.config import AppSettings
-    key = f"layout_settings_{user['id']}"
-    row = db.query(AppSettings).filter(AppSettings.key == key).first()
-    if row and row.value:
-        return json.loads(row.value)
-    return {}
-
-
-@router.put("/settings/layout")
-async def update_layout_settings(
-    settings: Dict[str, Any],
-    db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Save user's layout settings to app_settings."""
-    from app.models.config import AppSettings
-    key = f"layout_settings_{user['id']}"
-    row = db.query(AppSettings).filter(AppSettings.key == key).first()
-    if row:
-        row.value = json.dumps(settings)
-    else:
-        db.add(AppSettings(
-            key=key,
-            value=json.dumps(settings),
-            category="layout",
-            value_type="json",
-        ))
-    db.commit()
-    return {"status": "ok"}
-
 
 @router.get("/{brand_id}")
 async def get_brand(
@@ -531,7 +489,7 @@ async def create_brand(
             "instagram_handle": request.instagram_handle,
             "facebook_page_name": request.facebook_page_name,
             "youtube_channel_name": request.youtube_channel_name,
-            "schedule_offset": request.schedule_offset,  # None = auto-assigned by manager
+            "schedule_offset": request.schedule_offset,
             "posts_per_day": request.posts_per_day,
             "colors": request.colors.dict() if request.colors else {},
             # Platform credentials
@@ -818,3 +776,4 @@ async def update_brand_theme(
             "logo": updates.get("logo_path", brand.get("logo_path"))
         }
     }
+

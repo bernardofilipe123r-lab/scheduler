@@ -4,7 +4,7 @@ Pydantic schemas for API request and response models.
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
-from app.core.config import BrandType
+from app.core.config import BrandConfig
 from app.core.constants import MAX_TITLE_LENGTH, MAX_LINE_LENGTH, MAX_CONTENT_LINES
 
 
@@ -30,9 +30,9 @@ class ReelCreateRequest(BaseModel):
         description="Call-to-action type: 'follow_tips', 'sleep_lean', or 'workout_plan'"
     )
     
-    brand: BrandType = Field(
+    brand: str = Field(
         ...,
-        description="Brand identifier for styling and branding"
+        description="Brand identifier for styling and branding (e.g. 'healthycollege', 'prozis')"
     )
     
     music_id: str = Field(

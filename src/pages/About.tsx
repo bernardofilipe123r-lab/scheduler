@@ -36,7 +36,7 @@ import {
 
 // ─── PDF Generation Utility ─────────────────────────────────────────
 
-function generatePDF() {
+function generatePDF(dynamicBrands: { id: string; label: string; instagram_handle?: string }[]) {
   // We build a clean, print-optimized HTML document and open it in a new window
   const printContent = `
 <!DOCTYPE html>
@@ -269,7 +269,7 @@ function generatePDF() {
       The architecture is designed for infinite scalability — every brand tackles the same core health &amp; wellness 
       topics (nutrition, mental health, physical fitness, anti-aging, mind-body wellness, energy) but presents 
       them under a completely independent identity with its own voice, visual style, and audience. Currently 
-      operating 5 brands, the platform generates unique, differentiated content for each from a single 
+      operating ${dynamicBrands.length} brands, the platform generates unique, differentiated content for each from a single 
       pipeline — ensuring no two brands ever post identical content while maintaining consistent quality 
       and viral potential.
     </p>
@@ -374,11 +374,7 @@ function generatePDF() {
         <tr><th>Brand</th><th>Instagram Handle</th></tr>
       </thead>
       <tbody>
-        <tr><td>Healthy College</td><td>@thehealthycollege</td></tr>
-        <tr><td>Vitality College</td><td>@thevitalitycollege</td></tr>
-        <tr><td>Longevity College</td><td>@thelongevitycollege</td></tr>
-        <tr><td>Holistic College</td><td>@theholisticcollege</td></tr>
-        <tr><td>Wellbeing College</td><td>@thewellbeingcollege</td></tr>
+        ${dynamicBrands.map(b => `<tr><td>${b.label}</td><td>@${b.instagram_handle || b.id}</td></tr>`).join('')}
       </tbody>
     </table>
     <h3>Shared Topic Coverage</h3>
@@ -626,7 +622,7 @@ export function AboutPage() {
   const handleExportPDF = () => {
     setPdfLoading(true)
     try {
-      generatePDF()
+      generatePDF(dynamicBrands)
     } finally {
       setTimeout(() => setPdfLoading(false), 1000)
     }
@@ -867,7 +863,7 @@ export function AboutPage() {
                   <BrandRow 
                     key={brand.id}
                     name={brand.label} 
-                    handle={`@the${brand.id}`} 
+                    handle={brand.instagram_handle ? `@${brand.instagram_handle}` : brand.id} 
                     color={brand.color} 
                     focus="" 
                   />

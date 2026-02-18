@@ -17,7 +17,7 @@ from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.brands.resolver import brand_resolver
 from app.db_connection import get_db
 from app.models.jobs import GenerationJob
-from app.core.config import BrandType
+from app.core.config import BrandConfig
 from app.services.storage.supabase_storage import (
     upload_from_path, storage_path, StorageError,
 )
@@ -71,7 +71,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
         # Generate unique ID for this reel
         reel_id = str(uuid.uuid4())
         user_id = user["id"]
-        brand_slug = request.brand.value if hasattr(request.brand, 'value') else str(request.brand)
+        brand_slug = str(request.brand)
         
         # Create temp files for generators that need paths
         tmp_thumb = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
@@ -247,8 +247,8 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
         video_path = Path(tmp_video.name)
         
         # Parse brand - resolve dynamically from DB
-        brand_id = brand_resolver.resolve_brand_name(request.brand)
-        brand = brand_resolver.get_brand_type(brand_id) if brand_id else BrandType.HEALTHY_COLLEGE
+        brand_id = brand_resolver.resolve_brand_name(request.brand) or request.brand
+        brand = brand_id
         
         # Update progress
         job.current_step = "initializing"

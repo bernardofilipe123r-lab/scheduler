@@ -9,51 +9,17 @@ export interface BrandConfig {
 }
 
 /**
- * Static fallback brand configs — used when DB brands haven't loaded yet.
- * New brands added via the UI will be fetched dynamically from /api/v2/brands.
+ * Runtime brand config cache — populated dynamically by registerBrand()
+ * when brands load from the API via useDynamicBrands().
+ * No hardcoded brand entries — all brands come from the database.
  */
-export const BRAND_CONFIG: Record<string, BrandConfig> = {
-  healthycollege: {
-    id: 'healthycollege',
-    label: 'Healthy College',
-    color: '#2e7d32',
-    bgClass: 'bg-[#2e7d32]',
-    textClass: 'text-white',
-  },
-  vitalitycollege: {
-    id: 'vitalitycollege',
-    label: 'Vitality College',
-    color: '#c2185b',
-    bgClass: 'bg-[#c2185b]',
-    textClass: 'text-white',
-  },
-  longevitycollege: {
-    id: 'longevitycollege',
-    label: 'Longevity College',
-    color: '#6a1b9a',
-    bgClass: 'bg-[#6a1b9a]',
-    textClass: 'text-white',
-  },
-  holisticcollege: {
-    id: 'holisticcollege',
-    label: 'Holistic College',
-    color: '#f0836e',
-    bgClass: 'bg-[#f0836e]',
-    textClass: 'text-white',
-  },
-  wellbeingcollege: {
-    id: 'wellbeingcollege',
-    label: 'Wellbeing College',
-    color: '#ebbe4d',
-    bgClass: 'bg-[#ebbe4d]',
-    textClass: 'text-white',
-  },
-}
+export const BRAND_CONFIG: Record<string, BrandConfig> = {}
 
 /**
- * Static fallback list — use useBrands() or useDynamicBrands() for dynamic data.
+ * Dynamic brand list — use useBrands() or useDynamicBrands() for the real list.
+ * Empty by default; the hooks fetch from /api/v2/brands.
  */
-export const ALL_BRANDS: string[] = ['healthycollege', 'vitalitycollege', 'longevitycollege', 'holisticcollege', 'wellbeingcollege']
+export const ALL_BRANDS: string[] = []
 
 /**
  * Register a brand from DB data into the runtime config cache.
@@ -72,7 +38,7 @@ export function registerBrand(id: string, label: string, color: string): void {
 }
 
 export function getBrandLabel(brand: BrandName): string {
-  return BRAND_CONFIG[brand]?.label || brand.replace(/college$/i, ' College').replace(/^\w/, c => c.toUpperCase())
+  return BRAND_CONFIG[brand]?.label || brand
 }
 
 export function getBrandColor(brand: BrandName): string {

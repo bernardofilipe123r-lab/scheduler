@@ -34,54 +34,34 @@ const TEXT_FONT_SIZE = 38;
 const TEXT_LINE_HEIGHT = 1.55;
 
 // ─── Brand Configs ────────────────────────────────────────────────────────────
-const BRAND_CONFIGS = {
-  healthycollege:   { name: 'Healthy College',   color: '#22c55e', accentColor: '#16a34a' },
-  longevitycollege: { name: 'Longevity College',  color: '#0ea5e9', accentColor: '#0284c7' },
-  vitalitycollege:  { name: 'Vitality College',   color: '#14b8a6', accentColor: '#0d9488' },
-  wellbeingcollege: { name: 'Wellbeing College',   color: '#eab308', accentColor: '#ca8a04' },
-  holisticcollege:  { name: 'Holistic College',    color: '#f97316', accentColor: '#ea580c' },
-};
-
-const BRAND_ABBREVIATIONS = {
-  healthycollege:   'HCO',
-  holisticcollege:  'HCO',
-  longevitycollege: 'LCO',
-  vitalitycollege:  'VCO',
-  wellbeingcollege: 'WCO',
-};
-
-const BRAND_DISPLAY_NAMES = {
-  healthycollege:   'The Healthy College',
-  longevitycollege: 'The Longevity College',
-  wellbeingcollege: 'The Wellbeing College',
-  vitalitycollege:  'The Vitality College',
-  holisticcollege:  'The Holistic College',
-};
+// Brand data is passed in via input JSON (brandConfig field).
+// No hardcoded brand entries — all data comes from the database via the Python caller.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getBrandAbbr(brandId) {
-  if (BRAND_ABBREVIATIONS[brandId]) return BRAND_ABBREVIATIONS[brandId];
+function getBrandAbbr(brandId, input) {
+  if (input && input.brandConfig && input.brandConfig.abbreviation) return input.brandConfig.abbreviation;
   return (brandId.charAt(0).toUpperCase() + 'CO');
 }
 
-function getBrandLabel(brandId) {
-  if (BRAND_CONFIGS[brandId]) return BRAND_CONFIGS[brandId].name;
+function getBrandLabel(brandId, input) {
+  if (input && input.brandConfig && input.brandConfig.name) return input.brandConfig.name;
   return brandId;
 }
 
-function getBrandColor(brandId) {
-  if (BRAND_CONFIGS[brandId]) return BRAND_CONFIGS[brandId].color;
+function getBrandColor(brandId, input) {
+  if (input && input.brandConfig && input.brandConfig.color) return input.brandConfig.color;
   return '#888888';
 }
 
-function getBrandDisplayName(brandId) {
-  if (BRAND_DISPLAY_NAMES[brandId]) return BRAND_DISPLAY_NAMES[brandId];
+function getBrandDisplayName(brandId, input) {
+  if (input && input.brandConfig && input.brandConfig.displayName) return input.brandConfig.displayName;
   return brandId;
 }
 
-function getBrandHandle(brandId) {
-  return `@the${brandId}`;
+function getBrandHandle(brandId, input) {
+  if (input && input.brandConfig && input.brandConfig.handle) return input.brandConfig.handle;
+  return brandId;
 }
 
 // ─── Auto-fit Font Size (exact copy from PostCanvas.tsx) ──────────────────────
@@ -222,8 +202,8 @@ async function renderCoverSlide(input) {
     coverOutput,
   } = input;
 
-  const brandColor = getBrandColor(brand);
-  const brandAbbr = getBrandAbbr(brand);
+  const brandColor = getBrandColor(brand, input);
+  const brandAbbr = getBrandAbbr(brand, input);
   const readCaptionBottom = DEFAULT_READ_CAPTION_BOTTOM;
   const titleGap = DEFAULT_TITLE_GAP;
   const logoGap = DEFAULT_LOGO_GAP;
@@ -356,9 +336,9 @@ async function renderCoverSlide(input) {
 async function renderTextSlide(input, slideText, outputPath, isLast, contentY, logoImg) {
   const { brand, shareIconPath, saveIconPath, logoPath } = input;
 
-  const brandColor = getBrandColor(brand);
-  const brandDisplayName = getBrandDisplayName(brand);
-  const brandHandle = getBrandHandle(brand);
+  const brandColor = getBrandColor(brand, input);
+  const brandDisplayName = getBrandDisplayName(brand, input);
+  const brandHandle = getBrandHandle(brand, input);
   const brandInitial = brandDisplayName.charAt(0).toUpperCase();
 
   const stage = new Konva.Stage({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT });

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 from PIL import Image, ImageDraw
 from app.services.media.ai_background import AIBackgroundGenerator
-from app.core.config import get_brand_config, BrandType
+from app.core.config import get_brand_config
 from app.core.brand_colors import get_brand_colors, get_brand_display_name
 from app.core.constants import (
     REEL_WIDTH,
@@ -47,7 +47,7 @@ from app.utils.text_formatting import (
 class ImageGenerator:
     """Service for generating reel images and thumbnails."""
     
-    def __init__(self, brand_type: BrandType, variant: str = "light", brand_name: str = "gymcollege", ai_prompt: str = None, content_context: str = None):
+    def __init__(self, brand_type, variant: str = "light", brand_name: str = "default", ai_prompt: str = None, content_context: str = None):
         """
         Initialize the image generator.
         

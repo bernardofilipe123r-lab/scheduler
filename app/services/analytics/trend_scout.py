@@ -150,17 +150,37 @@ class TrendScout:
         print(f"✅ TrendScout initialized (reel competitors={len(self.competitors)}, post competitors={len(self.post_competitors)}, hashtags={total_hash})", flush=True)
 
     def _load_credentials(self):
-        """Load an IG access token to use for API calls."""
-        # Try healthycollege first (our main brand), then fallback
-        for brand in ["healthycollege", "gymcollege", "vitalitycollege"]:
-            token = os.getenv(f"{brand.upper()}_INSTAGRAM_ACCESS_TOKEN") or os.getenv(f"{brand.upper()}_META_ACCESS_TOKEN")
-            account_id = os.getenv(f"{brand.upper()}_INSTAGRAM_BUSINESS_ACCOUNT_ID")
-            if token and account_id:
-                self._access_token = token
-                self._ig_user_id = account_id
-                return
+        """Load an IG access token to use for API calls from any available brand."""
+        # Try all brands from DB first
+        try:
+            from app.services.brands.resolver import brand_resolver
+            brand_ids = brand_resolver.get_all_brand_ids()
+            for brand_id in brand_ids:
+                brand = brand_resolver.get_brand(brand_id)
+                if brand and brand.instagram_business_account_id:
+                    token = brand.meta_access_token or brand.instagram_access_token
+                    if token:
+                        self._access_token = token
+                        self._ig_user_id = brand.instagram_business_account_id
+                        return
+        except Exception:
+            pass
 
-        # Fallback to shared
+        # Fallback to env vars — try all brand-prefixed tokens dynamically
+        try:
+            from app.services.brands.resolver import brand_resolver
+            for brand_id in brand_resolver.get_all_brand_ids():
+                env_key = brand_id.upper()
+                token = os.getenv(f"{env_key}_INSTAGRAM_ACCESS_TOKEN") or os.getenv(f"{env_key}_META_ACCESS_TOKEN")
+                account_id = os.getenv(f"{env_key}_INSTAGRAM_BUSINESS_ACCOUNT_ID")
+                if token and account_id:
+                    self._access_token = token
+                    self._ig_user_id = account_id
+                    return
+        except Exception:
+            pass
+
+        # Final fallback to shared
         self._access_token = os.getenv("META_ACCESS_TOKEN")
         self._ig_user_id = os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID")
 
@@ -708,11 +728,7 @@ class TrendScout:
                         if handle:
                             own_handles.append(handle)
             except Exception:
-                own_handles = [
-                    "thehealthycollege", "theholisticcollege",
-                    "thelongevitycollege", "thewellbeingcollege",
-                    "thevitalitycollege",
-                ]
+                own_handles = []
 
             if own_handles:
                 # Pick account with fewest entries in DB (rotate naturally)
@@ -1013,12 +1029,7 @@ class TrendScout:
                         if handle:
                             own_handles.append(handle)
             except Exception:
-                # Fallback hardcoded list
-                own_handles = [
-                    "thehealthycollege", "theholisticcollege",
-                    "thelongevitycollege", "thewellbeingcollege",
-                    "thevitalitycollege",
-                ]
+                own_handles = []
 
             if not own_handles:
                 return {"own_accounts_scanned": 0, "new_stored": 0}

@@ -65,14 +65,19 @@ class RefreshResponse(BaseModel):
     analytics: Optional[List[BrandMetrics]] = None
 
 
-# Brand display info (fallback for analytics display)
-BRAND_DISPLAY_INFO = {
-    "healthycollege": {"display_name": "Healthy College", "color": "#004f00"},
-    "vitalitycollege": {"display_name": "Vitality College", "color": "#028f7a"},
-    "longevitycollege": {"display_name": "Longevity College", "color": "#019dc8"},
-    "holisticcollege": {"display_name": "Holistic College", "color": "#f0836e"},
-    "wellbeingcollege": {"display_name": "Wellbeing College", "color": "#ebbe4d"},
-}
+def _get_brand_display_info() -> dict:
+    """Build brand display info dynamically from DB."""
+    try:
+        from app.services.brands.resolver import brand_resolver
+        brands = brand_resolver.get_all_brands()
+        info = {}
+        for b in brands:
+            color = b.colors.get("primary", "#888888") if b.colors else "#888888"
+            display = b.display_name or b.id
+            info[b.id] = {"display_name": display, "color": color}
+        return info
+    except Exception:
+        return {}
 
 
 def format_analytics_response(analytics_list: List[Dict], db: Session) -> List[BrandMetrics]:
@@ -82,8 +87,9 @@ def format_analytics_response(analytics_list: List[Dict], db: Session) -> List[B
     for a in analytics_list:
         brand = a["brand"]
         if brand not in brands_data:
-            brand_info = BRAND_DISPLAY_INFO.get(brand, {
-                "display_name": brand.replace("college", " College").title(),
+            brand_display_info = _get_brand_display_info()
+            brand_info = brand_display_info.get(brand, {
+                "display_name": brand,
                 "color": "#888888"
             })
             brands_data[brand] = {

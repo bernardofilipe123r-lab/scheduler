@@ -6,7 +6,7 @@ import { useBrands } from '../api/use-brands'
 import { ConfigStrengthMeter } from './ConfigStrengthMeter'
 import { ContentExamplesSection } from './ContentExamplesSection'
 import type { NicheConfig } from '../types/niche-config'
-import { PostCanvas, DEFAULT_GENERAL_SETTINGS, BRAND_CONFIGS } from '@/shared/components/PostCanvas'
+import { PostCanvas, DEFAULT_GENERAL_SETTINGS, getBrandConfig } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 
 const CONTENT_BRIEF_PLACEHOLDER = `Viral short-form health content for women 35+ on Instagram and TikTok.
@@ -87,9 +87,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   // Pick a random brand for carousel previews — stable for the whole component lifetime
   const previewBrand = useMemo(() => {
-    const available = Object.keys(BRAND_CONFIGS)
-    return available[Math.floor(Math.random() * available.length)] || 'healthycollege'
-  }, []) // empty deps = computed once per mount
+    const available = brandsData?.map(b => b.id) || []
+    return available[Math.floor(Math.random() * available.length)] || ''
+  }, [brandsData])
 
   // Effective brand for reel preview API — previewBrand fallback when no brandId selected
   const effectiveBrand = brandId || previewBrand
@@ -514,7 +514,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                         Example Carousel Post Preview
                       </div>
                       <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        Konva render · {BRAND_CONFIGS[effectiveBrand]?.name || effectiveBrand}
+                        Konva render · {getBrandConfig(effectiveBrand).name || effectiveBrand}
                       </span>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-2">

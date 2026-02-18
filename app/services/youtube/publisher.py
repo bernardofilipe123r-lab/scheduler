@@ -636,18 +636,25 @@ def get_youtube_credentials_for_brand_env(brand: str) -> Optional[YouTubeCredent
     Returns:
         YouTubeCredentials if configured, None otherwise
     """
-    brand_upper = brand.upper().replace("COLLEGE", "COLLEGE")
+    brand_upper = brand.upper()
     
     channel_id = os.getenv(f"{brand_upper}_YOUTUBE_CHANNEL_ID")
     refresh_token = os.getenv(f"{brand_upper}_YOUTUBE_REFRESH_TOKEN")
     
     if not channel_id or not refresh_token:
-        print(f"⚠️ YouTube credentials not configured for {brand}")
+        print(f"\u26a0\ufe0f YouTube credentials not configured for {brand}")
         return None
+    
+    # Use brand_resolver for display name, fall back to brand ID
+    try:
+        from app.services.brands.resolver import brand_resolver
+        display_name = brand_resolver.get_brand_display_name(brand)
+    except Exception:
+        display_name = brand
     
     return YouTubeCredentials(
         channel_id=channel_id,
-        channel_name=brand.replace("college", " College").title(),
+        channel_name=display_name,
         refresh_token=refresh_token
     )
 

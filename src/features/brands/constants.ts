@@ -18,60 +18,8 @@ export interface BrandTheme {
 }
 
 export const BRAND_THEMES: Record<string, BrandTheme> = {
-  gymcollege: {
-    brandColor: '#000000',
-    lightThumbnailTextColor: '#000000',
-    lightContentTitleTextColor: '#000000',
-    lightContentTitleBgColor: '#c8e1f6',
-    darkThumbnailTextColor: '#ffffff',
-    darkContentTitleTextColor: '#ffffff',
-    darkContentTitleBgColor: '#00435c',
-  },
-  healthycollege: {
-    brandColor: '#004f00',
-    lightThumbnailTextColor: '#004f00',
-    lightContentTitleTextColor: '#000000',
-    lightContentTitleBgColor: '#dcf6c8',
-    darkThumbnailTextColor: '#ffffff',
-    darkContentTitleTextColor: '#ffffff',
-    darkContentTitleBgColor: '#004f00',
-  },
-  longevitycollege: {
-    brandColor: '#019dc8',
-    lightThumbnailTextColor: '#019dc8',
-    lightContentTitleTextColor: '#000000',
-    lightContentTitleBgColor: '#c8eaf6',
-    darkThumbnailTextColor: '#ffffff',
-    darkContentTitleTextColor: '#ffffff',
-    darkContentTitleBgColor: '#019dc8',
-  },
-  wellbeingcollege: {
-    brandColor: '#ebbe4d',
-    lightThumbnailTextColor: '#ffcd53',
-    lightContentTitleTextColor: '#000000',
-    lightContentTitleBgColor: '#fff4d6',
-    darkThumbnailTextColor: '#ffffff',
-    darkContentTitleTextColor: '#ffffff',
-    darkContentTitleBgColor: '#ebbe4d',
-  },
-  vitalitycollege: {
-    brandColor: '#028f7a',
-    lightThumbnailTextColor: '#028f7a',
-    lightContentTitleTextColor: '#ffffff',
-    lightContentTitleBgColor: '#028f7a',
-    darkThumbnailTextColor: '#ffffff',
-    darkContentTitleTextColor: '#ffffff',
-    darkContentTitleBgColor: '#028f7a',
-  },
-  holisticcollege: {
-    brandColor: '#f0836e',
-    lightThumbnailTextColor: '#f19b8a',
-    lightContentTitleTextColor: '#000000',
-    lightContentTitleBgColor: '#f9e0db',
-    darkThumbnailTextColor: '#ffffff',
-    darkContentTitleTextColor: '#ffffff',
-    darkContentTitleBgColor: '#f0836e',
-  },
+  // No hardcoded brand themes — theme data comes from the DB (brand.colors).
+  // The BrandThemeModal falls back to sensible defaults when a brand is not found here.
 }
 
 // Color presets for quick selection

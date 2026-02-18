@@ -143,8 +143,27 @@ def _render_slides_node(brand: str, title: str, background_image: str, slide_tex
         for idx in range(len(slide_texts))
     ]
 
+    # Build brand config from DB for the Node.js renderer
+    brand_config_data = {}
+    try:
+        from app.services.brands.resolver import brand_resolver
+        b = brand_resolver.get_brand(brand)
+        if b:
+            colors = b.colors or {}
+            brand_config_data = {
+                "name": b.display_name or brand,
+                "displayName": b.display_name or brand,
+                "color": colors.get("primary", "#888888"),
+                "accentColor": colors.get("accent", "#666666"),
+                "abbreviation": b.short_name or (brand[0].upper() + "CO"),
+                "handle": f"@{b.instagram_handle}" if b.instagram_handle else brand,
+            }
+    except Exception:
+        pass
+
     input_data = {
         "brand": brand,
+        "brandConfig": brand_config_data,
         "title": title,
         "backgroundImage": background_image,
         "slideTexts": slide_texts,

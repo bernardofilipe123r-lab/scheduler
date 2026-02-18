@@ -88,6 +88,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
     darkContentTitleBgColor: '#00435c',
   }
 
+  const [shortName, setShortName] = useState('')
   const [brandColor, setBrandColor] = useState(defaults.brandColor)
   const [lightThumbnailTextColor, setLightThumbnailTextColor] = useState(defaults.lightThumbnailTextColor)
   const [lightContentTitleTextColor, setLightContentTitleTextColor] = useState(defaults.lightContentTitleTextColor)
@@ -135,6 +136,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
           if (t.dark_thumbnail_text_color) setDarkThumbnailTextColor(t.dark_thumbnail_text_color)
           if (t.dark_content_title_text_color) setDarkContentTitleTextColor(t.dark_content_title_text_color)
           if (t.dark_content_title_bg_color) setDarkContentTitleBgColor(t.dark_content_title_bg_color)
+          if (t.short_name != null) setShortName(t.short_name)
           if (t.logo) {
             const logoUrl = t.logo.startsWith('http') ? `${t.logo}?t=${Date.now()}` : `/brand-logos/${t.logo}?t=${Date.now()}`
             setLogoPreview(logoUrl)
@@ -162,6 +164,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
       formData.append('dark_thumbnail_text_color', darkThumbnailTextColor)
       formData.append('dark_content_title_text_color', darkContentTitleTextColor)
       formData.append('dark_content_title_bg_color', darkContentTitleBgColor)
+      formData.append('short_name', shortName)
       if (logoFile) formData.append('logo', logoFile)
 
       const { data: sessionData } = await supabase.auth.getSession()
@@ -473,6 +476,22 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
 
         {/* ══════ RIGHT: Color Controls (40%) ══════ */}
         <div className="flex-[2] space-y-4">
+          {/* Abbreviation */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">Abbreviation</label>
+            <input
+              type="text"
+              value={shortName}
+              onChange={e => setShortName(e.target.value.toUpperCase().slice(0, 5))}
+              placeholder="e.g. HCO"
+              className="w-full px-3 py-2 text-sm font-mono border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
+              maxLength={5}
+            />
+            <p className="text-[10px] text-gray-400 mt-1">
+              Short code used on rendered posts &amp; reels (max 5 chars).
+            </p>
+          </div>
+
           {/* Logo Upload */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1.5 block">Logo</label>

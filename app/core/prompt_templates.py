@@ -375,15 +375,15 @@ def get_brand_palettes() -> dict:
         from app.db_connection import get_db_session
         with get_db_session() as db:
             from app.models.brands import Brand
-            brands = db.query(Brand).all()
+            brands = db.query(Brand).filter(Brand.active == True).all()
             palettes = {}
             for b in brands:
-                brand_key = (b.brand_name or "").lower().replace(" ", "")
-                palettes[brand_key] = {
-                    "name": b.brand_name or brand_key,
-                    "primary": getattr(b, 'primary_color', '#2196F3') or '#2196F3',
-                    "accent": getattr(b, 'accent_color', '#64B5F6') or '#64B5F6',
-                    "color_description": getattr(b, 'color_description', '') or '',
+                colors = b.colors or {}
+                palettes[b.id] = {
+                    "name": b.display_name or b.id,
+                    "primary": colors.get("primary", "#2196F3"),
+                    "accent": colors.get("accent", "#64B5F6"),
+                    "color_description": colors.get("color_name", ""),
                 }
             return palettes
     except Exception:

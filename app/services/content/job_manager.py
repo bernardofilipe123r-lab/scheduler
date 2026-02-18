@@ -6,7 +6,6 @@ from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.models import GenerationJob
-from app.core.config import BrandType
 from app.services.brands.resolver import brand_resolver
 
 
@@ -16,10 +15,9 @@ def generate_job_id() -> str:
     return f"GEN-{random_num}"
 
 
-def get_brand_type(brand_name: str) -> BrandType:
-    """Convert brand name to BrandType enum."""
-    bt = brand_resolver.get_brand_type(brand_name)
-    return bt if bt else BrandType.HEALTHY_COLLEGE
+def get_brand_type(brand_name: str) -> str:
+    """Resolve brand name to canonical brand ID."""
+    return brand_resolver.resolve_brand_name(brand_name) or brand_name
 
 
 class JobManager:

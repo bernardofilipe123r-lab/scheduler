@@ -182,35 +182,24 @@ class AIBackgroundGenerator:
         if progress_callback:
             progress_callback("Preparing AI prompt...", 10)
         
-        # Brand color palettes - BRIGHT, VIBRANT, SHINY colors
-        color_palettes = {
-            "gymcollege": {
-                "name": "Vibrant Blue",
-                "primary": "#2196F3",
-                "accent": "#64B5F6",
-                "description": "bright sky blue, vibrant azure, luminous cyan, sparkling light blue, with soft white and golden sunlight accents"
-            },
-            "healthycollege": {
-                "name": "Fresh Green", 
-                "primary": "#4CAF50",
-                "accent": "#81C784",
-                "description": "fresh lime green, vibrant leaf green, bright spring green, with soft yellow sunlight and white highlights"
-            },
-            "vitalitycollege": {
-                "name": "Bright Turquoise",
-                "primary": "#26C6DA", 
-                "accent": "#4DD0E1",
-                "description": "bright turquoise, sparkling teal, vibrant aquamarine, with white shimmer and golden sunlight accents"
-            },
-            "longevitycollege": {
-                "name": "Radiant Azure",
-                "primary": "#00BCD4",
-                "accent": "#80DEEA",
-                "description": "radiant azure, bright sky blue, luminous cyan, electric light blue, with white glow and warm sunlight touches"
-            }
-        }
-        
-        palette = color_palettes.get(brand_name, color_palettes["gymcollege"])
+        # Load brand color palette from DB
+        palette = {"name": "Default", "primary": "#2196F3", "accent": "#64B5F6", "description": "bright, vibrant, colorful tones with soft sunlight accents"}
+        try:
+            from app.services.brands.resolver import brand_resolver
+            brand = brand_resolver.get_brand(brand_name)
+            if brand and brand.colors:
+                colors = brand.colors
+                color_name = colors.get("color_name", "vibrant")
+                primary = colors.get("primary", "#2196F3")
+                accent = colors.get("accent", "#64B5F6")
+                palette = {
+                    "name": color_name.title(),
+                    "primary": primary,
+                    "accent": accent,
+                    "description": f"bright {color_name} tones, vibrant and luminous, with soft white and golden sunlight accents"
+                }
+        except Exception:
+            pass
         
         # BASE STYLE - BRIGHT, COLORFUL, VIBRANT, SHINY (like the NaturaMatrix example)
         base_style = """BRIGHT, COLORFUL, VIBRANT still-life composition with SUNLIT atmosphere. Dense, full-frame layout filling every inch with objects. Light, airy, fresh feeling with SOFT GLOWING LIGHT throughout. Shallow water ripples, water droplets, moisture, and dewy surfaces. Soft bokeh light orbs floating in the background. Objects slightly submerged in shallow crystal-clear water with gentle ripples and reflections. Morning sunlight streaming in with lens flares and light rays. BRIGHT PASTEL background tones - NO DARK OR BLACK AREAS. Polished, glossy, shiny surfaces catching light. Ultra-sharp focus with dreamy soft glow around edges. Fresh, clean, healthy, optimistic, uplifting mood. Magazine-quality product photography style with enhanced saturation and vibrancy. Every surface should sparkle and shine. White highlights, soft shadows, luminous atmosphere."""

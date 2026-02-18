@@ -1,14 +1,12 @@
 """
 Brand configurations for the reels automation system.
-Colors are imported from brand_colors.py - the single source of truth.
+All brand data is loaded dynamically from the database.
 """
-from enum import Enum
-from typing import Dict, Tuple, Optional
+from typing import Tuple, Optional
 from dataclasses import dataclass
 import os
 
-# Import colors from brand_colors.py - the single source of truth
-from app.core.brand_colors import BRAND_COLORS, BRAND_DISPLAY_NAMES, hex_to_rgb, hex_to_rgba
+from app.core.brand_colors import hex_to_rgb, hex_to_rgba
 
 # ---------------------------------------------------------------------------
 # Supabase configuration
@@ -18,25 +16,9 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")  # publishable/anon key
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")  # service role key (backend only)
 
 
-class BrandType(str, Enum):
-    """Available brand types."""
-    THE_GYM_COLLEGE = "THE_GYM_COLLEGE"
-    HEALTHY_COLLEGE = "HEALTHY_COLLEGE"
-    VITALITY_COLLEGE = "VITALITY_COLLEGE"
-    LONGEVITY_COLLEGE = "LONGEVITY_COLLEGE"
-    HOLISTIC_COLLEGE = "HOLISTIC_COLLEGE"
-    WELLBEING_COLLEGE = "WELLBEING_COLLEGE"
-
-
-# Map BrandType enum to brand_colors.py keys
-BRAND_TYPE_TO_KEY = {
-    BrandType.THE_GYM_COLLEGE: "gymcollege",
-    BrandType.HEALTHY_COLLEGE: "healthycollege",
-    BrandType.VITALITY_COLLEGE: "vitalitycollege",
-    BrandType.LONGEVITY_COLLEGE: "longevitycollege",
-    BrandType.HOLISTIC_COLLEGE: "holisticcollege",
-    BrandType.WELLBEING_COLLEGE: "wellbeingcollege",
-}
+# Legacy alias — kept so existing imports don't break at module level.
+# BrandType was a str Enum; now it's just `str`.
+BrandType = str
 
 
 @dataclass
@@ -44,101 +26,69 @@ class BrandConfig:
     """Brand configuration settings."""
     name: str
     display_name: str
-    primary_color: Tuple[int, int, int]  # RGB - light mode background (derived from light mode bg)
-    secondary_color: Tuple[int, int, int]  # RGB - brand's main color (dark mode bg)
+    primary_color: Tuple[int, int, int]  # RGB - light mode background
+    secondary_color: Tuple[int, int, int]  # RGB - brand's main color
     text_color: Tuple[int, int, int]  # RGB - brand text color
     highlight_color: Tuple[int, int, int, int]  # RGBA - light mode content bg
     logo_filename: str  # Relative to assets/logos/
     thumbnail_bg_color: Tuple[int, int, int]  # RGB for thumbnail background
-    thumbnail_text_color: Tuple[int, int, int]  # RGB for thumbnail text (light mode)
-    content_title_color: Tuple[int, int, int]  # RGB for content title text (light mode)
-    content_highlight_color: Tuple[int, int, int, int]  # RGBA for content title background (dark mode)
-    instagram_business_account_id: Optional[str] = None  # Brand-specific Instagram ID
-    facebook_page_id: Optional[str] = None  # Brand-specific Facebook Page ID
-    meta_access_token: Optional[str] = None  # Brand-specific access token
-    # Note: YouTube credentials are stored in the database (youtube_channels table)
-    # They are obtained via OAuth flow (/api/youtube/connect) and never stored in env vars
+    thumbnail_text_color: Tuple[int, int, int]  # RGB for thumbnail text
+    content_title_color: Tuple[int, int, int]  # RGB for content title text
+    content_highlight_color: Tuple[int, int, int, int]  # RGBA for content title background
+    instagram_business_account_id: Optional[str] = None
+    facebook_page_id: Optional[str] = None
+    meta_access_token: Optional[str] = None
 
 
-def _create_brand_config(
-    brand_type: BrandType,
-    instagram_business_account_id: Optional[str] = None,
-    facebook_page_id: Optional[str] = None,
-    meta_access_token: Optional[str] = None,
-) -> BrandConfig:
+# Default neutral colors used when a brand has no color config in the DB
+_DEFAULT_PRIMARY = hex_to_rgb("#e5e7eb")
+_DEFAULT_SECONDARY = hex_to_rgb("#374151")
+_DEFAULT_TEXT = hex_to_rgb("#000000")
+_DEFAULT_HIGHLIGHT = hex_to_rgba("#e5e7eb")
+
+
+def get_brand_config(brand_id) -> BrandConfig:
     """
-    Create a BrandConfig using colors from brand_colors.py.
-    This ensures colors are always synced with the single source of truth.
-    """
-    brand_key = BRAND_TYPE_TO_KEY[brand_type]
-    colors = BRAND_COLORS[brand_key]
-    display_name = BRAND_DISPLAY_NAMES.get(brand_key, brand_key.replace("college", " College").title())
-    
-    # Extract colors from brand_colors.py
-    light_mode = colors.light_mode
-    dark_mode = colors.dark_mode
-    
-    # secondary_color is the brand's main color (from dark mode bg, without alpha)
-    secondary_color = dark_mode.content_title_bg_color[:3]
-    
-    # primary_color is derived from light mode bg (without alpha)
-    primary_color = light_mode.content_title_bg_color[:3]
-    
-    return BrandConfig(
-        name=brand_type.value,
-        display_name=display_name.replace("THE ", ""),  # Remove "THE " prefix for display
-        primary_color=primary_color,
-        secondary_color=secondary_color,
-        text_color=secondary_color,  # Text color matches brand color
-        highlight_color=light_mode.content_title_bg_color,  # Light mode content bg (RGBA)
-        logo_filename=f"{brand_key.replace('college', '_college')}_logo.png",
-        thumbnail_bg_color=primary_color,  # Same as primary for consistency
-        thumbnail_text_color=light_mode.thumbnail_text_color,  # From brand_colors.py
-        content_title_color=light_mode.content_title_text_color,  # Light mode title text
-        content_highlight_color=dark_mode.content_title_bg_color,  # Dark mode content bg (RGBA)
-        instagram_business_account_id=instagram_business_account_id,
-        facebook_page_id=facebook_page_id,
-        meta_access_token=meta_access_token,
-    )
+    Get the brand configuration for any brand (by string ID or legacy enum value).
 
-
-# Brand configuration mapping - colors sourced from brand_colors.py
-# Credentials are loaded from the database at call time via get_brand_config().
-BRAND_CONFIGS: Dict[BrandType, BrandConfig] = {
-    bt: _create_brand_config(bt) for bt in BrandType
-}
-
-
-def get_brand_config(brand_type: BrandType) -> BrandConfig:
-    """
-    Get the brand configuration for a given brand type.
-
-    Credentials (meta_access_token, instagram_business_account_id,
-    facebook_page_id) are loaded from the database brands table at call
-    time.  Colour / display info falls back to the static BRAND_CONFIGS
-    when the DB is unavailable.
+    Loads all data from the database. Falls back to neutral defaults when
+    the brand is not found.
 
     Args:
-        brand_type: The brand type enum
+        brand_id: Brand identifier (e.g. 'healthycollege', 'prozis', 'nike')
 
     Returns:
-        The corresponding brand configuration
-
-    Raises:
-        ValueError: If brand type is not in the mapping
+        A BrandConfig populated from DB data or safe defaults.
     """
-    if brand_type not in BRAND_CONFIGS:
-        raise ValueError(f"Invalid brand type: {brand_type}")
+    # Normalise: accept enum-style values like 'HEALTHY_COLLEGE' or plain IDs
+    key = str(brand_id).lower().replace("_", "")
+    # Strip leading "the" for matching
+    if key.startswith("the"):
+        key = key[3:]
 
-    # Try to load full config (with credentials) from the database
-    brand_key = BRAND_TYPE_TO_KEY.get(brand_type)
-    if brand_key:
-        try:
-            from app.services.brands.resolver import brand_resolver
-            db_config = brand_resolver.get_brand_config(brand_key)
-            if db_config is not None:
-                return db_config
-        except Exception:
-            pass  # Fall back to static config (no credentials)
+    try:
+        from app.services.brands.resolver import brand_resolver
+        db_config = brand_resolver.get_brand_config(key)
+        if db_config is not None:
+            return db_config
+        # Try the original string too (in case normalisation differs)
+        db_config = brand_resolver.get_brand_config(str(brand_id))
+        if db_config is not None:
+            return db_config
+    except Exception:
+        pass
 
-    return BRAND_CONFIGS[brand_type]
+    # Return neutral defaults for unknown brands
+    return BrandConfig(
+        name=str(brand_id),
+        display_name=str(brand_id),
+        primary_color=_DEFAULT_PRIMARY,
+        secondary_color=_DEFAULT_SECONDARY,
+        text_color=_DEFAULT_TEXT,
+        highlight_color=_DEFAULT_HIGHLIGHT,
+        logo_filename="default_logo.png",
+        thumbnail_bg_color=_DEFAULT_PRIMARY,
+        thumbnail_text_color=_DEFAULT_TEXT,
+        content_title_color=_DEFAULT_TEXT,
+        content_highlight_color=hex_to_rgba("#374151"),
+    )

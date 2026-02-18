@@ -381,15 +381,12 @@ async def preview_reel_images(
     """
     from app.services.media.image_generator import ImageGenerator
     from app.services.brands.resolver import brand_resolver
-    from app.core.config import BrandType
 
     brand_id = request.brand_id
-    bt = brand_resolver.get_brand_type(brand_id)
-    if not bt:
-        bt = BrandType.HEALTHY_COLLEGE
+    resolved = brand_resolver.resolve_brand_name(brand_id) or brand_id
 
     generator = ImageGenerator(
-        brand_type=bt,
+        brand_type=resolved,
         variant="light",
         brand_name=brand_id,
     )

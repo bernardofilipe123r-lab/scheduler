@@ -952,7 +952,7 @@ export function JobDetailPage() {
                     baseTime.setHours(baseTime.getHours() + index)
                     return (
                       <li key={brand} className="flex items-center gap-2">
-                        <span className="capitalize">{brand.replace('college', ' College')}</span>
+                        <span className="capitalize">{brand}</span>
                         <span className="text-gray-400">→</span>
                         <span>{format(baseTime, 'MMM d, h:mm a')}</span>
                       </li>
