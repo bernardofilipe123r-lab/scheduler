@@ -43,20 +43,23 @@ const DEFAULT_CONFIG: NicheConfig = {
   disclaimer_text: '',
 }
 
-// Preload fonts needed by Konva canvas components
+// Preload fonts needed by Konva canvas components via Google Fonts CSS API
 function useFontPreload() {
   const [loaded, setLoaded] = useState(false)
   useEffect(() => {
-    const fonts = [
-      new FontFace('Anton', "url(https://fonts.gstatic.com/s/anton/v25/1Ptgg87GROyAm3K8-C8.woff2)"),
-      new FontFace('Inter', "url(https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjQ.woff2)"),
-      new FontFace('Georgia', 'local("Georgia")'),
-    ]
-    Promise.all(fonts.map(f => f.load().then(face => { document.fonts.add(face); return face }).catch(() => null)))
-      .then(() => {
-        // Small delay to let Konva pick up the fonts after they're added to document.fonts
-        setTimeout(() => setLoaded(true), 100)
-      })
+    // Inject Google Fonts stylesheet (avoids hardcoded woff2 URLs that 404)
+    const linkId = 'konva-preview-fonts'
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement('link')
+      link.id = linkId
+      link.rel = 'stylesheet'
+      link.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600&display=swap'
+      document.head.appendChild(link)
+    }
+    // Wait for all fonts (including Google Fonts) to finish loading
+    document.fonts.ready.then(() => {
+      setTimeout(() => setLoaded(true), 150)
+    })
   }, [])
   return loaded
 }
@@ -503,29 +506,29 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                         Example Carousel Post Preview
                       </div>
                       <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        Konva render · {BRAND_CONFIGS[previewBrand]?.name || previewBrand}
+                        Konva render · {BRAND_CONFIGS[effectiveBrand]?.name || effectiveBrand}
                       </span>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-2">
-                      {/* Cover slide — uses a random brand for realistic preview */}
+                      {/* Cover slide — uses effectiveBrand (current brand or random fallback) */}
                       <div className="shrink-0 rounded-lg overflow-hidden shadow-md">
                         <PostCanvas
-                          key={`cover-${previewBrand}-${fontsReady}`}
-                          brand={previewBrand}
+                          key={`cover-${effectiveBrand}-${fontsReady}`}
+                          brand={effectiveBrand}
                           title={aiResult.example_post.title}
                           backgroundImage={null}
                           settings={DEFAULT_GENERAL_SETTINGS}
                           scale={0.2}
                         />
                       </div>
-                      {/* Text slides — strip "Slide N:" prefix, use same random brand */}
+                      {/* Text slides — strip "Slide N:" prefix, use same effectiveBrand */}
                       {aiResult.example_post.slides.map((slide, i) => {
                         const cleanSlide = slide.replace(/^Slide\s*\d+\s*:\s*/i, '')
                         return (
                           <div key={i} className="shrink-0 rounded-lg overflow-hidden shadow-md">
                             <CarouselTextSlide
-                              key={`slide-${i}-${previewBrand}-${fontsReady}`}
-                              brand={previewBrand}
+                              key={`slide-${i}-${effectiveBrand}-${fontsReady}`}
+                              brand={effectiveBrand}
                               text={cleanSlide}
                               allSlideTexts={aiResult.example_post!.slides.map(s => s.replace(/^Slide\s*\d+\s*:\s*/i, ''))}
                               isLastSlide={i === aiResult.example_post!.slides.length - 1}

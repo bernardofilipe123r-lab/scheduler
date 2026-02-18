@@ -512,13 +512,30 @@ export function PostCanvas({
         {backgroundImage ? (
           <BackgroundImageLayer imageUrl={backgroundImage} />
         ) : (
-          <Rect
-            x={0}
-            y={0}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
-            fill="#1a1a2e"
-          />
+          <>
+            {/* Brand-colored gradient background (used in preview when no AI image exists) */}
+            {(() => {
+              const cfg = getBrandConfig(brand)
+              // Parse hex color to RGB for gradient stops
+              const hex = cfg.color.replace('#', '')
+              const r = parseInt(hex.substring(0, 2), 16)
+              const g = parseInt(hex.substring(2, 4), 16)
+              const b = parseInt(hex.substring(4, 6), 16)
+              return (
+                <Rect
+                  x={0} y={0}
+                  width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
+                  fillLinearGradientStartPoint={{ x: CANVAS_WIDTH / 2, y: 0 }}
+                  fillLinearGradientEndPoint={{ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT }}
+                  fillLinearGradientColorStops={[
+                    0, `rgb(${Math.max(0, r - 40)},${Math.max(0, g - 40)},${Math.max(0, b - 40)})`,
+                    0.5, `rgb(${Math.max(0, r - 80)},${Math.max(0, g - 80)},${Math.max(0, b - 80)})`,
+                    1, 'rgb(10,10,20)',
+                  ]}
+                />
+              )
+            })()}
+          </>
         )}
         <GradientOverlay />
         <LogoWithLines
