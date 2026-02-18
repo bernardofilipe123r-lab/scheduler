@@ -17,7 +17,6 @@ import {
   AlertCircle,
   Check,
   Clock,
-  Settings2,
   ChevronDown,
   ChevronUp,
   ChevronLeft,
@@ -48,17 +47,12 @@ import {
   CANVAS_HEIGHT,
   GRID_PREVIEW_SCALE,
   getBrandConfig,
-  DEFAULT_GENERAL_SETTINGS,
-  SETTINGS_STORAGE_KEY,
   POST_BRAND_OFFSETS,
-  SLIDE_FONT_OPTIONS,
   loadGeneralSettings,
-  saveGeneralSettings as persistSettings,
   PostCanvas,
   autoFitFontSize,
 } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
-import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
 import type { Job, BrandName, BrandOutput } from '@/shared/types'
 import { apiClient } from '@/shared/api/client'
 
@@ -104,9 +98,8 @@ export function PostJobDetail({ job, refetch }: Props) {
     document.fonts.load('1em Anton').then(() => setFontLoaded(true))
   }, [])
 
-  // Layout settings
-  const [settings, setSettings] = useState<GeneralSettings>(loadGeneralSettings)
-  const [showSettings, setShowSettings] = useState(false)
+  // Layout settings (read-only from /posts page)
+  const settings = loadGeneralSettings()
 
   // Scheduling state
   const [isScheduling, setIsScheduling] = useState(false)
@@ -162,24 +155,6 @@ export function PostJobDetail({ job, refetch }: Props) {
   // Stage refs for export (one per brand)
   const stageRefs = useRef<Map<string, Konva.Stage>>(new Map())
   const textSlideRefs = useRef<Map<string, Konva.Stage>>(new Map())
-
-  const updateLayout = (updates: Partial<LayoutConfig>) => {
-    setSettings((prev) => ({
-      ...prev,
-      layout: { ...prev.layout, ...updates },
-    }))
-  }
-
-  const saveSettings = () => {
-    persistSettings(settings)
-    toast.success('Settings saved!')
-  }
-
-  const resetToDefault = () => {
-    setSettings(DEFAULT_GENERAL_SETTINGS)
-    localStorage.removeItem(SETTINGS_STORAGE_KEY)
-    toast.success('Settings reset to default')
-  }
 
   const isGenerating = job.status === 'generating' || job.status === 'pending'
 
@@ -872,177 +847,6 @@ export function PostJobDetail({ job, refetch }: Props) {
             </div>
           )
         })}
-      </div>
-
-      {/* Layout Settings (collapsible) */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <button
-          onClick={() => setShowSettings((prev) => !prev)}
-          className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-primary-600 transition-colors"
-        >
-          <Settings2 className="w-4 h-4" />
-          Layout Settings
-          <span className="text-xs font-normal text-gray-500">
-            (applies to all brands)
-          </span>
-          <ChevronDown
-            className={`w-4 h-4 ml-auto transition-transform ${
-              showSettings ? 'rotate-180' : ''
-            }`}
-          />
-        </button>
-
-        {showSettings && (
-          <>
-            <div className="mt-4 mb-4">
-              <label className="text-sm text-gray-600 mb-1 block">
-                Font Size: {settings.fontSize}px
-              </label>
-              <input
-                type="range"
-                min={40}
-                max={90}
-                value={settings.fontSize}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    fontSize: Number(e.target.value),
-                  }))
-                }
-                className="w-full accent-primary-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="text-xs text-gray-500">
-                  Read Caption Bottom: {settings.layout.readCaptionBottom}px
-                </label>
-                <input
-                  type="range"
-                  min={20}
-                  max={80}
-                  value={settings.layout.readCaptionBottom}
-                  onChange={(e) =>
-                    updateLayout({
-                      readCaptionBottom: Number(e.target.value),
-                    })
-                  }
-                  className="w-full accent-primary-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">
-                  Title Gap: {settings.layout.titleGap}px
-                </label>
-                <input
-                  type="range"
-                  min={10}
-                  max={300}
-                  value={settings.layout.titleGap}
-                  onChange={(e) =>
-                    updateLayout({ titleGap: Number(e.target.value) })
-                  }
-                  className="w-full accent-primary-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">
-                  Logo Gap: {settings.layout.logoGap}px
-                </label>
-                <input
-                  type="range"
-                  min={20}
-                  max={60}
-                  value={settings.layout.logoGap}
-                  onChange={(e) =>
-                    updateLayout({ logoGap: Number(e.target.value) })
-                  }
-                  className="w-full accent-primary-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">
-                  Horizontal Padding: {settings.layout.titlePaddingX}px
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={200}
-                  value={settings.layout.titlePaddingX}
-                  onChange={(e) =>
-                    updateLayout({ titlePaddingX: Number(e.target.value) })
-                  }
-                  className="w-full accent-primary-500"
-                />
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-4 mb-4">
-              <label className="text-xs text-gray-500 mb-1 block">
-                Bar Width:{' '}
-                {settings.barWidth === 0
-                  ? 'Auto (match title)'
-                  : `${settings.barWidth}px`}
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={400}
-                value={settings.barWidth}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    barWidth: Number(e.target.value),
-                  }))
-                }
-                className="w-full accent-primary-500"
-              />
-            </div>
-
-            <div className="border-t border-gray-100 pt-4 mb-4">
-              <label className="text-xs text-gray-500 mb-1 block">
-                Slide Font Family
-              </label>
-              <select
-                value={settings.slideFontFamily || DEFAULT_GENERAL_SETTINGS.slideFontFamily}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    slideFontFamily: e.target.value,
-                  }))
-                }
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-              >
-                {SLIDE_FONT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                Font used for body text on carousel slides 2+
-              </p>
-            </div>
-
-            <div className="border-t border-gray-100 pt-4 flex gap-2">
-              <button
-                onClick={saveSettings}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600"
-              >
-                <Save className="w-4 h-4" />
-                Save Settings
-              </button>
-              <button
-                onClick={resetToDefault}
-                className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Reset
-              </button>
-            </div>
-          </>
-        )}
       </div>
 
       {/* Edit Brand Modal */}
