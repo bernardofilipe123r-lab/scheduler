@@ -66,6 +66,14 @@ export function HistoryPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null)
   
+  // Bulk delete confirmation
+  const [bulkDeleteModal, setBulkDeleteModal] = useState<{
+    label: string
+    jobs: Job[]
+    isFiltered: boolean
+    filterName: string
+  } | null>(null)
+  
   // Categorize jobs based on their scheduling state
   const categorizedJobs = useMemo(() => {
     const toSchedule: Job[] = []    // Completed jobs with brands ready to schedule
@@ -416,16 +424,15 @@ export function HistoryPage() {
             </h2>
             <span className="text-gray-500">({filteredJobs.length})</span>
           </div>
-          {viewFilter === 'to-schedule' && filteredJobs.length > 0 && (
+          {filteredJobs.length > 0 && (
             <button
-              onClick={async () => {
-                if (!confirm(`Delete all ${filteredJobs.length} ready-to-schedule jobs and their scheduled reels?`)) return
-                try {
-                  const result = await deleteByStatus.mutateAsync('completed')
-                  toast.success(`Deleted ${result.deleted} jobs`)
-                } catch {
-                  toast.error('Failed to delete jobs')
-                }
+              onClick={() => {
+                setBulkDeleteModal({
+                  label: stats.find(s => s.key === viewFilter)?.label || 'Jobs',
+                  jobs: filteredJobs,
+                  isFiltered: true,
+                  filterName: stats.find(s => s.key === viewFilter)?.label || viewFilter,
+                })
               }}
               disabled={deleteByStatus.isPending}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
@@ -642,32 +649,30 @@ export function HistoryPage() {
                 Hide &gt;2h Ago
               </button>
               <button
-                onClick={async () => {
-                  if (!confirm(`Delete all ${sectionJobs.length} ${label.toLowerCase()}? This cannot be undone.`)) return
-                  setIsDeletingSection(true)
-                  try {
-                    const jobIds = sectionJobs.map(j => j.id)
-                    const result = await deleteByIds.mutateAsync(jobIds)
-                    if (result.deleted > 0) {
-                      toast.success(`Deleted ${result.deleted} ${label.toLowerCase()}`)
-                    } else {
-                      toast.error(`Failed to delete ${label.toLowerCase()}`)
-                    }
-                    if (result.errors?.length > 0) {
-                      console.error('Bulk delete errors:', result.errors)
-                    }
-                  } catch (err) {
-                    console.error('Delete all failed:', err)
-                    toast.error(`Failed to delete ${label.toLowerCase()}`)
-                  } finally {
-                    setIsDeletingSection(false)
-                  }
+                onClick={() => {
+                  const hasViewFilter = viewFilter !== 'all'
+                  const hasSearchFilter = searchQuery.trim() !== ''
+                  const hasVariantFilter = variantFilter !== 'all'
+                  const isFiltered = hasViewFilter || hasSearchFilter || hasVariantFilter
+                  const filterName = hasViewFilter
+                    ? (stats.find(s => s.key === viewFilter)?.label || viewFilter)
+                    : hasSearchFilter
+                      ? `search "${searchQuery}"`
+                      : hasVariantFilter
+                        ? variantFilter
+                        : ''
+                  setBulkDeleteModal({
+                    label,
+                    jobs: sectionJobs,
+                    isFiltered,
+                    filterName,
+                  })
                 }}
                 disabled={isDeletingSection || sectionJobs.length === 0}
                 className="text-xs px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
               >
                 {isDeletingSection ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                Delete All
+                Delete All ({sectionJobs.length})
               </button>
             </div>
             {sectionJobs.map(renderJobCard)}
@@ -708,6 +713,92 @@ export function HistoryPage() {
         )
       })()}
       
+      {/* Bulk Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!bulkDeleteModal}
+        onClose={() => setBulkDeleteModal(null)}
+        title={bulkDeleteModal?.isFiltered ? 'Delete Filtered Jobs' : '⚠️ Delete ALL Jobs'}
+        size="sm"
+      >
+        {bulkDeleteModal && (
+          <div className="space-y-4">
+            {!bulkDeleteModal.isFiltered ? (
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  Be careful — you are deleting everything!
+                </p>
+                <p className="text-sm text-red-600 mt-2">
+                  No filter is selected. This will permanently delete <strong>all {bulkDeleteModal.jobs.length} {bulkDeleteModal.label.toLowerCase()}</strong>, including scheduled, in-progress, completed, and failed jobs.
+                </p>
+                <p className="text-sm text-red-600 mt-1">
+                  This action cannot be undone.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-gray-600">
+                  Delete <strong>{bulkDeleteModal.jobs.length}</strong> {bulkDeleteModal.label.toLowerCase()} matching the <strong>{bulkDeleteModal.filterName}</strong> filter?
+                </p>
+                <p className="text-sm text-gray-500 mt-1">This action cannot be undone.</p>
+              </div>
+            )}
+            
+            <div className="p-3 bg-gray-50 rounded-lg max-h-32 overflow-y-auto">
+              <p className="text-xs font-medium text-gray-500 mb-1">Jobs to delete:</p>
+              {bulkDeleteModal.jobs.slice(0, 10).map(j => (
+                <p key={j.id} className="text-xs text-gray-600 truncate">
+                  #{j.id} — {j.title?.split('\n')[0] || 'Untitled'}
+                </p>
+              ))}
+              {bulkDeleteModal.jobs.length > 10 && (
+                <p className="text-xs text-gray-400 mt-1">...and {bulkDeleteModal.jobs.length - 10} more</p>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setBulkDeleteModal(null)}
+                className="btn btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setIsDeletingSection(true)
+                  try {
+                    const jobIds = bulkDeleteModal.jobs.map(j => j.id)
+                    const result = await deleteByIds.mutateAsync(jobIds)
+                    if (result.deleted > 0) {
+                      toast.success(`Deleted ${result.deleted} ${bulkDeleteModal.label.toLowerCase()}`)
+                    } else {
+                      toast.error(`Failed to delete ${bulkDeleteModal.label.toLowerCase()}`)
+                    }
+                    if (result.errors?.length > 0) {
+                      console.error('Bulk delete errors:', result.errors)
+                    }
+                  } catch (err) {
+                    console.error('Delete all failed:', err)
+                    toast.error(`Failed to delete ${bulkDeleteModal.label.toLowerCase()}`)
+                  } finally {
+                    setIsDeletingSection(false)
+                    setBulkDeleteModal(null)
+                  }
+                }}
+                disabled={isDeletingSection}
+                className="btn btn-danger flex-1"
+              >
+                {isDeletingSection ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  `Delete ${bulkDeleteModal.jobs.length} ${bulkDeleteModal.label}`
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Delete Confirmation Modal */}
       <Modal
         isOpen={deleteModalOpen}

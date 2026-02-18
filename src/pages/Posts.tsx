@@ -221,8 +221,8 @@ export function PostsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[2.6fr_1.4fr] gap-5">
         {/* Col 1: Inputs */}
         <div className="space-y-4 min-w-0">
-          {/* Topic Hint + AI Image Prompt side by side on desktop */}
-          <div className="space-y-4">
+          {/* Title + AI Image Prompt side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Title */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -270,8 +270,8 @@ export function PostsPage() {
             </div>
           </div>
 
-          {/* Brands + Layout Settings stacked */}
-          <div className="space-y-4">
+          {/* Brands + AI Image Model side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4">
             {/* Brands */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <label className="block text-sm font-semibold text-gray-900 mb-3">
@@ -308,7 +308,7 @@ export function PostsPage() {
               <label className="block text-sm font-semibold text-gray-900 mb-3">
                 AI Image Model
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setImageModel('ZImageTurbo_INT8')}
                   className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
@@ -317,10 +317,10 @@ export function PostsPage() {
                       : 'border-gray-200 bg-white hover:bg-gray-50'
                   }`}
                 >
-                  <span className={`text-sm font-medium ${imageModel === 'ZImageTurbo_INT8' ? 'text-primary-700' : 'text-gray-700'}`}>
-                    High Quality
+                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'ZImageTurbo_INT8' ? 'text-primary-700' : 'text-gray-700'}`}>
+                    ✨ High Quality
                   </span>
-                  <span className="text-[10px] text-gray-400">ZImageTurbo · Slower · Better detail</span>
+                  <span className="text-[10px] text-gray-400 whitespace-nowrap">ZImageTurbo · Better detail</span>
                 </button>
                 <button
                   onClick={() => setImageModel('Flux1schnell')}
@@ -330,15 +330,16 @@ export function PostsPage() {
                       : 'border-gray-200 bg-white hover:bg-gray-50'
                   }`}
                 >
-                  <span className={`text-sm font-medium ${imageModel === 'Flux1schnell' ? 'text-primary-700' : 'text-gray-700'}`}>
-                    Fast
+                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'Flux1schnell' ? 'text-primary-700' : 'text-gray-700'}`}>
+                    ⚡ Fast
                   </span>
-                  <span className="text-[10px] text-gray-400">Flux Schnell · Faster · Cheaper</span>
+                  <span className="text-[10px] text-gray-400 whitespace-nowrap">Flux Schnell · Cheaper</span>
                 </button>
               </div>
             </div>
+          </div>
 
-            {/* Layout Settings (collapsible) */}
+          {/* Layout Settings (collapsible) */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <button
                 onClick={() => setShowSettings((prev) => !prev)}
@@ -508,12 +509,11 @@ export function PostsPage() {
                 </div>
               )}
             </div>
-          </div>
 
         </div>
 
         {/* Right: Preview + Actions */}
-        <div className="self-start space-y-4">
+        <div className="self-start sticky top-6 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-2">Preview</h3>
             <p className="text-xs text-gray-400 mb-3">
