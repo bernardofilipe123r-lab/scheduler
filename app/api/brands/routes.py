@@ -320,6 +320,101 @@ async def get_all_brand_credentials(
     return {"brands": result}
 
 
+# ============================================================================
+# GLOBAL PROMPTS ENDPOINTS
+# ============================================================================
+
+PROMPT_KEYS = ["reels_prompt", "posts_prompt", "brand_description"]
+
+
+class UpdatePromptsRequest(BaseModel):
+    reels_prompt: Optional[str] = None
+    posts_prompt: Optional[str] = None
+    brand_description: Optional[str] = None
+
+
+@router.get("/prompts")
+async def get_prompts(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Get the 3 global content prompt settings."""
+    from app.models.config import AppSettings
+    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
+    result = {k: "" for k in PROMPT_KEYS}
+    for row in rows:
+        result[row.key] = row.value or ""
+    return result
+
+
+@router.put("/prompts")
+async def update_prompts(
+    request: UpdatePromptsRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Update the 3 global content prompt settings."""
+    from app.models.config import AppSettings
+    updates = {k: v for k, v in request.dict().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    for key, value in updates.items():
+        row = db.query(AppSettings).filter(AppSettings.key == key).first()
+        if row:
+            row.value = value
+        else:
+            db.add(AppSettings(key=key, value=value, category="content", value_type="string"))
+    db.commit()
+
+    rows = db.query(AppSettings).filter(AppSettings.key.in_(PROMPT_KEYS)).all()
+    result = {k: "" for k in PROMPT_KEYS}
+    for row in rows:
+        result[row.key] = row.value or ""
+    return {"success": True, **result}
+
+
+# ============================================================================
+# LAYOUT SETTINGS ENDPOINTS
+# ============================================================================
+
+@router.get("/settings/layout")
+async def get_layout_settings(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Get user's layout settings from app_settings."""
+    from app.models.config import AppSettings
+    key = f"layout_settings_{user['id']}"
+    row = db.query(AppSettings).filter(AppSettings.key == key).first()
+    if row and row.value:
+        return json.loads(row.value)
+    return {}
+
+
+@router.put("/settings/layout")
+async def update_layout_settings(
+    settings: Dict[str, Any],
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Save user's layout settings to app_settings."""
+    from app.models.config import AppSettings
+    key = f"layout_settings_{user['id']}"
+    row = db.query(AppSettings).filter(AppSettings.key == key).first()
+    if row:
+        row.value = json.dumps(settings)
+    else:
+        db.add(AppSettings(
+            key=key,
+            value=json.dumps(settings),
+            category="layout",
+            value_type="json",
+        ))
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.get("/{brand_id}")
 async def get_brand(
     brand_id: str,

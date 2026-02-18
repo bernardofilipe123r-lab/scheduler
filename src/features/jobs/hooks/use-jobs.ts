@@ -16,9 +16,16 @@ export function useJobs() {
   return useQuery({
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
-    refetchInterval: 5000,
-    refetchOnMount: 'always', // Always refetch when component mounts
-    staleTime: 0, // Data is always considered stale
+    refetchInterval: (query) => {
+      // Poll faster (3s) when any job is generating/pending
+      const jobs = query.state.data
+      const hasActive = Array.isArray(jobs) && jobs.some(
+        (j: any) => j.status === 'generating' || j.status === 'pending'
+      )
+      return hasActive ? 3000 : 10000
+    },
+    refetchOnMount: 'always',
+    staleTime: 0,
   })
 }
 

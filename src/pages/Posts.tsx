@@ -24,6 +24,8 @@ import {
   loadGeneralSettings,
   saveGeneralSettings,
   PostCanvas,
+  autoFitFontSize,
+  CANVAS_WIDTH,
 } from '@/shared/components/PostCanvas'
 import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanvas'
 import { useLayoutSettings, useUpdateLayoutSettings } from '@/shared/api/use-layout-settings'
@@ -213,7 +215,7 @@ export function PostsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[2.6fr_1.4fr] gap-5">
         {/* Col 1: Inputs */}
         <div className="space-y-4 min-w-0">
           {/* Topic Hint + AI Image Prompt side by side on desktop */}
@@ -318,6 +320,13 @@ export function PostsPage() {
                   <div>
                     <label className="text-xs text-gray-500">
                       Font Size: {settings.fontSize}px
+                      {title.trim() && (() => {
+                        const maxW = CANVAS_WIDTH - (settings.layout.titlePaddingX || 45) * 2
+                        const effective = autoFitFontSize(title, maxW, settings.fontSize, 3)
+                        return effective !== settings.fontSize
+                          ? <span className="text-blue-500 ml-1">(auto-fit: {effective}px)</span>
+                          : null
+                      })()}
                     </label>
                     <input
                       type="range"

@@ -61,11 +61,18 @@ export function NotificationBell() {
                   {activeJobs.map(job => {
                     const totalBrands = job.brands?.length || 0
                     const completedBrands = Object.values(job.brand_outputs || {})
-                      .filter(o => o.status === 'completed' || o.status === 'scheduled')
+                      .filter(o => o.status === 'completed' || o.status === 'scheduled' || o.status === 'published')
                       .length
-                    const progress = totalBrands > 0 
-                      ? Math.round((completedBrands / totalBrands) * 100) 
-                      : 0
+                    // Use real-time progress_percent from backend, fall back to brand count
+                    const progress = (job.status === 'generating' && job.progress_percent != null)
+                      ? job.progress_percent
+                      : totalBrands > 0
+                        ? Math.round((completedBrands / totalBrands) * 100)
+                        : 0
+                    // Descriptive status message
+                    const statusMsg = job.current_step
+                      || Object.values(job.brand_outputs || {}).find((o: any) => o.status === 'generating' && o.progress_message)?.progress_message
+                      || (job.status === 'pending' ? 'Queued...' : 'Generating...')
                     
                     return (
                       <button
@@ -85,7 +92,7 @@ export function NotificationBell() {
                               {job.title?.split('\n')[0] || 'Generating...'}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              {completedBrands}/{totalBrands} brands • {progress}%
+                              {statusMsg} — {progress}%
                             </p>
                             <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div 

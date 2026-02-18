@@ -304,9 +304,7 @@ export function ScheduledPage() {
     setIsCleaning(true)
     toast.loading('Cleaning post schedule collisions...', { id: 'clean' })
     try {
-      const resp = await fetch('/reels/scheduled/clean-post-slots', { method: 'POST' })
-      if (!resp.ok) throw new Error('Failed')
-      const data = await resp.json()
+      const data = await apiClient.post<{ collisions_found: number; message: string }>('/reels/scheduled/clean-post-slots')
       if (data.collisions_found === 0) {
         toast.success('No collisions found – schedule is clean!', { id: 'clean' })
       } else {
@@ -325,9 +323,7 @@ export function ScheduledPage() {
     setIsCleaningReels(true)
     toast.loading('Cleaning reel schedule slots...', { id: 'clean-reels' })
     try {
-      const resp = await fetch('/reels/scheduled/clean-reel-slots', { method: 'POST' })
-      if (!resp.ok) throw new Error('Failed')
-      const data = await resp.json()
+      const data = await apiClient.post<{ total_fixed: number; message: string }>('/reels/scheduled/clean-reel-slots')
       if (data.total_fixed === 0) {
         toast.success('All reels are on correct slots!', { id: 'clean-reels' })
       } else {
