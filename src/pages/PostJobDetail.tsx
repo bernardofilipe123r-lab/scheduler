@@ -105,9 +105,14 @@ export function PostJobDetail({ job, refetch }: Props) {
 
   // Scheduling state
   const [isScheduling, setIsScheduling] = useState(false)
-  const [isCapturing, setIsCapturing] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [schedulingBrand, setSchedulingBrand] = useState<string | null>(null)
+
+  // Schedule options modal state
+  const [scheduleModalBrand, setScheduleModalBrand] = useState<string | null>(null)
+  const [scheduleMode, setScheduleMode] = useState<'auto' | 'custom'>('auto')
+  const [customDate, setCustomDate] = useState('')
+  const [customTime, setCustomTime] = useState('')
 
   // Per-brand font size overrides (session-only, not persisted)
   // Auto-fit runs by default; manual +/- adjustments apply only while viewing this job
@@ -327,7 +332,6 @@ export function PostJobDetail({ job, refetch }: Props) {
       return
     }
     setIsScheduling(true)
-    setIsCapturing(true)
     toast.loading('Scheduling posts for all brands...', { id: 'sched' })
 
     let scheduled = 0
@@ -483,13 +487,37 @@ export function PostJobDetail({ job, refetch }: Props) {
     } catch {
       toast.error('Failed to schedule posts', { id: 'sched' })
     } finally {
-      setIsCapturing(false)
       setIsScheduling(false)
     }
   }
 
+  // ── Open schedule modal for a brand ──────────────────────────────────
+  const openScheduleModal = (brand: string) => {
+    setScheduleModalBrand(brand)
+    setScheduleMode('auto')
+    // Default custom date/time to tomorrow at noon
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    setCustomDate(tomorrow.toISOString().split('T')[0])
+    setCustomTime('12:00')
+  }
+
+  const confirmSchedule = () => {
+    if (!scheduleModalBrand) return
+    let customDateTime: Date | undefined
+    if (scheduleMode === 'custom' && customDate && customTime) {
+      customDateTime = new Date(`${customDate}T${customTime}:00`)
+      if (customDateTime <= new Date()) {
+        toast.error('Please select a future date and time')
+        return
+      }
+    }
+    setScheduleModalBrand(null)
+    scheduleSingleBrand(scheduleModalBrand, customDateTime)
+  }
+
   // ── Schedule single brand ────────────────────────────────────────────
-  const scheduleSingleBrand = async (brand: string) => {
+  const scheduleSingleBrand = async (brand: string, customScheduleTime?: Date) => {
     const output = job.brand_outputs[brand as BrandName]
     if (!output || output.status !== 'completed') {
       toast.error('Brand must be completed before scheduling')
@@ -497,7 +525,6 @@ export function PostJobDetail({ job, refetch }: Props) {
     }
 
     setSchedulingBrand(brand)
-    setIsCapturing(true)
     toast.loading(`Scheduling ${getBrandConfig(brand).name}...`, { id: `sched-${brand}` })
 
     try {
@@ -558,25 +585,27 @@ export function PostJobDetail({ job, refetch }: Props) {
       const offset = POST_BRAND_OFFSETS[brand] || 0
       const brandTitle = output?.title || job.title
 
-      // Find next free slot
-      const now = new Date()
-      let scheduleTime: Date | null = null
-      for (let dayOffset = 0; dayOffset < 30 && !scheduleTime; dayOffset++) {
-        for (const baseHour of [0, 12]) {
-          const slot = new Date(now)
-          slot.setDate(slot.getDate() + dayOffset)
-          slot.setHours(baseHour + offset, 0, 0, 0)
-          if (slot <= now) continue
-          if (isSlotOccupied(brand, slot)) continue
-          scheduleTime = slot
-          break
-        }
-      }
-
+      // Use custom time if provided, otherwise find next free slot
+      let scheduleTime: Date | null = customScheduleTime || null
       if (!scheduleTime) {
-        scheduleTime = new Date(now)
-        scheduleTime.setDate(scheduleTime.getDate() + 30)
-        scheduleTime.setHours(offset, 0, 0, 0)
+        const now = new Date()
+        for (let dayOffset = 0; dayOffset < 30 && !scheduleTime; dayOffset++) {
+          for (const baseHour of [0, 12]) {
+            const slot = new Date(now)
+            slot.setDate(slot.getDate() + dayOffset)
+            slot.setHours(baseHour + offset, 0, 0, 0)
+            if (slot <= now) continue
+            if (isSlotOccupied(brand, slot)) continue
+            scheduleTime = slot
+            break
+          }
+        }
+
+        if (!scheduleTime) {
+          scheduleTime = new Date(now)
+          scheduleTime.setDate(scheduleTime.getDate() + 30)
+          scheduleTime.setHours(offset, 0, 0, 0)
+        }
       }
 
       await apiClient.post('/reels/schedule-post-image', {
@@ -601,7 +630,6 @@ export function PostJobDetail({ job, refetch }: Props) {
     } catch {
       toast.error(`Failed to schedule ${getBrandConfig(brand).name}`, { id: `sched-${brand}` })
     } finally {
-      setIsCapturing(false)
       setSchedulingBrand(null)
     }
   }
@@ -842,7 +870,7 @@ export function PostJobDetail({ job, refetch }: Props) {
 
               {/* Canvas with carousel navigation */}
               <div className="rounded-lg overflow-hidden border border-gray-100 relative">
-                {isCapturing && (status === 'completed' || status === 'scheduled') && (
+                {(schedulingBrand === brand || isScheduling) && (status === 'completed' || status === 'scheduled') && (
                   <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
@@ -949,7 +977,7 @@ export function PostJobDetail({ job, refetch }: Props) {
               {/* Per-brand schedule button */}
               {status === 'completed' && (
                 <button
-                  onClick={() => scheduleSingleBrand(brand)}
+                  onClick={() => openScheduleModal(brand)}
                   disabled={schedulingBrand === brand || isScheduling}
                   className="w-full flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600 disabled:opacity-50"
                 >
@@ -1170,6 +1198,92 @@ export function PostJobDetail({ job, refetch }: Props) {
               </button>
             </div>
 
+          </div>
+        </Modal>
+      )}
+
+      {/* Schedule Options Modal */}
+      {scheduleModalBrand && (
+        <Modal
+          isOpen={!!scheduleModalBrand}
+          onClose={() => setScheduleModalBrand(null)}
+          title={`Schedule — ${scheduleModalBrand ? getBrandConfig(scheduleModalBrand).name : ''}`}
+        >
+          <div className="space-y-4">
+            {/* Mode selection */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setScheduleMode('auto')}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                  scheduleMode === 'auto'
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <Calendar className={`w-5 h-5 ${scheduleMode === 'auto' ? 'text-primary-600' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${scheduleMode === 'auto' ? 'text-primary-700' : 'text-gray-600'}`}>
+                  Automatic Slot
+                </span>
+                <span className="text-[10px] text-gray-400 text-center">Next available time</span>
+              </button>
+              <button
+                onClick={() => setScheduleMode('custom')}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                  scheduleMode === 'custom'
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <Clock className={`w-5 h-5 ${scheduleMode === 'custom' ? 'text-primary-600' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${scheduleMode === 'custom' ? 'text-primary-700' : 'text-gray-600'}`}>
+                  Custom Schedule
+                </span>
+                <span className="text-[10px] text-gray-400 text-center">Pick date & time</span>
+              </button>
+            </div>
+
+            {/* Custom date/time picker */}
+            {scheduleMode === 'custom' && (
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={customDate}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Time</label>
+                  <input
+                    type="time"
+                    value={customTime}
+                    onChange={(e) => setCustomTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Confirm */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setScheduleModalBrand(null)}
+                className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg border border-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSchedule}
+                disabled={scheduleMode === 'custom' && (!customDate || !customTime)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-50"
+              >
+                <Calendar className="w-4 h-4" />
+                {scheduleMode === 'auto' ? 'Schedule Now' : 'Schedule for Selected Time'}
+              </button>
+            </div>
           </div>
         </Modal>
       )}
