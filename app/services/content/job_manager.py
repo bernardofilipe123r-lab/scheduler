@@ -37,6 +37,7 @@ class JobManager:
         cta_type: Optional[str] = None,
         platforms: Optional[List[str]] = None,
         fixed_title: bool = False,
+        image_model: Optional[str] = None,
     ) -> GenerationJob:
         """Create a new generation job."""
         job_id = generate_job_id()
@@ -60,6 +61,7 @@ class JobManager:
             cta_type=cta_type,
             platforms=platforms,
             fixed_title=fixed_title,
+            image_model=image_model,
             status="pending",
             brand_outputs={brand: {"status": "pending"} for brand in brands}
         )

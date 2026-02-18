@@ -32,6 +32,7 @@ class JobCreateRequest(BaseModel):
     user_id: str = "default"
     platforms: Optional[List[str]] = None  # ["instagram", "facebook", "youtube"] - defaults to all if None
     fixed_title: bool = False  # If True, use title as-is (no AI generation)
+    image_model: Optional[str] = None  # AI image model override ("Flux1schnell" or "ZImageTurbo_INT8")
 
 
 class JobUpdateRequest(BaseModel):
@@ -137,7 +138,8 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
                 ai_prompt=request.ai_prompt,
                 cta_type=request.cta_type,
                 platforms=request.platforms,
-                fixed_title=request.fixed_title
+                fixed_title=request.fixed_title,
+                image_model=request.image_model
             )
             
             job_id = job.job_id

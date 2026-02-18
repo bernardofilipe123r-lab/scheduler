@@ -164,7 +164,7 @@ class AIBackgroundGenerator:
         
         raise RuntimeError(f"Request failed after {MAX_RETRIES} retries")
 
-    def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None) -> Image.Image:
+    def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None, model_override: str = None) -> Image.Image:
         """
         Generate an AI background image based on brand.
         
@@ -240,19 +240,26 @@ class AIBackgroundGenerator:
         print(f"🔒 Acquired DEAPI queue position", flush=True)
         
         try:
-            if progress_callback:
-                progress_callback(f"Calling deAPI (FLUX.1-schnell) for {brand_name}...", 30)
+            # Determine which model to use
+            use_model = model_override or "Flux1schnell"
             
-            # Generate image using deAPI with FLUX.1-schnell (cheapest model)
+            if progress_callback:
+                progress_callback(f"Calling deAPI ({use_model}) for {brand_name}...", 30)
+            
             api_start = time.time()
             
-            # Calculate dimensions (FLUX.1-schnell requires multiples of 128)
-            # Our target is 1080x1920, round to nearest valid dimensions
-            width = ((REEL_WIDTH + 127) // 128) * 128  # Round up to nearest 128
-            height = ((REEL_HEIGHT + 127) // 128) * 128  # Round up to nearest 128
+            # Calculate dimensions based on model requirements
+            if use_model == "ZImageTurbo_INT8":
+                # ZImageTurbo: 16px step multiples
+                width = ((REEL_WIDTH + 15) // 16) * 16
+                height = ((REEL_HEIGHT + 15) // 16) * 16
+            else:
+                # Flux1schnell: 128px step multiples
+                width = ((REEL_WIDTH + 127) // 128) * 128
+                height = ((REEL_HEIGHT + 127) // 128) * 128
             
             print(f"📐 Target dimensions: {REEL_WIDTH}x{REEL_HEIGHT}")
-            print(f"📐 Rounded dimensions: {width}x{height} (multiples of 128 required)")
+            print(f"📐 Rounded dimensions: {width}x{height} (model: {use_model})")
             
             # Submit generation request
             headers = {
@@ -263,14 +270,19 @@ class AIBackgroundGenerator:
             
             payload = {
                 "prompt": prompt,
-                "model": "Flux1schnell",  # Cheapest model at $0.00136 for 512x512, 4 steps
+                "model": use_model,
                 "width": width,
                 "height": height,
-                "steps": 4,  # Max steps for Flux1schnell is 10, using 4 for speed/cost
-                "guidance": 0,  # Flux1schnell does not support guidance (must be 0)
-                "seed": int(unique_id, 16) % (2**31),  # Convert unique_id to seed
-                "loras": []
+                "seed": int(unique_id, 16) % (2**31),
             }
+            
+            # Model-specific parameters
+            if use_model == "Flux1schnell":
+                payload["steps"] = 4
+                payload["guidance"] = 0
+                payload["loras"] = []
+            else:
+                payload["steps"] = 8
             
             print(f"📊 API Request Parameters:")
             print(f"   Model: {payload['model']}")
@@ -399,7 +411,7 @@ class AIBackgroundGenerator:
             self._release_queue_position()
             print(f"🔓 Released DEAPI queue position", flush=True)
 
-    def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None) -> Image.Image:
+    def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, model_override: str = None) -> Image.Image:
         """
         Generate a HIGH QUALITY AI background for posts using FLUX.2 Klein 4B BF16.
         
@@ -448,18 +460,24 @@ class AIBackgroundGenerator:
         print(f"🔒 Acquired DEAPI queue position", flush=True)
         
         try:
+            # Determine which model to use
+            use_model = model_override or "ZImageTurbo_INT8"
+            
             if progress_callback:
-                progress_callback(f"Calling deAPI (Z-Image-Turbo — HQ) for {brand_name}...", 30)
+                progress_callback(f"Calling deAPI ({use_model}) for {brand_name}...", 30)
             
             api_start = time.time()
             
-            # Z-Image-Turbo INT8: 16px steps, up to 2048px, 1-50 steps
-            # Higher quality than Flux1schnell, better prompt adherence
-            # Post dimensions: 1080x1350 — round to nearest 16px
-            width = ((POST_WIDTH + 15) // 16) * 16   # 1080 → 1088
-            height = ((POST_HEIGHT + 15) // 16) * 16  # 1350 → 1360
+            # Calculate dimensions based on model requirements
+            if use_model == "Flux1schnell":
+                width = ((POST_WIDTH + 127) // 128) * 128
+                height = ((POST_HEIGHT + 127) // 128) * 128
+            else:
+                # ZImageTurbo: 16px step multiples
+                width = ((POST_WIDTH + 15) // 16) * 16   # 1080 → 1088
+                height = ((POST_HEIGHT + 15) // 16) * 16  # 1350 → 1360
             
-            print(f"📐 Target: {POST_WIDTH}x{POST_HEIGHT} → Rounded: {width}x{height} (16px steps)")
+            print(f"📐 Target: {POST_WIDTH}x{POST_HEIGHT} → Rounded: {width}x{height} (model: {use_model})")
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -469,14 +487,21 @@ class AIBackgroundGenerator:
             
             payload = {
                 "prompt": prompt,
-                "model": "ZImageTurbo_INT8",  # Higher quality than Flux1schnell
+                "model": use_model,
                 "width": width,
                 "height": height,
-                "steps": 8,  # More steps = better quality (supports 1-50)
                 "seed": int(unique_id, 16) % (2**31),
             }
             
-            print(f"📊 API Request: model={payload['model']}, {width}x{height}, steps={payload['steps']}")
+            # Model-specific parameters
+            if use_model == "Flux1schnell":
+                payload["steps"] = 4
+                payload["guidance"] = 0
+                payload["loras"] = []
+            else:
+                payload["steps"] = 8
+            
+            print(f"📊 API Request: model={payload['model']}, {width}x{height}, steps={payload.get('steps')}")
             print(f"📊 Full payload: {payload}", flush=True)
             
             response = self._request_with_retry(
@@ -536,13 +561,6 @@ class AIBackgroundGenerator:
                     # Resize to exact post dimensions
                     if image.size != (POST_WIDTH, POST_HEIGHT):
                         image = image.resize((POST_WIDTH, POST_HEIGHT), Image.Resampling.LANCZOS)
-                    
-                    # Crop top 80% of the image and stretch to full height.
-                    # This shifts the visible content upward by 20%, ensuring the
-                    # subject stays visible above the cover slide gradient overlay.
-                    crop_bottom = int(POST_HEIGHT * 0.8)
-                    cropped = image.crop((0, 0, POST_WIDTH, crop_bottom))
-                    image = cropped.resize((POST_WIDTH, POST_HEIGHT), Image.Resampling.LANCZOS)
                     
                     total_duration = time.time() - start_time
                     

@@ -1072,7 +1072,7 @@ export function JobDetailPage() {
               >
                 <Calendar className={`w-5 h-5 ${brandScheduleMode === 'auto' ? 'text-purple-600' : 'text-gray-400'}`} />
                 <span className={`text-sm font-medium ${brandScheduleMode === 'auto' ? 'text-purple-700' : 'text-gray-600'}`}>
-                  Automatic Slot
+                  Schedule Now
                 </span>
                 <span className="text-[10px] text-gray-400 text-center">Next available time</span>
               </button>
@@ -1086,7 +1086,7 @@ export function JobDetailPage() {
               >
                 <Clock className={`w-5 h-5 ${brandScheduleMode === 'custom' ? 'text-purple-600' : 'text-gray-400'}`} />
                 <span className={`text-sm font-medium ${brandScheduleMode === 'custom' ? 'text-purple-700' : 'text-gray-600'}`}>
-                  Custom Schedule
+                  Custom Time
                 </span>
                 <span className="text-[10px] text-gray-400 text-center">Pick date & time</span>
               </button>
@@ -1131,7 +1131,7 @@ export function JobDetailPage() {
                 className="btn btn-primary flex-1"
               >
                 <Calendar className="w-4 h-4" />
-                {brandScheduleMode === 'auto' ? 'Schedule Now' : 'Schedule for Selected Time'}
+                {brandScheduleMode === 'auto' ? 'Schedule Now' : 'Schedule'}
               </button>
             </div>
           </div>

@@ -164,7 +164,8 @@ class JobProcessor:
                 brand_type=brand_type,
                 variant=job.variant,
                 brand_name=brand,
-                ai_prompt=job.ai_prompt
+                ai_prompt=job.ai_prompt,
+                image_model=getattr(job, 'image_model', None)
             )
             print(f"   ✓ ImageGenerator initialized successfully", flush=True)
             sys.stdout.flush()
@@ -427,6 +428,7 @@ class JobProcessor:
             image = generator.generate_post_background(
                 brand_name=brand,
                 user_prompt=ai_prompt,
+                model_override=getattr(job, 'image_model', None),
             )
 
             # Save to temp file, upload to Supabase, delete temp

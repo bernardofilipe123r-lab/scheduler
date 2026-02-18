@@ -52,6 +52,7 @@ export function GeneratorPage() {
   const [autoVariant, setAutoVariant] = useState<Variant>('dark')
   const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
   const [autoCtaType, setAutoCtaType] = useState('auto')
+  const [imageModel, setImageModel] = useState<string>('Flux1schnell')
   
   // Refs for highlighting
   const titleRef = useRef<HTMLTextAreaElement>(null)
@@ -137,39 +138,63 @@ export function GeneratorPage() {
     }
     setShowAutoModal(false)
     setIsAutoGenerating(true)
-    toast.loading('AI is generating viral content...', { id: 'auto-gen' })
+
+    const total = autoBrands.length
+    toast.loading(`AI is generating ${total} unique viral reel${total > 1 ? 's' : ''}...`, { id: 'auto-gen' })
 
     try {
-      // Step 1: Generate content with AI
-      const response = await fetch('/reels/auto-generate-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to generate content')
+      let created = 0
+      let failed = 0
+
+      for (const brand of autoBrands) {
+        toast.loading(`Generating content ${created + failed + 1}/${total}...`, { id: 'auto-gen' })
+
+        try {
+          // Generate unique content for this brand
+          const response = await fetch('/reels/auto-generate-content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          })
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.detail || 'Failed to generate content')
+          }
+          const data = await response.json()
+
+          // Create a separate job for this brand with its unique content
+          await createJob.mutateAsync({
+            title: balanceTitle(data.title),
+            content_lines: data.content_lines || [],
+            brands: [brand],
+            variant: autoVariant,
+            ai_prompt: data.image_prompt || undefined,
+            cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
+            platforms: autoPlatforms,
+            image_model: imageModel,
+          })
+          created++
+        } catch (err) {
+          console.error(`Auto-generate failed for ${brand}:`, err)
+          failed++
+        }
       }
-      const data = await response.json()
-
-      toast.loading('Creating job...', { id: 'auto-gen' })
-
-      // Step 2: Create job immediately with the generated content
-      const job = await createJob.mutateAsync({
-        title: balanceTitle(data.title),
-        content_lines: data.content_lines || [],
-        brands: autoBrands,
-        variant: autoVariant,
-        ai_prompt: data.image_prompt || undefined,
-        cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
-        platforms: autoPlatforms,
-      })
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success(
-        `✅ Job ${job.id.slice(0, 8)}... created and processing!`,
-        { id: 'auto-gen', duration: 6000 }
-      )
+
+      if (created === total) {
+        toast.success(
+          `${total} unique reel${total > 1 ? 's' : ''} created! Check Jobs for progress.`,
+          { id: 'auto-gen', duration: 6000 }
+        )
+      } else if (created > 0) {
+        toast.success(
+          `${created}/${total} reels created. ${failed} failed.`,
+          { id: 'auto-gen', duration: 6000 }
+        )
+      } else {
+        toast.error('All reel generations failed.', { id: 'auto-gen' })
+      }
     } catch (error) {
       console.error('Auto-generate error:', error)
       toast.error(
@@ -232,7 +257,7 @@ export function GeneratorPage() {
         }
       }
 
-      const job = await createJob.mutateAsync({
+      await createJob.mutateAsync({
         title,
         content_lines: contentLines,
         brands: selectedBrands,
@@ -240,6 +265,7 @@ export function GeneratorPage() {
         ai_prompt: finalAiPrompt || undefined,
         cta_type: ctaType === 'auto' ? undefined : ctaType,
         platforms: selectedPlatforms,
+        image_model: imageModel,
       })
       
       setTitle('')
@@ -249,7 +275,7 @@ export function GeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       
       toast.success(
-        `✅ Job ${job.id.slice(0, 8)}... created and processing!`,
+        'Reel generation started! Check Jobs for progress.',
         { duration: 6000 }
       )
       
@@ -317,6 +343,41 @@ export function GeneratorPage() {
               </label>
             </div>
             <p className="text-xs text-gray-500 mt-2">Light: 12AM, 8AM, 4PM<br/>Dark: 4AM, 12PM, 8PM</p>
+          </div>
+
+          {/* AI Image Model */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">AI Image Model</label>
+            <div className="space-y-3">
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input
+                  type="radio"
+                  name="imageModel"
+                  value="Flux1schnell"
+                  checked={imageModel === 'Flux1schnell'}
+                  onChange={() => setImageModel('Flux1schnell')}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <div className="ml-3">
+                  <span className="text-sm font-medium text-gray-900">⚡ Fast</span>
+                  <p className="text-[10px] text-gray-400">Flux Schnell · Faster · Cheaper</p>
+                </div>
+              </label>
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input
+                  type="radio"
+                  name="imageModel"
+                  value="ZImageTurbo_INT8"
+                  checked={imageModel === 'ZImageTurbo_INT8'}
+                  onChange={() => setImageModel('ZImageTurbo_INT8')}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <div className="ml-3">
+                  <span className="text-sm font-medium text-gray-900">✨ High Quality</span>
+                  <p className="text-[10px] text-gray-400">ZImageTurbo · Slower · Better detail</p>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
 

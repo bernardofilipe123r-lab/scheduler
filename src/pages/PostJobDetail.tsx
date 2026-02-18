@@ -1222,7 +1222,7 @@ export function PostJobDetail({ job, refetch }: Props) {
               >
                 <Calendar className={`w-5 h-5 ${scheduleMode === 'auto' ? 'text-primary-600' : 'text-gray-400'}`} />
                 <span className={`text-sm font-medium ${scheduleMode === 'auto' ? 'text-primary-700' : 'text-gray-600'}`}>
-                  Automatic Slot
+                  Schedule Now
                 </span>
                 <span className="text-[10px] text-gray-400 text-center">Next available time</span>
               </button>
@@ -1236,7 +1236,7 @@ export function PostJobDetail({ job, refetch }: Props) {
               >
                 <Clock className={`w-5 h-5 ${scheduleMode === 'custom' ? 'text-primary-600' : 'text-gray-400'}`} />
                 <span className={`text-sm font-medium ${scheduleMode === 'custom' ? 'text-primary-700' : 'text-gray-600'}`}>
-                  Custom Schedule
+                  Custom Time
                 </span>
                 <span className="text-[10px] text-gray-400 text-center">Pick date & time</span>
               </button>
@@ -1281,7 +1281,7 @@ export function PostJobDetail({ job, refetch }: Props) {
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-50"
               >
                 <Calendar className="w-4 h-4" />
-                {scheduleMode === 'auto' ? 'Schedule Now' : 'Schedule for Selected Time'}
+                {scheduleMode === 'auto' ? 'Schedule Now' : 'Schedule'}
               </button>
             </div>
           </div>

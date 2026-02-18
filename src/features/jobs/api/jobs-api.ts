@@ -53,6 +53,7 @@ export interface JobCreateRequest {
   cta_type?: string
   platforms?: string[]  // ['instagram', 'facebook', 'youtube']
   fixed_title?: boolean
+  image_model?: string  // 'Flux1schnell' or 'ZImageTurbo_INT8'
 }
 
 // API functions

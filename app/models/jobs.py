@@ -27,6 +27,7 @@ class GenerationJob(Base):
     brands = Column(JSON, nullable=False)  # List of brands to generate
     platforms = Column(JSON, nullable=True)  # List of platforms: ["instagram", "facebook", "youtube"]
     fixed_title = Column(Boolean, default=False, nullable=False, server_default="false")
+    image_model = Column(String(50), nullable=True)  # AI image model override (e.g. "Flux1schnell", "ZImageTurbo_INT8")
     
     # Generated outputs per brand
     # Format: {"gymcollege": {"reel_id": "...", "thumbnail": "...", "video": "...", "status": "completed"}, ...}
@@ -66,6 +67,7 @@ class GenerationJob(Base):
             "cta_type": self.cta_type,
             "brands": self.brands,
             "fixed_title": getattr(self, 'fixed_title', False) or False,
+            "image_model": getattr(self, 'image_model', None),
             "platforms": platforms,
             "brand_outputs": self.brand_outputs or {},
             "ai_background_path": self.ai_background_path,

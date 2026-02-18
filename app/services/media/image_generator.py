@@ -47,7 +47,7 @@ from app.utils.text_formatting import (
 class ImageGenerator:
     """Service for generating reel images and thumbnails."""
     
-    def __init__(self, brand_type, variant: str = "light", brand_name: str = "default", ai_prompt: str = None, content_context: str = None):
+    def __init__(self, brand_type, variant: str = "light", brand_name: str = "default", ai_prompt: str = None, content_context: str = None, image_model: str = None):
         """
         Initialize the image generator.
         
@@ -70,6 +70,7 @@ class ImageGenerator:
         self.brand_name = brand_name
         self.ai_prompt = ai_prompt
         self.content_context = content_context
+        self.image_model = image_model
         self._ai_background = None  # Cache AI background for dark mode reuse
         
         print(f"   Loading brand colors...", flush=True)
@@ -120,7 +121,8 @@ class ImageGenerator:
         self._ai_background = ai_generator.generate_background(
             self.brand_name, 
             self.ai_prompt,
-            content_context=content_context
+            content_context=content_context,
+            model_override=self.image_model
         )
         print(f"   ✓ AI background generated", flush=True)
         
@@ -174,7 +176,8 @@ class ImageGenerator:
             image = ai_generator.generate_background(
                 self.brand_name, 
                 self.ai_prompt,
-                content_context=content_context
+                content_context=content_context,
+                model_override=self.image_model
             )
             # Cache it for potential reuse
             self._ai_background = image.copy()

@@ -58,6 +58,7 @@ export function PostsPage() {
   const [showAutoModal, setShowAutoModal] = useState(false)
   const [autoCount, setAutoCount] = useState(0)
   const [autoBrands, setAutoBrands] = useState<BrandName[]>([])
+  const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -146,15 +147,16 @@ export function PostsPage() {
     setIsCreating(true)
     setShowAutoModal(false)
     try {
-      const job = await createJob.mutateAsync({
+      await createJob.mutateAsync({
         title: 'Auto-generated posts',
         content_lines: [],
         brands: autoBrands,
         variant: 'post',
         cta_type: 'none',
+        image_model: imageModel,
       })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success(`Post job ${job.id.slice(0, 8)}... created and processing!`, { duration: 6000 })
+      toast.success('Post generation started! Check Jobs for progress.', { duration: 6000 })
     } catch {
       toast.error('Failed to create auto generate job')
     } finally {
@@ -170,7 +172,7 @@ export function PostsPage() {
     }
     setIsCreating(true)
     try {
-      const job = await createJob.mutateAsync({
+      await createJob.mutateAsync({
         title: title.trim(),
         content_lines: [],
         brands: selectedBrands,
@@ -178,9 +180,10 @@ export function PostsPage() {
         ai_prompt: aiPrompt.trim() || undefined,
         cta_type: 'none',
         fixed_title: true,
+        image_model: imageModel,
       })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success(`Post job ${job.id.slice(0, 8)}... created and processing!`, { duration: 6000 })
+      toast.success('Post generation started! Check Jobs for progress.', { duration: 6000 })
       setTitle('')
       setAiPrompt('')
     } catch {
@@ -297,6 +300,41 @@ export function PostsPage() {
                     </button>
                   )
                 })}
+              </div>
+            </div>
+
+            {/* AI Image Model */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <label className="block text-sm font-semibold text-gray-900 mb-3">
+                AI Image Model
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setImageModel('ZImageTurbo_INT8')}
+                  className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
+                    imageModel === 'ZImageTurbo_INT8'
+                      ? 'border-primary-300 bg-primary-50'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`text-sm font-medium ${imageModel === 'ZImageTurbo_INT8' ? 'text-primary-700' : 'text-gray-700'}`}>
+                    High Quality
+                  </span>
+                  <span className="text-[10px] text-gray-400">ZImageTurbo · Slower · Better detail</span>
+                </button>
+                <button
+                  onClick={() => setImageModel('Flux1schnell')}
+                  className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
+                    imageModel === 'Flux1schnell'
+                      ? 'border-primary-300 bg-primary-50'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`text-sm font-medium ${imageModel === 'Flux1schnell' ? 'text-primary-700' : 'text-gray-700'}`}>
+                    Fast
+                  </span>
+                  <span className="text-[10px] text-gray-400">Flux Schnell · Faster · Cheaper</span>
+                </button>
               </div>
             </div>
 
