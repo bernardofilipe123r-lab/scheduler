@@ -186,9 +186,12 @@ Just write the paragraph text, nothing else."""
         else:
             save_section = f"""🩵 Save this post and share it with someone who needs to see this."""
         
-        # Get CTA using weighted random selection from ctx
-        from app.core.cta import get_cta_line
-        cta_text = get_cta_line(ctx)
+        # Get CTA — if cta_type is explicit text use it; otherwise weighted random from ctx
+        if cta_type and cta_type not in ('follow_tips', 'sleep_lean', 'workout_plan'):
+            cta_text = cta_type
+        else:
+            from app.core.cta import get_cta_line
+            cta_text = get_cta_line(ctx)
         cta_section = f"💬 {cta_text}" if cta_text else ""
         
         # Disclaimer from PromptContext — only include if configured

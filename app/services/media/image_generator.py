@@ -389,10 +389,13 @@ class ImageGenerator:
         Returns:
             Path to the generated reel image
         """
-        # Add CTA line — prefer weighted selection from ctx, fall back to cta_type text
-        if ctx or cta_type:
-            from app.core.cta import get_cta_line
-            cta_line = get_cta_line(ctx) if ctx else (cta_type or "")
+        # Add CTA line — if cta_type is explicit text use it; otherwise weighted random from ctx
+        if cta_type or ctx:
+            if cta_type:
+                cta_line = cta_type
+            else:
+                from app.core.cta import get_cta_line
+                cta_line = get_cta_line(ctx)
             if cta_line:
                 lines = lines.copy()
                 lines.append(cta_line)

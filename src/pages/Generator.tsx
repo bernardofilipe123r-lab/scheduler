@@ -3,14 +3,8 @@ import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
-import { useDynamicBrands } from '@/features/brands'
+import { useDynamicBrands, useNicheConfig } from '@/features/brands'
 import type { BrandName, Variant } from '@/shared/types'
-
-const CTA_TYPES = [
-  { id: 'follow_tips', label: '👉 Follow for more healthy tips' },
-  { id: 'sleep_lean', label: '💬 Comment LEAN - Sleep Lean product' },
-  { id: 'workout_plan', label: '💬 Comment PLAN - Workout & nutrition plan' },
-]
 
 const PLATFORMS = [
   { id: 'instagram', label: '📸 Instagram', icon: '📸' },
@@ -24,6 +18,10 @@ export function GeneratorPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
   const { brands: dynamicBrands, brandIds } = useDynamicBrands()
+  const { data: nicheConfig } = useNicheConfig()
+  
+  // CTA options from settings (weighted)
+  const ctaOptions = (nicheConfig?.cta_options ?? []).filter(o => o.text && o.weight > 0)
   
   // Form state
   const [title, setTitle] = useState('')
@@ -40,7 +38,7 @@ export function GeneratorPage() {
     }
   }, [brandIds, brandsInitialized])
   const [aiPrompt, setAiPrompt] = useState('')
-  const [ctaType, setCtaType] = useState('follow_tips')
+  const [ctaType, setCtaType] = useState('auto')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
   
   // Loading states
@@ -194,7 +192,7 @@ export function GeneratorPage() {
         brands: selectedBrands,
         variant,
         ai_prompt: finalAiPrompt || undefined,
-        cta_type: ctaType,
+        cta_type: ctaType === 'auto' ? undefined : ctaType,
         platforms: selectedPlatforms,
       })
       
@@ -329,11 +327,16 @@ export function GeneratorPage() {
               onChange={(e) => setCtaType(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
             >
-              {CTA_TYPES.map(cta => (
-                <option key={cta.id} value={cta.id}>{cta.label}</option>
+              <option value="auto">🎲 Auto (weighted random from settings)</option>
+              {ctaOptions.map((cta, i) => (
+                <option key={i} value={cta.text}>{cta.text} ({cta.weight}%)</option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 mt-2">Select the call-to-action for the caption</p>
+            <p className="text-xs text-gray-500 mt-2">
+              {ctaOptions.length > 0
+                ? `${ctaOptions.length} CTA(s) configured in settings — "Auto" picks randomly by weight`
+                : 'No CTAs configured — add them in Brand Settings → Content DNA'}
+            </p>
           </div>
         </div>
         

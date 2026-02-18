@@ -28,7 +28,7 @@ class JobCreateRequest(BaseModel):
     brands: List[str]  # ["gymcollege", "healthycollege", etc.]
     variant: str = "light"
     ai_prompt: Optional[str] = None
-    cta_type: Optional[str] = "follow_tips"
+    cta_type: Optional[str] = None
     user_id: str = "default"
     platforms: Optional[List[str]] = None  # ["instagram", "facebook", "youtube"] - defaults to all if None
     fixed_title: bool = False  # If True, use title as-is (no AI generation)

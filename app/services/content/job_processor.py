@@ -126,6 +126,10 @@ class JobProcessor:
             brand_slug = brand
             user_id = job.user_id
 
+            # Build PromptContext from NicheConfig so CTA options load from DB settings
+            from app.services.content.niche_config_service import NicheConfigService
+            ctx = NicheConfigService().get_context(brand_id=brand, user_id=user_id)
+
             # Use temp files (FFmpeg/PIL need paths); upload to Supabase then delete
             tmp_thumbnail = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
             tmp_reel = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
@@ -204,7 +208,8 @@ class JobProcessor:
                 title=use_title,
                 lines=use_lines,
                 output_path=reel_path,
-                cta_type=job.cta_type
+                cta_type=job.cta_type,
+                ctx=ctx
             )
             print(f"   ✓ Reel image saved: {reel_path}", flush=True)
             self._manager.update_brand_output(job_id, brand, {
@@ -244,7 +249,8 @@ class JobProcessor:
                 brand_name=brand,
                 title=use_title,
                 content_lines=use_lines,
-                cta_type=job.cta_type or "follow_tips"
+                cta_type=job.cta_type or "follow_tips",
+                ctx=ctx
             )
             print(f"   ✓ Caption generated ({len(caption)} chars)", flush=True)
 
