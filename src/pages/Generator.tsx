@@ -342,7 +342,6 @@ export function GeneratorPage() {
                 <span className="ml-3 text-sm font-medium text-gray-900">🌙 Dark Mode</span>
               </label>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Light: 12AM, 8AM, 4PM<br/>Dark: 4AM, 12PM, 8PM</p>
           </div>
 
           {/* AI Image Model */}
