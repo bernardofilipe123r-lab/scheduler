@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Film, Briefcase, Calendar, Sparkles, Settings, Layers, LayoutGrid, BarChart3, ScrollText, User, LogOut, Info } from 'lucide-react'
+import { Film, Briefcase, Calendar, Settings, Layers, LayoutGrid, BarChart3, ScrollText, User, LogOut, Info } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
+import vaLogo from '@/assets/icons/va-logo.svg'
 
 export function AppLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -43,10 +44,12 @@ export function AppLayout() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 p-0.5 shadow-md shadow-violet-200">
+                <div className="w-full h-full rounded-[10px] bg-white/95 flex items-center justify-center">
+                  <img src={vaLogo} alt="Viral App logo" className="w-6 h-6" />
+                </div>
               </div>
-              <span className="font-bold text-lg text-gray-900">Reels Automation</span>
+              <span className="font-extrabold text-lg bg-gradient-to-r from-violet-700 to-fuchsia-600 text-transparent bg-clip-text">Viral App</span>
             </div>
             
             {/* Navigation */}

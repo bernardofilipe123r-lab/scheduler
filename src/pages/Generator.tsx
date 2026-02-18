@@ -290,8 +290,8 @@ export function GeneratorPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">📱 Instagram Reels Generator</h1>
-        <p className="text-gray-500 mt-1">Create viral content for all brands in minutes</p>
+        <h1 className="text-3xl font-bold text-gray-900">Instagram Reels Generator</h1>
+        <p className="text-gray-500 mt-1">Create viral content for all brands in seconds</p>
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -344,40 +344,6 @@ export function GeneratorPage() {
             </div>
           </div>
 
-          {/* AI Image Model */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">AI Image Model</label>
-            <div className="space-y-3">
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
-                <input
-                  type="radio"
-                  name="imageModel"
-                  value="Flux1schnell"
-                  checked={imageModel === 'Flux1schnell'}
-                  onChange={() => setImageModel('Flux1schnell')}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                />
-                <div className="ml-3">
-                  <span className="text-sm font-medium text-gray-900">⚡ Fast</span>
-                  <p className="text-[10px] text-gray-400">Flux Schnell · Faster · Cheaper</p>
-                </div>
-              </label>
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
-                <input
-                  type="radio"
-                  name="imageModel"
-                  value="ZImageTurbo_INT8"
-                  checked={imageModel === 'ZImageTurbo_INT8'}
-                  onChange={() => setImageModel('ZImageTurbo_INT8')}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                />
-                <div className="ml-3">
-                  <span className="text-sm font-medium text-gray-900">✨ High Quality</span>
-                  <p className="text-[10px] text-gray-400">ZImageTurbo · Slower · Better detail</p>
-                </div>
-              </label>
-            </div>
-          </div>
         </div>
 
         {/* AI Prompt (Dark Mode Only) */}
@@ -397,34 +363,47 @@ export function GeneratorPage() {
             <p className="text-xs text-purple-700 mt-1">Optional: Leave blank to auto-generate, or customize the AI-generated background</p>
           </div>
         )}
-        
-        {/* Brands & CTA Row */}
+
+        {/* Model + CTA & Platforms Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Brands */}
+          {/* AI Image Model */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Brands</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">AI Image Model</label>
             <div className="grid grid-cols-2 gap-3">
-              {dynamicBrands.map(brand => (
-                  <label 
-                    key={brand.id} 
-                    className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
-                  >
-                    <input 
-                      type="checkbox" 
-                      checked={selectedBrands.includes(brand.id)}
-                      onChange={() => toggleBrand(brand.id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    /> 
-                    <span className="ml-3 text-sm font-medium text-gray-900">{brand.label}</span>
-                  </label>
-              ))}
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input
+                  type="radio"
+                  name="imageModel"
+                  value="ZImageTurbo_INT8"
+                  checked={imageModel === 'ZImageTurbo_INT8'}
+                  onChange={() => setImageModel('ZImageTurbo_INT8')}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <div className="ml-3">
+                  <span className="text-sm font-medium text-gray-900">✨ High Quality</span>
+                  <p className="text-[10px] text-gray-400">ZImageTurbo · Better detail</p>
+                </div>
+              </label>
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input
+                  type="radio"
+                  name="imageModel"
+                  value="Flux1schnell"
+                  checked={imageModel === 'Flux1schnell'}
+                  onChange={() => setImageModel('Flux1schnell')}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <div className="ml-3">
+                  <span className="text-sm font-medium text-gray-900">⚡ Fast</span>
+                  <p className="text-[10px] text-gray-400">Flux Schnell · Cheaper</p>
+                </div>
+              </label>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Each brand has its own independent schedule</p>
           </div>
-          
-          {/* CTA Type */}
+
+          {/* CTA + Platforms */}
           <div>
-            <label htmlFor="ctaType" className="block text-sm font-medium text-gray-700 mb-3">
+            <label htmlFor="ctaType" className="block text-sm font-medium text-gray-700 mb-2">
               Call-to-Action
             </label>
             <select
@@ -438,38 +417,57 @@ export function GeneratorPage() {
                 <option key={i} value={cta.text}>{cta.text}</option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 mt-1">
               {ctaOptions.length > 0
-                ? `${ctaOptions.length} CTA(s) configured in settings — "Auto" picks randomly by weight`
-                : 'No CTAs configured — add them in Brand Settings → Content DNA'}
+                ? `${ctaOptions.length} CTA(s) configured — "Auto" picks randomly by weight`
+                : 'No CTAs configured — add in Brand Settings → Content DNA'}
             </p>
+
+            {/* Platforms inline under CTA */}
+            <label className="block text-sm font-medium text-gray-700 mt-4 mb-2">Publish To</label>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORMS.map(platform => (
+                <label 
+                  key={platform.id} 
+                  className={`flex items-center px-3 py-2 border-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                    selectedPlatforms.includes(platform.id)
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={selectedPlatforms.includes(platform.id)}
+                    onChange={() => togglePlatform(platform.id)}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  /> 
+                  <span className="ml-2 font-medium text-gray-900">{platform.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
-        
-        {/* Platforms */}
+
+        {/* Brands — full width row */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">Publish To</label>
-          <div className="flex flex-wrap gap-3">
-            {PLATFORMS.map(platform => (
-              <label 
-                key={platform.id} 
-                className={`flex items-center px-4 py-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                  selectedPlatforms.includes(platform.id)
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input 
-                  type="checkbox" 
-                  checked={selectedPlatforms.includes(platform.id)}
-                  onChange={() => togglePlatform(platform.id)}
-                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                /> 
-                <span className="ml-2 text-sm font-medium text-gray-900">{platform.label}</span>
-              </label>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Brands</label>
+          <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
+            {dynamicBrands.map(brand => (
+                <label 
+                  key={brand.id} 
+                  className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={selectedBrands.includes(brand.id)}
+                    onChange={() => toggleBrand(brand.id)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  /> 
+                  <span className="ml-3 text-sm font-medium text-gray-900">{brand.label}</span>
+                </label>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">Select at least one platform. YouTube requires a connected channel.</p>
+          <p className="text-xs text-gray-500 mt-2">Each brand has its own independent schedule</p>
         </div>
         
         {/* Content Lines */}

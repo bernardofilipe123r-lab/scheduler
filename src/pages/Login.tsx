@@ -2,9 +2,11 @@
  * Login Page — email + password via Supabase Auth.
  */
 import { useState } from 'react'
-import { Sparkles, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/features/auth'
+import vaLogo from '@/assets/icons/va-logo.svg'
+import vaHero from '@/assets/image/viral-app-va.svg'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -33,11 +35,14 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-200">
-            <Sparkles className="w-9 h-9 text-white" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 p-0.5 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-200">
+            <div className="w-full h-full rounded-[14px] bg-white/95 flex items-center justify-center">
+              <img src={vaLogo} alt="Viral App logo" className="w-10 h-10" />
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Reels Automation</h1>
+          <h1 className="text-2xl font-extrabold bg-gradient-to-r from-violet-700 to-fuchsia-600 text-transparent bg-clip-text">Viral App</h1>
           <p className="text-gray-500 mt-1">Sign in to your account</p>
+          <img src={vaHero} alt="Viral App brand image" className="mt-5 w-full rounded-xl border border-violet-100 shadow-sm" />
         </div>
 
         {/* Login Card */}
