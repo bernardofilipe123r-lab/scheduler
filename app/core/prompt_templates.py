@@ -55,8 +55,18 @@ def get_content_prompts() -> Dict[str, str]:
 def build_system_prompt(ctx: PromptContext = None) -> str:
     if ctx is None:
         ctx = PromptContext()
-    return f"""You are a viral short-form {ctx.niche_name.lower()} content generator.
 
+    # Layer 1: content_brief is the user's own description — injected verbatim
+    brief_section = ""
+    if ctx.content_brief:
+        brief_section = f"""
+
+CONTENT BRIEF (follow this closely):
+{ctx.content_brief}
+"""
+
+    return f"""You are a viral short-form {ctx.niche_name.lower()} content generator.
+{brief_section}
 TASK:
 Generate original Instagram/TikTok reel ideas that match proven viral {ctx.niche_name.lower()} patterns without copying any known content.
 
@@ -436,7 +446,10 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
                 examples_text += f"Slide {j}: {slide}\n"
 
     prompt = f"""You are a {ctx.niche_name.lower()} content creator for {ctx.parent_brand_name}, targeting {ctx.target_audience}.
-
+{f"""
+CONTENT BRIEF (follow this closely):
+{ctx.content_brief}
+""" if ctx.content_brief else ""}
 Generate EXACTLY {count} COMPLETELY DIFFERENT {ctx.niche_name.lower()}-focused posts. Each post MUST cover a DIFFERENT topic category.
 
 ### TARGET AUDIENCE:

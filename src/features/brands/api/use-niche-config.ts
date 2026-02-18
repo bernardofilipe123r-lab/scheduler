@@ -54,3 +54,20 @@ export function useAiUnderstanding() {
     mutationFn: fetchAiUnderstanding,
   })
 }
+
+// Reel Preview — calls the real ImageGenerator on the backend
+
+interface ReelPreview {
+  thumbnail_base64: string
+  content_base64: string
+}
+
+async function fetchReelPreview(data: { brand_id: string; title: string; content_lines: string[] }): Promise<ReelPreview> {
+  return apiClient.post<ReelPreview>('/api/v2/brands/niche-config/preview-reel', data)
+}
+
+export function useReelPreview() {
+  return useMutation({
+    mutationFn: fetchReelPreview,
+  })
+}

@@ -18,6 +18,7 @@ class PromptContext:
     # Core Identity
     niche_name: str = ""
     niche_description: str = ""
+    content_brief: str = ""
     target_audience: str = ""
     audience_description: str = ""
     content_tone: List[str] = field(default_factory=list)

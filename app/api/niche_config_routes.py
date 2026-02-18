@@ -1,8 +1,12 @@
 """API routes for niche configuration (Content DNA)."""
 
 import os
+import base64
+import tempfile
+import json
 import requests as http_requests
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
@@ -32,6 +36,7 @@ class NicheConfigUpdate(BaseModel):
     brand_id: Optional[str] = None
     niche_name: Optional[str] = Field(None, max_length=100)
     niche_description: Optional[str] = None
+    content_brief: Optional[str] = None
     target_audience: Optional[str] = Field(None, max_length=255)
     audience_description: Optional[str] = None
     content_tone: Optional[list] = None
@@ -109,6 +114,7 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
         "brand_id": cfg.brand_id,
         "niche_name": cfg.niche_name,
         "niche_description": cfg.niche_description,
+        "content_brief": cfg.content_brief or "",
         "target_audience": cfg.target_audience,
         "audience_description": cfg.audience_description,
         "content_tone": cfg.content_tone or [],
@@ -161,6 +167,7 @@ async def get_niche_config(
         "brand_id": brand_id,
         "niche_name": ctx.niche_name,
         "niche_description": ctx.niche_description,
+        "content_brief": ctx.content_brief,
         "target_audience": ctx.target_audience,
         "audience_description": ctx.audience_description,
         "content_tone": ctx.content_tone,
@@ -252,6 +259,8 @@ async def get_ai_understanding(
     config_summary = []
     if ctx.niche_name:
         config_summary.append(f"Niche: {ctx.niche_name}")
+    if ctx.content_brief:
+        config_summary.append(f"Content brief: {ctx.content_brief}")
     if ctx.target_audience:
         config_summary.append(f"Audience: {ctx.target_audience}")
     if ctx.audience_description:
@@ -293,6 +302,7 @@ Also generate:
    - A title referencing the study finding (ALL CAPS, 8-14 words, e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
    - 3-4 slides of detailed educational content (each slide is 3-5 sentences explaining the study and its implications)
    - The last slide should be a brief CTA line
+   - IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc. Just write the paragraph directly.
 
 Write in first person ("I create...", "I understand...", "My goal is..."). Be specific about the niche, not generic. Show that you deeply understand the brand identity.
 
@@ -305,7 +315,7 @@ OUTPUT FORMAT (JSON only):
     }}}},
     "example_post": {{{{
         "title": "POST TITLE IN ALL CAPS REFERENCING A STUDY",
-        "slides": ["Slide 1: detailed study findings...", "Slide 2: mechanism explanation...", "Slide 3: practical implications...", "Slide 4: Follow @brand for more..."],
+        "slides": ["Detailed study findings paragraph...", "Mechanism explanation paragraph...", "Practical implications paragraph...", "Follow @brand for more..."],
         "doi": "10.xxxx/xxxxx"
     }}}}
 }}}}"""
@@ -349,3 +359,62 @@ OUTPUT FORMAT (JSON only):
         "example_reel": None,
         "example_post": None,
     }
+
+
+# --- Reel Preview endpoint ---
+
+class ReelPreviewRequest(BaseModel):
+    brand_id: str
+    title: str = Field(..., max_length=200)
+    content_lines: List[str] = Field(..., max_length=15)
+
+
+@router.post("/preview-reel")
+async def preview_reel_images(
+    request: ReelPreviewRequest,
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Generate actual reel images (thumbnail + content) using the real ImageGenerator.
+
+    Returns base64-encoded PNG images identical to what gets published.
+    Uses light mode (no AI background generation = fast).
+    """
+    from app.services.media.image_generator import ImageGenerator
+    from app.services.brands.resolver import brand_resolver
+    from app.core.config import BrandType
+
+    brand_id = request.brand_id
+    bt = brand_resolver.get_brand_type(brand_id)
+    if not bt:
+        bt = BrandType.HEALTHY_COLLEGE
+
+    generator = ImageGenerator(
+        brand_type=bt,
+        variant="light",
+        brand_name=brand_id,
+    )
+
+    result = {}
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+
+            # Thumbnail
+            thumb_path = tmp / "thumb.png"
+            generator.generate_thumbnail(title=request.title, output_path=thumb_path)
+            result["thumbnail_base64"] = base64.b64encode(thumb_path.read_bytes()).decode()
+
+            # Content image
+            content_path = tmp / "content.png"
+            generator.generate_reel_image(
+                title=request.title,
+                lines=list(request.content_lines),
+                output_path=content_path,
+            )
+            result["content_base64"] = base64.b64encode(content_path.read_bytes()).decode()
+
+    except Exception as e:
+        print(f"Reel preview generation failed: {e}", flush=True)
+        raise HTTPException(status_code=500, detail="Failed to generate reel preview")
+
+    return result

@@ -21,6 +21,7 @@ export interface NicheConfig {
   // Core Identity
   niche_name: string
   niche_description: string
+  content_brief: string
   target_audience: string
   audience_description: string
   content_tone: string[]
@@ -61,19 +62,14 @@ export type ConfigStrength = 'basic' | 'good' | 'excellent'
 export function getConfigStrength(config: NicheConfig): ConfigStrength {
   let score = 0
 
-  if (config.niche_name && config.niche_name !== 'Health & Wellness') score++
-  if (config.niche_description) score++
-  if (config.target_audience) score++
-  if (config.audience_description) score++
-  if (config.content_tone.length > 0) score++
-  if (config.topic_categories.length > 0) score++
-  if (config.content_philosophy) score++
+  if (config.niche_name) score++
+  if (config.content_brief && config.content_brief.length > 50) score += 2
   if (config.cta_options.length > 0) score++
 
   const totalExamples = config.reel_examples.length + config.post_examples.length
 
-  if (score <= 2 && totalExamples < 3) return 'basic'
-  if (score >= 6 && totalExamples >= 5) return 'excellent'
+  if (score <= 1 && totalExamples < 3) return 'basic'
+  if (score >= 3 && totalExamples >= 5) return 'excellent'
   return 'good'
 }
 

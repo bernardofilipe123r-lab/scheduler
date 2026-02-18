@@ -19,6 +19,7 @@ class NicheConfig(Base):
     # Core Identity — all empty by default, user fills in everything
     niche_name = Column(String(100), nullable=False, default="")
     niche_description = Column(Text, default="")
+    content_brief = Column(Text, default="")
     target_audience = Column(String(255), default="")
     audience_description = Column(Text, default="")
     content_tone = Column(JSONB, default=[])

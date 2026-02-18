@@ -82,6 +82,7 @@ class NicheConfigService:
         field_map = {
             'niche_name': 'niche_name',
             'niche_description': 'niche_description',
+            'content_brief': 'content_brief',
             'target_audience': 'target_audience',
             'audience_description': 'audience_description',
             'content_tone': 'content_tone',

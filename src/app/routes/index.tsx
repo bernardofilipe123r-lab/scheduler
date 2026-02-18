@@ -11,7 +11,6 @@ import { ScheduledPage } from '@/pages/Scheduled'
 import { BrandsPage } from '@/pages/Brands'
 import { PostsPage } from '@/pages/Posts'
 import { AnalyticsPage } from '@/pages/Analytics'
-import { AITeamPage } from '@/pages/AITeam'
 import { AboutPage } from '@/pages/About'
 import { LogsPage } from '@/pages/Logs'
 import { Loader2 } from 'lucide-react'
@@ -69,7 +68,6 @@ export function AppRoutes() {
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings" element={<Navigate to="/brands?tab=settings" replace />} />
-        <Route path="ai-team" element={<AITeamPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="profile" element={<ProfilePage />} />
