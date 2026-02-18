@@ -448,7 +448,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
         </div>
       </CollapsibleSection>
 
-      {/* AI Understanding */}
+      {/* AI Understandings */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200">
           <div className="flex items-center justify-between">
