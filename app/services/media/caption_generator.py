@@ -186,15 +186,10 @@ Just write the paragraph text, nothing else."""
         else:
             save_section = f"""🩵 Save this post and share it with someone who needs to see this."""
         
-        # Get selected CTA: prefer ctx.cta_options, fall back to hardcoded CTA_OPTIONS
-        cta_section = None
-        if ctx.cta_options:
-            for cta in ctx.cta_options:
-                if cta.get("label") == cta_type:
-                    cta_section = f"💬 {cta['text']}"
-                    break
-        if cta_section is None:
-            cta_section = self.CTA_OPTIONS.get(cta_type, "")
+        # Get CTA using weighted random selection from ctx
+        from app.core.cta import get_cta_line
+        cta_text = get_cta_line(ctx)
+        cta_section = f"💬 {cta_text}" if cta_text else ""
         
         # Disclaimer from PromptContext — only include if configured
         disclaimer = f"🌱 {ctx.disclaimer_text}" if ctx.disclaimer_text else ""

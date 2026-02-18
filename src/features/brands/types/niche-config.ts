@@ -6,11 +6,12 @@ export interface ReelExample {
 export interface PostExample {
   title: string
   slides: string[]
+  doi?: string
 }
 
 export interface CtaOption {
-  label: string
   text: string
+  weight: number  // percentage 0-100, all weights must sum to 100
 }
 
 export interface NicheConfig {
@@ -67,7 +68,7 @@ export function getConfigStrength(config: NicheConfig): ConfigStrength {
   if (config.content_tone.length > 0) score++
   if (config.topic_categories.length > 0) score++
   if (config.content_philosophy) score++
-  if (config.image_style_description) score++
+  if (config.cta_options.length > 0) score++
 
   const totalExamples = config.reel_examples.length + config.post_examples.length
 

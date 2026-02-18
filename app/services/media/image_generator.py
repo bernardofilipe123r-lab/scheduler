@@ -367,7 +367,8 @@ class ImageGenerator:
         lines: List[str],
         output_path: Path,
         title_font_size: int = 56,
-        cta_type: Optional[str] = None
+        cta_type: Optional[str] = None,
+        ctx=None
     ) -> Path:
         """
         Generate a reel image.
@@ -382,17 +383,19 @@ class ImageGenerator:
             title: The title text
             lines: List of content lines (supports **text** for bold, can include anything)
             output_path: Path to save the reel image
-            cta_type: Optional CTA type to add as final line ('follow_tips', 'sleep_lean', 'workout_plan')
+            cta_type: Optional CTA type (legacy, used as fallback text)
+            ctx: Optional PromptContext for weighted CTA selection
             
         Returns:
             Path to the generated reel image
         """
-        # Add CTA line if cta_type is provided
-        if cta_type:
+        # Add CTA line — prefer weighted selection from ctx, fall back to cta_type text
+        if ctx or cta_type:
             from app.core.cta import get_cta_line
-            cta_line = get_cta_line(cta_type)
-            lines = lines.copy()  # Don't modify the original list
-            lines.append(cta_line)
+            cta_line = get_cta_line(ctx) if ctx else (cta_type or "")
+            if cta_line:
+                lines = lines.copy()
+                lines.append(cta_line)
         
         # Load or generate content background based on variant
         if self.variant == "light":

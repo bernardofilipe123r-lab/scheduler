@@ -454,6 +454,8 @@ Pick {count} DIFFERENT categories from this list (one per post):
 {chr(10).join(f'{i+1}. {topic}' for i, topic in enumerate(ctx.topic_categories))}
 
 ### WHAT MAKES A GREAT POST TITLE (Slide 1):
+- Each post MUST be based on a real, verifiable scientific study
+- The title should reference the study finding (e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
 - A bold, impactful health statement written in ALL CAPS
 - TITLE MUST BE 8-14 WORDS LONG (approximately 55-90 characters) — this is critical for the cover layout
 - Focused on one or two main benefits
@@ -476,6 +478,11 @@ You MUST use a MIX of these title styles. Never generate all titles in the same 
 - "[LITTLE-KNOWN FACT]. AND IT AFFECTS EVERYTHING."
 - "[TOPIC] IS MORE IMPORTANT THAN YOU THINK."
 
+**Style D: Study-based revelation**
+- "STUDY REVEALS [SURPRISING FINDING ABOUT TOPIC]"
+- "RESEARCH SHOWS [EVIDENCE-BASED CLAIM]"
+- "[YEAR] STUDY FOUND [FINDING] IMPROVES [BENEFIT]"
+
 ### WHAT TO AVOID:
 - Em dashes or en dashes anywhere in the text (use commas or periods instead)
 - Reel-style titles like "5 SIGNS..." or "THINGS THAT DESTROY..."
@@ -492,6 +499,7 @@ Write a full Instagram caption (4-5 paragraphs) that:
   DOI: 10.xxxx/xxxxx
   THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org. Use well-known published studies. The study must be related to the topic.
   MANDATORY: Every single post MUST include a real DOI. This is non-negotiable. Use studies from PubMed, Nature, The Lancet, JAMA, BMJ, or other reputable journals. NEVER invent or fabricate a DOI.
+- Include the study reference with DOI at the end of the caption.
 - End with a disclaimer block:
   Disclaimer:
   {ctx.disclaimer_text if ctx.disclaimer_text else 'This content is intended for educational and informational purposes only. Individual results may vary.'}
@@ -549,7 +557,8 @@ If only 3 slides, the last slide should include both actionable advice AND the F
       "Third slide with practical advice and actionable steps. 3-6 sentences.",
       "Fourth slide with closing takeaway.\\n\\nFollow @{{{{brandhandle}}}} to learn more about your health."
     ],
-    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
+    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos.",
+    "doi": "10.xxxx/xxxxx"
   }}}}
 ]
 

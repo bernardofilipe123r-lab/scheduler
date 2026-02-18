@@ -109,26 +109,8 @@ class ContentGeneratorV2:
         else:
             print("✅ Content Generator V2 initialized (3-layer architecture + Phase 2 tracker)")
     
-    # ============================================================
-    # CTA OPTIONS (same as V1)
-    # ============================================================
-    
-    CTA_OPTIONS = {
-        "none": {
-            "weight": 80,
-            "options": []
-        },
-        "part2_teaser": {
-            "weight": 20,
-            "options": [
-                "We have more for you — Follow for Part 2!",
-                "Part 2 coming soon — Follow this page!",
-                "This is just the beginning — Follow for more!",
-                "Stay tuned for Part 2 — Follow this page!",
-                "More secrets revealed in Part 2 — Follow us!"
-            ]
-        }
-    }
+    # CTA options are now managed via NicheConfig (Content DNA)
+    # Use get_cta_line(ctx) from app.core.cta for weighted random selection
     
     # ============================================================
     # MAIN GENERATION METHOD
@@ -503,21 +485,11 @@ class ContentGeneratorV2:
             for name, info in FORMAT_DEFINITIONS.items()
         ]
     
-    def _select_cta(self) -> Optional[str]:
-        """Select a CTA based on probability."""
-        categories = []
-        weights = []
-        for category, data in self.CTA_OPTIONS.items():
-            categories.append(category)
-            weights.append(data["weight"])
-        
-        selected = random.choices(categories, weights=weights, k=1)[0]
-        
-        if selected == "none":
-            return None
-        
-        options = self.CTA_OPTIONS[selected]["options"]
-        return random.choice(options) if options else None
+    def _select_cta(self, ctx: PromptContext = None) -> Optional[str]:
+        """Select a CTA using weighted random selection from NicheConfig."""
+        from app.core.cta import get_cta_line
+        cta = get_cta_line(ctx)
+        return cta if cta else None
 
     def _get_recent_post_titles_from_db(self, limit: int = 25) -> List[str]:
         """Fetch recent post titles from the database.

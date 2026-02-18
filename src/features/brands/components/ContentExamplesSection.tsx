@@ -172,8 +172,16 @@ function PostExampleCard({
             <input
               value={example.title}
               onChange={(e) => onChange({ ...example, title: e.target.value })}
-              placeholder="WHY COLLAGEN SUPPLEMENTS MIGHT NOT BE ENOUGH"
+              placeholder="STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div>
+            <input
+              value={example.doi || ''}
+              onChange={(e) => onChange({ ...example, doi: e.target.value })}
+              placeholder="DOI: 10.2337/db14-0513"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
           <div>
@@ -187,7 +195,7 @@ function PostExampleCard({
                   <textarea
                     value={slide}
                     onChange={(e) => updateSlide(si, e.target.value)}
-                    placeholder="Slide text..."
+                    placeholder="A study published in 'Diabetes' found that sleeping in 19°C environments for one month increased brown fat activity by 42%..."
                     rows={3}
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
                   />
@@ -319,6 +327,9 @@ export function ContentExamplesSection({
             Post Examples ({postExamples.length} of 20)
           </h4>
         </div>
+        <p className="text-xs text-gray-400 mb-3">
+          Post examples should reference real studies with DOI citations in the caption. Each slide should contain 2+ educational sentences.
+        </p>
         <div className="space-y-2">
           {postExamples.map((ex, i) => (
             <PostExampleCard

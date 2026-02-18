@@ -94,7 +94,10 @@ def validate_post_examples(examples: list) -> list:
             if str(slide).strip()
         ]
         if title and slides:
-            validated.append({"title": title, "slides": slides})
+            result = {"title": title, "slides": slides}
+            if ex.get("doi"):
+                result["doi"] = str(ex["doi"]).strip()[:100]
+            validated.append(result)
 
     return validated
 
@@ -286,7 +289,10 @@ Configuration:
 
 Also generate:
 1. One FULL example reel with a title (ALL CAPS, 8-12 words) and 5-8 content lines (short fragments or cause-effect pairs)
-2. One FULL example carousel post with a title (ALL CAPS, 8-14 words) and 5-8 slides (each slide is one educational point, 1-2 sentences)
+2. One FULL example carousel post BASED ON A REAL SCIENTIFIC STUDY with:
+   - A title referencing the study finding (ALL CAPS, 8-14 words, e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
+   - 3-4 slides of detailed educational content (each slide is 3-5 sentences explaining the study and its implications)
+   - The last slide should be a brief CTA line
 
 Write in first person ("I create...", "I understand...", "My goal is..."). Be specific about the niche, not generic. Show that you deeply understand the brand identity.
 
@@ -298,8 +304,9 @@ OUTPUT FORMAT (JSON only):
         "content_lines": ["Line 1", "Line 2", "Line 3", "..."]
     }}}},
     "example_post": {{{{
-        "title": "POST TITLE IN ALL CAPS",
-        "slides": ["Slide 1 text", "Slide 2 text", "Slide 3 text", "..."]
+        "title": "POST TITLE IN ALL CAPS REFERENCING A STUDY",
+        "slides": ["Slide 1: detailed study findings...", "Slide 2: mechanism explanation...", "Slide 3: practical implications...", "Slide 4: Follow @brand for more..."],
+        "doi": "10.xxxx/xxxxx"
     }}}}
 }}}}"""
 
