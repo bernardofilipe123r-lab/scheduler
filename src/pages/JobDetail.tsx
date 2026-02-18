@@ -62,6 +62,12 @@ export function JobDetailPage() {
   const [schedulingBrand, setSchedulingBrand] = useState<BrandName | null>(null)
   const [schedulingAll, setSchedulingAll] = useState(false)
   const [schedulingCustom, setSchedulingCustom] = useState(false)
+
+  // Per-brand schedule modal state
+  const [brandScheduleModalBrand, setBrandScheduleModalBrand] = useState<BrandName | null>(null)
+  const [brandScheduleMode, setBrandScheduleMode] = useState<'auto' | 'custom'>('auto')
+  const [brandCustomDate, setBrandCustomDate] = useState('')
+  const [brandCustomTime, setBrandCustomTime] = useState('')
   
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
   
@@ -122,7 +128,36 @@ export function JobDetailPage() {
     }
   }
   
-  const handleScheduleBrand = async (brand: BrandName, output: BrandOutput) => {
+  const openBrandScheduleModal = (brand: BrandName) => {
+    setBrandScheduleModalBrand(brand)
+    setBrandScheduleMode('auto')
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    setBrandCustomDate(tomorrow.toISOString().split('T')[0])
+    setBrandCustomTime('12:00')
+  }
+
+  const confirmBrandSchedule = () => {
+    if (!brandScheduleModalBrand || !job) return
+    const output = job.brand_outputs?.[brandScheduleModalBrand]
+    if (!output) return
+
+    let customTime: string | undefined
+    if (brandScheduleMode === 'custom' && brandCustomDate && brandCustomTime) {
+      const dt = new Date(`${brandCustomDate}T${brandCustomTime}:00`)
+      if (dt <= new Date()) {
+        toast.error('Please select a future date and time')
+        return
+      }
+      customTime = dt.toISOString()
+    }
+
+    const brand = brandScheduleModalBrand
+    setBrandScheduleModalBrand(null)
+    handleScheduleBrand(brand, output, customTime)
+  }
+
+  const handleScheduleBrand = async (brand: BrandName, output: BrandOutput, customScheduleTime?: string) => {
     if (!output.reel_id || !job) {
       toast.error('No reel to schedule')
       return
@@ -137,11 +172,12 @@ export function JobDetailPage() {
         reel_id: output.reel_id,
         variant: job.variant,
         caption: caption,
-        yt_title: output.yt_title,  // Pass YouTube title for YT Shorts
-        yt_thumbnail_path: output.yt_thumbnail_path,  // Clean AI image for YouTube
+        yt_title: output.yt_title,
+        yt_thumbnail_path: output.yt_thumbnail_path,
         video_path: output.video_path,
         thumbnail_path: output.thumbnail_path,
-        platforms: job.platforms,  // Pass platforms from job
+        platforms: job.platforms,
+        ...(customScheduleTime ? { scheduled_time: customScheduleTime } : {}),
       })
       
       await updateBrandStatus.mutateAsync({
@@ -792,7 +828,7 @@ export function JobDetailPage() {
                       {isCompleted && (
                         <>
                           <button
-                            onClick={() => handleScheduleBrand(brand, output)}
+                            onClick={() => openBrandScheduleModal(brand)}
                             disabled={schedulingBrand === brand || isGenerating}
                             className="btn btn-success flex-1"
                           >
@@ -923,6 +959,93 @@ export function JobDetailPage() {
         </div>
       </Modal>
       
+      {/* Per-brand Schedule Options Modal */}
+      {brandScheduleModalBrand && (
+        <Modal
+          isOpen={!!brandScheduleModalBrand}
+          onClose={() => setBrandScheduleModalBrand(null)}
+          title={`Schedule — ${brandScheduleModalBrand ? getBrandLabel(brandScheduleModalBrand) : ''}`}
+          size="md"
+        >
+          <div className="space-y-4">
+            {/* Mode selection */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setBrandScheduleMode('auto')}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                  brandScheduleMode === 'auto'
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <Calendar className={`w-5 h-5 ${brandScheduleMode === 'auto' ? 'text-purple-600' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${brandScheduleMode === 'auto' ? 'text-purple-700' : 'text-gray-600'}`}>
+                  Automatic Slot
+                </span>
+                <span className="text-[10px] text-gray-400 text-center">Next available time</span>
+              </button>
+              <button
+                onClick={() => setBrandScheduleMode('custom')}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                  brandScheduleMode === 'custom'
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <Clock className={`w-5 h-5 ${brandScheduleMode === 'custom' ? 'text-purple-600' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${brandScheduleMode === 'custom' ? 'text-purple-700' : 'text-gray-600'}`}>
+                  Custom Schedule
+                </span>
+                <span className="text-[10px] text-gray-400 text-center">Pick date & time</span>
+              </button>
+            </div>
+
+            {/* Custom date/time picker */}
+            {brandScheduleMode === 'custom' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={brandCustomDate}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setBrandCustomDate(e.target.value)}
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                  <input
+                    type="time"
+                    value={brandCustomTime}
+                    onChange={(e) => setBrandCustomTime(e.target.value)}
+                    className="input"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Confirm */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setBrandScheduleModalBrand(null)}
+                className="btn btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBrandSchedule}
+                disabled={brandScheduleMode === 'custom' && (!brandCustomDate || !brandCustomTime)}
+                className="btn btn-primary flex-1"
+              >
+                <Calendar className="w-4 h-4" />
+                {brandScheduleMode === 'auto' ? 'Schedule Now' : 'Schedule for Selected Time'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Custom Schedule Modal */}
       <Modal
         isOpen={customScheduleModalOpen}
