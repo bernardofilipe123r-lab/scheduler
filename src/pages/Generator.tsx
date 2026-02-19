@@ -144,84 +144,59 @@ export function GeneratorPage() {
     setShowAutoModal(false)
     setIsAutoGenerating(true)
 
-    const total = autoBrands.length
     toast.loading(
       (t) => (
         <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-          AI is generating {total} unique viral reel{total > 1 ? 's' : ''}... <u>View Jobs →</u>
+          AI is generating viral content... <u>View Jobs →</u>
         </span>
       ),
       { id: 'auto-gen' },
     )
 
     try {
-      let created = 0
-      let failed = 0
-
-      for (const brand of autoBrands) {
-        toast.loading(
-          (t) => (
-            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-              Generating content {created + failed + 1}/{total}... <u>View Jobs →</u>
-            </span>
-          ),
-          { id: 'auto-gen' },
-        )
-
-        try {
-          // Generate unique content for this brand
-          const response = await fetch('/reels/auto-generate-content', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-          })
-          if (!response.ok) {
-            const error = await response.json()
-            throw new Error(error.detail || 'Failed to generate content')
-          }
-          const data = await response.json()
-
-          // Create a separate job for this brand with its unique content
-          await createJob.mutateAsync({
-            title: balanceTitle(data.title),
-            content_lines: data.content_lines || [],
-            brands: [brand],
-            variant: autoVariant,
-            ai_prompt: data.image_prompt || undefined,
-            cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
-            platforms: autoPlatforms,
-            image_model: imageModel,
-          })
-          created++
-        } catch (err) {
-          console.error(`Auto-generate failed for ${brand}:`, err)
-          failed++
-        }
+      // Step 1: Generate content once via AI
+      const response = await fetch('/reels/auto-generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to generate content')
       }
+      const data = await response.json()
+
+      toast.loading(
+        (t) => (
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+            Creating reel for {autoBrands.length} brand{autoBrands.length > 1 ? 's' : ''}... <u>View Jobs →</u>
+          </span>
+        ),
+        { id: 'auto-gen' },
+      )
+
+      // Step 2: Create a single job with all selected brands
+      const job = await createJob.mutateAsync({
+        title: balanceTitle(data.title),
+        content_lines: data.content_lines || [],
+        brands: autoBrands,
+        variant: autoVariant,
+        ai_prompt: data.image_prompt || undefined,
+        cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
+        platforms: autoPlatforms,
+        image_model: imageModel,
+      })
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
 
-      if (created === total) {
-        toast.success(
-          (t) => (
-            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-              {total} unique reel{total > 1 ? 's' : ''} created! <u>View Jobs →</u>
-            </span>
-          ),
-          { id: 'auto-gen', duration: 6000 }
-        )
-      } else if (created > 0) {
-        toast.success(
-          (t) => (
-            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-              {created}/{total} reels created. {failed} failed. <u>View Jobs →</u>
-            </span>
-          ),
-          { id: 'auto-gen', duration: 6000 }
-        )
-      } else {
-        toast.error('All reel generations failed.', { id: 'auto-gen' })
-      }
+      toast.success(
+        (t) => (
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${job.id}`) }}>
+            Reel generation started for {autoBrands.length} brand{autoBrands.length > 1 ? 's' : ''}! <u>View Job →</u>
+          </span>
+        ),
+        { id: 'auto-gen', duration: 6000 }
+      )
     } catch (error) {
       console.error('Auto-generate error:', error)
       toast.error(
@@ -284,7 +259,7 @@ export function GeneratorPage() {
         }
       }
 
-      await createJob.mutateAsync({
+      const job = await createJob.mutateAsync({
         title,
         content_lines: contentLines,
         brands: selectedBrands,
@@ -303,8 +278,8 @@ export function GeneratorPage() {
       
       toast.success(
         (t) => (
-          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-            Reel generation started! <u>View Jobs →</u>
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${job.id}`) }}>
+            Reel generation started! <u>View Job →</u>
           </span>
         ),
         { duration: 6000 }
