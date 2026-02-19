@@ -119,7 +119,7 @@ async def get_user_brands(
     _require_super_admin(user)
 
     from app.models import Brand
-    brands = db.query(Brand).filter(Brand.user_id == target_user_id).all()
+    brands = db.query(Brand).filter(Brand.user_id == target_user_id, Brand.active == True).all()
 
     return {
         "brands": [
@@ -134,6 +134,47 @@ async def get_user_brands(
             for b in brands
         ]
     }
+
+
+# ─── Delete User ─────────────────────────────────────────────────────────────
+
+@router.delete("/api/admin/users/{target_user_id}", summary="Delete a user permanently (super admin only)")
+async def delete_user(
+    target_user_id: str,
+    user: dict = Depends(get_current_user),
+):
+    _require_super_admin(user)
+
+    if target_user_id == user.get("id"):
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    supabase = get_supabase_client()
+    await asyncio.to_thread(
+        lambda: supabase.auth.admin.delete_user(target_user_id)
+    )
+
+    return {"success": True, "user_id": target_user_id}
+
+
+# ─── Delete Brand ─────────────────────────────────────────────────────────────
+
+@router.delete("/api/admin/brands/{brand_id}", summary="Delete a brand permanently (super admin only)")
+def delete_brand(
+    brand_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    _require_super_admin(user)
+
+    from app.models import Brand
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand:
+        raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
+
+    db.delete(brand)
+    db.commit()
+
+    return {"success": True, "brand_id": brand_id}
 
 
 # ─── Get User Logs ────────────────────────────────────────────────────────────
