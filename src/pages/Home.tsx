@@ -208,7 +208,7 @@ export function HomePage() {
             {brandMetrics.length === 0 && (
               <div className="px-5 py-8 text-center text-sm text-gray-400">No brand data yet</div>
             )}
-            {brandMetrics.map(brand => {
+            {[...brandMetrics].sort((a, b) => (b.totals?.followers || 0) - (a.totals?.followers || 0)).map(brand => {
               const color = getBrandColor(brand.brand)
               // Check if brand has content scheduled in last 48h
               const hasRecentScheduled = postsArray.some(
