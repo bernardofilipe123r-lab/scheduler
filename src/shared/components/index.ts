@@ -6,6 +6,7 @@ export {
   Sk,
   Spinner,
   AppLoader,
+  HomeSkeleton,
   AnalyticsSkeleton,
   JobsSkeleton,
   JobDetailSkeleton,

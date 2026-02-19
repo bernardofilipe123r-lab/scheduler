@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutGrid, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
+import { LayoutGrid, Sparkles } from 'lucide-react'
 import { useAnalytics } from '@/features/analytics'
 import { useJobs } from '@/features/jobs'
 import { useScheduledPosts } from '@/features/scheduling'
 import { useDynamicBrands } from '@/features/brands'
 import { apiClient } from '@/shared/api/client'
+import { HomeSkeleton } from '@/shared/components'
 
 function formatNum(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
@@ -30,11 +31,10 @@ function formatTime(dateStr: string): string {
 
 export function HomePage() {
   const navigate = useNavigate()
-  const { data: analyticsData } = useAnalytics()
-  const { data: jobs = [] } = useJobs()
-  const { data: scheduledPosts = [] } = useScheduledPosts()
-  const { brands: dynamicBrands = [] } = useDynamicBrands()
-  const [publishingExpanded, setPublishingExpanded] = useState(false)
+  const { data: analyticsData, isLoading: analyticsLoading } = useAnalytics()
+  const { data: jobs = [], isLoading: jobsLoading } = useJobs()
+  const { data: scheduledPosts = [], isLoading: scheduledLoading } = useScheduledPosts()
+  const { brands: dynamicBrands = [], isLoading: brandsLoading } = useDynamicBrands()
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
 
   // Fetch brand logos from theme API
@@ -146,6 +146,10 @@ export function HomePage() {
   }
 
   const now = new Date()
+
+  if (analyticsLoading || jobsLoading || scheduledLoading || brandsLoading) {
+    return <HomeSkeleton />
+  }
 
   return (
     <div className="space-y-6">
@@ -296,64 +300,20 @@ export function HomePage() {
         </div>
 
         {/* Publishing Today */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-            <button
-              onClick={() => setPublishingExpanded(!publishingExpanded)}
-              className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
-            >
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 shrink-0">
+            <h2 className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Publishing Today
               <span className="text-gray-400 normal-case lowercase font-normal">
                 ({todayPosts.length} item{todayPosts.length !== 1 ? 's' : ''})
               </span>
-              {publishingExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
+            </h2>
             <button onClick={() => navigate('/calendar')} className="text-xs text-primary-500 font-medium hover:underline">
               Calendar →
             </button>
           </div>
-          {!publishingExpanded ? (
-            /* Collapsed summary: show next upcoming + counts */
-            <div className="px-5 py-3">
-              {todayPosts.length === 0 ? (
-                <div className="text-sm text-gray-400">Nothing scheduled for today</div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex -space-x-1.5">
-                      {[...new Set(todayPosts.map(p => p.brand))].slice(0, 5).map(brandId => (
-                        <div key={brandId} className="ring-2 ring-white rounded-full">
-                          <BrandAvatar brandId={brandId} size="sm" />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      <span className="font-medium text-gray-900">{todayPosts.filter(p => p.status === 'published').length}</span>
-                      <span className="text-gray-400"> published</span>
-                      {todayPosts.filter(p => p.status !== 'published').length > 0 && (
-                        <>
-                          <span className="text-gray-300 mx-1.5">·</span>
-                          <span className="font-medium text-gray-900">{todayPosts.filter(p => p.status !== 'published').length}</span>
-                          <span className="text-gray-400"> remaining</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {(() => {
-                    const nextPost = todayPosts.find(p => new Date(p.scheduled_time) > now)
-                    if (!nextPost) return null
-                    return (
-                      <div className="text-xs text-gray-400">
-                        Next: <span className="font-medium text-gray-600">{formatTime(nextPost.scheduled_time)}</span>
-                      </div>
-                    )
-                  })()}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Expanded: full timeline */
-            <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
+          {/* Full timeline */}
+          <div className="divide-y divide-gray-50 flex-1 overflow-y-auto">
             {todayPosts.map((post, i) => {
               const postTime = new Date(post.scheduled_time)
               const isPast = postTime < now
@@ -388,7 +348,6 @@ export function HomePage() {
               )
             })}
             </div>
-          )}
         </div>
       </div>
 

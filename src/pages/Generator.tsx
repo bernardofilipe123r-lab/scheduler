@@ -288,255 +288,255 @@ export function GeneratorPage() {
   }
   
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="max-w-[1400px] mx-auto px-4 py-6">
+      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Instagram Reels Generator</h1>
-        <p className="text-gray-500 mt-1">Create viral content for all brands in seconds</p>
+        <h1 className="text-2xl font-bold text-gray-900">Instagram Reels Generator</h1>
+        <p className="text-gray-500 text-sm mt-1">Create viral content for all brands in seconds</p>
       </div>
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Title & Variant Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Title - Takes 2 columns */}
-          <div className="lg:col-span-2">
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-              Title
-            </label>
-            <textarea
-              ref={titleRef}
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              rows={3}
-              placeholder="e.g., Ultimate Rice Guide"
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none"
-            />
-            <p className="text-xs text-gray-500 mt-1">Press Enter to add line breaks in the title</p>
-          </div>
-          
-          {/* Variant - Takes 1 column */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Variant</label>
-            <div className="space-y-3">
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
-                <input 
-                  type="radio" 
-                  name="variant" 
-                  value="light"
-                  checked={variant === 'light'}
-                  onChange={() => setVariant('light')}
-                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
-                /> 
-                <span className="ml-3 text-sm font-medium text-gray-900">☀️ Light Mode</span>
+
+      <form onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
+          {/* ── Left Column ── */}
+          <div className="space-y-5 min-w-0">
+            {/* Card: Title */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <label htmlFor="title" className="block text-sm font-semibold text-gray-900 mb-2">
+                Title
               </label>
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
-                <input 
-                  type="radio" 
-                  name="variant" 
-                  value="dark"
-                  checked={variant === 'dark'}
-                  onChange={() => setVariant('dark')}
-                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
-                /> 
-                <span className="ml-3 text-sm font-medium text-gray-900">🌙 Dark Mode</span>
-              </label>
+              <textarea
+                ref={titleRef}
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                rows={2}
+                placeholder="e.g., Ultimate Rice Guide"
+                required
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">Press Enter to add line breaks in the title</p>
             </div>
-          </div>
 
-        </div>
-
-        {/* AI Prompt (Dark Mode Only) */}
-        {variant === 'dark' && (
-          <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-            <label htmlFor="aiPrompt" className="block text-sm font-medium text-stone-900 mb-2">
-              ✨ AI Background Prompt
-            </label>
-            <textarea
-              id="aiPrompt"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              rows={3}
-              placeholder="Leave blank to auto-generate from title, or describe the background..."
-              className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none"
-            />
-            <p className="text-xs text-stone-600 mt-1">Optional: Leave blank to auto-generate, or customize the AI-generated background</p>
-          </div>
-        )}
-
-        {/* Model + CTA & Platforms Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* AI Image Model */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">AI Image Model</label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
-                <input
-                  type="radio"
-                  name="imageModel"
-                  value="ZImageTurbo_INT8"
-                  checked={imageModel === 'ZImageTurbo_INT8'}
-                  onChange={() => setImageModel('ZImageTurbo_INT8')}
-                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
-                />
-                <div className="ml-3">
-                  <span className="text-sm font-medium text-gray-900">✨ High Quality</span>
-                  <p className="text-[10px] text-gray-400">ZImageTurbo · Better detail</p>
-                </div>
-              </label>
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
-                <input
-                  type="radio"
-                  name="imageModel"
-                  value="Flux1schnell"
-                  checked={imageModel === 'Flux1schnell'}
-                  onChange={() => setImageModel('Flux1schnell')}
-                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
-                />
-                <div className="ml-3">
-                  <span className="text-sm font-medium text-gray-900">⚡ Fast</span>
-                  <p className="text-[10px] text-gray-400">Flux Schnell · Cheaper</p>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* CTA + Platforms */}
-          <div>
-            <label htmlFor="ctaType" className="block text-sm font-medium text-gray-700 mb-2">
-              Call-to-Action
-            </label>
-            <select
-              id="ctaType"
-              value={ctaType}
-              onChange={(e) => setCtaType(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900"
-            >
-              <option value="auto">🎲 Auto (weighted random from settings)</option>
-              {ctaOptions.map((cta, i) => (
-                <option key={i} value={cta.text}>{cta.text}</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              {ctaOptions.length > 0
-                ? `${ctaOptions.length} CTA(s) configured — "Auto" picks randomly by weight`
-                : 'No CTAs configured — add in Brand Settings → Content DNA'}
-            </p>
-
-            {/* Platforms inline under CTA */}
-            <label className="block text-sm font-medium text-gray-700 mt-4 mb-2">Publish To</label>
-            <div className="flex flex-wrap gap-2">
-              {PLATFORMS.map(platform => (
-                <label 
-                  key={platform.id} 
-                  className={`flex items-center px-3 py-2 border-2 rounded-lg cursor-pointer text-sm transition-colors ${
-                    selectedPlatforms.includes(platform.id)
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <input 
-                    type="checkbox" 
-                    checked={selectedPlatforms.includes(platform.id)}
-                    onChange={() => togglePlatform(platform.id)}
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                  /> 
-                  <span className="ml-2 font-medium text-gray-900">{platform.label}</span>
+            {/* AI Prompt (Dark Mode Only) */}
+            {variant === 'dark' && (
+              <div className="bg-stone-50 rounded-xl border border-stone-200 p-5">
+                <label htmlFor="aiPrompt" className="block text-sm font-semibold text-stone-900 mb-2">
+                  ✨ AI Background Prompt
                 </label>
-              ))}
+                <textarea
+                  id="aiPrompt"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  rows={2}
+                  placeholder="Leave blank to auto-generate from title, or describe the background..."
+                  className="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none text-sm"
+                />
+                <p className="text-xs text-stone-500 mt-1">Optional — leave blank to auto-generate</p>
+              </div>
+            )}
+
+            {/* Card: Content Lines */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <label htmlFor="content" className="block text-sm font-semibold text-gray-900 mb-2">
+                Content Lines
+              </label>
+              <textarea
+                ref={contentRef}
+                id="content"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={`Enter one item per line:\nRice — Always rinse before cooking\nGarlic — Crush for maximum flavor\nPasta — Salt the water generously\nChicken — Let it rest after cooking`}
+                required
+                rows={7}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none font-mono text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">One line per item. Use "—" or "-" to separate keyword from description</p>
+            </div>
+          </div>
+
+          {/* ── Right Column: Settings ── */}
+          <div className="space-y-5">
+            {/* Card: Variant + Image Model */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              {/* Variant */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Variant</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVariant('light')}
+                    className={`p-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      variant === 'light'
+                        ? 'border-stone-800 bg-stone-900 text-white'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    ☀️ Light
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVariant('dark')}
+                    className={`p-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      variant === 'dark'
+                        ? 'border-stone-800 bg-stone-900 text-white'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    🌙 Dark
+                  </button>
+                </div>
+              </div>
+
+              {/* Image Model */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Image Model</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setImageModel('ZImageTurbo_INT8')}
+                    className={`flex flex-col items-center gap-0.5 p-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      imageModel === 'ZImageTurbo_INT8'
+                        ? 'border-stone-800 bg-stone-900 text-white'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>✨ High Quality</span>
+                    <span className={`text-[10px] ${imageModel === 'ZImageTurbo_INT8' ? 'text-stone-300' : 'text-gray-400'}`}>ZImageTurbo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImageModel('Flux1schnell')}
+                    className={`flex flex-col items-center gap-0.5 p-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      imageModel === 'Flux1schnell'
+                        ? 'border-stone-800 bg-stone-900 text-white'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>⚡ Fast</span>
+                    <span className={`text-[10px] ${imageModel === 'Flux1schnell' ? 'text-stone-300' : 'text-gray-400'}`}>Flux Schnell</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Call-to-Action</label>
+                <select
+                  id="ctaType"
+                  value={ctaType}
+                  onChange={(e) => setCtaType(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
+                >
+                  <option value="auto">🎲 Auto (weighted random)</option>
+                  {ctaOptions.map((cta, i) => (
+                    <option key={i} value={cta.text}>{cta.text}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  {ctaOptions.length > 0
+                    ? `${ctaOptions.length} CTA(s) — "Auto" picks by weight`
+                    : 'No CTAs configured yet'}
+                </p>
+              </div>
+            </div>
+
+            {/* Card: Platforms */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Publish To</label>
+              <div className="space-y-2">
+                {PLATFORMS.map(platform => {
+                  const active = selectedPlatforms.includes(platform.id)
+                  return (
+                    <label
+                      key={platform.id}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all border ${
+                        active
+                          ? 'border-green-200 bg-green-50'
+                          : 'border-gray-100 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={() => togglePlatform(platform.id)}
+                        className="checkbox-green"
+                      />
+                      <span className="text-sm font-medium text-gray-800">{platform.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Card: Brands */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Brands</label>
+              <div className="space-y-2">
+                {dynamicBrands.map(brand => {
+                  const active = selectedBrands.includes(brand.id)
+                  return (
+                    <label
+                      key={brand.id}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all border ${
+                        active
+                          ? 'border-stone-300 bg-stone-50'
+                          : 'border-gray-100 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={() => toggleBrand(brand.id)}
+                      />
+                      <div
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: brand.color || '#999' }}
+                      />
+                      <span className="text-sm font-medium text-gray-800">{brand.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-2">Each brand has its own independent schedule</p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2.5">
+              <button
+                type="submit"
+                disabled={isCreatingJob}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-stone-900 text-white font-medium rounded-xl hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {isCreatingJob ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
+                ) : (
+                  <>🎬 Generate Reels</>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={openAutoModal}
+                disabled={isAutoGenerating}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-stone-700 text-white font-medium rounded-xl hover:bg-stone-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {isAutoGenerating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+                ) : (
+                  <>🤖 Auto-Generate Viral Reel</>
+                )}
+              </button>
+              <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+                💡 <strong>Auto-Generate</strong> uses AI to create a complete viral reel from scratch
+              </p>
             </div>
           </div>
         </div>
-
-        {/* Brands — full width row */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">Brands</label>
-          <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
-            {dynamicBrands.map(brand => (
-                <label 
-                  key={brand.id} 
-                  className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100"
-                >
-                  <input 
-                    type="checkbox" 
-                    checked={selectedBrands.includes(brand.id)}
-                    onChange={() => toggleBrand(brand.id)}
-                    className="w-4 h-4 text-stone-900 border-gray-300 rounded focus:ring-stone-400"
-                  /> 
-                  <span className="ml-3 text-sm font-medium text-gray-900">{brand.label}</span>
-                </label>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-2">Each brand has its own independent schedule</p>
-        </div>
-        
-        {/* Content Lines */}
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
-            Content Lines
-          </label>
-          <textarea
-            ref={contentRef}
-            id="content"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder={`Enter one item per line:
-Rice — Always rinse before cooking
-Garlic — Crush for maximum flavor
-Pasta — Salt the water generously
-Chicken — Let it rest after cooking`}
-            required
-            rows={8}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none font-mono text-sm"
-          />
-          <p className="text-xs text-gray-500 mt-1">Enter one line per item. Use "—" or "-" to separate keyword from description</p>
-        </div>
-        
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button 
-            type="submit" 
-            disabled={isCreatingJob}
-            className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-stone-900 text-white font-medium rounded-lg hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isCreatingJob ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                🎬 Generate Reels
-              </>
-            )}
-          </button>
-          <button 
-            type="button" 
-            onClick={openAutoModal}
-            disabled={isAutoGenerating}
-            className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isAutoGenerating ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                🤖 Auto-Generate Viral Reel
-              </>
-            )}
-          </button>
-        </div>
-        <p className="text-sm text-gray-600 text-center">
-          💡 <strong>Auto-Generate</strong> uses AI to create a complete viral reel (title, content & image prompt) from scratch!
-        </p>
       </form>
 
       {/* Auto Generate Modal */}
       {showAutoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-gray-900">🤖 Auto-Generate Viral Reel</h2>
               <button
@@ -547,124 +547,126 @@ Chicken — Let it rest after cooking`}
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              {/* Variant */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Variant</label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setAutoVariant('light')}
-                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                      autoVariant === 'light'
-                        ? 'border-stone-800 bg-stone-100 text-stone-900'
-                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
-                    }`}
-                  >
-                    ☀️ Light
-                  </button>
-                  <button
-                    onClick={() => setAutoVariant('dark')}
-                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                      autoVariant === 'dark'
-                        ? 'border-stone-800 bg-stone-100 text-stone-900'
-                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
-                    }`}
-                  >
-                    🌙 Dark
-                  </button>
+            <div className="space-y-4">
+              {/* Variant + Image Model row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Variant</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAutoVariant('light')}
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                        autoVariant === 'light'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      ☀️ Light
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAutoVariant('dark')}
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                        autoVariant === 'dark'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      🌙 Dark
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Image Model</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setImageModel('ZImageTurbo_INT8')}
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                        imageModel === 'ZImageTurbo_INT8'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      ✨ Quality
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageModel('Flux1schnell')}
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                        imageModel === 'Flux1schnell'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      ⚡ Fast
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* AI Image Model */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">AI Image Model</label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setImageModel('ZImageTurbo_INT8')}
-                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                      imageModel === 'ZImageTurbo_INT8'
-                        ? 'border-stone-800 bg-stone-100 text-stone-900'
-                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
-                    }`}
+              {/* Brand count + CTA row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">How many brands?</label>
+                  <div className="flex gap-2">
+                    {brandIds.map((_, i) => {
+                      const count = i + 1
+                      return (
+                        <button
+                          key={count}
+                          type="button"
+                          onClick={() => handleAutoCountChange(count)}
+                          className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all ${
+                            autoCount === count
+                              ? 'bg-stone-900 text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {count}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Call-to-Action</label>
+                  <select
+                    value={autoCtaType}
+                    onChange={(e) => setAutoCtaType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                   >
-                    ✨ High Quality
-                  </button>
-                  <button
-                    onClick={() => setImageModel('Flux1schnell')}
-                    className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                      imageModel === 'Flux1schnell'
-                        ? 'border-stone-800 bg-stone-100 text-stone-900'
-                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
-                    }`}
-                  >
-                    ⚡ Fast
-                  </button>
+                    <option value="auto">🎲 Auto</option>
+                    {ctaOptions.map((cta, i) => (
+                      <option key={i} value={cta.text}>{cta.text}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Brand count selector */}
+              {/* Brands */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  How many brands?
-                </label>
-                <div className="flex gap-2">
-                  {brandIds.map((_, i) => {
-                    const count = i + 1
-                    return (
-                      <button
-                        key={count}
-                        onClick={() => handleAutoCountChange(count)}
-                        className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
-                          autoCount === count
-                            ? 'bg-stone-900 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {count}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* CTA */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Call-to-Action</label>
-                <select
-                  value={autoCtaType}
-                  onChange={(e) => setAutoCtaType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
-                >
-                  <option value="auto">🎲 Auto (weighted random)</option>
-                  {ctaOptions.map((cta, i) => (
-                    <option key={i} value={cta.text}>{cta.text}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Brand checkboxes — spans full width */}
-              <div className="col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Select brands</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Select brands</label>
                 <div className="grid grid-cols-2 gap-2">
                   {dynamicBrands.map((brand) => {
                     const checked = autoBrands.includes(brand.id)
                     return (
                       <label
                         key={brand.id}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
                           checked
-                            ? 'border-stone-300 bg-stone-100'
-                            : 'border-gray-100 bg-white hover:bg-gray-50'
+                            ? 'border-stone-300 bg-stone-50'
+                            : 'border-gray-100 hover:bg-gray-50'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleAutoBrand(brand.id)}
-                          className="w-4 h-4 rounded border-gray-300 text-stone-900 focus:ring-stone-400"
                         />
                         <div
-                          className="w-3 h-3 rounded-full"
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                           style={{ backgroundColor: brand.color || '#999' }}
                         />
                         <span className="text-sm font-medium text-gray-700">{brand.label}</span>
@@ -674,28 +676,31 @@ Chicken — Let it rest after cooking`}
                 </div>
               </div>
 
-              {/* Platforms — spans full width */}
-              <div className="col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Publish To</label>
+              {/* Platforms */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
                 <div className="flex flex-wrap gap-2">
-                  {PLATFORMS.map(platform => (
-                    <label
-                      key={platform.id}
-                      className={`flex items-center px-3 py-2 border-2 rounded-lg cursor-pointer text-sm transition-colors ${
-                        autoPlatforms.includes(platform.id)
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={autoPlatforms.includes(platform.id)}
-                        onChange={() => toggleAutoPlatform(platform.id)}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                      />
-                      <span className="ml-2 font-medium text-gray-900">{platform.label}</span>
-                    </label>
-                  ))}
+                  {PLATFORMS.map(platform => {
+                    const active = autoPlatforms.includes(platform.id)
+                    return (
+                      <label
+                        key={platform.id}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all border ${
+                          active
+                            ? 'border-green-200 bg-green-50'
+                            : 'border-gray-100 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={active}
+                          onChange={() => toggleAutoPlatform(platform.id)}
+                          className="checkbox-green"
+                        />
+                        <span className="font-medium text-gray-800">{platform.label}</span>
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -703,12 +708,14 @@ Chicken — Let it rest after cooking`}
             {/* Modal actions */}
             <div className="flex gap-3 mt-5">
               <button
+                type="button"
                 onClick={() => setShowAutoModal(false)}
                 className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-sm"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleAutoSubmit}
                 disabled={autoBrands.length === 0}
                 className="flex-1 px-4 py-2.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-medium text-sm disabled:opacity-50"

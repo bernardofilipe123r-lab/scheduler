@@ -475,3 +475,149 @@ export function BrandThemeSkeleton() {
     </div>
   )
 }
+
+// ── Home / Dashboard skeleton ───────────────────────────────
+export function HomeSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Greeting + Quick actions */}
+      <div className="flex items-end justify-between">
+        <div className="space-y-2">
+          <Sk className="h-8 w-56 rounded-lg" />
+          <Sk className="h-4 w-72 rounded" />
+        </div>
+        <div className="flex gap-2">
+          <Sk className="h-10 w-28 rounded-lg" />
+          <Sk className="h-10 w-28 rounded-lg" />
+        </div>
+      </div>
+
+      {/* Stats strip — 5 cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <Sk className="h-3 w-20 rounded mb-2" />
+            <Sk className="h-7 w-14 rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Row 2: 3 panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Brand Health */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+            <Sk className="h-3 w-24 rounded" />
+            <Sk className="h-3 w-16 rounded" />
+          </div>
+          <div className="divide-y divide-gray-50">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3 px-5 py-3">
+                <Sk className="w-8 h-8 rounded-lg shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <Sk className="h-3.5 w-28 rounded" />
+                  <Sk className="h-2.5 w-20 rounded" />
+                </div>
+                <div className="flex gap-4">
+                  <div className="space-y-1 text-right">
+                    <Sk className="h-3.5 w-10 rounded ml-auto" />
+                    <Sk className="h-2 w-12 rounded ml-auto" />
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <Sk className="h-3.5 w-10 rounded ml-auto" />
+                    <Sk className="h-2 w-12 rounded ml-auto" />
+                  </div>
+                  <Sk className="w-2 h-2 rounded-full self-center" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Jobs Queue */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+            <Sk className="h-3 w-20 rounded" />
+            <Sk className="h-3 w-14 rounded" />
+          </div>
+          <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="px-4 py-3 space-y-1">
+                <Sk className="h-7 w-8 rounded" />
+                <Sk className="h-2.5 w-16 rounded" />
+              </div>
+            ))}
+          </div>
+          <div className="divide-y divide-gray-50">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-2.5 px-5 py-2.5">
+                <Sk className="h-4 w-10 rounded" />
+                <Sk className="w-5 h-5 rounded shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <Sk className="h-3 w-36 rounded" />
+                  <Sk className="h-2.5 w-12 rounded" />
+                </div>
+                <Sk className="h-4 w-16 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Publishing Today */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+            <Sk className="h-3 w-32 rounded" />
+            <Sk className="h-3 w-16 rounded" />
+          </div>
+          <div className="px-5 py-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="flex -space-x-1.5">
+                {[0, 1, 2].map((i) => (
+                  <Sk key={i} className="w-5 h-5 rounded-full ring-2 ring-white" />
+                ))}
+              </div>
+              <Sk className="h-3.5 w-40 rounded" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Recent Jobs table */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+          <Sk className="h-3 w-20 rounded" />
+          <Sk className="h-3 w-14 rounded" />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-100">
+                {['w-12', 'w-48', 'w-28', 'w-20', 'w-24'].map((w, i) => (
+                  <th key={i} className="px-5 py-2.5 text-left">
+                    <Sk className={`h-2.5 ${w} rounded`} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <tr key={i} className="border-b border-gray-50">
+                  <td className="px-5 py-2.5"><Sk className="h-4 w-10 rounded" /></td>
+                  <td className="px-5 py-2.5"><Sk className="h-3.5 w-44 rounded" /></td>
+                  <td className="px-5 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <Sk className="w-5 h-5 rounded shrink-0" />
+                      <Sk className="h-3 w-20 rounded" />
+                    </div>
+                  </td>
+                  <td className="px-5 py-2.5"><Sk className="h-4 w-16 rounded-full" /></td>
+                  <td className="px-5 py-2.5"><Sk className="h-3 w-14 rounded" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}

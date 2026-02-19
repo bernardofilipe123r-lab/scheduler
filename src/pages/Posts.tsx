@@ -209,314 +209,296 @@ export function PostsPage() {
   const previewBrand = selectedBrands[0] || brandIds[0] || ''
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-4">
+    <div className="max-w-[1400px] mx-auto px-4 py-6">
       {/* Header */}
-      <div>
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Create Posts</h1>
         <p className="text-gray-500 text-sm mt-1">
           Each brand gets a unique post with different topic, title, and image.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[2.6fr_1.4fr] gap-5">
-        {/* Col 1: Inputs */}
-        <div className="space-y-4 min-w-0">
-          {/* Title + AI Image Prompt side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Title */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Title
-                <span className="text-xs font-normal text-gray-400 ml-1">
-                  (required for Generate Posts)
-                </span>
-              </label>
-              <textarea
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                rows={3}
-                placeholder='e.g. Daily ginger consumption may reduce muscle pain by 25%'
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-              />
-            </div>
-
-            {/* AI Image Prompt */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                AI Image Prompt
-                <span className="text-xs font-normal text-gray-400 ml-1">
-                  (auto-generated if empty)
-                </span>
-              </label>
-              <textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                rows={3}
-                placeholder="Describe the background image..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-              />
-              <button
-                onClick={handleGeneratePrompt}
-                disabled={isGeneratingPrompt || !title.trim()}
-                className="mt-2 flex items-center gap-2 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
-              >
-                {isGeneratingPrompt ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Wand2 className="w-3 h-3" />
-                )}
-                Generate Prompt
-              </button>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
+        {/* ── Left Column: Inputs ── */}
+        <div className="space-y-5 min-w-0">
+          {/* Card: Title */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Title
+              <span className="text-xs font-normal text-gray-400 ml-1">(required for Generate Posts)</span>
+            </label>
+            <textarea
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              rows={2}
+              placeholder='e.g. Daily ginger consumption may reduce muscle pain by 25%'
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-stone-400 focus:border-transparent text-sm"
+            />
           </div>
 
-          {/* Brands + AI Image Model side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4">
-            {/* Brands */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <label className="block text-sm font-semibold text-gray-900 mb-3">
-                Brands
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {brandIds.map((brand) => {
-                  const config = brandMap[brand]
-                  const selected = selectedBrands.includes(brand)
-                  return (
-                    <button
-                      key={brand}
-                      onClick={() => selectBrand(brand)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
-                        selected
-                      ? 'border-stone-800 bg-stone-100 text-stone-900'
-                          : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: config?.color || '#999' }}
-                      />
-                      {config?.name || brand}
-                      {selected && <Check className="w-3 h-3" />}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* AI Image Model */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <label className="block text-sm font-semibold text-gray-900 mb-3">
-                AI Image Model
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setImageModel('ZImageTurbo_INT8')}
-                  className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
-                    imageModel === 'ZImageTurbo_INT8'
-                      ? 'border-stone-800 bg-stone-100'
-                      : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'ZImageTurbo_INT8' ? 'text-stone-900' : 'text-gray-700'}`}>
-                    ✨ High Quality
-                  </span>
-                  <span className="text-[10px] text-gray-400 whitespace-nowrap">ZImageTurbo · Better detail</span>
-                </button>
-                <button
-                  onClick={() => setImageModel('Flux1schnell')}
-                  className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
-                    imageModel === 'Flux1schnell'
-                      ? 'border-stone-800 bg-stone-100'
-                      : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'Flux1schnell' ? 'text-stone-900' : 'text-gray-700'}`}>
-                    ⚡ Fast
-                  </span>
-                  <span className="text-[10px] text-gray-400 whitespace-nowrap">Flux Schnell · Cheaper</span>
-                </button>
-              </div>
-            </div>
+          {/* Card: AI Image Prompt */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              AI Image Prompt
+              <span className="text-xs font-normal text-gray-400 ml-1">(auto-generated if empty)</span>
+            </label>
+            <textarea
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              rows={2}
+              placeholder="Describe the background image..."
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-stone-400 focus:border-transparent text-sm"
+            />
+            <button
+              onClick={handleGeneratePrompt}
+              disabled={isGeneratingPrompt || !title.trim()}
+              className="mt-2 flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {isGeneratingPrompt ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Wand2 className="w-3 h-3" />
+              )}
+              Generate Prompt
+            </button>
           </div>
 
-          {/* Layout Settings (collapsible) */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <button
-                onClick={() => setShowSettings((prev) => !prev)}
-                className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-stone-600 transition-colors text-sm"
-              >
-                <Settings2 className="w-4 h-4" />
-                Layout Settings
-                <ChevronDown
-                  className={`w-4 h-4 ml-auto transition-transform ${
-                    showSettings ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
+          {/* Card: Layout Settings (collapsible) */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <button
+              onClick={() => setShowSettings((prev) => !prev)}
+              className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-stone-600 transition-colors text-sm"
+            >
+              <Settings2 className="w-4 h-4" />
+              Layout Settings
+              <ChevronDown
+                className={`w-4 h-4 ml-auto transition-transform ${
+                  showSettings ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
 
-              {showSettings && (
-                <div className="mt-4 space-y-3">
+            {showSettings && (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500">
+                    Font Size: {settings.fontSize}px
+                    {title.trim() && (() => {
+                      const maxW = CANVAS_WIDTH - (settings.layout.titlePaddingX || 45) * 2
+                      const effective = autoFitFontSize(title, maxW, settings.fontSize, 3)
+                      return effective !== settings.fontSize
+                        ? <span className="text-blue-500 ml-1">(auto-fit: {effective}px)</span>
+                        : null
+                    })()}
+                  </label>
+                  <input
+                    type="range"
+                    min={40}
+                    max={90}
+                    value={settings.fontSize}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        fontSize: Number(e.target.value),
+                      }))
+                    }
+                    className="w-full accent-stone-800"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-500">
-                      Font Size: {settings.fontSize}px
-                      {title.trim() && (() => {
-                        const maxW = CANVAS_WIDTH - (settings.layout.titlePaddingX || 45) * 2
-                        const effective = autoFitFontSize(title, maxW, settings.fontSize, 3)
-                        return effective !== settings.fontSize
-                          ? <span className="text-blue-500 ml-1">(auto-fit: {effective}px)</span>
-                          : null
-                      })()}
+                      Caption Bottom: {settings.layout.readCaptionBottom}px
                     </label>
                     <input
                       type="range"
-                      min={40}
-                      max={90}
-                      value={settings.fontSize}
+                      min={20}
+                      max={80}
+                      value={settings.layout.readCaptionBottom}
                       onChange={(e) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          fontSize: Number(e.target.value),
-                        }))
+                        updateLayout({
+                          readCaptionBottom: Number(e.target.value),
+                        })
                       }
                       className="w-full accent-stone-800"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-gray-500">
-                        Caption Bottom: {settings.layout.readCaptionBottom}px
-                      </label>
-                      <input
-                        type="range"
-                        min={20}
-                        max={80}
-                        value={settings.layout.readCaptionBottom}
-                        onChange={(e) =>
-                          updateLayout({
-                            readCaptionBottom: Number(e.target.value),
-                          })
-                        }
-                        className="w-full accent-stone-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500">
-                        Title Gap: {settings.layout.titleGap}px
-                      </label>
-                      <input
-                        type="range"
-                        min={10}
-                        max={300}
-                        value={settings.layout.titleGap}
-                        onChange={(e) =>
-                          updateLayout({ titleGap: Number(e.target.value) })
-                        }
-                        className="w-full accent-stone-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500">
-                        Logo Gap: {settings.layout.logoGap}px
-                      </label>
-                      <input
-                        type="range"
-                        min={20}
-                        max={60}
-                        value={settings.layout.logoGap}
-                        onChange={(e) =>
-                          updateLayout({ logoGap: Number(e.target.value) })
-                        }
-                        className="w-full accent-stone-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500">
-                        Horizontal Padding: {settings.layout.titlePaddingX}px
-                      </label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={200}
-                        value={settings.layout.titlePaddingX}
-                        onChange={(e) =>
-                          updateLayout({ titlePaddingX: Number(e.target.value) })
-                        }
-                        className="w-full accent-stone-800"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-xs text-gray-500">
+                      Title Gap: {settings.layout.titleGap}px
+                    </label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={300}
+                      value={settings.layout.titleGap}
+                      onChange={(e) =>
+                        updateLayout({ titleGap: Number(e.target.value) })
+                      }
+                      className="w-full accent-stone-800"
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">
-                      Bar Width:{' '}
-                      {settings.barWidth === 0
-                        ? 'Auto'
-                        : `${settings.barWidth}px`}
+                      Logo Gap: {settings.layout.logoGap}px
+                    </label>
+                    <input
+                      type="range"
+                      min={20}
+                      max={60}
+                      value={settings.layout.logoGap}
+                      onChange={(e) =>
+                        updateLayout({ logoGap: Number(e.target.value) })
+                      }
+                      className="w-full accent-stone-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">
+                      Horizontal Padding: {settings.layout.titlePaddingX}px
                     </label>
                     <input
                       type="range"
                       min={0}
-                      max={400}
-                      value={settings.barWidth}
+                      max={200}
+                      value={settings.layout.titlePaddingX}
                       onChange={(e) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          barWidth: Number(e.target.value),
-                        }))
+                        updateLayout({ titlePaddingX: Number(e.target.value) })
                       }
                       className="w-full accent-stone-800"
                     />
                   </div>
-                  <div className="pt-2 border-t border-gray-100">
-                    <label className="text-xs text-gray-500">
-                      Slide Font Family
-                    </label>
-                    <select
-                      value={settings.slideFontFamily || DEFAULT_GENERAL_SETTINGS.slideFontFamily}
-                      onChange={(e) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          slideFontFamily: e.target.value,
-                        }))
-                      }
-                      className="w-full mt-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-stone-400"
-                    >
-                      {SLIDE_FONT_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-gray-400 mt-0.5">
-                      Font used for body text on carousel slides 2+
-                    </p>
-                  </div>
-                  <div className="flex gap-2 pt-2 border-t border-gray-100">
-                    <button
-                      onClick={handleSaveSettings}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-stone-900 text-white text-xs rounded-lg hover:bg-stone-800"
-                    >
-                      <Save className="w-3 h-3" />
-                      Save
-                    </button>
-                    <button
-                      onClick={handleResetSettings}
-                      className="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      Reset
-                    </button>
-                  </div>
                 </div>
-              )}
-            </div>
-
+                <div>
+                  <label className="text-xs text-gray-500">
+                    Bar Width:{' '}
+                    {settings.barWidth === 0
+                      ? 'Auto'
+                      : `${settings.barWidth}px`}
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={400}
+                    value={settings.barWidth}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        barWidth: Number(e.target.value),
+                      }))
+                    }
+                    className="w-full accent-stone-800"
+                  />
+                </div>
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="text-xs text-gray-500">
+                    Slide Font Family
+                  </label>
+                  <select
+                    value={settings.slideFontFamily || DEFAULT_GENERAL_SETTINGS.slideFontFamily}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        slideFontFamily: e.target.value,
+                      }))
+                    }
+                    className="w-full mt-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-stone-400"
+                  >
+                    {SLIDE_FONT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Font used for body text on carousel slides 2+
+                  </p>
+                </div>
+                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    onClick={handleSaveSettings}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-stone-900 text-white text-xs rounded-lg hover:bg-stone-800"
+                  >
+                    <Save className="w-3 h-3" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleResetSettings}
+                    className="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right: Preview + Actions */}
-        <div className="self-start sticky top-6 space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Preview</h3>
-            <p className="text-xs text-gray-400 mb-3">
+        {/* ── Right Column: Settings + Preview + Actions ── */}
+        <div className="self-start sticky top-6 space-y-5">
+          {/* Card: Brands */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Brands</label>
+            <div className="space-y-2">
+              {brandIds.map((brand) => {
+                const config = brandMap[brand]
+                const selected = selectedBrands.includes(brand)
+                return (
+                  <button
+                    key={brand}
+                    onClick={() => selectBrand(brand)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                      selected
+                        ? 'border-stone-300 bg-stone-50 text-stone-900'
+                        : 'border-gray-100 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: config?.color || '#999' }}
+                    />
+                    {config?.name || brand}
+                    {selected && <Check className="w-3.5 h-3.5 ml-auto" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Card: AI Image Model */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">AI Image Model</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setImageModel('ZImageTurbo_INT8')}
+                className={`flex flex-col items-center gap-0.5 p-2.5 rounded-lg border text-sm font-medium transition-all ${
+                  imageModel === 'ZImageTurbo_INT8'
+                    ? 'border-stone-800 bg-stone-900 text-white'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <span>✨ High Quality</span>
+                <span className={`text-[10px] ${imageModel === 'ZImageTurbo_INT8' ? 'text-stone-300' : 'text-gray-400'}`}>ZImageTurbo</span>
+              </button>
+              <button
+                onClick={() => setImageModel('Flux1schnell')}
+                className={`flex flex-col items-center gap-0.5 p-2.5 rounded-lg border text-sm font-medium transition-all ${
+                  imageModel === 'Flux1schnell'
+                    ? 'border-stone-800 bg-stone-900 text-white'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <span>⚡ Fast</span>
+                <span className={`text-[10px] ${imageModel === 'Flux1schnell' ? 'text-stone-300' : 'text-gray-400'}`}>Flux Schnell</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card: Preview */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Preview</h3>
+            <p className="text-[10px] text-gray-400 mb-3">
               Layout preview · backgrounds generated after job creation
             </p>
             <div className="flex justify-center">
@@ -532,8 +514,8 @@ export function PostsPage() {
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex flex-col gap-3">
+          {/* Action Buttons */}
+          <div className="space-y-2.5">
             <button
               onClick={() => {
                 setAutoCount(brandIds.length)
@@ -541,7 +523,7 @@ export function PostsPage() {
                 setShowAutoModal(true)
               }}
               disabled={isCreating}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-stone-800 text-white rounded-xl hover:bg-stone-700 font-medium disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-stone-700 text-white rounded-xl hover:bg-stone-600 font-medium disabled:opacity-50 transition-colors text-sm"
             >
               <Wand2 className="w-4 h-4" />
               Auto Generate Viral Carrousel Posts
@@ -549,7 +531,7 @@ export function PostsPage() {
             <button
               onClick={handleSubmit}
               disabled={isCreating || selectedBrands.length === 0 || !title.trim()}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-medium disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-medium disabled:opacity-50 transition-colors text-sm"
               title={!title.trim() ? 'Enter a title first' : ''}
             >
               {isCreating ? (
@@ -559,8 +541,8 @@ export function PostsPage() {
               )}
               Generate Posts
             </button>
-            <p className="text-xs text-gray-400 text-center">
-              💡 <strong>Generate Posts</strong> uses your exact title · <strong>Auto Generate Viral Carrousel Posts</strong> lets AI create everything
+            <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+              💡 <strong>Generate Posts</strong> uses your exact title · <strong>Auto Generate</strong> lets AI create everything
             </p>
           </div>
         </div>
@@ -569,7 +551,7 @@ export function PostsPage() {
       {/* Auto Generate Modal */}
       {showAutoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-gray-900">Auto Generate Viral Carrousel Posts</h2>
               <button
@@ -580,70 +562,67 @@ export function PostsPage() {
               </button>
             </div>
 
-            {/* Brand count selector */}
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                How many brands?
-              </label>
-              <div className="flex gap-2">
-                {brandIds.map((_, i) => {
-                  const count = i + 1
-                  return (
-                    <button
-                      key={count}
-                      onClick={() => handleAutoCountChange(count)}
-                      className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
-                        autoCount === count
-                          ? 'bg-stone-900 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {count}
-                    </button>
-                  )
-                })}
+            <div className="space-y-4">
+              {/* Brand count */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">How many brands?</label>
+                <div className="flex gap-2">
+                  {brandIds.map((_, i) => {
+                    const count = i + 1
+                    return (
+                      <button
+                        key={count}
+                        onClick={() => handleAutoCountChange(count)}
+                        className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all ${
+                          autoCount === count
+                            ? 'bg-stone-900 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {count}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
 
-            {/* Brand checkboxes */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Select brands
-              </label>
-              <div className="space-y-2">
-                {brandIds.map((brand) => {
-                  const config = brandMap[brand]
-                  const checked = autoBrands.includes(brand)
-                  return (
-                    <label
-                      key={brand}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
-                        checked
-                          ? 'border-stone-300 bg-stone-100'
-                          : 'border-gray-100 bg-white hover:bg-gray-50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleAutoBrand(brand)}
-                        className="w-4 h-4 rounded border-gray-300 text-stone-900 focus:ring-stone-400"
-                      />
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: config?.color || '#999' }}
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        {config?.name || brand}
-                      </span>
-                    </label>
-                  )
-                })}
+              {/* Brands */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Select brands</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {brandIds.map((brand) => {
+                    const config = brandMap[brand]
+                    const checked = autoBrands.includes(brand)
+                    return (
+                      <label
+                        key={brand}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
+                          checked
+                            ? 'border-stone-300 bg-stone-50'
+                            : 'border-gray-100 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAutoBrand(brand)}
+                        />
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: config?.color || '#999' }}
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          {config?.name || brand}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
             {/* Modal actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-5">
               <button
                 onClick={() => setShowAutoModal(false)}
                 className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-sm"
