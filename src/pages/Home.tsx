@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutGrid, Sparkles } from 'lucide-react'
+import { LayoutGrid, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAnalytics } from '@/features/analytics'
 import { useJobs } from '@/features/jobs'
 import { useScheduledPosts } from '@/features/scheduling'
 import { useDynamicBrands } from '@/features/brands'
+import { apiClient } from '@/shared/api/client'
 
 function formatNum(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
@@ -33,6 +34,27 @@ export function HomePage() {
   const { data: jobs = [] } = useJobs()
   const { data: scheduledPosts = [] } = useScheduledPosts()
   const { brands: dynamicBrands = [] } = useDynamicBrands()
+  const [publishingExpanded, setPublishingExpanded] = useState(false)
+  const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
+
+  // Fetch brand logos from theme API
+  useEffect(() => {
+    const fetchLogos = async () => {
+      const logos: Record<string, string> = {}
+      for (const brand of dynamicBrands) {
+        try {
+          const themeData = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brand.id}/theme`)
+          if (themeData.theme?.logo) {
+            logos[brand.id] = themeData.theme.logo.startsWith('http') ? themeData.theme.logo : `/brand-logos/${themeData.theme.logo}`
+          }
+        } catch {
+          // ignore
+        }
+      }
+      setBrandLogos(logos)
+    }
+    if (dynamicBrands.length > 0) fetchLogos()
+  }, [dynamicBrands])
 
   const jobsArray = Array.isArray(jobs) ? jobs : []
   const postsArray = Array.isArray(scheduledPosts) ? scheduledPosts : []
@@ -100,6 +122,29 @@ export function HomePage() {
     return metric?.display_name || brandId
   }
 
+  function getBrandLogo(brandId: string): string | undefined {
+    return brandLogos[brandId]
+  }
+
+  function BrandAvatar({ brandId, size = 'md' }: { brandId: string; size?: 'sm' | 'md' }) {
+    const logo = getBrandLogo(brandId)
+    const color = getBrandColor(brandId)
+    const initials = getBrandInitials(brandId)
+    const sizeClasses = size === 'sm' ? 'w-5 h-5 text-[8px]' : 'w-8 h-8 text-xs'
+    const roundClasses = size === 'sm' ? 'rounded' : 'rounded-lg'
+    if (logo) {
+      return <img src={logo} alt={getBrandName(brandId)} className={`${sizeClasses} ${roundClasses} object-cover shrink-0`} />
+    }
+    return (
+      <div
+        className={`${sizeClasses} ${roundClasses} flex items-center justify-center font-bold shrink-0`}
+        style={{ backgroundColor: color + '18', color }}
+      >
+        {initials}
+      </div>
+    )
+  }
+
   const now = new Date()
 
   return (
@@ -134,16 +179,15 @@ export function HomePage() {
 
       {/* Stats Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatsCard label="Total Followers" value={formatNum(totalFollowers)} color="green" />
-        <StatsCard label="Views (7d)" value={formatNum(totalViews7d)} color="violet" />
-        <StatsCard label="Likes (7d)" value={formatNum(totalLikes7d)} color="pink" />
+        <StatsCard label="Total Followers" value={formatNum(totalFollowers)} />
+        <StatsCard label="Views (7d)" value={formatNum(totalViews7d)} />
+        <StatsCard label="Likes (7d)" value={formatNum(totalLikes7d)} />
         <StatsCard
           label="Jobs Ready"
           value={String(readyJobs)}
-          color="amber"
           sub={inProgressJobs > 0 ? `${inProgressJobs} in progress` : undefined}
         />
-        <StatsCard label="Scheduled" value={String(scheduledCount)} color="blue" />
+        <StatsCard label="Scheduled" value={String(scheduledCount)} />
       </div>
 
       {/* Row 2: Brand Health + Jobs Queue + Publishing Today */}
@@ -162,19 +206,13 @@ export function HomePage() {
             )}
             {brandMetrics.map(brand => {
               const color = getBrandColor(brand.brand)
-              const initials = getBrandInitials(brand.brand)
               // Check if brand has content scheduled in last 48h
               const hasRecentScheduled = postsArray.some(
                 p => p.brand === brand.brand && p.status === 'scheduled'
               )
               return (
                 <div key={brand.brand} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ backgroundColor: color + '18', color }}
-                  >
-                    {initials}
-                  </div>
+                  <BrandAvatar brandId={brand.brand} size="md" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 truncate">{brand.display_name}</div>
                     <div className="text-xs text-gray-400">@{brand.brand}</div>
@@ -214,15 +252,15 @@ export function HomePage() {
           {/* Summary row */}
           <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
             <div className="px-4 py-3">
-              <div className="text-2xl font-bold tabular-nums text-amber-500">{readyJobs}</div>
+              <div className="text-2xl font-bold tabular-nums text-gray-900">{readyJobs}</div>
               <div className="text-[11px] text-gray-400">Completed</div>
             </div>
             <div className="px-4 py-3">
-              <div className="text-2xl font-bold tabular-nums text-orange-500">{inProgressJobs}</div>
+              <div className="text-2xl font-bold tabular-nums text-gray-900">{inProgressJobs}</div>
               <div className="text-[11px] text-gray-400">In Progress</div>
             </div>
             <div className="px-4 py-3">
-              <div className="text-2xl font-bold tabular-nums text-blue-500">{scheduledCount}</div>
+              <div className="text-2xl font-bold tabular-nums text-gray-900">{scheduledCount}</div>
               <div className="text-[11px] text-gray-400">Scheduled</div>
             </div>
           </div>
@@ -234,8 +272,6 @@ export function HomePage() {
             {recentJobs.slice(0, 4).map(job => {
               const isReel = job.variant !== 'post'
               const brandId = job.brands?.[0]
-              const color = brandId ? getBrandColor(brandId) : '#6b7280'
-              const initials = brandId ? getBrandInitials(brandId) : '??'
               return (
                 <button
                   key={job.id}
@@ -247,12 +283,7 @@ export function HomePage() {
                   }`}>
                     {isReel ? 'Reel' : 'Post'}
                   </span>
-                  <div
-                    className="w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold shrink-0"
-                    style={{ backgroundColor: color + '18', color }}
-                  >
-                    {initials}
-                  </div>
+                  {brandId && <BrandAvatar brandId={brandId} size="sm" />}
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium text-gray-800 truncate">{job.title || 'Untitled'}</div>
                     <div className="text-[11px] text-gray-400">{timeAgo(job.created_at)}</div>
@@ -267,22 +298,67 @@ export function HomePage() {
         {/* Publishing Today */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Publishing Today</h2>
+            <button
+              onClick={() => setPublishingExpanded(!publishingExpanded)}
+              className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+            >
+              Publishing Today
+              <span className="text-gray-400 normal-case lowercase font-normal">
+                ({todayPosts.length} item{todayPosts.length !== 1 ? 's' : ''})
+              </span>
+              {publishingExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
             <button onClick={() => navigate('/calendar')} className="text-xs text-primary-500 font-medium hover:underline">
               Calendar →
             </button>
           </div>
-          <div className="divide-y divide-gray-50">
-            {todayPosts.length === 0 && (
-              <div className="px-5 py-8 text-center text-sm text-gray-400">Nothing scheduled for today</div>
-            )}
+          {!publishingExpanded ? (
+            /* Collapsed summary: show next upcoming + counts */
+            <div className="px-5 py-3">
+              {todayPosts.length === 0 ? (
+                <div className="text-sm text-gray-400">Nothing scheduled for today</div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex -space-x-1.5">
+                      {[...new Set(todayPosts.map(p => p.brand))].slice(0, 5).map(brandId => (
+                        <div key={brandId} className="ring-2 ring-white rounded-full">
+                          <BrandAvatar brandId={brandId} size="sm" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium text-gray-900">{todayPosts.filter(p => p.status === 'published').length}</span>
+                      <span className="text-gray-400"> published</span>
+                      {todayPosts.filter(p => p.status !== 'published').length > 0 && (
+                        <>
+                          <span className="text-gray-300 mx-1.5">·</span>
+                          <span className="font-medium text-gray-900">{todayPosts.filter(p => p.status !== 'published').length}</span>
+                          <span className="text-gray-400"> remaining</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {(() => {
+                    const nextPost = todayPosts.find(p => new Date(p.scheduled_time) > now)
+                    if (!nextPost) return null
+                    return (
+                      <div className="text-xs text-gray-400">
+                        Next: <span className="font-medium text-gray-600">{formatTime(nextPost.scheduled_time)}</span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Expanded: full timeline */
+            <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
             {todayPosts.map((post, i) => {
               const postTime = new Date(post.scheduled_time)
               const isPast = postTime < now
               const isPublished = post.status === 'published'
               const isNext = !isPast && (i === 0 || new Date(todayPosts[i - 1].scheduled_time) < now)
-              const color = getBrandColor(post.brand)
-
               return (
                 <div key={post.id}>
                   {isNext && (
@@ -306,17 +382,13 @@ export function HomePage() {
                         {isNext && ' · Up next'}
                       </div>
                     </div>
-                    <div
-                      className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-bold shrink-0"
-                      style={{ backgroundColor: color + '18', color }}
-                    >
-                      {getBrandInitials(post.brand)}
-                    </div>
+                    <BrandAvatar brandId={post.brand} size="sm" />
                   </div>
                 </div>
               )
             })}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -349,8 +421,6 @@ export function HomePage() {
                 const isReel = job.variant !== 'post'
                 const brandId = job.brands?.[0]
                 const brandName = brandId ? getBrandName(brandId) : 'Unknown'
-                const color = brandId ? getBrandColor(brandId) : '#6b7280'
-                const initials = brandId ? getBrandInitials(brandId) : '??'
                 return (
                   <tr
                     key={job.id}
@@ -364,17 +434,12 @@ export function HomePage() {
                         {isReel ? 'Reel' : 'Post'}
                       </span>
                     </td>
-                    <td className="px-5 py-2.5">
-                      <span className="text-gray-800 font-medium truncate block max-w-[240px]">{job.title || 'Untitled'}</span>
+                    <td className="px-5 py-2.5 max-w-[300px]">
+                      <span className="text-gray-800 font-medium text-xs leading-snug line-clamp-2">{job.title || 'Untitled'}</span>
                     </td>
                     <td className="px-5 py-2.5">
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-5 h-5 rounded flex items-center justify-center text-[8px] font-bold shrink-0"
-                          style={{ backgroundColor: color + '18', color }}
-                        >
-                          {initials}
-                        </div>
+                        {brandId && <BrandAvatar brandId={brandId} size="sm" />}
                         <span className="text-gray-600 text-xs">{brandName}</span>
                         {job.brands.length > 1 && (
                           <span className="text-[10px] text-gray-400">+{job.brands.length - 1}</span>
@@ -398,21 +463,11 @@ export function HomePage() {
 
 /* ----- Sub-components ----- */
 
-function StatsCard({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) {
-  const colorMap: Record<string, string> = {
-    green: 'border-t-green-500 text-green-600',
-    violet: 'border-t-violet-500 text-violet-600',
-    pink: 'border-t-pink-500 text-pink-600',
-    amber: 'border-t-amber-500 text-amber-600',
-    blue: 'border-t-blue-500 text-blue-600',
-  }
-  const cls = colorMap[color] || ''
-  const [borderCls, textCls] = cls.split(' ')
-
+function StatsCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className={`bg-white rounded-xl border border-gray-100 shadow-sm p-4 border-t-2 ${borderCls}`}>
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
       <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</div>
-      <div className={`text-2xl font-bold tabular-nums ${textCls}`}>{value}</div>
+      <div className="text-2xl font-bold tabular-nums text-gray-900">{value}</div>
       {sub && <div className="text-[11px] text-gray-400 mt-1">{sub}</div>}
     </div>
   )

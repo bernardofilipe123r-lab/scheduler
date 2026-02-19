@@ -1,20 +1,9 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="va-bg" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7C3AED"/>
-      <stop offset="1" stop-color="#D946EF"/>
-    </linearGradient>
-    <linearGradient id="va-stroke" x1="24" y1="18" x2="104" y2="110" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E9D5FF"/>
-    </linearGradient>
-  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="#F5EDD8"/>
 
-  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#va-bg)"/>
+  <path d="M29 34L48 94H61L42 34H29Z" fill="#1A1A1A"/>
+  <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="#1A1A1A"/>
 
-  <path d="M29 34L48 94H61L42 34H29Z" fill="url(#va-stroke)"/>
-  <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="url(#va-stroke)"/>
-
-  <circle cx="99" cy="29" r="7" fill="#FDF4FF" fill-opacity="0.95"/>
-  <circle cx="107" cy="40" r="3" fill="#FDF4FF" fill-opacity="0.75"/>
+  <circle cx="99" cy="29" r="7" fill="#1A1A1A" fill-opacity="0.25"/>
+  <circle cx="107" cy="40" r="3" fill="#1A1A1A" fill-opacity="0.18"/>
 </svg>

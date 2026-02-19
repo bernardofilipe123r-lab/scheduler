@@ -5,7 +5,6 @@ import {
   Layers, ScrollText, User, LogOut, Info,
   ChevronLeft, ChevronRight,
 } from 'lucide-react'
-import { NotificationBell } from './NotificationBell'
 import { useAuth } from '@/features/auth'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
@@ -185,11 +184,6 @@ export function AppLayout() {
 
       {/* Main area */}
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-200 ease-in-out ${expanded ? 'ml-52' : 'ml-16'}`}>
-        {/* Top bar */}
-        <header className="h-14 bg-white border-b border-gray-200 sticky top-0 z-40 flex items-center justify-end px-4 gap-3">
-          <NotificationBell />
-        </header>
-
         {/* Page content */}
         <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
           <Outlet />
