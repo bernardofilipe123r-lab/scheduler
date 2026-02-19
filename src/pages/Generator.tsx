@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Loader2, X } from 'lucide-react'
+import igIcon from '@/assets/icons/instagram.png'
+import fbIcon from '@/assets/icons/facebook.png'
+import ytIcon from '@/assets/icons/youtube.png'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
@@ -8,42 +11,10 @@ import type { BrandName, Variant } from '@/shared/types'
 
 type Platform = 'instagram' | 'facebook' | 'youtube'
 
-const InstagramIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="ig-g" x1="0" y1="1" x2="1" y2="0">
-        <stop offset="0%" stopColor="#f09433"/>
-        <stop offset="25%" stopColor="#e6683c"/>
-        <stop offset="50%" stopColor="#dc2743"/>
-        <stop offset="75%" stopColor="#cc2366"/>
-        <stop offset="100%" stopColor="#bc1888"/>
-      </linearGradient>
-    </defs>
-    <rect width="24" height="24" rx="5" fill="url(#ig-g)"/>
-    <rect x="6.5" y="6.5" width="11" height="11" rx="3.5" fill="none" stroke="white" strokeWidth="1.8"/>
-    <circle cx="12" cy="12" r="3" fill="none" stroke="white" strokeWidth="1.8"/>
-    <circle cx="17" cy="7" r="1.1" fill="white"/>
-  </svg>
-)
-
-const FacebookIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <rect width="24" height="24" rx="5" fill="#1877F2"/>
-    <path d="M15.5 8H13.5C13.2 8 13 8.2 13 8.5V10.5H15.5L15.1 13H13V21H10V13H8V10.5H10V8.5C10 6.6 11.6 5 13.5 5H15.5V8Z" fill="white"/>
-  </svg>
-)
-
-const YouTubeIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <rect width="24" height="24" rx="5" fill="#FF0000"/>
-    <path d="M9.5 8L16.5 12L9.5 16V8Z" fill="white"/>
-  </svg>
-)
-
 const PLATFORMS = [
-  { id: 'instagram' as Platform, label: 'Instagram', Icon: InstagramIcon },
-  { id: 'facebook' as Platform, label: 'Facebook', Icon: FacebookIcon },
-  { id: 'youtube' as Platform, label: 'YouTube', Icon: YouTubeIcon },
+  { id: 'instagram' as Platform, label: 'Instagram', icon: igIcon },
+  { id: 'facebook' as Platform, label: 'Facebook', icon: fbIcon },
+  { id: 'youtube' as Platform, label: 'YouTube', icon: ytIcon },
 ]
 
 export function GeneratorPage() {
@@ -479,7 +450,7 @@ export function GeneratorPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
                 <div className="flex gap-2">
-                  {PLATFORMS.map(({ id, label, Icon }) => {
+                  {PLATFORMS.map(({ id, label, icon }) => {
                     const active = selectedPlatforms.includes(id)
                     return (
                       <button
@@ -492,7 +463,7 @@ export function GeneratorPage() {
                             : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
-                        <Icon className="w-5 h-5" />
+                        <img src={icon} alt={label} className="w-5 h-5 rounded" />
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
                     )
@@ -713,7 +684,7 @@ export function GeneratorPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
                 <div className="flex gap-2">
-                  {PLATFORMS.map(({ id, label, Icon }) => {
+                  {PLATFORMS.map(({ id, label, icon }) => {
                     const active = autoPlatforms.includes(id)
                     return (
                       <button
@@ -726,7 +697,7 @@ export function GeneratorPage() {
                             : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
-                        <Icon className="w-5 h-5" />
+                        <img src={icon} alt={label} className="w-5 h-5 rounded" />
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
                     )
