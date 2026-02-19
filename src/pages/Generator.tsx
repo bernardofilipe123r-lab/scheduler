@@ -6,13 +6,45 @@ import { useCreateJob } from '@/features/jobs'
 import { useDynamicBrands, useNicheConfig } from '@/features/brands'
 import type { BrandName, Variant } from '@/shared/types'
 
-const PLATFORMS = [
-  { id: 'instagram', label: '📸 Instagram', icon: '📸' },
-  { id: 'facebook', label: '📘 Facebook', icon: '📘' },
-  { id: 'youtube', label: '📺 YouTube', icon: '📺' },
-] as const
+type Platform = 'instagram' | 'facebook' | 'youtube'
 
-type Platform = typeof PLATFORMS[number]['id']
+const InstagramIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="ig-g" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%" stopColor="#f09433"/>
+        <stop offset="25%" stopColor="#e6683c"/>
+        <stop offset="50%" stopColor="#dc2743"/>
+        <stop offset="75%" stopColor="#cc2366"/>
+        <stop offset="100%" stopColor="#bc1888"/>
+      </linearGradient>
+    </defs>
+    <rect width="24" height="24" rx="5" fill="url(#ig-g)"/>
+    <rect x="6.5" y="6.5" width="11" height="11" rx="3.5" fill="none" stroke="white" strokeWidth="1.8"/>
+    <circle cx="12" cy="12" r="3" fill="none" stroke="white" strokeWidth="1.8"/>
+    <circle cx="17" cy="7" r="1.1" fill="white"/>
+  </svg>
+)
+
+const FacebookIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <rect width="24" height="24" rx="5" fill="#1877F2"/>
+    <path d="M15.5 8H13.5C13.2 8 13 8.2 13 8.5V10.5H15.5L15.1 13H13V21H10V13H8V10.5H10V8.5C10 6.6 11.6 5 13.5 5H15.5V8Z" fill="white"/>
+  </svg>
+)
+
+const YouTubeIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <rect width="24" height="24" rx="5" fill="#FF0000"/>
+    <path d="M9.5 8L16.5 12L9.5 16V8Z" fill="white"/>
+  </svg>
+)
+
+const PLATFORMS = [
+  { id: 'instagram' as Platform, label: 'Instagram', Icon: InstagramIcon },
+  { id: 'facebook' as Platform, label: 'Facebook', Icon: FacebookIcon },
+  { id: 'youtube' as Platform, label: 'YouTube', Icon: YouTubeIcon },
+]
 
 export function GeneratorPage() {
   const queryClient = useQueryClient()
@@ -296,7 +328,7 @@ export function GeneratorPage() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5">
           {/* ── Left Column ── */}
           <div className="space-y-5 min-w-0">
             {/* Card: Title */}
@@ -355,68 +387,70 @@ export function GeneratorPage() {
           </div>
 
           {/* ── Right Column: Settings ── */}
-          <div className="space-y-5">
-            {/* Card: Variant + Image Model */}
+          <div className="space-y-4">
+            {/* Card: Variant + Image Model + CTA + Platforms — all in one */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              {/* Variant */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Variant</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setVariant('light')}
-                    className={`p-2.5 rounded-lg border text-sm font-medium transition-all ${
-                      variant === 'light'
-                        ? 'border-stone-800 bg-stone-900 text-white'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    ☀️ Light
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVariant('dark')}
-                    className={`p-2.5 rounded-lg border text-sm font-medium transition-all ${
-                      variant === 'dark'
-                        ? 'border-stone-800 bg-stone-900 text-white'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    🌙 Dark
-                  </button>
+              {/* Variant + Image Model side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Variant</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setVariant('light')}
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                        variant === 'light'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      ☀️ Light
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVariant('dark')}
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
+                        variant === 'dark'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      🌙 Dark
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Image Model</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setImageModel('ZImageTurbo_INT8')}
+                      className={`flex flex-col items-center p-2 rounded-lg border text-[11px] font-medium transition-all ${
+                        imageModel === 'ZImageTurbo_INT8'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>✨ Quality</span>
+                      <span className={`text-[9px] ${imageModel === 'ZImageTurbo_INT8' ? 'text-stone-300' : 'text-gray-400'}`}>ZImageTurbo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageModel('Flux1schnell')}
+                      className={`flex flex-col items-center p-2 rounded-lg border text-[11px] font-medium transition-all ${
+                        imageModel === 'Flux1schnell'
+                          ? 'border-stone-800 bg-stone-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>⚡ Fast</span>
+                      <span className={`text-[9px] ${imageModel === 'Flux1schnell' ? 'text-stone-300' : 'text-gray-400'}`}>Flux Schnell</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Image Model */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Image Model</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setImageModel('ZImageTurbo_INT8')}
-                    className={`flex flex-col items-center gap-0.5 p-2.5 rounded-lg border text-sm font-medium transition-all ${
-                      imageModel === 'ZImageTurbo_INT8'
-                        ? 'border-stone-800 bg-stone-900 text-white'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span>✨ High Quality</span>
-                    <span className={`text-[10px] ${imageModel === 'ZImageTurbo_INT8' ? 'text-stone-300' : 'text-gray-400'}`}>ZImageTurbo</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImageModel('Flux1schnell')}
-                    className={`flex flex-col items-center gap-0.5 p-2.5 rounded-lg border text-sm font-medium transition-all ${
-                      imageModel === 'Flux1schnell'
-                        ? 'border-stone-800 bg-stone-900 text-white'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span>⚡ Fast</span>
-                    <span className={`text-[10px] ${imageModel === 'Flux1schnell' ? 'text-stone-300' : 'text-gray-400'}`}>Flux Schnell</span>
-                  </button>
-                </div>
-              </div>
+              <div className="border-t border-gray-100" />
 
               {/* CTA */}
               <div>
@@ -438,46 +472,45 @@ export function GeneratorPage() {
                     : 'No CTAs configured yet'}
                 </p>
               </div>
-            </div>
 
-            {/* Card: Platforms */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Publish To</label>
-              <div className="space-y-2">
-                {PLATFORMS.map(platform => {
-                  const active = selectedPlatforms.includes(platform.id)
-                  return (
-                    <label
-                      key={platform.id}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all border ${
-                        active
-                          ? 'border-green-200 bg-green-50'
-                          : 'border-gray-100 hover:bg-gray-50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={active}
-                        onChange={() => togglePlatform(platform.id)}
-                        className="checkbox-green"
-                      />
-                      <span className="text-sm font-medium text-gray-800">{platform.label}</span>
-                    </label>
-                  )
-                })}
+              <div className="border-t border-gray-100" />
+
+              {/* Platforms — icon buttons */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
+                <div className="flex gap-2">
+                  {PLATFORMS.map(({ id, label, Icon }) => {
+                    const active = selectedPlatforms.includes(id)
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => togglePlatform(id)}
+                        className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${
+                          active
+                            ? 'border-green-300 bg-green-50'
+                            : 'border-gray-200 hover:bg-gray-50 opacity-40'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        <span className="text-[10px] font-medium text-gray-700">{label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Card: Brands */}
+            {/* Card: Brands — 2-column grid */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Brands</label>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
                 {dynamicBrands.map(brand => {
                   const active = selectedBrands.includes(brand.id)
                   return (
                     <label
                       key={brand.id}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all border ${
+                      className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all border ${
                         active
                           ? 'border-stone-300 bg-stone-50'
                           : 'border-gray-100 hover:bg-gray-50'
@@ -489,10 +522,10 @@ export function GeneratorPage() {
                         onChange={() => toggleBrand(brand.id)}
                       />
                       <div
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: brand.color || '#999' }}
                       />
-                      <span className="text-sm font-medium text-gray-800">{brand.label}</span>
+                      <span className="text-xs font-medium text-gray-800 truncate">{brand.label}</span>
                     </label>
                   )
                 })}
@@ -676,29 +709,26 @@ export function GeneratorPage() {
                 </div>
               </div>
 
-              {/* Platforms */}
+              {/* Platforms — icon buttons */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
-                <div className="flex flex-wrap gap-2">
-                  {PLATFORMS.map(platform => {
-                    const active = autoPlatforms.includes(platform.id)
+                <div className="flex gap-2">
+                  {PLATFORMS.map(({ id, label, Icon }) => {
+                    const active = autoPlatforms.includes(id)
                     return (
-                      <label
-                        key={platform.id}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all border ${
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleAutoPlatform(id)}
+                        className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${
                           active
-                            ? 'border-green-200 bg-green-50'
-                            : 'border-gray-100 hover:bg-gray-50'
+                            ? 'border-green-300 bg-green-50'
+                            : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={active}
-                          onChange={() => toggleAutoPlatform(platform.id)}
-                          className="checkbox-green"
-                        />
-                        <span className="font-medium text-gray-800">{platform.label}</span>
-                      </label>
+                        <Icon className="w-5 h-5" />
+                        <span className="text-[10px] font-medium text-gray-700">{label}</span>
+                      </button>
                     )
                   })}
                 </div>
