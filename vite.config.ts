@@ -13,4 +13,14 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
   },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
+      '/reels': 'http://localhost:8000',
+      '/health': 'http://localhost:8000',
+      '/logs': 'http://localhost:8000',
+      '/output': 'http://localhost:8000',
+      '/docs': 'http://localhost:8000',
+    },
+  },
 })
