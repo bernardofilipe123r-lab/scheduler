@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutGrid, Sparkles } from 'lucide-react'
-import { useAnalytics } from '@/features/analytics'
+import { LayoutGrid, Sparkles, TrendingUp, TrendingDown } from 'lucide-react'
+import { useAnalytics, useSnapshots, type AnalyticsSnapshot } from '@/features/analytics'
 import { useJobs } from '@/features/jobs'
 import { useScheduledPosts } from '@/features/scheduling'
 import { useDynamicBrands } from '@/features/brands'
@@ -32,6 +32,7 @@ function formatTime(dateStr: string): string {
 export function HomePage() {
   const navigate = useNavigate()
   const { data: analyticsData, isLoading: analyticsLoading } = useAnalytics()
+  const { data: snapshotsData } = useSnapshots({ days: 14 })
   const { data: jobs = [], isLoading: jobsLoading } = useJobs()
   const { data: scheduledPosts = [], isLoading: scheduledLoading } = useScheduledPosts()
   const { brands: dynamicBrands = [], isLoading: brandsLoading } = useDynamicBrands()
@@ -71,6 +72,38 @@ export function HomePage() {
   const totalFollowers = analyticsData?.brands?.reduce((sum, b) => sum + (b.totals?.followers || 0), 0) ?? 0
   const totalViews7d = analyticsData?.brands?.reduce((sum, b) => sum + (b.totals?.views_7d || 0), 0) ?? 0
   const totalLikes7d = analyticsData?.brands?.reduce((sum, b) => sum + (b.totals?.likes_7d || 0), 0) ?? 0
+
+  // Week-over-week percentage changes derived from snapshots
+  const lastWeekTotals = useMemo(() => {
+    const snapshots: AnalyticsSnapshot[] = snapshotsData?.snapshots || []
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    // Pick the latest snapshot per (brand, platform) that is at least 7 days old
+    const latestOld = new Map<string, AnalyticsSnapshot>()
+    for (const s of snapshots) {
+      const d = new Date(s.snapshot_at)
+      if (d <= oneWeekAgo) {
+        const key = `${s.brand}|${s.platform}`
+        const ex = latestOld.get(key)
+        if (!ex || d > new Date(ex.snapshot_at)) latestOld.set(key, s)
+      }
+    }
+    let followers = 0, views = 0, likes = 0
+    for (const s of latestOld.values()) {
+      followers += s.followers_count
+      views += s.views_last_7_days
+      likes += s.likes_last_7_days
+    }
+    return latestOld.size > 0 ? { followers, views, likes } : null
+  }, [snapshotsData])
+
+  function calcChange(current: number, prev: number): number | null {
+    if (prev === 0) return null
+    return Math.round(((current - prev) / prev) * 100)
+  }
+
+  const followersChange = lastWeekTotals ? calcChange(totalFollowers, lastWeekTotals.followers) : null
+  const viewsChange = lastWeekTotals ? calcChange(totalViews7d, lastWeekTotals.views) : null
+  const likesChange = lastWeekTotals ? calcChange(totalLikes7d, lastWeekTotals.likes) : null
 
   // Job counts
   const readyJobs = jobsArray.filter(j => j.status === 'completed').length
@@ -183,9 +216,9 @@ export function HomePage() {
 
       {/* Stats Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatsCard label="Total Followers" value={formatNum(totalFollowers)} />
-        <StatsCard label="Views (7d)" value={formatNum(totalViews7d)} />
-        <StatsCard label="Likes (7d)" value={formatNum(totalLikes7d)} />
+        <StatsCard label="Total Followers" value={formatNum(totalFollowers)} change={followersChange} />
+        <StatsCard label="Views (7d)" value={formatNum(totalViews7d)} change={viewsChange} />
+        <StatsCard label="Likes (7d)" value={formatNum(totalLikes7d)} change={likesChange} />
         <StatsCard
           label="Jobs Ready"
           value={String(readyJobs)}
@@ -422,12 +455,22 @@ export function HomePage() {
 
 /* ----- Sub-components ----- */
 
-function StatsCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatsCard({ label, value, sub, change }: { label: string; value: string; sub?: string; change?: number | null }) {
+  const isPositive = change != null && change >= 0
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
       <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</div>
       <div className="text-2xl font-bold tabular-nums text-gray-900">{value}</div>
-      {sub && <div className="text-[11px] text-gray-400 mt-1">{sub}</div>}
+      {change != null ? (
+        <div className={`flex items-center gap-0.5 mt-1 text-[11px] font-semibold ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+          {isPositive
+            ? <TrendingUp className="w-3 h-3 shrink-0" />
+            : <TrendingDown className="w-3 h-3 shrink-0" />}
+          <span>{isPositive ? '+' : ''}{change}% vs last week</span>
+        </div>
+      ) : sub ? (
+        <div className="text-[11px] text-gray-400 mt-1">{sub}</div>
+      ) : null}
     </div>
   )
 }
