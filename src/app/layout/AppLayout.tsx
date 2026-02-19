@@ -46,6 +46,10 @@ export function AppLayout() {
     navigate('/login')
   }
 
+  const settingsItems = user?.isAdmin
+    ? SETTINGS_ITEMS
+    : SETTINGS_ITEMS.filter((item) => item.to !== '/logs')
+
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U'
 
   const sidebarWidth = expanded ? 'w-52' : 'w-16'
@@ -112,7 +116,7 @@ export function AppLayout() {
 
           <div className="my-1" />
 
-          {SETTINGS_ITEMS.map(({ to, icon: Icon, label }) => (
+          {settingsItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}

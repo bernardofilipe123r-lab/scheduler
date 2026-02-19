@@ -28,11 +28,24 @@ from sqlalchemy import desc, func, or_, and_, cast, String
 from app.db_connection import get_db
 from app.models import LogEntry
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
+from app.api.auth.middleware import get_current_user, is_admin_user
 
 router = APIRouter(tags=["logs"])
 
 # Logs password (from env or default)
 LOGS_PASSWORD = os.environ.get("LOGS_PASSWORD")
+
+
+def _require_admin(user: dict) -> None:
+    """Guard logs endpoints behind admin-only access."""
+    if not is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
+def _apply_user_scope(query, user_id: str):
+    """Scope logs to records tagged with the authenticated user_id."""
+    marker = f'"user_id": "{user_id}"'
+    return query.filter(cast(LogEntry.details, String).ilike(f"%{marker}%"))
 
 
 @router.get("/api/logs", summary="Query logs with filtering")
@@ -54,12 +67,15 @@ def get_logs(
     page_size: int = Query(100, ge=1, le=1000, description="Results per page"),
     order: str = Query("desc", description="Sort order: asc or desc"),
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Query logs with comprehensive filtering.
     
     Returns paginated log entries with total count for pagination.
     """
+    _require_admin(user)
+
     # Flush any buffered logs first
     try:
         get_logging_service().flush()
@@ -67,6 +83,7 @@ def get_logs(
         pass
     
     query = db.query(LogEntry)
+    query = _apply_user_scope(query, user.get("id", ""))
     
     # Apply filters
     if level:
@@ -151,14 +168,18 @@ def get_logs(
 def get_log_stats(
     since_minutes: int = Query(60, description="Stats for the last N minutes"),
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Get log statistics: counts by level, category, and recent errors."""
+    _require_admin(user)
+
     cutoff = datetime.utcnow() - timedelta(minutes=since_minutes)
     
     # Count by level
     level_counts = (
         db.query(LogEntry.level, func.count(LogEntry.id))
         .filter(LogEntry.timestamp >= cutoff)
+        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
         .group_by(LogEntry.level)
         .all()
     )
@@ -167,6 +188,7 @@ def get_log_stats(
     category_counts = (
         db.query(LogEntry.category, func.count(LogEntry.id))
         .filter(LogEntry.timestamp >= cutoff)
+        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
         .group_by(LogEntry.category)
         .all()
     )
@@ -175,6 +197,7 @@ def get_log_stats(
     recent_errors = (
         db.query(LogEntry)
         .filter(LogEntry.timestamp >= cutoff, LogEntry.level.in_(['ERROR', 'CRITICAL']))
+        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
         .order_by(LogEntry.timestamp.desc())
         .limit(10)
         .all()
@@ -189,6 +212,7 @@ def get_log_stats(
         .filter(
             LogEntry.timestamp >= cutoff,
             LogEntry.category == 'http_request',
+            cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'),
         )
         .first()
     )
@@ -200,6 +224,7 @@ def get_log_stats(
             LogEntry.timestamp >= cutoff,
             LogEntry.category == 'http_request',
             LogEntry.http_status.isnot(None),
+            cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'),
         )
         .group_by(LogEntry.http_status)
         .all()
@@ -214,13 +239,18 @@ def get_log_stats(
             func.count(LogEntry.id).label('log_count'),
         )
         .filter(LogEntry.timestamp >= cutoff)
+        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
         .group_by(LogEntry.deployment_id)
         .order_by(func.max(LogEntry.timestamp).desc())
         .all()
     )
     
     # Total log count
-    total_logs = db.query(func.count(LogEntry.id)).scalar()
+    total_logs = (
+        db.query(func.count(LogEntry.id))
+        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
+        .scalar()
+    )
     
     return {
         "period_minutes": since_minutes,
@@ -251,13 +281,18 @@ def get_log_stats(
 def clear_logs(
     retention_days: int = Query(7, ge=0, description="Delete logs older than N days. Use 0 to delete all."),
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Delete old log entries to manage database size."""
+    _require_admin(user)
+
+    scoped_query = _apply_user_scope(db.query(LogEntry), user.get("id", ""))
+
     if retention_days == 0:
-        deleted = db.query(LogEntry).delete()
+        deleted = scoped_query.delete()
     else:
         cutoff = datetime.utcnow() - timedelta(days=retention_days)
-        deleted = db.query(LogEntry).filter(LogEntry.timestamp < cutoff).delete()
+        deleted = scoped_query.filter(LogEntry.timestamp < cutoff).delete()
     
     db.commit()
     

@@ -8,6 +8,7 @@ from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
+from app.services.logging.service import set_user_id as set_logging_user_id
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -49,11 +50,41 @@ def get_supabase_client() -> Client:
 
 def _extract_user(payload: dict) -> dict:
     """Extract user info from a decoded JWT payload."""
+    app_metadata = payload.get("app_metadata") or {}
+    user_metadata = payload.get("user_metadata") or {}
+
+    roles = [
+        payload.get("role"),
+        payload.get("user_role"),
+        app_metadata.get("role"),
+        user_metadata.get("role"),
+    ]
+    normalized_roles = {str(r).strip().lower() for r in roles if r}
+
+    is_admin = (
+        "admin" in normalized_roles
+        or bool(app_metadata.get("is_admin"))
+        or bool(user_metadata.get("is_admin"))
+    )
+
+    role = next((str(r) for r in roles if r), "authenticated")
+
     return {
         "id": payload.get("sub", ""),
         "email": payload.get("email", ""),
-        "role": payload.get("role", "authenticated"),
+        "role": role,
+        "is_admin": is_admin,
     }
+
+
+def is_admin_user(user: dict) -> bool:
+    """Return True when the current authenticated user has admin privileges."""
+    if not user:
+        return False
+    if user.get("is_admin") is True:
+        return True
+    role = str(user.get("role", "")).strip().lower()
+    return role == "admin"
 
 
 async def get_current_user(
@@ -84,7 +115,10 @@ async def get_current_user(
                 algorithms=["ES256"],
                 audience="authenticated",
             )
-            return _extract_user(payload)
+            user = _extract_user(payload)
+            if user.get("id"):
+                set_logging_user_id(user["id"])
+            return user
         except pyjwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expired")
         except (pyjwt.InvalidTokenError, Exception) as e:
@@ -99,7 +133,10 @@ async def get_current_user(
                 algorithms=["HS256"],
                 audience="authenticated",
             )
-            return _extract_user(payload)
+            user = _extract_user(payload)
+            if user.get("id"):
+                set_logging_user_id(user["id"])
+            return user
         except pyjwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expired")
         except pyjwt.InvalidTokenError as e:
@@ -115,11 +152,27 @@ async def get_current_user(
         user = response.user
         if not user:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return {
+        app_metadata = user.app_metadata or {}
+        user_metadata = user.user_metadata or {}
+        roles = [
+            user.role,
+            app_metadata.get("role"),
+            user_metadata.get("role"),
+        ]
+        normalized_roles = {str(r).strip().lower() for r in roles if r}
+        extracted_user = {
             "id": user.id,
             "email": user.email or "",
-            "role": user.role or "authenticated",
+            "role": next((str(r) for r in roles if r), "authenticated"),
+            "is_admin": (
+                "admin" in normalized_roles
+                or bool(app_metadata.get("is_admin"))
+                or bool(user_metadata.get("is_admin"))
+            ),
         }
+        if extracted_user.get("id"):
+            set_logging_user_id(extracted_user["id"])
+        return extracted_user
     except HTTPException:
         raise
     except asyncio.TimeoutError:

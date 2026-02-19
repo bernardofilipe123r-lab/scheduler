@@ -55,6 +55,21 @@ def clear_request_id():
     _request_context.request_id = None
 
 
+def get_user_id() -> Optional[str]:
+    """Get current authenticated user id from thread-local storage."""
+    return getattr(_request_context, 'user_id', None)
+
+
+def set_user_id(user_id: str):
+    """Set current authenticated user id in thread-local storage."""
+    _request_context.user_id = user_id
+
+
+def clear_user_id():
+    """Clear current authenticated user id from thread-local storage."""
+    _request_context.user_id = None
+
+
 class LogBuffer:
     """Thread-safe buffer for batching log writes to the database."""
     
@@ -194,6 +209,10 @@ class DatabaseLogHandler(logging.Handler):
                 'request_id': get_request_id(),
                 'deployment_id': DEPLOYMENT_ID,
             }
+
+            current_user_id = get_user_id()
+            if current_user_id:
+                entry['details']['user_id'] = current_user_id
             
             # Capture exception info if present
             if record.exc_info and record.exc_info[1]:
@@ -314,13 +333,18 @@ class LoggingService:
             http_path: Optional[str] = None, http_status: Optional[int] = None,
             request_id: Optional[str] = None):
         """Write a structured log entry."""
+        details_with_user = dict(details or {})
+        current_user_id = get_user_id()
+        if current_user_id and 'user_id' not in details_with_user:
+            details_with_user['user_id'] = current_user_id
+
         entry = {
             'timestamp': datetime.utcnow(),
             'level': level.upper(),
             'category': category,
             'source': source or 'app',
             'message': message,
-            'details': details,
+            'details': details_with_user,
             'request_id': request_id or get_request_id(),
             'deployment_id': self.deployment_id,
             'duration_ms': duration_ms,

@@ -52,6 +52,24 @@ function LoginGuard() {
   return <LoginPage />
 }
 
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+      </div>
+    )
+  }
+
+  if (!user?.isAdmin) {
+    return <Navigate to="/" replace />
+  }
+
+  return <>{children}</>
+}
+
 export function AppRoutes() {
   return (
     <>
@@ -71,7 +89,7 @@ export function AppRoutes() {
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings" element={<Navigate to="/brands?tab=settings" replace />} />
         <Route path="about" element={<AboutPage />} />
-        <Route path="logs" element={<LogsPage />} />
+        <Route path="logs" element={<AdminGuard><LogsPage /></AdminGuard>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>

@@ -17,7 +17,12 @@ import uuid
 from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.services.logging.service import get_logging_service, set_request_id, clear_request_id
+from app.services.logging.service import (
+    get_logging_service,
+    set_request_id,
+    clear_request_id,
+    clear_user_id,
+)
 
 # Paths to skip logging (prevent recursion and noise)
 _SKIP_PATHS = (
@@ -121,3 +126,4 @@ class RequestLoggingMiddleware:
             )
         finally:
             clear_request_id()
+            clear_user_id()
