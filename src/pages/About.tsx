@@ -356,22 +356,35 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     <!-- Multi-Brand System -->
     <h2>Scalable Multi-Brand Ecosystem</h2>
     <p>
-      The platform is architected to support <strong>multiple brands</strong> — each with completely 
-      independent visual identities, social media accounts, and API credentials. Every brand covers the same 
-      content workflow but with distinct identity settings. Adding a new brand is a matter of configuring
-      credentials, colors, and content settings.
+      The platform is architected to support <strong>multiple brands</strong> with independent identity settings,
+      credentials, publishing calendars, and platform connections. Brand names and handles are fully workspace-defined,
+      which means each organization can operate with its own naming conventions and account structures.
     </p>
-    <h3>Currently Active</h3>
+
+    <h3>Operating Model</h3>
+    <ul>
+      <li><strong>Shared Infrastructure:</strong> One operational pipeline for content generation, scheduling, and publishing.</li>
+      <li><strong>Isolated Brand Context:</strong> Separate prompts, palettes, handles, credentials, and schedule offsets per brand.</li>
+      <li><strong>Governance by Configuration:</strong> New brands can be onboarded through settings, without code changes.</li>
+      <li><strong>Failure Isolation:</strong> Platform or credential issues in one brand do not interrupt others.</li>
+    </ul>
+
+    <h3>Illustrative Portfolio Example (Not Customer Data)</h3>
     <table class="tech-table">
       <thead>
-        <tr><th>Brand</th><th>Instagram Handle</th></tr>
+        <tr><th>Example Brand</th><th>Primary Channel</th><th>Content Focus</th></tr>
       </thead>
       <tbody>
-        ${dynamicBrands.map(b => `<tr><td>${b.label}</td><td>@${b.instagram_handle || b.id}</td></tr>`).join('')}
+        <tr><td>Brand Alpha</td><td>@brand_alpha</td><td>Education &amp; expert explainers</td></tr>
+        <tr><td>Brand Beta</td><td>@brand_beta</td><td>Tips, tutorials, and how-to formats</td></tr>
+        <tr><td>Brand Gamma</td><td>@brand_gamma</td><td>Lifestyle and motivation series</td></tr>
+        <tr><td>Brand Delta</td><td>@brand_delta</td><td>Product highlights and offers</td></tr>
+        <tr><td>Brand Epsilon</td><td>@brand_epsilon</td><td>Community stories and engagement</td></tr>
       </tbody>
     </table>
-    <h3>Shared Topic Coverage</h3>
-    <p>Teams can organize content themes per brand and keep a consistent publishing cadence:</p>
+
+    <h3>Reusable Topic Framework</h3>
+    <p>Teams can organize shared content pillars per brand while preserving a centralized workflow:</p>
     <div class="pipeline">
       <span class="pipeline-step">Education</span>
       <span class="pipeline-step">Tips</span>
@@ -382,8 +395,7 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
       <span class="pipeline-step">Promotions</span>
     </div>
     <p>
-      Content differentiation is managed through brand-specific templates, settings, and scheduling.
-      This keeps each brand timeline independent while still using one shared platform.
+      This model enables standardization at the platform level while preserving brand-level identity and editorial autonomy.
     </p>
 
     <!-- Publishing & Distribution -->
@@ -573,33 +585,6 @@ function TechRow({
       <td className="py-3 pr-4 text-sm font-medium text-gray-900 whitespace-nowrap">{layer}</td>
       <td className="py-3 pr-4 text-sm text-primary-700 font-mono">{tech}</td>
       <td className="py-3 text-sm text-gray-600">{purpose}</td>
-    </tr>
-  )
-}
-
-// ─── Brand Row ──────────────────────────────────────────────────────
-
-function BrandRow({
-  name,
-  handle,
-  color,
-  focus,
-}: {
-  name: string
-  handle: string
-  color: string
-  focus: string
-}) {
-  return (
-    <tr className="border-b border-gray-100 last:border-0">
-      <td className="py-3 pr-4">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-sm font-medium text-gray-900">{name}</span>
-        </div>
-      </td>
-      <td className="py-3 pr-4 text-sm text-gray-600 font-mono">{handle}</td>
-      <td className="py-3 text-sm text-gray-600">{focus}</td>
     </tr>
   )
 }
@@ -807,16 +792,86 @@ export function AboutPage() {
 
       {/* Multi-Brand System */}
       <Section icon={Layers} title="Scalable Multi-Brand Ecosystem">
-        <p className="text-gray-600 text-sm mb-4">
-          Architected to support <strong className="text-gray-900">multiple brands</strong> with independent identity settings,
-          credentials, and schedules. Each brand runs through the same operational pipeline while keeping
-          separate configuration.
+        <p className="text-gray-600 text-sm mb-4 leading-relaxed">
+          This platform supports a flexible multi-brand model where brand names, handles, and identity settings are
+          defined by each workspace. The same operational engine is reused across brands, while configuration,
+          credentials, and scheduling remain isolated at the brand level.
         </p>
 
-        {/* Shared Topics */}
         <div className="mb-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Shared Topic Coverage</h3>
-          <p className="text-xs text-gray-500 mb-3">Typical content themes can be organized per brand while keeping one central workflow:</p>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Operating Principles</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <FeatureCard
+              icon={Layers}
+              title="Shared Infrastructure"
+              description="A single content pipeline for creation, scheduling, and distribution across all brands."
+            />
+            <FeatureCard
+              icon={Shield}
+              title="Isolated Brand Context"
+              description="Per-brand prompts, visual identity, credentials, and publish settings are configured independently."
+            />
+            <FeatureCard
+              icon={Zap}
+              title="Configuration-First Onboarding"
+              description="New brands are onboarded through configuration and credentials rather than code changes."
+            />
+            <FeatureCard
+              icon={Cpu}
+              title="Failure Isolation"
+              description="Credential or platform errors for one brand do not block scheduling or publishing for other brands."
+            />
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Illustrative Portfolio Example</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Example only for documentation purposes. Actual brand names and handles are workspace-specific.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-2.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Example Brand</th>
+                  <th className="text-left py-2.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Primary Channel</th>
+                  <th className="text-left py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Content Focus</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 pr-4 text-sm font-medium text-gray-900">Brand Alpha</td>
+                  <td className="py-3 pr-4 text-sm text-gray-600 font-mono">@brand_alpha</td>
+                  <td className="py-3 text-sm text-gray-600">Education and expert explainers</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 pr-4 text-sm font-medium text-gray-900">Brand Beta</td>
+                  <td className="py-3 pr-4 text-sm text-gray-600 font-mono">@brand_beta</td>
+                  <td className="py-3 text-sm text-gray-600">Tips and tutorial formats</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 pr-4 text-sm font-medium text-gray-900">Brand Gamma</td>
+                  <td className="py-3 pr-4 text-sm text-gray-600 font-mono">@brand_gamma</td>
+                  <td className="py-3 text-sm text-gray-600">Lifestyle and motivation series</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 pr-4 text-sm font-medium text-gray-900">Brand Delta</td>
+                  <td className="py-3 pr-4 text-sm text-gray-600 font-mono">@brand_delta</td>
+                  <td className="py-3 text-sm text-gray-600">Product highlights and promotions</td>
+                </tr>
+                <tr>
+                  <td className="py-3 pr-4 text-sm font-medium text-gray-900">Brand Epsilon</td>
+                  <td className="py-3 pr-4 text-sm text-gray-600 font-mono">@brand_epsilon</td>
+                  <td className="py-3 text-sm text-gray-600">Community stories and engagement</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Reusable Topic Framework</h3>
+          <p className="text-xs text-gray-500 mb-3">Content themes can be reused across brands while preserving identity-level customization:</p>
           <div className="flex flex-wrap gap-2">
             {['Education', 'Tips', 'Lifestyle', 'Motivation', 'Product Highlights', 'Community', 'Promotions'].map(
               (topic) => (
@@ -831,36 +886,10 @@ export function AboutPage() {
           </div>
         </div>
 
-        {/* Current Brands */}
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Currently Active</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-2.5 pr-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
-                  <th className="text-left py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Instagram</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dynamicBrands.map(brand => (
-                  <BrandRow 
-                    key={brand.id}
-                    name={brand.label} 
-                    handle={brand.instagram_handle ? `@${brand.instagram_handle}` : brand.id} 
-                    color={brand.color} 
-                    focus="" 
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
           <p className="text-sm text-gray-600">
-            <strong className="text-gray-900">Content Differentiation:</strong> Brand-specific templates, settings,
-            and schedules keep each timeline independent while using the same platform.
+            <strong className="text-gray-900">Documentation Note:</strong> Brand labels shown in this section are illustrative examples.
+            Each customer workspace can define any brand naming scheme and account structure.
           </p>
         </div>
       </Section>
