@@ -268,6 +268,7 @@ export function GeneratorPage() {
         cta_type: ctaType === 'auto' ? undefined : ctaType,
         platforms: selectedPlatforms,
         image_model: imageModel,
+        fixed_title: true,
       })
       
       setTitle('')

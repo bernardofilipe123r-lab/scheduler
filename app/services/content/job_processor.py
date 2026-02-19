@@ -84,8 +84,9 @@ class JobProcessor:
             print(f"❌ ERROR: {error_msg}", flush=True)
             return {"success": False, "error": error_msg}
 
-        # Use provided values or fall back to job's stored values
-        use_title = title if title is not None else job.title
+        # Use provided values or fall back to per-brand title in brand_outputs, then job title
+        brand_data = (job.brand_outputs or {}).get(brand, {})
+        use_title = title if title is not None else (brand_data.get("title") or job.title)
         use_lines = content_lines if content_lines is not None else job.content_lines
 
         # Strip any CTA lines the AI may have included (real CTA added by image_generator)
@@ -623,8 +624,33 @@ class JobProcessor:
         print(f"   Processing {total_brands} brands: {job.brands}", flush=True)
         sys.stdout.flush()
 
+        # When auto-generated (fixed_title=False) with multiple brands,
+        # generate unique titles + content per brand via AI
+        if not getattr(job, 'fixed_title', False) and total_brands > 1:
+            print(f"\n🧠 Auto mode with {total_brands} brands — generating unique titles + content per brand...", flush=True)
+            try:
+                from app.services.content.generator import ContentGenerator
+                cg = ContentGenerator()
+                self._manager.update_job_status(job_id, "generating", f"Generating unique content for {total_brands} brands...", 5)
+                for i, brand in enumerate(job.brands):
+                    viral = cg.generate_viral_content()
+                    brand_title = viral.get("title", job.title)
+                    brand_lines = viral.get("content_lines", job.content_lines or [])
+                    brand_image_prompt = viral.get("image_prompt", job.ai_prompt or "")
+                    self._manager.update_brand_output(job_id, brand, {
+                        "title": brand_title,
+                        "content_lines": brand_lines,
+                        "ai_prompt": brand_image_prompt,
+                        "status": "pending",
+                    })
+                    print(f"   📝 {brand}: {brand_title[:60]}...", flush=True)
+                print(f"   ✓ Generated unique content for {total_brands} brands", flush=True)
+            except Exception as e:
+                print(f"   ⚠️ Per-brand content generation failed: {e}", flush=True)
+                print(f"   Falling back to shared title + content differentiation", flush=True)
+
         # Pre-generate ALL content variations in ONE DeepSeek call
-        # This ensures each brand gets truly unique content
+        # This ensures each brand gets truly unique content lines
         brand_content_map = {}
         if job.content_lines and len(job.content_lines) >= 3 and len(job.brands) > 1:
             print(f"\n🔄 Generating content variations for all {total_brands} brands...", flush=True)
@@ -662,12 +688,15 @@ class JobProcessor:
                     progress
                 )
 
-                # Get pre-generated content for this brand (if available)
-                brand_content = brand_content_map.get(brand.lower())
+                # Get per-brand content: first check brand_outputs (unique AI content),
+                # then fall back to differentiated content variations
+                job = self._manager.get_job(job_id)
+                brand_output_data = (job.brand_outputs or {}).get(brand, {})
+                brand_content = brand_output_data.get("content_lines") or brand_content_map.get(brand.lower())
 
                 print(f"   🎨 Calling regenerate_brand({job_id}, {brand})...", flush=True)
                 if brand_content:
-                    print(f"   📝 Using pre-generated variation ({len(brand_content)} lines)", flush=True)
+                    print(f"   📝 Using pre-generated content ({len(brand_content)} lines)", flush=True)
                     print(f"      First line: {brand_content[0][:60]}...", flush=True)
                 else:
                     print(f"   ⚠️ No pre-generated content found for {brand.lower()}", flush=True)
