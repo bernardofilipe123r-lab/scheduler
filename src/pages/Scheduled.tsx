@@ -110,7 +110,7 @@ export function ScheduledPage() {
   }, [dynamicBrands])
   
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
+  const [viewMode, setViewMode] = useState<'month' | 'week'>('week')
   
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
@@ -407,24 +407,34 @@ export function ScheduledPage() {
         </div>
         
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleCleanReelSlots}
-            disabled={isCleaningReels}
-            className="btn btn-secondary text-sm"
-            title="Fix reels on wrong slots or collisions: ensures every reel sits on its correct brand time slot"
-          >
-            {isCleaningReels ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-            Reel Scheduler Cleaner
-          </button>
-          <button
-            onClick={handleCleanPostSlots}
-            disabled={isCleaning}
-            className="btn btn-secondary text-sm"
-            title="Fix collisions: if multiple posts share the same time slot, re-schedule the extras"
-          >
-            {isCleaning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-            Post Schedule Cleaner
-          </button>
+          <div className="group relative">
+            <button
+              onClick={handleCleanReelSlots}
+              disabled={isCleaningReels}
+              className="btn btn-secondary text-sm"
+            >
+              {isCleaningReels ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+              Reel Scheduler Cleaner
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg z-50 hidden group-hover:block leading-relaxed">
+              <p className="font-semibold mb-1">Reel Scheduler Cleaner</p>
+              <p>Reorganises scheduled reels so each brand publishes at its configured time slot. Prevents two brands from going live simultaneously — each gets its own dedicated slot in the correct order.</p>
+            </div>
+          </div>
+          <div className="group relative">
+            <button
+              onClick={handleCleanPostSlots}
+              disabled={isCleaning}
+              className="btn btn-secondary text-sm"
+            >
+              {isCleaning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+              Post Schedule Cleaner
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg z-50 hidden group-hover:block leading-relaxed">
+              <p className="font-semibold mb-1">Post Schedule Cleaner</p>
+              <p>Detects and resolves time-slot collisions for posts. If multiple posts are scheduled at the same time, extras are shifted to the next available slot — ensuring no brand publishes over another.</p>
+            </div>
+          </div>
           
           <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
           <button

@@ -45,19 +45,6 @@ export function HistoryPage() {
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
   const [isDeletingSection, setIsDeletingSection] = useState(false)
   
-  const hideOlderThan2h = useCallback((jobsList: Job[]) => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
-    const toHide = jobsList
-      .filter(j => new Date(j.created_at) < twoHoursAgo)
-      .map(j => j.id.toString())
-    if (toHide.length === 0) {
-      toast('No jobs older than 2 hours', { icon: '📭' })
-      return
-    }
-    setHiddenJobIds(prev => new Set([...prev, ...toHide]))
-    toast.success(`Hidden ${toHide.length} old jobs`)
-  }, [])
-  
   const resetHidden = useCallback(() => {
     setHiddenJobIds(new Set())
   }, [])
@@ -632,21 +619,14 @@ export function HistoryPage() {
         }
 
         // Helper to render a section with header, delete all, and job list
-        const renderSection = (label: string, icon: string, sectionJobs: Job[], allSectionJobs: Job[]) => (
+        const renderSection = (label: string, icon: string, sectionJobs: Job[]) => (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <span className="text-lg">{icon}</span>
               <h3 className="text-base font-semibold text-gray-900">{label}</h3>
               <span className="text-sm text-gray-500">({sectionJobs.length})</span>
               <div className="flex-1" />
-              <button
-                onClick={() => hideOlderThan2h(allSectionJobs)}
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-              >
-                <Clock className="w-3 h-3" />
-                Hide &gt;2h Ago
-              </button>
-              {viewFilter === 'all' && (
+              {(searchQuery.trim() !== '' || variantFilter !== 'all') && (
                 <button
                   onClick={() => {
                     const hasSearchFilter = searchQuery.trim() !== ''
@@ -693,11 +673,11 @@ export function HistoryPage() {
             
             {/* Show sections based on content type filter */}
             {(contentTypeFilter === 'all' || contentTypeFilter === 'reels') && reelJobs.length > 0 && (
-              renderSection('Reels', '🎬', reelJobs, filteredJobs.filter(j => j.variant !== 'post'))
+              renderSection('Reels', '🎬', reelJobs)
             )}
             
             {(contentTypeFilter === 'all' || contentTypeFilter === 'posts') && postJobs.length > 0 && (
-              renderSection('Posts', '📄', postJobs, filteredJobs.filter(j => j.variant === 'post'))
+              renderSection('Posts', '📄', postJobs)
             )}
             
             {visibleJobs.length === 0 && hiddenJobIds.size > 0 && (

@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck, Users, Search, RefreshCw, AlertCircle,
   Ban, UserCheck, Shield,
-  Crown, ScrollText, X, Layers, Clock, ArrowUpDown,
+  Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
 import { Spinner } from '@/shared/components'
+import { useAuth } from '@/features/auth/AuthContext'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -130,12 +131,16 @@ function UserDetail({
   user,
   onClose,
   onRoleChanged,
+  onUserDeleted,
 }: {
   user: AdminUser
   onClose: () => void
   onRoleChanged: () => void
+  onUserDeleted: () => void
 }) {
   const queryClient = useQueryClient()
+  const { user: currentUser } = useAuth()
+  const isSelf = currentUser?.id === user.id
   const [activeTab, setActiveTab] = useState<'brands' | 'logs'>('brands')
   const [logPage, setLogPage] = useState(1)
   const [logOrder, setLogOrder] = useState<'desc' | 'asc'>('desc')
@@ -167,12 +172,39 @@ function UserDetail({
     },
   })
 
+  // Delete user mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: () => apiClient.delete(`/api/admin/users/${user.id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      onUserDeleted()
+    },
+  })
+
+  // Delete brand mutation
+  const deleteBrandMutation = useMutation({
+    mutationFn: (brandId: string) => apiClient.delete(`/api/admin/brands/${brandId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-user-brands', user.id] })
+    },
+  })
+
   const confirmRole = (newRole: string, label: string) => {
     if (!window.confirm(`Set ${user.email} as ${label}?`)) return
     roleMutation.mutate(newRole)
   }
 
-  const actionBusy = roleMutation.isPending
+  const confirmDeleteUser = () => {
+    if (!window.confirm(`Permanently delete ${user.email}? This cannot be undone.`)) return
+    deleteUserMutation.mutate()
+  }
+
+  const confirmDeleteBrand = (brand: Brand) => {
+    if (!window.confirm(`Delete brand "${brand.display_name}"? This cannot be undone.`)) return
+    deleteBrandMutation.mutate(brand.id)
+  }
+
+  const actionBusy = roleMutation.isPending || deleteUserMutation.isPending
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
@@ -187,9 +219,21 @@ function UserDetail({
             <p className="font-semibold text-gray-900">{user.name || user.email}</p>
             <p className="text-sm text-gray-500">{user.email}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isSelf && (
+              <button
+                disabled={deleteUserMutation.isPending}
+                onClick={confirmDeleteUser}
+                title="Delete user permanently"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete User
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Role & Info */}
@@ -303,11 +347,19 @@ function UserDetail({
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-gray-900 text-sm">{b.display_name}</p>
                         <p className="text-xs text-gray-400">{b.id}</p>
+                        <div className="text-xs text-gray-400 mt-0.5 space-y-0.5">
+                          {b.instagram_handle && <p>IG: {b.instagram_handle}</p>}
+                          {b.facebook_page_name && <p>FB: {b.facebook_page_name}</p>}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400 text-right space-y-0.5">
-                        {b.instagram_handle && <p>IG: {b.instagram_handle}</p>}
-                        {b.facebook_page_name && <p>FB: {b.facebook_page_name}</p>}
-                      </div>
+                      <button
+                        disabled={deleteBrandMutation.isPending}
+                        onClick={() => confirmDeleteBrand(b)}
+                        title="Delete brand"
+                        className="p-2 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -443,7 +495,7 @@ export function AdminPage() {
   })
 
   const counts = {
-    total: data?.users.length ?? 0,
+    total: data?.users.filter(u => !u.is_admin && !u.is_super_admin && !u.is_blocked).length ?? 0,
     superAdmins: data?.users.filter(u => u.is_super_admin).length ?? 0,
     admins: data?.users.filter(u => u.is_admin && !u.is_super_admin).length ?? 0,
     blocked: data?.users.filter(u => u.is_blocked).length ?? 0,
@@ -575,6 +627,10 @@ export function AdminPage() {
               const updated = res.data?.users.find(u => u.id === selectedUser.id)
               if (updated) setSelectedUser(updated)
             })
+          }}
+          onUserDeleted={() => {
+            setSelectedUser(null)
+            refetch()
           }}
         />
       )}
