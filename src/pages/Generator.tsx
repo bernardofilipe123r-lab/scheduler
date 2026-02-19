@@ -310,7 +310,7 @@ export function GeneratorPage() {
               rows={3}
               placeholder="e.g., Ultimate Rice Guide"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none"
             />
             <p className="text-xs text-gray-500 mt-1">Press Enter to add line breaks in the title</p>
           </div>
@@ -319,25 +319,25 @@ export function GeneratorPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Variant</label>
             <div className="space-y-3">
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
                 <input 
                   type="radio" 
                   name="variant" 
                   value="light"
                   checked={variant === 'light'}
                   onChange={() => setVariant('light')}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
                 /> 
                 <span className="ml-3 text-sm font-medium text-gray-900">☀️ Light Mode</span>
               </label>
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-purple-300 transition-colors has-[:checked]:border-purple-500 has-[:checked]:bg-purple-50">
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
                 <input 
                   type="radio" 
                   name="variant" 
                   value="dark"
                   checked={variant === 'dark'}
                   onChange={() => setVariant('dark')}
-                  className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
+                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
                 /> 
                 <span className="ml-3 text-sm font-medium text-gray-900">🌙 Dark Mode</span>
               </label>
@@ -348,8 +348,8 @@ export function GeneratorPage() {
 
         {/* AI Prompt (Dark Mode Only) */}
         {variant === 'dark' && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <label htmlFor="aiPrompt" className="block text-sm font-medium text-purple-900 mb-2">
+          <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+            <label htmlFor="aiPrompt" className="block text-sm font-medium text-stone-900 mb-2">
               ✨ AI Background Prompt
             </label>
             <textarea
@@ -358,9 +358,9 @@ export function GeneratorPage() {
               onChange={(e) => setAiPrompt(e.target.value)}
               rows={3}
               placeholder="Leave blank to auto-generate from title, or describe the background..."
-              className="w-full px-4 py-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none"
             />
-            <p className="text-xs text-purple-700 mt-1">Optional: Leave blank to auto-generate, or customize the AI-generated background</p>
+            <p className="text-xs text-stone-600 mt-1">Optional: Leave blank to auto-generate, or customize the AI-generated background</p>
           </div>
         )}
 
@@ -370,28 +370,28 @@ export function GeneratorPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">AI Image Model</label>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
                 <input
                   type="radio"
                   name="imageModel"
                   value="ZImageTurbo_INT8"
                   checked={imageModel === 'ZImageTurbo_INT8'}
                   onChange={() => setImageModel('ZImageTurbo_INT8')}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
                 />
                 <div className="ml-3">
                   <span className="text-sm font-medium text-gray-900">✨ High Quality</span>
                   <p className="text-[10px] text-gray-400">ZImageTurbo · Better detail</p>
                 </div>
               </label>
-              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+              <label className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100">
                 <input
                   type="radio"
                   name="imageModel"
                   value="Flux1schnell"
                   checked={imageModel === 'Flux1schnell'}
                   onChange={() => setImageModel('Flux1schnell')}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="w-4 h-4 text-stone-900 border-gray-300 focus:ring-stone-400"
                 />
                 <div className="ml-3">
                   <span className="text-sm font-medium text-gray-900">⚡ Fast</span>
@@ -410,7 +410,7 @@ export function GeneratorPage() {
               id="ctaType"
               value={ctaType}
               onChange={(e) => setCtaType(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900"
             >
               <option value="auto">🎲 Auto (weighted random from settings)</option>
               {ctaOptions.map((cta, i) => (
@@ -455,13 +455,13 @@ export function GeneratorPage() {
             {dynamicBrands.map(brand => (
                 <label 
                   key={brand.id} 
-                  className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
+                  className="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-stone-400 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-100"
                 >
                   <input 
                     type="checkbox" 
                     checked={selectedBrands.includes(brand.id)}
                     onChange={() => toggleBrand(brand.id)}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-stone-900 border-gray-300 rounded focus:ring-stone-400"
                   /> 
                   <span className="ml-3 text-sm font-medium text-gray-900">{brand.label}</span>
                 </label>
@@ -487,7 +487,7 @@ Pasta — Salt the water generously
 Chicken — Let it rest after cooking`}
             required
             rows={8}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent resize-none font-mono text-sm"
           />
           <p className="text-xs text-gray-500 mt-1">Enter one line per item. Use "—" or "-" to separate keyword from description</p>
         </div>
@@ -497,7 +497,7 @@ Chicken — Let it rest after cooking`}
           <button 
             type="submit" 
             disabled={isCreatingJob}
-            className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-stone-900 text-white font-medium rounded-lg hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isCreatingJob ? (
               <>
@@ -514,7 +514,7 @@ Chicken — Let it rest after cooking`}
             type="button" 
             onClick={openAutoModal}
             disabled={isAutoGenerating}
-            className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-stone-800 text-white font-medium rounded-lg hover:bg-stone-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isAutoGenerating ? (
               <>
@@ -556,8 +556,8 @@ Chicken — Let it rest after cooking`}
                     onClick={() => setAutoVariant('light')}
                     className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
                       autoVariant === 'light'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        ? 'border-stone-800 bg-stone-100 text-stone-900'
+                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
                     }`}
                   >
                     ☀️ Light
@@ -566,8 +566,8 @@ Chicken — Let it rest after cooking`}
                     onClick={() => setAutoVariant('dark')}
                     className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
                       autoVariant === 'dark'
-                        ? 'border-purple-500 bg-purple-50 text-purple-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        ? 'border-stone-800 bg-stone-100 text-stone-900'
+                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
                     }`}
                   >
                     🌙 Dark
@@ -583,8 +583,8 @@ Chicken — Let it rest after cooking`}
                     onClick={() => setImageModel('ZImageTurbo_INT8')}
                     className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
                       imageModel === 'ZImageTurbo_INT8'
-                        ? 'border-purple-500 bg-purple-50 text-purple-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        ? 'border-stone-800 bg-stone-100 text-stone-900'
+                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
                     }`}
                   >
                     ✨ High Quality
@@ -593,8 +593,8 @@ Chicken — Let it rest after cooking`}
                     onClick={() => setImageModel('Flux1schnell')}
                     className={`flex-1 p-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
                       imageModel === 'Flux1schnell'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        ? 'border-stone-800 bg-stone-100 text-stone-900'
+                        : 'border-gray-200 text-gray-600 hover:border-stone-400'
                     }`}
                   >
                     ⚡ Fast
@@ -616,7 +616,7 @@ Chicken — Let it rest after cooking`}
                         onClick={() => handleAutoCountChange(count)}
                         className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
                           autoCount === count
-                            ? 'bg-purple-600 text-white'
+                            ? 'bg-stone-900 text-white'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
@@ -633,7 +633,7 @@ Chicken — Let it rest after cooking`}
                 <select
                   value={autoCtaType}
                   onChange={(e) => setAutoCtaType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                 >
                   <option value="auto">🎲 Auto (weighted random)</option>
                   {ctaOptions.map((cta, i) => (
@@ -653,7 +653,7 @@ Chicken — Let it rest after cooking`}
                         key={brand.id}
                         className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
                           checked
-                            ? 'border-purple-200 bg-purple-50'
+                            ? 'border-stone-300 bg-stone-100'
                             : 'border-gray-100 bg-white hover:bg-gray-50'
                         }`}
                       >
@@ -661,7 +661,7 @@ Chicken — Let it rest after cooking`}
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleAutoBrand(brand.id)}
-                          className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                          className="w-4 h-4 rounded border-gray-300 text-stone-900 focus:ring-stone-400"
                         />
                         <div
                           className="w-3 h-3 rounded-full"
@@ -711,7 +711,7 @@ Chicken — Let it rest after cooking`}
               <button
                 onClick={handleAutoSubmit}
                 disabled={autoBrands.length === 0}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-medium text-sm disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-medium text-sm disabled:opacity-50"
               >
                 Generate
               </button>

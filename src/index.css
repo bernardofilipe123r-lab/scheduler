@@ -228,7 +228,7 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  background: #1c1917;
   color: white;
   padding: 14px 32px;
   border: none;

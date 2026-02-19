@@ -287,7 +287,7 @@ export function PostsPage() {
                       onClick={() => selectBrand(brand)}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
                         selected
-                          ? 'border-primary-300 bg-primary-50 text-primary-700'
+                      ? 'border-stone-800 bg-stone-100 text-stone-900'
                           : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -313,11 +313,11 @@ export function PostsPage() {
                   onClick={() => setImageModel('ZImageTurbo_INT8')}
                   className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
                     imageModel === 'ZImageTurbo_INT8'
-                      ? 'border-primary-300 bg-primary-50'
+                      ? 'border-stone-800 bg-stone-100'
                       : 'border-gray-200 bg-white hover:bg-gray-50'
                   }`}
                 >
-                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'ZImageTurbo_INT8' ? 'text-primary-700' : 'text-gray-700'}`}>
+                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'ZImageTurbo_INT8' ? 'text-stone-900' : 'text-gray-700'}`}>
                     ✨ High Quality
                   </span>
                   <span className="text-[10px] text-gray-400 whitespace-nowrap">ZImageTurbo · Better detail</span>
@@ -326,11 +326,11 @@ export function PostsPage() {
                   onClick={() => setImageModel('Flux1schnell')}
                   className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
                     imageModel === 'Flux1schnell'
-                      ? 'border-primary-300 bg-primary-50'
+                      ? 'border-stone-800 bg-stone-100'
                       : 'border-gray-200 bg-white hover:bg-gray-50'
                   }`}
                 >
-                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'Flux1schnell' ? 'text-primary-700' : 'text-gray-700'}`}>
+                  <span className={`text-sm font-medium whitespace-nowrap ${imageModel === 'Flux1schnell' ? 'text-stone-900' : 'text-gray-700'}`}>
                     ⚡ Fast
                   </span>
                   <span className="text-[10px] text-gray-400 whitespace-nowrap">Flux Schnell · Cheaper</span>
@@ -343,7 +343,7 @@ export function PostsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <button
                 onClick={() => setShowSettings((prev) => !prev)}
-                className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-primary-600 transition-colors text-sm"
+                className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-stone-600 transition-colors text-sm"
               >
                 <Settings2 className="w-4 h-4" />
                 Layout Settings
@@ -378,7 +378,7 @@ export function PostsPage() {
                           fontSize: Number(e.target.value),
                         }))
                       }
-                      className="w-full accent-primary-500"
+                      className="w-full accent-stone-800"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -396,7 +396,7 @@ export function PostsPage() {
                             readCaptionBottom: Number(e.target.value),
                           })
                         }
-                        className="w-full accent-primary-500"
+                        className="w-full accent-stone-800"
                       />
                     </div>
                     <div>
@@ -411,7 +411,7 @@ export function PostsPage() {
                         onChange={(e) =>
                           updateLayout({ titleGap: Number(e.target.value) })
                         }
-                        className="w-full accent-primary-500"
+                        className="w-full accent-stone-800"
                       />
                     </div>
                     <div>
@@ -426,7 +426,7 @@ export function PostsPage() {
                         onChange={(e) =>
                           updateLayout({ logoGap: Number(e.target.value) })
                         }
-                        className="w-full accent-primary-500"
+                        className="w-full accent-stone-800"
                       />
                     </div>
                     <div>
@@ -441,7 +441,7 @@ export function PostsPage() {
                         onChange={(e) =>
                           updateLayout({ titlePaddingX: Number(e.target.value) })
                         }
-                        className="w-full accent-primary-500"
+                        className="w-full accent-stone-800"
                       />
                     </div>
                   </div>
@@ -463,7 +463,7 @@ export function PostsPage() {
                           barWidth: Number(e.target.value),
                         }))
                       }
-                      className="w-full accent-primary-500"
+                      className="w-full accent-stone-800"
                     />
                   </div>
                   <div className="pt-2 border-t border-gray-100">
@@ -478,7 +478,7 @@ export function PostsPage() {
                           slideFontFamily: e.target.value,
                         }))
                       }
-                      className="w-full mt-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      className="w-full mt-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-stone-400"
                     >
                       {SLIDE_FONT_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -493,7 +493,7 @@ export function PostsPage() {
                   <div className="flex gap-2 pt-2 border-t border-gray-100">
                     <button
                       onClick={handleSaveSettings}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600"
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-stone-900 text-white text-xs rounded-lg hover:bg-stone-800"
                     >
                       <Save className="w-3 h-3" />
                       Save
@@ -541,7 +541,7 @@ export function PostsPage() {
                 setShowAutoModal(true)
               }}
               disabled={isCreating}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-primary-600 text-white rounded-xl hover:from-purple-700 hover:to-primary-700 font-medium disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-stone-800 text-white rounded-xl hover:bg-stone-700 font-medium disabled:opacity-50"
             >
               <Wand2 className="w-4 h-4" />
               Auto Generate Viral Carrousel Posts
@@ -549,7 +549,7 @@ export function PostsPage() {
             <button
               onClick={handleSubmit}
               disabled={isCreating || selectedBrands.length === 0 || !title.trim()}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 font-medium disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-medium disabled:opacity-50"
               title={!title.trim() ? 'Enter a title first' : ''}
             >
               {isCreating ? (
@@ -594,7 +594,7 @@ export function PostsPage() {
                       onClick={() => handleAutoCountChange(count)}
                       className={`w-10 h-10 rounded-lg text-sm font-semibold transition-all ${
                         autoCount === count
-                          ? 'bg-purple-600 text-white'
+                          ? 'bg-stone-900 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
                     >
@@ -619,7 +619,7 @@ export function PostsPage() {
                       key={brand}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
                         checked
-                          ? 'border-purple-200 bg-purple-50'
+                          ? 'border-stone-300 bg-stone-100'
                           : 'border-gray-100 bg-white hover:bg-gray-50'
                       }`}
                     >
@@ -627,7 +627,7 @@ export function PostsPage() {
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleAutoBrand(brand)}
-                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        className="w-4 h-4 rounded border-gray-300 text-stone-900 focus:ring-stone-400"
                       />
                       <div
                         className="w-3 h-3 rounded-full"
@@ -653,7 +653,7 @@ export function PostsPage() {
               <button
                 onClick={handleAutoSubmit}
                 disabled={autoBrands.length === 0}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-primary-600 text-white rounded-xl hover:from-purple-700 hover:to-primary-700 font-medium text-sm disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-medium text-sm disabled:opacity-50"
               >
                 Generate
               </button>

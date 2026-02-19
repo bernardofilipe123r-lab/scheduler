@@ -184,7 +184,7 @@ export function LogsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ScrollText className="w-6 h-6 text-primary-500" />
+          <ScrollText className="w-6 h-6 text-stone-600" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">System Logs</h1>
             <p className="text-sm text-gray-500">Real-time system log viewer</p>
@@ -196,7 +196,7 @@ export function LogsPage() {
               type="checkbox"
               checked={autoRefresh}
               onChange={e => setAutoRefresh(e.target.checked)}
-              className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+              className="rounded border-gray-300 text-stone-900 focus:ring-stone-400"
             />
             Auto-refresh
           </label>
@@ -220,7 +220,7 @@ export function LogsPage() {
             <select
               value={level}
               onChange={e => setLevel(e.target.value)}
-              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-primary-500 focus:border-primary-500"
+              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-stone-400 focus:border-stone-400"
             >
               <option value="">All Levels</option>
               {LEVELS.map(l => (
@@ -237,7 +237,7 @@ export function LogsPage() {
             <select
               value={category}
               onChange={e => setCategory(e.target.value)}
-              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-primary-500 focus:border-primary-500"
+              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-stone-400 focus:border-stone-400"
             >
               <option value="">All Categories</option>
               {CATEGORIES.map(c => (
@@ -252,7 +252,7 @@ export function LogsPage() {
             <select
               value={timeRange.label}
               onChange={e => setTimeRange(TIME_RANGES.find(t => t.label === e.target.value) ?? TIME_RANGES[0])}
-              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-primary-500 focus:border-primary-500"
+              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-stone-400 focus:border-stone-400"
             >
               {TIME_RANGES.map(t => (
                 <option key={t.label} value={t.label}>{t.label}</option>
@@ -270,7 +270,8 @@ export function LogsPage() {
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value)}
                 placeholder="Search messages..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-gray-200 text-sm bg-white focus:ring-primary-500 focus:border-primary-500"
+                style={{ paddingLeft: '2.25rem' }}
+                className="w-full pr-3 py-1.5 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 focus:border-stone-400"
               />
             </div>
           </div>
@@ -281,7 +282,7 @@ export function LogsPage() {
             <select
               value={pageSize}
               onChange={e => setPageSize(Number(e.target.value))}
-              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-primary-500 focus:border-primary-500"
+              className="rounded-lg border-gray-200 text-sm py-1.5 px-3 bg-white focus:ring-stone-400 focus:border-stone-400"
             >
               {PAGE_SIZES.map(s => (
                 <option key={s} value={s}>{s}</option>
@@ -320,7 +321,7 @@ export function LogsPage() {
       {/* Log Table */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+          <Loader2 className="w-6 h-6 animate-spin text-stone-600" />
         </div>
       ) : error ? (
         <div className="bg-white border border-red-200 rounded-lg p-8 text-center">
@@ -487,7 +488,7 @@ export function LogsPage() {
                   className={clsx(
                     'px-3 py-1.5 text-sm border rounded-lg transition-colors',
                     p === page
-                      ? 'bg-primary-500 text-white border-primary-500'
+                      ? 'bg-stone-900 text-white border-stone-900'
                       : 'bg-white border-gray-200 hover:bg-gray-50',
                   )}
                 >
