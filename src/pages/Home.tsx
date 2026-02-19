@@ -120,6 +120,20 @@ export function HomePage() {
   const inProgressJobs = jobsArray.filter(j => j.status === 'generating' || j.status === 'pending').length
   const scheduledCount = postsArray.filter(p => p.status === 'scheduled').length
 
+  // Week-over-week changes for operational metrics
+  const _7dAgo = useMemo(() => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), [])
+  const _14dAgo = useMemo(() => new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), [])
+  const _7dAhead = useMemo(() => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), [])
+  const _now = useMemo(() => new Date(), [])
+
+  const completedThisWeek = jobsArray.filter(j => j.status === 'completed' && new Date(j.created_at) >= _7dAgo).length
+  const completedLastWeek = jobsArray.filter(j => j.status === 'completed' && new Date(j.created_at) >= _14dAgo && new Date(j.created_at) < _7dAgo).length
+  const jobsReadyChange = calcChange(completedThisWeek, completedLastWeek)
+
+  const scheduledUpcoming = postsArray.filter(p => { const t = new Date(p.scheduled_time); return t >= _now && t <= _7dAhead }).length
+  const publishedPastWeek = postsArray.filter(p => { const t = new Date(p.scheduled_time); return t >= _7dAgo && t < _now }).length
+  const scheduledChange = calcChange(scheduledUpcoming, publishedPastWeek)
+
   // Today's schedule
   const today = new Date().toDateString()
   const todayPosts = postsArray
@@ -267,9 +281,10 @@ export function HomePage() {
         <StatsCard
           label="Jobs Ready"
           value={String(readyJobs)}
+          change={jobsReadyChange}
           sub={inProgressJobs > 0 ? `${inProgressJobs} in progress` : undefined}
         />
-        <StatsCard label="Scheduled" value={String(scheduledCount)} />
+        <StatsCard label="Scheduled" value={String(scheduledCount)} change={scheduledChange} />
       </div>
 
       {/* Today's Schedule Coverage */}
