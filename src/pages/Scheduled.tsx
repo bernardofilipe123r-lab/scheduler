@@ -38,7 +38,7 @@ import {
 } from 'date-fns'
 import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, useDynamicBrands } from '@/features/brands'
-import { PageLoader, Modal } from '@/shared/components'
+import { ScheduledSkeleton, Modal } from '@/shared/components'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -383,23 +383,27 @@ export function ScheduledPage() {
     filteredPosts.forEach(post => {
       byBrand[post.brand] = (byBrand[post.brand] || 0) + 1
     })
+
+    const postCount = filteredPosts.filter((post) => post.metadata?.variant === 'post').length
+    const reelCount = filteredPosts.length - postCount
+
     return {
       total: filteredPosts.length,
       byBrand,
+      reels: reelCount,
+      posts: postCount,
     }
   }, [posts, statsFilter, contentTypeFilter])
   
-  if (isLoading) {
-    return <PageLoader page="calendar" />
-  }
+  if (isLoading) return <ScheduledSkeleton />
   
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Scheduled</h1>
-          <p className="text-gray-500">{stats.total} posts scheduled</p>
+          <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+          <p className="text-gray-500">{stats.reels} reels and {stats.posts} posts scheduled</p>
         </div>
         
         <div className="flex items-center gap-3">

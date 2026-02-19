@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
 import { apiClient } from '@/shared/api/client'
-import { PageLoader } from '@/shared/components'
+import { ConnectionsSkeleton } from '@/shared/components'
 import { ConnectionSummaryBar } from './ConnectionSummaryBar'
 import { ConnectionCard } from './ConnectionCard'
 
@@ -32,9 +32,7 @@ export function ConnectionsTab() {
     if (data?.brands?.length) fetchBrandLogos()
   }, [data?.brands])
 
-  if (isLoading) {
-    return <PageLoader page="connections" />
-  }
+  if (isLoading) return <ConnectionsSkeleton />
 
   if (!data) {
     return (

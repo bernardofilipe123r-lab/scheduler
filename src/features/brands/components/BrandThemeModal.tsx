@@ -6,6 +6,7 @@ import {
   type BrandInfo,
   BRAND_THEMES,
 } from '@/features/brands/constants'
+import { BrandThemeSkeleton } from '@/shared/components'
 
 export interface BrandThemeModalProps {
   brand: BrandInfo
@@ -194,13 +195,7 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-      </div>
-    )
-  }
+  if (loading) return <BrandThemeSkeleton />
 
   /* Content start Y = barStartY + N bars × barHeight + titleContentGap */
   const contentStartY =

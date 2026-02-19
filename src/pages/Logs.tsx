@@ -6,13 +6,13 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
-  Loader2,
   ScrollText,
   Clock,
   ArrowUpDown,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
+import { Spinner } from '@/shared/components'
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -312,8 +312,8 @@ export function LogsPage() {
         )}
         {isFetching && (
           <div className="flex items-center gap-2 text-gray-400">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span className="text-xs">Loading…</span>
+            <Spinner size={14} className="text-gray-400" />
+            <span className="text-xs">Refreshing…</span>
           </div>
         )}
       </div>
@@ -321,7 +321,7 @@ export function LogsPage() {
       {/* Log Table */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-stone-600" />
+          <Spinner size={32} className="text-gray-500" />
         </div>
       ) : error ? (
         <div className="bg-white border border-red-200 rounded-lg p-8 text-center">

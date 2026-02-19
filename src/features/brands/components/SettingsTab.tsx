@@ -22,6 +22,7 @@ import {
 } from '@/features/settings/api/use-settings'
 import { useUpdateBrandCredentials } from '@/features/brands/api/use-brands'
 import { apiClient } from '@/shared/api/client'
+import { SettingsSkeleton, SettingsBrandIdsSkeleton } from '@/shared/components'
 
 // Category icons
 const CATEGORY_ICONS: Record<string, typeof SettingsIcon> = {
@@ -212,13 +213,7 @@ export function SettingsTab() {
     return editedCreds[brandId][field] !== original
   }
   
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      </div>
-    )
-  }
+  if (isLoading) return <SettingsSkeleton />
   
   if (error) {
     return (
@@ -293,9 +288,7 @@ export function SettingsTab() {
         </div>
         
         {brandsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
-          </div>
+          <SettingsBrandIdsSkeleton />
         ) : brandsError ? (
           <div className="px-6 py-8 text-center">
             <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />

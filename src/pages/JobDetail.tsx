@@ -34,7 +34,7 @@ import {
 } from '@/features/jobs'
 import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
-import { StatusBadge, PageLoader, Modal } from '@/shared/components'
+import { StatusBadge, JobDetailSkeleton, Modal } from '@/shared/components'
 import { createFacebookCaption } from '@/shared/lib/captionUtils'
 import { PostJobDetail } from './PostJobDetail'
 import type { BrandName, BrandOutput } from '@/shared/types'
@@ -393,9 +393,7 @@ export function JobDetailPage() {
     toast.success(`${label} copied!`)
   }
   
-  if (isLoading) {
-    return <PageLoader page="jobs" />
-  }
+  if (isLoading) return <JobDetailSkeleton />
   
   if (error || !job) {
     return (

@@ -8,6 +8,7 @@ import { ContentExamplesSection } from './ContentExamplesSection'
 import type { NicheConfig } from '../types/niche-config'
 import { PostCanvas, DEFAULT_GENERAL_SETTINGS, getBrandConfig } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
+import { NicheConfigSkeleton } from '@/shared/components'
 
 const CONTENT_BRIEF_PLACEHOLDER = `Viral short-form health content for women 35+ on Instagram and TikTok.
 
@@ -190,13 +191,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId, handleAiUnderstanding])
 
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-center h-40">
-        <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
-      </div>
-    )
-  }
+  if (isLoading) return <NicheConfigSkeleton />
 
   return (
     <div className="space-y-4">

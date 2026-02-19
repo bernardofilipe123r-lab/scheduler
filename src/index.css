@@ -2,6 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: -600px 0 }
+  100% { background-position: 600px 0 }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e9eaec 50%, #f3f4f6 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── SVG spinner stroke-dash animation ── */
+@keyframes spinner-rotate {
+  100% { transform: rotate(360deg); }
+}
+@keyframes spinner-dash {
+  0%   { stroke-dasharray: 1 150; stroke-dashoffset: 0; }
+  50%  { stroke-dasharray: 90 150; stroke-dashoffset: -35; }
+  100% { stroke-dasharray: 90 150; stroke-dashoffset: -124; }
+}
+.svg-spinner { animation: spinner-rotate 1.4s linear infinite; }
+.svg-spinner-circle { animation: spinner-dash 1.4s ease-in-out infinite; }
+
 /* Prevent layout shift from scrollbar appearing/disappearing */
 html {
   overflow-y: scroll;

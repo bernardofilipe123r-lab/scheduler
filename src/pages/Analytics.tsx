@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   BarChart3,
   Users,
@@ -11,12 +11,10 @@ import {
   Filter,
   TrendingUp,
   ChevronDown,
-  Loader2,
   History,
   Instagram,
   Facebook,
   Youtube,
-  X,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -40,7 +38,7 @@ import {
   type PlatformMetrics,
   type AnalyticsSnapshot,
 } from '@/features/analytics'
-import { PageLoader } from '@/shared/components'
+import { AnalyticsSkeleton } from '@/shared/components'
 import { useDynamicBrands } from '@/features/brands'
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -231,52 +229,6 @@ function BrandCard({ brand }: { brand: BrandMetrics }) {
   )
 }
 
-// ─── Refresh overlay ────────────────────────────────────────────────
-
-// ~12s per brand × 3 platforms; 5 brands = ~60s typical
-const ESTIMATED_TOTAL_SECONDS = 60
-
-function RefreshOverlay({
-  elapsedSeconds,
-  onCancel,
-}: {
-  elapsedSeconds: number
-  onCancel: () => void
-}) {
-  const remaining = Math.max(0, ESTIMATED_TOTAL_SECONDS - elapsedSeconds)
-  const remainingMins = Math.floor(remaining / 60)
-  const remainingSecs = remaining % 60
-
-  const estimateLabel =
-    remaining === 0
-      ? 'Almost done…'
-      : remainingMins > 0
-        ? `~${remainingMins}m ${remainingSecs}s remaining`
-        : `~${remainingSecs}s remaining`
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
-      <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl relative">
-        <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">Refreshing Analytics</h3>
-        <p className="text-sm text-gray-500 mb-3">
-          Fetching data from Instagram, Facebook &amp; YouTube…
-        </p>
-        <p className="text-xs text-gray-400 font-mono mb-4">
-          {estimateLabel}
-        </p>
-        <button
-          onClick={onCancel}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-        >
-          <X className="w-4 h-4" />
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ─── Data helpers ───────────────────────────────────────────────────
 
 /**
@@ -391,6 +343,25 @@ export function AnalyticsPage() {
   const [backfillSuccess, setBackfillSuccess] = useState<string | null>(null)
   const { brands: dynamicBrands } = useDynamicBrands()
 
+  // 3-hour cooldown tracked in localStorage
+  const COOLDOWN_MS = 3 * 60 * 60 * 1000
+  const LS_KEY = 'analytics_last_refresh'
+  const getLastRefresh = () => Number(localStorage.getItem(LS_KEY) || 0)
+  const [cooldownMs, setCooldownMs] = useState(() => {
+    const remaining = COOLDOWN_MS - (Date.now() - getLastRefresh())
+    return remaining > 0 ? remaining : 0
+  })
+
+  // Tick cooldown every second
+  useEffect(() => {
+    if (cooldownMs <= 0) return
+    const id = setInterval(() => {
+      const remaining = COOLDOWN_MS - (Date.now() - getLastRefresh())
+      setCooldownMs(remaining > 0 ? remaining : 0)
+    }, 1000)
+    return () => clearInterval(id)
+  }, [cooldownMs > 0])
+
   // Build brand color/label maps dynamically from API data + dynamic brands
   const BRAND_COLORS = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {}
@@ -407,20 +378,6 @@ export function AnalyticsPage() {
     return map
   }, [dynamicBrands, data?.brands])
 
-  // Elapsed timer for refresh overlay
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  useEffect(() => {
-    if (refreshMutation.isPending) {
-      setElapsedSeconds(0)
-      timerRef.current = setInterval(() => setElapsedSeconds((p) => p + 1), 1000)
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [refreshMutation.isPending])
-
   // Filters
   const [selectedBrand, setSelectedBrand] = useState<string>('all')
   const [timeRange, setTimeRange] = useState<number>(30)
@@ -430,8 +387,11 @@ export function AnalyticsPage() {
 
   const handleRefresh = async () => {
     setRefreshError(null)
-    try { await refreshMutation.mutateAsync() }
-    catch (err: unknown) {
+    try {
+      await refreshMutation.mutateAsync()
+      localStorage.setItem(LS_KEY, String(Date.now()))
+      setCooldownMs(COOLDOWN_MS)
+    } catch (err: unknown) {
       if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 429)
         setRefreshError('Rate limit exceeded. Please wait before refreshing again.')
       else
@@ -501,7 +461,7 @@ export function AnalyticsPage() {
 
   // ── Render ──
 
-  if (isLoading) return <PageLoader page="analytics" />
+  if (isLoading) return <AnalyticsSkeleton />
 
   if (error) {
     return (
@@ -531,22 +491,7 @@ export function AnalyticsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {refreshMutation.isPending && (
-        <RefreshOverlay
-          elapsedSeconds={elapsedSeconds}
-          onCancel={() => {
-            // AbortController not available on mutateAsync; hide overlay
-            // The request finishes in the background but user is unblocked
-            refreshMutation.reset()
-          }}
-        />
-      )}
-
-      <div
-        className={`max-w-7xl mx-auto px-6 py-8 transition-all duration-300 ${
-          refreshMutation.isPending ? 'opacity-50 blur-sm pointer-events-none' : ''
-        }`}
-      >
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* ── Header ── */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -567,11 +512,16 @@ export function AnalyticsPage() {
             )}
             <button
               onClick={handleRefresh}
-              disabled={refreshMutation.isPending}
+              disabled={refreshMutation.isPending || cooldownMs > 0}
               className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+              title={cooldownMs > 0 ? `Available in ${Math.ceil(cooldownMs / 60000)}m` : undefined}
             >
               <RefreshCw className={`w-4 h-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-              Refresh
+              {refreshMutation.isPending
+                ? 'Refreshing…'
+                : cooldownMs > 0
+                  ? `${Math.ceil(cooldownMs / 60000)}m cooldown`
+                  : 'Refresh'}
             </button>
             <button
               onClick={handleBackfill}

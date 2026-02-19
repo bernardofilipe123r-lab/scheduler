@@ -3,7 +3,7 @@ import { Plus, ArrowRight } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
 import { useBrands } from '@/features/brands/api/use-brands'
 import { apiClient } from '@/shared/api/client'
-import { PageLoader, Modal } from '@/shared/components'
+import { BrandsSkeleton, Modal } from '@/shared/components'
 import { BrandSettingsModal } from './BrandSettingsModal'
 import { BrandThemeModal } from './BrandThemeModal'
 import { CreateBrandModal } from './CreateBrandModal'
@@ -99,9 +99,7 @@ export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTab
     return connections.find((b) => b.brand === brandId)
   }
 
-  if (brandsLoading || connectionsLoading) {
-    return <PageLoader page="brands" />
-  }
+  if (brandsLoading || connectionsLoading) return <BrandsSkeleton />
 
   return (
     <>

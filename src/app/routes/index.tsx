@@ -14,18 +14,12 @@ import { PostsPage } from '@/pages/Posts'
 import { AnalyticsPage } from '@/pages/Analytics'
 import { AboutPage } from '@/pages/About'
 import { LogsPage } from '@/pages/Logs'
-import { Loader2 } from 'lucide-react'
+import { AppLoader } from '@/shared/components'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
   
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      </div>
-    )
-  }
+  if (isLoading) return <AppLoader />
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -37,13 +31,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 function LoginGuard() {
   const { isAuthenticated, isLoading } = useAuth()
   
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      </div>
-    )
-  }
+  if (isLoading) return <AppLoader />
   
   if (isAuthenticated) {
     return <Navigate to="/" replace />
@@ -55,13 +43,7 @@ function LoginGuard() {
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      </div>
-    )
-  }
+  if (isLoading) return <AppLoader />
 
   if (!user?.isAdmin) {
     return <Navigate to="/" replace />

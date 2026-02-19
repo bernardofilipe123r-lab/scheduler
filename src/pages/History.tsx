@@ -20,7 +20,7 @@ import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus, useDeleteJobsByIds } from '@/features/jobs'
 import { BrandBadge } from '@/features/brands'
-import { StatusBadge, PageLoader, Modal } from '@/shared/components'
+import { StatusBadge, JobsSkeleton, Modal } from '@/shared/components'
 import type { Job, Variant, BrandName } from '@/shared/types'
 
 type ViewFilter = 'all' | 'to-schedule' | 'published' | 'scheduled' | 'in-progress' | 'other'
@@ -215,9 +215,7 @@ export function HistoryPage() {
     }
   }
   
-  if (isLoading) {
-    return <PageLoader page="jobs" />
-  }
+  if (isLoading) return <JobsSkeleton />
   
   if (error) {
     return (
