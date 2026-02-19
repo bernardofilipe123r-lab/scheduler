@@ -144,10 +144,16 @@ export function GeneratorPage() {
     setShowAutoModal(false)
     setIsAutoGenerating(true)
 
+    let jobId: string | null = null
+    const goToJob = (dismissId: string) => {
+      toast.dismiss(dismissId)
+      navigate(jobId ? `/job/${jobId}` : '/jobs')
+    }
+
     toast.loading(
       (t) => (
-        <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-          AI is generating viral content... <u>View Jobs →</u>
+        <span className="cursor-pointer" onClick={() => goToJob(t.id)}>
+          AI is generating viral content... <u>View Job →</u>
         </span>
       ),
       { id: 'auto-gen' },
@@ -168,8 +174,8 @@ export function GeneratorPage() {
 
       toast.loading(
         (t) => (
-          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-            Creating reel for {autoBrands.length} brand{autoBrands.length > 1 ? 's' : ''}... <u>View Jobs →</u>
+          <span className="cursor-pointer" onClick={() => goToJob(t.id)}>
+            Creating reel for {autoBrands.length} brand{autoBrands.length > 1 ? 's' : ''}... <u>View Job →</u>
           </span>
         ),
         { id: 'auto-gen' },
@@ -187,6 +193,7 @@ export function GeneratorPage() {
         image_model: imageModel,
       })
 
+      jobId = job.id
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
 
       toast.success(
