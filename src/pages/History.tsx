@@ -583,6 +583,10 @@ export function HistoryPage() {
           </div>
         )
         
+        const showReels = (contentTypeFilter === 'all' || contentTypeFilter === 'reels') && reelJobs.length > 0
+        const showPosts = (contentTypeFilter === 'all' || contentTypeFilter === 'posts') && postJobs.length > 0
+        const sideBySide = showReels && showPosts
+        
         return (
           <div className="space-y-6">
             {/* Hidden count banner */}
@@ -598,14 +602,11 @@ export function HistoryPage() {
               </div>
             )}
             
-            {/* Show sections based on content type filter */}
-            {(contentTypeFilter === 'all' || contentTypeFilter === 'reels') && reelJobs.length > 0 && (
-              renderSection('Reels', '🎬', reelJobs)
-            )}
-            
-            {(contentTypeFilter === 'all' || contentTypeFilter === 'posts') && postJobs.length > 0 && (
-              renderSection('Posts', '📄', postJobs)
-            )}
+            {/* Show sections — side by side when both visible, full width when filtered */}
+            <div className={clsx(sideBySide ? 'grid grid-cols-2 gap-6 items-start' : '')}>
+              {showReels && renderSection('Reels', '🎬', reelJobs)}
+              {showPosts && renderSection('Posts', '📄', postJobs)}
+            </div>
             
             {visibleJobs.length === 0 && hiddenJobIds.size > 0 && (
               <div className="card p-12 text-center">
