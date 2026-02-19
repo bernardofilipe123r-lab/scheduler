@@ -300,7 +300,7 @@ export function HomePage() {
         </div>
 
         {/* Publishing Today */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col max-h-[480px]">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 shrink-0">
             <h2 className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Publishing Today
