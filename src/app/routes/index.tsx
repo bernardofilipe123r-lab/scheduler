@@ -15,6 +15,7 @@ import { AnalyticsPage } from '@/pages/Analytics'
 import { AboutPage } from '@/pages/About'
 import { LogsPage } from '@/pages/Logs'
 import { AdminPage } from '@/pages/Admin'
+import { CreateBrandPage } from '@/pages/CreateBrand'
 import { AppLoader } from '@/shared/components'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -80,6 +81,7 @@ export function AppRoutes() {
         <Route path="scheduled" element={<Navigate to="/calendar" replace />} />
         <Route path="connected" element={<Navigate to="/brands?tab=connections" replace />} />
         <Route path="brands" element={<BrandsPage />} />
+        <Route path="brands/new" element={<CreateBrandPage />} />
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings" element={<Navigate to="/brands?tab=settings" replace />} />

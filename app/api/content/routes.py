@@ -15,7 +15,7 @@ from app.services.media.ai_background import AIBackgroundGenerator
 class CaptionRequest(BaseModel):
     title: str
     content_lines: List[str]
-    cta_type: str = "sleep_lean"
+    cta_type: Optional[str] = None
     brands: Optional[List[str]] = None  # If None, generate for all brands
 
 

@@ -389,8 +389,8 @@ class YouTubePublisher:
             "snippet": {
                 "title": title[:100],  # Max 100 chars
                 "description": description[:5000],  # Max 5000 chars
-                "tags": tags or ["shorts", "health", "wellness"],
-                "categoryId": "22"  # People & Blogs (good for health content)
+                "tags": tags or ["shorts"],
+                "categoryId": "22"  # People & Blogs
             },
             "status": {
                 "privacyStatus": "private" if publish_at else "public",

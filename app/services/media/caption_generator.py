@@ -149,7 +149,7 @@ Just write the paragraph text, nothing else."""
         brand_name: str,
         title: str,
         content_lines: List[str],
-        cta_type: str = "sleep_lean",
+        cta_type: str = None,
         ctx: PromptContext = None
     ) -> str:
         """
@@ -187,7 +187,7 @@ Just write the paragraph text, nothing else."""
             save_section = f"""🩵 Save this post and share it with someone who needs to see this."""
         
         # Get CTA — if cta_type is explicit text use it; otherwise weighted random from ctx
-        if cta_type and cta_type not in ('follow_tips', 'sleep_lean', 'workout_plan'):
+        if cta_type and cta_type not in ('follow_tips', 'sleep_lean', 'workout_plan', None):
             cta_text = cta_type
         else:
             from app.core.cta import get_cta_line
@@ -219,7 +219,7 @@ Just write the paragraph text, nothing else."""
         self,
         title: str,
         content_lines: List[str],
-        cta_type: str = "sleep_lean",
+        cta_type: str = None,
         ctx: PromptContext = None
     ) -> Dict[str, str]:
         """

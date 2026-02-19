@@ -28,7 +28,7 @@ class SimpleReelRequest(BaseModel):
     brand: str
     variant: str = "light"
     ai_prompt: Optional[str] = None  # Optional custom AI prompt for dark mode
-    cta_type: Optional[str] = "sleep_lean"  # CTA option for caption
+    cta_type: Optional[str] = None  # CTA option for caption (None = use brand config)
 
 
 class DownloadRequest(BaseModel):

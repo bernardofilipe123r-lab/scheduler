@@ -73,3 +73,25 @@ export async function connectYouTube(brand: BrandName): Promise<string> {
 export async function disconnectYouTube(brand: BrandName): Promise<{ success: boolean; message: string }> {
   return post<{ success: boolean; message: string }>(`/api/youtube/disconnect/${brand}`)
 }
+
+// Connection test types
+export interface ConnectionTestResult {
+  platform: string
+  status: 'success' | 'error'
+  message: string
+  details?: Record<string, unknown>
+}
+
+/**
+ * Test Meta (Instagram + Facebook) connection for a brand
+ */
+export async function testMetaConnection(brandId: string): Promise<ConnectionTestResult> {
+  return post<ConnectionTestResult>(`/api/v2/brands/${brandId}/test-connection/meta`)
+}
+
+/**
+ * Test YouTube connection for a brand
+ */
+export async function testYouTubeConnection(brandId: string): Promise<ConnectionTestResult> {
+  return post<ConnectionTestResult>(`/api/v2/brands/${brandId}/test-connection/youtube`)
+}

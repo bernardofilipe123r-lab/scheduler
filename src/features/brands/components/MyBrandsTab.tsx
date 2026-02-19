@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, ArrowRight } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
 import { useBrands } from '@/features/brands/api/use-brands'
@@ -6,17 +7,16 @@ import { apiClient } from '@/shared/api/client'
 import { BrandsSkeleton, Modal } from '@/shared/components'
 import { BrandSettingsModal } from './BrandSettingsModal'
 import { BrandThemeModal } from './BrandThemeModal'
-import { CreateBrandModal } from './CreateBrandModal'
 import { DeleteBrandDialog } from './DeleteBrandDialog'
 import { BrandCard } from './BrandCard'
 import { type BrandInfo } from '@/features/brands/constants'
 
 interface MyBrandsTabProps {
-  showCreateModal: boolean
-  setShowCreateModal: (open: boolean) => void
+  // No props needed — create navigates to /brands/new
 }
 
-export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTabProps) {
+export function MyBrandsTab(_props: MyBrandsTabProps) {
+  const navigate = useNavigate()
   const { data: v2Brands, isLoading: brandsLoading } = useBrands()
   const { data: connectionsData, isLoading: connectionsLoading } = useBrandConnections()
 
@@ -120,7 +120,7 @@ export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTab
 
         {/* Add new brand card */}
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => navigate('/brands/new')}
           className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-6 flex items-center justify-center gap-3 hover:border-primary-400 hover:bg-primary-50/50 transition-colors"
         >
           <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
@@ -164,19 +164,6 @@ export function MyBrandsTab({ showCreateModal, setShowCreateModal }: MyBrandsTab
             onSave={() => refreshBrandLogo(selectedBrandForTheme.id)}
           />
         )}
-      </Modal>
-
-      {/* Create brand modal */}
-      <Modal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        title="Create New Brand"
-        size="2xl"
-      >
-        <CreateBrandModal
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => setShowCreateModal(false)}
-        />
       </Modal>
 
       {/* Delete confirmation */}

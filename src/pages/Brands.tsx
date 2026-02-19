@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layers, Plus } from 'lucide-react'
 import { BrandsTabBar, type BrandsTab } from '@/features/brands/components/BrandsTabBar'
 import { MyBrandsTab } from '@/features/brands/components/MyBrandsTab'
@@ -10,7 +10,7 @@ import { SettingsTab } from '@/features/brands/components/SettingsTab'
 export function BrandsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = (searchParams.get('tab') || 'brands') as BrandsTab
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const navigate = useNavigate()
 
   const handleTabChange = useCallback(
     (tab: BrandsTab) => {
@@ -39,7 +39,7 @@ export function BrandsPage() {
 
         {activeTab === 'brands' && (
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/brands/new')}
             className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -52,9 +52,7 @@ export function BrandsPage() {
       <BrandsTabBar activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* Tab content */}
-      {activeTab === 'brands' && (
-        <MyBrandsTab showCreateModal={showCreateModal} setShowCreateModal={setShowCreateModal} />
-      )}
+      {activeTab === 'brands' && <MyBrandsTab />}
       {activeTab === 'prompts' && <NicheConfigForm />}
       {activeTab === 'connections' && <ConnectionsTab />}
       {activeTab === 'settings' && <SettingsTab />}

@@ -49,7 +49,7 @@ def create_facebook_caption(full_caption: str, max_length: int = 400) -> str:
     intro_text = '\n'.join(clean_lines).strip()
     
     # Simple FB CTA
-    fb_cta = "\n\n💡 Follow for daily health insights!"
+    fb_cta = "\n\n💡 Follow for more content like this!"
     
     # Calculate available space for intro
     available_space = max_length - len(fb_cta)

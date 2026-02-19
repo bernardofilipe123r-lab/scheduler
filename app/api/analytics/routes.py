@@ -235,14 +235,15 @@ async def get_brand_analytics(brand: str, db: Session = Depends(get_db), user: d
     Args:
         brand: Brand name (e.g., 'healthycollege')
     """
-    if brand not in BRAND_DISPLAY_INFO:
+    brand_display_info = _get_brand_display_info()
+    if brand not in brand_display_info:
         raise HTTPException(status_code=404, detail=f"Brand '{brand}' not found")
     
     service = AnalyticsService(db)
     user_id = user.get("id")
     result = service.get_analytics_by_brand(brand, user_id=user_id)
     
-    brand_info = BRAND_DISPLAY_INFO[brand]
+    brand_info = brand_display_info[brand]
     
     return {
         "brand": brand,
@@ -289,7 +290,7 @@ async def get_snapshots(
     Returns:
         List of snapshots ordered by time, plus available brands and platforms
     """
-    if brand and brand not in BRAND_DISPLAY_INFO:
+    if brand and brand not in _get_brand_display_info():
         raise HTTPException(status_code=404, detail=f"Brand '{brand}' not found")
     
     if platform and platform not in ["instagram", "facebook", "youtube"]:

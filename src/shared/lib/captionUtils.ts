@@ -47,7 +47,7 @@ export function createFacebookCaption(fullCaption: string, maxLength: number = 4
   let introText = cleanLines.join('\n').trim()
 
   // Simple FB CTA
-  const fbCta = '\n\n💡 Follow for daily health insights!'
+  const fbCta = '\n\n💡 Follow for more content like this!'
 
   // Calculate available space for intro
   const availableSpace = maxLength - fbCta.length

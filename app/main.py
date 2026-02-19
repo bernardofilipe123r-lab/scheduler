@@ -16,6 +16,7 @@ from app.api.routes import router as reels_router
 from app.api.content.jobs_routes import router as jobs_router
 from app.api.youtube.routes import router as youtube_router
 from app.api.brands.routes import router as brands_router
+from app.api.brands.connection_test_routes import router as connection_test_router
 from app.api.system.settings_routes import router as settings_router
 from app.api.analytics.routes import router as analytics_router
 from app.api.system.logs_routes import router as logs_router
@@ -87,6 +88,7 @@ app.include_router(youtube_router, prefix="/api")
 app.include_router(niche_config_router, prefix="/api/v2/brands")  # Niche config (Content DNA) — MUST be before brands_router to avoid /{brand_id} shadowing
 app.include_router(brands_router, prefix="/api")  # Backward-compatible mount
 app.include_router(brands_router, prefix="/api/v2")  # V2 mount
+app.include_router(connection_test_router, prefix="/api/v2")  # Connection test endpoints
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs

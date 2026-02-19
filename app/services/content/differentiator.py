@@ -155,7 +155,7 @@ class ContentDifferentiator:
             for brand in brands
         ])
         
-        niche_label = ctx.niche_name.lower() if ctx.niche_name else "health"
+        niche_label = ctx.niche_name.lower() if ctx.niche_name else "content"
         
         prompt = f"""You are creating {num_brands} UNIQUE variations of {niche_label} content for different brands.
 
