@@ -9,33 +9,17 @@
 
   <rect width="1200" height="630" rx="40" fill="url(#hero-bg)"/>
 
-  <!-- Subtle noise texture lines -->
-  <g opacity="0.06" stroke="white" stroke-width="1">
+  <g opacity="0.05" stroke="white" stroke-width="1">
     <path d="M0 210C200 180 400 230 600 200C800 170 1000 210 1200 190"/>
     <path d="M0 310C200 290 400 340 600 310C800 280 1000 320 1200 300"/>
     <path d="M0 410C200 385 400 440 600 415C800 385 1000 425 1200 400"/>
     <path d="M0 510C200 490 400 540 600 515C800 490 1000 525 1200 505"/>
   </g>
 
-  <!-- Logo mark -->
-  <rect x="90" y="210" width="130" height="130" rx="28" fill="#F5EDD8"/>
-  <path d="M118 246L139 308H152L131 246H118Z" fill="#1A1A1A"/>
-  <path d="M162 308H175L196 246H183L172 279.5L161 246H148L162 308Z" fill="#1A1A1A"/>
+  <rect x="90" y="220" width="110" height="110" rx="24" fill="#F5EDD8"/>
+  <path d="M115 249L132 303H143L126 249H115Z" fill="#1A1A1A"/>
+  <path d="M151 303H162L179 249H168L159 276L150 249H139L151 303Z" fill="#1A1A1A"/>
 
-  <!-- App name -->
-  <text x="250" y="270" fill="#F5F5F4" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="800" letter-spacing="-1">Viral App</text>
-  <text x="250" y="318" fill="#A8A29E" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="400">Content operations platform</text>
-
-  <!-- Stats row -->
-  <rect x="90" y="420" width="220" height="80" rx="14" fill="white" fill-opacity="0.05" stroke="white" stroke-opacity="0.1" stroke-width="1"/>
-  <text x="200" y="453" fill="#F5EDD8" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle">5 Brands</text>
-  <text x="200" y="480" fill="#78716C" font-family="Inter, Arial, sans-serif" font-size="16" text-anchor="middle">Managed</text>
-
-  <rect x="330" y="420" width="220" height="80" rx="14" fill="white" fill-opacity="0.05" stroke="white" stroke-opacity="0.1" stroke-width="1"/>
-  <text x="440" y="453" fill="#F5EDD8" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle">3 Platforms</text>
-  <text x="440" y="480" fill="#78716C" font-family="Inter, Arial, sans-serif" font-size="16" text-anchor="middle">Connected</text>
-
-  <rect x="570" y="420" width="220" height="80" rx="14" fill="white" fill-opacity="0.05" stroke="white" stroke-opacity="0.1" stroke-width="1"/>
-  <text x="680" y="453" fill="#F5EDD8" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle">Daily</text>
-  <text x="680" y="480" fill="#78716C" font-family="Inter, Arial, sans-serif" font-size="16" text-anchor="middle">Operations</text>
+  <text x="90" y="378" fill="#F5F5F4" font-family="Inter, Arial, sans-serif" font-size="60" font-weight="800" letter-spacing="-1">Viral App</text>
+  <text x="90" y="418" fill="#78716C" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="400">Content operations platform</text>
 </svg>

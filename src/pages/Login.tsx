@@ -6,7 +6,6 @@ import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/features/auth'
 import vaLogo from '@/assets/icons/va-logo.svg'
-import vaHero from '@/assets/image/viral-app-va.svg'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -39,12 +38,17 @@ export function LoginPage() {
               <img src={vaLogo} alt="Viral App logo" className="w-10 h-10" />
               <span className="text-lg font-bold tracking-tight text-stone-100">Viral App</span>
             </div>
-            <h2 className="mt-8 text-3xl font-bold leading-tight text-stone-50">Manage your content operations in one place.</h2>
-            <p className="mt-3 text-sm text-stone-400 leading-relaxed">
+            <h2 className="mt-10 text-3xl font-bold leading-tight text-stone-50">Manage your content operations in one place.</h2>
+            <p className="mt-4 text-sm text-stone-400 leading-relaxed">
               Create, schedule, and publish across brands with a focused dashboard built for daily execution.
             </p>
           </div>
-          <img src={vaHero} alt="Viral App brand image" className="w-full rounded-xl border border-white/10" />
+          <div className="space-y-3 text-sm text-stone-500">
+            <p className="uppercase tracking-widest text-xs text-stone-600 font-medium">Platform capabilities</p>
+            <p className="text-stone-400">Multi-brand content generation & scheduling</p>
+            <p className="text-stone-400">Instagram, Facebook & YouTube publishing</p>
+            <p className="text-stone-400">Analytics, job tracking & system logs</p>
+          </div>
         </aside>
 
         <section className="bg-white p-7 sm:p-10 lg:p-12">
