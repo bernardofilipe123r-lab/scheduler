@@ -15,12 +15,36 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
-      '/reels': 'http://localhost:8000',
-      '/health': 'http://localhost:8000',
-      '/logs': 'http://localhost:8000',
-      '/output': 'http://localhost:8000',
-      '/docs': 'http://localhost:8000',
+      '/api': {
+        target: 'https://scheduler-production-29d5.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/reels': {
+        target: 'https://scheduler-production-29d5.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/health': {
+        target: 'https://scheduler-production-29d5.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/logs': {
+        target: 'https://scheduler-production-29d5.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/output': {
+        target: 'https://scheduler-production-29d5.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/docs': {
+        target: 'https://scheduler-production-29d5.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 })
