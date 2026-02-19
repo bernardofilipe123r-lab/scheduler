@@ -315,9 +315,7 @@ export function HomePage() {
               </span>
               <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
                 <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
-                  <span className="grid grid-cols-2" style={{ gap: 1.5 }}>
-                    {[0,1,2,3].map(i => <span key={i} className="block" style={{ width: 2.5, height: 2.5, backgroundColor: '#9ca3af' }} />)}
-                  </span>
+                  <span className="block rounded-full" style={{ width: 8, height: 2, backgroundColor: '#9ca3af' }} />
                   <span className="text-[8px] font-mono font-bold leading-none text-gray-400">8AM</span>
                 </span>
                 Carousel
@@ -352,11 +350,12 @@ export function HomePage() {
                     <span className="text-xs font-medium text-gray-800 truncate">{getBrandName(brandId)}</span>
                   </div>
 
-                  {/* Reel + Carousel slots combined */}
-                  <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
-                    {reelSlots.map(s => <SlotChip key={`r-${s.hour}`} {...s} kind="reel" />)}
-                    <span className="w-px h-4 bg-gray-200 shrink-0" />
-                    {postSlots.map(s => <SlotChip key={`p-${s.hour}`} {...s} kind="post" />)}
+                  {/* All slots in time order */}
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
+                    {[...reelSlots.map(s => ({ ...s, kind: 'reel' as const })), ...postSlots.map(s => ({ ...s, kind: 'post' as const }))]
+                      .sort((a, b) => a.hour - b.hour)
+                      .map(s => <SlotChip key={`${s.kind}-${s.hour}`} {...s} />)
+                    }
                   </div>
 
                   {/* Status summary */}
@@ -676,12 +675,11 @@ function SlotChip({ hour, filled, isPast, isSoon, kind }: { hour: number; filled
           style={{ width: 6, height: 6, backgroundColor: iconColor }}
         />
       ) : (
-        // 2×2 grid = carousel
-        <span className="grid grid-cols-2 gap-[2px] shrink-0">
-          {[0, 1, 2, 3].map(i => (
-            <span key={i} className="block" style={{ width: 3, height: 3, backgroundColor: iconColor }} />
-          ))}
-        </span>
+        // Carousel = horizontal line
+        <span
+          className="block rounded-full shrink-0"
+          style={{ width: 8, height: 2, backgroundColor: iconColor }}
+        />
       )}
       {/* Time label */}
       <span className={`text-[9px] font-mono font-bold leading-none ${textCls}`}>{label}</span>
