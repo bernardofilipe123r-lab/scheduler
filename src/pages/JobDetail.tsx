@@ -414,6 +414,9 @@ export function JobDetailPage() {
   
   const completedCount = Object.values(job.brand_outputs || {})
     .filter(o => o.status === 'completed').length
+  const scheduledCount = Object.values(job.brand_outputs || {})
+    .filter(o => o.status === 'scheduled').length
+  const scheduleButtonLabel = completedCount === 1 ? 'Schedule Reel' : scheduledCount > 0 ? `Schedule ${completedCount} Remaining` : 'Schedule All'
   
   return (
     <div className="space-y-6">
@@ -557,7 +560,7 @@ export function JobDetailPage() {
                 ) : (
                   <Calendar className="w-4 h-4" />
                 )}
-                {allScheduled ? 'All Scheduled' : completedCount === 1 ? 'Schedule Reel' : 'Schedule All'}
+                {allScheduled ? 'All Scheduled' : scheduleButtonLabel}
               </button>
               
               {!allScheduled && (
@@ -1145,8 +1148,8 @@ export function JobDetailPage() {
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            Choose a date and time to schedule {completedCount === 1 ? 'this brand' : `all ${completedCount} brands`}.
-            Brands will be staggered by 1 hour each.
+            Choose a date and time to schedule {completedCount === 1 ? 'this brand' : scheduledCount > 0 ? `the ${completedCount} remaining brands` : `all ${completedCount} brands`}.
+            {completedCount > 1 && 'Brands will be staggered by 1 hour each.'}
           </p>
           
           <div className="grid grid-cols-2 gap-4">
@@ -1213,7 +1216,7 @@ export function JobDetailPage() {
               ) : (
                 <>
                   <CalendarClock className="w-4 h-4" />
-                  {completedCount === 1 ? 'Schedule Reel' : 'Schedule All'}
+                  {scheduleButtonLabel}
                 </>
               )}
             </button>
