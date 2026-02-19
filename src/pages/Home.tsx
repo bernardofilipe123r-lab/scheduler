@@ -173,8 +173,13 @@ export function HomePage() {
       const missedReels  = reelSlots.filter(s => !s.filled && s.isPast).length
       const missedPosts  = postSlots.filter(s => !s.filled && s.isPast).length
       return { brandId: brand.id, reelSlots, postSlots, openReels, openPosts, missedReels, missedPosts }
+    }).sort((a, b) => {
+      const metrics = analyticsData?.brands || []
+      const fa = metrics.find(m => m.brand === a.brandId)?.totals?.followers ?? 0
+      const fb = metrics.find(m => m.brand === b.brandId)?.totals?.followers ?? 0
+      return fb - fa
     })
-  }, [todayPosts, dynamicBrands])
+  }, [todayPosts, dynamicBrands, analyticsData])
 
   // Recent jobs (last 6)
   const recentJobs = [...jobsArray]
@@ -299,21 +304,31 @@ export function HomePage() {
                 {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-gray-400 flex-wrap">
+            <div className="flex items-center gap-4 text-[10px] text-gray-400 flex-wrap">
+              {/* Type legend */}
+              <span className="flex items-center gap-1 pr-3 border-r border-gray-100">
+                <span className="inline-block w-3.5 h-[3px] rounded-full bg-gray-300" />
+                Reel
+              </span>
+              <span className="flex items-center gap-1 pr-3 border-r border-gray-100">
+                <span className="inline-block w-2 h-2 rounded-full border border-gray-300" />
+                Carousel
+              </span>
+              {/* State legend */}
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded bg-green-100 border border-green-200" />
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
                 Filled
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded bg-amber-50 border border-dashed border-amber-300" />
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
                 Up next
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded bg-rose-50 border border-rose-200" />
+                <span className="inline-block w-2 h-2 rounded-full bg-rose-400" />
                 Missed
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded bg-gray-50 border border-gray-200" />
+                <span className="inline-block w-2 h-2 rounded-full bg-gray-200" />
                 Open
               </span>
             </div>
@@ -329,20 +344,11 @@ export function HomePage() {
                     <span className="text-xs font-medium text-gray-800 truncate">{getBrandName(brandId)}</span>
                   </div>
 
-                  {/* Reel slots */}
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-violet-400 shrink-0 w-7">Reels</span>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {reelSlots.map(s => <SlotChip key={s.hour} {...s} />)}
-                    </div>
-                  </div>
-
-                  {/* Post/carousel slots */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-pink-400 w-8">Posts</span>
-                    <div className="flex items-center gap-1">
-                      {postSlots.map(s => <SlotChip key={s.hour} {...s} />)}
-                    </div>
+                  {/* Reel + Carousel slots combined */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                    {reelSlots.map(s => <SlotChip key={`r-${s.hour}`} {...s} kind="reel" />)}
+                    <span className="w-px h-4 bg-gray-200 shrink-0" />
+                    {postSlots.map(s => <SlotChip key={`p-${s.hour}`} {...s} kind="post" />)}
                   </div>
 
                   {/* Status summary */}
@@ -632,25 +638,49 @@ function StatsCard({ label, value, sub, change }: { label: string; value: string
   )
 }
 
-function SlotChip({ hour, filled, isPast, isSoon }: { hour: number; filled: boolean; isPast: boolean; isSoon: boolean }) {
+function SlotChip({ hour, filled, isPast, isSoon, kind }: { hour: number; filled: boolean; isPast: boolean; isSoon: boolean; kind: 'reel' | 'post' }) {
   const label = fmtSlotHour(hour)
-  let cls: string
+  const stateLabel = filled ? 'Filled' : isPast ? 'Missed' : isSoon ? 'Up next' : 'Open'
+  const tipText = `${kind === 'reel' ? 'Reel' : 'Carousel'} · ${stateLabel} · ${label}`
+
+  let color: string
   if (filled) {
-    cls = 'bg-green-100 text-green-700 border-green-200'
+    color = '#4ade80'  // green-400
   } else if (isPast) {
-    cls = 'bg-rose-50 text-rose-400 border-rose-200'
+    color = '#fb7185'  // rose-400
   } else if (isSoon) {
-    cls = 'bg-amber-50 text-amber-600 border-amber-300 border-dashed'
+    color = '#fbbf24'  // amber-400
   } else {
-    cls = 'bg-gray-50 text-gray-300 border-gray-200'
+    color = '#d1d5db'  // gray-300
   }
-  const tipText = filled ? `Filled · ${label}` : isPast ? `Missed · ${label}` : isSoon ? `Up next · ${label}` : `Open · ${label}`
+
+  if (kind === 'reel') {
+    // Horizontal bar (line) — same colour
+    return (
+      <span
+        className="group relative flex items-center justify-center cursor-default"
+        title={tipText}
+        style={{ width: 20, height: 16 }}
+      >
+        <span
+          className="block rounded-full"
+          style={{ width: 16, height: 3, backgroundColor: color }}
+        />
+      </span>
+    )
+  }
+
+  // Carousel = circle bubble
   return (
     <span
-      className={`inline-flex items-center px-1 py-px rounded text-[9px] font-mono font-semibold border ${cls}`}
+      className="group relative flex items-center justify-center cursor-default"
       title={tipText}
+      style={{ width: 16, height: 16 }}
     >
-      {label}
+      <span
+        className="block rounded-full border-2"
+        style={{ width: 10, height: 10, borderColor: color, backgroundColor: filled ? color : 'transparent' }}
+      />
     </span>
   )
 }
