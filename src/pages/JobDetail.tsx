@@ -282,7 +282,9 @@ export function JobDetailPage() {
     if (scheduled > 0) {
       const message = failed > 0 
         ? `✅ ${scheduled} brand${scheduled !== 1 ? 's' : ''} scheduled! ${failed} failed.`
-        : `🎉 All ${scheduled} brand${scheduled !== 1 ? 's' : ''} scheduled successfully!`
+        : scheduled === 1
+          ? '🎉 Reel scheduled successfully!'
+          : `🎉 All ${scheduled} brands scheduled successfully!`
       
       toast.success(message, { duration: 4000 })
       
@@ -367,7 +369,9 @@ export function JobDetailPage() {
     if (scheduled > 0) {
       const message = failed > 0 
         ? `✅ ${scheduled} brand${scheduled !== 1 ? 's' : ''} scheduled for ${customScheduleDate}! ${failed} failed.`
-        : `🎉 All ${scheduled} brand${scheduled !== 1 ? 's' : ''} scheduled for ${customScheduleDate}!`
+        : scheduled === 1
+          ? `🎉 Reel scheduled for ${customScheduleDate}!`
+          : `🎉 All ${scheduled} brands scheduled for ${customScheduleDate}!`
       
       toast.success(message, { duration: 4000 })
       
