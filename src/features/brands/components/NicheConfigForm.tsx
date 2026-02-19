@@ -194,7 +194,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   if (isLoading) return <NicheConfigSkeleton />
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {/* Header */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
@@ -419,7 +419,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
         </div>
 
         {aiResult && (
-          <div className="px-6 py-4 space-y-4">
+          <div className="px-6 py-4 space-y-4 min-w-0">
             <div className="bg-gray-50 rounded-lg p-4">
               <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{aiResult.understanding}</p>
             </div>
@@ -439,7 +439,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0">
                       {/* Left: Media preview — 2 columns: IG/FB Thumbnail + Content */}
                       <div className="grid grid-cols-2 gap-3">
                         {/* IG/FB Thumbnail */}
@@ -502,7 +502,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
                 {/* Carousel Post Preview — real Konva components with preloaded fonts */}
                 {aiResult.example_post && fontsReady && (
-                  <div className="border border-purple-100 rounded-lg p-4">
+                  <div className="border border-purple-100 rounded-lg p-4 min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600">
                         <LayoutGrid className="w-3.5 h-3.5" />
