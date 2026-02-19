@@ -304,31 +304,39 @@ export function HomePage() {
                 {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
-            <div className="flex items-center gap-4 text-[10px] text-gray-400 flex-wrap">
-              {/* Type legend */}
-              <span className="flex items-center gap-1 pr-3 border-r border-gray-100">
-                <span className="inline-block w-3.5 h-[3px] rounded-full bg-gray-300" />
+            <div className="flex items-center gap-3 text-[10px] text-gray-400 flex-wrap">
+              {/* Type legend — mini chip previews */}
+              <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
+                <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
+                  <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#9ca3af' }} />
+                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">8AM</span>
+                </span>
                 Reel
               </span>
-              <span className="flex items-center gap-1 pr-3 border-r border-gray-100">
-                <span className="inline-block w-2 h-2 rounded-full border border-gray-300" />
+              <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
+                <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
+                  <span className="grid grid-cols-2" style={{ gap: 1.5 }}>
+                    {[0,1,2,3].map(i => <span key={i} className="block" style={{ width: 2.5, height: 2.5, backgroundColor: '#9ca3af' }} />)}
+                  </span>
+                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">8AM</span>
+                </span>
                 Carousel
               </span>
               {/* State legend */}
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
+                <span className="inline-block w-2 h-2 rounded bg-green-100 border border-green-200" />
                 Filled
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+                <span className="inline-block w-2 h-2 rounded bg-amber-50 border border-dashed border-amber-300" />
                 Up next
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-rose-400" />
+                <span className="inline-block w-2 h-2 rounded bg-rose-50 border border-rose-200" />
                 Missed
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-gray-200" />
+                <span className="inline-block w-2 h-2 rounded bg-gray-50 border border-gray-200" />
                 Open
               </span>
             </div>
@@ -643,44 +651,40 @@ function SlotChip({ hour, filled, isPast, isSoon, kind }: { hour: number; filled
   const stateLabel = filled ? 'Filled' : isPast ? 'Missed' : isSoon ? 'Up next' : 'Open'
   const tipText = `${kind === 'reel' ? 'Reel' : 'Carousel'} · ${stateLabel} · ${label}`
 
-  let color: string
+  // Background & text based on state
+  let bg: string, textCls: string, border: string, iconColor: string
   if (filled) {
-    color = '#4ade80'  // green-400
+    bg = 'bg-green-100'; textCls = 'text-green-700'; border = 'border-green-200'; iconColor = '#16a34a'
   } else if (isPast) {
-    color = '#fb7185'  // rose-400
+    bg = 'bg-rose-50'; textCls = 'text-rose-400'; border = 'border-rose-200'; iconColor = '#fb7185'
   } else if (isSoon) {
-    color = '#fbbf24'  // amber-400
+    bg = 'bg-amber-50'; textCls = 'text-amber-600'; border = 'border-amber-300 border-dashed'; iconColor = '#f59e0b'
   } else {
-    color = '#d1d5db'  // gray-300
+    bg = 'bg-gray-50'; textCls = 'text-gray-300'; border = 'border-gray-200'; iconColor = '#d1d5db'
   }
 
-  if (kind === 'reel') {
-    // Horizontal bar (line) — same colour
-    return (
-      <span
-        className="group relative flex items-center justify-center cursor-default"
-        title={tipText}
-        style={{ width: 20, height: 16 }}
-      >
-        <span
-          className="block rounded-full"
-          style={{ width: 16, height: 3, backgroundColor: color }}
-        />
-      </span>
-    )
-  }
-
-  // Carousel = circle bubble
   return (
     <span
-      className="group relative flex items-center justify-center cursor-default"
+      className={`inline-flex flex-col items-center gap-[3px] px-1.5 pt-1 pb-0.5 rounded border cursor-default select-none ${bg} ${border}`}
       title={tipText}
-      style={{ width: 16, height: 16 }}
     >
-      <span
-        className="block rounded-full border-2"
-        style={{ width: 10, height: 10, borderColor: color, backgroundColor: filled ? color : 'transparent' }}
-      />
+      {/* Type icon */}
+      {kind === 'reel' ? (
+        // Circle dot = reel
+        <span
+          className="block rounded-full shrink-0"
+          style={{ width: 6, height: 6, backgroundColor: iconColor }}
+        />
+      ) : (
+        // 2×2 grid = carousel
+        <span className="grid grid-cols-2 gap-[2px] shrink-0">
+          {[0, 1, 2, 3].map(i => (
+            <span key={i} className="block" style={{ width: 3, height: 3, backgroundColor: iconColor }} />
+          ))}
+        </span>
+      )}
+      {/* Time label */}
+      <span className={`text-[9px] font-mono font-bold leading-none ${textCls}`}>{label}</span>
     </span>
   )
 }
