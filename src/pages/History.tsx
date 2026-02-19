@@ -491,7 +491,7 @@ export function HistoryPage() {
                     </span>
                   )}
                   
-                  <h3 className="font-medium text-gray-900 text-sm truncate flex-1 min-w-0">
+                  <h3 className="font-medium text-gray-900 text-xs leading-tight flex-1 min-w-0 line-clamp-2">
                     {job.title?.split('\n')[0] || 'Untitled'}
                   </h3>
                   

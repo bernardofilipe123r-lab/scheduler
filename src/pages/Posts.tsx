@@ -279,14 +279,14 @@ export function PostsPage() {
             </button>
           </div>
 
-          {/* Card: Layout Settings (collapsible) */}
+          {/* Card: Layout Settings + Preview (collapsible) */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <button
               onClick={() => setShowSettings((prev) => !prev)}
               className="w-full font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-stone-600 transition-colors text-sm"
             >
               <Settings2 className="w-4 h-4" />
-              Layout Settings
+              Layout Settings & Preview
               <ChevronDown
                 className={`w-4 h-4 ml-auto transition-transform ${
                   showSettings ? 'rotate-180' : ''
@@ -295,156 +295,177 @@ export function PostsPage() {
             </button>
 
             {showSettings && (
-              <div className="mt-4 space-y-3">
-                <div>
-                  <label className="text-xs text-gray-500">
-                    Font Size: {settings.fontSize}px
-                    {title.trim() && (() => {
-                      const maxW = CANVAS_WIDTH - (settings.layout.titlePaddingX || 45) * 2
-                      const effective = autoFitFontSize(title, maxW, settings.fontSize, 3)
-                      return effective !== settings.fontSize
-                        ? <span className="text-blue-500 ml-1">(auto-fit: {effective}px)</span>
-                        : null
-                    })()}
-                  </label>
-                  <input
-                    type="range"
-                    min={40}
-                    max={90}
-                    value={settings.fontSize}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        fontSize: Number(e.target.value),
-                      }))
-                    }
-                    className="w-full accent-stone-800"
-                  />
+              <div className="mt-4 flex gap-5">
+                {/* Preview (left) */}
+                <div className="flex-shrink-0">
+                  <p className="text-[10px] text-gray-400 mb-2">
+                    Layout preview · backgrounds generated after job creation
+                  </p>
+                  <div className="flex justify-center">
+                    {fontLoaded && (
+                      <PostCanvas
+                        brand={previewBrand}
+                        title={title || 'YOUR TITLE\nGOES HERE'}
+                        backgroundImage={null}
+                        settings={settings}
+                        scale={POSTS_PREVIEW_SCALE}
+                      />
+                    )}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+
+                {/* Settings (right) */}
+                <div className="flex-1 min-w-0 space-y-3">
                   <div>
                     <label className="text-xs text-gray-500">
-                      Caption Bottom: {settings.layout.readCaptionBottom}px
+                      Font Size: {settings.fontSize}px
+                      {title.trim() && (() => {
+                        const maxW = CANVAS_WIDTH - (settings.layout.titlePaddingX || 45) * 2
+                        const effective = autoFitFontSize(title, maxW, settings.fontSize, 3)
+                        return effective !== settings.fontSize
+                          ? <span className="text-blue-500 ml-1">(auto-fit: {effective}px)</span>
+                          : null
+                      })()}
                     </label>
                     <input
                       type="range"
-                      min={20}
-                      max={80}
-                      value={settings.layout.readCaptionBottom}
+                      min={40}
+                      max={90}
+                      value={settings.fontSize}
                       onChange={(e) =>
-                        updateLayout({
-                          readCaptionBottom: Number(e.target.value),
-                        })
+                        setSettings((prev) => ({
+                          ...prev,
+                          fontSize: Number(e.target.value),
+                        }))
                       }
                       className="w-full accent-stone-800"
                     />
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500">
-                      Title Gap: {settings.layout.titleGap}px
-                    </label>
-                    <input
-                      type="range"
-                      min={10}
-                      max={300}
-                      value={settings.layout.titleGap}
-                      onChange={(e) =>
-                        updateLayout({ titleGap: Number(e.target.value) })
-                      }
-                      className="w-full accent-stone-800"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Caption Bottom: {settings.layout.readCaptionBottom}px
+                      </label>
+                      <input
+                        type="range"
+                        min={20}
+                        max={80}
+                        value={settings.layout.readCaptionBottom}
+                        onChange={(e) =>
+                          updateLayout({
+                            readCaptionBottom: Number(e.target.value),
+                          })
+                        }
+                        className="w-full accent-stone-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Title Gap: {settings.layout.titleGap}px
+                      </label>
+                      <input
+                        type="range"
+                        min={10}
+                        max={300}
+                        value={settings.layout.titleGap}
+                        onChange={(e) =>
+                          updateLayout({ titleGap: Number(e.target.value) })
+                        }
+                        className="w-full accent-stone-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Logo Gap: {settings.layout.logoGap}px
+                      </label>
+                      <input
+                        type="range"
+                        min={20}
+                        max={60}
+                        value={settings.layout.logoGap}
+                        onChange={(e) =>
+                          updateLayout({ logoGap: Number(e.target.value) })
+                        }
+                        className="w-full accent-stone-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">
+                        Horizontal Padding: {settings.layout.titlePaddingX}px
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={200}
+                        value={settings.layout.titlePaddingX}
+                        onChange={(e) =>
+                          updateLayout({ titlePaddingX: Number(e.target.value) })
+                        }
+                        className="w-full accent-stone-800"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">
-                      Logo Gap: {settings.layout.logoGap}px
-                    </label>
-                    <input
-                      type="range"
-                      min={20}
-                      max={60}
-                      value={settings.layout.logoGap}
-                      onChange={(e) =>
-                        updateLayout({ logoGap: Number(e.target.value) })
-                      }
-                      className="w-full accent-stone-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">
-                      Horizontal Padding: {settings.layout.titlePaddingX}px
+                      Bar Width:{' '}
+                      {settings.barWidth === 0
+                        ? 'Auto'
+                        : `${settings.barWidth}px`}
                     </label>
                     <input
                       type="range"
                       min={0}
-                      max={200}
-                      value={settings.layout.titlePaddingX}
+                      max={400}
+                      value={settings.barWidth}
                       onChange={(e) =>
-                        updateLayout({ titlePaddingX: Number(e.target.value) })
+                        setSettings((prev) => ({
+                          ...prev,
+                          barWidth: Number(e.target.value),
+                        }))
                       }
                       className="w-full accent-stone-800"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">
-                    Bar Width:{' '}
-                    {settings.barWidth === 0
-                      ? 'Auto'
-                      : `${settings.barWidth}px`}
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={400}
-                    value={settings.barWidth}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        barWidth: Number(e.target.value),
-                      }))
-                    }
-                    className="w-full accent-stone-800"
-                  />
-                </div>
-                <div className="pt-2 border-t border-gray-100">
-                  <label className="text-xs text-gray-500">
-                    Slide Font Family
-                  </label>
-                  <select
-                    value={settings.slideFontFamily || DEFAULT_GENERAL_SETTINGS.slideFontFamily}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        slideFontFamily: e.target.value,
-                      }))
-                    }
-                    className="w-full mt-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-stone-400"
-                  >
-                    {SLIDE_FONT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    Font used for body text on carousel slides 2+
-                  </p>
-                </div>
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
-                  <button
-                    onClick={handleSaveSettings}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-stone-900 text-white text-xs rounded-lg hover:bg-stone-800"
-                  >
-                    <Save className="w-3 h-3" />
-                    Save
-                  </button>
-                  <button
-                    onClick={handleResetSettings}
-                    className="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    Reset
-                  </button>
+                  <div className="pt-2 border-t border-gray-100">
+                    <label className="text-xs text-gray-500">
+                      Slide Font Family
+                    </label>
+                    <select
+                      value={settings.slideFontFamily || DEFAULT_GENERAL_SETTINGS.slideFontFamily}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          slideFontFamily: e.target.value,
+                        }))
+                      }
+                      className="w-full mt-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-stone-400"
+                    >
+                      {SLIDE_FONT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Font used for body text on carousel slides 2+
+                    </p>
+                  </div>
+                  <div className="flex gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={handleSaveSettings}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-stone-900 text-white text-xs rounded-lg hover:bg-stone-800"
+                    >
+                      <Save className="w-3 h-3" />
+                      Save
+                    </button>
+                    <button
+                      onClick={handleResetSettings}
+                      className="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -513,25 +534,6 @@ export function PostsPage() {
                   <span className={`text-[9px] ${imageModel === 'Flux1schnell' ? 'text-stone-300' : 'text-gray-400'}`}>Flux Schnell</span>
                 </button>
               </div>
-            </div>
-          </div>
-
-          {/* Card: Preview */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Preview</h3>
-            <p className="text-[10px] text-gray-400 mb-3">
-              Layout preview · backgrounds generated after job creation
-            </p>
-            <div className="flex justify-center">
-              {fontLoaded && (
-                <PostCanvas
-                  brand={previewBrand}
-                  title={title || 'YOUR TITLE\nGOES HERE'}
-                  backgroundImage={null}
-                  settings={settings}
-                  scale={POSTS_PREVIEW_SCALE}
-                />
-              )}
             </div>
           </div>
 
