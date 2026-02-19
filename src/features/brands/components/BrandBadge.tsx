@@ -4,7 +4,7 @@ import { BRAND_CONFIG, getBrandLabel, getBrandColor } from '../model'
 
 interface BrandBadgeProps {
   brand: BrandName
-  size?: 'sm' | 'md'
+  size?: 'xs' | 'sm' | 'md'
 }
 
 export function BrandBadge({ brand, size = 'sm' }: BrandBadgeProps) {
@@ -16,7 +16,7 @@ export function BrandBadge({ brand, size = 'sm' }: BrandBadgeProps) {
     <span
       className={clsx(
         'badge text-white inline-flex items-center rounded-full font-medium',
-        size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-3 py-1'
+        size === 'xs' ? 'text-[10px] px-1.5 py-0' : size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-3 py-1'
       )}
       style={{ backgroundColor: color }}
     >

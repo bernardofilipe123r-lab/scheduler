@@ -5,7 +5,6 @@ import {
   Filter, 
   Trash2, 
   RefreshCw, 
-  ExternalLink,
   Calendar,
   Loader2,
   AlertCircle,
@@ -166,18 +165,6 @@ export function HistoryPage() {
     return Math.round((done / brands.length) * 100);
   }
 
-  // Get descriptive status message for generating jobs
-  const getStatusMessage = (job: Job): string | null => {
-    if (job.status !== 'generating' && job.status !== 'pending') return null;
-    // Check job-level current_step first
-    if (job.current_step) return job.current_step;
-    // Fall back to brand-level progress_message
-    const outputs = Object.values(job.brand_outputs || {});
-    const generating = outputs.find(o => o.status === 'generating' && o.progress_message);
-    if (generating?.progress_message) return generating.progress_message;
-    return job.status === 'pending' ? 'Queued...' : 'Generating...';
-  }
-  
   // Handle delete
   const handleDelete = async () => {
     if (!jobToDelete) return
@@ -461,158 +448,104 @@ export function HistoryPage() {
             const isFullyScheduled = (schedulingInfo.scheduled.length + schedulingInfo.published.length) === schedulingInfo.total && schedulingInfo.total > 0 && !isFullyPublished
             const hasReadyToSchedule = schedulingInfo.readyToSchedule.length > 0
             
+            // Compact status pill
+            const statusPill = isFullyPublished
+              ? { label: 'Published', bg: 'bg-emerald-100', text: 'text-emerald-700', Icon: CheckCircle2 }
+              : isFullyScheduled
+                ? { label: 'Scheduled', bg: 'bg-green-100', text: 'text-green-700', Icon: CalendarCheck }
+                : hasReadyToSchedule
+                  ? { label: `${schedulingInfo.readyToSchedule.length} to schedule`, bg: 'bg-amber-100', text: 'text-amber-700', Icon: Clock }
+                  : null
+            
             return (
               <div
                 key={job.id}
                 className={clsx(
-                  'card p-4 hover:shadow-md transition-shadow cursor-pointer border-l-4 group',
-                  isFullyPublished && 'border-l-emerald-500',
-                  isFullyScheduled && !isFullyPublished && 'border-l-green-500',
-                  hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && 'border-l-amber-500',
-                  isGenerating && 'border-l-blue-500',
-                  !isFullyPublished && !isFullyScheduled && !hasReadyToSchedule && !isGenerating && 'border-l-gray-300'
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group',
+                  'hover:bg-gray-50 hover:shadow-sm',
+                  isFullyPublished && 'border-l-[3px] border-l-emerald-500',
+                  isFullyScheduled && !isFullyPublished && 'border-l-[3px] border-l-green-500',
+                  hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && 'border-l-[3px] border-l-amber-500',
+                  isGenerating && 'border-l-[3px] border-l-blue-500',
+                  !isFullyPublished && !isFullyScheduled && !hasReadyToSchedule && !isGenerating && 'border-l-[3px] border-l-gray-200',
+                  'border-gray-200'
                 )}
                 onClick={() => navigate(`/job/${job.id}`)}
               >
-                <div className="flex items-start gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <span className="text-xs font-mono text-gray-400">#{job.id}</span>
-                      <StatusBadge status={job.status} />
-                      
-                      {isFullyPublished && (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Published
-                        </span>
-                      )}
-                      {isFullyScheduled && (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                          <CalendarCheck className="w-3 h-3" />
-                          All Scheduled
-                        </span>
-                      )}
-                      {hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 animate-pulse">
-                          <Clock className="w-3 h-3" />
-                          {schedulingInfo.readyToSchedule.length} to schedule
-                        </span>
-                      )}
-                      {schedulingInfo.scheduled.length > 0 && schedulingInfo.scheduled.length < schedulingInfo.total && (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                          {schedulingInfo.scheduled.length}/{schedulingInfo.total} scheduled
-                        </span>
-                      )}
-                      
-                      <span className={clsx(
-                        'text-xs px-2 py-0.5 rounded-full',
-                        job.variant === 'dark' 
-                          ? 'bg-gray-900 text-white' 
-                          : job.variant === 'post'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-gray-100 text-gray-700'
-                      )}>
-                        {job.variant === 'dark' ? '🌙 Dark' : job.variant === 'post' ? '📄 Post' : '☀️ Light'}
-                      </span>
+                {/* ID */}
+                <span className="text-[11px] font-mono text-gray-400 w-[85px] flex-shrink-0 hidden sm:block">#{job.id}</span>
+                
+                {/* Status badge */}
+                <div className="flex-shrink-0">
+                  <StatusBadge status={job.status} />
+                </div>
+                
+                {/* Scheduling status pill */}
+                {statusPill && (
+                  <span className={clsx(
+                    'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full flex-shrink-0',
+                    statusPill.bg, statusPill.text,
+                    hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && 'animate-pulse'
+                  )}>
+                    <statusPill.Icon className="w-3 h-3" />
+                    {statusPill.label}
+                  </span>
+                )}
+                
+                {/* Title — grows to fill space */}
+                <h3 className="font-medium text-gray-900 text-sm truncate flex-1 min-w-0">
+                  {job.title?.split('\n')[0] || 'Untitled'}
+                </h3>
+                
+                {/* Brands — compact inline */}
+                <div className="flex items-center gap-0.5 flex-shrink-0">
+                  {job.brands?.slice(0, 5).map(brand => (
+                    <BrandBadge key={brand} brand={brand} size="xs" />
+                  ))}
+                  {(job.brands?.length || 0) > 5 && (
+                    <span className="text-[10px] text-gray-400 ml-0.5">+{(job.brands?.length || 0) - 5}</span>
+                  )}
+                </div>
+                
+                {/* Date */}
+                <span className="text-[11px] text-gray-400 flex-shrink-0 w-[90px] text-right hidden md:block">
+                  {format(new Date(job.created_at), 'MMM d, h:mm a')}
+                </span>
+                
+                {/* Progress bar for generating jobs */}
+                {isGenerating && (
+                  <div className="w-16 flex-shrink-0">
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                        style={{ width: `${progress}%` }}
+                      />
                     </div>
-                    
-                    <h3 className="font-medium text-gray-900 truncate mb-2">
-                      {job.title?.split('\n')[0] || 'Untitled'}
-                    </h3>
-                    
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {job.brands?.map(brand => {
-                        const output = job.brand_outputs?.[brand]
-                        const isPublished = output?.status === 'published'
-                        const isScheduled = output?.status === 'scheduled'
-                        const isReady = output?.status === 'completed'
-                        
-                        return (
-                          <div 
-                            key={brand} 
-                            className={clsx(
-                              'relative',
-                              isPublished && 'ring-2 ring-emerald-400 ring-offset-1 rounded-full',
-                              isScheduled && !isPublished && 'ring-2 ring-green-400 ring-offset-1 rounded-full',
-                              isReady && 'ring-2 ring-amber-400 ring-offset-1 rounded-full'
-                            )}
-                          >
-                            <BrandBadge brand={brand} size="sm" />
-                            {isPublished && (
-                              <CheckCircle2 
-                                className="absolute -top-1 -right-1 w-3 h-3 text-emerald-600 bg-white rounded-full" 
-                              />
-                            )}
-                            {isScheduled && !isPublished && (
-                              <CalendarCheck 
-                                className="absolute -top-1 -right-1 w-3 h-3 text-green-600 bg-white rounded-full" 
-                              />
-                            )}
-                            {isReady && (
-                              <Clock 
-                                className="absolute -top-1 -right-1 w-3 h-3 text-amber-600 bg-white rounded-full" 
-                              />
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                    
-                    <div className="text-xs text-gray-500">
-                      Created {format(new Date(job.created_at), 'MMM d, yyyy h:mm a')}
-                    </div>
-                    
-                    {isGenerating && (
-                      <div className="mt-3">
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-blue-600 mt-1">
-                          {getStatusMessage(job) || `${progress}% complete`}
-                          {progress > 0 && ` — ${progress}%`}
-                        </p>
-                      </div>
-                    )}
                   </div>
-                  
-                  <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                )}
+                
+                {/* Actions — visible on hover */}
+                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                  {(job.status === 'completed' || job.status === 'failed') && (
                     <button
-                      onClick={() => navigate(`/job/${job.id}`)}
-                      className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-                      title="View details"
+                      onClick={() => handleRegenerate(job)}
+                      className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                      title="Regenerate"
+                      disabled={regenerateJob.isPending}
                     >
-                      <ExternalLink className="w-4 h-4" />
+                      <RefreshCw className="w-3.5 h-3.5" />
                     </button>
-                    
-                    {job.status === 'completed' || job.status === 'failed' ? (
-                      <button
-                        onClick={() => handleRegenerate(job)}
-                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-                        title="Regenerate"
-                        disabled={regenerateJob.isPending}
-                      >
-                        {regenerateJob.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4" />
-                        )}
-                      </button>
-                    ) : null}
-                    
-                    <button
-                      onClick={() => {
-                        setJobToDelete(job)
-                        setDeleteModalOpen(true)
-                      }}
-                      className="p-2 rounded-lg hover:bg-red-50 text-gray-600 hover:text-red-600"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      setJobToDelete(job)
+                      setDeleteModalOpen(true)
+                    }}
+                    className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             )
@@ -620,8 +553,8 @@ export function HistoryPage() {
 
         // Helper to render a section with header, delete all, and job list
         const renderSection = (label: string, icon: string, sectionJobs: Job[]) => (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3 mb-2">
               <span className="text-lg">{icon}</span>
               <h3 className="text-base font-semibold text-gray-900">{label}</h3>
               <span className="text-sm text-gray-500">({sectionJobs.length})</span>
