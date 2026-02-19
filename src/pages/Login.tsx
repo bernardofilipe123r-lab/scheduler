@@ -31,29 +31,27 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
-        <aside className="hidden lg:flex flex-col justify-between bg-gray-900 text-white p-10">
+    <div className="min-h-screen bg-stone-950 flex items-center justify-center p-4 sm:p-6">
+      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 rounded-2xl overflow-hidden shadow-2xl">
+        <aside className="hidden lg:flex flex-col justify-between bg-gradient-to-b from-neutral-950 via-stone-900 to-stone-800 text-white p-10">
           <div>
-            <div className="inline-flex items-center gap-3 rounded-xl bg-white/10 border border-white/15 px-4 py-3">
-              <img src={vaLogo} alt="Viral App logo" className="w-8 h-8" />
-              <span className="text-lg font-semibold tracking-tight">Viral App</span>
+            <div className="inline-flex items-center gap-3">
+              <img src={vaLogo} alt="Viral App logo" className="w-10 h-10" />
+              <span className="text-lg font-bold tracking-tight text-stone-100">Viral App</span>
             </div>
-            <h2 className="mt-8 text-3xl font-bold leading-tight">Manage your content operations in one place.</h2>
-            <p className="mt-3 text-sm text-gray-300 leading-relaxed">
+            <h2 className="mt-8 text-3xl font-bold leading-tight text-stone-50">Manage your content operations in one place.</h2>
+            <p className="mt-3 text-sm text-stone-400 leading-relaxed">
               Create, schedule, and publish across brands with a focused dashboard built for daily execution.
             </p>
           </div>
-          <img src={vaHero} alt="Viral App brand image" className="w-full rounded-xl border border-white/15 bg-white/5" />
+          <img src={vaHero} alt="Viral App brand image" className="w-full rounded-xl border border-white/10" />
         </aside>
 
-        <section className="p-7 sm:p-10 lg:p-12">
+        <section className="bg-white p-7 sm:p-10 lg:p-12">
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="w-11 h-11 rounded-xl bg-gray-900 flex items-center justify-center">
-              <img src={vaLogo} alt="Viral App logo" className="w-6 h-6" />
-            </div>
+            <img src={vaLogo} alt="Viral App logo" className="w-10 h-10" />
             <div>
-              <p className="text-lg font-semibold text-gray-900 tracking-tight">Viral App</p>
+              <p className="text-lg font-bold text-gray-900 tracking-tight">Viral App</p>
               <p className="text-xs text-gray-500">Content operations platform</p>
             </div>
           </div>
@@ -67,7 +65,7 @@ export function LoginPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="email"
                   value={email}
@@ -75,7 +73,7 @@ export function LoginPage() {
                   placeholder="you@example.com"
                   autoFocus
                   autoComplete="email"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent text-sm bg-white"
                 />
               </div>
             </div>
@@ -83,14 +81,14 @@ export function LoginPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   autoComplete="current-password"
-                  className="w-full pl-10 pr-11 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white"
+                  className="w-full pl-10 pr-11 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent text-sm bg-white"
                 />
                 <button
                   type="button"
@@ -105,7 +103,7 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={!email || !password || isLoading}
-              className="w-full h-11 flex items-center justify-center gap-2 bg-gray-900 text-white rounded-lg hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
+              className="w-full h-11 flex items-center justify-center gap-2 bg-stone-900 text-white rounded-lg hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sign In'}
             </button>

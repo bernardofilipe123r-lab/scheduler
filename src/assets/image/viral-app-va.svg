@@ -1,34 +1,41 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="hero-bg" x1="120" y1="20" x2="1090" y2="610" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#6D28D9"/>
-      <stop offset="1" stop-color="#EC4899"/>
-    </linearGradient>
-    <linearGradient id="hero-glow" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    <linearGradient id="hero-bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0c0a09"/>
+      <stop offset="0.55" stop-color="#1c1917"/>
+      <stop offset="1" stop-color="#292524"/>
     </linearGradient>
   </defs>
 
   <rect width="1200" height="630" rx="40" fill="url(#hero-bg)"/>
-  <rect width="1200" height="630" rx="40" fill="url(#hero-glow)"/>
 
-  <g opacity="0.18" stroke="white" stroke-width="2">
-    <path d="M80 510C290 430 430 520 620 450C820 376 940 430 1120 350"/>
-    <path d="M80 560C280 510 420 570 620 520C860 460 940 500 1120 460"/>
-    <path d="M80 460C290 390 430 460 620 400C810 340 940 380 1120 310"/>
+  <!-- Subtle noise texture lines -->
+  <g opacity="0.06" stroke="white" stroke-width="1">
+    <path d="M0 210C200 180 400 230 600 200C800 170 1000 210 1200 190"/>
+    <path d="M0 310C200 290 400 340 600 310C800 280 1000 320 1200 300"/>
+    <path d="M0 410C200 385 400 440 600 415C800 385 1000 425 1200 400"/>
+    <path d="M0 510C200 490 400 540 600 515C800 490 1000 525 1200 505"/>
   </g>
 
-  <rect x="90" y="120" width="170" height="170" rx="36" fill="white" fill-opacity="0.95"/>
-  <path d="M130 162L157 248H174L147 162H130Z" fill="#7C3AED"/>
-  <path d="M186 248H203L230 162H213L194.5 218L176 162H159L186 248Z" fill="#7C3AED"/>
+  <!-- Logo mark -->
+  <rect x="90" y="210" width="130" height="130" rx="28" fill="#F5EDD8"/>
+  <path d="M118 246L139 308H152L131 246H118Z" fill="#1A1A1A"/>
+  <path d="M162 308H175L196 246H183L172 279.5L161 246H148L162 308Z" fill="#1A1A1A"/>
 
-  <text x="295" y="195" fill="white" font-family="Inter, Arial, sans-serif" font-size="68" font-weight="800">Viral App</text>
-  <text x="295" y="255" fill="white" fill-opacity="0.92" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="500">Create viral content at speed</text>
+  <!-- App name -->
+  <text x="250" y="270" fill="#F5F5F4" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="800" letter-spacing="-1">Viral App</text>
+  <text x="250" y="318" fill="#A8A29E" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="400">Content operations platform</text>
 
-  <g>
-    <rect x="295" y="322" width="270" height="64" rx="16" fill="white" fill-opacity="0.18"/>
-    <text x="329" y="364" fill="white" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700">VA</text>
-    <text x="396" y="364" fill="white" fill-opacity="0.9" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="500">Visual Identity</text>
-  </g>
+  <!-- Stats row -->
+  <rect x="90" y="420" width="220" height="80" rx="14" fill="white" fill-opacity="0.05" stroke="white" stroke-opacity="0.1" stroke-width="1"/>
+  <text x="200" y="453" fill="#F5EDD8" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle">5 Brands</text>
+  <text x="200" y="480" fill="#78716C" font-family="Inter, Arial, sans-serif" font-size="16" text-anchor="middle">Managed</text>
+
+  <rect x="330" y="420" width="220" height="80" rx="14" fill="white" fill-opacity="0.05" stroke="white" stroke-opacity="0.1" stroke-width="1"/>
+  <text x="440" y="453" fill="#F5EDD8" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle">3 Platforms</text>
+  <text x="440" y="480" fill="#78716C" font-family="Inter, Arial, sans-serif" font-size="16" text-anchor="middle">Connected</text>
+
+  <rect x="570" y="420" width="220" height="80" rx="14" fill="white" fill-opacity="0.05" stroke="white" stroke-opacity="0.1" stroke-width="1"/>
+  <text x="680" y="453" fill="#F5EDD8" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" text-anchor="middle">Daily</text>
+  <text x="680" y="480" fill="#78716C" font-family="Inter, Arial, sans-serif" font-size="16" text-anchor="middle">Operations</text>
 </svg>
