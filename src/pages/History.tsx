@@ -461,7 +461,7 @@ export function HistoryPage() {
               <div
                 key={job.id}
                 className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group',
+                  'px-3 py-2 rounded-lg border cursor-pointer transition-all group',
                   'hover:bg-gray-50 hover:shadow-sm',
                   isFullyPublished && 'border-l-[3px] border-l-emerald-500',
                   isFullyScheduled && !isFullyPublished && 'border-l-[3px] border-l-green-500',
@@ -472,80 +472,74 @@ export function HistoryPage() {
                 )}
                 onClick={() => navigate(`/job/${job.id}`)}
               >
-                {/* ID */}
-                <span className="text-[11px] font-mono text-gray-400 w-[85px] flex-shrink-0 hidden sm:block">#{job.id}</span>
-                
-                {/* Status badge */}
-                <div className="flex-shrink-0">
-                  <StatusBadge status={job.status} />
+                {/* Line 1: ID, status, scheduling pill, title, date, actions */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-gray-400 flex-shrink-0">#{job.id}</span>
+                  
+                  <div className="flex-shrink-0">
+                    <StatusBadge status={job.status} />
+                  </div>
+                  
+                  {statusPill && (
+                    <span className={clsx(
+                      'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full flex-shrink-0',
+                      statusPill.bg, statusPill.text,
+                      hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && 'animate-pulse'
+                    )}>
+                      <statusPill.Icon className="w-3 h-3" />
+                      {statusPill.label}
+                    </span>
+                  )}
+                  
+                  <h3 className="font-medium text-gray-900 text-sm truncate flex-1 min-w-0">
+                    {job.title?.split('\n')[0] || 'Untitled'}
+                  </h3>
+                  
+                  {isGenerating && (
+                    <div className="w-16 flex-shrink-0">
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <span className="text-[11px] text-gray-400 flex-shrink-0 hidden sm:block">
+                    {format(new Date(job.created_at), 'MMM d, h:mm a')}
+                  </span>
+                  
+                  {/* Actions — visible on hover */}
+                  <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    {(job.status === 'completed' || job.status === 'failed') && (
+                      <button
+                        onClick={() => handleRegenerate(job)}
+                        className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                        title="Regenerate"
+                        disabled={regenerateJob.isPending}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setJobToDelete(job)
+                        setDeleteModalOpen(true)
+                      }}
+                      className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 
-                {/* Scheduling status pill */}
-                {statusPill && (
-                  <span className={clsx(
-                    'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full flex-shrink-0',
-                    statusPill.bg, statusPill.text,
-                    hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && 'animate-pulse'
-                  )}>
-                    <statusPill.Icon className="w-3 h-3" />
-                    {statusPill.label}
-                  </span>
-                )}
-                
-                {/* Title — grows to fill space */}
-                <h3 className="font-medium text-gray-900 text-sm truncate flex-1 min-w-0">
-                  {job.title?.split('\n')[0] || 'Untitled'}
-                </h3>
-                
-                {/* Brands — compact inline */}
-                <div className="flex items-center gap-0.5 flex-shrink-0">
-                  {job.brands?.slice(0, 5).map(brand => (
+                {/* Line 2: Brand badges (wrap-friendly for up to 10 brands) */}
+                <div className="flex flex-wrap items-center gap-1 mt-1.5 pl-0">
+                  {job.brands?.map(brand => (
                     <BrandBadge key={brand} brand={brand} size="xs" />
                   ))}
-                  {(job.brands?.length || 0) > 5 && (
-                    <span className="text-[10px] text-gray-400 ml-0.5">+{(job.brands?.length || 0) - 5}</span>
-                  )}
-                </div>
-                
-                {/* Date */}
-                <span className="text-[11px] text-gray-400 flex-shrink-0 w-[90px] text-right hidden md:block">
-                  {format(new Date(job.created_at), 'MMM d, h:mm a')}
-                </span>
-                
-                {/* Progress bar for generating jobs */}
-                {isGenerating && (
-                  <div className="w-16 flex-shrink-0">
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                
-                {/* Actions — visible on hover */}
-                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                  {(job.status === 'completed' || job.status === 'failed') && (
-                    <button
-                      onClick={() => handleRegenerate(job)}
-                      className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
-                      title="Regenerate"
-                      disabled={regenerateJob.isPending}
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setJobToDelete(job)
-                      setDeleteModalOpen(true)
-                    }}
-                    className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               </div>
             )
