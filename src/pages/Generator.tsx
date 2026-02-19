@@ -145,14 +145,28 @@ export function GeneratorPage() {
     setIsAutoGenerating(true)
 
     const total = autoBrands.length
-    toast.loading(`AI is generating ${total} unique viral reel${total > 1 ? 's' : ''}...`, { id: 'auto-gen' })
+    toast.loading(
+      (t) => (
+        <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+          AI is generating {total} unique viral reel{total > 1 ? 's' : ''}... <u>View Jobs →</u>
+        </span>
+      ),
+      { id: 'auto-gen' },
+    )
 
     try {
       let created = 0
       let failed = 0
 
       for (const brand of autoBrands) {
-        toast.loading(`Generating content ${created + failed + 1}/${total}...`, { id: 'auto-gen' })
+        toast.loading(
+          (t) => (
+            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+              Generating content {created + failed + 1}/{total}... <u>View Jobs →</u>
+            </span>
+          ),
+          { id: 'auto-gen' },
+        )
 
         try {
           // Generate unique content for this brand
