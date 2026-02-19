@@ -14,6 +14,7 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useCreateJob } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
@@ -36,6 +37,7 @@ const POSTS_PREVIEW_SCALE = 0.2
 export function PostsPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
+  const navigate = useNavigate()
   const { brands: dynamicBrands, brandIds } = useDynamicBrands()
   const { data: dbSettings } = useLayoutSettings()
   const updateDbSettings = useUpdateLayoutSettings()
@@ -156,7 +158,14 @@ export function PostsPage() {
         image_model: imageModel,
       })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success('Post generation started! Check Jobs for progress.', { duration: 6000 })
+      toast.success(
+        (t) => (
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+            Post generation started! <u>View Jobs →</u>
+          </span>
+        ),
+        { duration: 6000 }
+      )
     } catch {
       toast.error('Failed to create auto generate job')
     } finally {
@@ -183,7 +192,14 @@ export function PostsPage() {
         image_model: imageModel,
       })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      toast.success('Post generation started! Check Jobs for progress.', { duration: 6000 })
+      toast.success(
+        (t) => (
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+            Post generation started! <u>View Jobs →</u>
+          </span>
+        ),
+        { duration: 6000 }
+      )
       setTitle('')
       setAiPrompt('')
     } catch {

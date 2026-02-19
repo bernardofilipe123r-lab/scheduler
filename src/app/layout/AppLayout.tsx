@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
+import { useJobs } from '@/features/jobs'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
 const NAV_ITEMS = [
@@ -30,6 +31,10 @@ export function AppLayout() {
   const userMenuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { data: jobs = [] } = useJobs()
+  const activeJobCount = (Array.isArray(jobs) ? jobs : []).filter(
+    (j: any) => j.status === 'generating' || j.status === 'pending'
+  ).length
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -107,7 +112,14 @@ export function AppLayout() {
                 }`
               }
             >
-              <Icon className="w-5 h-5 shrink-0" />
+              <div className="relative shrink-0">
+                <Icon className="w-5 h-5" />
+                {to === '/jobs' && activeJobCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none px-1">
+                    {activeJobCount}
+                  </span>
+                )}
+              </div>
               {expanded && <span className="text-sm whitespace-nowrap">{label}</span>}
               {!expanded && (
                 <span className="absolute left-14 bg-stone-700 text-stone-100 text-xs font-medium px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[60]">

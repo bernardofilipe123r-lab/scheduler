@@ -557,7 +557,7 @@ export function JobDetailPage() {
                 ) : (
                   <Calendar className="w-4 h-4" />
                 )}
-                {allScheduled ? 'All Scheduled' : 'Schedule All'}
+                {allScheduled ? 'All Scheduled' : completedCount === 1 ? 'Schedule Reel' : 'Schedule All'}
               </button>
               
               {!allScheduled && (
@@ -1145,7 +1145,7 @@ export function JobDetailPage() {
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            Choose a date and time to schedule all {completedCount} brand{completedCount !== 1 ? 's' : ''}.
+            Choose a date and time to schedule {completedCount === 1 ? 'this brand' : `all ${completedCount} brands`}.
             Brands will be staggered by 1 hour each.
           </p>
           
@@ -1213,7 +1213,7 @@ export function JobDetailPage() {
               ) : (
                 <>
                   <CalendarClock className="w-4 h-4" />
-                  Schedule All
+                  {completedCount === 1 ? 'Schedule Reel' : 'Schedule All'}
                 </>
               )}
             </button>

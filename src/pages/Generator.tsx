@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Loader2, X } from 'lucide-react'
 import igIcon from '@/assets/icons/instagram.png'
 import fbIcon from '@/assets/icons/facebook.png'
@@ -20,6 +21,7 @@ const PLATFORMS = [
 export function GeneratorPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
+  const navigate = useNavigate()
   const { brands: dynamicBrands, brandIds } = useDynamicBrands()
   const { data: nicheConfig } = useNicheConfig()
   
@@ -187,12 +189,20 @@ export function GeneratorPage() {
 
       if (created === total) {
         toast.success(
-          `${total} unique reel${total > 1 ? 's' : ''} created! Check Jobs for progress.`,
+          (t) => (
+            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+              {total} unique reel{total > 1 ? 's' : ''} created! <u>View Jobs →</u>
+            </span>
+          ),
           { id: 'auto-gen', duration: 6000 }
         )
       } else if (created > 0) {
         toast.success(
-          `${created}/${total} reels created. ${failed} failed.`,
+          (t) => (
+            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+              {created}/{total} reels created. {failed} failed. <u>View Jobs →</u>
+            </span>
+          ),
           { id: 'auto-gen', duration: 6000 }
         )
       } else {
@@ -278,7 +288,11 @@ export function GeneratorPage() {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       
       toast.success(
-        'Reel generation started! Check Jobs for progress.',
+        (t) => (
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
+            Reel generation started! <u>View Jobs →</u>
+          </span>
+        ),
         { duration: 6000 }
       )
       
@@ -390,7 +404,7 @@ export function GeneratorPage() {
                     </button>
                   </div>
                 </div>
-                <div>
+                <div className={variant === 'light' && !selectedPlatforms.includes('youtube') ? 'opacity-40 pointer-events-none' : ''}>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Image Model</label>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
@@ -581,7 +595,7 @@ export function GeneratorPage() {
                     </button>
                   </div>
                 </div>
-                <div>
+                <div className={autoVariant === 'light' && !autoPlatforms.includes('youtube') ? 'opacity-40 pointer-events-none' : ''}>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Image Model</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
