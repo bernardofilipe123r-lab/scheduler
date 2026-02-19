@@ -55,12 +55,26 @@ export function AppLayout() {
         className={`${sidebarWidth} fixed top-0 left-0 bottom-0 z-50 flex flex-col transition-all duration-200 ease-in-out bg-gradient-to-b from-neutral-950 via-stone-900 to-stone-800`}
       >
         {/* Logo */}
+        <style>{`
+          @keyframes logo-hello {
+            0%   { transform: scale(1) translateY(0); }
+            20%  { transform: scale(1.18) translateY(-3px); }
+            40%  { transform: scale(1.12) translateY(0px); }
+            55%  { transform: scale(1.16) translateY(-2px); }
+            70%  { transform: scale(1.1) translateY(0px); }
+            82%  { transform: scale(1.13) translateY(-1px); }
+            100% { transform: scale(1) translateY(0); }
+          }
+          .logo-animate:hover .logo-img {
+            animation: logo-hello 0.7s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+          }
+        `}</style>
         <NavLink
           to="/"
-          className="flex items-center gap-2.5 h-16 px-3 shrink-0 hover:bg-white/5 transition-colors"
+          className="logo-animate flex items-center gap-2.5 h-16 px-3 shrink-0 transition-colors"
         >
           <div className="w-10 h-10 shrink-0 flex items-center justify-center">
-            <img src={vaLogo} alt="Viral App logo" className="w-9 h-9" />
+            <img src={vaLogo} alt="Viral App logo" className="logo-img w-9 h-9" />
           </div>
           {expanded && (
             <span className="font-extrabold text-base text-stone-100 whitespace-nowrap tracking-tight">
