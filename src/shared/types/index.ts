@@ -47,6 +47,7 @@ export interface Job {
   ai_prompt?: string
   cta_type: string
   status: JobStatus
+  fixed_title?: boolean
   brand_outputs: Record<BrandName, BrandOutput>
   current_step?: string
   progress_percent?: number

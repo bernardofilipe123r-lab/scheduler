@@ -81,6 +81,9 @@ export function JobDetailPage() {
   
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
 
+  // Detect auto-generated jobs: fixed_title is false/undefined AND at least one brand has its own title
+  const hasPerBrandTitles = job ? !job.fixed_title && Object.values(job.brand_outputs || {}).some(o => o.title && o.title !== job.title) : false
+
   // Per-brand title helpers
   const startEditingTitle = (brand: string) => {
     const output = job?.brand_outputs?.[brand as BrandName]
@@ -438,31 +441,49 @@ export function JobDetailPage() {
               <span className="text-sm font-mono text-gray-400">#{job.id}</span>
               <StatusBadge status={job.status} size="md" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 whitespace-pre-line">
-              {job.title}
-            </h1>
-            <p className="text-gray-500 text-sm mt-2">
-              Created {format(new Date(job.created_at), 'MMMM d, yyyy h:mm a')}
-            </p>
-            
-            {/* Content Lines - always show for reference */}
-            {job.content_lines && job.content_lines.length > 0 && (
-              <div className="mt-3 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-                <p className="font-medium text-gray-700 mb-1">Content:</p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  {job.content_lines.map((line, idx) => (
-                    <li key={idx}>{line}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {/* AI Prompt - show if dark mode */}
-            {job.variant === 'dark' && job.ai_prompt && (
-              <div className="mt-2 text-sm text-gray-600 bg-purple-50 rounded-lg p-3">
-                <p className="font-medium text-purple-700 mb-1">AI Background Prompt:</p>
-                <p className="text-purple-600 italic">{job.ai_prompt}</p>
-              </div>
+            {hasPerBrandTitles ? (
+              /* Auto-generated: compact header, per-brand content shown in cards below */
+              <>
+                <h1 className="text-lg font-bold text-gray-900">
+                  🤖 Auto-Generated Viral Reels
+                </h1>
+                <p className="text-gray-500 text-sm mt-1">
+                  {job.brands.length} brand{job.brands.length !== 1 ? 's' : ''} · each with unique title & content
+                </p>
+                <p className="text-gray-400 text-xs mt-1">
+                  Created {format(new Date(job.created_at), 'MMMM d, yyyy h:mm a')}
+                </p>
+              </>
+            ) : (
+              /* Manual generate: shared title & content */
+              <>
+                <h1 className="text-2xl font-bold text-gray-900 whitespace-pre-line">
+                  {job.title}
+                </h1>
+                <p className="text-gray-500 text-sm mt-2">
+                  Created {format(new Date(job.created_at), 'MMMM d, yyyy h:mm a')}
+                </p>
+                
+                {/* Content Lines - show for shared-title jobs */}
+                {job.content_lines && job.content_lines.length > 0 && (
+                  <div className="mt-3 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                    <p className="font-medium text-gray-700 mb-1">Content:</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {job.content_lines.map((line, idx) => (
+                        <li key={idx}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* AI Prompt - show if dark mode */}
+                {job.variant === 'dark' && job.ai_prompt && (
+                  <div className="mt-2 text-sm text-gray-600 bg-purple-50 rounded-lg p-3">
+                    <p className="font-medium text-purple-700 mb-1">AI Background Prompt:</p>
+                    <p className="text-purple-600 italic">{job.ai_prompt}</p>
+                  </div>
+                )}
+              </>
             )}
             
             {/* Job-level error message */}
@@ -500,15 +521,17 @@ export function JobDetailPage() {
         </div>
         
         <div className="flex items-center gap-2">
-          <button
-            onClick={openEditTitleModal}
-            disabled={isGenerating || allScheduled}
-            className="btn btn-secondary"
-            title={allScheduled ? "Cannot edit - brands are scheduled" : ""}
-          >
-            <Edit2 className="w-4 h-4" />
-            Edit Title
-          </button>
+          {!hasPerBrandTitles && (
+            <button
+              onClick={openEditTitleModal}
+              disabled={isGenerating || allScheduled}
+              className="btn btn-secondary"
+              title={allScheduled ? "Cannot edit - brands are scheduled" : ""}
+            >
+              <Edit2 className="w-4 h-4" />
+              Edit Title
+            </button>
+          )}
           
           {!isGenerating && (
             <button
@@ -652,6 +675,14 @@ export function JobDetailPage() {
                   </div>
                 ) : (isCompleted || isScheduled) ? (
                   <div className="space-y-4">
+                    {/* Per-brand AI prompt (auto-generated jobs) */}
+                    {hasPerBrandTitles && output.ai_prompt && (
+                      <div className="text-sm bg-purple-50 rounded-lg p-3 border border-purple-100">
+                        <p className="font-medium text-purple-700 mb-1 text-xs">AI Prompt:</p>
+                        <p className="text-purple-600 italic text-xs">{output.ai_prompt}</p>
+                      </div>
+                    )}
+                    
                     {/* Main content area - Media + Content Lines side by side */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {/* Left side: Media Preview - 3 columns: IG/FB Thumbnail, YT Thumbnail, Video */}
