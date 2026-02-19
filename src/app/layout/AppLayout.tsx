@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
   Layers, ScrollText, User, LogOut, Info,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import vaLogo from '@/assets/icons/va-logo.svg'
@@ -20,7 +20,8 @@ const NAV_ITEMS = [
 const SETTINGS_ITEMS = [
   { to: '/brands', icon: Layers, label: 'Brands' },
   { to: '/about', icon: Info, label: 'About' },
-  { to: '/logs', icon: ScrollText, label: 'Logs' },
+  { to: '/logs', icon: ScrollText, label: 'Logs', adminOnly: true },
+  { to: '/admin', icon: ShieldCheck, label: 'Admin', superAdminOnly: true },
 ]
 
 export function AppLayout() {
@@ -46,9 +47,11 @@ export function AppLayout() {
     navigate('/login')
   }
 
-  const settingsItems = user?.isAdmin
-    ? SETTINGS_ITEMS
-    : SETTINGS_ITEMS.filter((item) => item.to !== '/logs')
+  const settingsItems = SETTINGS_ITEMS.filter(item => {
+    if ((item as { superAdminOnly?: boolean }).superAdminOnly) return user?.isSuperAdmin
+    if ((item as { adminOnly?: boolean }).adminOnly) return user?.isAdmin
+    return true
+  })
 
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U'
 

@@ -19,6 +19,7 @@ from app.api.brands.routes import router as brands_router
 from app.api.system.settings_routes import router as settings_router
 from app.api.analytics.routes import router as analytics_router
 from app.api.system.logs_routes import router as logs_router
+from app.api.system.admin_routes import router as admin_router
 from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
 from app.api.system.health_routes import router as health_router
@@ -89,6 +90,7 @@ app.include_router(brands_router, prefix="/api/v2")  # V2 mount
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
+app.include_router(admin_router)  # Admin user management at /api/admin/*
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(health_router)  # Deep health check at /api/system/health-check

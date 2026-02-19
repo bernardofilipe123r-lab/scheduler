@@ -61,7 +61,13 @@ def _extract_user(payload: dict) -> dict:
     ]
     normalized_roles = {str(r).strip().lower() for r in roles if r}
 
-    is_admin = (
+    is_super_admin = (
+        "super_admin" in normalized_roles
+        or bool(app_metadata.get("is_super_admin"))
+        or bool(user_metadata.get("is_super_admin"))
+    )
+
+    is_admin = is_super_admin or (
         "admin" in normalized_roles
         or bool(app_metadata.get("is_admin"))
         or bool(user_metadata.get("is_admin"))
@@ -74,17 +80,28 @@ def _extract_user(payload: dict) -> dict:
         "email": payload.get("email", ""),
         "role": role,
         "is_admin": is_admin,
+        "is_super_admin": is_super_admin,
     }
 
 
 def is_admin_user(user: dict) -> bool:
-    """Return True when the current authenticated user has admin privileges."""
+    """Return True when the current authenticated user has admin privileges (includes super admin)."""
     if not user:
         return False
     if user.get("is_admin") is True:
         return True
     role = str(user.get("role", "")).strip().lower()
-    return role == "admin"
+    return role in ("admin", "super_admin")
+
+
+def is_super_admin_user(user: dict) -> bool:
+    """Return True only when the user has super admin privileges."""
+    if not user:
+        return False
+    if user.get("is_super_admin") is True:
+        return True
+    role = str(user.get("role", "")).strip().lower()
+    return role == "super_admin"
 
 
 async def get_current_user(
@@ -160,15 +177,22 @@ async def get_current_user(
             user_metadata.get("role"),
         ]
         normalized_roles = {str(r).strip().lower() for r in roles if r}
+        is_super_admin = (
+            "super_admin" in normalized_roles
+            or bool(app_metadata.get("is_super_admin"))
+            or bool(user_metadata.get("is_super_admin"))
+        )
         extracted_user = {
             "id": user.id,
             "email": user.email or "",
             "role": next((str(r) for r in roles if r), "authenticated"),
             "is_admin": (
-                "admin" in normalized_roles
+                is_super_admin
+                or "admin" in normalized_roles
                 or bool(app_metadata.get("is_admin"))
                 or bool(user_metadata.get("is_admin"))
             ),
+            "is_super_admin": is_super_admin,
         }
         if extracted_user.get("id"):
             set_logging_user_id(extracted_user["id"])

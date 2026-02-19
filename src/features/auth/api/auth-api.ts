@@ -11,6 +11,7 @@ export interface AuthUser {
   avatarUrl: string
   role: string
   isAdmin: boolean
+  isSuperAdmin: boolean
 }
 
 function extractRoleAndAdmin(rawUser: {
@@ -24,7 +25,13 @@ function extractRoleAndAdmin(rawUser: {
     .filter(Boolean)
     .map((v) => String(v).toLowerCase())
 
+  const isSuperAdmin =
+    roles.includes('super_admin') ||
+    Boolean(appMeta.is_super_admin) ||
+    Boolean(userMeta.is_super_admin)
+
   const isAdmin =
+    isSuperAdmin ||
     roles.includes('admin') ||
     Boolean(appMeta.is_admin) ||
     Boolean(userMeta.is_admin)
@@ -32,6 +39,7 @@ function extractRoleAndAdmin(rawUser: {
   return {
     role: roles[0] || 'authenticated',
     isAdmin,
+    isSuperAdmin,
   }
 }
 

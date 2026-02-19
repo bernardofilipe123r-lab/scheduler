@@ -14,6 +14,7 @@ import { PostsPage } from '@/pages/Posts'
 import { AnalyticsPage } from '@/pages/Analytics'
 import { AboutPage } from '@/pages/About'
 import { LogsPage } from '@/pages/Logs'
+import { AdminPage } from '@/pages/Admin'
 import { AppLoader } from '@/shared/components'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -52,6 +53,18 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function SuperAdminGuard({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) return <AppLoader />
+
+  if (!user?.isSuperAdmin) {
+    return <Navigate to="/" replace />
+  }
+
+  return <>{children}</>
+}
+
 export function AppRoutes() {
   return (
     <>
@@ -72,6 +85,7 @@ export function AppRoutes() {
         <Route path="settings" element={<Navigate to="/brands?tab=settings" replace />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="logs" element={<AdminGuard><LogsPage /></AdminGuard>} />
+        <Route path="admin" element={<SuperAdminGuard><AdminPage /></SuperAdminGuard>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>
