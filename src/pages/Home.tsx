@@ -29,6 +29,16 @@ function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+// Auto-schedule slot definitions (must match backend scheduler.py)
+const BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]        // 6 reels/day, every 4h, alternating L/D
+const BASE_POST_HOURS_DAY = [0, 12]                   // 2 posts/day: midnight + noon (POST_BRAND_OFFSETS is always {})
+
+function fmtSlotHour(h: number): string {
+  if (h === 0) return '12AM'
+  if (h === 12) return '12PM'
+  return h < 12 ? `${h}AM` : `${h - 12}PM`
+}
+
 export function HomePage() {
   const navigate = useNavigate()
   const { data: analyticsData, isLoading: analyticsLoading } = useAnalytics()
@@ -115,6 +125,41 @@ export function HomePage() {
   const todayPosts = postsArray
     .filter(p => new Date(p.scheduled_time).toDateString() === today)
     .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
+
+  // Today's slot coverage per brand
+  const coverage = useMemo(() => {
+    const n = new Date()
+    const dayStart = new Date(n)
+    dayStart.setHours(0, 0, 0, 0)
+    return dynamicBrands.filter(b => b.active).map(brand => {
+      const brandToday = todayPosts.filter(p => p.brand === brand.id)
+      const reelHours = new Set(
+        brandToday.filter(p => p.metadata?.variant !== 'post').map(p => new Date(p.scheduled_time).getHours())
+      )
+      const postHours = new Set(
+        brandToday.filter(p => p.metadata?.variant === 'post').map(p => new Date(p.scheduled_time).getHours())
+      )
+      const offset = brand.scheduleOffset || 0
+      const reelSlots = BASE_REEL_HOURS.map(base => {
+        const hour = (base + offset) % 24
+        const t = new Date(dayStart); t.setHours(hour, 0, 0, 0)
+        const isPast = t < n
+        const isSoon = !isPast && t.getTime() - n.getTime() < 7_200_000
+        return { hour, filled: reelHours.has(hour), isPast, isSoon }
+      })
+      const postSlots = BASE_POST_HOURS_DAY.map(h => {
+        const t = new Date(dayStart); t.setHours(h, 0, 0, 0)
+        const isPast = t < n
+        const isSoon = !isPast && t.getTime() - n.getTime() < 7_200_000
+        return { hour: h, filled: postHours.has(h), isPast, isSoon }
+      })
+      const openReels    = reelSlots.filter(s => !s.filled && !s.isPast).length
+      const openPosts    = postSlots.filter(s => !s.filled && !s.isPast).length
+      const missedReels  = reelSlots.filter(s => !s.filled && s.isPast).length
+      const missedPosts  = postSlots.filter(s => !s.filled && s.isPast).length
+      return { brandId: brand.id, reelSlots, postSlots, openReels, openPosts, missedReels, missedPosts }
+    })
+  }, [todayPosts, dynamicBrands])
 
   // Recent jobs (last 6)
   const recentJobs = [...jobsArray]
@@ -226,6 +271,95 @@ export function HomePage() {
         />
         <StatsCard label="Scheduled" value={String(scheduledCount)} />
       </div>
+
+      {/* Today's Schedule Coverage */}
+      {coverage.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between px-5 py-3.5 border-b border-gray-100 gap-y-2">
+            <div>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Today's Coverage</h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Auto-schedule: max 6 reels · 2 carousels per brand ·{' '}
+                {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-gray-400 flex-wrap">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded bg-green-100 border border-green-200" />
+                Filled
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded bg-amber-50 border border-dashed border-amber-300" />
+                Up next
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded bg-rose-50 border border-rose-200" />
+                Missed
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded bg-gray-50 border border-gray-200" />
+                Open
+              </span>
+            </div>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {coverage.map(({ brandId, reelSlots, postSlots, openReels, openPosts, missedReels, missedPosts }) => {
+              const allGood = openReels === 0 && openPosts === 0 && missedReels === 0 && missedPosts === 0
+              return (
+                <div key={brandId} className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors flex-wrap md:flex-nowrap">
+                  {/* Brand */}
+                  <div className="flex items-center gap-2 w-36 shrink-0">
+                    <BrandAvatar brandId={brandId} size="sm" />
+                    <span className="text-xs font-medium text-gray-800 truncate">{getBrandName(brandId)}</span>
+                  </div>
+
+                  {/* Reel slots */}
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-violet-400 shrink-0 w-7">Reels</span>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {reelSlots.map(s => <SlotChip key={s.hour} {...s} />)}
+                    </div>
+                  </div>
+
+                  {/* Post/carousel slots */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-pink-400 w-8">Posts</span>
+                    <div className="flex items-center gap-1">
+                      {postSlots.map(s => <SlotChip key={s.hour} {...s} />)}
+                    </div>
+                  </div>
+
+                  {/* Status summary */}
+                  <div className="shrink-0 w-44 text-right">
+                    {allGood ? (
+                      <span className="text-[11px] font-semibold text-green-600">✓ All filled</span>
+                    ) : (
+                      <div className="space-y-0.5 text-[11px] font-semibold">
+                        {(missedReels > 0 || missedPosts > 0) && (
+                          <div className="text-rose-500">
+                            {[
+                              missedReels > 0 && `${missedReels} reel${missedReels !== 1 ? 's' : ''} missed`,
+                              missedPosts > 0 && `${missedPosts} post${missedPosts !== 1 ? 's' : ''} missed`,
+                            ].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                        {(openReels > 0 || openPosts > 0) && (
+                          <div className="text-amber-600">
+                            {[
+                              openReels > 0 && `${openReels} reel${openReels !== 1 ? 's' : ''} open`,
+                              openPosts > 0 && `${openPosts} post${openPosts !== 1 ? 's' : ''} open`,
+                            ].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Row 2: Brand Health + Jobs Queue + Publishing Today */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -472,6 +606,29 @@ function StatsCard({ label, value, sub, change }: { label: string; value: string
         <div className="text-[11px] text-gray-400 mt-1">{sub}</div>
       ) : null}
     </div>
+  )
+}
+
+function SlotChip({ hour, filled, isPast, isSoon }: { hour: number; filled: boolean; isPast: boolean; isSoon: boolean }) {
+  const label = fmtSlotHour(hour)
+  let cls: string
+  if (filled) {
+    cls = 'bg-green-100 text-green-700 border-green-200'
+  } else if (isPast) {
+    cls = 'bg-rose-50 text-rose-400 border-rose-200'
+  } else if (isSoon) {
+    cls = 'bg-amber-50 text-amber-600 border-amber-300 border-dashed'
+  } else {
+    cls = 'bg-gray-50 text-gray-300 border-gray-200'
+  }
+  const tipText = filled ? `Filled · ${label}` : isPast ? `Missed · ${label}` : isSoon ? `Up next · ${label}` : `Open · ${label}`
+  return (
+    <span
+      className={`inline-flex items-center px-1 py-px rounded text-[9px] font-mono font-semibold border ${cls}`}
+      title={tipText}
+    >
+      {label}
+    </span>
   )
 }
 
