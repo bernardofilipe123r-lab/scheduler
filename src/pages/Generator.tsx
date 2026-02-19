@@ -463,7 +463,7 @@ export function GeneratorPage() {
                             : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
-                        <img src={icon} alt={label} className="w-5 h-5 rounded" />
+                        <img src={icon} alt={label} className="h-5 w-auto" />
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
                     )
@@ -697,7 +697,7 @@ export function GeneratorPage() {
                             : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
-                        <img src={icon} alt={label} className="w-5 h-5 rounded" />
+                        <img src={icon} alt={label} className="h-5 w-auto" />
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
                     )
