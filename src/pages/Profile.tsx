@@ -2,7 +2,7 @@
  * Profile Page — view/edit profile info, change password & email via Supabase.
  */
 import { useState, useEffect } from 'react'
-import { User, Mail, KeyRound, Loader2, ArrowLeft, Pencil, Send, ShieldCheck } from 'lucide-react'
+import { User, Mail, KeyRound, Loader2, ArrowLeft, Pencil, Send, ShieldCheck, Camera } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/features/auth'
@@ -23,13 +23,20 @@ export function ProfilePage() {
   const [newEmail, setNewEmail] = useState('')
   const [emailSaving, setEmailSaving] = useState(false)
 
+  // Avatar
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [avatarSaving, setAvatarSaving] = useState(false)
+
   useEffect(() => {
     refreshUser()
   }, [])
 
   useEffect(() => {
     if (user?.name) setDisplayName(user.name)
-  }, [user?.name])
+    setAvatarUrl(user?.avatarUrl || '')
+  }, [user?.name, user?.avatarUrl])
+
+  const userInitial = (displayName || user?.name || 'U').charAt(0).toUpperCase()
 
   const nameChanged = displayName !== (user?.name || '')
 
@@ -81,8 +88,76 @@ export function ProfilePage() {
     }
   }
 
+  const imageFileToDataUrl = (file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(new Error('Failed to read image file'))
+      reader.onload = () => {
+        const image = new Image()
+        image.onerror = () => reject(new Error('Invalid image file'))
+        image.onload = () => {
+          const targetSize = 256
+          const smallestSide = Math.min(image.width, image.height)
+          const sourceX = (image.width - smallestSide) / 2
+          const sourceY = (image.height - smallestSide) / 2
+
+          const canvas = document.createElement('canvas')
+          canvas.width = targetSize
+          canvas.height = targetSize
+          const context = canvas.getContext('2d')
+          if (!context) {
+            reject(new Error('Failed to process image'))
+            return
+          }
+
+          // Center-crop to a square so avatar rendering is consistent everywhere.
+          context.drawImage(
+            image,
+            sourceX,
+            sourceY,
+            smallestSide,
+            smallestSide,
+            0,
+            0,
+            targetSize,
+            targetSize,
+          )
+
+          resolve(canvas.toDataURL('image/jpeg', 0.85))
+        }
+        image.src = String(reader.result)
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file')
+      e.target.value = ''
+      return
+    }
+
+    setAvatarSaving(true)
+    try {
+      const avatarDataUrl = await imageFileToDataUrl(file)
+      const { error } = await supabase.auth.updateUser({ data: { avatar_url: avatarDataUrl } })
+      if (error) throw new Error(error.message)
+      setAvatarUrl(avatarDataUrl)
+      await refreshUser()
+      toast.success('Profile image updated')
+    } catch {
+      toast.error('Failed to update profile image')
+    } finally {
+      setAvatarSaving(false)
+      e.target.value = ''
+    }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-3xl space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -93,7 +168,11 @@ export function ProfilePage() {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <User className="w-7 h-7 text-primary-500" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={displayName || 'User avatar'} className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+            ) : (
+              <User className="w-7 h-7 text-primary-500" />
+            )}
             Profile
           </h1>
           <p className="text-gray-500 mt-1">Manage your account information</p>
@@ -110,6 +189,36 @@ export function ProfilePage() {
         </div>
 
         <div className="p-6 space-y-5">
+          <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <div className="flex items-center gap-4 min-w-0">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName || 'User avatar'} className="w-16 h-16 rounded-full object-cover border border-gray-200" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-2xl font-bold border border-primary-200">
+                  {userInitial}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900">Profile Image</p>
+                <p className="text-xs text-gray-500 truncate">Upload a square image for the best result.</p>
+              </div>
+            </div>
+
+            <label className="shrink-0">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+                disabled={avatarSaving}
+              />
+              <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer text-sm font-medium">
+                {avatarSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                {avatarSaving ? 'Uploading...' : 'Upload Image'}
+              </span>
+            </label>
+          </div>
+
           {/* Editable Display Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Display Name</label>

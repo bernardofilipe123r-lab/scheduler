@@ -46,6 +46,8 @@ export function AppLayout() {
     navigate('/login')
   }
 
+  const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U'
+
   const sidebarWidth = expanded ? 'w-52' : 'w-16'
   
   return (
@@ -151,11 +153,17 @@ export function AppLayout() {
                 userMenuOpen ? 'bg-white/10 text-white' : 'text-stone-400 hover:bg-white/[0.07]'
               }`}
             >
-              <div className="w-7 h-7 bg-stone-700 rounded-full flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-stone-200">
-                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                </span>
-              </div>
+              {user?.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user?.name || 'User avatar'}
+                  className="w-7 h-7 rounded-full object-cover shrink-0 border border-stone-600"
+                />
+              ) : (
+                <div className="w-7 h-7 bg-stone-700 rounded-full flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-stone-200">{userInitial}</span>
+                </div>
+              )}
               {expanded && (
                 <div className="text-left min-w-0">
                   <p className="text-sm font-medium text-stone-200 truncate">{user?.name || 'User'}</p>

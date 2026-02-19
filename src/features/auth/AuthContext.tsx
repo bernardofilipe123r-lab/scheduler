@@ -17,12 +17,32 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+function extractRoleAndAdmin(supaUser: User) {
+  const appMeta = (supaUser.app_metadata ?? {}) as Record<string, unknown>
+  const userMeta = (supaUser.user_metadata ?? {}) as Record<string, unknown>
+  const roles = [supaUser.role, appMeta.role, userMeta.role]
+    .filter(Boolean)
+    .map((v) => String(v).toLowerCase())
+
+  const isAdmin =
+    roles.includes('admin') ||
+    Boolean(appMeta.is_admin) ||
+    Boolean(userMeta.is_admin)
+
+  return {
+    role: roles[0] || 'authenticated',
+    isAdmin,
+  }
+}
+
 function mapUser(supaUser: User | null): AuthUser | null {
   if (!supaUser) return null
   return {
     email: supaUser.email || '',
     name: supaUser.user_metadata?.name || '',
     id: supaUser.id,
+    avatarUrl: supaUser.user_metadata?.avatar_url || '',
+    ...extractRoleAndAdmin(supaUser),
   }
 }
 
