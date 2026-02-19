@@ -13,11 +13,12 @@ export interface ApiError {
 
 export interface RequestOptions {
   headers?: Record<string, string>
+  timeout?: number
 }
 
-function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   return fetch(url, { ...init, signal: controller.signal })
     .catch((err) => {
       if (err.name === 'AbortError') {
@@ -69,7 +70,7 @@ export async function post<T>(endpoint: string, data?: unknown, options?: Reques
       ...options?.headers,
     },
     body: data ? JSON.stringify(data) : undefined,
-  })
+  }, options?.timeout)
   return handleResponse<T>(response)
 }
 

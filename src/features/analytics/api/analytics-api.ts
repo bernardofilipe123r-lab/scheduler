@@ -78,11 +78,11 @@ export async function fetchAnalytics(): Promise<AnalyticsResponse> {
 }
 
 /**
- * Refresh analytics data for all brands
- * Rate limited to 3 refreshes per hour
+ * Refresh analytics data for all brands.
+ * Uses a 3-minute timeout to account for multiple external API calls.
  */
 export async function refreshAnalytics(): Promise<RefreshResponse> {
-  return post<RefreshResponse>('/api/analytics/refresh')
+  return post<RefreshResponse>('/api/analytics/refresh', undefined, { timeout: 180_000 })
 }
 
 /**

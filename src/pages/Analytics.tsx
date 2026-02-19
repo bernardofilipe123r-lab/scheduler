@@ -389,7 +389,6 @@ export function AnalyticsPage() {
   const backfillMutation = useBackfillHistoricalData()
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [backfillSuccess, setBackfillSuccess] = useState<string | null>(null)
-  const [hasAutoRefreshed, setHasAutoRefreshed] = useState(false)
   const { brands: dynamicBrands } = useDynamicBrands()
 
   // Build brand color/label maps dynamically from API data + dynamic brands
@@ -407,14 +406,6 @@ export function AnalyticsPage() {
     for (const bm of data?.brands || []) if (!map[bm.brand]) map[bm.brand] = bm.display_name || bm.brand
     return map
   }, [dynamicBrands, data?.brands])
-
-  // Auto-refresh on page load if data is stale
-  useEffect(() => {
-    if (data?.needs_refresh && !hasAutoRefreshed && !refreshMutation.isPending) {
-      setHasAutoRefreshed(true)
-      refreshMutation.mutate()
-    }
-  }, [data?.needs_refresh, hasAutoRefreshed, refreshMutation])
 
   // Elapsed timer for refresh overlay
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
