@@ -138,46 +138,89 @@ export function AnalyticsSkeleton() {
 }
 
 // ── Jobs / History skeleton ─────────────────────────────────
+// ⚠️ IMPORTANT FOR FUTURE AI: If you change the layout of History.tsx (Jobs page),
+// update this skeleton to match. It mirrors: Header → 5 Status Cards → Filter bar
+// (search + content-type toggle + variant select) → Two-column Reels/Posts sections
+// with compact job row cards (left color border, meta row, title row, brand badges).
 export function JobsSkeleton() {
+  // A single fake job row matching History.tsx renderJobCard layout
+  const jobRow = (i: number) => (
+    <div key={i} className="px-3 py-2.5 rounded-lg border border-l-[3px] border-gray-200">
+      {/* Row 1: ID, status badge, scheduling pill, spacer, date */}
+      <div className="flex items-center gap-2">
+        <Sk className="h-3 w-16 rounded" />
+        <Sk className="h-5 w-16 rounded-full" />
+        <Sk className="h-4 w-20 rounded-full" />
+        <div className="flex-1" />
+        <Sk className="h-3 w-24 rounded" />
+      </div>
+      {/* Row 2: Title */}
+      <Sk className="h-3.5 w-4/5 rounded mt-1.5" />
+      {/* Row 3: Brand badges */}
+      <div className="flex gap-1 mt-1.5">
+        {[0, 1].map(j => <Sk key={j} className="h-5 w-20 rounded-md" />)}
+      </div>
+    </div>
+  )
+
   return (
     <div className="space-y-6">
-      {/* Stat cards */}
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <Sk className="h-7 w-16 rounded-lg" />
+          <Sk className="h-4 w-28 rounded mt-1" />
+        </div>
+      </div>
+
+      {/* Status Cards — 5 cards matching History.tsx stat cards */}
       <div className="grid grid-cols-5 gap-4">
         {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Sk className="w-4 h-4 rounded" />
-              <Sk className="h-3 w-20 rounded" />
-            </div>
+          <div key={i} className="p-4 rounded-xl border-2 border-gray-100 bg-white">
+            <Sk className="w-10 h-10 rounded-lg mb-3" />
             <Sk className="h-7 w-10 rounded" />
-            <Sk className="h-3 w-28 rounded mt-1" />
+            <Sk className="h-4 w-24 rounded mt-1" />
+            <Sk className="h-3 w-full rounded mt-1" />
           </div>
         ))}
       </div>
 
-      {/* Search / filter row */}
-      <div className="flex gap-3">
-        <Sk className="h-9 flex-1 rounded-lg" />
-        <Sk className="h-9 w-28 rounded-lg" />
-        <Sk className="h-9 w-24 rounded-lg" />
+      {/* Filter bar */}
+      <div className="card p-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          {/* Search input */}
+          <Sk className="h-9 flex-1 min-w-[200px] rounded-lg" />
+          {/* Content type toggle (All | Reels | Posts) */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <Sk className="h-8 w-14 rounded-md" />
+            <Sk className="h-8 w-16 rounded-md" />
+            <Sk className="h-8 w-16 rounded-md" />
+          </div>
+          {/* Variant select */}
+          <Sk className="h-9 w-32 rounded-lg" />
+        </div>
       </div>
 
-      {/* Job rows */}
-      <div className="space-y-3">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
-            <Sk className="w-10 h-10 rounded-lg shrink-0" />
-            <div className="flex-1 space-y-2">
-              <Sk className="h-4 w-56 rounded" />
-              <div className="flex gap-2">
-                <Sk className="h-3 w-20 rounded" />
-                <Sk className="h-3 w-16 rounded" />
-              </div>
-            </div>
-            <Sk className="h-6 w-20 rounded-full" />
-            <Sk className="h-4 w-28 rounded" />
+      {/* Two-column Reels / Posts sections */}
+      <div className="grid grid-cols-2 gap-6 items-start">
+        {/* Reels section */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-3 mb-2">
+            <Sk className="h-5 w-5 rounded" />
+            <Sk className="h-5 w-14 rounded" />
+            <Sk className="h-4 w-8 rounded" />
           </div>
-        ))}
+          {[0, 1, 2, 3, 4, 5].map(jobRow)}
+        </div>
+        {/* Posts section */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-3 mb-2">
+            <Sk className="h-5 w-5 rounded" />
+            <Sk className="h-5 w-14 rounded" />
+            <Sk className="h-4 w-8 rounded" />
+          </div>
+          {[0, 1, 2].map(jobRow)}
+        </div>
       </div>
     </div>
   )
