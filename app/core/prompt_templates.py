@@ -222,16 +222,19 @@ def build_correction_prompt(
         issues.append("Some claims feel implausible or too extreme")
         instructions.append("Use more familiar, believable claims")
     
+    issues_text = "\n".join(f"- {issue}" for issue in issues)
+    instructions_text = "\n".join(f"- {inst}" for inst in instructions)
+
     prompt = f"""Regenerate this reel with improvements.
 
 ORIGINAL TITLE: {original_output.get('title', '')}
 FORMAT: {original_output.get('format_style', '')}
 
 ISSUES TO FIX:
-{chr(10).join(f'- {issue}' for issue in issues)}
+{issues_text}
 
 INSTRUCTIONS:
-{chr(10).join(f'- {inst}' for inst in instructions)}
+{instructions_text}
 
 KEEP:
 - Same format style
@@ -624,6 +627,10 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
     if ctx.content_brief:
         brief_block = f"\nCONTENT BRIEF (follow this closely):\n{ctx.content_brief}\n"
 
+    # Pre-compute strings that contain newlines (Python 3.11 forbids chr(10) inside f-strings)
+    avoid_suffix = ("\n" + avoid_block) if avoid_block else ""
+    caption_source_suffix = "\\n\\nSource:\\n[citation]" if citation_block else ""
+
     prompt = f"""You are a {niche_label} content creator for {ctx.parent_brand_name or 'the brand'}, targeting {audience_label}.
 {brief_block}
 Generate EXACTLY {count} COMPLETELY DIFFERENT {niche_label}-focused posts. Each post MUST cover a DIFFERENT topic category.
@@ -650,7 +657,7 @@ Each post is a DIFFERENT topic. Each must be {title_style_note}.
 - Repeating any title or topic from the previously generated list
 - Question formats or list/numbered formats (those are for reels)
 - Vague claims without specific evidence or examples
-- Topics outside {niche_label}{(chr(10) + avoid_block) if avoid_block else ""}
+- Topics outside {niche_label}{avoid_suffix}
 
 ### CAPTION REQUIREMENTS:
 Each caption must be 4-5 paragraphs:
@@ -697,7 +704,7 @@ All slide text must be SHORT: 1-2 sentences max per slide. No bullet points. No 
 [
   {{{{
     "title": "TITLE IN ALL CAPS",
-    "caption": "Hook paragraph.\\n\\nMechanism explanation...\\n\\nImplications...\\n\\nTakeaway.{chr(10) + chr(10) + 'Source:\\n[citation]' if citation_block else ''}",
+    "caption": "Hook paragraph.\\n\\nMechanism explanation...\\n\\nImplications...\\n\\nTakeaway.{caption_source_suffix}",
     "slide_texts": [
       "Cover slide: POST TITLE IN ALL CAPS",
       "{slide1_instruction.replace('Slide 1 text: ', '')}",

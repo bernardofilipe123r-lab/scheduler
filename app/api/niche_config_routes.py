@@ -315,10 +315,12 @@ async def get_ai_understanding(
             "example_post": None,
         }
 
+    config_text = "\n".join(config_summary)
+
     prompt = f"""Based on the following brand configuration, write a first-person summary (as the AI content engine) explaining how you understand this brand. Write 2-3 paragraphs.
 
 Configuration:
-{chr(10).join(config_summary)}
+{config_text}
 
 Also generate:
 1. One FULL example reel with a title (ALL CAPS, 8-12 words) and 5-8 content lines (short fragments or cause-effect pairs)
