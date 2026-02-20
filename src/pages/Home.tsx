@@ -319,20 +319,26 @@ export function HomePage() {
               </p>
             </div>
             <div className="flex items-center gap-3 text-[10px] text-gray-400 flex-wrap">
-              {/* Type legend — mini chip previews */}
+              {/* Type legend — mini chip previews that match actual chips */}
               <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
                 <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
-                  <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#fbbf24' }} />
-                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">☀️</span>
+                  <span className="flex items-center gap-0.5">
+                    <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#fbbf24' }} />
+                    <span className="text-[8px] font-bold leading-none text-amber-500">L</span>
+                  </span>
+                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">8AM</span>
                 </span>
-                Light
+                Light Reel
               </span>
               <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
                 <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
-                  <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#6366f1' }} />
-                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">🌙</span>
+                  <span className="flex items-center gap-0.5">
+                    <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#6366f1' }} />
+                    <span className="text-[8px] font-bold leading-none text-indigo-500">D</span>
+                  </span>
+                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">8AM</span>
                 </span>
-                Dark
+                Dark Reel
               </span>
               <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
                 <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
@@ -668,16 +674,19 @@ function StatsCard({ label, value, sub, change }: { label: string; value: string
 
 function SlotChip({ hour, filled, isPast, isSoon, kind, variant }: { hour: number; filled: boolean; isPast: boolean; isSoon: boolean; kind: 'reel' | 'post'; variant?: 'light' | 'dark' }) {
   const label = fmtSlotHour(hour)
-  const variantLabel = kind === 'reel' && variant ? (variant === 'dark' ? '🌙 Dark' : '☀️ Light') : ''
+  const variantLabel = kind === 'reel' && variant ? (variant === 'dark' ? 'Dark' : 'Light') : ''
   const typeLabel = kind === 'reel' ? 'Reel' : 'Carousel'
   const stateLabel = filled ? 'Filled' : isPast ? 'Missed' : isSoon ? 'Up next' : 'Open'
   const tipText = [typeLabel, variantLabel, stateLabel, label].filter(Boolean).join(' · ')
 
-  // Variant accent colors for reel icons
-  const lightAccent = '#f59e0b'  // amber/sun
-  const darkAccent = '#6366f1'   // indigo/moon
+  // Variant letter colors (independent of state)
+  const variantLetterColor = kind === 'reel'
+    ? (variant === 'dark' ? '#6366f1' : '#f59e0b')
+    : undefined
 
   // Background & text based on state
+  const lightAccent = '#f59e0b'
+  const darkAccent = '#6366f1'
   let bg: string, textCls: string, border: string, iconColor: string
   if (filled) {
     bg = 'bg-green-100'; textCls = 'text-green-700'; border = 'border-green-200'
@@ -700,11 +709,16 @@ function SlotChip({ hour, filled, isPast, isSoon, kind, variant }: { hour: numbe
     >
       {/* Type icon */}
       {kind === 'reel' ? (
-        // Circle dot = reel, colored by variant
-        <span
-          className="block rounded-full shrink-0"
-          style={{ width: 6, height: 6, backgroundColor: iconColor }}
-        />
+        // Dot + L/D letter side by side
+        <span className="flex items-center gap-0.5 shrink-0">
+          <span
+            className="block rounded-full shrink-0"
+            style={{ width: 5, height: 5, backgroundColor: iconColor }}
+          />
+          <span style={{ fontSize: 7, fontWeight: 700, lineHeight: 1, color: variantLetterColor }}>
+            {variant === 'dark' ? 'D' : 'L'}
+          </span>
+        </span>
       ) : (
         // Carousel = horizontal line
         <span
