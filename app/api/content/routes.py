@@ -1,6 +1,7 @@
 """
 Content generation API routes.
 """
+import asyncio
 import base64
 from io import BytesIO
 from typing import List, Optional
