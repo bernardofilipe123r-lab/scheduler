@@ -687,8 +687,8 @@ export function PostJobDetail({ job, refetch }: Props) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {!isGenerating && (
+        <div className="flex items-center gap-2 flex-shrink-0 whitespace-nowrap">
+          {!isGenerating && (job.brands?.length ?? 0) > 1 && (
             <button
               onClick={handleRegenerate}
               className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
