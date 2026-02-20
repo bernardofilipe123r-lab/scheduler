@@ -29,7 +29,10 @@ import {
   endOfWeek,
   eachDayOfInterval,
   isSameMonth,
+  isSameWeek,
   isToday,
+  addDays,
+  subDays,
   addMonths,
   subMonths,
   addWeeks,
@@ -110,7 +113,7 @@ export function ScheduledPage() {
   }, [dynamicBrands])
   
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [viewMode, setViewMode] = useState<'month' | 'week'>('week')
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('week')
   
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
@@ -258,17 +261,29 @@ export function ScheduledPage() {
   const goPrev = () => {
     if (viewMode === 'month') {
       setCurrentDate(prev => subMonths(prev, 1))
-    } else {
+    } else if (viewMode === 'week') {
       setCurrentDate(prev => subWeeks(prev, 1))
+    } else {
+      setCurrentDate(prev => subDays(prev, 1))
     }
   }
   const goNext = () => {
     if (viewMode === 'month') {
       setCurrentDate(prev => addMonths(prev, 1))
-    } else {
+    } else if (viewMode === 'week') {
       setCurrentDate(prev => addWeeks(prev, 1))
+    } else {
+      setCurrentDate(prev => addDays(prev, 1))
     }
   }
+  
+  // Determine if the current view already contains today
+  const isCurrentPeriod = useMemo(() => {
+    const today = new Date()
+    if (viewMode === 'month') return isSameMonth(currentDate, today)
+    if (viewMode === 'week') return isSameWeek(currentDate, today)
+    return isToday(currentDate)
+  }, [currentDate, viewMode])
   
   const handleDelete = async (post: ScheduledPost) => {
     try {
@@ -461,6 +476,18 @@ export function ScheduledPage() {
             <List className="w-4 h-4 inline mr-1" />
             Week
           </button>
+          <button
+            onClick={() => setViewMode('day')}
+            className={clsx(
+              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              viewMode === 'day'
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            <CalendarIcon className="w-4 h-4 inline mr-1" />
+            Day
+          </button>
         </div>
         </div>
       </div>
@@ -478,15 +505,19 @@ export function ScheduledPage() {
             <h2 className="text-xl font-semibold text-gray-900 ml-2">
               {viewMode === 'month' 
                 ? format(currentDate, 'MMMM yyyy')
-                : `Week of ${format(startOfWeek(currentDate), 'MMM d')} - ${format(endOfWeek(currentDate), 'MMM d, yyyy')}`
+                : viewMode === 'week'
+                  ? `Week of ${format(startOfWeek(currentDate), 'MMM d')} - ${format(endOfWeek(currentDate), 'MMM d, yyyy')}`
+                  : format(currentDate, 'EEEE, MMMM d, yyyy')
               }
             </h2>
           </div>
           
-          <button onClick={goToToday} className="btn btn-secondary">
-            <CalendarIcon className="w-4 h-4" />
-            Today
-          </button>
+          {!isCurrentPeriod && (
+            <button onClick={goToToday} className="btn btn-secondary">
+              <CalendarIcon className="w-4 h-4" />
+              Today
+            </button>
+          )}
         </div>
         
         {/* Compact Filter Bar */}
@@ -768,6 +799,96 @@ export function ScheduledPage() {
             })}
           </div>
         )}
+        
+        {/* Day View */}
+        {viewMode === 'day' && (() => {
+          const dayPosts = getPostsForDay(currentDate)
+          const isCurrentDay = isToday(currentDate)
+          
+          return (
+            <div className="max-w-2xl mx-auto">
+              <div
+                className={clsx(
+                  'bg-white rounded-lg p-4 border',
+                  isCurrentDay ? 'border-primary-500 shadow-sm' : 'border-gray-200'
+                )}
+              >
+                <div className={clsx(
+                  'text-center mb-4 pb-3 border-b',
+                  isCurrentDay && 'border-primary-200'
+                )}>
+                  <div className="text-sm text-gray-500 uppercase">
+                    {format(currentDate, 'EEEE')}
+                  </div>
+                  <div className={clsx(
+                    'text-3xl font-bold',
+                    isCurrentDay ? 'text-primary-600' : 'text-gray-900'
+                  )}>
+                    {format(currentDate, 'd')}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {format(currentDate, 'MMMM yyyy')}
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  {dayPosts.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-8">No posts scheduled</p>
+                  ) : (
+                    dayPosts.map(post => (
+                      <div
+                        key={post.id}
+                        onClick={() => { setDetailSlideIndex(0); setSelectedPost(post) }}
+                        className="p-3 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                        style={{ 
+                          backgroundColor: `${getBrandColor(post.brand)}10`,
+                          borderLeft: `3px solid ${getBrandColor(post.brand)}`
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm font-medium min-w-[70px]" style={{ color: getBrandColor(post.brand) }}>
+                            {formatTime(post.scheduled_time, '12h')}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <BrandBadge brand={post.brand} size="sm" />
+                              <span className={clsx(
+                                'text-xs px-1.5 py-0.5 rounded',
+                                post.metadata?.variant === 'post'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : (post.metadata?.variant || 'light') === 'dark'
+                                    ? 'bg-gray-800 text-white'
+                                    : 'bg-amber-100 text-amber-700'
+                              )}>
+                                {post.metadata?.variant === 'post' ? '📄 Post' : (post.metadata?.variant || 'light') === 'dark' ? '🌙' : '☀️'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 truncate">
+                              {post.title.split('\n')[0]}
+                            </p>
+                          </div>
+                          {post.thumbnail_path && (
+                            <img
+                              src={post.thumbnail_path}
+                              alt=""
+                              className="w-10 h-10 rounded object-cover flex-shrink-0"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                {dayPosts.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-gray-100 text-center">
+                    <span className="text-xs text-gray-500">{dayPosts.length} item{dayPosts.length !== 1 ? 's' : ''} scheduled</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
         
         {/* Week View */}
         {viewMode === 'week' && (
