@@ -197,29 +197,20 @@ class AIBackgroundGenerator:
                     "name": color_name.title(),
                     "primary": primary,
                     "accent": accent,
-                    "description": f"bright {color_name} tones, vibrant and luminous, with soft white and golden sunlight accents"
+                    "description": f"vibrant {color_name} tones with luminous highlights"
                 }
         except Exception:
             pass
         
-        # BASE STYLE - use niche image_style_description from ctx if available
-        if ctx and ctx.image_style_description:
-            base_style = ctx.image_style_description
-        else:
-            base_style = """BRIGHT, COLORFUL, VIBRANT still-life composition with SUNLIT atmosphere. Dense, full-frame layout filling every inch with objects. Light, airy, fresh feeling with SOFT GLOWING LIGHT throughout. Shallow water ripples, water droplets, moisture, and dewy surfaces. Soft bokeh light orbs floating in the background. Morning sunlight streaming in with lens flares and light rays. BRIGHT PASTEL background tones - NO DARK OR BLACK AREAS. Polished, glossy, shiny surfaces catching light. Ultra-sharp focus with dreamy soft glow around edges. Magazine-quality product photography style with enhanced saturation and vibrancy. Every surface should sparkle and shine. White highlights, soft shadows, luminous atmosphere."""
-        
-        # Build content-derived subject matter from ctx palette keywords
-        palette_keywords = ", ".join(ctx.image_palette_keywords) if ctx and ctx.image_palette_keywords else ""
-        if content_context:
-            if palette_keywords:
-                subject_matter = f"Visual elements inspired by: '{content_context}'. Include relevant objects: {palette_keywords} - whatever relates to the theme."
-            else:
-                subject_matter = f"Visual elements inspired by: '{content_context}'. Include relevant objects that relate to the theme."
-        else:
-            if palette_keywords:
-                subject_matter = f"Include an abundance of niche-relevant objects: {palette_keywords}."
-            else:
-                subject_matter = "Include an abundance of premium lifestyle objects arranged artistically."
+        from app.core.prompt_templates import build_reel_base_style
+        from app.core.prompt_context import PromptContext as _PC
+        _ctx = ctx if ctx is not None else _PC()
+
+        # Visual style — fully driven by NicheConfig, no health defaults
+        base_style = build_reel_base_style(_ctx)
+
+        # Subject matter — objects/elements to include in the image
+        subject_matter = self._build_subject_matter(content_context, _ctx)
         
         # Build the final prompt
         if user_prompt:
@@ -421,6 +412,50 @@ class AIBackgroundGenerator:
             self._release_queue_position()
             print(f"🔓 Released DEAPI queue position", flush=True)
 
+    def _build_subject_matter(self, content_context: str = None, ctx=None) -> str:
+        """
+        Build the subject matter description for the deAPI image prompt.
+        Uses NicheConfig when available. Never hardcodes niche-specific objects.
+        Priority: palette_keywords > image_style_description > content_context > generic fallback.
+        """
+        from app.core.prompt_context import PromptContext as _PC
+        if ctx is None:
+            ctx = _PC()
+
+        # Priority 1: explicit visual keywords from NicheConfig
+        if ctx.image_palette_keywords:
+            keywords_str = ", ".join(ctx.image_palette_keywords[:12])
+            if content_context:
+                return (
+                    f"Visual elements inspired by the theme: '{content_context}'. "
+                    f"Include niche-relevant objects: {keywords_str}."
+                )
+            return f"Niche-relevant objects arranged artistically: {keywords_str}."
+
+        # Priority 2: general image style description
+        if ctx.image_style_description:
+            if content_context:
+                return (
+                    f"Visual elements inspired by: '{content_context}'. "
+                    f"{ctx.image_style_description}."
+                )
+            return ctx.image_style_description
+
+        # Priority 3: derive from content context alone
+        if content_context:
+            return (
+                f"Premium, close-up visual elements inspired by the theme: '{content_context}'. "
+                f"Contemporary, clean composition with objects that naturally match the concept. "
+                f"High-quality studio aesthetic."
+            )
+
+        # Priority 4: truly generic
+        return (
+            "Premium studio still-life with elegant, contemporary objects arranged artistically. "
+            "Clean surfaces, soft professional lighting, modern minimal aesthetic. "
+            "High-quality, polished, sophisticated visual."
+        )
+
     def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, model_override: str = None, ctx=None) -> Image.Image:
         """
         Generate a HIGH QUALITY AI background for posts.
@@ -436,12 +471,19 @@ class AIBackgroundGenerator:
         # Quality suffix imported from prompt_templates (single source of truth)
         from app.core.prompt_templates import POST_QUALITY_SUFFIX
         
+        from app.core.prompt_context import PromptContext as _PC
+        _ctx = ctx if ctx is not None else _PC()
         if user_prompt:
             prompt = user_prompt
-        elif ctx and ctx.image_style_description:
-            prompt = ctx.image_style_description
+        elif _ctx.image_style_description:
+            prompt = f"{_ctx.image_style_description}. Premium close-up photography style."
+        elif _ctx.image_composition_style:
+            prompt = f"{_ctx.image_composition_style}. Clean, close-up, professional studio shot."
         else:
-            prompt = "Soft cinematic still life with premium objects on white countertop in morning light."
+            prompt = (
+                "Soft cinematic premium still-life with elegant contemporary objects "
+                "on a clean surface in soft studio light."
+            )
         prompt = f"{prompt} {POST_QUALITY_SUFFIX}"
         
         # Add unique identifier

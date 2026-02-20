@@ -148,19 +148,39 @@ def _render_slides_node(brand: str, title: str, background_image: str, slide_tex
 
     # Build brand config from DB for the Node.js renderer
     brand_config_data = {}
+    logo_local_path = None
     try:
         from app.services.brands.resolver import brand_resolver
         b = brand_resolver.get_brand(brand)
         if b:
             colors = b.colors or {}
+            # Ensure handle has exactly one @ prefix
+            raw_handle = b.instagram_handle or ""
+            handle = raw_handle if raw_handle.startswith("@") else f"@{raw_handle}"
+            if not handle or handle == "@":
+                handle = brand
             brand_config_data = {
                 "name": b.display_name or brand,
                 "displayName": b.display_name or brand,
                 "color": colors.get("primary", "#888888"),
                 "accentColor": colors.get("accent", "#666666"),
                 "abbreviation": b.short_name or (brand[0].upper() + "CO"),
-                "handle": f"@{b.instagram_handle}" if b.instagram_handle else brand,
+                "handle": handle,
             }
+            # Download brand logo to temp file for Node.js renderer
+            if b.logo_path:
+                try:
+                    import urllib.request
+                    logo_url = b.logo_path
+                    if logo_url.startswith("http"):
+                        logo_ext = os.path.splitext(logo_url.split("?")[0])[1] or ".png"
+                        logo_local_path = os.path.join(tmp_dir, f"{brand}_logo{logo_ext}")
+                        urllib.request.urlretrieve(logo_url, logo_local_path)
+                    elif os.path.isfile(logo_url):
+                        logo_local_path = logo_url
+                except Exception as logo_err:
+                    print(f"[NODE-RENDER] Logo download warning: {logo_err}", flush=True)
+                    logo_local_path = None
     except Exception:
         pass
 
@@ -172,7 +192,7 @@ def _render_slides_node(brand: str, title: str, background_image: str, slide_tex
         "slideTexts": slide_texts,
         "coverOutput": cover_out,
         "slideOutputs": slide_outputs,
-        "logoPath": None,
+        "logoPath": logo_local_path,
         "shareIconPath": "/app/assets/icons/share.png",
         "saveIconPath": "/app/assets/icons/save.png",
         "fontPaths": {

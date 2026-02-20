@@ -508,9 +508,9 @@ class ContentGeneratorV2:
         Generate a viral post title suitable for Instagram image posts.
         
         Post titles are different from reel titles:
-        - Statement-based with facts/studies ("STUDY REVEALS...", "RESEARCH SHOWS...")  
+        - Statement-based with facts/studies
         - Contains specific percentages, timeframes, or quantifiable claims
-        - Reads like a headline from a health publication
+        - Reads like a headline from a leading niche publication
         - Single powerful statement, not a topic header
         
         Returns:
@@ -561,50 +561,81 @@ class ContentGeneratorV2:
 
         disclaimer = ctx.disclaimer_text if ctx.disclaimer_text else "This content is intended for educational and informational purposes only. Individual results may vary."
 
+        # Build niche-dynamic blocks using same helpers as build_post_content_prompt
+        from app.core.prompt_templates import (
+            _build_citation_block, _build_post_title_examples,
+        )
+        citation_block = _build_citation_block(ctx)
+        title_examples = _build_post_title_examples(ctx)
+
+        if ctx.citation_style == "academic_doi":
+            title_style_note = "based on a real, verifiable scientific study"
+            title_type_note = "A bold, impactful statement revealing the research finding, written in ALL CAPS"
+        elif ctx.citation_style == "financial_data":
+            title_style_note = "based on a real, verifiable statistic or data point"
+            title_type_note = "A bold, impactful statement revealing what the data shows, written in ALL CAPS"
+        elif ctx.citation_style == "case_study":
+            title_style_note = "based on a real, verifiable case"
+            title_type_note = "A bold, impactful statement summarizing the outcome, written in ALL CAPS"
+        elif ctx.citation_style == "expert_quote":
+            title_style_note = "based on a real expert's documented insight"
+            title_type_note = "A bold, impactful statement framing the expert insight, written in ALL CAPS"
+        else:
+            title_style_note = "focused on a compelling insight about the topic"
+            title_type_note = f"A bold, impactful {niche_label} statement written in ALL CAPS"
+
+        niche_mechanism = ctx.niche_description if ctx.niche_description else f"key concepts in {niche_label}"
+        caption_mechanism = (
+            f"Paragraph 2-3: Explain the core mechanism in accessible, {niche_label}-appropriate language. "
+            f"Be specific about how and why this works in the context of {niche_mechanism}."
+        )
+        image_style = ctx.image_style_description or "High-end professional photography style"
+        composition_hint = ctx.image_composition_style or "Close-up, full-frame where the subject fills the entire frame"
+
         prompt = f"""You are a {niche_label} content creator for {brand_label}, targeting {audience_label}.
 
-Generate a SINGLE short, engaging, {niche_label}-focused title and a matching Instagram caption with a real scientific reference.
+Generate a SINGLE carousel post that is {title_style_note}.
 
 ### TARGET AUDIENCE:
 {audience_desc}
 
-### WHAT MAKES A GREAT POST TITLE:
-- A bold, impactful statement written in ALL CAPS
-- TITLE MUST BE 8-14 WORDS LONG (approximately 55-90 characters)
-- Focused on one or two main benefits
-- Some titles may include percentages for extra impact
-- Positive, empowering, and slightly exaggerated to create scroll-stop engagement
-- Do NOT lie, but dramatize slightly to spark discussion
-- Do NOT end the title with a period (.)
+### TITLE FORMAT:
+- {title_type_note}
+- MUST BE 8-14 WORDS (55-90 characters)
+- Title examples: {title_examples}
+- Do NOT end with a period
 
-### TOPIC FOR THIS POST (mandatory — write about this topic):
-{topic_hint if topic_hint else forced_topic}
+### TOPIC: {topic_hint if topic_hint else forced_topic}
 {topic_list}
 {examples_section}
 ### WHAT TO AVOID:
 - Reel-style titles like "5 SIGNS..." or "THINGS THAT DESTROY..."
-- Question formats
-- Lists or numbered formats (those are for reels)
-- Vague claims without specifics
+- Question formats or numbered lists
 - Topics outside the configured niche{avoid_topics}
 
-### CAPTION REQUIREMENTS:
-Write a full Instagram caption (4-5 paragraphs) that:
-- Paragraph 1: Hook — expand on the title with a surprising or counterintuitive angle
-- Paragraph 2-3: Explain the science/mechanism in accessible language
-- Paragraph 4: Summarize the takeaway
-- After the paragraphs, add a "Source:" section with a REAL, EXISTING academic reference:
-  Author(s). (Year). Title. Journal, Volume(Issue), Pages.
-  DOI: 10.xxxx/xxxxx
-  THE DOI MUST BE A REAL, VERIFIABLE DOI. NEVER invent or fabricate a DOI.
-- End with a disclaimer block:
-  ⚠️ Disclaimer:
-  {disclaimer}
-- Separate each section with a blank line
+### CAPTION (4-5 paragraphs):
+- Paragraph 1: Hook — expand on the title with a surprising angle
+- {caption_mechanism}
+- Paragraph 4: Takeaway
+{citation_block}
+- End with: \u26a0\ufe0f Disclaimer: {disclaimer}
+
+### IMAGE:
+- {image_style}
+- CRITICAL: {composition_hint}
+- 2-3 sentence cinematic description
+- Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 {history_context}
 
-IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title from the PREVIOUSLY GENERATED list."""
+### OUTPUT (JSON only):
+{{{{{{
+    "title": "TITLE IN ALL CAPS",
+    "caption": "Full caption with paragraphs and source.",
+    "image_prompt": "Cinematic image description. No text, no letters, no numbers, no symbols, no logos."
+}}}}}}
+
+Generate now:"""
 
         # Inject user-configured content prompts
         prompts = get_content_prompts()
@@ -614,24 +645,6 @@ IMPORTANT: Generate about the MANDATORY topic above. Do NOT repeat any title fro
             prompt += f"\n\n### BRAND CONTEXT:\n{brand_desc}"
         if posts_prompt_text:
             prompt += f"\n\n### ADDITIONAL INSTRUCTIONS:\n{posts_prompt_text}"
-
-        image_style = ctx.image_style_description if ctx.image_style_description else "High-end lifestyle photography style"
-        prompt += f"""
-
-### IMAGE PROMPT REQUIREMENTS:
-- {image_style}
-- CRITICAL: Generate CLOSE-UP, full-frame images where the subject fills the ENTIRE frame with minimal background
-- Think macro photography or tightly-cropped food/product shots — NOT wide shots with empty space
-- Must end with: "No text, no letters, no numbers, no symbols, no logos."
-
-### OUTPUT FORMAT (JSON only, no markdown):
-{{{{{{
-    "title": "Your statement title here.",
-    "caption": "Hook paragraph.\\n\\nExplanation...\\n\\nTakeaway.\\n\\nSource:\\nAuthor. (Year). Title. Journal.\\nDOI: 10.xxxx/xxxxx\\n\\n⚠️ Disclaimer:\\n{disclaimer}",
-    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
-}}}}}}
-
-Generate now:"""
 
         try:
             response = requests.post(

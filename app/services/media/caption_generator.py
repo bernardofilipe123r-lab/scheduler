@@ -67,18 +67,17 @@ class CaptionGenerator:
         
         # Add randomization to ensure different openings
         import random
+        niche_label = ctx.niche_name.lower()
+        audience_label = ctx.target_audience
+
         opening_styles = [
             "Start with a surprising statistic or fact",
             "Begin with a common misconception to debunk", 
             "Open with how this impacts daily life",
-            "Start by describing what happens in the body",
+            f"Start by describing the core mechanism or process in {niche_label} terms",
             "Begin with why most people overlook this",
             "Open with a relatable scenario or observation"
         ]
-        style_hint = random.choice(opening_styles)
-        
-        niche_label = ctx.niche_name.lower()
-        audience_label = ctx.target_audience
 
         prompt = f"""You are writing the first paragraph for an Instagram {niche_label} post. 
 The post is about: {title}
@@ -288,6 +287,29 @@ Just write the paragraph text, nothing else."""
         
         niche_label = ctx.niche_name.lower()
 
+        # Build niche-appropriate examples
+        if ctx.yt_title_examples:
+            good_examples_str = "\n".join(f'- "{ex}"' for ex in ctx.yt_title_examples[:6])
+            good_examples_block = f"GOOD EXAMPLES from your niche (study the format, not the topic):\n{good_examples_str}"
+        else:
+            good_examples_block = """GOOD EXAMPLES (curiosity-driven, no numbers, niche-agnostic format):
+- "The Hidden Reason Most People Fail At This"
+- "Why You're Doing This Wrong (And What To Fix)"
+- "Stop Making This Mistake Every Day"
+- "The Real Truth Nobody Is Talking About"
+- "This Common Belief Is Silently Costing You"
+- "What Most People Never Learn Until It's Too Late" """
+
+        if ctx.yt_title_bad_examples:
+            bad_examples_str = "\n".join(f'- "{ex}"' for ex in ctx.yt_title_bad_examples[:4])
+            bad_examples_block = f"BAD EXAMPLES for your niche (avoid these patterns):\n{bad_examples_str}"
+        else:
+            bad_examples_block = """BAD EXAMPLES (avoid these patterns):
+- "5 Tips to Improve Your [Topic]" (has numbers, generic)
+- "AMAZING TRICK EVERYONE NEEDS NOW!!" (all caps, excessive punctuation)
+- "Watch This Before It's Too Late" (pure clickbait without substance)
+- "Everything You Need to Know About [Topic]" (vague, no hook) """
+
         prompt = f"""You are creating a YouTube Shorts title for a {niche_label} video.
 
 Original reel title: {title}
@@ -304,20 +326,9 @@ Create a YouTube title that:
 6. Focus on intrigue and emotional hooks instead
 7. Avoids clickbait but is engaging
 
-GOOD EXAMPLES (no numbers, curiosity-driven):
-- "This Bedtime Habit Is Secretly Ruining Your Sleep"
-- "Why You're Always Tired (It's Not Sleep)"
-- "The Hidden Reason You Can't Lose Weight"
-- "Stop Doing This Every Morning For More Energy"
-- "Your Hormones Are Begging You To Eat This"
-- "This Common Food Is Destroying Your Gut"
+{good_examples_block}
 
-BAD EXAMPLES (avoid these):
-- "3 Signs Your Hormones Are Off" (has numbers)
-- "5 Foods That Speed Up Fat Loss" (has numbers)
-- "EAT THIS IF YOU ARE HORMONE IMBALANCED" (all caps)
-- "Amazing Health Tips You Need to Know!!" (vague, excessive punctuation)
-- "Watch This Before It's Too Late" (pure clickbait)
+{bad_examples_block}
 
 Respond with ONLY the title, nothing else."""
 

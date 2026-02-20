@@ -441,136 +441,245 @@ IMAGE_MODELS = {
 CAROUSEL_SLIDE_EXAMPLES = []
 
 
+def _build_citation_block(ctx: PromptContext) -> str:
+    """
+    Build the citation/source instruction block for carousel posts.
+    Branches based on ctx.citation_style. Returns empty string when "none".
+    """
+    style = ctx.citation_style or "none"
+    sources = ctx.citation_source_types
+
+    if style == "academic_doi":
+        source_names = ", ".join(sources) if sources else "PubMed, Nature, The Lancet, JAMA, BMJ"
+        return (
+            f"After the content paragraphs, add a real academic source:\n"
+            f"  Source: Author(s). (Year). Title. Journal, Volume(Issue), Pages.\n"
+            f"  DOI: 10.xxxx/xxxxx\n"
+            f"  Use studies from: {source_names}\n"
+            f"  THE DOI MUST BE A REAL, VERIFIABLE DOI. NEVER invent or fabricate a DOI."
+        )
+    elif style == "financial_data":
+        source_names = ", ".join(sources) if sources else "Federal Reserve, World Bank, Bloomberg, SEC, IMF, BLS"
+        return (
+            f"After the content paragraphs, add a real data source:\n"
+            f"  Source: [Organization]. ([Year]). [Report or dataset name]. Retrieved from [URL if public].\n"
+            f"  Use data from: {source_names}\n"
+            f"  The source MUST be a real, existing organization and real report."
+        )
+    elif style == "case_study":
+        source_names = ", ".join(sources) if sources else "Harvard Business Review, McKinsey, real company public records"
+        return (
+            f"After the content paragraphs, add a real case reference:\n"
+            f"  Case: [Company or person]. ([Year]). [What they did / quantified result].\n"
+            f"  Source: {source_names} or verified company records.\n"
+            f"  The case MUST be real and identifiable — no fabricated companies."
+        )
+    elif style == "expert_quote":
+        return (
+            f"After the content paragraphs, add a real expert reference:\n"
+            f"  Expert: [Full name], [Title/Credential], [Organization/Context].\n"
+            f"  Quote or key insight: \"[Their actual documented statement or position].\"\n"
+            f"  The expert MUST be a real, named professional with verifiable credentials."
+        )
+    else:
+        return ""  # "none" or empty — no citation required
+
+
+def _build_slide1_instruction(ctx: PromptContext) -> str:
+    """Build the first slide content instruction based on citation_style and niche."""
+    style = ctx.citation_style or "none"
+    niche = ctx.niche_description or (f"the {ctx.niche_name}" if ctx.niche_name else "this topic")
+
+    if style == "academic_doi":
+        return "Slide 1 text: The core scientific finding — what the research reveals and the mechanism behind it"
+    elif style == "financial_data":
+        return "Slide 1 text: What the data shows — the key statistic or trend and why it matters financially"
+    elif style == "case_study":
+        return "Slide 1 text: What happened — the context, the key decision or action, and the immediate outcome"
+    elif style == "expert_quote":
+        return "Slide 1 text: The expert's core insight — what they know that most people don't"
+    else:
+        return f"Slide 1 text: The core insight — what makes this true and why it matters in {niche}"
+
+
+def _build_post_title_examples(ctx: PromptContext) -> str:
+    """Build title examples for carousel posts. Uses user's post_examples first."""
+    # User's own examples are the highest quality signal
+    if ctx.has_post_examples:
+        titles = [ex.get("title", "") for ex in ctx.post_examples[:3] if ex.get("title")]
+        if titles:
+            return "e.g. " + " | ".join(f'"{t}"' for t in titles)
+
+    style = ctx.citation_style or "none"
+    if style == "academic_doi":
+        return (
+            'e.g. "STUDY REVEALS COLD EXPOSURE ACTIVATES BROWN FAT THERMOGENESIS" or '
+            '"RESEARCH SHOWS SLEEP DEBT DOUBLES CORTISOL WITHIN 72 HOURS"'
+        )
+    elif style == "financial_data":
+        return (
+            'e.g. "DATA SHOWS 73% OF RETAIL INVESTORS UNDERPERFORM INFLATION OVER 10 YEARS" or '
+            '"FED DATA REVEALS MEDIAN HOUSEHOLD DEBT GREW 40% SINCE 2019"'
+        )
+    elif style == "case_study":
+        return (
+            'e.g. "HOW AIRBNB GREW FROM ZERO TO $75 BILLION BY BREAKING ONE RULE" or '
+            '"THE APPLE PRICING STRATEGY THAT GENERATED $19 BILLION FROM A SINGLE PRODUCT"'
+        )
+    elif style == "expert_quote":
+        return (
+            'e.g. "WARREN BUFFETT\'S RULE THAT 99% OF INVESTORS IGNORE" or '
+            '"WHY CHARLIE MUNGER REFUSED TO OWN THIS TYPE OF ASSET"'
+        )
+    else:
+        niche = ctx.niche_name.upper() if ctx.niche_name else "YOUR TOPIC"
+        return (
+            f'e.g. "THE TRUTH ABOUT {niche} THAT CHANGES EVERYTHING" or '
+            f'"WHY MOST PEOPLE GET {niche} COMPLETELY WRONG"'
+        )
+
+
+def _build_carousel_cta_topic(ctx: PromptContext) -> str:
+    """Get the topic word for slide 4 CTA. Falls back through ctx fields."""
+    if ctx.carousel_cta_topic:
+        return ctx.carousel_cta_topic
+    if ctx.topic_keywords:
+        return ctx.topic_keywords[0]
+    if ctx.niche_name:
+        return ctx.niche_name.split()[0].lower()
+    return "this topic"
+
+
 def build_post_content_prompt(count: int, history_context: str = "", topic_hint: str = None, ctx: PromptContext = None) -> str:
     """
-    Build the full post content generation prompt.
-    This is the SINGLE SOURCE OF TRUTH for post generation.
-    Both the AI generator and the transparency page read from here.
-
-    Args:
-        count: Number of posts to generate
-        history_context: Recently generated titles to avoid repetition
-        topic_hint: Optional topic hint
-        ctx: Optional PromptContext for niche-specific content
-    Returns:
-        Complete prompt string
+    Build the prompt for batch carousel post generation.
+    Fully niche-agnostic — all domain-specific content comes from ctx.
     """
     if ctx is None:
         ctx = PromptContext()
-    # Build examples section — user examples if available, else hardcoded fallback
-    if ctx.has_post_examples:
-        examples_text = format_post_examples(ctx.post_examples)
-    else:
-        examples_text = ""
-        for i, ex in enumerate(CAROUSEL_SLIDE_EXAMPLES, 1):
-            examples_text += f"\n**Example {i} ({ex.get('topic', 'General')}):**\n"
-            examples_text += f"Title (Slide 1): {ex['title']}\n"
-            for j, slide in enumerate(ex["slides"], 2):
-                examples_text += f"Slide {j}: {slide}\n"
 
+    niche_label = ctx.niche_name.lower() if ctx.niche_name else "content"
+    audience_label = ctx.target_audience if ctx.target_audience else "the target audience"
+
+    # Build each dynamic block
+    citation_block = _build_citation_block(ctx)
+    slide1_instruction = _build_slide1_instruction(ctx)
+    title_examples = _build_post_title_examples(ctx)
+    cta_topic = _build_carousel_cta_topic(ctx)
+
+    # Image composition hint — from ctx, never a niche-specific fallback
+    composition_hint = (
+        ctx.image_composition_style
+        or "Close-up, full-frame where subject fills the entire frame with minimal background"
+    )
+    image_style_hint = ctx.image_style_description or "High-quality studio photography style"
+
+    # Post examples from user (few-shot, highest quality signal)
+    examples_block = format_post_examples(ctx.post_examples) if ctx.has_post_examples else ""
+
+    # Topic list
+    topic_block = ""
+    if ctx.topic_categories:
+        topic_block = "### VALID TOPICS (rotate through these):\n"
+        topic_block += "\n".join(f"- {t}" for t in ctx.topic_categories)
+
+    # Topic avoid
+    avoid_block = ""
+    if ctx.topic_avoid:
+        avoid_block = "\n".join(f"- {t}" for t in ctx.topic_avoid)
+
+    # Citation style label for title instruction
+    if ctx.citation_style == "academic_doi":
+        title_style_note = "based on a real, verifiable scientific study"
+        title_type_note = "A bold, impactful statement revealing what the research found, written in ALL CAPS"
+    elif ctx.citation_style == "financial_data":
+        title_style_note = "based on a real, verifiable data point or statistic"
+        title_type_note = "A bold, impactful statement revealing what the data shows, written in ALL CAPS"
+    elif ctx.citation_style == "case_study":
+        title_style_note = "based on a real, verifiable case or example"
+        title_type_note = "A bold, impactful statement summarizing the key finding or outcome, written in ALL CAPS"
+    elif ctx.citation_style == "expert_quote":
+        title_style_note = "based on a real expert's documented insight or position"
+        title_type_note = "A bold, impactful statement framing what the expert reveals, written in ALL CAPS"
+    else:
+        title_style_note = "focused on a compelling insight or truth about the topic"
+        title_type_note = f"A bold, impactful {niche_label} statement written in ALL CAPS"
+
+    # Slide 4 CTA sentence
+    slide4_cta = f"Follow @{{{{brandhandle}}}} to learn more about your {cta_topic}."
+
+    # Caption mechanism instruction — uses niche description, not body/health
+    niche_mechanism = ctx.niche_description if ctx.niche_description else f"the key concepts in {niche_label}"
+    caption_mechanism = (
+        f"Paragraph 2-3: Explain the core mechanism in accessible, {niche_label}-appropriate language. "
+        f"Be specific about how and why this works in the context of {niche_mechanism}."
+    )
+
+    # Disclaimer
+    disclaimer = ctx.disclaimer_text if ctx.disclaimer_text else ""
+    disclaimer_block = f"- End with this disclaimer:\\n\u26a0\ufe0f Disclaimer:\\n{disclaimer}" if disclaimer else ""
+
+    # Brief block
     brief_block = ""
     if ctx.content_brief:
         brief_block = f"\nCONTENT BRIEF (follow this closely):\n{ctx.content_brief}\n"
 
-    prompt = f"""You are a {ctx.niche_name.lower()} content creator for {ctx.parent_brand_name}, targeting {ctx.target_audience}.
+    prompt = f"""You are a {niche_label} content creator for {ctx.parent_brand_name or 'the brand'}, targeting {audience_label}.
 {brief_block}
-Generate EXACTLY {count} COMPLETELY DIFFERENT {ctx.niche_name.lower()}-focused posts. Each post MUST cover a DIFFERENT topic category.
+Generate EXACTLY {count} COMPLETELY DIFFERENT {niche_label}-focused posts. Each post MUST cover a DIFFERENT topic category.
 
-### TARGET AUDIENCE:
-{ctx.audience_description}
+Each post is a DIFFERENT topic. Each must be {title_style_note}.
+
+{examples_block}
+
+### TITLE FORMAT:
+- {title_type_note}
+- MUST BE 8-14 WORDS LONG (approximately 55-90 characters)
+- Title examples: {title_examples}
+- Do NOT end the title with a period
+- Do NOT use reel-style titles like "5 SIGNS..." or "THINGS THAT DESTROY..."
+
+{topic_block}
 
 ### CRITICAL WRITING RULES:
-- NEVER use em dashes or en dashes (the long dash characters). Instead, use commas, periods, semicolons, or rephrase the sentence. For example, write "it's not just about volume, it's about balance" instead of "it's not just about volume—it's about balance."
+- NEVER use em dashes or en dashes (the long dash characters). Instead, use commas, periods, semicolons, or rephrase the sentence.
 - Write in a natural, human, conversational tone. Avoid patterns that feel robotic or AI-generated.
 - Use short, punchy sentences mixed with longer explanatory ones for rhythm.
-- Each slide text must read as a standalone paragraph that could be a standalone Instagram text post.
-
-### CRITICAL RULE:
-Each of the {count} posts MUST be about a DIFFERENT topic. Do NOT repeat similar themes.
-Pick {count} DIFFERENT categories from this list (one per post):
-{chr(10).join(f'{i+1}. {topic}' for i, topic in enumerate(ctx.topic_categories))}
-
-### WHAT MAKES A GREAT POST TITLE (Slide 1):
-- Each post MUST be based on a real, verifiable scientific study
-- The title should reference the study finding (e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
-- A bold, impactful health statement written in ALL CAPS
-- TITLE MUST BE 8-14 WORDS LONG (approximately 55-90 characters) — this is critical for the cover layout
-- Focused on one or two main benefits
-- Positive, empowering, and slightly exaggerated to create scroll-stop engagement
-- Do NOT lie, but dramatize slightly to spark discussion
-- Do NOT end the title with a period (.) unless it's a two-part statement where the second part adds impact
-
-### TITLE STYLE VARIETY (CRITICAL, mix these across the batch):
-You MUST use a MIX of these title styles. Never generate all titles in the same style!
-
-**Style A: Bold statement with impact**
-- "[SURPRISING STATISTIC]. BUT HERE'S THE GOOD NEWS."
-- "[COMMON ASSUMPTION] IS ACTUALLY WRONG. HERE'S WHY."
-
-**Style B: Direct statement or conditional**
-- "IF YOU [COMMON EXPERIENCE], THIS COULD BE WHY."
-- "ONE DAILY HABIT CAN CHANGE YOUR [RELEVANT AREA]."
-
-**Style C: Educational insight**
-- "[LITTLE-KNOWN FACT]. AND IT AFFECTS EVERYTHING."
-- "[TOPIC] IS MORE IMPORTANT THAN YOU THINK."
-
-**Style D: Study-based revelation**
-- "STUDY REVEALS [SURPRISING FINDING ABOUT TOPIC]"
-- "RESEARCH SHOWS [EVIDENCE-BASED CLAIM]"
-- "[YEAR] STUDY FOUND [FINDING] IMPROVES [BENEFIT]"
 
 ### WHAT TO AVOID:
-- Em dashes or en dashes anywhere in the text (use commas or periods instead)
-- Reel-style titles like "5 SIGNS..." or "THINGS THAT DESTROY..."
-- Question formats or numbered lists as titles
-- Topics outside the configured niche categories
+- Repeating any title or topic from the previously generated list
+- Question formats or list/numbered formats (those are for reels)
+- Vague claims without specific evidence or examples
+- Topics outside {niche_label}{(chr(10) + avoid_block) if avoid_block else ""}
 
 ### CAPTION REQUIREMENTS:
-Write a full Instagram caption (4-5 paragraphs) that:
-- Paragraph 1: Hook: expand on the title with a surprising or counterintuitive angle
-- Paragraph 2-3: Explain the science/mechanism in accessible, expert-friendly language. Be specific about what happens and why it matters.
-- Paragraph 4: Summarize the takeaway, what the reader can expect if they take action
-- After the paragraphs, add a "Source:" section with a REAL, EXISTING academic reference in this format:
-  Author(s). (Year). Title. Journal, Volume(Issue), Pages.
-  DOI: 10.xxxx/xxxxx
-  THE DOI MUST BE A REAL, VERIFIABLE DOI that exists on doi.org. Use well-known published studies. The study must be related to the topic.
-  MANDATORY: Every single post MUST include a real DOI. This is non-negotiable. Use studies from PubMed, Nature, The Lancet, JAMA, BMJ, or other reputable journals. NEVER invent or fabricate a DOI.
-- Include the study reference with DOI at the end of the caption.
-- End with a disclaimer block:
-  Disclaimer:
-  {ctx.disclaimer_text if ctx.disclaimer_text else 'This content is intended for educational and informational purposes only. Individual results may vary.'}
-- Separate each section with a blank line for readability
+Each caption must be 4-5 paragraphs:
+- Paragraph 1: Hook — expand on the title with a surprising or counterintuitive angle
+- {caption_mechanism}
+- Paragraph 4: Key takeaway — what the reader should understand or do differently
+{citation_block}
+{disclaimer_block}
+- Separate each paragraph with a blank line
 
-### CAROUSEL SLIDE TEXTS (CRITICAL, this is for Instagram carousel slides 2+):
-Generate 3-4 slide texts for each post. These appear as text-only slides after the main cover image.
-Each slide text should be:
-- A standalone paragraph (3-6 sentences) that reads well on its own
-- Written in a calm, authoritative, educational tone (NOT salesy)
-- No em dashes or en dashes anywhere
-- Slide 1 text: The core scientific explanation (what happens in the body)
-- Slide 2 text: Deeper mechanism / why it matters / practical context
-- Slide 3 text: Practical advice, actionable takeaways, or specific recommendations
-- Slide 4 text (optional): Closing takeaway + call-to-action. MUST end with a new paragraph: "Follow @{{{{brandhandle}}}} to learn more about your {{{{topic_word}}}}." where topic_word is one relevant word from the niche (e.g. one of: {', '.join(ctx.topic_keywords[:8]) if ctx.topic_keywords else 'the topic'}).
-Note: the {{{{brandhandle}}}} placeholder will be replaced by the system.
-If only 3 slides, the last slide should include both actionable advice AND the Follow CTA.
+### SLIDE TEXT REQUIREMENTS (3-4 slides):
+- Slide 0 (COVER): The post title — exactly as written above
+- {slide1_instruction}
+- Slide 2 text: Deeper implications, context, or supporting evidence
+- Slide 3 text: Practical application — what this means for {audience_label} in real terms
+- Slide 4 text (optional): {slide4_cta}
+All slide text must be SHORT: 1-2 sentences max per slide. No bullet points. No emojis.
 
-### REFERENCE EXAMPLES (study these for tone, depth, and structure):
-{examples_text}
-
-### IMAGE PROMPT REQUIREMENTS:
-- {ctx.image_style_description if ctx.image_style_description else 'High-end lifestyle photography style'}
-- Each image prompt MUST be visually DIFFERENT (different setting, different elements)
-- CRITICAL: Generate CLOSE-UP, full-frame images where the subject fills the ENTIRE frame with minimal background visible
-- Think macro photography or tightly-cropped food/product shots — NO wide shots, NO large empty backgrounds
-- The subject should dominate the image, edge to edge
+### IMAGE REQUIREMENTS:
+- {image_style_hint}
+- CRITICAL: {composition_hint}
+- Generate a full cinematic image prompt, 2-3 sentences
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
 {history_context}
 
 {"Topic hint: " + topic_hint if topic_hint else ""}
 
-### OUTPUT FORMAT (JSON array, no markdown):"""
+### OUTPUT FORMAT (JSON array, no markdown, exactly {count} items):"""
 
     # Inject user-configured content prompts from DB
     prompts = get_content_prompts()
@@ -587,20 +696,20 @@ If only 3 slides, the last slide should include both actionable advice AND the F
     prompt += f"""
 [
   {{{{
-    "title": "TITLE IN ALL CAPS FOR SLIDE 1",
-    "caption": "Hook paragraph.\\n\\nScience explanation.\\n\\nMore detail.\\n\\nTakeaway.\\n\\nSource:\\nAuthor. (Year). Title. Journal, Vol(Issue), Pages.\\nDOI: 10.xxxx/xxxxx\\n\\nDisclaimer:\\nThis content is intended for educational and informational purposes only...",
+    "title": "TITLE IN ALL CAPS",
+    "caption": "Hook paragraph.\\n\\nMechanism explanation...\\n\\nImplications...\\n\\nTakeaway.{chr(10) + chr(10) + 'Source:\\n[citation]' if citation_block else ''}",
     "slide_texts": [
-      "First slide paragraph explaining the core science. 3-6 sentences.",
-      "Second slide going deeper into why it matters. 3-6 sentences.",
-      "Third slide with practical advice and actionable steps. 3-6 sentences.",
-      "Fourth slide with closing takeaway.\n\nFollow @{{{{brandhandle}}}} to learn more about your {{{{topic_word}}}}."
+      "Cover slide: POST TITLE IN ALL CAPS",
+      "{slide1_instruction.replace('Slide 1 text: ', '')}",
+      "Deeper context or supporting evidence.",
+      "Practical application for {audience_label}.",
+      "{slide4_cta}"
     ],
-    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos.",
-    "doi": "10.xxxx/xxxxx"
+    "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
   }}}}
 ]
 
-Generate exactly {count} posts now:"""
+Generate exactly {count} DIFFERENT posts now. Each must have a different title and topic."""
 
     return prompt
 
