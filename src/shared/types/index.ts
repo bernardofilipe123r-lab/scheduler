@@ -8,7 +8,7 @@ export type BrandName = string
 
 // Status types
 export type JobStatus = 'pending' | 'generating' | 'completed' | 'failed' | 'cancelled'
-export type BrandStatus = 'pending' | 'generating' | 'completed' | 'failed' | 'scheduled' | 'published'
+export type BrandStatus = 'pending' | 'generating' | 'completed' | 'failed' | 'scheduled' | 'published' | 'dismissed'
 export type ScheduleStatus = 'scheduled' | 'publishing' | 'published' | 'partial' | 'failed'
 
 // Variant type

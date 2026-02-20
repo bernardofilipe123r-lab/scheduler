@@ -17,7 +17,8 @@ import {
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
-import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus, useDeleteJobsByIds } from '@/features/jobs'
+import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus, useDeleteJobsByIds, useUpdateBrandStatus } from '@/features/jobs'
+import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge } from '@/features/brands'
 import { StatusBadge, JobsSkeleton, Modal } from '@/shared/components'
 import type { Job, Variant, BrandName } from '@/shared/types'
@@ -31,6 +32,8 @@ export function HistoryPage() {
   const regenerateJob = useRegenerateJob()
   const deleteByStatus = useDeleteJobsByStatus()
   const deleteByIds = useDeleteJobsByIds()
+  const autoSchedule = useAutoScheduleReel()
+  const updateBrandStatus = useUpdateBrandStatus()
   
   const jobsArray = Array.isArray(jobs) ? jobs : []
   
@@ -43,6 +46,7 @@ export function HistoryPage() {
   // Visual-only hidden job IDs (not persisted, not DB deletes)
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
   const [isDeletingSection, setIsDeletingSection] = useState(false)
+  const [isSchedulingAll, setIsSchedulingAll] = useState(false)
   
   const resetHidden = useCallback(() => {
     setHiddenJobIds(new Set())
@@ -186,6 +190,60 @@ export function HistoryPage() {
       toast.success('Regeneration started')
     } catch {
       toast.error('Failed to regenerate')
+    }
+  }
+  
+  // Handle schedule all ready-to-schedule jobs
+  const handleScheduleAllReady = async (jobs: Job[]) => {
+    setIsSchedulingAll(true)
+    let scheduled = 0
+    let failed = 0
+    
+    for (const job of jobs) {
+      const completedBrands = Object.entries(job.brand_outputs || {})
+        .filter(([_, output]) => output.status === 'completed')
+        .map(([brand]) => brand as BrandName)
+      
+      for (const brand of completedBrands) {
+        const output = job.brand_outputs[brand]
+        if (output?.reel_id) {
+          try {
+            const caption = output.caption || `${job.title}\n\nGenerated content for ${brand}`
+            
+            await autoSchedule.mutateAsync({
+              brand,
+              reel_id: output.reel_id,
+              variant: job.variant,
+              caption,
+              yt_title: output.yt_title,
+              yt_thumbnail_path: output.yt_thumbnail_path,
+              video_path: output.video_path,
+              thumbnail_path: output.thumbnail_path,
+              platforms: job.platforms,
+            })
+            await updateBrandStatus.mutateAsync({
+              id: job.id,
+              brand,
+              status: 'scheduled',
+            })
+            scheduled++
+          } catch (error) {
+            console.error(`Failed to schedule ${brand} in job ${job.id}:`, error)
+            failed++
+          }
+        }
+      }
+    }
+    
+    setIsSchedulingAll(false)
+    
+    if (scheduled > 0) {
+      const message = failed > 0
+        ? `✅ ${scheduled} brand(s) scheduled! ${failed} failed.`
+        : `🎉 ${scheduled} brand(s) scheduled successfully!`
+      toast.success(message, { duration: 4000 })
+    } else if (failed > 0) {
+      toast.error('Failed to schedule brands')
     }
   }
   
@@ -397,25 +455,41 @@ export function HistoryPage() {
             <span className="text-gray-500">({filteredJobs.length})</span>
           </div>
           {filteredJobs.length > 0 && (
-            <button
-              onClick={() => {
-                setBulkDeleteModal({
-                  label: stats.find(s => s.key === viewFilter)?.label || 'Jobs',
-                  jobs: filteredJobs,
-                  isFiltered: true,
-                  filterName: stats.find(s => s.key === viewFilter)?.label || viewFilter,
-                })
-              }}
-              disabled={deleteByStatus.isPending}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
-            >
-              {deleteByStatus.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
+            <div className="flex items-center gap-2">
+              {viewFilter === 'to-schedule' && (
+                <button
+                  onClick={() => handleScheduleAllReady(filteredJobs)}
+                  disabled={isSchedulingAll}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                >
+                  {isSchedulingAll ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CalendarCheck className="w-4 h-4" />
+                  )}
+                  {isSchedulingAll ? 'Scheduling...' : `Schedule All (${filteredJobs.length})`}
+                </button>
               )}
-              Delete All ({filteredJobs.length})
-            </button>
+              <button
+                onClick={() => {
+                  setBulkDeleteModal({
+                    label: stats.find(s => s.key === viewFilter)?.label || 'Jobs',
+                    jobs: filteredJobs,
+                    isFiltered: true,
+                    filterName: stats.find(s => s.key === viewFilter)?.label || viewFilter,
+                  })
+                }}
+                disabled={deleteByStatus.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {deleteByStatus.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                Delete All ({filteredJobs.length})
+              </button>
+            </div>
           )}
         </div>
       )}

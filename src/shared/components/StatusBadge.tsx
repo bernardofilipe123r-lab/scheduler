@@ -47,6 +47,11 @@ const statusConfig: Record<string, { bg: string; text: string; label: string }> 
     text: 'text-green-700',
     label: 'Published',
   },
+  dismissed: {
+    bg: 'bg-gray-100',
+    text: 'text-gray-500',
+    label: 'Dismissed',
+  },
 }
 
 export function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {
