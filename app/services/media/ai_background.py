@@ -53,6 +53,7 @@ class AIBackgroundGenerator:
             raise ValueError("DEAPI_API_KEY not found in environment variables")
         self.api_key = api_key
         self.base_url = "https://api.deapi.ai/api/v1/client"
+        self.last_deapi_prompt = None  # Stores the actual prompt sent to deAPI
     
     def _acquire_queue_position(self):
         """Acquire the semaphore to make a DEAPI request. Times out after QUEUE_TIMEOUT seconds."""
@@ -229,6 +230,9 @@ class AIBackgroundGenerator:
         if no_text_tag not in deapi_prompt.lower():
             deapi_prompt = f"{deapi_prompt} Absolutely {no_text_tag}."
 
+        # Store the final prompt so callers can read it back
+        self.last_deapi_prompt = deapi_prompt
+
         print(f"\n{'='*80}")
         print(f"🎨 REEL BACKGROUND — 3-LAYER PIPELINE")
         print(f"{'='*80}")
@@ -327,8 +331,8 @@ class AIBackgroundGenerator:
                         {"role": "system", "content": system_msg},
                         {"role": "user", "content": user_msg},
                     ],
-                    "temperature": 0.9,
-                    "max_tokens": 250,
+                    "temperature": 1.0,
+                    "max_tokens": 300,
                 },
                 timeout=20,
             )
@@ -371,53 +375,113 @@ class AIBackgroundGenerator:
         """System prompt for DeepSeek Layer 2 — image prompt engineering."""
         return (
             "You are an expert visual prompt engineer for AI image generation models "
-            "(Flux, Stable Diffusion). You create cinematic, detailed image prompts "
-            "that produce stunning background images for Instagram Reels.\n\n"
-            "RULES:\n"
+            "(Flux, Stable Diffusion). Your job is to create a **content-specific** "
+            "background image prompt for an Instagram Reel.\n\n"
+            "CRITICAL — CONTENT MATCHING:\n"
+            "- The image MUST visually represent the SPECIFIC topic of the reel.\n"
+            "- If the reel is about energy habits, show something related to energy.\n"
+            "- If it's about hormones, show something related to hormonal health.\n"
+            "- If it's about aging, show something about vitality or time.\n"
+            "- NEVER default to a generic 'woman by a window' or 'glass of water' scene.\n"
+            "- Each prompt must be UNIQUE — vary subjects, settings, compositions.\n\n"
+            "CRITICAL — VARIETY:\n"
+            "- Alternate between: aerial/bird's-eye, wide establishing, macro detail, \n"
+            "  environmental portrait (no face), abstract texture, flat lay, dramatic angle.\n"
+            "- Use DIFFERENT settings: labs, gyms, nature, cities, kitchens, studios, \n"
+            "  bathrooms, bedrooms, markets, gardens, clinics, trails.\n"
+            "- NEVER repeat the same composition style twice in a row.\n\n"
+            "OUTPUT RULES:\n"
             "- Output ONLY the image prompt text. No JSON, no markdown, no explanation.\n"
-            "- The prompt must describe a VISUAL SCENE, not text or concepts.\n"
-            "- Translate abstract ideas into concrete visual elements and compositions.\n"
-            "- Always specify: lighting, composition, color palette, textures, mood.\n"
-            "- Use close-up or medium shots. Fill the entire frame.\n"
-            "- NEVER include any written text, letters, numbers, or symbols in the scene.\n"
-            "- End every prompt with: 'No text, no letters, no numbers, no words, no symbols, no logos, no watermarks.'\n"
+            "- Describe a VISUAL SCENE with specific objects, textures, materials.\n"
+            "- Always specify: lighting type, camera angle, depth of field, color mood.\n"
+            "- NEVER include people's faces (backs, hands, silhouettes are OK).\n"
+            "- NEVER include any written text, letters, numbers, or symbols.\n"
+            "- End with: 'No text, no letters, no numbers, no symbols, no logos.'\n"
             "- Keep prompts 2-4 sentences (60-120 words).\n"
-            "- Be specific and vivid. Generic prompts produce generic images."
+            "- Be SPECIFIC and UNEXPECTED. Surprise me."
         )
 
+    # Palette terms that image models interpret as literal plants/objects
+    _PALETTE_BLOCKLIST = {
+        "sage", "eucalyptus", "linen", "terracotta", "lavender",
+        "mint", "olive", "moss", "fern", "cedar", "rosemary",
+    }
+
+    # Scene-description phrases in image_style_description to strip
+    _STYLE_SCENE_PHRASES = [
+        "Think:",
+        "morning kitchen counter",
+        "sunlit herbs",
+        "peaceful nature close-ups",
+        "soft greenery",
+    ]
+
+    def _clean_style_description(self, raw_style: str) -> str:
+        """Strip literal scene instructions from image_style_description so
+        it only conveys mood/aesthetic, not specific scene content."""
+        if not raw_style:
+            return ""
+        cleaned = raw_style
+        for phrase in self._STYLE_SCENE_PHRASES:
+            # Remove phrase and any trailing sentence fragment
+            idx = cleaned.find(phrase)
+            if idx != -1:
+                # Remove from phrase to end of sentence (or end of string)
+                end = cleaned.find(".", idx)
+                if end != -1:
+                    cleaned = cleaned[:idx] + cleaned[end + 1:]
+                else:
+                    cleaned = cleaned[:idx]
+        # Clean up double spaces / leading-trailing
+        return " ".join(cleaned.split()).strip(" .—-")
+
+    def _clean_palette_keywords(self, keywords: list) -> list:
+        """Filter out palette keywords that image models render as literal
+        plants/objects instead of treating as colors."""
+        return [
+            kw for kw in keywords
+            if kw.lower().strip() not in self._PALETTE_BLOCKLIST
+        ]
+
     def _build_layer2_user_prompt(self, content_data: dict) -> str:
-        """Build the user message for DeepSeek Layer 2 from structured content."""
+        """Build the user message for DeepSeek Layer 2 from structured content.
+        Content topic is the PRIMARY driver; niche style is secondary mood guidance."""
         parts = []
 
-        parts.append("Generate a cinematic image prompt for an Instagram Reel background.")
+        # ── Primary: Content (must drive the visual) ─────────────────
+        parts.append(
+            "Create a CONTENT-SPECIFIC image prompt for an Instagram Reel background."
+        )
 
         if content_data["title"]:
-            parts.append(f"\nREEL TOPIC: {content_data['title']}")
+            parts.append(f"\n>>> REEL TOPIC (this is what the image MUST represent): {content_data['title']}")
 
         if content_data["content_lines"]:
-            lines_text = "; ".join(content_data["content_lines"][:3])
-            parts.append(f"KEY POINTS: {lines_text}")
+            lines_text = "; ".join(content_data["content_lines"][:4])
+            parts.append(f">>> KEY POINTS (use these to choose scene elements): {lines_text}")
 
+        # ── Secondary: Mood / color guidance (do NOT dictate the scene) ──
         if content_data["niche_name"]:
-            parts.append(f"NICHE: {content_data['niche_name']}")
+            parts.append(f"\nNiche (for mood only, NOT for scene content): {content_data['niche_name']}")
 
-        if content_data["image_style"]:
-            parts.append(f"VISUAL STYLE GUIDE: {content_data['image_style']}")
+        cleaned_style = self._clean_style_description(content_data.get("image_style", ""))
+        if cleaned_style:
+            parts.append(f"Mood reference: {cleaned_style}")
 
-        if content_data["palette_keywords"]:
-            kw = ", ".join(content_data["palette_keywords"][:8])
-            parts.append(f"VISUAL ELEMENTS TO INCLUDE: {kw}")
+        clean_palette = self._clean_palette_keywords(content_data.get("palette_keywords", []))
+        if clean_palette:
+            kw = ", ".join(clean_palette[:6])
+            parts.append(f"Color palette (use as COLOR guidance only, not as objects): {kw}")
 
-        if content_data["composition_style"]:
-            parts.append(f"COMPOSITION: {content_data['composition_style']}")
+        if content_data.get("color_description"):
+            parts.append(f"Brand color mood: {content_data['color_description']}")
 
-        if content_data["color_description"]:
-            parts.append(f"COLOR MOOD: {content_data['color_description']}")
-
+        # ── Instructions ────────────────────────────────────────────
         parts.append(
-            "\nCreate a vivid, specific image prompt that captures the essence "
-            "of this content as a visual scene. The image will have text overlaid "
-            "on top, so the background must be clean and uncluttered."
+            "\nIMPORTANT: The image must be ABOUT the reel topic, not a generic "
+            "wellness/nature scene. Choose objects, settings, and compositions that "
+            "a viewer would immediately associate with the specific subject matter. "
+            "The image will have text overlaid, so keep the composition clean."
         )
 
         return "\n".join(parts)
@@ -425,36 +489,43 @@ class AIBackgroundGenerator:
     def _fallback_prompt(self, content_data: dict) -> str:
         """
         Fallback prompt when DeepSeek is unavailable.
-        Assembles a reasonable prompt from content_data without any LLM.
+        Derives a content-specific scene from the title + key points.
         """
         parts = []
 
-        # Visual style from NicheConfig
-        if content_data.get("image_style"):
-            parts.append(content_data["image_style"])
-        elif content_data.get("composition_style"):
-            parts.append(content_data["composition_style"])
+        # Content-driven scene description
+        title = content_data.get("title", "")
+        if title:
+            # Use title keywords to drive scene
+            parts.append(
+                f"A cinematic, atmospheric photograph representing the concept of: {title.lower()}"
+            )
         else:
             parts.append(
-                "Premium cinematic close-up photography with soft studio lighting"
+                "Premium cinematic photography with dramatic lighting"
             )
 
-        # Palette keywords as scene elements
-        if content_data.get("palette_keywords"):
-            kw = ", ".join(content_data["palette_keywords"][:6])
-            parts.append(f"Featuring {kw}")
+        # Add key points for specificity
+        lines = content_data.get("content_lines", [])
+        if lines:
+            subjects = ", ".join(lines[:2])
+            parts.append(f"Visual elements related to: {subjects.lower()}")
 
-        # Color mood
-        if content_data.get("color_description"):
-            parts.append(f"{content_data['color_description']}")
+        # Color palette (cleaned)
+        clean_palette = self._clean_palette_keywords(
+            content_data.get("palette_keywords", [])
+        )
+        if clean_palette:
+            kw = ", ".join(clean_palette[:4])
+            parts.append(f"Color palette: {kw}")
 
-        parts.append("Full-frame composition, sharp focus, magazine-quality output.")
+        parts.append("Sharp focus, magazine-quality, clean composition for text overlay.")
         parts.append(
             "No text, no letters, no numbers, no words, no symbols, "
             "no logos, no watermarks."
         )
 
-        return ". ".join(parts)
+        return " ".join(parts)
 
     # ================================================================
     # LAYER 3: deAPI Image Generation (shared by reels and posts)

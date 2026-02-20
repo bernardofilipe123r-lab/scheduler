@@ -155,17 +155,20 @@ class JobProcessor:
             # Each brand gets its own unique AI background (no caching/sharing)
             # The AIBackgroundGenerator uses a unique seed per generation
 
+            # Use per-brand ai_prompt if available (auto-gen), fall back to job-level
+            brand_ai_prompt = brand_data.get("ai_prompt") or job.ai_prompt
+
             print(f"🎨 Initializing ImageGenerator...", flush=True)
             print(f"   Variant: {job.variant}", flush=True)
             print(f"   Brand: {brand}", flush=True)
-            print(f"   AI Prompt: {job.ai_prompt[:100] if job.ai_prompt else 'None'}...", flush=True)
+            print(f"   AI Prompt: {brand_ai_prompt[:100] if brand_ai_prompt else 'None'}...", flush=True)
             sys.stdout.flush()
 
             generator = ImageGenerator(
                 brand_type=brand_type,
                 variant=job.variant,
                 brand_name=brand,
-                ai_prompt=job.ai_prompt,
+                ai_prompt=brand_ai_prompt,
                 image_model=getattr(job, 'image_model', None),
                 ctx=ctx
             )
@@ -190,6 +193,15 @@ class JobProcessor:
             })
             generator.generate_thumbnail(use_title, thumbnail_path)
             print(f"   ✓ Thumbnail saved: {thumbnail_path}", flush=True)
+
+            # After first image generation, update brand_outputs with the actual
+            # deAPI prompt so the UI shows what was really sent to the image model
+            if job.variant == "dark" and getattr(generator, '_actual_deapi_prompt', None):
+                self._manager.update_brand_output(job_id, brand, {
+                    "ai_prompt": generator._actual_deapi_prompt,
+                })
+                print(f"   ✓ Updated ai_prompt with actual deAPI prompt", flush=True)
+
             self._manager.update_brand_output(job_id, brand, {
                 "status": "generating",
                 "progress_message": "Thumbnail complete",

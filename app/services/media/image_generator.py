@@ -73,6 +73,7 @@ class ImageGenerator:
         self.image_model = image_model
         self.ctx = ctx
         self._ai_background = None  # Cache AI background for dark mode reuse
+        self._actual_deapi_prompt = None  # Actual prompt sent to deAPI
         
         print(f"   Loading brand colors...", flush=True)
         # Load brand-specific colors from centralized configuration
@@ -126,6 +127,8 @@ class ImageGenerator:
             model_override=self.image_model,
             ctx=self.ctx
         )
+        # Store the actual prompt sent to deAPI so callers can read it
+        self._actual_deapi_prompt = getattr(ai_generator, 'last_deapi_prompt', None)
         print(f"   ✓ AI background generated", flush=True)
         
         return self._ai_background
