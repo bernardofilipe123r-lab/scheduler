@@ -613,8 +613,12 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
         title_style_note = "focused on a compelling insight or truth about the topic"
         title_type_note = f"A bold, impactful {niche_label} statement written in ALL CAPS"
 
-    # Slide 4 CTA sentence
-    slide4_cta = f"Follow @{{{{brandhandle}}}} to learn more about your {cta_topic}."
+    # Slide 4: conclusion + CTA
+    slide4_cta_line = f"Follow @{{{{brandhandle}}}} to learn more about your {cta_topic}."
+    slide4_instruction = (
+        f"A concluding takeaway paragraph (2-3 sentences summarizing the key insight or actionable advice for {audience_label}). "
+        f"Then on a NEW paragraph: \"{slide4_cta_line}\""
+    )
 
     # Caption mechanism instruction — uses niche description, not body/health
     niche_mechanism = ctx.niche_description if ctx.niche_description else f"the key concepts in {niche_label}"
@@ -678,7 +682,7 @@ Each caption must be 4-5 paragraphs:
 - {slide1_instruction}
 - Slide 2 text: Deeper implications, context, or supporting evidence
 - Slide 3 text: Practical application — what this means for {audience_label} in real terms
-- Slide 4 text (optional): {slide4_cta}
+- Slide 4 text: {slide4_instruction}
 Each slide should be 3-4 sentences (roughly 40-60 words). Write in flowing prose, not bullet points or emojis.
 Do NOT include the post title or a cover slide in slide_texts — the cover is handled separately.
 
@@ -715,7 +719,7 @@ Do NOT include the post title or a cover slide in slide_texts — the cover is h
       "{slide1_instruction.replace('Slide 1 text: ', '')}",
       "Deeper context or supporting evidence.",
       "Practical application for {audience_label}.",
-      "{slide4_cta}"
+      "Concluding takeaway with actionable advice.\n\n{slide4_cta_line}"
     ],
     "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos."
   }}}}

@@ -1323,27 +1323,27 @@ export function PostJobDetail({ job, refetch }: Props) {
         const logoUrl = brandLogos[expandedBrand] || null
         const currentSlide = brandSlideIndex[expandedBrand] || 0
         const totalSlides = 1 + slideTexts.length
-        const FULL_SCALE = 0.55
+        const FULL_SCALE = 0.45
 
         return (
           <div
-            className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center"
+            className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6"
             onClick={() => setExpandedBrand(null)}
           >
             <div
-              className="relative flex flex-col items-center gap-4"
+              className="relative flex flex-col items-center gap-3 max-h-[calc(100dvh-3rem)] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close button */}
               <button
                 onClick={() => setExpandedBrand(null)}
-                className="absolute -top-2 -right-2 z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                className="absolute top-0 right-0 z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
               >
                 <X className="w-5 h-5 text-gray-600" />
               </button>
 
-              {/* Canvas at higher scale */}
-              <div className="rounded-xl overflow-hidden shadow-2xl">
+              {/* Canvas at higher scale — capped for viewport fit */}
+              <div className="rounded-xl overflow-hidden shadow-2xl shrink-0">
                 {currentSlide === 0 ? (
                   <PostCanvas
                     brand={expandedBrand}

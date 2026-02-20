@@ -331,7 +331,7 @@ Also generate:
    - A title referencing the study finding (ALL CAPS, 8-14 words, e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
    - 3-4 slides of detailed educational content (each slide is 3-5 sentences explaining the study and its implications)
    - A study_ref string: "Study short name — Journal or Institution, Year" (must be a real, verifiable study)
-   - The LAST slide must end with a CTA sentence (e.g. "For more science-backed tips, follow @brand_name"). The CTA MUST be separated from the preceding content by a blank line (\\n\\n). This is critical for proper rendering.
+   - The LAST slide must have TWO paragraphs: first a concluding takeaway (2-3 sentences summarizing the key insight or actionable advice), then separated by a blank line (\\n\\n), a CTA sentence (e.g. "For more science-backed tips, follow @brand_name"). This paragraph separation is critical for proper rendering.
    - IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc. Just write the paragraph directly.
 
 Write in first person ("I create...", "I understand...", "My goal is..."). Be specific about the niche, not generic. Show that you deeply understand the brand identity.
@@ -345,7 +345,7 @@ OUTPUT FORMAT (JSON only):
     }}}},
     "example_post": {{{{
         "title": "POST TITLE IN ALL CAPS REFERENCING A STUDY",
-        "slides": ["Detailed study findings paragraph...", "Mechanism explanation paragraph...", "Practical implications paragraph...", "Follow @brand for more..."],
+        "slides": ["Detailed study findings paragraph...", "Mechanism explanation paragraph...", "Practical implications paragraph...", "Concluding takeaway sentences.\\n\\nFollow @brand for more..."],
         "study_ref": "Iron absorption and tea tannins — Cell Metabolism, 2022"
     }}}}
 }}}}"""
