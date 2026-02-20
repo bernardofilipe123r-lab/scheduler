@@ -164,15 +164,16 @@ class AIBackgroundGenerator:
         
         raise RuntimeError(f"Request failed after {MAX_RETRIES} retries")
 
-    def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None, model_override: str = None) -> Image.Image:
+    def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None, model_override: str = None, ctx=None) -> Image.Image:
         """
         Generate an AI background image based on brand.
         
         Args:
-            brand_name: Brand name ("gymcollege", "healthycollege", "vitalitycollege", "longevitycollege")
+            brand_name: Brand name
             user_prompt: Custom prompt from user (optional)
             progress_callback: Callback function for progress updates (optional)
             content_context: Title or content lines to derive visual elements from (optional)
+            ctx: Optional PromptContext for niche-specific imagery
             
         Returns:
             PIL Image object with AI-generated background
@@ -201,15 +202,24 @@ class AIBackgroundGenerator:
         except Exception:
             pass
         
-        # BASE STYLE - BRIGHT, COLORFUL, VIBRANT, SHINY (like the NaturaMatrix example)
-        base_style = """BRIGHT, COLORFUL, VIBRANT still-life composition with SUNLIT atmosphere. Dense, full-frame layout filling every inch with objects. Light, airy, fresh feeling with SOFT GLOWING LIGHT throughout. Shallow water ripples, water droplets, moisture, and dewy surfaces. Soft bokeh light orbs floating in the background. Objects slightly submerged in shallow crystal-clear water with gentle ripples and reflections. Morning sunlight streaming in with lens flares and light rays. BRIGHT PASTEL background tones - NO DARK OR BLACK AREAS. Polished, glossy, shiny surfaces catching light. Ultra-sharp focus with dreamy soft glow around edges. Fresh, clean, healthy, optimistic, uplifting mood. Magazine-quality product photography style with enhanced saturation and vibrancy. Every surface should sparkle and shine. White highlights, soft shadows, luminous atmosphere."""
-        
-        # Build content-derived subject matter
-        if content_context:
-            subject_matter = f"Visual elements inspired by: '{content_context}'. Include relevant health/wellness objects: water bottles, fresh fruits, vegetables, fitness equipment, leaves, citrus slices, herbs, supplements, dumbbells, yoga mats, sneakers, salads, smoothies, clocks, measuring tape - whatever relates to the theme."
+        # BASE STYLE - use niche image_style_description from ctx if available
+        if ctx and ctx.image_style_description:
+            base_style = ctx.image_style_description
         else:
-            # Fallback generic health/wellness subjects if no content provided
-            subject_matter = "Include an abundance of health and wellness objects: glass water bottles, fresh fruits, colorful vegetables, green leaves, citrus slices, sneakers, dumbbells, yoga accessories, clocks, fresh salads, smoothie glasses, measuring tape, supplements."
+            base_style = """BRIGHT, COLORFUL, VIBRANT still-life composition with SUNLIT atmosphere. Dense, full-frame layout filling every inch with objects. Light, airy, fresh feeling with SOFT GLOWING LIGHT throughout. Shallow water ripples, water droplets, moisture, and dewy surfaces. Soft bokeh light orbs floating in the background. Morning sunlight streaming in with lens flares and light rays. BRIGHT PASTEL background tones - NO DARK OR BLACK AREAS. Polished, glossy, shiny surfaces catching light. Ultra-sharp focus with dreamy soft glow around edges. Magazine-quality product photography style with enhanced saturation and vibrancy. Every surface should sparkle and shine. White highlights, soft shadows, luminous atmosphere."""
+        
+        # Build content-derived subject matter from ctx palette keywords
+        palette_keywords = ", ".join(ctx.image_palette_keywords) if ctx and ctx.image_palette_keywords else ""
+        if content_context:
+            if palette_keywords:
+                subject_matter = f"Visual elements inspired by: '{content_context}'. Include relevant objects: {palette_keywords} - whatever relates to the theme."
+            else:
+                subject_matter = f"Visual elements inspired by: '{content_context}'. Include relevant objects that relate to the theme."
+        else:
+            if palette_keywords:
+                subject_matter = f"Include an abundance of niche-relevant objects: {palette_keywords}."
+            else:
+                subject_matter = "Include an abundance of premium lifestyle objects arranged artistically."
         
         # Build the final prompt
         if user_prompt:
@@ -411,17 +421,11 @@ class AIBackgroundGenerator:
             self._release_queue_position()
             print(f"🔓 Released DEAPI queue position", flush=True)
 
-    def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, model_override: str = None) -> Image.Image:
+    def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, model_override: str = None, ctx=None) -> Image.Image:
         """
-        Generate a HIGH QUALITY AI background for posts using FLUX.2 Klein 4B BF16.
+        Generate a HIGH QUALITY AI background for posts.
         
-        This model produces significantly better images than Flux1schnell:
-        - Higher fidelity details and textures
-        - Better prompt adherence
-        - More photorealistic output
-        - Supports up to 1536px resolution
-        
-        Uses 1080x1350 post dimensions (16px steps for Flux2Klein).
+        Uses 1080x1350 post dimensions (16px steps for ZImageTurbo).
         """
         start_time = time.time()
         
@@ -432,7 +436,12 @@ class AIBackgroundGenerator:
         # Quality suffix imported from prompt_templates (single source of truth)
         from app.core.prompt_templates import POST_QUALITY_SUFFIX
         
-        prompt = user_prompt or "Soft cinematic wellness still life with natural ingredients on white countertop in morning light."
+        if user_prompt:
+            prompt = user_prompt
+        elif ctx and ctx.image_style_description:
+            prompt = ctx.image_style_description
+        else:
+            prompt = "Soft cinematic still life with premium objects on white countertop in morning light."
         prompt = f"{prompt} {POST_QUALITY_SUFFIX}"
         
         # Add unique identifier

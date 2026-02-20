@@ -101,6 +101,8 @@ class NicheConfigService:
             'parent_brand_name': 'parent_brand_name',
             'cta_options': 'cta_options',
             'hashtags': 'hashtags',
+            'competitor_accounts': 'competitor_accounts',
+            'discovery_hashtags': 'discovery_hashtags',
             'follow_section_text': 'follow_section_text',
             'save_section_text': 'save_section_text',
             'disclaimer_text': 'disclaimer_text',

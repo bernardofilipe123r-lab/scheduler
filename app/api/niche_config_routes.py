@@ -55,6 +55,8 @@ class NicheConfigUpdate(BaseModel):
     parent_brand_name: Optional[str] = Field(None, max_length=100)
     cta_options: Optional[list] = None
     hashtags: Optional[list] = None
+    competitor_accounts: Optional[list] = None
+    discovery_hashtags: Optional[list] = None
     follow_section_text: Optional[str] = None
     save_section_text: Optional[str] = None
     disclaimer_text: Optional[str] = None
@@ -133,6 +135,8 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
         "parent_brand_name": cfg.parent_brand_name,
         "cta_options": cfg.cta_options or [],
         "hashtags": cfg.hashtags or [],
+        "competitor_accounts": cfg.competitor_accounts or [],
+        "discovery_hashtags": cfg.discovery_hashtags or [],
         "follow_section_text": cfg.follow_section_text,
         "save_section_text": cfg.save_section_text,
         "disclaimer_text": cfg.disclaimer_text,
@@ -186,6 +190,8 @@ async def get_niche_config(
         "parent_brand_name": ctx.parent_brand_name,
         "cta_options": ctx.cta_options,
         "hashtags": ctx.hashtags,
+        "competitor_accounts": ctx.competitor_accounts,
+        "discovery_hashtags": ctx.discovery_hashtags,
         "follow_section_text": ctx.follow_section_text,
         "save_section_text": ctx.save_section_text,
         "disclaimer_text": ctx.disclaimer_text,

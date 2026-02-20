@@ -166,7 +166,8 @@ class JobProcessor:
                 variant=job.variant,
                 brand_name=brand,
                 ai_prompt=job.ai_prompt,
-                image_model=getattr(job, 'image_model', None)
+                image_model=getattr(job, 'image_model', None),
+                ctx=ctx
             )
             print(f"   ✓ ImageGenerator initialized successfully", flush=True)
             sys.stdout.flush()
@@ -415,6 +416,10 @@ class JobProcessor:
             brand_slug = brand
             user_id = job.user_id
 
+            # Build PromptContext from NicheConfig for niche-specific imagery
+            from app.services.content.niche_config_service import NicheConfigService
+            ctx = NicheConfigService().get_context(brand_id=brand, user_id=user_id)
+
             # Generate AI background using per-brand prompt
             ai_prompt = brand_ai_prompt
             generator = AIBackgroundGenerator()
@@ -430,6 +435,7 @@ class JobProcessor:
                 brand_name=brand,
                 user_prompt=ai_prompt,
                 model_override=getattr(job, 'image_model', None),
+                ctx=ctx,
             )
 
             # Save to temp file, upload to Supabase, delete temp

@@ -41,73 +41,17 @@ class TrendScout:
     GRAPH_API_VERSION = "v21.0"
     BASE_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
-    # Health/wellness hashtags to monitor (curated for our niche)
-    DEFAULT_HASHTAGS = [
-        "healthyaging", "over40health", "wellnessover50",
-        "womenshealth", "naturalhealth", "healthyliving",
-        "holistichealth", "antiaging", "longevity",
-        "healthtips", "wellnesstips", "guthealth",
-    ]
+    # Discovery hashtags — loaded from NicheConfig per user
+    DEFAULT_HASHTAGS: List[str] = []
 
-    # Competitor/inspiration accounts to monitor (public business accounts)
-    # These are top health/wellness pages with millions of combined followers
-    DEFAULT_COMPETITORS: List[str] = [
-        "naturamatrix",
-        "holistichealthworld",
-        "manifestableglowup",
-        "mylera_life",
-        "naturalhealinglab",
-    ]
+    # Competitor/inspiration accounts — loaded from NicheConfig per user
+    DEFAULT_COMPETITORS: List[str] = []
 
-    # Post-focused competitor/inspiration accounts (carousel & educational content)
-    # Avatar-aligned: women 45+, health, daily habits, mental health, wellness, longevity
-    DEFAULT_POST_COMPETITORS: List[str] = [
-        # === Health & Wellness (women 45+ focused) ===
-        "drericberg",              # Dr. Eric Berg — health tips, huge following
-        "doutorbarakat",           # Dr. Barakat — holistic health, lifestyle
-        "consciousnesstruth",      # Consciousness & spiritual wellness
-        "mindset.therapy",         # Mental health & mindset
-        "mental.aspect",           # Mental wellness & daily habits
-        "healf",                   # Holistic health & self-care
-        # === Nutrition & Natural Health ===
-        "thefarmacyreal",          # Natural remedies, plant-based healing
-        "seedoilscout",            # Seed oil awareness, clean eating
-        "eatinghealthyfeed",       # Healthy eating tips & nutrition
-        "foodlty",                 # Food & healthy lifestyle
-        "naturethecure",           # Natural cures & wellness
-        # === Longevity & Anti-Aging ===
-        "longevityxlab",           # Longevity science & tips
-        "dr.longevity",            # Anti-aging & longevity
-        "trillionairehealth",      # High-end health & longevity
-        "healvex",                 # Healing & wellness
-        # === Neuroscience & Brain Health ===
-        "neurolab._",              # Neuroscience & brain health
-        "neuroglobe",              # Brain science & mental clarity
-        # === Lifestyle & Habits ===
-        "demicstory",              # Personal health stories
-        "betterme",                # Self-improvement & health
-        "science",                 # Science-backed health
-        "thuthlyrical",            # Wellness wisdom
-        "manifestableglowup",     # Glow-up & self-care
-        # === Wellness Brands & Supplements ===
-        "laviahealthshop",         # Health products & tips
-        "bioganancias",            # Bio-health & supplements
-        # === Women's Health Specific ===
-        "mentalmentevisionario",   # Mental health & vision
-        "fitnessforallus",         # Accessible fitness for all ages
-        "naturamatrix",            # Natural health matrix
-        "holistichealthworld",     # Holistic health community
-        "mylera_life",             # Lifestyle & wellness
-        "naturalhealinglab",       # Natural healing approaches
-    ]
+    # Post-focused competitor/inspiration accounts — loaded from NicheConfig per user
+    DEFAULT_POST_COMPETITORS: List[str] = []
 
-    # Post-specific hashtags (carousel/educational content discovery)
-    DEFAULT_POST_HASHTAGS = [
-        "healthscience", "nutritionscience", "evidencebasedhealth",
-        "longevityscience", "biohacking", "healthfacts",
-        "nutritiontips", "wellnessjourney", "brainhealth",
-        "guthealth", "hormonehealth", "antiaging",
-    ]
+    # Post-specific hashtags — loaded from NicheConfig per user
+    DEFAULT_POST_HASHTAGS: List[str] = []
 
     def __init__(self, user_id: str = None):
         # User context for tenant isolation (optional for background services)
@@ -117,31 +61,51 @@ class TrendScout:
         self._ig_user_id = None
         self._load_credentials()
 
-        # Load reel competitor list from env
+        # Load discovery config from NicheConfig if user_id provided
+        niche_competitors = []
+        niche_hashtags = []
+        if user_id:
+            try:
+                from app.services.content.niche_config_service import NicheConfigService
+                ctx = NicheConfigService().get_context(user_id=user_id)
+                niche_competitors = ctx.competitor_accounts or []
+                niche_hashtags = ctx.discovery_hashtags or []
+            except Exception:
+                pass
+
+        # Load reel competitor list: env > NicheConfig > empty
         comp_env = os.getenv("TOBY_COMPETITOR_ACCOUNTS", "")
         if comp_env:
             self.competitors = [c.strip() for c in comp_env.split(",") if c.strip()]
+        elif niche_competitors:
+            self.competitors = list(niche_competitors)
         else:
             self.competitors = list(self.DEFAULT_COMPETITORS)
 
-        # Load post competitor list from env
+        # Load post competitor list: env > NicheConfig > empty
         post_comp_env = os.getenv("TOBY_POST_COMPETITOR_ACCOUNTS", "")
         if post_comp_env:
             self.post_competitors = [c.strip() for c in post_comp_env.split(",") if c.strip()]
+        elif niche_competitors:
+            self.post_competitors = list(niche_competitors)
         else:
             self.post_competitors = list(self.DEFAULT_POST_COMPETITORS)
 
-        # Custom reel hashtags from env
+        # Custom reel hashtags: env > NicheConfig > empty
         hashtag_env = os.getenv("TOBY_HASHTAGS", "")
         if hashtag_env:
             self.hashtags = [h.strip().lstrip("#") for h in hashtag_env.split(",") if h.strip()]
+        elif niche_hashtags:
+            self.hashtags = [h.lstrip("#") for h in niche_hashtags]
         else:
             self.hashtags = list(self.DEFAULT_HASHTAGS)
 
-        # Custom post hashtags from env
+        # Custom post hashtags: env > NicheConfig > empty
         post_hashtag_env = os.getenv("TOBY_POST_HASHTAGS", "")
         if post_hashtag_env:
             self.post_hashtags = [h.strip().lstrip("#") for h in post_hashtag_env.split(",") if h.strip()]
+        elif niche_hashtags:
+            self.post_hashtags = [h.lstrip("#") for h in niche_hashtags]
         else:
             self.post_hashtags = list(self.DEFAULT_POST_HASHTAGS)
 

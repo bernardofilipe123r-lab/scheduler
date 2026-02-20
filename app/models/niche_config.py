@@ -51,6 +51,10 @@ class NicheConfig(Base):
     cta_options = Column(JSONB, default=[])
     hashtags = Column(JSONB, default=[])
 
+    # Discovery Configuration — empty, user defines competitor accounts and hashtags
+    competitor_accounts = Column(JSONB, default=[])
+    discovery_hashtags = Column(JSONB, default=[])
+
     # Caption sections — empty until configured
     follow_section_text = Column(Text, default="")
     save_section_text = Column(Text, default="")

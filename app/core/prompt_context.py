@@ -56,6 +56,10 @@ class PromptContext:
     save_section_text: str = ""
     disclaimer_text: str = ""
 
+    # Discovery Configuration
+    competitor_accounts: List[str] = field(default_factory=list)
+    discovery_hashtags: List[str] = field(default_factory=list)
+
     # --- Derived / computed ---
 
     @property

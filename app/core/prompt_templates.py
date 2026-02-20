@@ -338,7 +338,6 @@ POST_QUALITY_SUFFIX = (
 REEL_BASE_STYLE = (
     "BRIGHT, COLORFUL, VIBRANT still-life composition with SUNLIT atmosphere. "
     "Dense, full-frame layout filling every inch with objects. "
-    "Shallow water ripples, water droplets, moisture, and dewy surfaces. "
     "Soft bokeh light orbs floating in the background. "
     "Morning sunlight streaming in with lens flares and light rays. "
     "BRIGHT PASTEL background tones - NO DARK OR BLACK AREAS. "
@@ -505,7 +504,7 @@ You MUST use a MIX of these title styles. Never generate all titles in the same 
 ### CAPTION REQUIREMENTS:
 Write a full Instagram caption (4-5 paragraphs) that:
 - Paragraph 1: Hook: expand on the title with a surprising or counterintuitive angle
-- Paragraph 2-3: Explain the science/mechanism in accessible, wellness-friendly language. Be specific about what happens in the body (metabolism, organs, brain chemistry, skin, energy, etc.)
+- Paragraph 2-3: Explain the science/mechanism in accessible, expert-friendly language. Be specific about what happens and why it matters.
 - Paragraph 4: Summarize the takeaway, what the reader can expect if they take action
 - After the paragraphs, add a "Source:" section with a REAL, EXISTING academic reference in this format:
   Author(s). (Year). Title. Journal, Volume(Issue), Pages.
@@ -527,7 +526,7 @@ Each slide text should be:
 - Slide 1 text: The core scientific explanation (what happens in the body)
 - Slide 2 text: Deeper mechanism / why it matters / practical context
 - Slide 3 text: Practical advice, actionable takeaways, or specific recommendations
-- Slide 4 text (optional): Closing takeaway + call-to-action. MUST end with a new paragraph: "Follow @{{{{brandhandle}}}} to learn more about your {{{{topic_word}}}}." where topic_word is one relevant word like "health", "brain", "body", "longevity", "energy", "skin", "sleep", "nutrition" etc.
+- Slide 4 text (optional): Closing takeaway + call-to-action. MUST end with a new paragraph: "Follow @{{{{brandhandle}}}} to learn more about your {{{{topic_word}}}}." where topic_word is one relevant word from the niche (e.g. one of: {', '.join(ctx.topic_keywords[:8]) if ctx.topic_keywords else 'the topic'}).
 Note: the {{{{brandhandle}}}} placeholder will be replaced by the system.
 If only 3 slides, the last slide should include both actionable advice AND the Follow CTA.
 
@@ -569,7 +568,7 @@ If only 3 slides, the last slide should include both actionable advice AND the F
       "First slide paragraph explaining the core science. 3-6 sentences.",
       "Second slide going deeper into why it matters. 3-6 sentences.",
       "Third slide with practical advice and actionable steps. 3-6 sentences.",
-      "Fourth slide with closing takeaway.\\n\\nFollow @{{{{brandhandle}}}} to learn more about your health."
+      "Fourth slide with closing takeaway.\n\nFollow @{{{{brandhandle}}}} to learn more about your {{{{topic_word}}}}."
     ],
     "image_prompt": "Detailed cinematic image description. No text, no letters, no numbers, no symbols, no logos.",
     "doi": "10.xxxx/xxxxx"

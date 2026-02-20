@@ -394,46 +394,13 @@ class BrandManager:
         """
         Seed default brands if none exist.
         
-        Returns the number of brands seeded.
+        NOTE: Default brand seeding is disabled. Users should create their own brands
+        through the UI with their own niche configuration. The DEFAULT_BRANDS dict
+        is retained only for reference by existing deployments that already have data.
+        
+        Returns the number of brands seeded (always 0).
         """
-        Brand = self._get_brand_model()
-        
-        query = self.db.query(Brand)
-        if user_id:
-            query = query.filter(Brand.user_id == user_id)
-        existing_count = query.count()
-        if existing_count > 0:
-            logger.info(f"Brands already exist ({existing_count}), skipping seed")
-            return 0
-        
-        logger.info("Seeding default brands...")
-        seeded = 0
-        
-        for idx, (brand_id, config) in enumerate(DEFAULT_BRANDS.items()):
-            colors = DEFAULT_BRAND_COLORS.get(brand_id, {})
-            
-            brand = Brand(
-                id=brand_id,
-                user_id=user_id,
-                display_name=config["display_name"],
-                short_name=config["short_name"],
-                instagram_handle=config.get("instagram_handle"),
-                facebook_page_name=config.get("facebook_page_name"),
-                youtube_channel_name=config.get("youtube_channel_name"),
-                schedule_offset=idx,  # Auto-assign based on creation order
-                posts_per_day=config.get("posts_per_day", 6),
-                baseline_for_content=config.get("baseline_for_content", False),
-                colors=colors,
-                active=True,
-            )
-            
-            self.db.add(brand)
-            seeded += 1
-        
-        self.db.commit()
-        logger.info(f"Seeded {seeded} default brands")
-        
-        return seeded
+        return 0
 
 
 # Singleton-like accessor for convenience

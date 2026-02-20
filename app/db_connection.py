@@ -42,6 +42,13 @@ def init_db():
 def run_migrations():
     """Run idempotent SQL migrations for indexes and constraints not handled by create_all."""
     with engine.connect() as conn:
+        # Add niche_config discovery columns if they don't exist
+        for col in ["competitor_accounts", "discovery_hashtags"]:
+            conn.execute(
+                text(
+                    f"ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS {col} JSONB DEFAULT '[]'::jsonb"
+                )
+            )
         # Seed global prompt settings if they don't exist
         for key, desc in [
             ("reels_prompt", "Global prompt describing topics/ideas for reel content"),
