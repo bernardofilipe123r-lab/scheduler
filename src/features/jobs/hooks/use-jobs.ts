@@ -16,16 +16,10 @@ export function useJobs() {
   return useQuery({
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
-    refetchInterval: (query) => {
-      // Poll faster (3s) when any job is generating/pending
-      const jobs = query.state.data
-      const hasActive = Array.isArray(jobs) && jobs.some(
-        (j: any) => j.status === 'generating' || j.status === 'pending'
-      )
-      return hasActive ? 3000 : 10000
-    },
+    // Realtime subscription handles instant updates; poll as safety fallback
+    refetchInterval: 30000,
     refetchOnMount: 'always',
-    staleTime: 0,
+    staleTime: 2000,
   })
 }
 
@@ -34,13 +28,8 @@ export function useJob(id: string) {
     queryKey: jobKeys.detail(id),
     queryFn: () => jobsApi.get(id),
     enabled: !!id,
-    refetchInterval: (query) => {
-      const job = query.state.data
-      if (job?.status === 'generating' || job?.status === 'pending') {
-        return 3000
-      }
-      return 5000
-    },
+    // Realtime subscription handles instant updates; poll as safety fallback
+    refetchInterval: 30000,
   })
 }
 

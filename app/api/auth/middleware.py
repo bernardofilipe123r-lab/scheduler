@@ -2,10 +2,9 @@
 
 import os
 import logging
-import asyncio
 import jwt as pyjwt
 from jwt import PyJWKClient
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
 from app.services.logging.service import set_user_id as set_logging_user_id
@@ -110,9 +109,8 @@ async def get_current_user(
     """Verify Supabase JWT and return user data.
     
     Tries validation in order:
-    1. JWKS (ES256) — fetches public key from Supabase JWKS endpoint
-    2. HS256 with SUPABASE_JWT_SECRET (legacy fallback)
-    3. Supabase API call (slowest, but always works)
+    1. JWKS (ES256) — fetches public key from Supabase JWKS endpoint (cached)
+    2. HS256 with SUPABASE_JWT_SECRET (fallback for older tokens)
     
     Returns dict with at minimum: { "id": str, "email": str }
     """
@@ -141,7 +139,7 @@ async def get_current_user(
         except (pyjwt.InvalidTokenError, Exception) as e:
             logger.debug("JWKS validation failed: %s", e)
 
-    # --- 2. Try HS256 with shared secret (legacy) ---
+    # --- 2. Try HS256 with shared secret (fallback) ---
     if SUPABASE_JWT_SECRET:
         try:
             payload = pyjwt.decode(
@@ -159,50 +157,7 @@ async def get_current_user(
         except pyjwt.InvalidTokenError as e:
             logger.debug("HS256 validation failed: %s", e)
 
-    # --- 3. Fallback: call Supabase API (with 5s timeout) ---
-    try:
-        supabase = get_supabase_client()
-        response = await asyncio.wait_for(
-            asyncio.to_thread(supabase.auth.get_user, token),
-            timeout=5.0,
-        )
-        user = response.user
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        app_metadata = user.app_metadata or {}
-        user_metadata = user.user_metadata or {}
-        roles = [
-            user.role,
-            app_metadata.get("role"),
-            user_metadata.get("role"),
-        ]
-        normalized_roles = {str(r).strip().lower() for r in roles if r}
-        is_super_admin = (
-            "super_admin" in normalized_roles
-            or bool(app_metadata.get("is_super_admin"))
-            or bool(user_metadata.get("is_super_admin"))
-        )
-        extracted_user = {
-            "id": user.id,
-            "email": user.email or "",
-            "role": next((str(r) for r in roles if r), "authenticated"),
-            "is_admin": (
-                is_super_admin
-                or "admin" in normalized_roles
-                or bool(app_metadata.get("is_admin"))
-                or bool(user_metadata.get("is_admin"))
-            ),
-            "is_super_admin": is_super_admin,
-        }
-        if extracted_user.get("id"):
-            set_logging_user_id(extracted_user["id"])
-        return extracted_user
-    except HTTPException:
-        raise
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Auth service timeout")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Authentication failed")
+    raise HTTPException(status_code=401, detail="Authentication failed")
 
 
 async def get_optional_user(

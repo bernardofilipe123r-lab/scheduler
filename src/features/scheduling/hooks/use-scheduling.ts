@@ -50,9 +50,10 @@ export function useScheduledPosts() {
   return useQuery({
     queryKey: schedulingKeys.scheduled(),
     queryFn: schedulingApi.getScheduled,
-    refetchInterval: 30000,
-    refetchOnMount: 'always', // Always refetch when navigating to Scheduled page
-    staleTime: 0, // Data is always considered stale
+    // Realtime subscription handles instant updates; poll as safety fallback
+    refetchInterval: 60000,
+    refetchOnMount: 'always',
+    staleTime: 5000,
   })
 }
 
