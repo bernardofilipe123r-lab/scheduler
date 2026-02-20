@@ -4,7 +4,7 @@ Uses a global FIFO queue to ensure only one DEAPI request runs at a time.
 Includes retry logic with exponential backoff for 429 rate limit errors.
 """
 import os
-import uuid
+import random
 import time
 import threading
 from pathlib import Path
@@ -220,16 +220,11 @@ class AIBackgroundGenerator:
             # Standard prompt with content-derived subjects and brand colors
             prompt = f"{subject_matter} {base_style} COLOR PALETTE: Primary tones of {palette['description']}. Main accent color: {palette['primary']}. MANDATORY: Image must be BRIGHT, LIGHT, and COLORFUL. Absolutely NO dark backgrounds, NO black, NO shadowy or moody atmosphere."
         
-        # Add unique identifier to ensure different images each time
-        unique_id = str(uuid.uuid4())[:8]
-        prompt = f"{prompt} [ID: {unique_id}]"
-        
         print(f"\n{'='*80}")
         print(f"🎨 AI BACKGROUND GENERATION STARTED")
         print(f"{'='*80}")
         print(f"🏷️  Brand: {brand_name}")
         print(f"📝 Prompt length: {len(prompt)} chars")
-        print(f"🆔 Unique ID: {unique_id}")
         print(f"📄 Full prompt: {prompt[:200]}...")  # Show first 200 chars
         print(f"{'='*80}\n")
         
@@ -269,12 +264,15 @@ class AIBackgroundGenerator:
                 "Accept": "application/json"
             }
             
+            import random
+            seed = random.randint(0, 2**31 - 1)
+            
             payload = {
                 "prompt": prompt,
                 "model": use_model,
                 "width": width,
                 "height": height,
-                "seed": int(unique_id, 16) % (2**31),
+                "seed": seed,
             }
             
             # Model-specific parameters
@@ -486,10 +484,6 @@ class AIBackgroundGenerator:
             )
         prompt = f"{prompt} {POST_QUALITY_SUFFIX}"
         
-        # Add unique identifier
-        unique_id = str(uuid.uuid4())[:8]
-        prompt = f"{prompt} [ID: {unique_id}]"
-        
         print(f"\n{'='*80}")
         print(f"🎨 POST BACKGROUND GENERATION (HQ - Z-Image-Turbo)")
         print(f"{'='*80}")
@@ -530,12 +524,15 @@ class AIBackgroundGenerator:
                 "Accept": "application/json"
             }
             
+            import random
+            seed = random.randint(0, 2**31 - 1)
+            
             payload = {
                 "prompt": prompt,
                 "model": use_model,
                 "width": width,
                 "height": height,
-                "seed": int(unique_id, 16) % (2**31),
+                "seed": seed,
             }
             
             # Model-specific parameters
