@@ -82,10 +82,9 @@ function removeBrandLogo(brand: string) {
 
 interface Props {
   job: Job
-  refetch: () => void
 }
 
-export function PostJobDetail({ job, refetch }: Props) {
+export function PostJobDetail({ job }: Props) {
   const navigate = useNavigate()
   const deleteJob = useDeleteJob()
   const regenerateJob = useRegenerateJob()
@@ -219,7 +218,6 @@ export function PostJobDetail({ job, refetch }: Props) {
       })
       toast.success('Content updated!')
       setEditingBrand(null)
-      refetch()
     } catch {
       toast.error('Failed to update content')
     }
@@ -235,7 +233,6 @@ export function PostJobDetail({ job, refetch }: Props) {
       })
       toast.success('Image regeneration started!')
       setEditingBrand(null)
-      refetch()
     } catch {
       toast.error('Failed to regenerate image')
     }
@@ -280,7 +277,6 @@ export function PostJobDetail({ job, refetch }: Props) {
     try {
       await regenerateJob.mutateAsync(job.id)
       toast.success('Regeneration started')
-      refetch()
     } catch {
       toast.error('Failed to regenerate')
     }
@@ -319,7 +315,6 @@ export function PostJobDetail({ job, refetch }: Props) {
             slide_texts: editSlideTexts,
           },
         })
-        await refetch()
         setEditingBrand(null)
       } catch {
         toast.error('Failed to save edits before scheduling')
@@ -479,7 +474,6 @@ export function PostJobDetail({ job, refetch }: Props) {
               ? 'Post was scheduled successfully'
               : 'Posts were scheduled successfully for all brands'
         toast.success(msg, { id: 'sched', duration: 5000 })
-        await refetch()
         setBrandSlideIndex({})
       } else {
         toast.error('Failed to schedule posts', { id: 'sched' })
@@ -626,7 +620,6 @@ export function PostJobDetail({ job, refetch }: Props) {
       })
 
       toast.success(`${getBrandConfig(brand).name} scheduled!`, { id: `sched-${brand}` })
-      refetch()
     } catch {
       toast.error(`Failed to schedule ${getBrandConfig(brand).name}`, { id: `sched-${brand}` })
     } finally {

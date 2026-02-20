@@ -44,7 +44,7 @@ export function JobDetailPage() {
   const navigate = useNavigate()
   const id = jobId || ''
   
-  const { data: job, isLoading, error, refetch } = useJob(id)
+  const { data: job, isLoading, error } = useJob(id)
   const { data: nextSlots } = useJobNextSlots(id)
   const deleteJob = useDeleteJob()
   const regenerateJob = useRegenerateJob()
@@ -103,7 +103,6 @@ export function JobDetailPage() {
       })
       toast.success('Title updated!')
       setEditingTitleBrand(null)
-      refetch()
     } catch {
       toast.error('Failed to update title')
     } finally {
@@ -121,7 +120,6 @@ export function JobDetailPage() {
     try {
       await updateBrandStatus.mutateAsync({ id, brand, status: 'dismissed' })
       toast.success(`${getBrandLabel(brand)} removed from scheduling`)
-      refetch()
     } catch {
       toast.error('Failed to dismiss brand')
     }
@@ -133,7 +131,6 @@ export function JobDetailPage() {
     try {
       await updateBrandStatus.mutateAsync({ id, brand, status: 'completed' })
       toast.success(`${getBrandLabel(brand)} restored`)
-      refetch()
     } catch {
       toast.error('Failed to restore brand')
     }
@@ -153,7 +150,6 @@ export function JobDetailPage() {
     try {
       await regenerateJob.mutateAsync(id)
       toast.success('Regeneration started')
-      refetch()
     } catch {
       toast.error('Failed to regenerate')
     }
@@ -163,7 +159,6 @@ export function JobDetailPage() {
     try {
       await regenerateBrand.mutateAsync({ id, brand })
       toast.success(`Regenerating ${getBrandLabel(brand)}`)
-      refetch()
     } catch {
       toast.error('Failed to regenerate')
     }
@@ -186,7 +181,6 @@ export function JobDetailPage() {
       toast.success('Title updated')
       await regenerateJob.mutateAsync(id)
       toast.success('Regenerating with new title')
-      refetch()
     } catch {
       toast.error('Failed to update title')
     }
@@ -251,7 +245,6 @@ export function JobDetailPage() {
       })
       
       toast.success(`${getBrandLabel(brand)} scheduled!`)
-      refetch()
     } catch {
       toast.error('Failed to schedule')
     } finally {
@@ -441,7 +434,7 @@ export function JobDetailPage() {
 
   // Delegate to post-specific detail view
   if (job.variant === 'post') {
-    return <PostJobDetail job={job} refetch={refetch} />
+    return <PostJobDetail job={job} />
   }
   
   const completedCount = Object.values(job.brand_outputs || {})

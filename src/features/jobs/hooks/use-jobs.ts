@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { jobsApi } from '../api'
-import type { Job, BrandName } from '@/shared/types'
+import type { Job, BrandName, BrandStatus } from '@/shared/types'
 
 // Query keys for caching
 export const jobKeys = {
@@ -11,6 +11,45 @@ export const jobKeys = {
   detail: (id: string) => [...jobKeys.details(), id] as const,
   nextSlots: (id: string) => [...jobKeys.detail(id), 'next-slots'] as const,
 }
+
+// ── Helpers for optimistic cache mutations ──────────────────────────────
+
+/** Remove a job from every cached list query. */
+function optimisticRemoveFromLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  jobId: string,
+) {
+  queryClient.setQueriesData<Job[]>(
+    { queryKey: jobKeys.lists() },
+    (old) => old?.filter((j) => j.id !== jobId),
+  )
+}
+
+/** Patch a job inside every cached list query. */
+function optimisticPatchInLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  jobId: string,
+  patch: Partial<Job>,
+) {
+  queryClient.setQueriesData<Job[]>(
+    { queryKey: jobKeys.lists() },
+    (old) => old?.map((j) => (j.id === jobId ? { ...j, ...patch } : j)),
+  )
+}
+
+/** Patch the detail cache for a single job. */
+function optimisticPatchDetail(
+  queryClient: ReturnType<typeof useQueryClient>,
+  jobId: string,
+  patch: Partial<Job>,
+) {
+  queryClient.setQueryData<Job>(
+    jobKeys.detail(jobId),
+    (old) => old ? { ...old, ...patch } : old,
+  )
+}
+
+// ── Queries ─────────────────────────────────────────────────────────────
 
 export function useJobs() {
   return useQuery({
@@ -32,6 +71,8 @@ export function useJob(id: string) {
     refetchInterval: 30000,
   })
 }
+
+// ── Mutations (optimistic where it matters) ─────────────────────────────
 
 export function useCreateJob() {
   const queryClient = useQueryClient()
@@ -62,7 +103,17 @@ export function useDeleteJob() {
   
   return useMutation({
     mutationFn: jobsApi.delete,
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.lists() })
+      const prev = queryClient.getQueriesData<Job[]>({ queryKey: jobKeys.lists() })
+      optimisticRemoveFromLists(queryClient, id)
+      return { prev }
+    },
+    onError: (_err, _id, ctx) => {
+      // Rollback to snapshots
+      ctx?.prev?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
       queryClient.invalidateQueries({ queryKey: ['scheduled'] })
     },
@@ -74,7 +125,19 @@ export function useDeleteJobsByStatus() {
 
   return useMutation({
     mutationFn: (status: string) => jobsApi.deleteByStatus(status),
-    onSuccess: () => {
+    onMutate: async (status) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.lists() })
+      const prev = queryClient.getQueriesData<Job[]>({ queryKey: jobKeys.lists() })
+      queryClient.setQueriesData<Job[]>(
+        { queryKey: jobKeys.lists() },
+        (old) => old?.filter((j) => j.status !== status),
+      )
+      return { prev }
+    },
+    onError: (_err, _status, ctx) => {
+      ctx?.prev?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
       queryClient.invalidateQueries({ queryKey: ['scheduled'] })
     },
@@ -86,7 +149,20 @@ export function useDeleteJobsByIds() {
 
   return useMutation({
     mutationFn: (jobIds: string[]) => jobsApi.deleteByIds(jobIds),
-    onSuccess: () => {
+    onMutate: async (jobIds) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.lists() })
+      const prev = queryClient.getQueriesData<Job[]>({ queryKey: jobKeys.lists() })
+      const idSet = new Set(jobIds)
+      queryClient.setQueriesData<Job[]>(
+        { queryKey: jobKeys.lists() },
+        (old) => old?.filter((j) => !idSet.has(j.id)),
+      )
+      return { prev }
+    },
+    onError: (_err, _ids, ctx) => {
+      ctx?.prev?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
       queryClient.invalidateQueries({ queryKey: ['scheduled'] })
     },
@@ -98,7 +174,21 @@ export function useCancelJob() {
   
   return useMutation({
     mutationFn: jobsApi.cancel,
-    onSuccess: (_, id) => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.detail(id) })
+      await queryClient.cancelQueries({ queryKey: jobKeys.lists() })
+      const prevDetail = queryClient.getQueryData<Job>(jobKeys.detail(id))
+      const prevLists = queryClient.getQueriesData<Job[]>({ queryKey: jobKeys.lists() })
+      const patch = { status: 'cancelled' } as Partial<Job>
+      optimisticPatchDetail(queryClient, id, patch)
+      optimisticPatchInLists(queryClient, id, patch)
+      return { prevDetail, prevLists }
+    },
+    onError: (_err, id, ctx) => {
+      if (ctx?.prevDetail) queryClient.setQueryData(jobKeys.detail(id), ctx.prevDetail)
+      ctx?.prevLists?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: (_, __, id) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
     },
@@ -110,8 +200,23 @@ export function useRegenerateJob() {
   
   return useMutation({
     mutationFn: jobsApi.regenerate,
-    onSuccess: (_, id) => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.detail(id) })
+      await queryClient.cancelQueries({ queryKey: jobKeys.lists() })
+      const prevDetail = queryClient.getQueryData<Job>(jobKeys.detail(id))
+      const prevLists = queryClient.getQueriesData<Job[]>({ queryKey: jobKeys.lists() })
+      const patch = { status: 'generating', progress_percent: 0 } as Partial<Job>
+      optimisticPatchDetail(queryClient, id, patch)
+      optimisticPatchInLists(queryClient, id, patch)
+      return { prevDetail, prevLists }
+    },
+    onError: (_err, id, ctx) => {
+      if (ctx?.prevDetail) queryClient.setQueryData(jobKeys.detail(id), ctx.prevDetail)
+      ctx?.prevLists?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: (_, __, id) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
     },
   })
 }
@@ -122,7 +227,25 @@ export function useRegenerateBrand() {
   return useMutation({
     mutationFn: ({ id, brand }: { id: string; brand: BrandName }) => 
       jobsApi.regenerateBrand(id, brand),
-    onSuccess: (_, { id }) => {
+    onMutate: async ({ id, brand }) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.detail(id) })
+      const prevDetail = queryClient.getQueryData<Job>(jobKeys.detail(id))
+      if (prevDetail) {
+        const updatedOutputs = { ...prevDetail.brand_outputs }
+        if (updatedOutputs[brand]) {
+          updatedOutputs[brand] = { ...updatedOutputs[brand], status: 'generating' }
+        }
+        queryClient.setQueryData<Job>(jobKeys.detail(id), {
+          ...prevDetail,
+          brand_outputs: updatedOutputs,
+        })
+      }
+      return { prevDetail }
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prevDetail) queryClient.setQueryData(jobKeys.detail(id), ctx.prevDetail)
+    },
+    onSettled: (_, __, { id }) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
     },
   })
@@ -146,7 +269,29 @@ export function useUpdateBrandStatus() {
       status: string
       scheduledTime?: string
     }) => jobsApi.updateBrandStatus(id, brand, status, scheduledTime),
-    onSuccess: (_, { id }) => {
+    onMutate: async ({ id, brand, status, scheduledTime }) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.detail(id) })
+      const prevDetail = queryClient.getQueryData<Job>(jobKeys.detail(id))
+      if (prevDetail) {
+        const updatedOutputs = { ...prevDetail.brand_outputs }
+        if (updatedOutputs[brand]) {
+          updatedOutputs[brand] = {
+            ...updatedOutputs[brand],
+            status: status as BrandStatus,
+            ...(scheduledTime ? { scheduled_time: scheduledTime } : {}),
+          }
+        }
+        queryClient.setQueryData<Job>(jobKeys.detail(id), {
+          ...prevDetail,
+          brand_outputs: updatedOutputs,
+        })
+      }
+      return { prevDetail }
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prevDetail) queryClient.setQueryData(jobKeys.detail(id), ctx.prevDetail)
+    },
+    onSettled: (_, __, { id }) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
       queryClient.invalidateQueries({ queryKey: ['scheduled'] })
     },
@@ -162,7 +307,25 @@ export function useUpdateBrandContent() {
       brand: BrandName
       data: { title?: string; caption?: string; slide_texts?: string[] }
     }) => jobsApi.updateBrandContent(id, brand, data),
-    onSuccess: (_, { id }) => {
+    onMutate: async ({ id, brand, data }) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.detail(id) })
+      const prevDetail = queryClient.getQueryData<Job>(jobKeys.detail(id))
+      if (prevDetail) {
+        const updatedOutputs = { ...prevDetail.brand_outputs }
+        if (updatedOutputs[brand]) {
+          updatedOutputs[brand] = { ...updatedOutputs[brand], ...data }
+        }
+        queryClient.setQueryData<Job>(jobKeys.detail(id), {
+          ...prevDetail,
+          brand_outputs: updatedOutputs,
+        })
+      }
+      return { prevDetail }
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prevDetail) queryClient.setQueryData(jobKeys.detail(id), ctx.prevDetail)
+    },
+    onSettled: (_, __, { id }) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
     },
   })
@@ -177,7 +340,25 @@ export function useRegenerateBrandImage() {
       brand: BrandName
       aiPrompt?: string
     }) => jobsApi.regenerateBrandImage(id, brand, aiPrompt),
-    onSuccess: (_, { id }) => {
+    onMutate: async ({ id, brand }) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.detail(id) })
+      const prevDetail = queryClient.getQueryData<Job>(jobKeys.detail(id))
+      if (prevDetail) {
+        const updatedOutputs = { ...prevDetail.brand_outputs }
+        if (updatedOutputs[brand]) {
+          updatedOutputs[brand] = { ...updatedOutputs[brand], status: 'generating' }
+        }
+        queryClient.setQueryData<Job>(jobKeys.detail(id), {
+          ...prevDetail,
+          brand_outputs: updatedOutputs,
+        })
+      }
+      return { prevDetail }
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prevDetail) queryClient.setQueryData(jobKeys.detail(id), ctx.prevDetail)
+    },
+    onSettled: (_, __, { id }) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
     },
   })
@@ -188,7 +369,30 @@ export function useRetryJob() {
 
   return useMutation({
     mutationFn: jobsApi.retry,
-    onSuccess: (_, id) => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: jobKeys.detail(id) })
+      await queryClient.cancelQueries({ queryKey: jobKeys.lists() })
+      const prevDetail = queryClient.getQueryData<Job>(jobKeys.detail(id))
+      const prevLists = queryClient.getQueriesData<Job[]>({ queryKey: jobKeys.lists() })
+      // Mark job as generating and flip failed brands to generating
+      if (prevDetail) {
+        const updatedOutputs = { ...prevDetail.brand_outputs }
+        for (const brand of Object.keys(updatedOutputs) as BrandName[]) {
+          if (updatedOutputs[brand]?.status === 'failed' || updatedOutputs[brand]?.status === 'pending') {
+            updatedOutputs[brand] = { ...updatedOutputs[brand], status: 'generating' }
+          }
+        }
+        const patch = { status: 'generating', error_message: undefined, brand_outputs: updatedOutputs } as Partial<Job>
+        queryClient.setQueryData<Job>(jobKeys.detail(id), { ...prevDetail, ...patch })
+      }
+      optimisticPatchInLists(queryClient, id, { status: 'generating' } as Partial<Job>)
+      return { prevDetail, prevLists }
+    },
+    onError: (_err, id, ctx) => {
+      if (ctx?.prevDetail) queryClient.setQueryData(jobKeys.detail(id), ctx.prevDetail)
+      ctx?.prevLists?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: (_, __, id) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
     },
