@@ -47,6 +47,7 @@ export function HistoryPage() {
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
   const [isDeletingSection, setIsDeletingSection] = useState(false)
   const [isSchedulingAll, setIsSchedulingAll] = useState(false)
+  const [schedulingJobId, setSchedulingJobId] = useState<string | null>(null)
   
   const resetHidden = useCallback(() => {
     setHiddenJobIds(new Set())
@@ -242,6 +243,58 @@ export function HistoryPage() {
         ? `✅ ${scheduled} brand(s) scheduled! ${failed} failed.`
         : `🎉 ${scheduled} brand(s) scheduled successfully!`
       toast.success(message, { duration: 4000 })
+    } else if (failed > 0) {
+      toast.error('Failed to schedule brands')
+    }
+  }
+  
+  // Handle auto-schedule for a single job
+  const handleScheduleJob = async (job: Job) => {
+    setSchedulingJobId(job.id.toString())
+    let scheduled = 0
+    let failed = 0
+    
+    const completedBrands = Object.entries(job.brand_outputs || {})
+      .filter(([_, output]) => output.status === 'completed')
+      .map(([brand]) => brand as BrandName)
+    
+    for (const brand of completedBrands) {
+      const output = job.brand_outputs[brand]
+      if (output?.reel_id) {
+        try {
+          const caption = output.caption || `${job.title}\n\nGenerated content for ${brand}`
+          
+          await autoSchedule.mutateAsync({
+            brand,
+            reel_id: output.reel_id,
+            variant: job.variant,
+            caption,
+            yt_title: output.yt_title,
+            yt_thumbnail_path: output.yt_thumbnail_path,
+            video_path: output.video_path,
+            thumbnail_path: output.thumbnail_path,
+            platforms: job.platforms,
+          })
+          await updateBrandStatus.mutateAsync({
+            id: job.id,
+            brand,
+            status: 'scheduled',
+          })
+          scheduled++
+        } catch (error) {
+          console.error(`Failed to schedule ${brand} in job ${job.id}:`, error)
+          failed++
+        }
+      }
+    }
+    
+    setSchedulingJobId(null)
+    
+    if (scheduled > 0) {
+      const message = failed > 0
+        ? `✅ ${scheduled} brand(s) scheduled! ${failed} failed.`
+        : `✅ ${scheduled} brand(s) scheduled for #${job.id}!`
+      toast.success(message, { duration: 3000 })
     } else if (failed > 0) {
       toast.error('Failed to schedule brands')
     }
@@ -522,7 +575,6 @@ export function HistoryPage() {
             const isFullyScheduled = (schedulingInfo.scheduled.length + schedulingInfo.published.length) === schedulingInfo.total && schedulingInfo.total > 0 && !isFullyPublished
             const hasReadyToSchedule = schedulingInfo.readyToSchedule.length > 0
             
-            // Compact status pill
             const statusPill = isFullyPublished
               ? { label: 'Published', bg: 'bg-emerald-100', text: 'text-emerald-700', Icon: CheckCircle2 }
               : isFullyScheduled
@@ -531,16 +583,17 @@ export function HistoryPage() {
                   ? { label: `${schedulingInfo.readyToSchedule.length} to schedule`, bg: 'bg-amber-100', text: 'text-amber-700', Icon: Clock }
                   : null
             
-            // Build full title from all lines
             const fullTitle = job.title
               ? job.title.split('\n').filter(Boolean).join(' ')
               : 'Untitled'
+            
+            const isSchedulingThis = schedulingJobId === job.id.toString()
             
             return (
               <div
                 key={job.id}
                 className={clsx(
-                  'px-3 py-2.5 rounded-lg border cursor-pointer transition-all group',
+                  'px-3 py-1.5 rounded-lg border cursor-pointer transition-all group',
                   'hover:bg-gray-50 hover:shadow-sm',
                   isFullyPublished && 'border-l-[3px] border-l-emerald-500',
                   isFullyScheduled && !isFullyPublished && 'border-l-[3px] border-l-green-500',
@@ -551,8 +604,8 @@ export function HistoryPage() {
                 )}
                 onClick={() => navigate(`/job/${job.id}`)}
               >
-                {/* Row 1: Metadata — ID, status, scheduling pill, date, actions */}
-                <div className="flex items-center gap-2">
+                {/* Primary row: ID, status, pill, title, date, actions */}
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="text-[11px] font-mono text-gray-400 flex-shrink-0">#{job.id}</span>
                   
                   <div className="flex-shrink-0">
@@ -571,8 +624,8 @@ export function HistoryPage() {
                   )}
                   
                   {isGenerating && (
-                    <div className="w-20 flex-shrink-0">
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="w-16 flex-shrink-0">
+                      <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-blue-500 rounded-full transition-all duration-500"
                           style={{ width: `${progress}%` }}
@@ -581,7 +634,9 @@ export function HistoryPage() {
                     </div>
                   )}
                   
-                  <div className="flex-1" />
+                  <span className="text-[13px] font-medium text-gray-900 truncate min-w-0 flex-1" title={fullTitle}>
+                    {fullTitle}
+                  </span>
                   
                   <span className="text-[11px] text-gray-400 flex-shrink-0 hidden sm:block">
                     {format(new Date(job.created_at), 'MMM d, h:mm a')}
@@ -589,6 +644,20 @@ export function HistoryPage() {
                   
                   {/* Actions — visible on hover */}
                   <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    {hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && (
+                      <button
+                        onClick={() => handleScheduleJob(job)}
+                        className="p-1 rounded hover:bg-green-50 text-gray-400 hover:text-green-600"
+                        title="Auto-schedule"
+                        disabled={isSchedulingThis}
+                      >
+                        {isSchedulingThis ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CalendarCheck className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
                     {(job.status === 'completed' || job.status === 'failed') && (
                       <button
                         onClick={() => handleRegenerate(job)}
@@ -612,13 +681,8 @@ export function HistoryPage() {
                   </div>
                 </div>
                 
-                {/* Row 2: Full title */}
-                <h3 className="font-medium text-gray-900 text-[13px] leading-snug mt-1">
-                  {fullTitle}
-                </h3>
-                
-                {/* Row 3: Brand badges */}
-                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                {/* Secondary row: Brand badges */}
+                <div className="flex items-center gap-1 mt-0.5">
                   {job.brands?.map(brand => (
                     <BrandBadge key={brand} brand={brand} size="xs" />
                   ))}
