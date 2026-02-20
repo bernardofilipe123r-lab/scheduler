@@ -668,13 +668,13 @@ Each caption must be 4-5 paragraphs:
 {disclaimer_block}
 - Separate each paragraph with a blank line
 
-### SLIDE TEXT REQUIREMENTS (3-4 slides):
-- Slide 0 (COVER): The post title — exactly as written above
+### SLIDE TEXT REQUIREMENTS (3-4 text slides — the cover image is generated separately):
 - {slide1_instruction}
 - Slide 2 text: Deeper implications, context, or supporting evidence
 - Slide 3 text: Practical application — what this means for {audience_label} in real terms
 - Slide 4 text (optional): {slide4_cta}
 All slide text must be SHORT: 1-2 sentences max per slide. No bullet points. No emojis.
+Do NOT include the post title or a cover slide in slide_texts — the cover is handled separately.
 
 ### IMAGE REQUIREMENTS:
 - {image_style_hint}
@@ -706,7 +706,6 @@ All slide text must be SHORT: 1-2 sentences max per slide. No bullet points. No 
     "title": "TITLE IN ALL CAPS",
     "caption": "Hook paragraph.\\n\\nMechanism explanation...\\n\\nImplications...\\n\\nTakeaway.{caption_source_suffix}",
     "slide_texts": [
-      "Cover slide: POST TITLE IN ALL CAPS",
       "{slide1_instruction.replace('Slide 1 text: ', '')}",
       "Deeper context or supporting evidence.",
       "Practical application for {audience_label}.",
