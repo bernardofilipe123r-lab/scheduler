@@ -212,13 +212,16 @@ class AIBackgroundGenerator:
         # Subject matter — objects/elements to include in the image
         subject_matter = self._build_subject_matter(content_context, _ctx)
         
-        # Build the final prompt
+        # Build the final prompt — keep it clean for image models:
+        # - Never include hex color codes (models render them as text)
+        # - Never use labels like "MANDATORY:" or "COLOR PALETTE:" (rendered as text)
+        # - Never use negative phrasing like "NO dark" (models don't understand negation)
+        # - Always end with explicit no-text instruction
+        no_text = "Absolutely no text, no letters, no numbers, no words, no symbols, no logos, no watermarks."
         if user_prompt:
-            # User provided custom prompt - adapt with brand colors
-            prompt = f"{user_prompt} {base_style} COLOR PALETTE: Dominated by {palette['description']}. Primary accent: {palette['primary']}. MANDATORY: Bright, light, colorful image with NO dark areas, NO black backgrounds, NO moody lighting."
+            prompt = f"{user_prompt} {base_style} {palette['description']}. Bright, vivid, colorful lighting. {no_text}"
         else:
-            # Standard prompt with content-derived subjects and brand colors
-            prompt = f"{subject_matter} {base_style} COLOR PALETTE: Primary tones of {palette['description']}. Main accent color: {palette['primary']}. MANDATORY: Image must be BRIGHT, LIGHT, and COLORFUL. Absolutely NO dark backgrounds, NO black, NO shadowy or moody atmosphere."
+            prompt = f"{subject_matter} {base_style} {palette['description']}. Bright, vivid, colorful, well-lit scene. {no_text}"
         
         print(f"\n{'='*80}")
         print(f"🎨 AI BACKGROUND GENERATION STARTED")
@@ -415,36 +418,42 @@ class AIBackgroundGenerator:
         Build the subject matter description for the deAPI image prompt.
         Uses NicheConfig when available. Never hardcodes niche-specific objects.
         Priority: palette_keywords > image_style_description > content_context > generic fallback.
+
+        IMPORTANT: Never embed literal titles or ALL-CAPS text into the prompt.
+        Image models (Flux, SDXL) will try to render any text literally.
+        Instead, extract the *visual concept* from content_context.
         """
         from app.core.prompt_context import PromptContext as _PC
         if ctx is None:
             ctx = _PC()
 
+        # Extract a short visual concept from content_context (strip caps, numbers, etc.)
+        visual_concept = self._extract_visual_concept(content_context) if content_context else None
+
         # Priority 1: explicit visual keywords from NicheConfig
         if ctx.image_palette_keywords:
             keywords_str = ", ".join(ctx.image_palette_keywords[:12])
-            if content_context:
+            if visual_concept:
                 return (
-                    f"Visual elements inspired by the theme: '{content_context}'. "
-                    f"Include niche-relevant objects: {keywords_str}."
+                    f"A scene evoking {visual_concept}. "
+                    f"Featuring: {keywords_str}."
                 )
             return f"Niche-relevant objects arranged artistically: {keywords_str}."
 
         # Priority 2: general image style description
         if ctx.image_style_description:
-            if content_context:
+            if visual_concept:
                 return (
-                    f"Visual elements inspired by: '{content_context}'. "
+                    f"A scene evoking {visual_concept}. "
                     f"{ctx.image_style_description}."
                 )
             return ctx.image_style_description
 
         # Priority 3: derive from content context alone
-        if content_context:
+        if visual_concept:
             return (
-                f"Premium, close-up visual elements inspired by the theme: '{content_context}'. "
-                f"Contemporary, clean composition with objects that naturally match the concept. "
-                f"High-quality studio aesthetic."
+                f"Premium close-up scene evoking {visual_concept}. "
+                f"Contemporary, clean composition. High-quality studio aesthetic."
             )
 
         # Priority 4: truly generic
@@ -453,6 +462,41 @@ class AIBackgroundGenerator:
             "Clean surfaces, soft professional lighting, modern minimal aesthetic. "
             "High-quality, polished, sophisticated visual."
         )
+
+    @staticmethod
+    def _extract_visual_concept(content_context: str) -> str:
+        """
+        Convert a title/content string into a short visual concept phrase.
+        Strips ALL-CAPS, numbers, and long text to prevent the image model
+        from rendering literal text in the output.
+
+        Example:
+          'STUDY REVEALS COLD EXPOSURE ACTIVATES BROWN FAT'
+          → 'cold exposure and brown fat'
+        """
+        if not content_context:
+            return ""
+        import re
+        # Take only the first segment (before | delimiter if multiple lines)
+        text = content_context.split("|")[0].strip()
+        # Lowercase everything to prevent text rendering
+        text = text.lower()
+        # Remove common non-visual filler words from titles
+        filler = [
+            "study reveals", "research shows", "new research", "scientists found",
+            "experts say", "data shows", "why", "how", "what", "the truth about",
+            "the hidden", "the real", "the secret", "things that", "signs that",
+            "your", "this", "that", "these",
+        ]
+        for word in filler:
+            text = re.sub(r'\b' + re.escape(word) + r'\b', '', text, flags=re.IGNORECASE)
+        # Remove numbers and special characters
+        text = re.sub(r'[^a-z\s]', '', text)
+        # Collapse whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        # Limit to ~8 words to keep it concise
+        words = text.split()[:8]
+        return " ".join(words) if words else "wellness and nature"
 
     def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, model_override: str = None, ctx=None) -> Image.Image:
         """
