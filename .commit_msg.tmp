@@ -1,0 +1,38 @@
+fix: 100% content-based reel image prompts — remove all niche/brand/audience bias
+
+ROOT CAUSE: The "woman in her late 30s" bias had TWO sources:
+
+1. Content-gen DeepSeek Call #1 generates image_prompt with "women 35+"
+   audience context (from NicheConfig target_audience). This was stored
+   as brand_outputs["ai_prompt"] and PASSED to ImageGenerator as
+   user_prompt, which SKIPPED Layer 2 entirely — the 3-layer pipeline
+   was never running for auto-generated reels.
+
+2. Layer 2 itself was sending niche_name ("Health & Wellness"),
+   image_style_description, palette_keywords, brand colors — all of
+   which pointed DeepSeek toward generic "wellness woman" imagery.
+
+FIXES:
+
+Layer 1 (_extract_content): Now returns ONLY title + content_lines.
+  Removed: niche_name, niche_description, image_style, palette_keywords,
+  composition_style, color_description, brand color lookup.
+
+Layer 2 system prompt: Complete rewrite.
+  - Rule #2: NO PEOPLE — no women, men, hands, silhouettes, body parts
+  - Only objects, environments, textures, food, nature, abstract scenes
+  - Few-shot examples showing correct prompts for typical topics
+  - Varied compositions required (flat-lay, macro, establishing, etc.)
+
+Layer 2 user prompt: Pure content only.
+  - TOPIC: {title}
+  - KEY POINTS: {first 5 content lines}
+  - Nothing else. No niche, no brand, no style, no palette, no colors.
+
+job_processor.py: Auto-gen reels now pass ai_prompt=None to ImageGenerator.
+  - fixed_title=True (manual): user's prompt goes directly to deAPI
+  - fixed_title=False (auto): ai_prompt=None, Layer 2 creates the prompt
+  - After generation, brand_outputs["ai_prompt"] updated with actual prompt
+
+Removed: _clean_style_description, _clean_palette_keywords, _PALETTE_BLOCKLIST,
+  _STYLE_SCENE_PHRASES (no longer needed — no style data enters Layer 2)

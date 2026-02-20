@@ -155,13 +155,18 @@ class JobProcessor:
             # Each brand gets its own unique AI background (no caching/sharing)
             # The AIBackgroundGenerator uses a unique seed per generation
 
-            # Use per-brand ai_prompt if available (auto-gen), fall back to job-level
-            brand_ai_prompt = brand_data.get("ai_prompt") or job.ai_prompt
+            # For manual mode (fixed_title=True), the user's ai_prompt goes
+            # directly to deAPI, bypassing Layer 2. For auto-generated reels,
+            # ai_prompt is None — Layer 2 (DeepSeek) creates the image prompt
+            # from the content (title + lines) only.
+            is_manual = getattr(job, 'fixed_title', False)
+            brand_ai_prompt = job.ai_prompt if is_manual else None
 
             print(f"🎨 Initializing ImageGenerator...", flush=True)
             print(f"   Variant: {job.variant}", flush=True)
             print(f"   Brand: {brand}", flush=True)
-            print(f"   AI Prompt: {brand_ai_prompt[:100] if brand_ai_prompt else 'None'}...", flush=True)
+            print(f"   Mode: {'manual' if is_manual else 'auto-gen (Layer 2 will create prompt)'}", flush=True)
+            print(f"   AI Prompt: {brand_ai_prompt[:100] if brand_ai_prompt else 'None (Layer 2)'}...", flush=True)
             sys.stdout.flush()
 
             generator = ImageGenerator(

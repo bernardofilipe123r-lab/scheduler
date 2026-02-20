@@ -262,12 +262,11 @@ class AIBackgroundGenerator:
 
     def _extract_content(self, content_context: str, ctx, brand_name: str) -> dict:
         """
-        Layer 1: Structure the reel content + NicheConfig visual settings
-        into a clean dict that Layer 2 (DeepSeek) can reason over.
+        Layer 1: Extract ONLY the reel's title and content lines.
 
-        This is pure data extraction — no prompt engineering here.
+        100% content-based — no niche config, no brand info, no style presets.
+        The image must be driven entirely by what the reel is about.
         """
-        # Parse content_context (format: "TITLE | line1 | line2 | ...")
         title = ""
         content_lines = []
         if content_context:
@@ -275,26 +274,9 @@ class AIBackgroundGenerator:
             title = parts[0] if parts else ""
             content_lines = parts[1:] if len(parts) > 1 else []
 
-        # Load brand color palette
-        color_description = "vibrant, colorful"
-        try:
-            from app.services.brands.resolver import brand_resolver
-            brand = brand_resolver.get_brand(brand_name)
-            if brand and brand.colors:
-                color_name = brand.colors.get("color_name", "vibrant")
-                color_description = f"vibrant {color_name} tones"
-        except Exception:
-            pass
-
         return {
             "title": title,
             "content_lines": content_lines,
-            "niche_name": ctx.niche_name or "",
-            "niche_description": ctx.niche_description or "",
-            "image_style": ctx.image_style_description or "",
-            "palette_keywords": ctx.image_palette_keywords or [],
-            "composition_style": ctx.image_composition_style or "",
-            "color_description": color_description,
         }
 
     # ================================================================
@@ -372,160 +354,86 @@ class AIBackgroundGenerator:
             return self._fallback_prompt(content_data)
 
     def _build_layer2_system_prompt(self) -> str:
-        """System prompt for DeepSeek Layer 2 — image prompt engineering."""
+        """System prompt for DeepSeek Layer 2 — image prompt engineering.
+
+        100% content-driven. No niche, no brand, no audience info.
+        """
         return (
-            "You are an expert visual prompt engineer for AI image generation models "
-            "(Flux, Stable Diffusion). Your job is to create a **content-specific** "
-            "background image prompt for an Instagram Reel.\n\n"
-            "CRITICAL — CONTENT MATCHING:\n"
-            "- The image MUST visually represent the SPECIFIC topic of the reel.\n"
-            "- If the reel is about energy habits, show something related to energy.\n"
-            "- If it's about hormones, show something related to hormonal health.\n"
-            "- If it's about aging, show something about vitality or time.\n"
-            "- NEVER default to a generic 'woman by a window' or 'glass of water' scene.\n"
-            "- Each prompt must be UNIQUE — vary subjects, settings, compositions.\n\n"
-            "CRITICAL — VARIETY:\n"
-            "- Alternate between: aerial/bird's-eye, wide establishing, macro detail, \n"
-            "  environmental portrait (no face), abstract texture, flat lay, dramatic angle.\n"
-            "- Use DIFFERENT settings: labs, gyms, nature, cities, kitchens, studios, \n"
-            "  bathrooms, bedrooms, markets, gardens, clinics, trails.\n"
-            "- NEVER repeat the same composition style twice in a row.\n\n"
-            "OUTPUT RULES:\n"
-            "- Output ONLY the image prompt text. No JSON, no markdown, no explanation.\n"
-            "- Describe a VISUAL SCENE with specific objects, textures, materials.\n"
-            "- Always specify: lighting type, camera angle, depth of field, color mood.\n"
-            "- NEVER include people's faces (backs, hands, silhouettes are OK).\n"
-            "- NEVER include any written text, letters, numbers, or symbols.\n"
-            "- End with: 'No text, no letters, no numbers, no symbols, no logos.'\n"
-            "- Keep prompts 2-4 sentences (60-120 words).\n"
-            "- Be SPECIFIC and UNEXPECTED. Surprise me."
+            "You are an expert visual prompt engineer for AI image generation "
+            "(Flux, Stable Diffusion). You translate a reel TOPIC + KEY POINTS "
+            "into a vivid, cinematic image prompt.\n\n"
+            "ABSOLUTE RULES:\n"
+            "1. The image MUST depict the SPECIFIC subject of the reel. "
+            "Read the topic and key points — the scene must make a viewer "
+            "immediately think of THAT subject.\n"
+            "2. NO PEOPLE. No women, no men, no hands, no silhouettes, no body parts. "
+            "Show OBJECTS, ENVIRONMENTS, TEXTURES, FOOD, NATURE, ABSTRACT SCENES.\n"
+            "3. NO text, letters, numbers, words, symbols, logos, watermarks.\n"
+            "4. Every prompt must have a DIFFERENT composition style. Rotate between: "
+            "aerial flat-lay, extreme macro close-up, wide cinematic establishing shot, "
+            "abstract texture, moody still life, dramatic lighting study.\n"
+            "5. Use SPECIFIC concrete nouns — name exact objects, materials, foods, "
+            "textures. Never say 'wellness items' or 'healthy objects'.\n"
+            "6. Always include: camera angle, lighting type, depth of field, color mood.\n"
+            "7. End every prompt with: 'No text, no letters, no numbers, no symbols, no logos.'\n"
+            "8. Keep prompts 2-3 sentences, 50-100 words.\n"
+            "9. Output ONLY the prompt. No explanation, no JSON, no markdown.\n\n"
+            "EXAMPLES OF GOOD PROMPTS:\n"
+            "- Topic 'Morning Routine': Aerial flat-lay of a wooden breakfast tray with "
+            "black coffee, sliced avocado, a small alarm clock, and a folded newspaper. "
+            "Warm golden morning light from the left. Shallow depth of field. "
+            "No text, no letters, no numbers, no symbols, no logos.\n"
+            "- Topic 'Hormonal Health': Extreme macro of a ripe pomegranate split open, "
+            "seeds glistening with juice, on a dark slate surface. Dramatic side lighting, "
+            "rich crimson and deep purple tones. No text, no letters, no numbers, no symbols, no logos.\n"
+            "- Topic 'Sleep Quality': A dark bedroom scene with rumpled linen sheets, "
+            "a glowing salt lamp on a nightstand, and moonlight through sheer curtains. "
+            "Blue-hour color palette, soft bokeh. No text, no letters, no numbers, no symbols, no logos."
         )
-
-    # Palette terms that image models interpret as literal plants/objects
-    _PALETTE_BLOCKLIST = {
-        "sage", "eucalyptus", "linen", "terracotta", "lavender",
-        "mint", "olive", "moss", "fern", "cedar", "rosemary",
-    }
-
-    # Scene-description phrases in image_style_description to strip
-    _STYLE_SCENE_PHRASES = [
-        "Think:",
-        "morning kitchen counter",
-        "sunlit herbs",
-        "peaceful nature close-ups",
-        "soft greenery",
-    ]
-
-    def _clean_style_description(self, raw_style: str) -> str:
-        """Strip literal scene instructions from image_style_description so
-        it only conveys mood/aesthetic, not specific scene content."""
-        if not raw_style:
-            return ""
-        cleaned = raw_style
-        for phrase in self._STYLE_SCENE_PHRASES:
-            # Remove phrase and any trailing sentence fragment
-            idx = cleaned.find(phrase)
-            if idx != -1:
-                # Remove from phrase to end of sentence (or end of string)
-                end = cleaned.find(".", idx)
-                if end != -1:
-                    cleaned = cleaned[:idx] + cleaned[end + 1:]
-                else:
-                    cleaned = cleaned[:idx]
-        # Clean up double spaces / leading-trailing
-        return " ".join(cleaned.split()).strip(" .—-")
-
-    def _clean_palette_keywords(self, keywords: list) -> list:
-        """Filter out palette keywords that image models render as literal
-        plants/objects instead of treating as colors."""
-        return [
-            kw for kw in keywords
-            if kw.lower().strip() not in self._PALETTE_BLOCKLIST
-        ]
 
     def _build_layer2_user_prompt(self, content_data: dict) -> str:
-        """Build the user message for DeepSeek Layer 2 from structured content.
-        Content topic is the PRIMARY driver; niche style is secondary mood guidance."""
+        """Build the user message for DeepSeek Layer 2.
+
+        100% content-driven. Only title + content lines. Nothing else."""
         parts = []
 
-        # ── Primary: Content (must drive the visual) ─────────────────
-        parts.append(
-            "Create a CONTENT-SPECIFIC image prompt for an Instagram Reel background."
-        )
-
         if content_data["title"]:
-            parts.append(f"\n>>> REEL TOPIC (this is what the image MUST represent): {content_data['title']}")
+            parts.append(f"TOPIC: {content_data['title']}")
 
         if content_data["content_lines"]:
-            lines_text = "; ".join(content_data["content_lines"][:4])
-            parts.append(f">>> KEY POINTS (use these to choose scene elements): {lines_text}")
+            lines_text = "; ".join(content_data["content_lines"][:5])
+            parts.append(f"KEY POINTS: {lines_text}")
 
-        # ── Secondary: Mood / color guidance (do NOT dictate the scene) ──
-        if content_data["niche_name"]:
-            parts.append(f"\nNiche (for mood only, NOT for scene content): {content_data['niche_name']}")
+        if not parts:
+            parts.append("TOPIC: Premium lifestyle and wellness")
 
-        cleaned_style = self._clean_style_description(content_data.get("image_style", ""))
-        if cleaned_style:
-            parts.append(f"Mood reference: {cleaned_style}")
-
-        clean_palette = self._clean_palette_keywords(content_data.get("palette_keywords", []))
-        if clean_palette:
-            kw = ", ".join(clean_palette[:6])
-            parts.append(f"Color palette (use as COLOR guidance only, not as objects): {kw}")
-
-        if content_data.get("color_description"):
-            parts.append(f"Brand color mood: {content_data['color_description']}")
-
-        # ── Instructions ────────────────────────────────────────────
         parts.append(
-            "\nIMPORTANT: The image must be ABOUT the reel topic, not a generic "
-            "wellness/nature scene. Choose objects, settings, and compositions that "
-            "a viewer would immediately associate with the specific subject matter. "
-            "The image will have text overlaid, so keep the composition clean."
+            "\nCreate an image prompt that visually represents this specific topic. "
+            "Remember: NO PEOPLE, only objects/environments/textures."
         )
 
         return "\n".join(parts)
 
     def _fallback_prompt(self, content_data: dict) -> str:
-        """
-        Fallback prompt when DeepSeek is unavailable.
-        Derives a content-specific scene from the title + key points.
-        """
-        parts = []
-
-        # Content-driven scene description
+        """Fallback when DeepSeek is unavailable. Content-driven, no niche/brand."""
         title = content_data.get("title", "")
-        if title:
-            # Use title keywords to drive scene
-            parts.append(
-                f"A cinematic, atmospheric photograph representing the concept of: {title.lower()}"
-            )
-        else:
-            parts.append(
-                "Premium cinematic photography with dramatic lighting"
-            )
-
-        # Add key points for specificity
         lines = content_data.get("content_lines", [])
+
+        if title:
+            scene = f"A cinematic still-life photograph representing the concept of {title.lower()}"
+        else:
+            scene = "A dramatic cinematic still-life with premium objects"
+
         if lines:
-            subjects = ", ".join(lines[:2])
-            parts.append(f"Visual elements related to: {subjects.lower()}")
+            detail = f", featuring elements related to {lines[0].lower()}"
+        else:
+            detail = ""
 
-        # Color palette (cleaned)
-        clean_palette = self._clean_palette_keywords(
-            content_data.get("palette_keywords", [])
+        return (
+            f"{scene}{detail}. Dramatic studio lighting, shallow depth of field, "
+            f"rich colors, magazine-quality composition. "
+            f"No text, no letters, no numbers, no words, no symbols, no logos, no watermarks."
         )
-        if clean_palette:
-            kw = ", ".join(clean_palette[:4])
-            parts.append(f"Color palette: {kw}")
-
-        parts.append("Sharp focus, magazine-quality, clean composition for text overlay.")
-        parts.append(
-            "No text, no letters, no numbers, no words, no symbols, "
-            "no logos, no watermarks."
-        )
-
-        return " ".join(parts)
 
     # ================================================================
     # LAYER 3: deAPI Image Generation (shared by reels and posts)
