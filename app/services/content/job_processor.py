@@ -630,14 +630,18 @@ class JobProcessor:
         print(f"   Processing {total_brands} brands: {job.brands}", flush=True)
         sys.stdout.flush()
 
-        # When auto-generated (fixed_title=False) with multiple brands,
-        # generate unique titles + content per brand via AI
-        if not getattr(job, 'fixed_title', False) and total_brands > 1:
-            print(f"\n🧠 Auto mode with {total_brands} brands — generating unique titles + content per brand...", flush=True)
+        # When auto-generated (fixed_title=False), generate AI content per brand.
+        # This covers both single-brand and multi-brand auto-generate:
+        # the frontend creates the job instantly with a placeholder title,
+        # and we generate real viral content here in the background.
+        if not getattr(job, 'fixed_title', False):
+            print(f"\n🧠 Auto mode — generating AI content for {total_brands} brand(s)...", flush=True)
             try:
                 from app.services.content.generator import ContentGenerator
                 cg = ContentGenerator()
-                self._manager.update_job_status(job_id, "generating", f"Generating unique content for {total_brands} brands...", 5)
+                step_msg = "Generating viral content..." if total_brands == 1 else f"Generating content for {total_brands} brands..."
+                self._manager.update_job_status(job_id, "generating", step_msg, 5)
+                first_title = None
                 for i, brand in enumerate(job.brands):
                     viral = cg.generate_viral_content()
                     brand_title = viral.get("title", job.title)
@@ -649,10 +653,17 @@ class JobProcessor:
                         "ai_prompt": brand_image_prompt,
                         "status": "pending",
                     })
+                    if first_title is None:
+                        first_title = brand_title
                     print(f"   📝 {brand}: {brand_title[:60]}...", flush=True)
-                print(f"   ✓ Generated unique content for {total_brands} brands", flush=True)
+                # Update the job's main title so the jobs list shows the real title
+                if first_title:
+                    self._manager.update_job_inputs(job_id, title=first_title)
+                    # Re-fetch job to pick up updated title
+                    job = self._manager.get_job(job_id)
+                print(f"   ✓ Generated content for {total_brands} brand(s)", flush=True)
             except Exception as e:
-                print(f"   ⚠️ Per-brand content generation failed: {e}", flush=True)
+                print(f"   ⚠️ AI content generation failed: {e}", flush=True)
                 print(f"   Falling back to shared title + content differentiation", flush=True)
 
         # Pre-generate ALL content variations in ONE DeepSeek call

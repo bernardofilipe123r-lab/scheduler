@@ -531,11 +531,16 @@ export function HistoryPage() {
                   ? { label: `${schedulingInfo.readyToSchedule.length} to schedule`, bg: 'bg-amber-100', text: 'text-amber-700', Icon: Clock }
                   : null
             
+            // Build full title from all lines
+            const fullTitle = job.title
+              ? job.title.split('\n').filter(Boolean).join(' ')
+              : 'Untitled'
+            
             return (
               <div
                 key={job.id}
                 className={clsx(
-                  'px-3 py-2 rounded-lg border cursor-pointer transition-all group',
+                  'px-3 py-2.5 rounded-lg border cursor-pointer transition-all group',
                   'hover:bg-gray-50 hover:shadow-sm',
                   isFullyPublished && 'border-l-[3px] border-l-emerald-500',
                   isFullyScheduled && !isFullyPublished && 'border-l-[3px] border-l-green-500',
@@ -546,7 +551,7 @@ export function HistoryPage() {
                 )}
                 onClick={() => navigate(`/job/${job.id}`)}
               >
-                {/* Line 1: ID, status, scheduling pill, title, date, actions */}
+                {/* Row 1: Metadata — ID, status, scheduling pill, date, actions */}
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-mono text-gray-400 flex-shrink-0">#{job.id}</span>
                   
@@ -565,12 +570,8 @@ export function HistoryPage() {
                     </span>
                   )}
                   
-                  <h3 className="font-medium text-gray-900 text-xs leading-tight flex-1 min-w-0 line-clamp-2">
-                    {job.title?.split('\n')[0] || 'Untitled'}
-                  </h3>
-                  
                   {isGenerating && (
-                    <div className="w-16 flex-shrink-0">
+                    <div className="w-20 flex-shrink-0">
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-blue-500 rounded-full transition-all duration-500"
@@ -579,6 +580,8 @@ export function HistoryPage() {
                       </div>
                     </div>
                   )}
+                  
+                  <div className="flex-1" />
                   
                   <span className="text-[11px] text-gray-400 flex-shrink-0 hidden sm:block">
                     {format(new Date(job.created_at), 'MMM d, h:mm a')}
@@ -609,8 +612,13 @@ export function HistoryPage() {
                   </div>
                 </div>
                 
-                {/* Line 2: Brand badges (wrap-friendly for up to 10 brands) */}
-                <div className="flex flex-wrap items-center gap-1 mt-1.5 pl-0">
+                {/* Row 2: Full title */}
+                <h3 className="font-medium text-gray-900 text-[13px] leading-snug mt-1">
+                  {fullTitle}
+                </h3>
+                
+                {/* Row 3: Brand badges */}
+                <div className="flex flex-wrap items-center gap-1 mt-1.5">
                   {job.brands?.map(brand => (
                     <BrandBadge key={brand} brand={brand} size="xs" />
                   ))}
@@ -730,7 +738,7 @@ export function HistoryPage() {
               <p className="text-xs font-medium text-gray-500 mb-1">Jobs to delete:</p>
               {bulkDeleteModal.jobs.slice(0, 10).map(j => (
                 <p key={j.id} className="text-xs text-gray-600 truncate">
-                  #{j.id} — {j.title?.split('\n')[0] || 'Untitled'}
+                  #{j.id} — {j.title?.split('\n').filter(Boolean).join(' ') || 'Untitled'}
                 </p>
               ))}
               {bulkDeleteModal.jobs.length > 10 && (
@@ -798,7 +806,7 @@ export function HistoryPage() {
           {jobToDelete && (
             <div className="p-3 bg-gray-50 rounded-lg">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {jobToDelete.title?.split('\n')[0] || 'Untitled'}
+                {jobToDelete.title?.split('\n').filter(Boolean).join(' ') || 'Untitled'}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 Job #{jobToDelete.id}
