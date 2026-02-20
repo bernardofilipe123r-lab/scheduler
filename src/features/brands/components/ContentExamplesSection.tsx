@@ -269,10 +269,11 @@ export function ContentExamplesSection({
     const newExample: PostExample = { title: '', slides: emptySlides, _maxSlides: newPostSlideCount }
     onPostExamplesChange([...postExamples, newExample])
 
-    // Fire DeepSeek generation immediately
+    // Fire DeepSeek generation immediately — pass existing titles so AI never repeats
+    const existingTitles = postExamples.map(ex => ex.title).filter(Boolean)
     setGeneratingIndex(newIndex)
     generateMutation.mutate(
-      { brand_id: brandId, num_slides: newPostSlideCount },
+      { brand_id: brandId, num_slides: newPostSlideCount, existing_titles: existingTitles },
       {
         onSuccess: (data) => {
           const updated = [...postExamples, newExample]

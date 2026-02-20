@@ -80,7 +80,7 @@ interface GeneratedPostExample {
   doi: string
 }
 
-async function fetchGeneratePostExample(data: { brand_id?: string; num_slides: number }): Promise<GeneratedPostExample> {
+async function fetchGeneratePostExample(data: { brand_id?: string; num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExample> {
   return apiClient.post<GeneratedPostExample>('/api/v2/brands/niche-config/generate-post-example', data)
 }
 

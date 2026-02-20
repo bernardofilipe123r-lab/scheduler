@@ -392,6 +392,7 @@ OUTPUT FORMAT (JSON only):
 class GeneratePostExampleRequest(BaseModel):
     brand_id: Optional[str] = None
     num_slides: int = Field(default=4, ge=3, le=4)
+    existing_titles: List[str] = Field(default_factory=list, max_length=20)
 
 
 @router.post("/generate-post-example")
@@ -418,12 +419,21 @@ async def generate_post_example(
         config_parts.append(f"Tone: {', '.join(ctx.content_tone)}")
     config_text = "\n".join(config_parts) if config_parts else "General educational content"
 
+    # Build exclusion block from existing examples
+    exclusion_block = ""
+    if request.existing_titles:
+        exclusion_block = "\n\nALREADY USED TOPICS (you MUST pick a COMPLETELY DIFFERENT topic, study, and DOI — NEVER repeat or paraphrase these):\n"
+        for t in request.existing_titles:
+            exclusion_block += f"- {t}\n"
+        exclusion_block += "\nPick a totally different scientific domain, a different journal, and a different health mechanism. Be creative and surprising."
+
     prompt = f"""Generate ONE carousel post example BASED ON A REAL SCIENTIFIC STUDY for this brand:
 
-{config_text}
+{config_text}{exclusion_block}
 
 Requirements:
 - Title: ALL CAPS, 8-14 words, referencing a real study finding
+- The topic MUST be unique — choose a surprising, lesser-known study the audience wouldn't expect
 - {request.num_slides} content slides (not counting the cover). Each slide: 3-5 sentences of educational content explaining the study
 - Do NOT include a CTA in any slide — the CTA is added automatically by the system
 - A real, verifiable DOI (this is MANDATORY — never omit or fabricate it)
@@ -446,7 +456,7 @@ OUTPUT FORMAT (JSON only):
             json={
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
+                "temperature": 0.95,
                 "max_tokens": 1000,
             },
             timeout=30,
