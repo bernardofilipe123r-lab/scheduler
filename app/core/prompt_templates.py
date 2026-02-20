@@ -673,7 +673,7 @@ Each caption must be 4-5 paragraphs:
 - Slide 2 text: Deeper implications, context, or supporting evidence
 - Slide 3 text: Practical application — what this means for {audience_label} in real terms
 - Slide 4 text (optional): {slide4_cta}
-All slide text must be SHORT: 1-2 sentences max per slide. No bullet points. No emojis.
+Each slide should be 3-4 sentences (roughly 40-60 words). Write in flowing prose, not bullet points or emojis.
 Do NOT include the post title or a cover slide in slide_texts — the cover is handled separately.
 
 ### IMAGE REQUIREMENTS:
