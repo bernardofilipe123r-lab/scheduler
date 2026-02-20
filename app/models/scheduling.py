@@ -2,12 +2,17 @@
 Scheduled reel model.
 """
 from datetime import datetime
+from sqlalchemy import Index
 from app.models.base import Base, Column, String, DateTime, Text, JSON
 
 
 class ScheduledReel(Base):
     """Model for scheduled reels with user support."""
     __tablename__ = "scheduled_reels"
+    
+    __table_args__ = (
+        Index("ix_scheduled_reels_status_time", "status", "scheduled_time"),
+    )
     
     # Primary key
     schedule_id = Column(String(36), primary_key=True)

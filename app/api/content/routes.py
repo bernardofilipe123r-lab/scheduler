@@ -77,10 +77,11 @@ async def generate_captions(request: CaptionRequest):
     """
     try:
         # Generate captions for all brands
-        captions = caption_generator.generate_all_brand_captions(
+        captions = await asyncio.to_thread(
+            caption_generator.generate_all_brand_captions,
             title=request.title,
             content_lines=request.content_lines,
-            cta_type=request.cta_type
+            cta_type=request.cta_type,
         )
         
         # Extract just the first paragraph for each brand
@@ -116,7 +117,7 @@ async def auto_generate_content(request: AutoContentRequest = None):
     """
     try:
         topic_hint = request.topic_hint if request else None
-        content = content_generator.generate_viral_content(topic_hint)
+        content = await asyncio.to_thread(content_generator.generate_viral_content, topic_hint)
         
         if not content.get("success"):
             raise HTTPException(
@@ -153,7 +154,7 @@ async def generate_post_title(request: AutoContentRequest = None):
     """
     try:
         topic_hint = request.topic_hint if request else None
-        result = content_generator.generate_post_title(topic_hint)
+        result = await asyncio.to_thread(content_generator.generate_post_title, topic_hint)
         
         if not result:
             raise HTTPException(
@@ -184,7 +185,7 @@ async def generate_post_titles_batch(request: BatchTitlesRequest = None):
         topic_hint = request.topic_hint if request else None
         print(f"\n🔱 [GOD] generate_post_titles_batch: count={count}, topic_hint={topic_hint!r}", flush=True)
         t0 = _time.time()
-        results = content_generator.generate_post_titles_batch(count, topic_hint)
+        results = await asyncio.to_thread(content_generator.generate_post_titles_batch, count, topic_hint)
         elapsed = _time.time() - t0
         titles = [r.get('title', '?')[:50] for r in results]
         print(f"🔱 [GOD] titles generated in {elapsed:.1f}s: {titles}", flush=True)
@@ -208,7 +209,8 @@ async def generate_post_background(request: GeneratePostBgRequest):
         print(f"\n🔱 [GOD] generate_post_background: brand={request.brand}, prompt={request.prompt[:60]}...", flush=True)
         t0 = _time.time()
         generator = AIBackgroundGenerator()
-        image = generator.generate_post_background(
+        image = await asyncio.to_thread(
+            generator.generate_post_background,
             brand_name=request.brand,
             user_prompt=request.prompt,
         )
@@ -241,7 +243,7 @@ async def generate_image_prompt(request: GenerateImagePromptRequest):
     Returns a detailed cinematic prompt suitable for DALL-E/Flux.
     """
     try:
-        result = content_generator.generate_image_prompt(request.title)
+        result = await asyncio.to_thread(content_generator.generate_image_prompt, request.title)
         
         if not result:
             raise HTTPException(
@@ -275,9 +277,10 @@ async def generate_background(request: GenerateBackgroundRequest):
         generator = AIBackgroundGenerator()
         
         # Generate the image
-        image = generator.generate_background(
+        image = await asyncio.to_thread(
+            generator.generate_background,
             brand_name=request.brand,
-            user_prompt=request.prompt
+            user_prompt=request.prompt,
         )
         
         # Convert to base64

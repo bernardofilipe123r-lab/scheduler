@@ -143,11 +143,9 @@ class DatabaseSchedulerService:
         """
         with get_db_session() as db:
             now = datetime.now(timezone.utc)
-            now_naive = datetime.now()  # Local time, no timezone
             
             print(f"\n🔍 get_pending_publications() check at:")
             print(f"   UTC now: {now}")
-            print(f"   Local now (naive): {now_naive}")
             
             # Show ALL posts for debugging (any status)
             all_posts = db.query(ScheduledReel).order_by(ScheduledReel.scheduled_time.asc()).limit(50).all()
