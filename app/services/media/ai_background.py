@@ -362,22 +362,20 @@ class AIBackgroundGenerator:
             "You are an expert visual prompt engineer for AI image generation "
             "(Flux, Stable Diffusion). You translate a reel TOPIC + KEY POINTS "
             "into a vivid, cinematic image prompt.\n\n"
-            "ABSOLUTE RULES:\n"
+            "RULES:\n"
             "1. The image MUST depict the SPECIFIC subject of the reel. "
             "Read the topic and key points — the scene must make a viewer "
             "immediately think of THAT subject.\n"
-            "2. NO PEOPLE. No women, no men, no hands, no silhouettes, no body parts. "
-            "Show OBJECTS, ENVIRONMENTS, TEXTURES, FOOD, NATURE, ABSTRACT SCENES.\n"
-            "3. NO text, letters, numbers, words, symbols, logos, watermarks.\n"
-            "4. Every prompt must have a DIFFERENT composition style. Rotate between: "
+            "2. NO text, letters, numbers, words, symbols, logos, watermarks.\n"
+            "3. Every prompt must have a DIFFERENT composition style. Rotate between: "
             "aerial flat-lay, extreme macro close-up, wide cinematic establishing shot, "
             "abstract texture, moody still life, dramatic lighting study.\n"
-            "5. Use SPECIFIC concrete nouns — name exact objects, materials, foods, "
+            "4. Use SPECIFIC concrete nouns — name exact objects, materials, foods, "
             "textures. Never say 'wellness items' or 'healthy objects'.\n"
-            "6. Always include: camera angle, lighting type, depth of field, color mood.\n"
-            "7. End every prompt with: 'No text, no letters, no numbers, no symbols, no logos.'\n"
-            "8. Keep prompts 2-3 sentences, 50-100 words.\n"
-            "9. Output ONLY the prompt. No explanation, no JSON, no markdown.\n\n"
+            "5. Always include: camera angle, lighting type, depth of field, color mood.\n"
+            "6. End every prompt with: 'No text, no letters, no numbers, no symbols, no logos.'\n"
+            "7. Keep prompts 2-3 sentences, 50-100 words.\n"
+            "8. Output ONLY the prompt. No explanation, no JSON, no markdown.\n\n"
             "EXAMPLES OF GOOD PROMPTS:\n"
             "- Topic 'Morning Routine': Aerial flat-lay of a wooden breakfast tray with "
             "black coffee, sliced avocado, a small alarm clock, and a folded newspaper. "
@@ -408,8 +406,7 @@ class AIBackgroundGenerator:
             parts.append("TOPIC: Premium lifestyle and wellness")
 
         parts.append(
-            "\nCreate an image prompt that visually represents this specific topic. "
-            "Remember: NO PEOPLE, only objects/environments/textures."
+            "\nCreate an image prompt that visually represents this specific topic."
         )
 
         return "\n".join(parts)
