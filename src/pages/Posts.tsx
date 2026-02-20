@@ -149,7 +149,7 @@ export function PostsPage() {
     setIsCreating(true)
     setShowAutoModal(false)
     try {
-      await createJob.mutateAsync({
+      const job = await createJob.mutateAsync({
         title: 'Auto-generated posts',
         content_lines: [],
         brands: autoBrands,
@@ -160,8 +160,8 @@ export function PostsPage() {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       toast.success(
         (t) => (
-          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-            Post generation started! <u>View Jobs →</u>
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${job.id}`) }}>
+            Post generation started! <u>View Job →</u>
           </span>
         ),
         { duration: 6000 }
@@ -181,7 +181,7 @@ export function PostsPage() {
     }
     setIsCreating(true)
     try {
-      await createJob.mutateAsync({
+      const job = await createJob.mutateAsync({
         title: title.trim(),
         content_lines: [],
         brands: selectedBrands,
@@ -194,8 +194,8 @@ export function PostsPage() {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       toast.success(
         (t) => (
-          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate('/jobs') }}>
-            Post generation started! <u>View Jobs →</u>
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${job.id}`) }}>
+            Post generation started! <u>View Job →</u>
           </span>
         ),
         { duration: 6000 }
