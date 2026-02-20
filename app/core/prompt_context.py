@@ -43,6 +43,18 @@ class PromptContext:
     # Visual Style
     image_style_description: str = ""
     image_palette_keywords: List[str] = field(default_factory=list)
+    image_composition_style: str = ""  # replaces REEL_BASE_STYLE per niche
+
+    # Citation / Source
+    citation_style: str = ""  # "academic_doi"|"financial_data"|"case_study"|"expert_quote"|"none"
+    citation_source_types: List[str] = field(default_factory=list)
+
+    # YouTube
+    yt_title_examples: List[str] = field(default_factory=list)
+    yt_title_bad_examples: List[str] = field(default_factory=list)
+
+    # Carousel
+    carousel_cta_topic: str = ""
 
     # Brand Personality
     brand_personality: Optional[str] = None

@@ -915,7 +915,7 @@ export function ScheduledPage() {
                     <img
                       src={post.thumbnail_path}
                       alt=""
-                      className="w-16 h-24 object-cover object-top rounded"
+                      className="w-16 rounded object-contain"
                     />
                   )}
                   <div className="flex-1 min-w-0">

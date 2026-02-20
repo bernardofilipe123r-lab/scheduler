@@ -335,27 +335,52 @@ POST_QUALITY_SUFFIX = (
     "Portrait orientation 4:5 aspect ratio."
 )
 
-REEL_BASE_STYLE = (
-    "BRIGHT, COLORFUL, VIBRANT still-life composition with SUNLIT atmosphere. "
-    "Dense, full-frame layout filling every inch with objects. "
-    "Soft bokeh light orbs floating in the background. "
-    "Morning sunlight streaming in with lens flares and light rays. "
-    "BRIGHT PASTEL background tones - NO DARK OR BLACK AREAS. "
-    "Polished, glossy, shiny surfaces catching light. "
-    "Magazine-quality product photography style with enhanced saturation."
-)
+def build_reel_base_style(ctx: PromptContext = None) -> str:
+    """
+    Build the deAPI visual style directive from NicheConfig.
+    Replaces the hardcoded REEL_BASE_STYLE constant.
+    No niche-specific defaults — all style comes from ctx or is completely generic.
+    """
+    if ctx is None:
+        ctx = PromptContext()
+
+    # Priority 1: explicit composition style from NicheConfig (most specific)
+    if ctx.image_composition_style:
+        return (
+            f"{ctx.image_composition_style} "
+            "Full-frame composition. Dense, detailed layout filling the entire frame. "
+            "Polished, high-detail surfaces. Magazine-quality output."
+        )
+
+    # Priority 2: general image style description (medium specificity)
+    if ctx.image_style_description:
+        return (
+            f"{ctx.image_style_description} "
+            "Full-frame composition filling the entire frame. "
+            "Professional studio-quality lighting. Sharp focus. Magazine-quality output."
+        )
+
+    # Priority 3: truly generic — imposes NOTHING niche-specific
+    return (
+        "Premium studio photography. Clean, full-frame composition. "
+        "Professional lighting with sharp focus and high-quality textures. "
+        "Polished surfaces. Magazine-quality output with vivid clarity."
+    )
+
+# Backward-compatible alias
+REEL_BASE_STYLE = build_reel_base_style()
 
 def build_image_prompt_system(ctx: PromptContext = None) -> str:
     if ctx is None:
         ctx = PromptContext()
+    composition_hint = ctx.image_composition_style if ctx.image_composition_style else "Close-up, full-frame composition where the subject fills the entire frame — NOT wide shots"
     return f"""You are a visual prompt engineer specializing in {ctx.niche_name.lower()} imagery for Instagram.
 
 Given a title, generate a DETAILED cinematic image prompt suitable for AI image generation (DALL-E / Flux).
 
 ### REQUIREMENTS:
 - {ctx.image_style_description}
-- CLOSE-UP, full-frame composition — the subject must fill the entire image with minimal background
-- Think macro photography, tightly-cropped food/product shots — NOT wide shots with empty space
+- CRITICAL: {composition_hint}
 - Must end with "No text, no letters, no numbers, no symbols, no logos."
 - Should be 2-3 sentences long
 """

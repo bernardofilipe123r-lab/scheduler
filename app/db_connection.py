@@ -49,6 +49,21 @@ def run_migrations():
                     f"ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS {col} JSONB DEFAULT '[]'::jsonb"
                 )
             )
+        # NicheConfig v2: citation, composition, YT, carousel fields
+        niche_v2_migrations = [
+            "ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS citation_style VARCHAR DEFAULT 'none'",
+            "ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS citation_source_types JSONB DEFAULT '[]'::jsonb",
+            "ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS image_composition_style TEXT DEFAULT ''",
+            "ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS yt_title_examples JSONB DEFAULT '[]'::jsonb",
+            "ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS yt_title_bad_examples JSONB DEFAULT '[]'::jsonb",
+            "ALTER TABLE niche_config ADD COLUMN IF NOT EXISTS carousel_cta_topic VARCHAR DEFAULT ''",
+        ]
+        for sql in niche_v2_migrations:
+            conn.execute(text(sql))
+        # Performance indexes
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_generation_jobs_status ON generation_jobs(status)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_scheduled_reels_status_time ON scheduled_reels(status, scheduled_time)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_brands_user_id ON brands(user_id)"))
         # Seed global prompt settings if they don't exist
         for key, desc in [
             ("reels_prompt", "Global prompt describing topics/ideas for reel content"),

@@ -55,6 +55,25 @@ class NicheConfig(Base):
     competitor_accounts = Column(JSONB, default=[])
     discovery_hashtags = Column(JSONB, default=[])
 
+    # Citation / source style — determines carousel post source format
+    # Values: "academic_doi" | "financial_data" | "case_study" | "expert_quote" | "none"
+    citation_style = Column(String, default="none")
+
+    # Source databases/organizations for citations (overrides built-in defaults when set)
+    citation_source_types = Column(JSONB, default=[])
+
+    # Visual composition style — replaces REEL_BASE_STYLE per niche
+    image_composition_style = Column(Text, default="")
+
+    # YouTube title examples — good titles that show format for this niche
+    yt_title_examples = Column(JSONB, default=[])
+
+    # YouTube title bad examples — titles to avoid for this niche
+    yt_title_bad_examples = Column(JSONB, default=[])
+
+    # Carousel CTA topic word — the niche-relevant word used in slide 4 CTA
+    carousel_cta_topic = Column(String, default="")
+
     # Caption sections — empty until configured
     follow_section_text = Column(Text, default="")
     save_section_text = Column(Text, default="")
