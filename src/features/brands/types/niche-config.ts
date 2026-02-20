@@ -7,6 +7,8 @@ export interface PostExample {
   title: string
   slides: string[]
   doi?: string
+  /** Max slides for this example (3 or 4). Not persisted — UI-only. */
+  _maxSlides?: number
 }
 
 export interface CtaOption {
@@ -69,15 +71,37 @@ export type ConfigStrength = 'basic' | 'good' | 'excellent'
 
 export function getConfigStrength(config: NicheConfig): ConfigStrength {
   let score = 0
+  const maxScore = 12
 
+  // Core identity (3 points)
   if (config.niche_name) score++
-  if (config.content_brief && config.content_brief.length > 50) score += 2
-  if (config.cta_options.length > 0) score++
+  if (config.content_brief && config.content_brief.length > 50) score++
+  if (config.content_brief && config.content_brief.length > 200) score++
 
-  const totalExamples = config.reel_examples.length + config.post_examples.length
+  // Examples (3 points)
+  if (config.reel_examples.length >= 3) score++
+  if (config.reel_examples.length >= 10) score++
+  if (config.post_examples.length >= 1) score++
 
-  if (score <= 1 && totalExamples < 3) return 'basic'
-  if (score >= 3 && totalExamples >= 5) return 'excellent'
+  // CTAs (1 point)
+  if (config.cta_options.length > 0 && config.cta_options.some(c => c.text.trim())) score++
+
+  // Visual & content style (2 points)
+  if (config.image_composition_style && config.image_composition_style.trim()) score++
+  if (config.carousel_cta_topic && config.carousel_cta_topic.trim()) score++
+
+  // YouTube titles (1 point)
+  if ((config.yt_title_examples || []).length >= 2) score++
+
+  // Citation (1 point)
+  if (config.citation_style && config.citation_style !== 'none') score++
+
+  // Brand name (1 point)
+  if (config.parent_brand_name && config.parent_brand_name.trim()) score++
+
+  const pct = score / maxScore
+  if (pct < 0.4) return 'basic'
+  if (pct >= 0.75) return 'excellent'
   return 'good'
 }
 

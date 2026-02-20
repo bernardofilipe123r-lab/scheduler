@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview } from '../api/use-niche-config'
+import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles } from '../api/use-niche-config'
 import { useBrands } from '../api/use-brands'
 import { ConfigStrengthMeter } from './ConfigStrengthMeter'
 import { ContentExamplesSection } from './ContentExamplesSection'
@@ -78,6 +78,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   const updateMutation = useUpdateNicheConfig()
   const aiMutation = useAiUnderstanding()
   const reelPreviewMutation = useReelPreview()
+  const ytSuggestMutation = useSuggestYtTitles()
   const fontsReady = useFontPreload()
 
   const [values, setValues] = useState<NicheConfig>(DEFAULT_CONFIG)
@@ -275,6 +276,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             postExamples={values.post_examples}
             onReelExamplesChange={(v) => update('reel_examples', v)}
             onPostExamplesChange={(v) => update('post_examples', v)}
+            brandId={brandId}
           />
         </div>
       </div>
@@ -408,17 +410,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Citation Source Types</label>
-              <input
-                value={(values.citation_source_types || []).join(', ')}
-                onChange={(e) => update('citation_source_types', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                placeholder="e.g. PubMed, JAMA, Nature, SEC filings, case law"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-              <p className="text-xs text-gray-400 mt-1">Comma-separated list of preferred source types for citations.</p>
-            </div>
-
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Image Composition Style</label>
               <textarea
                 value={values.image_composition_style}
@@ -427,7 +418,16 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
               />
-              <p className="text-xs text-gray-400 mt-1">Describes the visual composition style for AI-generated backgrounds.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                This controls the visual style of AI-generated background images used in your reels and posts.
+                Describe the type of imagery, lighting, composition, and aesthetic you want. For example:
+              </p>
+              <ul className="text-xs text-gray-400 mt-1 ml-4 list-disc space-y-0.5">
+                <li><strong>Health/Food:</strong> "overhead flat-lay food photography, soft natural light, clean marble surfaces, colorful fresh ingredients"</li>
+                <li><strong>Tech:</strong> "minimal tech product mockups, dark gradient backgrounds, neon accent lighting"</li>
+                <li><strong>Lifestyle:</strong> "candid lifestyle moments, warm golden hour lighting, shallow depth of field"</li>
+                <li><strong>Finance:</strong> "clean data visualizations, professional office settings, muted corporate tones"</li>
+              </ul>
             </div>
 
             <div>
@@ -447,9 +447,37 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
       {/* Section 6: YouTube Title Examples */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-5">
-          <h3 className="font-medium text-gray-900 mb-1">🎬 YouTube Title Style</h3>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-medium text-gray-900">🎬 YouTube Title Style</h3>
+            <button
+              type="button"
+              onClick={() => {
+                ytSuggestMutation.mutate(brandId, {
+                  onSuccess: (data) => {
+                    if (data.good_titles?.length) {
+                      update('yt_title_examples', data.good_titles)
+                    }
+                    if (data.bad_titles?.length) {
+                      update('yt_title_bad_examples', data.bad_titles)
+                    }
+                    toast.success('AI suggestions applied — review and edit as needed')
+                  },
+                  onError: () => toast.error('Failed to generate suggestions'),
+                })
+              }}
+              disabled={ytSuggestMutation.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {ytSuggestMutation.isPending ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              {ytSuggestMutation.isPending ? 'Suggesting...' : 'Suggest with AI'}
+            </button>
+          </div>
           <p className="text-xs text-gray-400 mb-4">
-            Provide example titles to teach the AI your preferred YouTube title patterns.
+            Provide example titles to teach the AI your preferred YouTube title patterns. Use "Suggest with AI" to get recommendations based on your Content DNA.
           </p>
           <div className="space-y-4">
             <div>
@@ -625,9 +653,16 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                           scale={0.2}
                         />
                       </div>
-                      {/* Text slides — strip "Slide N:" prefix, use same effectiveBrand */}
+                      {/* Text slides — strip "Slide N:" prefix, ensure CTA spacing on last slide */}
                       {aiResult.example_post.slides.map((slide, i) => {
-                        const cleanSlide = slide.replace(/^Slide\s*\d+\s*:\s*/i, '')
+                        let cleanSlide = slide.replace(/^Slide\s*\d+\s*:\s*/i, '')
+                        // Ensure CTA line on last slide has paragraph gap
+                        if (i === aiResult.example_post!.slides.length - 1) {
+                          cleanSlide = cleanSlide.replace(
+                            /([.!?])\s*((?:For more|Follow @|If you care|Want more)\S*.*)/i,
+                            (_m, punct, cta) => `${punct}\n\n${cta}`
+                          )
+                        }
                         return (
                           <div key={i} className="shrink-0 rounded-lg overflow-hidden shadow-md">
                             <CarouselTextSlide

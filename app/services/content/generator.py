@@ -568,7 +568,8 @@ class ContentGeneratorV2:
         citation_block = _build_citation_block(ctx)
         title_examples = _build_post_title_examples(ctx)
 
-        if ctx.citation_style == "academic_doi":
+        _cstyle = ctx.citation_style if ctx.citation_style != "doi" else "academic_doi"
+        if _cstyle == "academic_doi":
             title_style_note = "based on a real, verifiable scientific study"
             title_type_note = "A bold, impactful statement revealing the research finding, written in ALL CAPS"
         elif ctx.citation_style == "financial_data":

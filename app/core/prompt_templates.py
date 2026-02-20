@@ -450,6 +450,9 @@ def _build_citation_block(ctx: PromptContext) -> str:
     Branches based on ctx.citation_style. Returns empty string when "none".
     """
     style = ctx.citation_style or "none"
+    # Normalize: frontend sends "doi" but legacy code used "academic_doi"
+    if style == "doi":
+        style = "academic_doi"
     sources = ctx.citation_source_types
 
     if style == "academic_doi":
@@ -491,6 +494,8 @@ def _build_citation_block(ctx: PromptContext) -> str:
 def _build_slide1_instruction(ctx: PromptContext) -> str:
     """Build the first slide content instruction based on citation_style and niche."""
     style = ctx.citation_style or "none"
+    if style == "doi":
+        style = "academic_doi"
     niche = ctx.niche_description or (f"the {ctx.niche_name}" if ctx.niche_name else "this topic")
 
     if style == "academic_doi":
@@ -592,7 +597,8 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
         avoid_block = "\n".join(f"- {t}" for t in ctx.topic_avoid)
 
     # Citation style label for title instruction
-    if ctx.citation_style == "academic_doi":
+    _citation = ctx.citation_style if ctx.citation_style != "doi" else "academic_doi"
+    if _citation == "academic_doi":
         title_style_note = "based on a real, verifiable scientific study"
         title_type_note = "A bold, impactful statement revealing what the research found, written in ALL CAPS"
     elif ctx.citation_style == "financial_data":

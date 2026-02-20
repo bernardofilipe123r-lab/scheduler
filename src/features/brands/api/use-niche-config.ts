@@ -71,3 +71,41 @@ export function useReelPreview() {
     mutationFn: fetchReelPreview,
   })
 }
+
+// Generate Post Example via DeepSeek
+
+interface GeneratedPostExample {
+  title: string
+  slides: string[]
+  doi: string
+}
+
+async function fetchGeneratePostExample(data: { brand_id?: string; num_slides: number }): Promise<GeneratedPostExample> {
+  return apiClient.post<GeneratedPostExample>('/api/v2/brands/niche-config/generate-post-example', data)
+}
+
+export function useGeneratePostExample() {
+  return useMutation({
+    mutationFn: fetchGeneratePostExample,
+  })
+}
+
+// Suggest YouTube Titles via DeepSeek
+
+interface SuggestedYtTitles {
+  good_titles: string[]
+  bad_titles: string[]
+}
+
+async function fetchSuggestYtTitles(brandId?: string): Promise<SuggestedYtTitles> {
+  const url = brandId
+    ? `/api/v2/brands/niche-config/suggest-yt-titles?brand_id=${encodeURIComponent(brandId)}`
+    : '/api/v2/brands/niche-config/suggest-yt-titles'
+  return apiClient.post<SuggestedYtTitles>(url, {})
+}
+
+export function useSuggestYtTitles() {
+  return useMutation({
+    mutationFn: fetchSuggestYtTitles,
+  })
+}

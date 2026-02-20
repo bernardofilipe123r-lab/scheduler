@@ -327,7 +327,7 @@ Also generate:
 2. One FULL example carousel post BASED ON A REAL SCIENTIFIC STUDY with:
    - A title referencing the study finding (ALL CAPS, 8-14 words, e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
    - 3-4 slides of detailed educational content (each slide is 3-5 sentences explaining the study and its implications)
-   - The last slide should be a brief CTA line
+   - The LAST slide must end with a CTA sentence (e.g. "For more science-backed tips, follow @brand_name"). The CTA MUST be separated from the preceding content by a blank line (\\n\\n). This is critical for proper rendering.
    - IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc. Just write the paragraph directly.
 
 Write in first person ("I create...", "I understand...", "My goal is..."). Be specific about the niche, not generic. Show that you deeply understand the brand identity.
@@ -385,6 +385,168 @@ OUTPUT FORMAT (JSON only):
         "example_reel": None,
         "example_post": None,
     }
+
+
+# --- Generate Post Example endpoint ---
+
+class GeneratePostExampleRequest(BaseModel):
+    brand_id: Optional[str] = None
+    num_slides: int = Field(default=4, ge=3, le=4)
+
+
+@router.post("/generate-post-example")
+async def generate_post_example(
+    request: GeneratePostExampleRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Generate a single post example via DeepSeek based on brand config."""
+    user_id = user["id"]
+    service = get_niche_config_service()
+    ctx = service.get_context(brand_id=request.brand_id, user_id=user_id)
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    config_parts = []
+    if ctx.niche_name:
+        config_parts.append(f"Niche: {ctx.niche_name}")
+    if ctx.content_brief:
+        config_parts.append(f"Brief: {ctx.content_brief}")
+    if ctx.content_tone:
+        config_parts.append(f"Tone: {', '.join(ctx.content_tone)}")
+    config_text = "\n".join(config_parts) if config_parts else "General educational content"
+
+    prompt = f"""Generate ONE carousel post example BASED ON A REAL SCIENTIFIC STUDY for this brand:
+
+{config_text}
+
+Requirements:
+- Title: ALL CAPS, 8-14 words, referencing a real study finding
+- {request.num_slides} content slides (not counting the cover). Each slide: 3-5 sentences of educational content explaining the study
+- The LAST slide must end with a CTA sentence separated by a blank line, e.g. "Follow @brand for more..."
+- A real, verifiable DOI
+- IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc.
+
+OUTPUT FORMAT (JSON only):
+{{{{
+    "title": "POST TITLE IN ALL CAPS",
+    "slides": ["slide 1 text...", "slide 2 text...", ...],
+    "doi": "10.xxxx/xxxxx"
+}}}}"""
+
+    try:
+        response = http_requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7,
+                "max_tokens": 1000,
+            },
+            timeout=30,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            content_text = data["choices"][0]["message"]["content"].strip()
+            if content_text.startswith("```"):
+                content_text = content_text.split("```")[1]
+                if content_text.startswith("json"):
+                    content_text = content_text[4:]
+                content_text = content_text.strip()
+            result = json.loads(content_text)
+            return {
+                "title": result.get("title", ""),
+                "slides": result.get("slides", [])[:request.num_slides],
+                "doi": result.get("doi", ""),
+            }
+    except Exception as e:
+        print(f"Post example generation failed: {e}", flush=True)
+
+    raise HTTPException(status_code=500, detail="Failed to generate post example")
+
+
+# --- Suggest YouTube Titles endpoint ---
+
+@router.post("/suggest-yt-titles")
+async def suggest_yt_titles(
+    brand_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Generate suggested YouTube title examples based on brand config."""
+    user_id = user["id"]
+    service = get_niche_config_service()
+    ctx = service.get_context(brand_id=brand_id, user_id=user_id)
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    config_parts = []
+    if ctx.niche_name:
+        config_parts.append(f"Niche: {ctx.niche_name}")
+    if ctx.content_brief:
+        config_parts.append(f"Brief: {ctx.content_brief}")
+    if ctx.content_tone:
+        config_parts.append(f"Tone: {', '.join(ctx.content_tone)}")
+    if ctx.reel_examples:
+        titles = [ex.get("title", "") for ex in ctx.reel_examples[:5] if ex.get("title")]
+        if titles:
+            config_parts.append(f"Reel title examples: {', '.join(titles)}")
+    config_text = "\n".join(config_parts) if config_parts else "General educational content"
+
+    prompt = f"""Based on this brand configuration, suggest YouTube title examples — both good patterns to emulate and bad patterns to avoid.
+
+{config_text}
+
+Generate:
+- 5 good title examples that match this brand's tone and niche (curiosity-driven, clear, engaging, not clickbait)
+- 3 bad title examples that this brand should avoid (overly clickbaity, all-caps screaming, misleading)
+
+OUTPUT FORMAT (JSON only):
+{{{{
+    "good_titles": ["title 1", "title 2", "title 3", "title 4", "title 5"],
+    "bad_titles": ["bad title 1", "bad title 2", "bad title 3"]
+}}}}"""
+
+    try:
+        response = http_requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7,
+                "max_tokens": 500,
+            },
+            timeout=30,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            content_text = data["choices"][0]["message"]["content"].strip()
+            if content_text.startswith("```"):
+                content_text = content_text.split("```")[1]
+                if content_text.startswith("json"):
+                    content_text = content_text[4:]
+                content_text = content_text.strip()
+            result = json.loads(content_text)
+            return {
+                "good_titles": result.get("good_titles", []),
+                "bad_titles": result.get("bad_titles", []),
+            }
+    except Exception as e:
+        print(f"YT title suggestion failed: {e}", flush=True)
+
+    raise HTTPException(status_code=500, detail="Failed to generate title suggestions")
 
 
 # --- Reel Preview endpoint ---
