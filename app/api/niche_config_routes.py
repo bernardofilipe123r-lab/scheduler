@@ -425,8 +425,8 @@ async def generate_post_example(
 Requirements:
 - Title: ALL CAPS, 8-14 words, referencing a real study finding
 - {request.num_slides} content slides (not counting the cover). Each slide: 3-5 sentences of educational content explaining the study
-- The LAST slide must end with a CTA sentence separated by a blank line, e.g. "Follow @brand for more..."
-- A real, verifiable DOI
+- Do NOT include a CTA in any slide — the CTA is added automatically by the system
+- A real, verifiable DOI (this is MANDATORY — never omit or fabricate it)
 - IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc.
 
 OUTPUT FORMAT (JSON only):

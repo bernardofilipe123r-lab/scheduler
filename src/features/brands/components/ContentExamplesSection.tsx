@@ -192,12 +192,20 @@ function PostExampleCard({
             />
           </div>
           <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              DOI <span className="text-red-500">*</span>
+            </label>
             <input
               value={example.doi || ''}
               onChange={(e) => onChange({ ...example, doi: e.target.value })}
-              placeholder="DOI: 10.2337/db14-0513"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="10.2337/db14-0513"
+              className={`w-full px-3 py-2 border rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                !example.doi?.trim() ? 'border-red-300 bg-red-50/30' : 'border-gray-200'
+              }`}
             />
+            {!example.doi?.trim() && (
+              <p className="text-[10px] text-red-500 mt-0.5">A real, verifiable DOI is required for every post example.</p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -375,9 +383,14 @@ export function ContentExamplesSection({
             Post Examples ({postExamples.length} of 20)
           </h4>
         </div>
-        <p className="text-xs text-gray-400 mb-3">
-          Post examples should reference real studies with DOI citations in the caption. Each slide should contain 2+ educational sentences.
+        <p className="text-xs text-gray-400 mb-2">
+          Post examples should reference real studies with DOI citations. Each slide should contain 2+ educational sentences.
         </p>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+          <p className="text-[11px] text-amber-700">
+            <strong>Note:</strong> Don't include a CTA in these slides — the final call-to-action is configured in the <strong>"Carousel CTA Topic"</strong> field below, or the AI will adapt one automatically based on your brand.
+          </p>
+        </div>
         <div className="space-y-2">
           {postExamples.map((ex, i) => (
             <PostExampleCard

@@ -284,9 +284,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
       {/* Section 4: CTAs */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-5">
-          <h3 className="font-medium text-gray-900 mb-1">💬 CTAs & Captions</h3>
+          <h3 className="font-medium text-gray-900 mb-1">💬 Reel CTAs & Captions</h3>
           <p className="text-xs text-gray-400 mb-4">
-            Define your call-to-action variants with probability weights. The AI randomly picks one based on the weights you assign.
+            These CTAs are used for <strong>reels only</strong>. The AI randomly picks one based on the weights you assign. Carousel post CTAs are configured separately in the "Carousel CTA Topic" field below.
           </p>
           <div className="space-y-4">
             <div>
