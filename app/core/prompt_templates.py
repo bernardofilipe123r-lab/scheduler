@@ -458,11 +458,10 @@ def _build_citation_block(ctx: PromptContext) -> str:
     if style == "academic_doi":
         source_names = ", ".join(sources) if sources else "PubMed, Nature, The Lancet, JAMA, BMJ"
         return (
-            f"After the content paragraphs, add a real academic source:\n"
-            f"  Source: Author(s). (Year). Title. Journal, Volume(Issue), Pages.\n"
-            f"  DOI: 10.xxxx/xxxxx\n"
+            f"After the content paragraphs, add a real academic source reference:\n"
+            f"  Study: [Short study description] — [Journal or Institution], [Year]\n"
             f"  Use studies from: {source_names}\n"
-            f"  THE DOI MUST BE A REAL, VERIFIABLE DOI. NEVER invent or fabricate a DOI."
+            f"  The study MUST be real and verifiable. NEVER invent or fabricate a study reference."
         )
     elif style == "financial_data":
         source_names = ", ".join(sources) if sources else "Federal Reserve, World Bank, Bloomberg, SEC, IMF, BLS"
@@ -651,6 +650,7 @@ Each post is a DIFFERENT topic. Each must be {title_style_note}.
 - Title examples: {title_examples}
 - Do NOT end the title with a period
 - Do NOT use reel-style titles like "5 SIGNS..." or "THINGS THAT DESTROY..."
+- IMPORTANT: Vary the opening word of each title. Do NOT start every title with "YOUR". Use diverse patterns like "STUDY REVEALS...", "NEW RESEARCH SHOWS...", "THE HIDDEN REASON...", "HOW [X] ACTUALLY...", "WHY [X] IS...", "WHAT HAPPENS WHEN...", "THIS COMMON [X]..." etc.
 
 {topic_block}
 

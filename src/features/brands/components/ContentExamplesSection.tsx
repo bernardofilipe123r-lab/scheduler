@@ -10,6 +10,7 @@ interface ContentExamplesSectionProps {
   onReelExamplesChange: (examples: ReelExample[]) => void
   onPostExamplesChange: (examples: PostExample[]) => void
   brandId?: string
+  showOnly?: 'reels' | 'posts'
 }
 
 function ReelExampleCard({
@@ -193,18 +194,18 @@ function PostExampleCard({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">
-              DOI <span className="text-red-500">*</span>
+              Study Reference <span className="text-red-500">*</span>
             </label>
             <input
-              value={example.doi || ''}
-              onChange={(e) => onChange({ ...example, doi: e.target.value })}
-              placeholder="10.2337/db14-0513"
+              value={example.study_ref || ''}
+              onChange={(e) => onChange({ ...example, study_ref: e.target.value })}
+              placeholder="Iron absorption study — Cell Metabolism, 2022"
               className={`w-full px-3 py-2 border rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-                !example.doi?.trim() ? 'border-red-300 bg-red-50/30' : 'border-gray-200'
+                !example.study_ref?.trim() ? 'border-red-300 bg-red-50/30' : 'border-gray-200'
               }`}
             />
-            {!example.doi?.trim() && (
-              <p className="text-[10px] text-red-500 mt-0.5">A real, verifiable DOI is required for every post example.</p>
+            {!example.study_ref?.trim() && (
+              <p className="text-[10px] text-red-500 mt-0.5">A study reference (name, journal/institution, year) is required.</p>
             )}
           </div>
           <div>
@@ -254,6 +255,7 @@ export function ContentExamplesSection({
   onReelExamplesChange,
   onPostExamplesChange,
   brandId,
+  showOnly,
 }: ContentExamplesSectionProps) {
   const [newPostSlideCount, setNewPostSlideCount] = useState<3 | 4>(4)
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null)
@@ -280,7 +282,7 @@ export function ContentExamplesSection({
           updated[newIndex] = {
             title: data.title,
             slides: data.slides.slice(0, newPostSlideCount),
-            doi: data.doi,
+            study_ref: data.study_ref,
             _maxSlides: newPostSlideCount,
           }
           onPostExamplesChange(updated)
@@ -316,8 +318,12 @@ export function ContentExamplesSection({
   }
 
   const totalExamples = reelExamples.length + postExamples.length
+  const showReels = !showOnly || showOnly === 'reels'
+  const showPosts = !showOnly || showOnly === 'posts'
 
-  if (totalExamples === 0) {
+  const relevantCount = showOnly === 'reels' ? reelExamples.length : showOnly === 'posts' ? postExamples.length : totalExamples
+
+  if (relevantCount === 0) {
     return (
       <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
         <p className="text-gray-500 text-sm mb-1">No examples added yet</p>
@@ -325,20 +331,24 @@ export function ContentExamplesSection({
           Examples are the most powerful way to guide the AI. Add 5-10 examples to dramatically improve quality.
         </p>
         <div className="flex gap-3 justify-center">
-          <button
-            type="button"
-            onClick={addReelExample}
-            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
-          >
-            <Plus className="w-4 h-4" /> Add Reel Example
-          </button>
-          <button
-            type="button"
-            onClick={addPostExample}
-            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
-          >
-            <Plus className="w-4 h-4" /> Add Post Example
-          </button>
+          {showReels && (
+            <button
+              type="button"
+              onClick={addReelExample}
+              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4" /> Add Reel Example
+            </button>
+          )}
+          {showPosts && (
+            <button
+              type="button"
+              onClick={addPostExample}
+              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4" /> Add Post Example
+            </button>
+          )}
         </div>
       </div>
     )
@@ -347,107 +357,111 @@ export function ContentExamplesSection({
   return (
     <div className="space-y-6">
       {/* Reel Examples */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-gray-700">
-            Reel Examples ({reelExamples.length} of 20)
-          </h4>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          CTA is automatically added as the final line — don't include it here.
-        </p>
-        <div className="space-y-2">
-          {reelExamples.map((ex, i) => (
-            <ReelExampleCard
-              key={i}
-              example={ex}
-              index={i}
-              onChange={(updated) => updateReelExample(i, updated)}
-              onDelete={() => deleteReelExample(i)}
-            />
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={addReelExample}
-          disabled={reelExamples.length >= 20}
-          className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" /> Add Reel Example
-        </button>
-      </div>
-
-      {/* Post Examples */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-gray-700">
-            Post Examples ({postExamples.length} of 20)
-          </h4>
-        </div>
-        <p className="text-xs text-gray-400 mb-2">
-          Post examples should reference real studies with DOI citations. Each slide should contain 2+ educational sentences.
-        </p>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-          <p className="text-[11px] text-amber-700">
-            <strong>Note:</strong> Don't include a CTA in these slides — the final call-to-action is configured in the <strong>"Carousel CTA Topic"</strong> field below, or the AI will adapt one automatically based on your brand.
+      {showReels && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700">
+              Reel Examples ({reelExamples.length} of 20)
+            </h4>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            CTA is automatically added as the final line — don't include it here.
           </p>
-        </div>
-        <div className="space-y-2">
-          {postExamples.map((ex, i) => (
-            <PostExampleCard
-              key={i}
-              example={ex}
-              index={i}
-              onChange={(updated) => updatePostExample(i, updated)}
-              onDelete={() => deletePostExample(i)}
-              isGenerating={generatingIndex === i}
-            />
-          ))}
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">Slides per post:</span>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setNewPostSlideCount(3)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  newPostSlideCount === 3
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                3
-              </button>
-              <button
-                type="button"
-                onClick={() => setNewPostSlideCount(4)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  newPostSlideCount === 4
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                4
-              </button>
-            </div>
-            <span className="text-[10px] text-gray-400">+ cover</span>
+          <div className="space-y-2">
+            {reelExamples.map((ex, i) => (
+              <ReelExampleCard
+                key={i}
+                example={ex}
+                index={i}
+                onChange={(updated) => updateReelExample(i, updated)}
+                onDelete={() => deleteReelExample(i)}
+              />
+            ))}
           </div>
           <button
             type="button"
-            onClick={addPostExample}
-            disabled={postExamples.length >= 20 || generateMutation.isPending}
-            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
+            onClick={addReelExample}
+            disabled={reelExamples.length >= 20}
+            className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
           >
-            {generateMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4" />
-            )}
-            {generateMutation.isPending ? 'Generating...' : 'Add Post Example'}
+            <Plus className="w-4 h-4" /> Add Reel Example
           </button>
         </div>
-      </div>
+      )}
+
+      {/* Post Examples */}
+      {showPosts && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700">
+              Post Examples ({postExamples.length} of 20)
+            </h4>
+          </div>
+          <p className="text-xs text-gray-400 mb-2">
+            Post examples should reference real studies (name, journal/institution, year). Each slide should contain 2+ educational sentences.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+            <p className="text-[11px] text-amber-700">
+              <strong>Note:</strong> Don't include a CTA in these slides — the final call-to-action is configured in the <strong>"Carousel CTA Topic"</strong> field, or the AI will adapt one automatically based on your brand.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {postExamples.map((ex, i) => (
+              <PostExampleCard
+                key={i}
+                example={ex}
+                index={i}
+                onChange={(updated) => updatePostExample(i, updated)}
+                onDelete={() => deletePostExample(i)}
+                isGenerating={generatingIndex === i}
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Slides per post:</span>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setNewPostSlideCount(3)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    newPostSlideCount === 3
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  3
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPostSlideCount(4)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    newPostSlideCount === 4
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  4
+                </button>
+              </div>
+              <span className="text-[10px] text-gray-400">+ cover</span>
+            </div>
+            <button
+              type="button"
+              onClick={addPostExample}
+              disabled={postExamples.length >= 20 || generateMutation.isPending}
+              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
+            >
+              {generateMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
+              {generateMutation.isPending ? 'Generating...' : 'Add Post Example'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

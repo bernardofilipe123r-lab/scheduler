@@ -147,8 +147,10 @@ def format_post_examples(examples: list[dict]) -> str:
         lines.append(f"Title: {ex['title']}")
         for j, slide in enumerate(ex.get('slides', []), 1):
             lines.append(f"Slide {j}: {slide}")
-        if ex.get('doi'):
-            lines.append(f"DOI: {ex['doi']}")
+        if ex.get('study_ref'):
+            lines.append(f"Study: {ex['study_ref']}")
+        elif ex.get('doi'):
+            lines.append(f"Study: {ex['doi']}")
         lines.append("")
 
     lines.append(

@@ -86,7 +86,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   const [aiResult, setAiResult] = useState<{
     understanding: string
     example_reel: { title: string; content_lines: string[] } | null
-    example_post: { title: string; slides: string[]; doi?: string } | null
+    example_post: { title: string; slides: string[]; study_ref?: string } | null
   } | null>(null)
   const [reelImages, setReelImages] = useState<{
     thumbnail_base64: string
@@ -233,167 +233,291 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
         </div>
       </div>
 
-      {/* Section 1: Niche Name */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          BLOCK 1: GENERAL
+         ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Niche Name</label>
-          <input
-            value={values.niche_name}
-            onChange={(e) => update('niche_name', e.target.value)}
-            placeholder="Health & Wellness"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-          <p className="text-xs text-gray-400 mt-1">A short label for your niche (e.g. "Health & Wellness", "Personal Finance")</p>
+        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+            🧬 General
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">Core identity and visual style shared across all content types.</p>
+        </div>
+        <div className="px-6 py-5 space-y-5">
+          {/* Niche Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Niche Name</label>
+            <input
+              value={values.niche_name}
+              onChange={(e) => update('niche_name', e.target.value)}
+              placeholder="Health & Wellness"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">A short label for your niche (e.g. "Health & Wellness", "Personal Finance")</p>
+          </div>
+
+          {/* Content Brief */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Content Brief</label>
+            <textarea
+              value={values.content_brief}
+              onChange={(e) => update('content_brief', e.target.value)}
+              placeholder={CONTENT_BRIEF_PLACEHOLDER}
+              rows={10}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Describe everything the AI needs to know: topics, tone, audience, style, philosophy. This goes directly into every prompt.
+            </p>
+          </div>
+
+          {/* Image Composition Style */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Image Composition Style</label>
+            <textarea
+              value={values.image_composition_style}
+              onChange={(e) => update('image_composition_style', e.target.value)}
+              placeholder="e.g. food/product shots with natural lighting, architecture photography, tech product mockups"
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              This controls the visual style of AI-generated background images used in your reels and posts.
+              Describe the type of imagery, lighting, composition, and aesthetic you want. For example:
+            </p>
+            <ul className="text-xs text-gray-400 mt-1 ml-4 list-disc space-y-0.5">
+              <li><strong>Health/Food:</strong> "overhead flat-lay food photography, soft natural light, clean marble surfaces, colorful fresh ingredients"</li>
+              <li><strong>Tech:</strong> "minimal tech product mockups, dark gradient backgrounds, neon accent lighting"</li>
+              <li><strong>Lifestyle:</strong> "candid lifestyle moments, warm golden hour lighting, shallow depth of field"</li>
+              <li><strong>Finance:</strong> "clean data visualizations, professional office settings, muted corporate tones"</li>
+            </ul>
+          </div>
         </div>
       </div>
 
-      {/* Section 2: Content Brief */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          BLOCK 2: REELS
+         ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Content Brief</label>
-          <textarea
-            value={values.content_brief}
-            onChange={(e) => update('content_brief', e.target.value)}
-            placeholder={CONTENT_BRIEF_PLACEHOLDER}
-            rows={10}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
-          />
-          <p className="text-xs text-gray-400 mt-1">
-            Describe everything the AI needs to know: topics, tone, audience, style, philosophy. This goes directly into every prompt.
-          </p>
+        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+            🎬 Reels
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">Reel examples, CTAs, and YouTube title style for short-form video content.</p>
         </div>
-      </div>
+        <div className="px-6 py-5 space-y-6">
+          {/* Reel Examples */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Reel Examples</h4>
+            <p className="text-xs text-gray-400 mb-3">
+              The AI learns directly from your examples. Providing 10+ examples dramatically improves content relevance and quality.
+            </p>
+            <ContentExamplesSection
+              reelExamples={values.reel_examples}
+              postExamples={values.post_examples}
+              onReelExamplesChange={(v) => update('reel_examples', v)}
+              onPostExamplesChange={(v) => update('post_examples', v)}
+              brandId={brandId}
+              showOnly="reels"
+            />
+          </div>
 
-      {/* Section 3: Content Examples */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-5">
-          <h3 className="font-medium text-gray-900 mb-1">📝 Content Examples</h3>
-          <p className="text-xs text-gray-400 mb-4">
-            The AI learns directly from your examples. Providing 10+ examples dramatically improves content relevance and quality.
-          </p>
-          <ContentExamplesSection
-            reelExamples={values.reel_examples}
-            postExamples={values.post_examples}
-            onReelExamplesChange={(v) => update('reel_examples', v)}
-            onPostExamplesChange={(v) => update('post_examples', v)}
-            brandId={brandId}
-          />
-        </div>
-      </div>
-
-      {/* Section 4: CTAs */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-5">
-          <h3 className="font-medium text-gray-900 mb-1">💬 Reel CTAs & Captions</h3>
-          <p className="text-xs text-gray-400 mb-4">
-            These CTAs are used for <strong>reels only</strong>. The AI randomly picks one based on the weights you assign. Carousel post CTAs are configured separately in the "Carousel CTA Topic" field below.
-          </p>
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">CTA Options ({values.cta_options.length}/10)</label>
-                <div className="flex gap-2">
-                  {values.cta_options.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const equalWeight = Math.floor(100 / values.cta_options.length)
-                        const remainder = 100 - equalWeight * values.cta_options.length
-                        update('cta_options', values.cta_options.map((opt, i) => ({
-                          ...opt,
-                          weight: equalWeight + (i === 0 ? remainder : 0),
-                        })))
-                      }}
-                      className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                    >
-                      Auto-distribute
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (values.cta_options.length >= 10) return
-                      update('cta_options', [...values.cta_options, { text: '', weight: 0 }])
-                    }}
-                    disabled={values.cta_options.length >= 10}
-                    className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Add CTA
-                  </button>
-                </div>
-              </div>
-
-              {values.cta_options.length === 0 && (
-                <div className="text-xs text-gray-400 italic py-3 text-center border border-dashed border-gray-200 rounded-lg">
-                  No CTAs configured. Add CTA variants that will be randomly selected for your content.
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {values.cta_options.map((opt, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      value={opt.text}
-                      onChange={(e) => {
-                        const updated = [...values.cta_options]
-                        updated[i] = { ...updated[i], text: e.target.value }
-                        update('cta_options', updated)
-                      }}
-                      placeholder="e.g. If you want to improve your health, follow our page"
-                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <div className="flex items-center gap-1 shrink-0">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={opt.weight}
-                        onChange={(e) => {
-                          const updated = [...values.cta_options]
-                          updated[i] = { ...updated[i], weight: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }
-                          update('cta_options', updated)
+          {/* Reel CTAs */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-medium text-gray-700 mb-1">💬 Reel CTAs & Captions</h4>
+            <p className="text-xs text-gray-400 mb-4">
+              These CTAs are used for <strong>reels only</strong>. The AI randomly picks one based on the weights you assign. Carousel post CTAs are configured separately in the Carousel Posts section.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">CTA Options ({values.cta_options.length}/10)</label>
+                  <div className="flex gap-2">
+                    {values.cta_options.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const equalWeight = Math.floor(100 / values.cta_options.length)
+                          const remainder = 100 - equalWeight * values.cta_options.length
+                          update('cta_options', values.cta_options.map((opt, i) => ({
+                            ...opt,
+                            weight: equalWeight + (i === 0 ? remainder : 0),
+                          })))
                         }}
-                        className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                      <span className="text-xs text-gray-400">%</span>
-                    </div>
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                      >
+                        Auto-distribute
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
-                        update('cta_options', values.cta_options.filter((_, j) => j !== i))
+                        if (values.cta_options.length >= 10) return
+                        update('cta_options', [...values.cta_options, { text: '', weight: 0 }])
                       }}
-                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                      disabled={values.cta_options.length >= 10}
+                      className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Plus className="w-3 h-3" />
+                      Add CTA
                     </button>
                   </div>
-                ))}
+                </div>
+
+                {values.cta_options.length === 0 && (
+                  <div className="text-xs text-gray-400 italic py-3 text-center border border-dashed border-gray-200 rounded-lg">
+                    No CTAs configured. Add CTA variants that will be randomly selected for your content.
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {values.cta_options.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        value={opt.text}
+                        onChange={(e) => {
+                          const updated = [...values.cta_options]
+                          updated[i] = { ...updated[i], text: e.target.value }
+                          update('cta_options', updated)
+                        }}
+                        placeholder="e.g. If you want to improve your health, follow our page"
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={opt.weight}
+                          onChange={(e) => {
+                            const updated = [...values.cta_options]
+                            updated[i] = { ...updated[i], weight: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }
+                            update('cta_options', updated)
+                          }}
+                          className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                        <span className="text-xs text-gray-400">%</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          update('cta_options', values.cta_options.filter((_, j) => j !== i))
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {values.cta_options.length > 0 && (() => {
+                  const totalWeight = values.cta_options.reduce((sum, opt) => sum + opt.weight, 0)
+                  return totalWeight !== 100 ? (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠ Weights sum to {totalWeight}% — should be 100%
+                    </p>
+                  ) : (
+                    <p className="text-xs text-green-600 mt-1">✓ Weights sum to 100%</p>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* YouTube Title Style */}
+          <div className="border-t border-gray-100 pt-5">
+            <div className="flex items-center justify-between mb-1">
+              <h4 className="text-sm font-medium text-gray-700">🎬 YouTube Title Style</h4>
+              <button
+                type="button"
+                onClick={() => {
+                  ytSuggestMutation.mutate(brandId, {
+                    onSuccess: (data) => {
+                      if (data.good_titles?.length) {
+                        update('yt_title_examples', data.good_titles)
+                      }
+                      if (data.bad_titles?.length) {
+                        update('yt_title_bad_examples', data.bad_titles)
+                      }
+                      toast.success('AI suggestions applied — review and edit as needed')
+                    },
+                    onError: () => toast.error('Failed to generate suggestions'),
+                  })
+                }}
+                disabled={ytSuggestMutation.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {ytSuggestMutation.isPending ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                {ytSuggestMutation.isPending ? 'Suggesting...' : 'Suggest with AI'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">
+              Provide example titles to teach the AI your preferred YouTube title patterns. Use "Suggest with AI" to get recommendations based on your Content DNA.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Good Title Examples</label>
+                <textarea
+                  value={(values.yt_title_examples || []).join('\n')}
+                  onChange={(e) => update('yt_title_examples', e.target.value.split('\n').filter(Boolean))}
+                  placeholder={"One title per line, e.g.:\nThe Sleep Trick That Changed Everything\nWhat Really Happens When You Fast 16 Hours"}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+                />
+                <p className="text-xs text-gray-400 mt-1">Titles the AI should emulate. One per line.</p>
               </div>
 
-              {values.cta_options.length > 0 && (() => {
-                const totalWeight = values.cta_options.reduce((sum, opt) => sum + opt.weight, 0)
-                return totalWeight !== 100 ? (
-                  <p className="text-xs text-amber-600 mt-1">
-                    ⚠ Weights sum to {totalWeight}% — should be 100%
-                  </p>
-                ) : (
-                  <p className="text-xs text-green-600 mt-1">✓ Weights sum to 100%</p>
-                )
-              })()}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bad Title Examples (avoid these)</label>
+                <textarea
+                  value={(values.yt_title_bad_examples || []).join('\n')}
+                  onChange={(e) => update('yt_title_bad_examples', e.target.value.split('\n').filter(Boolean))}
+                  placeholder={"One title per line, e.g.:\nYOU WON'T BELIEVE THIS HACK!!!\n10 FOODS YOU MUST EAT NOW"}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+                />
+                <p className="text-xs text-gray-400 mt-1">Anti-patterns the AI should avoid. One per line.</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Section 5: Citation & Content Style */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          BLOCK 3: CAROUSEL POSTS
+         ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-5">
-          <h3 className="font-medium text-gray-900 mb-1">📚 Citation & Content Style</h3>
-          <p className="text-xs text-gray-400 mb-4">
-            Control how the AI references sources and structures content for your niche.
-          </p>
-          <div className="space-y-4">
+        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+            📱 Carousel Posts
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and CTA topic for carousel content.</p>
+        </div>
+        <div className="px-6 py-5 space-y-6">
+          {/* Post Examples */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Post Examples</h4>
+            <p className="text-xs text-gray-400 mb-3">
+              The AI learns directly from your examples. Providing 10+ examples dramatically improves content relevance and quality.
+            </p>
+            <ContentExamplesSection
+              reelExamples={values.reel_examples}
+              postExamples={values.post_examples}
+              onReelExamplesChange={(v) => update('reel_examples', v)}
+              onPostExamplesChange={(v) => update('post_examples', v)}
+              brandId={brandId}
+              showOnly="posts"
+            />
+          </div>
+
+          {/* Citation Style */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">📚 Citation Style</h4>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Citation Style</label>
               <select
@@ -402,34 +526,17 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="none">None — no source citations</option>
-                <option value="doi">DOI — scientific paper references</option>
+                <option value="doi">Academic — study name, institution & year</option>
                 <option value="url">URL — web source links</option>
                 <option value="named">Named — mention source by name</option>
               </select>
               <p className="text-xs text-gray-400 mt-1">How (or whether) the AI should cite sources in carousel posts.</p>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Image Composition Style</label>
-              <textarea
-                value={values.image_composition_style}
-                onChange={(e) => update('image_composition_style', e.target.value)}
-                placeholder="e.g. food/product shots with natural lighting, architecture photography, tech product mockups"
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                This controls the visual style of AI-generated background images used in your reels and posts.
-                Describe the type of imagery, lighting, composition, and aesthetic you want. For example:
-              </p>
-              <ul className="text-xs text-gray-400 mt-1 ml-4 list-disc space-y-0.5">
-                <li><strong>Health/Food:</strong> "overhead flat-lay food photography, soft natural light, clean marble surfaces, colorful fresh ingredients"</li>
-                <li><strong>Tech:</strong> "minimal tech product mockups, dark gradient backgrounds, neon accent lighting"</li>
-                <li><strong>Lifestyle:</strong> "candid lifestyle moments, warm golden hour lighting, shallow depth of field"</li>
-                <li><strong>Finance:</strong> "clean data visualizations, professional office settings, muted corporate tones"</li>
-              </ul>
-            </div>
-
+          {/* Carousel CTA Topic */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">💬 Carousel CTA</h4>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carousel CTA Topic</label>
               <input
@@ -444,70 +551,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
         </div>
       </div>
 
-      {/* Section 6: YouTube Title Examples */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-5">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-medium text-gray-900">🎬 YouTube Title Style</h3>
-            <button
-              type="button"
-              onClick={() => {
-                ytSuggestMutation.mutate(brandId, {
-                  onSuccess: (data) => {
-                    if (data.good_titles?.length) {
-                      update('yt_title_examples', data.good_titles)
-                    }
-                    if (data.bad_titles?.length) {
-                      update('yt_title_bad_examples', data.bad_titles)
-                    }
-                    toast.success('AI suggestions applied — review and edit as needed')
-                  },
-                  onError: () => toast.error('Failed to generate suggestions'),
-                })
-              }}
-              disabled={ytSuggestMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {ytSuggestMutation.isPending ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Sparkles className="w-3 h-3" />
-              )}
-              {ytSuggestMutation.isPending ? 'Suggesting...' : 'Suggest with AI'}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mb-4">
-            Provide example titles to teach the AI your preferred YouTube title patterns. Use "Suggest with AI" to get recommendations based on your Content DNA.
-          </p>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Good Title Examples</label>
-              <textarea
-                value={(values.yt_title_examples || []).join('\n')}
-                onChange={(e) => update('yt_title_examples', e.target.value.split('\n').filter(Boolean))}
-                placeholder={"One title per line, e.g.:\nThe Sleep Trick That Changed Everything\nWhat Really Happens When You Fast 16 Hours"}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
-              />
-              <p className="text-xs text-gray-400 mt-1">Titles the AI should emulate. One per line.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bad Title Examples (avoid these)</label>
-              <textarea
-                value={(values.yt_title_bad_examples || []).join('\n')}
-                onChange={(e) => update('yt_title_bad_examples', e.target.value.split('\n').filter(Boolean))}
-                placeholder={"One title per line, e.g.:\nYOU WON'T BELIEVE THIS HACK!!!\n10 FOODS YOU MUST EAT NOW"}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
-              />
-              <p className="text-xs text-gray-400 mt-1">Anti-patterns the AI should avoid. One per line.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Understanding */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          BLOCK 4: AI UNDERSTANDING
+         ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -555,7 +601,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
             {(aiResult.example_reel || aiResult.example_post) && (
               <div className="space-y-6">
-                {/* Reel Preview — real images from ImageGenerator (matches Job Detail layout) */}
+                {/* Reel Preview */}
                 {aiResult.example_reel && (
                   <div className="border border-indigo-100 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -569,9 +615,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0">
-                      {/* Left: Media preview — 2 columns: IG/FB Thumbnail + Content */}
                       <div className="grid grid-cols-2 gap-3">
-                        {/* IG/FB Thumbnail */}
                         <div>
                           <p className="text-xs text-gray-500 mb-1 text-center">IG/FB Thumbnail</p>
                           {reelImages ? (
@@ -591,7 +635,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                           )}
                         </div>
 
-                        {/* Content Slide */}
                         <div>
                           <p className="text-xs text-gray-500 mb-1 text-center">Content Slide</p>
                           {reelImages ? (
@@ -612,7 +655,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                         </div>
                       </div>
 
-                      {/* Right: Script lines */}
                       <div className="bg-gray-50 rounded-lg p-4">
                         <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_reel.title}</p>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5">Script Lines</p>
@@ -629,7 +671,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                   </div>
                 )}
 
-                {/* Carousel Post Preview — real Konva components with preloaded fonts */}
+                {/* Carousel Post Preview */}
                 {aiResult.example_post && fontsReady && (
                   <div className="border border-purple-100 rounded-lg p-4 min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-3">
@@ -642,7 +684,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                       </span>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-2">
-                      {/* Cover slide — uses effectiveBrand (current brand or random fallback) */}
                       <div className="shrink-0 rounded-lg overflow-hidden shadow-md">
                         <PostCanvas
                           key={`cover-${effectiveBrand}-${fontsReady}`}
@@ -653,10 +694,8 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                           scale={0.2}
                         />
                       </div>
-                      {/* Text slides — strip "Slide N:" prefix, ensure CTA spacing on last slide */}
                       {aiResult.example_post.slides.map((slide, i) => {
                         let cleanSlide = slide.replace(/^Slide\s*\d+\s*:\s*/i, '')
-                        // Ensure CTA line on last slide has paragraph gap
                         if (i === aiResult.example_post!.slides.length - 1) {
                           cleanSlide = cleanSlide.replace(
                             /([.!?])\s*((?:For more|Follow @|If you care|Want more)\S*.*)/i,
@@ -680,9 +719,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                         )
                       })}
                     </div>
-                    {aiResult.example_post.doi && (
+                    {aiResult.example_post.study_ref && (
                       <p className="text-[10px] text-gray-500 mt-2 font-mono">
-                        DOI: {aiResult.example_post.doi}
+                        Study: {aiResult.example_post.study_ref}
                       </p>
                     )}
                   </div>

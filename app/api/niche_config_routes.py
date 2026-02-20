@@ -108,8 +108,11 @@ def validate_post_examples(examples: list) -> list:
         ]
         if title and slides:
             result = {"title": title, "slides": slides}
-            if ex.get("doi"):
-                result["doi"] = str(ex["doi"]).strip()[:100]
+            if ex.get("study_ref"):
+                result["study_ref"] = str(ex["study_ref"]).strip()[:200]
+            # Legacy migration: convert old doi field to study_ref
+            elif ex.get("doi"):
+                result["study_ref"] = str(ex["doi"]).strip()[:200]
             validated.append(result)
 
     return validated
@@ -327,6 +330,7 @@ Also generate:
 2. One FULL example carousel post BASED ON A REAL SCIENTIFIC STUDY with:
    - A title referencing the study finding (ALL CAPS, 8-14 words, e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
    - 3-4 slides of detailed educational content (each slide is 3-5 sentences explaining the study and its implications)
+   - A study_ref string: "Study short name — Journal or Institution, Year" (must be a real, verifiable study)
    - The LAST slide must end with a CTA sentence (e.g. "For more science-backed tips, follow @brand_name"). The CTA MUST be separated from the preceding content by a blank line (\\n\\n). This is critical for proper rendering.
    - IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc. Just write the paragraph directly.
 
@@ -342,7 +346,7 @@ OUTPUT FORMAT (JSON only):
     "example_post": {{{{
         "title": "POST TITLE IN ALL CAPS REFERENCING A STUDY",
         "slides": ["Detailed study findings paragraph...", "Mechanism explanation paragraph...", "Practical implications paragraph...", "Follow @brand for more..."],
-        "doi": "10.xxxx/xxxxx"
+        "study_ref": "Iron absorption and tea tannins — Cell Metabolism, 2022"
     }}}}
 }}}}"""
 
@@ -422,7 +426,7 @@ async def generate_post_example(
     # Build exclusion block from existing examples
     exclusion_block = ""
     if request.existing_titles:
-        exclusion_block = "\n\nALREADY USED TOPICS (you MUST pick a COMPLETELY DIFFERENT topic, study, and DOI — NEVER repeat or paraphrase these):\n"
+        exclusion_block = "\n\nALREADY USED TOPICS (you MUST pick a COMPLETELY DIFFERENT topic, study, and angle — NEVER repeat or paraphrase these):\n"
         for t in request.existing_titles:
             exclusion_block += f"- {t}\n"
         exclusion_block += "\nPick a totally different scientific domain, a different journal, and a different health mechanism. Be creative and surprising."
@@ -433,17 +437,21 @@ async def generate_post_example(
 
 Requirements:
 - Title: ALL CAPS, 8-14 words, referencing a real study finding
+- TITLE VARIETY IS CRITICAL: Do NOT start the title with "YOUR". Vary the opening word — use patterns like:
+  "A NEW STUDY REVEALS...", "RESEARCHERS FOUND THAT...", "THIS COMMON HABIT...", "SCIENCE SAYS...",
+  "THE SURPRISING LINK BETWEEN...", "HOW [THING] AFFECTS...", "WHAT HAPPENS WHEN...",
+  "ONE SIMPLE CHANGE THAT...", "THE HIDDEN DANGER OF...", "WHY [THING] MATTERS MORE THAN..."
 - The topic MUST be unique — choose a surprising, lesser-known study the audience wouldn't expect
 - {request.num_slides} content slides (not counting the cover). Each slide: 3-5 sentences of educational content explaining the study
 - Do NOT include a CTA in any slide — the CTA is added automatically by the system
-- A real, verifiable DOI (this is MANDATORY — never omit or fabricate it)
+- A study_ref string: "Study short name — Journal or Institution, Year" (must reference a REAL, verifiable study — do NOT fabricate)
 - IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc.
 
 OUTPUT FORMAT (JSON only):
 {{{{
     "title": "POST TITLE IN ALL CAPS",
     "slides": ["slide 1 text...", "slide 2 text...", ...],
-    "doi": "10.xxxx/xxxxx"
+    "study_ref": "Tannin-iron absorption interaction — Cell Metabolism, 2022"
 }}}}"""
 
     try:
@@ -473,7 +481,7 @@ OUTPUT FORMAT (JSON only):
             return {
                 "title": result.get("title", ""),
                 "slides": result.get("slides", [])[:request.num_slides],
-                "doi": result.get("doi", ""),
+                "study_ref": result.get("study_ref", ""),
             }
     except Exception as e:
         print(f"Post example generation failed: {e}", flush=True)

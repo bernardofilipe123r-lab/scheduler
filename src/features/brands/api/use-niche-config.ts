@@ -77,7 +77,7 @@ export function useReelPreview() {
 interface GeneratedPostExample {
   title: string
   slides: string[]
-  doi: string
+  study_ref: string
 }
 
 async function fetchGeneratePostExample(data: { brand_id?: string; num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExample> {

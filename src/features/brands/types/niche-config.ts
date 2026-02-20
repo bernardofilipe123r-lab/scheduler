@@ -6,7 +6,7 @@ export interface ReelExample {
 export interface PostExample {
   title: string
   slides: string[]
-  doi?: string
+  study_ref?: string
   /** Max slides for this example (3 or 4). Not persisted — UI-only. */
   _maxSlides?: number
 }
