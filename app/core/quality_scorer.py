@@ -273,15 +273,17 @@ class QualityScorer:
         familiar_patterns = [
             r"SIGNS YOUR",
             r"^\d+\s",
-            r"DOCTORS",
-            r"EAT THIS",
+            r"YOUR [A-Z]",
             r"TRY THIS",
             r"HABITS",
-            r"YOUR BODY",
+            r"MOST PEOPLE",
             r"DESTROYING",
             r"WARNING",
             r"TRUTHS",
-            r"IF YOU WANT"
+            r"IF YOU WANT",
+            r"HIDDEN",
+            r"REAL REASON",
+            r"STOP DOING"
         ]
         
         pattern_matches = sum(

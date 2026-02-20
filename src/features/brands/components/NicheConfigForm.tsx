@@ -35,14 +35,20 @@ const DEFAULT_CONFIG: NicheConfig = {
   post_examples: [],
   image_style_description: '',
   image_palette_keywords: [],
+  image_composition_style: '',
   brand_personality: null,
   brand_focus_areas: [],
   parent_brand_name: '',
   cta_options: [],
   hashtags: [],
+  carousel_cta_topic: '',
   follow_section_text: '',
   save_section_text: '',
   disclaimer_text: '',
+  citation_style: 'none',
+  citation_source_types: [],
+  yt_title_examples: [],
+  yt_title_bad_examples: [],
 }
 
 // Preload fonts needed by Konva canvas components via Google Fonts CSS API
@@ -373,6 +379,101 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                   <p className="text-xs text-green-600 mt-1">✓ Weights sum to 100%</p>
                 )
               })()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 5: Citation & Content Style */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-6 py-5">
+          <h3 className="font-medium text-gray-900 mb-1">📚 Citation & Content Style</h3>
+          <p className="text-xs text-gray-400 mb-4">
+            Control how the AI references sources and structures content for your niche.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Citation Style</label>
+              <select
+                value={values.citation_style}
+                onChange={(e) => update('citation_style', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="none">None — no source citations</option>
+                <option value="doi">DOI — scientific paper references</option>
+                <option value="url">URL — web source links</option>
+                <option value="named">Named — mention source by name</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">How (or whether) the AI should cite sources in carousel posts.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Citation Source Types</label>
+              <input
+                value={(values.citation_source_types || []).join(', ')}
+                onChange={(e) => update('citation_source_types', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                placeholder="e.g. PubMed, JAMA, Nature, SEC filings, case law"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <p className="text-xs text-gray-400 mt-1">Comma-separated list of preferred source types for citations.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Image Composition Style</label>
+              <textarea
+                value={values.image_composition_style}
+                onChange={(e) => update('image_composition_style', e.target.value)}
+                placeholder="e.g. food/product shots with natural lighting, architecture photography, tech product mockups"
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
+              />
+              <p className="text-xs text-gray-400 mt-1">Describes the visual composition style for AI-generated backgrounds.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carousel CTA Topic</label>
+              <input
+                value={values.carousel_cta_topic}
+                onChange={(e) => update('carousel_cta_topic', e.target.value)}
+                placeholder="e.g. your health, your portfolio, your fitness journey"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <p className="text-xs text-gray-400 mt-1">Topic phrase used in carousel CTA slides (e.g. "If you care about [your health]...").</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 6: YouTube Title Examples */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-6 py-5">
+          <h3 className="font-medium text-gray-900 mb-1">🎬 YouTube Title Style</h3>
+          <p className="text-xs text-gray-400 mb-4">
+            Provide example titles to teach the AI your preferred YouTube title patterns.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Good Title Examples</label>
+              <textarea
+                value={(values.yt_title_examples || []).join('\n')}
+                onChange={(e) => update('yt_title_examples', e.target.value.split('\n').filter(Boolean))}
+                placeholder={"One title per line, e.g.:\nThe Sleep Trick That Changed Everything\nWhat Really Happens When You Fast 16 Hours"}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+              />
+              <p className="text-xs text-gray-400 mt-1">Titles the AI should emulate. One per line.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Bad Title Examples (avoid these)</label>
+              <textarea
+                value={(values.yt_title_bad_examples || []).join('\n')}
+                onChange={(e) => update('yt_title_bad_examples', e.target.value.split('\n').filter(Boolean))}
+                placeholder={"One title per line, e.g.:\nYOU WON'T BELIEVE THIS HACK!!!\n10 FOODS YOU MUST EAT NOW"}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+              />
+              <p className="text-xs text-gray-400 mt-1">Anti-patterns the AI should avoid. One per line.</p>
             </div>
           </div>
         </div>

@@ -57,6 +57,12 @@ class NicheConfigUpdate(BaseModel):
     hashtags: Optional[list] = None
     competitor_accounts: Optional[list] = None
     discovery_hashtags: Optional[list] = None
+    citation_style: Optional[str] = Field(None, max_length=50)
+    citation_source_types: Optional[list] = None
+    image_composition_style: Optional[str] = None
+    yt_title_examples: Optional[list] = None
+    yt_title_bad_examples: Optional[list] = None
+    carousel_cta_topic: Optional[str] = Field(None, max_length=255)
     follow_section_text: Optional[str] = None
     save_section_text: Optional[str] = None
     disclaimer_text: Optional[str] = None
@@ -137,6 +143,12 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
         "hashtags": cfg.hashtags or [],
         "competitor_accounts": cfg.competitor_accounts or [],
         "discovery_hashtags": cfg.discovery_hashtags or [],
+        "citation_style": cfg.citation_style or "none",
+        "citation_source_types": cfg.citation_source_types or [],
+        "image_composition_style": cfg.image_composition_style or "",
+        "yt_title_examples": cfg.yt_title_examples or [],
+        "yt_title_bad_examples": cfg.yt_title_bad_examples or [],
+        "carousel_cta_topic": cfg.carousel_cta_topic or "",
         "follow_section_text": cfg.follow_section_text,
         "save_section_text": cfg.save_section_text,
         "disclaimer_text": cfg.disclaimer_text,
@@ -192,6 +204,12 @@ async def get_niche_config(
         "hashtags": ctx.hashtags,
         "competitor_accounts": ctx.competitor_accounts,
         "discovery_hashtags": ctx.discovery_hashtags,
+        "citation_style": ctx.citation_style,
+        "citation_source_types": ctx.citation_source_types,
+        "image_composition_style": ctx.image_composition_style,
+        "yt_title_examples": ctx.yt_title_examples,
+        "yt_title_bad_examples": ctx.yt_title_bad_examples,
+        "carousel_cta_topic": ctx.carousel_cta_topic,
         "follow_section_text": ctx.follow_section_text,
         "save_section_text": ctx.save_section_text,
         "disclaimer_text": ctx.disclaimer_text,

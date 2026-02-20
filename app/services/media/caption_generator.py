@@ -78,6 +78,7 @@ class CaptionGenerator:
             "Begin with why most people overlook this",
             "Open with a relatable scenario or observation"
         ]
+        style_hint = random.choice(opening_styles)
 
         prompt = f"""You are writing the first paragraph for an Instagram {niche_label} post. 
 The post is about: {title}

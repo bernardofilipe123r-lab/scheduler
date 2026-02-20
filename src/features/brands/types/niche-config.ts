@@ -43,6 +43,7 @@ export interface NicheConfig {
   // Visual
   image_style_description: string
   image_palette_keywords: string[]
+  image_composition_style: string
 
   // Brand Identity
   brand_personality: string | null
@@ -52,9 +53,16 @@ export interface NicheConfig {
   // CTAs
   cta_options: CtaOption[]
   hashtags: string[]
+  carousel_cta_topic: string
   follow_section_text: string
   save_section_text: string
   disclaimer_text: string
+
+  // Citation & YouTube
+  citation_style: string
+  citation_source_types: string[]
+  yt_title_examples: string[]
+  yt_title_bad_examples: string[]
 }
 
 export type ConfigStrength = 'basic' | 'good' | 'excellent'

@@ -27,7 +27,7 @@ class ReelCreateRequest(BaseModel):
     
     cta_type: str = Field(
         default="follow_tips",
-        description="Call-to-action type: 'follow_tips', 'sleep_lean', or 'workout_plan'"
+        description="Optional CTA text override. Leave empty to use NicheConfig weighted CTA selection."
     )
     
     brand: str = Field(
