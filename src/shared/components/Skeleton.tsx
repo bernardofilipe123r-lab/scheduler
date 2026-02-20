@@ -477,6 +477,9 @@ export function BrandThemeSkeleton() {
 }
 
 // ── Home / Dashboard skeleton ───────────────────────────────
+// ⚠️ IMPORTANT FOR FUTURE AI: If you change the layout of Home.tsx, update this
+// skeleton to match. It mirrors: Greeting → Stats strip → Today's Coverage →
+// Row2 (Brand Health | Jobs Queue | Publishing Today) → Recent Jobs table.
 export function HomeSkeleton() {
   return (
     <div className="space-y-6">
@@ -498,11 +501,51 @@ export function HomeSkeleton() {
           <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <Sk className="h-3 w-20 rounded mb-2" />
             <Sk className="h-7 w-14 rounded" />
+            <Sk className="h-2.5 w-24 rounded mt-2" />
           </div>
         ))}
       </div>
 
-      {/* Row 2: 3 panels */}
+      {/* Today's Coverage panel */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+          <div className="space-y-1.5">
+            <Sk className="h-3 w-28 rounded" />
+            <Sk className="h-2.5 w-64 rounded" />
+          </div>
+          <div className="flex gap-3">
+            {[0, 1, 2, 3].map((i) => (
+              <Sk key={i} className="h-6 w-16 rounded" />
+            ))}
+          </div>
+        </div>
+        {/* Brand rows */}
+        <div className="divide-y divide-gray-50">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center gap-3 px-5 py-2.5">
+              {/* Brand name */}
+              <div className="flex items-center gap-2 w-36 shrink-0">
+                <Sk className="w-5 h-5 rounded shrink-0" />
+                <Sk className="h-3 w-24 rounded" />
+              </div>
+              {/* Slot chips */}
+              <div className="flex items-center gap-1.5 flex-1">
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((j) => (
+                  <Sk key={j} className="h-8 w-8 rounded" />
+                ))}
+              </div>
+              {/* Status summary */}
+              <div className="w-44 space-y-1 flex flex-col items-end shrink-0">
+                <Sk className="h-3 w-32 rounded" />
+                <Sk className="h-3 w-28 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Row 2: Brand Health | Jobs Queue | Publishing Today */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Brand Health */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -511,14 +554,14 @@ export function HomeSkeleton() {
             <Sk className="h-3 w-16 rounded" />
           </div>
           <div className="divide-y divide-gray-50">
-            {[0, 1, 2].map((i) => (
+            {[0, 1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center gap-3 px-5 py-3">
                 <Sk className="w-8 h-8 rounded-lg shrink-0" />
                 <div className="flex-1 space-y-1.5">
                   <Sk className="h-3.5 w-28 rounded" />
-                  <Sk className="h-2.5 w-20 rounded" />
+                  <Sk className="h-2.5 w-16 rounded" />
                 </div>
-                <div className="flex gap-4">
+                <div className="flex gap-4 items-center">
                   <div className="space-y-1 text-right">
                     <Sk className="h-3.5 w-10 rounded ml-auto" />
                     <Sk className="h-2 w-12 rounded ml-auto" />
@@ -527,7 +570,7 @@ export function HomeSkeleton() {
                     <Sk className="h-3.5 w-10 rounded ml-auto" />
                     <Sk className="h-2 w-12 rounded ml-auto" />
                   </div>
-                  <Sk className="w-2 h-2 rounded-full self-center" />
+                  <Sk className="w-2 h-2 rounded-full" />
                 </div>
               </div>
             ))}
@@ -540,6 +583,7 @@ export function HomeSkeleton() {
             <Sk className="h-3 w-20 rounded" />
             <Sk className="h-3 w-14 rounded" />
           </div>
+          {/* Summary numbers */}
           <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
             {[0, 1, 2].map((i) => (
               <div key={i} className="px-4 py-3 space-y-1">
@@ -548,6 +592,7 @@ export function HomeSkeleton() {
               </div>
             ))}
           </div>
+          {/* Recent job rows */}
           <div className="divide-y divide-gray-50">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-2.5 px-5 py-2.5">
@@ -563,26 +608,29 @@ export function HomeSkeleton() {
           </div>
         </div>
 
-        {/* Publishing Today */}
+        {/* Publishing Today — timeline list */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-            <Sk className="h-3 w-32 rounded" />
+            <Sk className="h-3 w-36 rounded" />
             <Sk className="h-3 w-16 rounded" />
           </div>
-          <div className="px-5 py-3 space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-1.5">
-                {[0, 1, 2].map((i) => (
-                  <Sk key={i} className="w-5 h-5 rounded-full ring-2 ring-white" />
-                ))}
+          <div className="divide-y divide-gray-50">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-3 px-5 py-2.5">
+                <Sk className="h-3 w-11 rounded shrink-0" />
+                <Sk className="w-px h-6 rounded shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <Sk className="h-3 w-28 rounded" />
+                  <Sk className="h-2.5 w-20 rounded" />
+                </div>
+                <Sk className="w-5 h-5 rounded shrink-0" />
               </div>
-              <Sk className="h-3.5 w-40 rounded" />
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Row 3: Recent Jobs table */}
+      {/* Recent Jobs table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
           <Sk className="h-3 w-20 rounded" />
