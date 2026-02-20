@@ -30,8 +30,15 @@ function formatTime(dateStr: string): string {
 }
 
 // Auto-schedule slot definitions (must match backend scheduler.py)
-const BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]        // 6 reels/day, every 4h, alternating L/D
-const BASE_POST_HOURS_DAY = [0, 12]                   // 2 posts/day: midnight + noon (POST_BRAND_OFFSETS is always {})
+const BASE_REEL_SLOTS: Array<{ hour: number; variant: 'light' | 'dark' }> = [
+  { hour: 0, variant: 'light' },
+  { hour: 4, variant: 'dark' },
+  { hour: 8, variant: 'light' },
+  { hour: 12, variant: 'dark' },
+  { hour: 16, variant: 'light' },
+  { hour: 20, variant: 'dark' },
+]
+const BASE_POST_HOURS_DAY = [0, 12]                   // 2 posts/day: midnight + noon
 
 function fmtSlotHour(h: number): string {
   if (h === 0) return '12AM'
@@ -148,19 +155,26 @@ export function HomePage() {
     dayStart.setHours(0, 0, 0, 0)
     return dynamicBrands.filter(b => b.active).map(brand => {
       const brandToday = todayPosts.filter(p => p.brand === brand.id)
-      const reelHours = new Set(
-        brandToday.filter(p => p.metadata?.variant !== 'post').map(p => new Date(p.scheduled_time).getHours())
-      )
+      // Map of hour → actual variant from scheduled post metadata
+      const reelsByHour = new Map<number, string>()
+      brandToday.filter(p => p.metadata?.variant !== 'post').forEach(p => {
+        reelsByHour.set(new Date(p.scheduled_time).getHours(), p.metadata?.variant || 'light')
+      })
       const postHours = new Set(
         brandToday.filter(p => p.metadata?.variant === 'post').map(p => new Date(p.scheduled_time).getHours())
       )
       const offset = brand.scheduleOffset || 0
-      const reelSlots = BASE_REEL_HOURS.map(base => {
+      const reelSlots = BASE_REEL_SLOTS.map(({ hour: base, variant: expectedVariant }) => {
         const hour = (base + offset) % 24
         const t = new Date(dayStart); t.setHours(hour, 0, 0, 0)
         const isPast = t < n
         const isSoon = !isPast && t.getTime() - n.getTime() < 7_200_000
-        return { hour, filled: reelHours.has(hour), isPast, isSoon }
+        const filled = reelsByHour.has(hour)
+        // Use actual variant from scheduled post, or the expected pattern variant
+        const slotVariant: 'light' | 'dark' = filled
+          ? (reelsByHour.get(hour) === 'dark' ? 'dark' : 'light')
+          : expectedVariant
+        return { hour, filled, isPast, isSoon, variant: slotVariant }
       })
       const postSlots = BASE_POST_HOURS_DAY.map(h => {
         const t = new Date(dayStart); t.setHours(h, 0, 0, 0)
@@ -308,10 +322,17 @@ export function HomePage() {
               {/* Type legend — mini chip previews */}
               <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
                 <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
-                  <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#9ca3af' }} />
-                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">8AM</span>
+                  <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#fbbf24' }} />
+                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">☀️</span>
                 </span>
-                Reel
+                Light
+              </span>
+              <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
+                <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
+                  <span className="block rounded-full" style={{ width: 5, height: 5, backgroundColor: '#6366f1' }} />
+                  <span className="text-[8px] font-mono font-bold leading-none text-gray-400">🌙</span>
+                </span>
+                Dark
               </span>
               <span className="flex items-center gap-1.5 pr-3 border-r border-gray-100">
                 <span className="inline-flex flex-col items-center gap-[3px] px-1 pt-0.5 pb-px rounded border bg-gray-100 border-gray-200">
@@ -352,7 +373,7 @@ export function HomePage() {
 
                   {/* All slots in time order */}
                   <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
-                    {[...reelSlots.map(s => ({ ...s, kind: 'reel' as const })), ...postSlots.map(s => ({ ...s, kind: 'post' as const }))]
+                    {[...reelSlots.map(s => ({ ...s, kind: 'reel' as const })), ...postSlots.map(s => ({ ...s, kind: 'post' as const, variant: undefined as 'light' | 'dark' | undefined }))]
                       .sort((a, b) => a.hour - b.hour)
                       .map(s => <SlotChip key={`${s.kind}-${s.hour}`} {...s} />)
                     }
@@ -533,7 +554,7 @@ export function HomePage() {
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium text-gray-800">{getBrandName(post.brand)}</div>
                       <div className="text-[11px] text-gray-400">
-                        {post.metadata?.variant === 'post' ? 'Post' : 'Reel'}
+                        {post.metadata?.variant === 'post' ? 'Post' : post.metadata?.variant === 'dark' ? '🌙 Dark Reel' : '☀️ Light Reel'}
                         {isPublished && ' · Published ✓'}
                         {isNext && ' · Up next'}
                       </div>
@@ -645,21 +666,31 @@ function StatsCard({ label, value, sub, change }: { label: string; value: string
   )
 }
 
-function SlotChip({ hour, filled, isPast, isSoon, kind }: { hour: number; filled: boolean; isPast: boolean; isSoon: boolean; kind: 'reel' | 'post' }) {
+function SlotChip({ hour, filled, isPast, isSoon, kind, variant }: { hour: number; filled: boolean; isPast: boolean; isSoon: boolean; kind: 'reel' | 'post'; variant?: 'light' | 'dark' }) {
   const label = fmtSlotHour(hour)
+  const variantLabel = kind === 'reel' && variant ? (variant === 'dark' ? '🌙 Dark' : '☀️ Light') : ''
+  const typeLabel = kind === 'reel' ? 'Reel' : 'Carousel'
   const stateLabel = filled ? 'Filled' : isPast ? 'Missed' : isSoon ? 'Up next' : 'Open'
-  const tipText = `${kind === 'reel' ? 'Reel' : 'Carousel'} · ${stateLabel} · ${label}`
+  const tipText = [typeLabel, variantLabel, stateLabel, label].filter(Boolean).join(' · ')
+
+  // Variant accent colors for reel icons
+  const lightAccent = '#f59e0b'  // amber/sun
+  const darkAccent = '#6366f1'   // indigo/moon
 
   // Background & text based on state
   let bg: string, textCls: string, border: string, iconColor: string
   if (filled) {
-    bg = 'bg-green-100'; textCls = 'text-green-700'; border = 'border-green-200'; iconColor = '#16a34a'
+    bg = 'bg-green-100'; textCls = 'text-green-700'; border = 'border-green-200'
+    iconColor = kind === 'reel' ? (variant === 'dark' ? darkAccent : lightAccent) : '#16a34a'
   } else if (isPast) {
-    bg = 'bg-rose-50'; textCls = 'text-rose-400'; border = 'border-rose-200'; iconColor = '#fb7185'
+    bg = 'bg-rose-50'; textCls = 'text-rose-400'; border = 'border-rose-200'
+    iconColor = kind === 'reel' ? (variant === 'dark' ? '#a5b4fc' : '#fcd34d') : '#fb7185'
   } else if (isSoon) {
-    bg = 'bg-amber-50'; textCls = 'text-amber-600'; border = 'border-amber-300 border-dashed'; iconColor = '#f59e0b'
+    bg = 'bg-amber-50'; textCls = 'text-amber-600'; border = 'border-amber-300 border-dashed'
+    iconColor = kind === 'reel' ? (variant === 'dark' ? darkAccent : lightAccent) : '#f59e0b'
   } else {
-    bg = 'bg-gray-50'; textCls = 'text-gray-300'; border = 'border-gray-200'; iconColor = '#d1d5db'
+    bg = 'bg-gray-50'; textCls = 'text-gray-300'; border = 'border-gray-200'
+    iconColor = kind === 'reel' ? (variant === 'dark' ? '#c7d2fe' : '#fde68a') : '#d1d5db'
   }
 
   return (
@@ -669,7 +700,7 @@ function SlotChip({ hour, filled, isPast, isSoon, kind }: { hour: number; filled
     >
       {/* Type icon */}
       {kind === 'reel' ? (
-        // Circle dot = reel
+        // Circle dot = reel, colored by variant
         <span
           className="block rounded-full shrink-0"
           style={{ width: 6, height: 6, backgroundColor: iconColor }}
