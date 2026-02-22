@@ -376,7 +376,7 @@ function UserDetail({
                 </span>
                 <div className="flex items-center gap-2">
                   <a
-                    href={`/logs?user_id=${encodeURIComponent(user.id)}&user_name=${encodeURIComponent(user.name || user.email)}`}
+                    href={`/logs?user_id=${encodeURIComponent(user.id)}&user_name=${encodeURIComponent(user.name || user.email)}&user_email=${encodeURIComponent(user.email)}&user_role=${encodeURIComponent(user.is_super_admin ? 'Super Admin' : user.is_admin ? 'Admin' : user.is_blocked ? 'Blocked' : 'User')}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors"

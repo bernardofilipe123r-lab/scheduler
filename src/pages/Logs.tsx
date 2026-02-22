@@ -128,6 +128,8 @@ export function LogsPage() {
   const [searchParams] = useSearchParams()
   const userId = searchParams.get('user_id')
   const userName = searchParams.get('user_name')
+  const userEmail = searchParams.get('user_email')
+  const userRole = searchParams.get('user_role')
 
   // Filters
   const [level, setLevel] = useState('')
@@ -197,8 +199,22 @@ export function LogsPage() {
           <ScrollText className="w-6 h-6 text-stone-600" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">System Logs</h1>
-            {userId && userName
-              ? <p className="text-sm text-gray-500">Viewing logs for <span className="font-medium text-gray-700">{decodeURIComponent(userName)}</span></p>
+            {userId
+              ? (
+                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                  <span className="text-sm font-medium text-gray-800">{userName ? decodeURIComponent(userName) : userId}</span>
+                  {userEmail && <span className="text-sm text-gray-500">{decodeURIComponent(userEmail)}</span>}
+                  {userRole && (
+                    <span className={clsx(
+                      'inline-block px-2 py-0.5 rounded-full text-xs font-semibold',
+                      userRole === 'Super Admin' ? 'bg-purple-100 text-purple-700' :
+                      userRole === 'Admin' ? 'bg-blue-100 text-blue-700' :
+                      userRole === 'Blocked' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-600'
+                    )}>{userRole}</span>
+                  )}
+                </div>
+              )
               : <p className="text-sm text-gray-500">Real-time system log viewer</p>
             }
           </div>
