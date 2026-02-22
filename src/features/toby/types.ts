@@ -21,6 +21,32 @@ export interface TobyBufferStatus {
   }>
 }
 
+export interface TobyLiveAction {
+  key: string
+  label: string
+  description: string
+  status: 'due' | 'scheduled' | 'idle'
+  minutes_until?: number
+}
+
+export interface TobyLiveInfo {
+  current_action: TobyLiveAction | null
+  next_actions: TobyLiveAction[]
+  last_activity: TobyActivityItem | null
+}
+
+export interface TobyTimestamps {
+  last_buffer_check_at: string | null
+  last_metrics_check_at: string | null
+  last_analysis_at: string | null
+  last_discovery_at: string | null
+}
+
+export interface TobyStats {
+  total_created: number
+  total_scored: number
+}
+
 export interface TobyStatus {
   enabled: boolean
   phase: TobyPhase
@@ -29,6 +55,9 @@ export interface TobyStatus {
   buffer: TobyBufferStatus | null
   active_experiments: number
   config: TobyConfig
+  live: TobyLiveInfo
+  timestamps: TobyTimestamps
+  stats: TobyStats
 }
 
 export interface TobyActivityItem {

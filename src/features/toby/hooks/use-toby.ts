@@ -18,8 +18,8 @@ export function useTobyStatus() {
   return useQuery({
     queryKey: tobyKeys.status(),
     queryFn: tobyApi.getStatus,
-    refetchInterval: 30_000,
-    staleTime: 10_000,
+    refetchInterval: 15_000,
+    staleTime: 5_000,
   })
 }
 

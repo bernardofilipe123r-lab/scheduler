@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Bot, Activity, FlaskConical, Lightbulb, Settings } from 'lucide-react'
+import { useTobyStatus } from '@/features/toby'
 import {
   TobyStatusBar,
+  TobyLiveStatus,
   TobyActivityFeed,
   TobyExperiments,
   TobyInsights,
@@ -20,6 +22,7 @@ type TabId = typeof TABS[number]['id']
 
 export function TobyPage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
+  const { data: status } = useTobyStatus()
 
   return (
     <div className="space-y-6">
@@ -36,6 +39,9 @@ export function TobyPage() {
 
       {/* Status bar — always visible */}
       <TobyStatusBar />
+
+      {/* Live status — shows what Toby is doing RIGHT NOW */}
+      {status && status.enabled && <TobyLiveStatus status={status} />}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">

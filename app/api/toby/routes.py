@@ -30,10 +30,10 @@ def get_status(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get Toby's current state: enabled/disabled, phase, buffer health, active experiments."""
+    """Get Toby's current state: enabled/disabled, phase, buffer health, active experiments, live action."""
     from app.services.toby.state import get_or_create_state
     from app.services.toby.buffer_manager import get_buffer_status
-    from app.models.toby import TobyExperiment
+    from app.models.toby import TobyExperiment, TobyActivityLog, TobyContentTag
 
     state = get_or_create_state(db, user["id"])
     buffer = get_buffer_status(db, user["id"], state) if state.enabled else None
@@ -41,6 +41,32 @@ def get_status(
     active_experiments = (
         db.query(TobyExperiment)
         .filter(TobyExperiment.user_id == user["id"], TobyExperiment.status == "active")
+        .count()
+    )
+
+    # Compute current action and next actions based on timestamps
+    current_action = None
+    next_actions = []
+    if state.enabled:
+        current_action, next_actions = _compute_live_actions(state)
+
+    # Last activity log entry
+    last_log = (
+        db.query(TobyActivityLog)
+        .filter(TobyActivityLog.user_id == user["id"])
+        .order_by(TobyActivityLog.created_at.desc())
+        .first()
+    )
+
+    # Stats
+    total_created = (
+        db.query(TobyContentTag)
+        .filter(TobyContentTag.user_id == user["id"])
+        .count()
+    )
+    total_scored = (
+        db.query(TobyContentTag)
+        .filter(TobyContentTag.user_id == user["id"], TobyContentTag.toby_score.isnot(None))
         .count()
     )
 
@@ -56,6 +82,21 @@ def get_status(
             "explore_ratio": state.explore_ratio,
             "reel_slots_per_day": state.reel_slots_per_day,
             "post_slots_per_day": state.post_slots_per_day,
+        },
+        "live": {
+            "current_action": current_action,
+            "next_actions": next_actions,
+            "last_activity": last_log.to_dict() if last_log else None,
+        },
+        "timestamps": {
+            "last_buffer_check_at": state.last_buffer_check_at.isoformat() if state.last_buffer_check_at else None,
+            "last_metrics_check_at": state.last_metrics_check_at.isoformat() if state.last_metrics_check_at else None,
+            "last_analysis_at": state.last_analysis_at.isoformat() if state.last_analysis_at else None,
+            "last_discovery_at": state.last_discovery_at.isoformat() if state.last_discovery_at else None,
+        },
+        "stats": {
+            "total_created": total_created,
+            "total_scored": total_scored,
         },
     }
 
@@ -272,3 +313,76 @@ def update_config(
         "reel_slots_per_day": state.reel_slots_per_day,
         "post_slots_per_day": state.post_slots_per_day,
     }}
+
+
+# ---------------------------------------------------------------------------
+#  Internal helpers
+# ---------------------------------------------------------------------------
+
+# Intervals must match orchestrator.py
+_BUFFER_INTERVAL = 5       # minutes
+_METRICS_INTERVAL = 360    # 6 hours
+_ANALYSIS_INTERVAL = 360   # 6 hours
+_DISCOVERY_INTERVAL = 720  # 12 hours (approx)
+
+
+def _minutes_until(last_at, interval_minutes: int) -> int | None:
+    """Return minutes until next check, or None if never checked."""
+    if not last_at:
+        return 0
+    elapsed = (datetime.utcnow() - last_at).total_seconds() / 60
+    remaining = interval_minutes - elapsed
+    return max(0, int(remaining))
+
+
+def _compute_live_actions(state):
+    """Derive human-readable current and upcoming actions from TobyState timestamps."""
+    actions_due = []
+    upcoming = []
+
+    checks = [
+        ("buffer_check", state.last_buffer_check_at, _BUFFER_INTERVAL,
+         "Checking content buffer", "Checking if your content calendar has empty slots and filling them"),
+        ("metrics_check", state.last_metrics_check_at, _METRICS_INTERVAL,
+         "Collecting performance metrics", "Gathering views, likes, and engagement data from published posts"),
+        ("analysis_check", state.last_analysis_at, _ANALYSIS_INTERVAL,
+         "Analyzing content performance", "Scoring posts and updating strategy knowledge to find what works best"),
+        ("discovery_check", state.last_discovery_at, _DISCOVERY_INTERVAL,
+         "Scanning trends", "Looking for trending topics and competitor content for inspiration"),
+    ]
+
+    for key, last_at, interval, label, description in checks:
+        mins_left = _minutes_until(last_at, interval)
+        if mins_left == 0:
+            actions_due.append({
+                "key": key,
+                "label": label,
+                "description": description,
+                "status": "due",
+            })
+        else:
+            upcoming.append({
+                "key": key,
+                "label": label,
+                "description": description,
+                "status": "scheduled",
+                "minutes_until": mins_left,
+            })
+
+    # Sort upcoming by soonest first
+    upcoming.sort(key=lambda x: x.get("minutes_until", 9999))
+
+    # Current action is the first due action, or "idle" if nothing is due
+    if actions_due:
+        current = actions_due[0]
+    else:
+        next_mins = upcoming[0]["minutes_until"] if upcoming else 5
+        current = {
+            "key": "idle",
+            "label": "Idle",
+            "description": f"All checks complete. Next action in ~{next_mins} min",
+            "status": "idle",
+            "minutes_until": next_mins,
+        }
+
+    return current, upcoming

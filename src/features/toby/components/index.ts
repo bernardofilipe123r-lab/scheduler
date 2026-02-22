@@ -1,4 +1,5 @@
 export { TobyStatusBar } from './TobyStatusBar'
+export { TobyLiveStatus } from './TobyLiveStatus'
 export { TobyActivityFeed } from './TobyActivityFeed'
 export { TobyExperiments } from './TobyExperiments'
 export { TobyInsights } from './TobyInsights'
