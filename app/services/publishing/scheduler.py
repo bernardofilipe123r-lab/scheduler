@@ -317,6 +317,12 @@ class DatabaseSchedulerService:
                 
                 # CRITICAL: Force SQLAlchemy to detect the change
                 scheduled_reel.extra_data = dict(metadata)
+                
+                # Sync status back to generation_jobs.brand_outputs
+                self._sync_brand_output_status(
+                    db, metadata, scheduled_reel.status
+                )
+                
                 db.commit()
     
     def mark_as_failed(self, schedule_id: str, error: str) -> None:
@@ -329,7 +335,37 @@ class DatabaseSchedulerService:
             if scheduled_reel:
                 scheduled_reel.status = "failed"
                 scheduled_reel.publish_error = error
+                
+                # Sync status back to generation_jobs.brand_outputs
+                metadata = scheduled_reel.extra_data or {}
+                self._sync_brand_output_status(db, metadata, "failed")
+                
                 db.commit()
+    
+    @staticmethod
+    def _sync_brand_output_status(db, metadata: dict, new_status: str) -> None:
+        """Sync scheduled_reels status back into generation_jobs.brand_outputs.
+        
+        This prevents desync where brand_outputs says 'scheduled' but the
+        scheduled_reels entry has moved to published/partial/failed.
+        """
+        from app.models.jobs import GenerationJob
+        from sqlalchemy.orm.attributes import flag_modified
+        
+        job_id = metadata.get("job_id")
+        brand = metadata.get("brand")
+        if not job_id or not brand:
+            return
+        
+        try:
+            job = db.query(GenerationJob).filter(
+                GenerationJob.job_id == job_id
+            ).first()
+            if job and job.brand_outputs and brand in job.brand_outputs:
+                job.brand_outputs[brand]["status"] = new_status
+                flag_modified(job, "brand_outputs")
+        except Exception as e:
+            print(f"⚠️ Failed to sync brand_output status for {job_id}/{brand}: {e}")
     
     def reset_stuck_publishing(self, max_age_minutes: int = 10) -> int:
         """
