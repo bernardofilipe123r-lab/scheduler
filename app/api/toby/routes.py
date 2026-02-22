@@ -36,7 +36,8 @@ def get_status(
     from app.models.toby import TobyExperiment, TobyActivityLog, TobyContentTag
 
     state = get_or_create_state(db, user["id"])
-    buffer = get_buffer_status(db, user["id"], state) if state.enabled else None
+    raw_buffer = get_buffer_status(db, user["id"], state) if state.enabled else None
+    buffer = _format_buffer(raw_buffer)
 
     active_experiments = (
         db.query(TobyExperiment)
@@ -263,7 +264,7 @@ def get_buffer(
     from app.services.toby.buffer_manager import get_buffer_status
 
     state = get_or_create_state(db, user["id"])
-    return get_buffer_status(db, user["id"], state)
+    return _format_buffer(get_buffer_status(db, user["id"], state))
 
 
 @router.get("/config")
@@ -318,6 +319,30 @@ def update_config(
 # ---------------------------------------------------------------------------
 #  Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _format_buffer(raw: dict | None) -> dict | None:
+    """Transform buffer_manager output into the shape the frontend expects."""
+    if raw is None:
+        return None
+    slots = raw.get("slots", [])
+    empty_list = [
+        {
+            "brand_id": s["brand_id"],
+            "date": s["time"][:10],
+            "time": s["time"][11:16],
+            "content_type": s["content_type"],
+        }
+        for s in slots
+        if not s.get("filled")
+    ]
+    return {
+        "health": raw.get("health", "healthy"),
+        "total_slots": raw.get("total_slots", 0),
+        "filled_slots": raw.get("filled_slots", 0),
+        "fill_percent": raw.get("percent", 0),
+        "empty_slots": empty_list,
+    }
 
 # Intervals must match orchestrator.py
 _BUFFER_INTERVAL = 5       # minutes

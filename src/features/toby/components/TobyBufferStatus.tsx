@@ -57,9 +57,11 @@ export function TobyBufferStatus() {
   const cfg = HEALTH_CONFIG[buffer.health] || HEALTH_CONFIG.healthy
   const HealthIcon = cfg.icon
 
+  const emptySlots = Array.isArray(buffer.empty_slots) ? buffer.empty_slots : []
+
   // Group empty slots by date
-  const slotsByDate: Record<string, typeof buffer.empty_slots> = {}
-  for (const slot of buffer.empty_slots) {
+  const slotsByDate: Record<string, typeof emptySlots> = {}
+  for (const slot of emptySlots) {
     const key = slot.date
     if (!slotsByDate[key]) slotsByDate[key] = []
     slotsByDate[key].push(slot)
