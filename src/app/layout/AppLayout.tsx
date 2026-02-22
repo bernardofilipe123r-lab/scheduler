@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
-  Layers, ScrollText, User, LogOut, Info,
+  Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
@@ -20,8 +20,6 @@ const NAV_ITEMS = [
 
 const SETTINGS_ITEMS = [
   { to: '/brands', icon: Layers, label: 'Brands' },
-  { to: '/about', icon: Info, label: 'About' },
-  { to: '/logs', icon: ScrollText, label: 'Logs', adminOnly: true },
   { to: '/admin', icon: ShieldCheck, label: 'Admin', superAdminOnly: true },
 ]
 

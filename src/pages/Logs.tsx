@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Search,
@@ -124,6 +125,10 @@ function statusColorClass(status: number): string {
 // ─── Component ──────────────────────────────────────────────────
 
 export function LogsPage() {
+  const [searchParams] = useSearchParams()
+  const userId = searchParams.get('user_id')
+  const userName = searchParams.get('user_name')
+
   // Filters
   const [level, setLevel] = useState('')
   const [category, setCategory] = useState('')
@@ -154,8 +159,13 @@ export function LogsPage() {
 
   // Fetch logs
   const { data, isLoading, isFetching, error, refetch } = useQuery<LogsResponse>({
-    queryKey: ['system-logs', page, pageSize, order, level, category, search, timeRange.label],
-    queryFn: () => apiClient.get<LogsResponse>(`/api/logs?${buildParams()}`),
+    queryKey: ['system-logs', userId, page, pageSize, order, level, category, search, timeRange.label],
+    queryFn: () => {
+      const endpoint = userId
+        ? `/api/admin/users/${encodeURIComponent(userId)}/logs?${buildParams()}`
+        : `/api/logs?${buildParams()}`
+      return apiClient.get<LogsResponse>(endpoint)
+    },
     refetchInterval: autoRefresh ? 30_000 : false,
   })
 
@@ -187,7 +197,10 @@ export function LogsPage() {
           <ScrollText className="w-6 h-6 text-stone-600" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">System Logs</h1>
-            <p className="text-sm text-gray-500">Real-time system log viewer</p>
+            {userId && userName
+              ? <p className="text-sm text-gray-500">Viewing logs for <span className="font-medium text-gray-700">{decodeURIComponent(userName)}</span></p>
+              : <p className="text-sm text-gray-500">Real-time system log viewer</p>
+            }
           </div>
         </div>
         <div className="flex items-center gap-2">

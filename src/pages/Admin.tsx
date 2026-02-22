@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck, Users, Search, RefreshCw, AlertCircle,
   Ban, UserCheck, Shield,
-  Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2,
+  Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2, ExternalLink,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -375,6 +375,15 @@ function UserDetail({
                   {logsQuery.data ? `${logsQuery.data.total.toLocaleString()} entries` : '—'}
                 </span>
                 <div className="flex items-center gap-2">
+                  <a
+                    href={`/logs?user_id=${encodeURIComponent(user.id)}&user_name=${encodeURIComponent(user.name || user.email)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    See in full page
+                  </a>
                   <button
                     onClick={() => setLogOrder(o => o === 'desc' ? 'asc' : 'desc')}
                     className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-200 bg-white"
