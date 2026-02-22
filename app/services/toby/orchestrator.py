@@ -283,7 +283,13 @@ def _execute_content_plan(db: Session, plan):
         job_id=job_id,
     )
 
-    # ── Step 8: Mark as Toby-created + record tags ───────────
+    # ── Step 8: Mark brand as scheduled + Toby-created + record tags ──
+    # Update the job's brand_output status so Jobs page shows "scheduled"
+    job_manager.update_brand_output(job_id, plan.brand_id, {
+        "status": "scheduled",
+        "scheduled_time": plan.scheduled_time,
+    })
+
     schedule_id = sched_result.get("schedule_id", "")
     if schedule_id:
         from app.models.scheduling import ScheduledReel
