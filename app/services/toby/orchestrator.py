@@ -168,8 +168,8 @@ def _execute_content_plan(db: Session, plan):
     from app.services.content.niche_config_service import NicheConfigService
 
     # Build PromptContext with personality overlay
-    niche_svc = NicheConfigService(db)
-    ctx = niche_svc.build_prompt_context(plan.user_id, plan.brand_id)
+    niche_svc = NicheConfigService()
+    ctx = niche_svc.get_context(user_id=plan.user_id, brand_id=plan.brand_id)
     if not ctx:
         ctx = PromptContext()
 
