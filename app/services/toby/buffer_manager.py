@@ -6,7 +6,7 @@ Buffer Health States:
   LOW      — 1-3 slots in next 48h are empty
   CRITICAL — 4+ slots empty, or less than 24h of content remaining
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyActivityLog
 from app.models.scheduling import ScheduledReel
@@ -29,7 +29,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         }
     """
     buffer_hours = (state.buffer_days or 2) * 24
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     horizon = now + timedelta(hours=buffer_hours)
 
     # Get all brands for this user
@@ -78,7 +78,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
             for slot_idx in range(total_per_day):
                 # Distribute slots evenly across the day
                 hour = (offset_hours + int(slot_idx * 24 / total_per_day)) % 24
-                slot_time = datetime(day.year, day.month, day.day, hour, 0)
+                slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
                 if slot_time <= now:
                     continue  # Skip past slots
 

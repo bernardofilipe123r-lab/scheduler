@@ -12,7 +12,7 @@ Decision priority (highest to lowest):
   5. PHASE CHECK   — Should Toby transition to the next phase?
 """
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyContentTag, TobyActivityLog
 
@@ -50,7 +50,7 @@ def toby_tick():
                         action_type="error",
                         description=f"Toby tick error: {str(e)[:500]}",
                         level="error",
-                        created_at=datetime.utcnow(),
+                        created_at=datetime.now(timezone.utc),
                     ))
                     db.commit()
                 except Exception:
@@ -64,7 +64,7 @@ def toby_tick():
 
 def _process_user(db: Session, state: TobyState):
     """Process one user's Toby tick — runs the highest-priority action."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     user_id = state.user_id
 
     # 1. BUFFER CHECK
@@ -107,7 +107,12 @@ def _should_check(last_at: datetime, interval_minutes: int) -> bool:
     """Return True if enough time has passed since the last check."""
     if not last_at:
         return True
-    return (datetime.utcnow() - last_at).total_seconds() >= interval_minutes * 60
+    # Ensure both datetimes are comparable (handle naive vs aware)
+    now = datetime.now(timezone.utc)
+    if last_at.tzinfo is None:
+        from datetime import timezone as _tz
+        last_at = last_at.replace(tzinfo=_tz.utc)
+    return (now - last_at).total_seconds() >= interval_minutes * 60
 
 
 def _run_buffer_check(db: Session, user_id: str, state: TobyState):
@@ -136,7 +141,7 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
                 action_type="error",
                 description=f"Content generation failed for {plan.brand_id}: {str(e)[:300]}",
                 level="error",
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             ))
 
     if generated > 0:
@@ -146,7 +151,7 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
             description=f"Generated {generated} pieces of content to fill buffer",
             level="success",
             action_metadata={"count": generated, "buffer_health": status["health"]},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         ))
 
 
@@ -194,7 +199,7 @@ def _execute_content_plan(db: Session, plan):
     scheduler = DatabaseSchedulerService()
     sched_result = scheduler.schedule_reel(
         user_id=plan.user_id,
-        reel_id=result.get("reel_id", f"toby-{plan.brand_id}-{datetime.utcnow().strftime('%Y%m%d%H%M')}"),
+        reel_id=result.get("reel_id", f"toby-{plan.brand_id}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"),
         scheduled_time=datetime.fromisoformat(plan.scheduled_time),
         caption=result.get("caption", ""),
         brand=plan.brand_id,
@@ -240,7 +245,7 @@ def _run_metrics_check(db: Session, user_id: str, state: TobyState):
                 description=f"Collected metrics for {total_collected} posts",
                 level="info",
                 action_metadata={"count": total_collected},
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             ))
     except Exception as e:
         print(f"[TOBY] Metrics check error: {e}", flush=True)

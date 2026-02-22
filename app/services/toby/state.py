@@ -4,7 +4,7 @@ Toby State Machine — manages per-user Toby lifecycle.
 States: OFF → BOOTSTRAP → LEARNING → OPTIMIZING
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyActivityLog
 
@@ -24,8 +24,8 @@ def get_or_create_state(db: Session, user_id: str) -> TobyState:
             user_id=user_id,
             enabled=False,
             phase="bootstrap",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         db.add(state)
         db.flush()
@@ -35,7 +35,7 @@ def get_or_create_state(db: Session, user_id: str) -> TobyState:
 def enable_toby(db: Session, user_id: str) -> TobyState:
     """Enable Toby for a user. Starts/resumes the autonomous loop."""
     state = get_or_create_state(db, user_id)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     state.enabled = True
     state.enabled_at = now
     state.disabled_at = None
@@ -50,7 +50,7 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
 def disable_toby(db: Session, user_id: str) -> TobyState:
     """Disable Toby for a user. Stops content generation, keeps analysis running."""
     state = get_or_create_state(db, user_id)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     state.enabled = False
     state.disabled_at = now
     state.updated_at = now
@@ -69,7 +69,7 @@ def reset_toby(db: Session, user_id: str) -> TobyState:
     db.query(TobyContentTag).filter(TobyContentTag.user_id == user_id).delete()
 
     state = get_or_create_state(db, user_id)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     state.phase = "bootstrap"
     state.phase_started_at = now
     state.last_buffer_check_at = None
@@ -88,13 +88,17 @@ def check_phase_transition(db: Session, state: TobyState, scored_post_count: int
     if not state.phase_started_at:
         return False
 
-    days_in_phase = (datetime.utcnow() - state.phase_started_at).days
+    now = datetime.now(timezone.utc)
+    phase_start = state.phase_started_at
+    if phase_start.tzinfo is None:
+        phase_start = phase_start.replace(tzinfo=timezone.utc)
+    days_in_phase = (now - phase_start).days
 
     if state.phase == "bootstrap":
         if scored_post_count >= BOOTSTRAP_MIN_POSTS and days_in_phase >= BOOTSTRAP_MIN_DAYS:
             state.phase = "learning"
-            state.phase_started_at = datetime.utcnow()
-            state.updated_at = datetime.utcnow()
+            state.phase_started_at = now
+            state.updated_at = now
             _log_activity(
                 db, state.user_id, "phase_transition",
                 f"Toby transitioned from bootstrap to learning (after {days_in_phase} days, {scored_post_count} scored posts)",
@@ -105,8 +109,8 @@ def check_phase_transition(db: Session, state: TobyState, scored_post_count: int
     elif state.phase == "learning":
         if days_in_phase >= LEARNING_MIN_DAYS:
             state.phase = "optimizing"
-            state.phase_started_at = datetime.utcnow()
-            state.updated_at = datetime.utcnow()
+            state.phase_started_at = now
+            state.updated_at = now
             _log_activity(
                 db, state.user_id, "phase_transition",
                 f"Toby transitioned from learning to optimizing (after {days_in_phase} days)",
@@ -132,6 +136,6 @@ def _log_activity(
         description=description,
         action_metadata=metadata,
         level=level,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(entry)

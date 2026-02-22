@@ -4,7 +4,7 @@ Toby Discovery Manager — coordinates TrendScout scanning schedules.
 Wraps the existing TrendScout service with a smart scheduling layer
 that varies frequency based on Toby's phase (bootstrap vs normal).
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyActivityLog
 
@@ -21,11 +21,15 @@ def should_run_discovery(state: TobyState) -> bool:
     if not state.enabled:
         return False
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     last = state.last_discovery_at
 
     if not last:
         return True  # Never scanned before
+
+    # Ensure both are aware
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
 
     if state.phase == "bootstrap":
         return (now - last).total_seconds() >= BOOTSTRAP_SCAN_INTERVAL * 60
@@ -85,8 +89,8 @@ def run_discovery_tick(db: Session, user_id: str, state: TobyState) -> dict:
         results["error"] = str(e)
 
     # Update last discovery time
-    state.last_discovery_at = datetime.utcnow()
-    state.updated_at = datetime.utcnow()
+    state.last_discovery_at = datetime.now(timezone.utc)
+    state.updated_at = datetime.now(timezone.utc)
 
     return results
 
@@ -98,5 +102,5 @@ def _log(db, user_id, action_type, description, level="info", metadata=None):
         description=description,
         action_metadata=metadata,
         level=level,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     ))

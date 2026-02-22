@@ -15,7 +15,7 @@ Endpoints:
   GET    /api/toby/config       — Configuration
   PATCH  /api/toby/config       — Update configuration
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.db_connection import get_db
@@ -305,7 +305,7 @@ def update_config(
     if body.post_slots_per_day is not None:
         state.post_slots_per_day = body.post_slots_per_day
 
-    state.updated_at = datetime.utcnow()
+    state.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"status": "updated", "config": {
@@ -355,7 +355,11 @@ def _minutes_until(last_at, interval_minutes: int) -> int | None:
     """Return minutes until next check, or None if never checked."""
     if not last_at:
         return 0
-    elapsed = (datetime.utcnow() - last_at).total_seconds() / 60
+    # Handle naive datetimes from DB
+    now = datetime.now(timezone.utc)
+    if last_at.tzinfo is None:
+        last_at = last_at.replace(tzinfo=timezone.utc)
+    elapsed = (now - last_at).total_seconds() / 60
     remaining = interval_minutes - elapsed
     return max(0, int(remaining))
 

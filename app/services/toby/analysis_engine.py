@@ -6,7 +6,7 @@ Two-phase scoring:
   - 7d final score:   authoritative score used for learning
 """
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.toby import TobyContentTag, TobyActivityLog
@@ -60,7 +60,7 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
 
 def get_brand_baseline(db: Session, brand: str, days: int = 14) -> dict:
     """Compute rolling baseline stats for a brand over the last N days."""
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (
         db.query(PostPerformance)
         .filter(
@@ -103,7 +103,7 @@ def score_pending_posts(db: Session, user_id: str, phase: str = "48h") -> int:
     Returns number of posts scored.
     """
     hours = 48 if phase == "48h" else 168  # 7 days
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     # Find toby content tags that need scoring for this phase
     tags = (
@@ -144,7 +144,7 @@ def score_pending_posts(db: Session, user_id: str, phase: str = "48h") -> int:
 
         score = compute_toby_score(metrics, baseline)
         tag.toby_score = score
-        tag.scored_at = datetime.utcnow()
+        tag.scored_at = datetime.now(timezone.utc)
         tag.score_phase = phase
         scored += 1
 
@@ -163,5 +163,5 @@ def _log(db, user_id, action_type, description, level="info", metadata=None):
         description=description,
         action_metadata=metadata,
         level=level,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     ))

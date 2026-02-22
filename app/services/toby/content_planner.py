@@ -5,7 +5,7 @@ Produces ContentPlan objects that get handed to the existing
 ContentGeneratorV2 + JobProcessor pipeline.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -103,7 +103,7 @@ def record_content_tag(
         experiment_id=plan.experiment_id,
         is_experiment=plan.is_experiment,
         is_control=plan.is_control,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(tag)
 

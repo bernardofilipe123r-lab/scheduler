@@ -7,7 +7,7 @@ to balance proven strategies with experimental ones.
 """
 import random
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -178,7 +178,7 @@ def update_strategy_score(
     recent = list(existing.recent_scores or [])
     recent.append(score)
     existing.recent_scores = recent[-10:]
-    existing.updated_at = datetime.utcnow()
+    existing.updated_at = datetime.now(timezone.utc)
 
 
 def update_experiment_results(
@@ -226,7 +226,7 @@ def update_experiment_results(
         best_opt = max(options, key=lambda o: results.get(o, {}).get("avg_score", 0))
         exp.winner = best_opt
         exp.status = "completed"
-        exp.completed_at = datetime.utcnow()
+        exp.completed_at = datetime.now(timezone.utc)
 
         best_avg = results[best_opt]["avg_score"]
         _log(db, user_id, "experiment_completed",
@@ -266,7 +266,7 @@ def create_experiment(
         results={},
         status="active",
         min_samples=min_samples,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
     )
     db.add(exp)
 
@@ -350,5 +350,5 @@ def _log(db, user_id, action_type, description, level="info", metadata=None):
         description=description,
         action_metadata=metadata,
         level=level,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     ))
