@@ -85,10 +85,20 @@ def _process_user(db: Session, state: TobyState):
         state.last_analysis_at = now
         state.updated_at = now
 
-    # 4. DISCOVERY CHECK
+    # 4. DISCOVERY CHECK — skip during bootstrap if buffer is critically low
     from app.services.toby.discovery_manager import should_run_discovery, run_discovery_tick
     if should_run_discovery(state):
-        run_discovery_tick(db, user_id, state)
+        # During bootstrap, prioritise buffer filling over scanning
+        if state.phase == "bootstrap":
+            from app.services.toby.buffer_manager import get_buffer_status
+            buf = get_buffer_status(db, user_id, state)
+            if buf["health"] in ("critical", "low"):
+                # Postpone discovery — buffer needs filling first
+                pass
+            else:
+                run_discovery_tick(db, user_id, state)
+        else:
+            run_discovery_tick(db, user_id, state)
 
     # 5. PHASE CHECK
     from app.services.toby.state import check_phase_transition
