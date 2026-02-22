@@ -17,6 +17,13 @@ from app.models.youtube import YouTubeChannel
 from app.models.logs import LogEntry
 from app.models.config import AppSettings
 from app.models.niche_config import NicheConfig
+from app.models.toby import (
+    TobyState,
+    TobyExperiment,
+    TobyStrategyScore,
+    TobyActivityLog,
+    TobyContentTag,
+)
 
 __all__ = [
     "Base",
@@ -34,4 +41,9 @@ __all__ = [
     "LogEntry",
     "AppSettings",
     "NicheConfig",
+    "TobyState",
+    "TobyExperiment",
+    "TobyStrategyScore",
+    "TobyActivityLog",
+    "TobyContentTag",
 ]

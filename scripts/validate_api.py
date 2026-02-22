@@ -111,6 +111,17 @@ CRITICAL_MODULES = [
     ("app.api.system.health_routes", "Health routes"),
     ("app.api.system.settings_routes", "Settings routes"),
     ("app.api.system.logs_routes", "Logs routes"),
+    # ── Toby ──
+    ("app.api.toby.routes", "Toby routes"),
+    ("app.api.toby.schemas", "Toby schemas"),
+    ("app.models.toby", "Toby models"),
+    ("app.services.toby.state", "Toby state service"),
+    ("app.services.toby.orchestrator", "Toby orchestrator"),
+    ("app.services.toby.analysis_engine", "Toby analysis engine"),
+    ("app.services.toby.learning_engine", "Toby learning engine"),
+    ("app.services.toby.buffer_manager", "Toby buffer manager"),
+    ("app.services.toby.content_planner", "Toby content planner"),
+    ("app.services.toby.discovery_manager", "Toby discovery manager"),
     # ── Utilities ──
     ("app.utils.ffmpeg", "FFmpeg utils"),
     ("app.utils.fonts", "Font utils"),
@@ -319,6 +330,19 @@ def check_endpoints():
         ("GET", "/api/prompts/overview", "Prompts overview"),
         ("POST", "/api/prompts/test-generate", "Test prompt generate"),
         ("POST", "/api/prompts/build-final", "Build final prompt"),
+        # Toby (Auth)
+        ("GET", "/api/toby/status", "Toby status"),
+        ("POST", "/api/toby/enable", "Toby enable"),
+        ("POST", "/api/toby/disable", "Toby disable"),
+        ("POST", "/api/toby/reset", "Toby reset"),
+        ("GET", "/api/toby/activity", "Toby activity"),
+        ("GET", "/api/toby/published", "Toby published"),
+        ("GET", "/api/toby/experiments", "Toby experiments"),
+        ("GET", "/api/toby/insights", "Toby insights"),
+        ("GET", "/api/toby/discovery", "Toby discovery"),
+        ("GET", "/api/toby/buffer", "Toby buffer"),
+        ("GET", "/api/toby/config", "Toby config"),
+        ("PATCH", "/api/toby/config", "Toby config update"),
     ]
 
     for method, path, label in auth_endpoints:

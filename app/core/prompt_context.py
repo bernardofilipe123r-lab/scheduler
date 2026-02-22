@@ -72,6 +72,9 @@ class PromptContext:
     competitor_accounts: List[str] = field(default_factory=list)
     discovery_hashtags: List[str] = field(default_factory=list)
 
+    # Toby personality modifier (injected by Toby orchestrator)
+    personality_modifier: str = ""
+
     # --- Derived / computed ---
 
     @property

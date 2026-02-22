@@ -25,6 +25,7 @@ from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
 from app.api.system.health_routes import router as health_router
 from app.api.niche_config_routes import router as niche_config_router
+from app.api.toby.routes import router as toby_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -96,6 +97,7 @@ app.include_router(admin_router)  # Admin user management at /api/admin/*
 app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(health_router)  # Deep health check at /api/system/health-check
+app.include_router(toby_router)  # Toby autonomous agent endpoints at /api/toby/*
 
 
 # Serve React frontend (SPA catch-all)
@@ -883,6 +885,15 @@ async def startup_event():
     
     # Store scheduler for shutdown
     app.state.scheduler = scheduler
+    
+    # Register Toby orchestrator (5-minute ticks)
+    print("🤖 Initializing Toby autonomous agent...", flush=True)
+    try:
+        from app.services.toby.orchestrator import start_toby_scheduler
+        start_toby_scheduler(scheduler)
+        print("✅ Toby orchestrator registered (5-minute ticks)", flush=True)
+    except Exception as e:
+        print(f"⚠️ Toby init failed: {e}", flush=True)
     
     print("🎉 Startup complete! App is ready.", flush=True)
 

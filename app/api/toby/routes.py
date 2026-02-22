@@ -1,0 +1,274 @@
+"""
+Toby API Routes — all Toby-related endpoints.
+
+Endpoints:
+  GET    /api/toby/status       — Current state, phase, buffer health
+  POST   /api/toby/enable       — Turn Toby on
+  POST   /api/toby/disable      — Turn Toby off
+  POST   /api/toby/reset        — Reset all learnings
+  GET    /api/toby/activity     — Paginated activity log
+  GET    /api/toby/published    — All Toby-published content
+  GET    /api/toby/experiments  — Active and completed experiments
+  GET    /api/toby/insights     — Aggregated insights
+  GET    /api/toby/discovery    — Discovery results
+  GET    /api/toby/buffer       — Buffer status
+  GET    /api/toby/config       — Configuration
+  PATCH  /api/toby/config       — Update configuration
+"""
+from datetime import datetime
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from app.db_connection import get_db
+from app.api.auth.middleware import get_current_user
+from app.api.toby.schemas import TobyConfigUpdate
+
+router = APIRouter(prefix="/api/toby", tags=["toby"])
+
+
+@router.get("/status")
+def get_status(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get Toby's current state: enabled/disabled, phase, buffer health, active experiments."""
+    from app.services.toby.state import get_or_create_state
+    from app.services.toby.buffer_manager import get_buffer_status
+    from app.models.toby import TobyExperiment
+
+    state = get_or_create_state(db, user["id"])
+    buffer = get_buffer_status(db, user["id"], state) if state.enabled else None
+
+    active_experiments = (
+        db.query(TobyExperiment)
+        .filter(TobyExperiment.user_id == user["id"], TobyExperiment.status == "active")
+        .count()
+    )
+
+    return {
+        "enabled": state.enabled,
+        "phase": state.phase,
+        "phase_started_at": state.phase_started_at.isoformat() if state.phase_started_at else None,
+        "enabled_at": state.enabled_at.isoformat() if state.enabled_at else None,
+        "buffer": buffer,
+        "active_experiments": active_experiments,
+        "config": {
+            "buffer_days": state.buffer_days,
+            "explore_ratio": state.explore_ratio,
+            "reel_slots_per_day": state.reel_slots_per_day,
+            "post_slots_per_day": state.post_slots_per_day,
+        },
+    }
+
+
+@router.post("/enable")
+def enable(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Turn Toby on — starts buffer fill and autonomous loop."""
+    from app.services.toby.state import enable_toby
+    state = enable_toby(db, user["id"])
+    db.commit()
+    return {"status": "enabled", "phase": state.phase}
+
+
+@router.post("/disable")
+def disable(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Turn Toby off — stops content generation, keeps analysis running."""
+    from app.services.toby.state import disable_toby
+    state = disable_toby(db, user["id"])
+    db.commit()
+    return {"status": "disabled"}
+
+
+@router.post("/reset")
+def reset(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reset all Toby learning data. Does NOT delete published content."""
+    from app.services.toby.state import reset_toby
+    state = reset_toby(db, user["id"])
+    db.commit()
+    return {"status": "reset", "phase": state.phase}
+
+
+@router.get("/activity")
+def get_activity(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    action_type: str = Query(None),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Paginated activity log — what Toby has done recently."""
+    from app.models.toby import TobyActivityLog
+
+    query = db.query(TobyActivityLog).filter(TobyActivityLog.user_id == user["id"])
+    if action_type:
+        query = query.filter(TobyActivityLog.action_type == action_type)
+
+    total = query.count()
+    logs = (
+        query.order_by(TobyActivityLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "total": total,
+        "items": [log.to_dict() for log in logs],
+    }
+
+
+@router.get("/published")
+def get_published(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """All content Toby has published, with performance scores."""
+    from app.models.toby import TobyContentTag
+    from app.models.scheduling import ScheduledReel
+
+    tags = (
+        db.query(TobyContentTag)
+        .filter(TobyContentTag.user_id == user["id"])
+        .order_by(TobyContentTag.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for tag in tags:
+        sched = (
+            db.query(ScheduledReel)
+            .filter(ScheduledReel.schedule_id == tag.schedule_id)
+            .first()
+        )
+        item = tag.to_dict()
+        if sched:
+            item["schedule"] = sched.to_dict()
+        results.append(item)
+
+    total = (
+        db.query(TobyContentTag)
+        .filter(TobyContentTag.user_id == user["id"])
+        .count()
+    )
+
+    return {"total": total, "items": results}
+
+
+@router.get("/experiments")
+def get_experiments(
+    status: str = Query(None),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Active and completed experiments with results."""
+    from app.models.toby import TobyExperiment
+
+    query = db.query(TobyExperiment).filter(TobyExperiment.user_id == user["id"])
+    if status:
+        query = query.filter(TobyExperiment.status == status)
+
+    experiments = query.order_by(TobyExperiment.started_at.desc()).all()
+    return {"experiments": [e.to_dict() for e in experiments]}
+
+
+@router.get("/insights")
+def get_insights(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Aggregated insights — best topics, hooks, personalities."""
+    from app.services.toby.learning_engine import get_insights as _get_insights
+    return _get_insights(db, user["id"])
+
+
+@router.get("/discovery")
+def get_discovery(
+    limit: int = Query(20, ge=1, le=100),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """What Toby found from competitor/hashtag scanning."""
+    from app.models.analytics import TrendingContent
+
+    trending = (
+        db.query(TrendingContent)
+        .filter(TrendingContent.user_id == user["id"])
+        .order_by(TrendingContent.discovered_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {"items": [t.to_dict() for t in trending]}
+
+
+@router.get("/buffer")
+def get_buffer(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Buffer status — which slots are filled, which are empty."""
+    from app.services.toby.state import get_or_create_state
+    from app.services.toby.buffer_manager import get_buffer_status
+
+    state = get_or_create_state(db, user["id"])
+    return get_buffer_status(db, user["id"], state)
+
+
+@router.get("/config")
+def get_config(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Toby's configuration."""
+    from app.services.toby.state import get_or_create_state
+
+    state = get_or_create_state(db, user["id"])
+    return {
+        "buffer_days": state.buffer_days,
+        "explore_ratio": state.explore_ratio,
+        "reel_slots_per_day": state.reel_slots_per_day,
+        "post_slots_per_day": state.post_slots_per_day,
+        "daily_budget_cents": state.daily_budget_cents,
+    }
+
+
+@router.patch("/config")
+def update_config(
+    body: TobyConfigUpdate,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update Toby's configuration."""
+    from app.services.toby.state import get_or_create_state
+
+    state = get_or_create_state(db, user["id"])
+
+    if body.buffer_days is not None:
+        state.buffer_days = body.buffer_days
+    if body.explore_ratio is not None:
+        state.explore_ratio = body.explore_ratio
+    if body.reel_slots_per_day is not None:
+        state.reel_slots_per_day = body.reel_slots_per_day
+    if body.post_slots_per_day is not None:
+        state.post_slots_per_day = body.post_slots_per_day
+
+    state.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"status": "updated", "config": {
+        "buffer_days": state.buffer_days,
+        "explore_ratio": state.explore_ratio,
+        "reel_slots_per_day": state.reel_slots_per_day,
+        "post_slots_per_day": state.post_slots_per_day,
+    }}

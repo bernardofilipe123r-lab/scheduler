@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
-  Layers, User, LogOut,
+  Bot, Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/jobs', icon: Briefcase, label: 'Jobs', end: false },
   { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', end: false },
+  { to: '/toby', icon: Bot, label: 'Toby', end: false },
 ]
 
 const SETTINGS_ITEMS = [
