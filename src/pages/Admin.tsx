@@ -264,7 +264,7 @@ function UserDetail({
                 <Shield className="w-3.5 h-3.5" /> Make Admin
               </button>
             )}
-            {(user.is_admin || user.is_super_admin) && !user.is_blocked && (
+            {(user.is_admin || user.is_super_admin) && !user.is_blocked && !isSelf && (
               <button
                 disabled={actionBusy}
                 onClick={() => confirmRole('user', 'Regular User')}
@@ -273,7 +273,7 @@ function UserDetail({
                 <UserCheck className="w-3.5 h-3.5" /> Demote to User
               </button>
             )}
-            {!user.is_blocked ? (
+            {!isSelf && (!user.is_blocked ? (
               <button
                 disabled={actionBusy}
                 onClick={() => confirmRole('blocked', 'Blocked')}
@@ -289,7 +289,7 @@ function UserDetail({
               >
                 <UserCheck className="w-3.5 h-3.5" /> Unblock User
               </button>
-            )}
+            ))}
             {actionBusy && <Spinner size={16} className="text-gray-500 self-center" />}
           </div>
 

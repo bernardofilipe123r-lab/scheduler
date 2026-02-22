@@ -303,31 +303,9 @@ def clear_logs(
     }
 
 
-@router.get("/logs", response_class=HTMLResponse, summary="Log viewer dashboard")
-def logs_dashboard(logs_token: Optional[str] = Cookie(None), pwd: Optional[str] = Query(None)):
-    """
-    Serve the full-featured log viewer dashboard.
-    Protected by a simple password.
-    Access via: /logs?pwd=<password> (sets cookie for future visits)
-    """
-    expected = os.environ.get("LOGS_PASSWORD")
-    
-    if not expected:
-        return HTMLResponse(content="<h1>Logs password not configured</h1><p>Set the LOGS_PASSWORD environment variable.</p>", status_code=503)
-    
-    # Check cookie or query param
-    if pwd == expected:
-        # Valid password in query — set cookie and serve page
-        response = HTMLResponse(content=LOGS_HTML)
-        response.set_cookie("logs_token", expected, max_age=60*60*24*30, httponly=True, samesite="lax")
-        return response
-    
-    if logs_token == expected:
-        # Valid cookie — serve page
-        return HTMLResponse(content=LOGS_HTML)
-    
-    # Not authenticated — show password form
-    return HTMLResponse(content=LOGS_LOGIN_HTML)
+# NOTE: The /logs HTML dashboard route has been removed.
+# /logs is now handled by the React SPA (LogsPage component) which
+# uses /api/logs for data and is protected by the app's auth system.
 
 
 # =============================================================================
