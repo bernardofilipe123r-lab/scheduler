@@ -195,6 +195,16 @@ def _execute_content_plan(db: Session, plan):
     if not result or not result.get("title"):
         raise ValueError("Content generation returned empty result")
 
+    # Determine proper variant for the scheduling system
+    # Reels use "light"/"dark" based on the time slot pattern (alternating every 4h)
+    # Posts use "post" variant
+    if plan.content_type == "reel":
+        sched_time = datetime.fromisoformat(plan.scheduled_time)
+        slot_index = sched_time.hour // 4  # 0-5 across 24h
+        variant = "light" if slot_index % 2 == 0 else "dark"
+    else:
+        variant = "post"
+
     # Schedule the content
     scheduler = DatabaseSchedulerService()
     sched_result = scheduler.schedule_reel(
@@ -203,7 +213,7 @@ def _execute_content_plan(db: Session, plan):
         scheduled_time=datetime.fromisoformat(plan.scheduled_time),
         caption=result.get("caption", ""),
         brand=plan.brand_id,
-        variant=plan.content_type,
+        variant=variant,
         post_title=result.get("title", ""),
         slide_texts=result.get("content_lines", []),
     )

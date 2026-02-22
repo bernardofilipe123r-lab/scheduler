@@ -214,10 +214,21 @@ export function ScheduledPage() {
       brandPosts.forEach(post => {
         const hour = parseISO(post.scheduled_time).getHours()
         const variant = post.metadata?.variant || 'light'
+        if (variant === 'post') return // Posts don't occupy reel slots
         if (variant === 'light') {
           scheduledLight.push(hour)
-        } else {
+        } else if (variant === 'dark') {
           scheduledDark.push(hour)
+        } else {
+          // Legacy "reel" variant — infer slot type from nearest matching slot hour
+          if (lightSlots.includes(hour)) {
+            scheduledLight.push(hour)
+          } else if (darkSlots.includes(hour)) {
+            scheduledDark.push(hour)
+          } else {
+            // Fallback: treat as light
+            scheduledLight.push(hour)
+          }
         }
       })
       
@@ -1282,9 +1293,18 @@ export function ScheduledPage() {
                             style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
                           />
                         ) : (
-                          <div className="flex items-center justify-center text-zinc-500 text-sm"
-                               style={{ height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE), width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}>
-                            Cover not available
+                          <div className="flex flex-col items-center justify-center p-6 text-center"
+                               style={{
+                                 height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE),
+                                 width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE),
+                                 backgroundColor: selectedBrandData?.color ? `${selectedBrandData.color}15` : '#f4f4f5',
+                                 borderLeft: `4px solid ${selectedBrandData?.color || '#a1a1aa'}`,
+                               }}>
+                            <BrandBadge brand={selectedPost.brand} size="md" />
+                            <p className="mt-3 text-sm font-semibold text-gray-800 leading-snug whitespace-pre-line line-clamp-4">
+                              {selectedPost.title}
+                            </p>
+                            <span className="mt-2 text-xs text-gray-400">Cover preview pending</span>
                           </div>
                         )
                       ) : slideTexts.length > 0 ? (
@@ -1362,7 +1382,7 @@ export function ScheduledPage() {
                     </div>
                   )}
                 </div>
-              ) : selectedPost.thumbnail_path && (
+              ) : selectedPost.thumbnail_path ? (
                 <div className={clsx(
                   'bg-gray-100 rounded-lg overflow-hidden',
                   isPost ? 'aspect-[4/5] max-w-[280px]' : 'aspect-[9/16]'
@@ -1372,6 +1392,17 @@ export function ScheduledPage() {
                     alt="Thumbnail"
                     className="w-full h-full object-cover object-top"
                   />
+                </div>
+              ) : !selectedPost.video_path && (
+                <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden flex flex-col items-center justify-center p-4 text-center"
+                     style={{
+                       borderLeft: `4px solid ${selectedBrandData?.color || '#a1a1aa'}`,
+                     }}>
+                  <BrandBadge brand={selectedPost.brand} size="md" />
+                  <p className="mt-3 text-sm font-semibold text-gray-800 leading-snug whitespace-pre-line line-clamp-6">
+                    {selectedPost.title}
+                  </p>
+                  <span className="mt-2 text-xs text-gray-400">Video pending</span>
                 </div>
               )}
               {selectedPost.video_path && (
