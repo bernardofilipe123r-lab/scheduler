@@ -1,9 +1,13 @@
 """
 Scheduled reel model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Index
 from app.models.base import Base, Column, String, DateTime, Text, JSON
+
+
+def _utc_now():
+    return datetime.now(timezone.utc)
 
 
 class ScheduledReel(Base):
@@ -27,7 +31,7 @@ class ScheduledReel(Base):
     
     # Scheduling
     scheduled_time = Column(DateTime(timezone=True), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
     
     # Publishing status
     status = Column(String(20), default="scheduled", nullable=False, index=True)

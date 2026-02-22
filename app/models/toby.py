@@ -2,8 +2,12 @@
 Toby models: TobyState, TobyExperiment, TobyStrategyScore,
 TobyActivityLog, TobyContentTag.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.base import Base, Column, String, DateTime, Text, Boolean, Integer, JSON, Float, Index
+
+
+def _utc_now():
+    return datetime.now(timezone.utc)
 
 
 class TobyState(Base):
@@ -41,8 +45,8 @@ class TobyState(Base):
     budget_reset_at = Column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)
 
     def to_dict(self):
         return {
@@ -83,7 +87,7 @@ class TobyExperiment(Base):
     status = Column(String(20), nullable=False, default="active")  # active | paused | completed
     winner = Column(String(100), nullable=True)
 
-    started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     min_samples = Column(Integer, default=5)
 
@@ -129,7 +133,7 @@ class TobyStrategyScore(Base):
 
     recent_scores = Column(JSON, default=list)
 
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)
 
     __table_args__ = (
         Index("ix_toby_strategy_user_dim", "user_id", "content_type", "dimension"),
@@ -164,7 +168,7 @@ class TobyActivityLog(Base):
     action_metadata = Column("metadata", JSON, nullable=True)
     level = Column(String(10), default="info")
 
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
 
     __table_args__ = (
         Index("ix_toby_activity_user_time", "user_id", "created_at"),
@@ -206,7 +210,7 @@ class TobyContentTag(Base):
     scored_at = Column(DateTime(timezone=True), nullable=True)
     score_phase = Column(String(10), nullable=True)  # "48h" | "7d"
 
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
 
     def to_dict(self):
         return {
