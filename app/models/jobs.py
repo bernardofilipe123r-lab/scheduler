@@ -45,6 +45,9 @@ class GenerationJob(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     
+    # Creator tracking
+    created_by = Column(String(20), default="user", nullable=True)
+    
     # Error tracking
     error_message = Column(Text, nullable=True)
     
@@ -77,4 +80,5 @@ class GenerationJob(Base):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error_message": self.error_message,
+            "created_by": getattr(self, 'created_by', None) or "user",
         }

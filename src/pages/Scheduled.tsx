@@ -60,6 +60,7 @@ import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 // Platform type for filtering
 type PlatformFilter = 'all' | 'instagram' | 'facebook' | 'youtube'
 type ContentTypeFilter = 'all' | 'reels' | 'posts'
+type CreatorFilter = 'all' | 'user' | 'toby'
 
 const BASE_SLOTS: Array<{ hour: number; variant: Variant }> = [
   { hour: 0, variant: 'light' },   // 12 AM
@@ -124,6 +125,7 @@ export function ScheduledPage() {
   const [brandFilter, setBrandFilter] = useState<BrandName | null>(null)
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<ContentTypeFilter>('all')
+  const [creatorFilter, setCreatorFilter] = useState<CreatorFilter>('all')
   const [selectedDayForMissing, setSelectedDayForMissing] = useState<Date | null>(null)
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
@@ -180,6 +182,12 @@ export function ScheduledPage() {
         if (contentTypeFilter === 'reels' && isPost) return
       }
 
+      // Apply creator filter
+      if (creatorFilter !== 'all') {
+        const creator = post.created_by || 'user'
+        if (creator !== creatorFilter) return
+      }
+
       const d = parseISO(post.scheduled_time)
       const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       if (!grouped[dateKey]) {
@@ -189,7 +197,7 @@ export function ScheduledPage() {
     })
     
     return grouped
-  }, [posts, contentTypeFilter])
+  }, [posts, contentTypeFilter, creatorFilter])
   
   // Analyze slots for a specific brand on a specific day
   const analyzeSlots = useMemo(() => {
@@ -542,9 +550,9 @@ export function ScheduledPage() {
           >
             <SlidersHorizontal className="w-4 h-4" />
             <span>Filters</span>
-            {((contentTypeFilter !== 'all' ? 1 : 0) + (platformFilter !== 'all' ? 1 : 0) + (brandFilter !== null ? 1 : 0)) > 0 && (
+            {((contentTypeFilter !== 'all' ? 1 : 0) + (platformFilter !== 'all' ? 1 : 0) + (brandFilter !== null ? 1 : 0) + (creatorFilter !== 'all' ? 1 : 0)) > 0 && (
               <span className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {(contentTypeFilter !== 'all' ? 1 : 0) + (platformFilter !== 'all' ? 1 : 0) + (brandFilter !== null ? 1 : 0)}
+                {(contentTypeFilter !== 'all' ? 1 : 0) + (platformFilter !== 'all' ? 1 : 0) + (brandFilter !== null ? 1 : 0) + (creatorFilter !== 'all' ? 1 : 0)}
               </span>
             )}
           </button>
@@ -561,6 +569,11 @@ export function ScheduledPage() {
           {brandFilter && (
             <span className="text-xs px-2 py-1 bg-orange-50 text-orange-600 rounded-full">
               Tracking: {dynamicBrands.find(b => b.id === brandFilter)?.shortName}
+            </span>
+          )}
+          {creatorFilter !== 'all' && (
+            <span className="text-xs px-2 py-1 bg-violet-50 text-violet-600 rounded-full">
+              {creatorFilter === 'toby' ? '🤖 Toby' : '👤 Manual'}
             </span>
           )}
         </div>
@@ -719,6 +732,46 @@ export function ScheduledPage() {
                 </button>
               </div>
             </div>
+
+            {/* Creator */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">Creator</p>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setCreatorFilter('all')}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5',
+                    creatorFilter === 'all'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setCreatorFilter('user')}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5',
+                    creatorFilter === 'user'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  👤 Manual
+                </button>
+                <button
+                  onClick={() => setCreatorFilter('toby')}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5',
+                    creatorFilter === 'toby'
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  🤖 Toby
+                </button>
+              </div>
+            </div>
           </div>
         )}
         
@@ -790,13 +843,14 @@ export function ScheduledPage() {
                     {dayPosts.slice(0, 3).map(post => (
                       <div
                         key={post.id}
-                        className="text-xs px-1.5 py-0.5 rounded truncate"
+                        className="text-xs px-1.5 py-0.5 rounded truncate flex items-center gap-1"
                         style={{ 
                           backgroundColor: `${getBrandColor(post.brand)}20`,
                           color: getBrandColor(post.brand)
                         }}
                       >
                         {formatTime(post.scheduled_time)}
+                        {post.created_by === 'toby' && <span title="Created by Toby">🤖</span>}
                       </div>
                     ))}
                     {dayPosts.length > 3 && (
@@ -873,6 +927,9 @@ export function ScheduledPage() {
                               )}>
                                 {post.metadata?.variant === 'post' ? '📄 Post' : (post.metadata?.variant || 'light') === 'dark' ? '🌙' : '☀️'}
                               </span>
+                              {post.created_by === 'toby' && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700" title="Created by Toby">🤖</span>
+                              )}
                             </div>
                             <p className="text-sm text-gray-700 truncate">
                               {post.title.split('\n')[0]}
@@ -947,6 +1004,7 @@ export function ScheduledPage() {
                         >
                           <div className="text-xs font-medium" style={{ color: getBrandColor(post.brand) }}>
                             {formatTime(post.scheduled_time, '12h')}
+                            {post.created_by === 'toby' && <span className="ml-1" title="Created by Toby">🤖</span>}
                           </div>
                           <div className="text-xs text-gray-600 truncate mt-0.5">
                             {post.title.split('\n')[0]}
@@ -1263,6 +1321,11 @@ export function ScheduledPage() {
               {selectedPost.status === 'published' && (
                 <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
                   Published
+                </span>
+              )}
+              {selectedPost.created_by === 'toby' && (
+                <span className="px-2 py-1 bg-violet-100 text-violet-700 text-xs font-medium rounded-full flex items-center gap-1">
+                  🤖 Toby
                 </span>
               )}
               {selectedPost.status === 'partial' && (

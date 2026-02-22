@@ -21,6 +21,7 @@ interface BackendJob {
   started_at?: string
   completed_at?: string
   error_message?: string
+  created_by?: string
 }
 
 interface JobsListResponse {

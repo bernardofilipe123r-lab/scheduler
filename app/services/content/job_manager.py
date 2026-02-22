@@ -15,6 +15,12 @@ def generate_job_id() -> str:
     return f"GEN-{random_num}"
 
 
+def generate_toby_job_id() -> str:
+    """Generate a short readable job ID like TOBY-001234."""
+    random_num = ''.join(random.choices(string.digits, k=6))
+    return f"TOBY-{random_num}"
+
+
 def get_brand_type(brand_name: str) -> str:
     """Resolve brand name to canonical brand ID."""
     return brand_resolver.resolve_brand_name(brand_name) or brand_name
@@ -38,9 +44,10 @@ class JobManager:
         platforms: Optional[List[str]] = None,
         fixed_title: bool = False,
         image_model: Optional[str] = None,
+        created_by: str = "user",
     ) -> GenerationJob:
         """Create a new generation job."""
-        job_id = generate_job_id()
+        job_id = generate_job_id() if created_by != "toby" else generate_toby_job_id()
         
         # Ensure unique job_id
         while self.db.query(GenerationJob).filter_by(job_id=job_id).first():
@@ -62,6 +69,7 @@ class JobManager:
             platforms=platforms,
             fixed_title=fixed_title,
             image_model=image_model,
+            created_by=created_by,
             status="pending",
             brand_outputs={brand: {"status": "pending"} for brand in brands}
         )

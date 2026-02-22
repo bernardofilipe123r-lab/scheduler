@@ -46,6 +46,7 @@ interface ScheduledResponse {
     created_at?: string
     published_at?: string
     publish_error?: string
+    created_by?: string
     metadata?: {
       platforms?: string[]
       brand?: string
@@ -97,8 +98,7 @@ export const schedulingApi = {
       published_at: s.published_at,
       thumbnail_path: s.metadata?.thumbnail_path,
       video_path: s.metadata?.video_path,
-      metadata: s.metadata,
-    }))
+      metadata: s.metadata,      created_by: (s.created_by || 'user') as 'user' | 'toby',    }))
   },
   
   deleteScheduled: (id: string) =>

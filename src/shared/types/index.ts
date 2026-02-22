@@ -57,6 +57,7 @@ export interface Job {
   completed_at?: string
   updated_at?: string
   error_message?: string
+  created_by?: 'user' | 'toby'
 }
 
 // Scheduled post entity
@@ -67,6 +68,7 @@ export interface ScheduledPost {
   reel_id: string
   title: string
   scheduled_time: string
+  created_by?: 'user' | 'toby'
   thumbnail_path?: string
   video_path?: string
   caption?: string

@@ -42,6 +42,7 @@ export function HistoryPage() {
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [variantFilter, setVariantFilter] = useState<Variant | 'all'>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'reels' | 'posts'>('all')
+  const [creatorFilter, setCreatorFilter] = useState<'all' | 'user' | 'toby'>('all')
   
   // Visual-only hidden job IDs (not persisted, not DB deletes)
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
@@ -153,9 +154,15 @@ export function HistoryPage() {
       if (contentTypeFilter === 'posts' && job.variant !== 'post') return false
       if (contentTypeFilter === 'reels' && job.variant === 'post') return false
       
+      // Creator filter
+      if (creatorFilter !== 'all') {
+        const creator = job.created_by || 'user'
+        if (creator !== creatorFilter) return false
+      }
+      
       return true
     })
-  }, [jobsArray, categorizedJobs, viewFilter, searchQuery, variantFilter, contentTypeFilter])
+  }, [jobsArray, categorizedJobs, viewFilter, searchQuery, variantFilter, contentTypeFilter, creatorFilter])
   
   // Calculate job progress
   const getProgress = (job: Job) => {
@@ -483,6 +490,28 @@ export function HistoryPage() {
             </select>
           </div>
           
+          {/* Creator Filter */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {[
+              { key: 'all' as const, label: 'All', icon: '' },
+              { key: 'user' as const, label: 'Manual', icon: '👤' },
+              { key: 'toby' as const, label: 'Toby', icon: '🤖' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setCreatorFilter(opt.key)}
+                className={clsx(
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                  creatorFilter === opt.key
+                    ? opt.key === 'toby' ? 'bg-violet-600 text-white shadow-sm' : 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                {opt.icon} {opt.label}
+              </button>
+            ))}
+          </div>
+          
           {viewFilter !== 'all' && (
             <button
               onClick={() => setViewFilter('all')}
@@ -686,6 +715,11 @@ export function HistoryPage() {
                   {job.brands?.map(brand => (
                     <BrandBadge key={brand} brand={brand} size="xs" />
                   ))}
+                  {job.created_by === 'toby' && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700" title="Created by Toby">
+                      🤖 Toby
+                    </span>
+                  )}
                 </div>
               </div>
             )

@@ -330,6 +330,7 @@ async def get_scheduled_posts(user: dict = Depends(get_current_user)):
                 "created_at": schedule.get("created_at"),
                 "published_at": schedule.get("published_at"),
                 "publish_error": schedule.get("publish_error"),
+                "created_by": schedule.get("created_by", "user"),
                 "metadata": {
                     "brand": metadata.get("brand"),
                     "variant": metadata.get("variant"),

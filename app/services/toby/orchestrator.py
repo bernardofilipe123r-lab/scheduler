@@ -124,7 +124,7 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
     if status["health"] == "healthy":
         return
 
-    plans = create_plans_for_empty_slots(db, user_id, state, max_plans=3)
+    plans = create_plans_for_empty_slots(db, user_id, state, max_plans=1)
     if not plans:
         return
 
@@ -157,17 +157,20 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
 
 def _execute_content_plan(db: Session, plan):
     """
-    Execute a ContentPlan: generate content and schedule it.
+    Execute a ContentPlan: generate content, create media, and schedule.
 
-    Uses existing ContentGeneratorV2 + DatabaseSchedulerService pipeline.
+    v2.0: Creates a real GenerationJob and runs the full JobProcessor pipeline
+    so that Toby-created content has real images, video, and Supabase URLs.
     """
     from app.services.content.generator import ContentGeneratorV2
+    from app.services.content.job_manager import JobManager
+    from app.services.content.job_processor import JobProcessor
     from app.services.publishing.scheduler import DatabaseSchedulerService
     from app.services.toby.content_planner import record_content_tag
     from app.core.prompt_context import PromptContext
     from app.services.content.niche_config_service import NicheConfigService
 
-    # Build PromptContext with personality overlay
+    # ── Step 1: Build PromptContext ──────────────────────────
     niche_svc = NicheConfigService()
     ctx = niche_svc.get_context(user_id=plan.user_id, brand_id=plan.brand_id)
     if not ctx:
@@ -177,7 +180,7 @@ def _execute_content_plan(db: Session, plan):
     if plan.personality_prompt:
         ctx.personality_modifier = plan.personality_prompt
 
-    # Generate content
+    # ── Step 2: Generate text content ────────────────────────
     generator = ContentGeneratorV2()
 
     if plan.content_type == "reel":
@@ -195,9 +198,7 @@ def _execute_content_plan(db: Session, plan):
     if not result or not result.get("title"):
         raise ValueError("Content generation returned empty result")
 
-    # Determine proper variant for the scheduling system
-    # Reels use "light"/"dark" based on the time slot pattern (alternating every 4h)
-    # Posts use "post" variant
+    # ── Step 3: Determine variant from slot pattern ──────────
     if plan.content_type == "reel":
         sched_time = datetime.fromisoformat(plan.scheduled_time)
         slot_index = sched_time.hour // 4  # 0-5 across 24h
@@ -205,29 +206,97 @@ def _execute_content_plan(db: Session, plan):
     else:
         variant = "post"
 
-    # Schedule the content
+    # ── Step 4: Create a GenerationJob ───────────────────────
+    job_manager = JobManager(db)
+    job = job_manager.create_job(
+        user_id=plan.user_id,
+        title=result["title"],
+        content_lines=result.get("content_lines", []),
+        brands=[plan.brand_id],
+        variant=variant,
+        ai_prompt=result.get("image_prompt"),
+        cta_type=None,
+        platforms=["instagram", "facebook", "youtube"],
+        fixed_title=True,
+        created_by="toby",
+    )
+    job_id = job.job_id
+
+    # Store per-brand content in brand_outputs (so regenerate_brand finds it)
+    job_manager.update_brand_output(job_id, plan.brand_id, {
+        "title": result["title"],
+        "content_lines": result.get("content_lines", []),
+        "ai_prompt": result.get("image_prompt", ""),
+        "status": "pending",
+    })
+
+    print(f"[TOBY] Created job {job_id} for {plan.brand_id} ({variant})", flush=True)
+
+    # ── Step 5: Run the media pipeline ───────────────────────
+    processor = JobProcessor(db)
+    job_manager.update_job_status(job_id, "generating", "Toby generating media...", 5)
+
+    try:
+        if variant == "post":
+            media_result = processor.process_post_brand(job_id, plan.brand_id)
+        else:
+            media_result = processor.regenerate_brand(job_id, plan.brand_id)
+
+        if not media_result.get("success"):
+            error = media_result.get("error", "Unknown media generation error")
+            job_manager.update_job_status(job_id, "failed", error_message=error)
+            raise ValueError(f"Media generation failed: {error}")
+    except Exception:
+        # Ensure job is marked failed on any exception
+        job = job_manager.get_job(job_id)
+        if job and job.status != "failed":
+            job_manager.update_job_status(job_id, "failed", error_message="Media pipeline exception")
+        raise
+
+    # ── Step 6: Read completed brand_outputs ─────────────────
+    db.expire_all()
+    job = job_manager.get_job(job_id)
+    brand_data = (job.brand_outputs or {}).get(plan.brand_id, {})
+
+    # Update job status to completed
+    job_manager.update_job_status(job_id, "completed", progress_percent=100)
+    print(f"[TOBY] Job {job_id} completed — media ready", flush=True)
+
+    # ── Step 7: Auto-schedule with real media URLs ───────────
     scheduler = DatabaseSchedulerService()
+    reel_id = brand_data.get("reel_id", f"{job_id}_{plan.brand_id}")
+
     sched_result = scheduler.schedule_reel(
         user_id=plan.user_id,
-        reel_id=result.get("reel_id", f"toby-{plan.brand_id}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"),
+        reel_id=reel_id,
         scheduled_time=datetime.fromisoformat(plan.scheduled_time),
-        caption=result.get("caption", ""),
+        caption=brand_data.get("caption", result.get("caption", "")),
+        yt_title=brand_data.get("yt_title"),
+        platforms=["instagram", "facebook", "youtube"],
+        video_path=brand_data.get("video_path"),
+        thumbnail_path=brand_data.get("thumbnail_path"),
+        yt_thumbnail_path=brand_data.get("yt_thumbnail_path"),
         brand=plan.brand_id,
         variant=variant,
-        post_title=result.get("title", ""),
+        post_title=result["title"],
         slide_texts=result.get("content_lines", []),
+        job_id=job_id,
     )
 
+    # ── Step 8: Mark as Toby-created + record tags ───────────
     schedule_id = sched_result.get("schedule_id", "")
     if schedule_id:
-        # Mark as created by Toby
         from app.models.scheduling import ScheduledReel
-        sched = db.query(ScheduledReel).filter(ScheduledReel.schedule_id == schedule_id).first()
+        sched = db.query(ScheduledReel).filter(
+            ScheduledReel.schedule_id == schedule_id
+        ).first()
         if sched and hasattr(sched, 'created_by'):
             sched.created_by = "toby"
 
         # Record content tags for learning
         record_content_tag(db, plan.user_id, schedule_id, plan)
+
+    print(f"[TOBY] Scheduled {reel_id} for {plan.brand_id} at {plan.scheduled_time}", flush=True)
 
 
 def _run_metrics_check(db: Session, user_id: str, state: TobyState):
