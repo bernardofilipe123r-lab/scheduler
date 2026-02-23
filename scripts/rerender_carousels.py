@@ -28,21 +28,24 @@ def main():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT schedule_id, extra_data
-        FROM scheduled_reels
-        WHERE status = 'scheduled'
-          AND extra_data->>'variant' = 'post'
-          AND extra_data->>'job_id' IS NOT NULL
-          AND extra_data->>'thumbnail_path' IS NOT NULL
+        SELECT s.schedule_id, s.extra_data, j.brand_outputs
+        FROM scheduled_reels s
+        LEFT JOIN generation_jobs j ON j.job_id = s.extra_data->>'job_id'
+        WHERE s.status = 'scheduled'
+          AND s.extra_data->>'variant' = 'post'
+          AND s.extra_data->>'job_id' IS NOT NULL
+          AND s.extra_data->>'thumbnail_path' IS NOT NULL
     """)
     rows = cur.fetchall()
     print(f"Found {len(rows)} post-variant scheduled posts", flush=True)
 
     rendered = 0
     failed = 0
-    for schedule_id, ed in rows:
+    for schedule_id, ed, brand_outputs in rows:
         if not isinstance(ed, dict):
             ed = json.loads(ed) if ed else {}
+        if brand_outputs and not isinstance(brand_outputs, dict):
+            brand_outputs = json.loads(brand_outputs)
 
         job_id = ed.get("job_id", "")
         brand = ed.get("brand", "unknown")
@@ -53,10 +56,18 @@ def main():
         if not job_id or not slide_texts or not tp:
             continue
 
-        # Derive raw background URL
         reel_id = f"{job_id}_{brand}"
-        base_url = tp.rsplit("/", 1)[0]
-        raw_bg_url = f"{base_url}/{reel_id}_background.png"
+
+        # Get raw background URL from generation_jobs (correct user-scoped path)
+        raw_bg_url = None
+        if brand_outputs:
+            bd = brand_outputs.get(brand, {})
+            raw_bg_url = bd.get("thumbnail_path")
+        if not raw_bg_url:
+            # Fallback: derive from scheduled thumbnail_path
+            reel_id = f"{job_id}_{brand}"
+            base_url = tp.rsplit("/", 1)[0]
+            raw_bg_url = f"{base_url}/{reel_id}_background.png"
 
         print(f"  [{schedule_id[:8]}] {brand} — {len(slide_texts)} slides", flush=True)
 
