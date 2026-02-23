@@ -283,6 +283,14 @@ async def get_ai_understanding(
     service = get_niche_config_service()
     ctx = service.get_context(brand_id=brand_id, user_id=user_id)
 
+    # Resolve brand display name from brands table (not niche_config.parent_brand_name)
+    brand_display_name = None
+    if brand_id:
+        from app.models.brands import Brand
+        brand_row = db.query(Brand.display_name).filter(Brand.id == brand_id).first()
+        if brand_row:
+            brand_display_name = brand_row.display_name
+
     config_summary = []
     if ctx.niche_name:
         config_summary.append(f"Niche: {ctx.niche_name}")
@@ -298,7 +306,9 @@ async def get_ai_understanding(
         config_summary.append(f"Topics: {', '.join(ctx.topic_categories[:10])}")
     if ctx.content_philosophy:
         config_summary.append(f"Philosophy: {ctx.content_philosophy}")
-    if ctx.parent_brand_name:
+    if brand_display_name:
+        config_summary.append(f"Brand: {brand_display_name}")
+    elif ctx.parent_brand_name:
         config_summary.append(f"Brand: {ctx.parent_brand_name}")
     if ctx.image_style_description:
         config_summary.append(f"Visual style: {ctx.image_style_description}")
@@ -320,13 +330,24 @@ async def get_ai_understanding(
 
     config_text = "\n".join(config_summary)
 
+    # Include a few reel examples from the user's config so DeepSeek matches the format
+    reel_examples_text = ""
+    if ctx.reel_examples:
+        samples = ctx.reel_examples[:3]
+        example_lines = []
+        for i, ex in enumerate(samples, 1):
+            example_lines.append(f"  Reel {i}: {ex['title']}")
+            for line in ex.get("content_lines", [])[:5]:
+                example_lines.append(f"    - {line}")
+        reel_examples_text = "\nHere are some of the brand's existing reel examples — match this style:\n" + "\n".join(example_lines) + "\n"
+
     prompt = f"""Based on the following brand configuration, write a first-person summary (as the AI content engine) explaining how you understand this brand. Write 2-3 paragraphs.
 
 Configuration:
 {config_text}
-
+{reel_examples_text}
 Also generate:
-1. One FULL example reel with a title (ALL CAPS, 8-12 words) and 5-8 content lines (short fragments or cause-effect pairs)
+1. One FULL example reel with a title (ALL CAPS, 8-12 words) and 5-8 content lines. CRITICAL: each content line must be a STANDALONE fact, tip, or statement that makes sense on its own — NOT a fragment of a longer sentence split across lines. Good: "Walking after meals cuts blood sugar by 30%." Bad: "Can bind to non-heme iron from plants." (makes no sense alone). Think of each line as its own mini-fact displayed on a separate screen.
 2. One FULL example carousel post BASED ON A REAL SCIENTIFIC STUDY with:
    - A title referencing the study finding (ALL CAPS, 8-14 words, e.g. "STUDY REVEALS SLEEPING IN A COLD ROOM IMPROVES FAT METABOLISM")
    - 3-4 slides of detailed educational content (each slide is 3-5 sentences explaining the study and its implications)
@@ -341,7 +362,7 @@ OUTPUT FORMAT (JSON only):
     "understanding": "Your 2-3 paragraph first-person summary here...",
     "example_reel": {{{{
         "title": "REEL TITLE IN ALL CAPS",
-        "content_lines": ["Line 1", "Line 2", "Line 3", "..."]
+        "content_lines": ["Standalone fact 1.", "Standalone fact 2.", "Standalone fact 3.", "..."]
     }}}},
     "example_post": {{{{
         "title": "POST TITLE IN ALL CAPS REFERENCING A STUDY",
