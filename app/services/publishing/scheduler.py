@@ -94,6 +94,7 @@ class DatabaseSchedulerService:
                     "title": post_title,  # Store post title for cover slide compositing
                     "slide_texts": slide_texts,  # Store carousel text slides
                     "carousel_paths": [str(p) for p in carousel_paths] if carousel_paths else None,
+                    "raw_background_url": str(thumbnail_path) if thumbnail_path else None,
                     "job_id": job_id,  # Link back to generation job
                 }
                 print(f"   ✅ Metadata prepared: {metadata}")

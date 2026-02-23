@@ -238,20 +238,19 @@ async function renderCoverSlide(input) {
   });
   layer.add(bgKonva);
 
-  // 2. Gradient overlay
-  const gradY = CANVAS_HEIGHT * 0.4;
-  const gradH = CANVAS_HEIGHT * 0.6;
+  // 2. Gradient overlay — full-height, gentle opacity
   const gradRect = new Konva.Rect({
     x: 0,
-    y: gradY,
+    y: 0,
     width: CANVAS_WIDTH,
-    height: gradH,
+    height: CANVAS_HEIGHT,
     fillLinearGradientStartPoint: { x: 0, y: 0 },
-    fillLinearGradientEndPoint: { x: 0, y: gradH },
+    fillLinearGradientEndPoint: { x: 0, y: CANVAS_HEIGHT },
     fillLinearGradientColorStops: [
       0, 'rgba(0,0,0,0)',
-      0.3, 'rgba(0,0,0,0.5)',
-      1, 'rgba(0,0,0,0.95)',
+      0.45, 'rgba(0,0,0,0.10)',
+      0.7, 'rgba(0,0,0,0.35)',
+      1, 'rgba(0,0,0,0.65)',
     ],
   });
   layer.add(gradRect);

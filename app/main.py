@@ -172,16 +172,25 @@ def _repair_missing_carousel_images():
             brand = ed.get("brand", "unknown")
             title = ed.get("title", "")
             reel_id = post.reel_id or ""
-            bg_url = ed.get("thumbnail_path", "")
-
-            if not bg_url or not bg_url.startswith("https://"):
-                print(f"  ⚠️ [{post.schedule_id}] No Supabase background URL for {brand}/{reel_id}", flush=True)
+            
+            # Use raw_background_url if stored, otherwise fall back to
+            # deriving it from job_id + brand (the original AI background).
+            raw_bg = ed.get("raw_background_url", "")
+            if not raw_bg:
+                job_id = ed.get("job_id", "")
+                tp = ed.get("thumbnail_path", "")
+                if job_id and tp and tp.startswith("https://"):
+                    base = tp.rsplit("/", 1)[0]
+                    raw_bg = f"{base}/{job_id}_{brand}_background.png"
+            
+            if not raw_bg or not raw_bg.startswith("https://"):
+                print(f"  ⚠️ [{post.schedule_id}] No background URL for {brand}/{reel_id}", flush=True)
                 continue
 
             tmp_bg_path = None
             try:
-                # Download background image from Supabase to temp file
-                resp = _req.get(bg_url, timeout=60)
+                # Download raw background image from Supabase to temp file
+                resp = _req.get(raw_bg, timeout=60)
                 resp.raise_for_status()
                 tmp_bg = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
                 tmp_bg.write(resp.content)
@@ -201,6 +210,7 @@ def _repair_missing_carousel_images():
                     slide_urls = composed.get("slideUrls") or composed.get("slidePaths") or []
                     ed["thumbnail_path"] = cover_url
                     ed["carousel_paths"] = [cover_url] + slide_urls
+                    ed["raw_background_url"] = raw_bg
                     post.extra_data = dict(ed)
                     flag_modified(post, "extra_data")
                     repaired += 1

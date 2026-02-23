@@ -127,6 +127,8 @@ export function ScheduledPage() {
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
+  const [slideLoadedMap, setSlideLoadedMap] = useState<Record<string, boolean>>({})
+  const [slideLoading, setSlideLoading] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
   // Post preview: brand logos + layout settings (mirrors PostJobDetail)
@@ -149,6 +151,32 @@ export function ScheduledPage() {
     }
     fetchLogo()
   }, [selectedPost?.brand])
+
+  // Preload all carousel images when a post is selected
+  useEffect(() => {
+    if (!selectedPost) {
+      setSlideLoadedMap({})
+      return
+    }
+    const paths = selectedPost.metadata?.carousel_paths || []
+    if (paths.length === 0) return
+
+    paths.forEach((url: string) => {
+      if (!url || slideLoadedMap[url]) return
+      const img = new Image()
+      img.onload = () => setSlideLoadedMap(prev => ({ ...prev, [url]: true }))
+      img.onerror = () => setSlideLoadedMap(prev => ({ ...prev, [url]: true }))
+      img.src = url
+    })
+  }, [selectedPost?.metadata?.carousel_paths])
+
+  // Track loading state per slide change
+  const currentSlideUrl = selectedPost?.metadata?.carousel_paths?.[detailSlideIndex] || null
+  useEffect(() => {
+    if (!currentSlideUrl) { setSlideLoading(false); return }
+    if (slideLoadedMap[currentSlideUrl]) { setSlideLoading(false); return }
+    setSlideLoading(true)
+  }, [currentSlideUrl, slideLoadedMap])
 
   
   const calendarDays = useMemo(() => {
@@ -1347,14 +1375,31 @@ export function ScheduledPage() {
                 <div className="flex flex-col items-center">
                   <div className="relative" style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}>
                     {/* Slide content — pre-rendered images */}
-                    <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100">
+                    <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100"
+                         style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE), height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}>
                       {hasPreRendered ? (
-                        <img
-                          src={allCarouselPaths[detailSlideIndex]}
-                          alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
-                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
-                          className="w-full object-contain"
-                        />
+                        <div className="relative w-full h-full">
+                          {/* Loading skeleton — shown while current slide is loading */}
+                          {slideLoading && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-zinc-100 z-10">
+                              <div className="flex flex-col items-center gap-2">
+                                <Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
+                                <span className="text-xs text-zinc-400">Loading slide...</span>
+                              </div>
+                            </div>
+                          )}
+                          <img
+                            key={allCarouselPaths[detailSlideIndex]}
+                            src={allCarouselPaths[detailSlideIndex]}
+                            alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
+                            style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                            className={clsx('w-full object-contain transition-opacity duration-200', slideLoading ? 'opacity-0' : 'opacity-100')}
+                            onLoad={() => {
+                              setSlideLoadedMap(prev => ({ ...prev, [allCarouselPaths[detailSlideIndex]]: true }))
+                              setSlideLoading(false)
+                            }}
+                          />
+                        </div>
                       ) : legacyCarouselPaths[detailSlideIndex - 1] ? (
                         <img
                           src={detailSlideIndex === 0 ? (bgUrl || '') : legacyCarouselPaths[detailSlideIndex - 1]}

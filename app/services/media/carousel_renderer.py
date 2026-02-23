@@ -82,8 +82,10 @@ def render_carousel_images(
         pass
 
     # Resolve script + font paths (works both locally and in Docker)
-    script_dir = Path(__file__).resolve().parent.parent.parent / "scripts"
-    assets_dir = Path(__file__).resolve().parent.parent.parent / "assets"
+    # __file__ = app/services/media/carousel_renderer.py → .parent x4 = project root
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    script_dir = project_root / "scripts"
+    assets_dir = project_root / "assets"
     render_script = str(script_dir / "render-slides.cjs")
     # Docker paths take priority if they exist
     if Path("/app/scripts/render-slides.cjs").exists():

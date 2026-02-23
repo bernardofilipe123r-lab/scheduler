@@ -265,23 +265,25 @@ export function BackgroundImageLayer({ imageUrl }: { imageUrl: string }) {
   )
 }
 
-/** Bottom-half gradient overlay. */
+/** Full-height gradient overlay — gentle opacity for text readability. */
 export function GradientOverlay() {
   return (
     <Rect
       x={0}
-      y={CANVAS_HEIGHT * 0.4}
+      y={0}
       width={CANVAS_WIDTH}
-      height={CANVAS_HEIGHT * 0.6}
+      height={CANVAS_HEIGHT}
       fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-      fillLinearGradientEndPoint={{ x: 0, y: CANVAS_HEIGHT * 0.6 }}
+      fillLinearGradientEndPoint={{ x: 0, y: CANVAS_HEIGHT }}
       fillLinearGradientColorStops={[
         0,
         'rgba(0,0,0,0)',
-        0.3,
-        'rgba(0,0,0,0.5)',
+        0.45,
+        'rgba(0,0,0,0.10)',
+        0.7,
+        'rgba(0,0,0,0.35)',
         1,
-        'rgba(0,0,0,0.95)',
+        'rgba(0,0,0,0.65)',
       ]}
       listening={false}
     />
