@@ -617,7 +617,7 @@ Generate a SINGLE carousel post that is {title_style_note}.
 ### CAPTION (4-5 paragraphs):
 - Paragraph 1: Hook — expand on the title with a surprising angle
 - {caption_mechanism}
-- Paragraph 4: Takeaway
+- Paragraph 4: Takeaway — conclude with: "Follow @{{{{brandhandle}}}} to learn more about your {ctx.carousel_cta_topic or ctx.niche_name.lower() or 'health'}."
 {citation_block}
 - End with: \u26a0\ufe0f Disclaimer: {disclaimer}
 

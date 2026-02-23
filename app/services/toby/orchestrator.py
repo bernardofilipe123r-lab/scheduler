@@ -219,13 +219,19 @@ def _execute_content_plan(db: Session, plan):
         caption_text = result.get("caption", "")
         if caption_text and not result.get("content_lines"):
             slide_paras = [p.strip() for p in caption_text.split("\n\n") if p.strip()]
-            # Filter out disclaimer/CTA paragraphs (keep substantive slides)
+            # Filter out disclaimer paragraphs but keep Follow CTA
             slide_texts = []
             for para in slide_paras:
                 lower = para.lower()
                 if lower.startswith("⚠️") or lower.startswith("disclaimer"):
                     continue  # Skip disclaimer
                 slide_texts.append(para)
+            # Ensure the last slide has a Follow CTA
+            if slide_texts:
+                last = slide_texts[-1].lower()
+                if "follow @" not in last and "follow us" not in last:
+                    cta_topic = getattr(ctx, "carousel_cta_topic", "") or getattr(ctx, "niche_name", "").lower() or "health"
+                    slide_texts[-1] += f"\n\nFollow @{{{{brandhandle}}}} to learn more about your {cta_topic}."
             result["content_lines"] = slide_texts
 
     # ── Step 4: Create a GenerationJob ───────────────────────
