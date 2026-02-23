@@ -337,6 +337,7 @@ async def get_scheduled_posts(user: dict = Depends(get_current_user)):
                     "platforms": metadata.get("platforms"),
                     "video_path": video_url,
                     "thumbnail_path": thumb_url,
+                    "carousel_paths": carousel_urls,
                     "carousel_image_paths": carousel_urls,
                     "title": metadata.get("title"),
                     "slide_texts": metadata.get("slide_texts"),

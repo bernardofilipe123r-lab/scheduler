@@ -54,6 +54,7 @@ interface ScheduledResponse {
       video_path?: string
       thumbnail_path?: string
       carousel_image_paths?: string[]
+      carousel_paths?: string[]
       title?: string
       slide_texts?: string[]
       job_id?: string
