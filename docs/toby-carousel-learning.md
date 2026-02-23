@@ -50,19 +50,33 @@ A rich prompt is assembled from your Content DNA:
 6. **Topic hint**: from the strategy engine
 7. **Anti-repetition context**: recent titles and topics to avoid
 
-### Step 4 — AI Generates Content
-**Model**: DeepSeek Chat (`deepseek-chat`) — temperature 0.95, max 8,000 tokens for batch generation.
+### Step 4 — AI Generates Content (with Quality Loop)
+**Model**: DeepSeek Chat (`deepseek-chat`) — temperature 0.85, max 8,000 tokens for batch generation.
+
+The generation has up to **3 attempts** with escalating fixes (same quality loop as reels):
+1. **Attempt 1**: Standard prompt with anti-repetition history
+2. **Attempt 2**: Correction prompt — references weak titles from attempt 1 and asks for stronger hooks, better structure, more novelty, more plausible claims
+3. **Attempt 3**: Repeats with fresh correction guidance
+
+Each attempt scores the generated content across 5 quality dimensions:
+- Structure correctness
+- Topic familiarity
+- Content novelty
+- Hook strength
+- Plausibility
+
+If average quality score is ≥ 80 → publish immediately.
+If all 3 attempts score below 80 → uses the best attempt.
 
 Returns for each post:
 - `title` — ALL CAPS, 8–14 words
 - `slide_texts` — 3 text slides (educational paragraphs with 2+ sentences each)
 - `caption` — 4–5 paragraphs with optional citation + disclaimer
 - `image_prompt` — cinematic image description for the background
-
-If `slide_texts` comes back empty, it **retries once** automatically.
+- `quality_breakdown` — per-dimension scores for transparency
 
 ### Step 5 — Generate Visual Assets
-1. **AI Background Image**: DeepSeek crafts a professional image prompt → sent to `deAPI` using the `ZImageTurbo_INT8` model (8 steps, higher quality than reels) → returns a background PNG
+1. **AI Background Image**: DeepSeek crafts a professional image prompt → sent to `deAPI` using the `ZImageTurbo_INT8` model (8 steps) → returns a background PNG
 2. Background is uploaded to Supabase Storage
 
 ### Step 6 — Render Carousel Slides
@@ -91,10 +105,12 @@ After a carousel is published:
 **Score formula**:
 | Component | Weight | Logic |
 |---|---|---|
-| Raw views | 30% | Logarithmic scale, capped at 500k |
-| Relative views | 35% | Your views vs. brand average × 25 (capped at 100) |
-| Engagement quality | 25% | `(saves×2 + shares×3) / views × 10,000` |
+| Raw views | 20% | Logarithmic scale, capped at 500k |
+| Relative views | 30% | Your views vs. brand average × 25 (capped at 100) |
+| Engagement quality | 40% | `(saves×2 + shares×3) / views × 10,000` — **primary signal** |
 | Follower context | 10% | `views / followers × 10` |
+
+Engagement quality (saves + shares) is the dominant signal at 40%, ensuring Toby optimizes for save-worthy, valuable content rather than just high-view clickbait.
 
 ### Strategy Score Updates
 After the 7-day score, each of the 5 strategy dimensions gets its running average updated:
@@ -170,7 +186,7 @@ This produces functional carousels, but they won't match your brand's specific v
 | No Topic Categories | Falls back to "general" |
 | No NicheConfig at all | All defaults — completely generic content |
 | AI generation fails | `_fallback_post_title()` returns "Content generation temporarily unavailable" |
-| Slide texts empty | Retries once; if still empty, proceeds with what it has |
+| All 3 attempts score below 80 | Uses the best attempt from all 3 tries |
 
 ---
 

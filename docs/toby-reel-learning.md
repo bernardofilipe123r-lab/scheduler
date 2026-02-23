@@ -130,7 +130,7 @@ Based on time slot: `slot_index = hour ÷ 4` → even = **light mode**, odd = **
 **AI Background Generation** (for dark mode + YouTube thumbnails):
 1. Content is parsed into structured data
 2. DeepSeek crafts a professional image prompt
-3. Prompt is sent to `deAPI` using the `Flux1schnell` model (fast, 4 steps, 1152×1920)
+3. Prompt is sent to `deAPI` using the `ZImageTurbo_INT8` model (8 steps, 1152×1920) for higher quality backgrounds
 
 **Caption**: DeepSeek generates an AI first paragraph → assembled with: follow section + save section + CTA (weighted random) + disclaimer + hashtags.
 
@@ -154,10 +154,12 @@ After a reel is published:
 **Score formula**:
 | Component | Weight | Logic |
 |---|---|---|
-| Raw views | 30% | Logarithmic scale, capped at 500k |
-| Relative views | 35% | Your views vs. brand average × 25 (capped at 100) |
-| Engagement quality | 25% | `(saves×2 + shares×3) / views × 10,000` |
+| Raw views | 20% | Logarithmic scale, capped at 500k |
+| Relative views | 30% | Your views vs. brand average × 25 (capped at 100) |
+| Engagement quality | 40% | `(saves×2 + shares×3) / views × 10,000` — **primary signal** |
 | Follower context | 10% | `views / followers × 10` |
+
+Engagement quality (saves + shares) is the dominant signal at 40%, ensuring Toby optimizes for save-worthy, valuable content rather than just high-view clickbait.
 
 ### Strategy Score Updates
 After the 7-day score, each of the 5 strategy dimensions gets its running average updated:
@@ -271,9 +273,9 @@ The strategy engine picks the format, and the AI generates content matching that
 | **Formats** | SHORT_FRAGMENT, FULL_SENTENCE, CAUSE_EFFECT, PURE_LIST | Paragraph-based educational content |
 | **Citations** | None | Based on citation_style setting |
 | **Visual output** | PNG image → MP4 video (7–8s with music) | Carousel PNGs (cover + slides) rendered via Konva |
-| **Image model** | `Flux1schnell` (fast, 4 steps) | `ZImageTurbo_INT8` (higher quality, 8 steps) |
-| **Quality loop** | 3-attempt escalation with quality scorer | Single attempt with retry if slide_texts empty |
-| **AI temperature** | 0.85 | 0.95 (slightly more creative) |
+| **Image model** | `ZImageTurbo_INT8` (8 steps, high quality) | `ZImageTurbo_INT8` (8 steps, high quality) |
+| **Quality loop** | 3-attempt escalation with quality scorer | 3-attempt escalation with quality scorer (same engine) |
+| **AI temperature** | 0.85 | 0.85 |
 | **Default slots/day** | 6 per brand | 2 per brand |
 | **Examples field** | `reel_examples` (title + content_lines) | `post_examples` (title + slides + optional study ref) |
 
