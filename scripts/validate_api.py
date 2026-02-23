@@ -38,6 +38,43 @@ failed = 0
 warnings = 0
 
 
+# ── Mock production-only packages not installed locally ──────
+# This lets the script validate code structure (imports, symbols,
+# field alignment) without requiring Pillow / supabase installed.
+def _install_mock_packages():
+    """Pre-populate sys.modules with lightweight mocks for heavy deps."""
+    from unittest.mock import MagicMock
+
+    MOCK_PACKAGES = {
+        # Pillow
+        "PIL": ["Image", "ImageFont", "ImageDraw", "ImageEnhance"],
+        # supabase-py
+        "supabase": [],
+        # python-multipart (FastAPI form data) — needs __version__ for check
+        "python_multipart": ["multipart"],
+    }
+
+    for pkg, submodules in MOCK_PACKAGES.items():
+        if pkg in sys.modules:
+            continue  # already installed for real — skip
+        try:
+            importlib.import_module(pkg)
+            continue  # available — no mock needed
+        except ImportError:
+            pass
+
+        mock = MagicMock()
+        mock.__version__ = "0.1.0"  # satisfy FastAPI version checks
+        sys.modules[pkg] = mock
+        for sub in submodules:
+            sub_mock = MagicMock()
+            sub_mock.__version__ = "0.1.0"
+            sys.modules[f"{pkg}.{sub}"] = sub_mock
+
+
+_install_mock_packages()
+
+
 def ok(label: str, detail: str = ""):
     global passed
     passed += 1
