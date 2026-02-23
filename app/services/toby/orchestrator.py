@@ -200,10 +200,14 @@ def _execute_content_plan(db: Session, plan):
             ctx=ctx,
         )
     else:
-        result = generator.generate_post_title(
+        # Use the same batch generation as manual post creation
+        # to get proper slide_texts, caption, and image_prompt
+        results = generator.generate_post_titles_batch(
+            count=1,
             topic_hint=plan.topic_bucket,
             ctx=ctx,
         )
+        result = results[0] if results else generator._fallback_post_title()
 
     if not result or not result.get("title"):
         raise ValueError("Content generation returned empty result")
@@ -215,31 +219,15 @@ def _execute_content_plan(db: Session, plan):
         variant = "light" if slot_index % 2 == 0 else "dark"
     else:
         variant = "post"
-        # For posts, split caption paragraphs into slide_texts for carousel
-        caption_text = result.get("caption", "")
-        if caption_text and not result.get("content_lines"):
-            slide_paras = [p.strip() for p in caption_text.split("\n\n") if p.strip()]
-            # Filter out disclaimer paragraphs but keep Follow CTA
-            slide_texts = []
-            for para in slide_paras:
-                lower = para.lower()
-                if lower.startswith("⚠️") or lower.startswith("disclaimer"):
-                    continue  # Skip disclaimer
-                slide_texts.append(para)
-            # Ensure the last slide has a Follow CTA
-            if slide_texts:
-                last = slide_texts[-1].lower()
-                if "follow @" not in last and "follow us" not in last:
-                    cta_topic = getattr(ctx, "carousel_cta_topic", "") or getattr(ctx, "niche_name", "").lower() or "health"
-                    slide_texts[-1] += f"\n\nFollow @{{{{brandhandle}}}} to learn more about your {cta_topic}."
-            result["content_lines"] = slide_texts
 
     # ── Step 4: Create a GenerationJob ───────────────────────
     job_manager = JobManager(db)
+    slide_texts = result.get("slide_texts", result.get("content_lines", []))
+
     job = job_manager.create_job(
         user_id=plan.user_id,
         title=result["title"],
-        content_lines=result.get("content_lines", []),
+        content_lines=slide_texts,
         brands=[plan.brand_id],
         variant=variant,
         ai_prompt=result.get("image_prompt"),
@@ -253,12 +241,12 @@ def _execute_content_plan(db: Session, plan):
     # Store per-brand content in brand_outputs (so regenerate_brand finds it)
     brand_output_data = {
         "title": result["title"],
-        "content_lines": result.get("content_lines", []),
+        "content_lines": slide_texts,
         "ai_prompt": result.get("image_prompt", ""),
         "status": "pending",
     }
     if variant == "post":
-        brand_output_data["slide_texts"] = result.get("content_lines", [])
+        brand_output_data["slide_texts"] = slide_texts
         brand_output_data["caption"] = result.get("caption", "")
     job_manager.update_brand_output(job_id, plan.brand_id, brand_output_data)
 
@@ -311,7 +299,7 @@ def _execute_content_plan(db: Session, plan):
         brand=plan.brand_id,
         variant=variant,
         post_title=result["title"],
-        slide_texts=result.get("content_lines", []),
+        slide_texts=slide_texts,
         job_id=job_id,
     )
 
