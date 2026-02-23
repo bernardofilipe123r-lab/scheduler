@@ -56,6 +56,8 @@ const DEFAULT_CONFIG: NicheConfig = {
   citation_source_types: [],
   yt_title_examples: [],
   yt_title_bad_examples: [],
+  carousel_cover_overlay_opacity: 55,
+  carousel_content_overlay_opacity: 85,
 }
 
 // Preload fonts needed by Konva canvas components via Google Fonts CSS API
@@ -592,6 +594,46 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                 <option value="named">Named — mention source by name</option>
               </select>
               <p className="text-xs text-gray-400 mt-1">How (or whether) the AI should cite sources in carousel posts.</p>
+            </div>
+          </div>
+
+          {/* Carousel CTA */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">🌑 Dark Overlay Opacity</h4>
+            <p className="text-xs text-gray-400 mb-4">
+              Controls the dark overlay strength on carousel slides (dark mode only). Higher values = darker background, better text readability.
+            </p>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cover Slide</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={values.carousel_cover_overlay_opacity}
+                    onChange={(e) => update('carousel_cover_overlay_opacity', parseInt(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-stone-800"
+                  />
+                  <span className="text-sm font-medium text-gray-700 w-10 text-right">{values.carousel_cover_overlay_opacity}%</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Applied to the cover/thumbnail slide</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Content Slides</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={values.carousel_content_overlay_opacity}
+                    onChange={(e) => update('carousel_content_overlay_opacity', parseInt(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-stone-800"
+                  />
+                  <span className="text-sm font-medium text-gray-700 w-10 text-right">{values.carousel_content_overlay_opacity}%</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Applied to text/content slides</p>
+              </div>
             </div>
           </div>
 

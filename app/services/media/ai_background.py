@@ -250,7 +250,7 @@ class AIBackgroundGenerator:
             brand_name=brand_name,
             target_width=REEL_WIDTH,
             target_height=REEL_HEIGHT,
-            model_override=model_override or "Flux1schnell",
+            model_override=model_override or "ZImageTurbo_INT8",
             progress_callback=progress_callback,
             start_time=start_time,
             darken=0.95,  # 5% darker for reel backgrounds

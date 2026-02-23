@@ -200,23 +200,13 @@ def _execute_content_plan(db: Session, plan):
             ctx=ctx,
         )
     else:
-        # Use the same batch generation as manual post creation
-        # to get proper slide_texts, caption, and image_prompt
+        # Batch generation with built-in 3-attempt quality loop
         results = generator.generate_post_titles_batch(
             count=1,
             topic_hint=plan.topic_bucket,
             ctx=ctx,
         )
         result = results[0] if results else generator._fallback_post_title()
-
-        # Validate slide_texts — retry once if AI returned empty
-        if not result.get("slide_texts"):
-            print("[TOBY] slide_texts empty — retrying generation once...", flush=True)
-            retry = generator.generate_post_titles_batch(count=1, topic_hint=plan.topic_bucket, ctx=ctx)
-            if retry and retry[0].get("slide_texts"):
-                result = retry[0]
-            else:
-                print("[TOBY] Retry also returned no slide_texts", flush=True)
 
     if not result or not result.get("title"):
         raise ValueError("Content generation returned empty result")

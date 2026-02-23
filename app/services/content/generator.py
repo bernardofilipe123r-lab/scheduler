@@ -663,7 +663,7 @@ Generate now:"""
                     "messages": [
                         {"role": "user", "content": prompt}
                     ],
-                    "temperature": 1.0,
+                    "temperature": 0.85,
                     "max_tokens": 2000
                 },
                 timeout=30
@@ -747,36 +747,8 @@ Generate now:"""
     # BATCH POST GENERATION (unique post per brand)
     # ============================================================
 
-    def generate_post_titles_batch(self, count: int, topic_hint: str = None, ctx: PromptContext = None) -> List[Dict]:
-        """
-        Generate N completely unique posts in a single AI call.
-        Each post has a different topic, title, caption, and image prompt.
-        Used so each brand gets a completely different post.
-
-        Args:
-            count: Number of unique posts to generate
-            topic_hint: Optional hint to guide topic selection
-            ctx: Optional PromptContext for niche-aware prompts
-
-        Returns:
-            List of dicts, each with 'title', 'caption', 'image_prompt', 'is_fallback'
-        """
-        if ctx is None:
-            ctx = PromptContext()
-        
-        if not self.api_key or count <= 0:
-            return [self._fallback_post_title() for _ in range(max(count, 1))]
-
-        # Phase 2: Use ContentTracker for persistent anti-repetition
-        history_context = self.content_tracker.build_history_context("post")
-
-        prompt = build_post_content_prompt(
-            count=count,
-            history_context=history_context,
-            topic_hint=topic_hint,
-            ctx=ctx,
-        )
-
+    def _call_deepseek_post(self, prompt: str) -> Optional[List[Dict]]:
+        """Call DeepSeek API for carousel/post generation. Returns parsed list of posts or None."""
         try:
             response = requests.post(
                 f"{self.base_url}/chat/completions",
@@ -789,7 +761,7 @@ Generate now:"""
                     "messages": [
                         {"role": "user", "content": prompt}
                     ],
-                    "temperature": 0.95,
+                    "temperature": 0.85,
                     "max_tokens": 8000
                 },
                 timeout=90
@@ -806,61 +778,148 @@ Generate now:"""
                         content_text = content_text[4:]
                     content_text = content_text.strip()
 
-                try:
-                    results = json.loads(content_text)
-                    if isinstance(results, list) and len(results) >= count:
-                        for r in results:
-                            r["is_fallback"] = False
-                            if r.get("title"):
-                                r["title"] = r["title"].rstrip(".")
-                            title = r.get("title", "")
-                            # Phase 2: Quality gate + record
-                            quality = check_post_quality(title, r.get("caption", ""))
-                            r["quality_score"] = quality.score
-                            r["quality_issues"] = quality.issues
-                            self.content_tracker.record(
-                                title=title,
-                                content_type="post",
-                                caption=r.get("caption"),
-                                image_prompt=r.get("image_prompt"),
-                                quality_score=quality.score,
-                            )
-                            self._add_to_history({"title": title})
-                        return results[:count]
-                    elif isinstance(results, list) and len(results) > 0:
-                        # Got fewer than requested — pad with fallbacks
-                        for r in results:
-                            r["is_fallback"] = False
-                            if r.get("title"):
-                                r["title"] = r["title"].rstrip(".")
-                            title = r.get("title", "")
-                            quality = check_post_quality(title, r.get("caption", ""))
-                            r["quality_score"] = quality.score
-                            r["quality_issues"] = quality.issues
-                            self.content_tracker.record(
-                                title=title,
-                                content_type="post",
-                                caption=r.get("caption"),
-                                image_prompt=r.get("image_prompt"),
-                                quality_score=quality.score,
-                            )
-                            self._add_to_history({"title": title})
-                        while len(results) < count:
-                            results.append(self._fallback_post_title())
-                        return results
-                    else:
-                        print(f"⚠️ Unexpected batch response format", flush=True)
-                        return [self._fallback_post_title() for _ in range(count)]
-                except json.JSONDecodeError as e:
-                    print(f"⚠️ JSON parse error in batch post generation: {e}", flush=True)
-                    return [self._fallback_post_title() for _ in range(count)]
+                results = json.loads(content_text)
+                if isinstance(results, dict):
+                    results = [results]
+                if isinstance(results, list):
+                    return results
+                return None
             else:
                 print(f"⚠️ DeepSeek API error: {response.status_code}", flush=True)
-                return [self._fallback_post_title() for _ in range(count)]
-
+                return None
+        except json.JSONDecodeError as e:
+            print(f"⚠️ JSON parse error in post generation: {e}", flush=True)
+            return None
         except Exception as e:
-            print(f"⚠️ Batch post generation error: {e}", flush=True)
-            return [self._fallback_post_title() for _ in range(count)]
+            print(f"⚠️ Post generation API error: {e}", flush=True)
+            return None
+
+    def _score_post_content(self, post: Dict) -> QualityScore:
+        """
+        Score a carousel post using the same QualityScorer as reels.
+        Maps slide_texts to content_lines for scoring compatibility.
+        """
+        # Build a scoring-compatible dict: QualityScorer expects content_lines
+        scoreable = {
+            "title": post.get("title", ""),
+            "content_lines": post.get("slide_texts", post.get("content_lines", [])),
+            "image_prompt": post.get("image_prompt", ""),
+            "hook_type": post.get("hook_type", "curiosity"),
+            "format_style": "FULL_SENTENCE",  # carousels are always full sentences
+        }
+        return self.quality_scorer.score(
+            scoreable,
+            recent_outputs=self._get_recent_outputs()
+        )
+
+    def _process_post_results(self, results: List[Dict], count: int) -> List[Dict]:
+        """Apply quality gates, tracking, and history to parsed post results."""
+        processed = []
+        for r in results:
+            r["is_fallback"] = False
+            if r.get("title"):
+                r["title"] = r["title"].rstrip(".")
+            title = r.get("title", "")
+            quality = check_post_quality(title, r.get("caption", ""))
+            r["quality_score"] = quality.score
+            r["quality_issues"] = quality.issues
+            self.content_tracker.record(
+                title=title,
+                content_type="post",
+                caption=r.get("caption"),
+                image_prompt=r.get("image_prompt"),
+                quality_score=quality.score,
+            )
+            self._add_to_history({"title": title})
+            processed.append(r)
+        # Pad with fallbacks if needed
+        while len(processed) < count:
+            processed.append(self._fallback_post_title())
+        return processed[:count]
+
+    def generate_post_titles_batch(self, count: int, topic_hint: str = None, ctx: PromptContext = None) -> List[Dict]:
+        """
+        Generate N completely unique posts with a 3-attempt quality loop.
+        Each post has a different topic, title, caption, and image prompt.
+        Uses the same quality escalation strategy as reels.
+
+        Args:
+            count: Number of unique posts to generate
+            topic_hint: Optional hint to guide topic selection
+            ctx: Optional PromptContext for niche-aware prompts
+
+        Returns:
+            List of dicts, each with 'title', 'caption', 'image_prompt', 'is_fallback'
+        """
+        if ctx is None:
+            ctx = PromptContext()
+
+        if not self.api_key or count <= 0:
+            return [self._fallback_post_title() for _ in range(max(count, 1))]
+
+        history_context = self.content_tracker.build_history_context("post")
+
+        best_results = None
+        best_avg_score = 0.0
+
+        for attempt in range(1, self.max_regeneration_attempts + 1):
+            prompt = build_post_content_prompt(
+                count=count,
+                history_context=history_context,
+                topic_hint=topic_hint,
+                ctx=ctx,
+            )
+
+            # On attempt 2+, append correction guidance
+            if attempt >= 2 and best_results:
+                weak_titles = [r.get("title", "")[:60] for r in best_results
+                               if r.get("_quality_total", 100) < 80]
+                if weak_titles:
+                    prompt += (
+                        f"\n\n### QUALITY CORRECTION (attempt {attempt}):\n"
+                        f"Previous titles scored below threshold: {weak_titles}\n"
+                        "Improve: stronger hooks, better structure, more novelty, "
+                        "more plausible claims. Generate completely different content."
+                    )
+
+            raw_results = self._call_deepseek_post(prompt)
+            if not raw_results:
+                print(f"⚠️ Post generation attempt {attempt}/{self.max_regeneration_attempts} returned nothing", flush=True)
+                continue
+
+            # Score each post with QualityScorer
+            total_score = 0.0
+            for r in raw_results:
+                qs = self._score_post_content(r)
+                r["_quality_total"] = qs.total_score
+                r["quality_breakdown"] = {
+                    "structure": qs.structure_score,
+                    "familiarity": qs.familiarity_score,
+                    "novelty": qs.novelty_score,
+                    "hook": qs.hook_score,
+                    "plausibility": qs.plausibility_score,
+                }
+                total_score += qs.total_score
+
+            avg_score = total_score / len(raw_results) if raw_results else 0
+
+            if avg_score > best_avg_score:
+                best_results = raw_results
+                best_avg_score = avg_score
+
+            if avg_score >= 80:
+                print(f"✅ Post quality passed on attempt {attempt} (avg {avg_score:.1f})", flush=True)
+                break
+            else:
+                print(f"⚠️ Post quality {avg_score:.1f} < 80 on attempt {attempt}/{self.max_regeneration_attempts}", flush=True)
+
+        if best_results:
+            # Clean up internal scoring keys
+            for r in best_results:
+                r.pop("_quality_total", None)
+            return self._process_post_results(best_results, count)
+
+        return [self._fallback_post_title() for _ in range(count)]
 
     # ============================================================
     # IMAGE PROMPT GENERATION (standalone, from title only)

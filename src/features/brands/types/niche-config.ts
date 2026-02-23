@@ -64,6 +64,10 @@ export interface NicheConfig {
   citation_source_types: string[]
   yt_title_examples: string[]
   yt_title_bad_examples: string[]
+
+  // Carousel Overlay
+  carousel_cover_overlay_opacity: number
+  carousel_content_overlay_opacity: number
 }
 
 export type ConfigStrength = 'basic' | 'good' | 'excellent'

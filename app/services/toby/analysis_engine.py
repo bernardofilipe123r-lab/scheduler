@@ -18,9 +18,9 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
     Score a post's performance relative to the brand's baseline.
 
     Components (weights):
-      1. Raw views (30%)        — absolute performance (logarithmic)
-      2. Relative views (35%)   — compared to brand average (most important)
-      3. Engagement quality (25%) — saves + shares weighted heavily
+      1. Raw views (20%)        — absolute performance (logarithmic)
+      2. Relative views (30%)   — compared to brand average
+      3. Engagement quality (40%) — saves + shares weighted heavily (primary signal)
       4. Follower context (10%) — mild normalization by followers
     """
     views = metrics.get("views", 0)
@@ -30,14 +30,14 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
     # 1. Raw views — logarithmic scale capped at 500k
     raw_views_score = min(100, math.log10(max(views, 1)) / math.log10(500_000) * 100)
 
-    # 2. Relative views — THE most important signal
+    # 2. Relative views
     if brand_avg_views > 0:
         relative_ratio = views / brand_avg_views
         relative_score = min(100, relative_ratio * 25)
     else:
         relative_score = 50  # No baseline yet
 
-    # 3. Engagement quality
+    # 3. Engagement quality — primary learning signal
     saves = metrics.get("saves", 0)
     shares = metrics.get("shares", 0)
     engagement_score = min(100, (saves * 2 + shares * 3) / max(views, 1) * 10000)
@@ -50,9 +50,9 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
         follower_context_score = 50
 
     final = (
-        raw_views_score * 0.30
-        + relative_score * 0.35
-        + engagement_score * 0.25
+        raw_views_score * 0.20
+        + relative_score * 0.30
+        + engagement_score * 0.40
         + follower_context_score * 0.10
     )
     return round(final, 1)

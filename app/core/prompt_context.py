@@ -55,6 +55,8 @@ class PromptContext:
     # Carousel
     carousel_cta_topic: str = ""
     carousel_cta_options: List[dict] = field(default_factory=list)
+    carousel_cover_overlay_opacity: int = 55
+    carousel_content_overlay_opacity: int = 85
 
     # Brand Personality
     brand_personality: Optional[str] = None

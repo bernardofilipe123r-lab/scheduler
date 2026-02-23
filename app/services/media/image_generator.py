@@ -248,12 +248,13 @@ class ImageGenerator:
             ai_bg = self._get_or_generate_ai_background(title=title)
             image = ai_bg.copy()
             
-            # Apply 55% dark overlay for thumbnail (darker for better white text visibility)
-            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.55)))
+            # Apply dark overlay for thumbnail (configurable via niche config)
+            cover_opacity = getattr(self.ctx, 'carousel_cover_overlay_opacity', 55) if self.ctx else 55
+            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * cover_opacity / 100)))
             image = image.convert('RGBA')
             image = Image.alpha_composite(image, overlay)
             image = image.convert('RGB')
-            print(f"      ✓ Dark overlay applied", flush=True)
+            print(f"      ✓ Dark overlay applied ({cover_opacity}%)", flush=True)
             
         draw = ImageDraw.Draw(image)
         
@@ -418,8 +419,9 @@ class ImageGenerator:
             ai_bg = self._get_or_generate_ai_background(title=title, lines=lines)
             image = ai_bg.copy()
             
-            # Apply 80% dark overlay for content
-            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * 0.85)))
+            # Apply dark overlay for content (configurable via niche config)
+            content_opacity = getattr(self.ctx, 'carousel_content_overlay_opacity', 85) if self.ctx else 85
+            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * content_opacity / 100)))
             image = image.convert('RGBA')
             image = Image.alpha_composite(image, overlay)
             image = image.convert('RGB')

@@ -1409,6 +1409,7 @@ export function ScheduledPage() {
                             alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
                             style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
                             className="w-full object-contain"
+                            draggable={false}
                           />
                         </div>
                       ) : legacyCarouselPaths[detailSlideIndex - 1] ? (
@@ -1417,6 +1418,7 @@ export function ScheduledPage() {
                           alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
                           style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
                           className="w-full object-contain"
+                          draggable={false}
                         />
                       ) : bgUrl && detailSlideIndex === 0 ? (
                         <img
@@ -1424,6 +1426,7 @@ export function ScheduledPage() {
                           alt="Cover"
                           style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
                           className="w-full object-contain"
+                          draggable={false}
                         />
                       ) : (
                         <div className="flex items-center justify-center text-zinc-500 text-sm"

@@ -1,7 +1,7 @@
 """NicheConfig model — stores niche configuration per user/brand."""
 
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, UniqueConstraint, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, UniqueConstraint, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from app.models.base import Base
 import uuid
@@ -73,6 +73,10 @@ class NicheConfig(Base):
 
     # Carousel CTA options — weighted templates for last slide CTA (like cta_options for reels)
     carousel_cta_options = Column(JSONB, default=[])
+
+    # Carousel overlay opacity — controls dark overlay strength on carousel slides (0-100)
+    carousel_cover_overlay_opacity = Column(Integer, default=55)
+    carousel_content_overlay_opacity = Column(Integer, default=85)
 
     # Caption sections — empty until configured
     follow_section_text = Column(Text, default="")
