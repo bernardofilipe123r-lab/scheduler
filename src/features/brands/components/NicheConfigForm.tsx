@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw } from 'lucide-react'
+import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles } from '../api/use-niche-config'
 import { useBrands } from '../api/use-brands'
@@ -40,7 +40,11 @@ const DEFAULT_CONFIG: NicheConfig = {
   brand_focus_areas: [],
   parent_brand_name: '',
   cta_options: [],
-  carousel_cta_options: [],
+  carousel_cta_options: [
+    { text: 'Follow @{brandhandle} to learn more about {cta_topic}', weight: 34 },
+    { text: 'If you want to learn more about {cta_topic}, follow our page!', weight: 33 },
+    { text: 'If you want to learn more about {cta_topic}, follow @{brandhandle}!', weight: 33 },
+  ],
   hashtags: [],
   carousel_cta_topic: '',
   follow_section_text: '',
@@ -199,6 +203,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId, handleAiUnderstanding])
 
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ general: false, reels: false, posts: false, ai: false })
+  const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
+
   if (isLoading) return <NicheConfigSkeleton />
 
   return (
@@ -238,13 +245,16 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           BLOCK 1: GENERAL
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-            🧬 General
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">Core identity and visual style shared across all content types.</p>
-        </div>
-        <div className="px-6 py-5 space-y-5">
+        <button type="button" onClick={() => toggleSection('general')} className="w-full px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
+          <div className="text-left">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+              🧬 General
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">Core identity and visual style shared across all content types.</p>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.general ? '-rotate-90' : ''}`} />
+        </button>
+        {!collapsed.general && <div className="px-6 py-5 space-y-5">
           {/* Niche Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Niche Name</label>
@@ -293,20 +303,23 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               <li><strong>Finance:</strong> "clean data visualizations, professional office settings, muted corporate tones"</li>
             </ul>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 2: REELS
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-            🎬 Reels
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">Reel examples, CTAs, and YouTube title style for short-form video content.</p>
-        </div>
-        <div className="px-6 py-5 space-y-6">
+        <button type="button" onClick={() => toggleSection('reels')} className="w-full px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
+          <div className="text-left">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+              🎬 Reels
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">Reel examples, CTAs, and YouTube title style for short-form video content.</p>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.reels ? '-rotate-90' : ''}`} />
+        </button>
+        {!collapsed.reels && <div className="px-6 py-5 space-y-6">
           {/* Reel Examples */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Reel Examples</h4>
@@ -486,20 +499,23 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 3: CAROUSEL POSTS
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-            📱 Carousel Posts
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and CTA topic for carousel content.</p>
-        </div>
-        <div className="px-6 py-5 space-y-6">
+        <button type="button" onClick={() => toggleSection('posts')} className="w-full px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
+          <div className="text-left">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+              📱 Carousel Posts
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and CTA topic for carousel content.</p>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.posts ? '-rotate-90' : ''}`} />
+        </button>
+        {!collapsed.posts && <div className="px-6 py-5 space-y-6">
           {/* Post Examples */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Post Examples</h4>
@@ -542,18 +558,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               These CTAs appear on the <strong>last slide</strong> of carousel posts. The AI randomly picks one based on weights. Use <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> for the topic and <code className="text-xs bg-gray-100 px-1 rounded">@{'{brandhandle}'}</code> for the brand handle.
             </p>
 
-            {/* CTA Topic */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">CTA Topic Phrase</label>
-              <input
-                value={values.carousel_cta_topic}
-                onChange={(e) => update('carousel_cta_topic', e.target.value)}
-                placeholder="e.g. your health, your portfolio, your fitness journey"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-              <p className="text-xs text-gray-400 mt-1">Replaces <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> in your CTA templates below.</p>
-            </div>
-
             {/* CTA Options (weighted) */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -590,11 +594,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                 </div>
               </div>
 
-              {values.carousel_cta_options.length === 0 && (
-                <div className="text-xs text-gray-400 italic py-3 text-center border border-dashed border-gray-200 rounded-lg">
-                  No custom CTAs configured. Defaults will be used: "Follow @brand to learn more about {'{cta_topic}'}" and two alternatives, each at ~33%.
-                </div>
-              )}
+
 
               <div className="space-y-2">
                 {values.carousel_cta_options.map((opt, i) => (
@@ -649,16 +649,16 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               })()}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 4: AI UNDERSTANDING
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200">
+        <button type="button" onClick={() => toggleSection('ai')} className="w-full px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200 cursor-pointer hover:from-indigo-100 hover:to-purple-100 transition-colors">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="text-left">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-indigo-500" />
                 AI Understanding of Your Brand
@@ -667,31 +667,34 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                 Ask the AI to describe how it interprets your Content DNA configuration
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {aiResult && (
-                <button
-                  onClick={handleRegenerate}
-                  disabled={aiMutation.isPending || reelPreviewMutation.isPending}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Regenerate
-                </button>
-              )}
-              <button
-                onClick={handleAiUnderstanding}
-                disabled={aiMutation.isPending || reelPreviewMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                {(aiMutation.isPending || reelPreviewMutation.isPending) ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
-                )}
-                {aiMutation.isPending ? 'Analyzing brand...' : reelPreviewMutation.isPending ? 'Rendering images...' : 'Generate'}
-              </button>
-            </div>
+            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.ai ? '-rotate-90' : ''}`} />
           </div>
+        </button>
+
+        {!collapsed.ai && <>
+        <div className="px-6 py-3 flex items-center justify-end gap-2 border-b border-gray-100">
+          {aiResult && (
+            <button
+              onClick={handleRegenerate}
+              disabled={aiMutation.isPending || reelPreviewMutation.isPending}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Regenerate
+            </button>
+          )}
+          <button
+            onClick={handleAiUnderstanding}
+            disabled={aiMutation.isPending || reelPreviewMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            {(aiMutation.isPending || reelPreviewMutation.isPending) ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            {aiMutation.isPending ? 'Analyzing brand...' : reelPreviewMutation.isPending ? 'Rendering images...' : 'Generate'}
+          </button>
         </div>
 
         {aiResult && (
@@ -849,6 +852,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             Click "Generate" to see how the AI interprets your brand configuration
           </div>
         )}
+        </>}
       </div>
     </div>
   )
