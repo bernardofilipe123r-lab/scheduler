@@ -164,6 +164,11 @@ def _repair_missing_carousel_images():
             if not slide_texts:
                 continue
 
+            # Skip posts that already have correct carousel_paths (cover + slides)
+            existing_cp = ed.get("carousel_paths") or []
+            if len(existing_cp) == len(slide_texts) + 1:
+                continue
+
             brand = ed.get("brand", "unknown")
             title = ed.get("title", "")
             reel_id = post.reel_id or ""
@@ -192,12 +197,14 @@ def _repair_missing_carousel_images():
                     user_id=getattr(post, 'user_id', 'system'),
                 )
                 if composed:
-                    ed["thumbnail_path"] = composed.get("coverUrl") or composed["coverPath"]
-                    ed["carousel_paths"] = composed.get("slideUrls") or composed["slidePaths"]
+                    cover_url = composed.get("coverUrl") or composed.get("coverPath")
+                    slide_urls = composed.get("slideUrls") or composed.get("slidePaths") or []
+                    ed["thumbnail_path"] = cover_url
+                    ed["carousel_paths"] = [cover_url] + slide_urls
                     post.extra_data = dict(ed)
                     flag_modified(post, "extra_data")
                     repaired += 1
-                    print(f"  ✅ [{post.schedule_id}] Rendered {1 + len(composed.get('slidePaths', []))} slides for {brand}", flush=True)
+                    print(f"  ✅ [{post.schedule_id}] Rendered {1 + len(slide_urls)} slides for {brand}", flush=True)
                 else:
                     print(f"  ❌ [{post.schedule_id}] Node renderer failed for {brand}", flush=True)
             except Exception as e:
