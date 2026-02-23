@@ -59,7 +59,6 @@ class NicheConfigUpdate(BaseModel):
     discovery_hashtags: Optional[list] = None
     citation_style: Optional[str] = Field(None, max_length=50)
     citation_source_types: Optional[list] = None
-    image_composition_style: Optional[str] = None
     yt_title_examples: Optional[list] = None
     yt_title_bad_examples: Optional[list] = None
     carousel_cta_topic: Optional[str] = Field(None, max_length=255)
@@ -149,7 +148,6 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
         "discovery_hashtags": cfg.discovery_hashtags or [],
         "citation_style": cfg.citation_style or "none",
         "citation_source_types": cfg.citation_source_types or [],
-        "image_composition_style": cfg.image_composition_style or "",
         "yt_title_examples": cfg.yt_title_examples or [],
         "yt_title_bad_examples": cfg.yt_title_bad_examples or [],
         "carousel_cta_topic": cfg.carousel_cta_topic or "",
@@ -211,7 +209,6 @@ async def get_niche_config(
         "discovery_hashtags": ctx.discovery_hashtags,
         "citation_style": ctx.citation_style,
         "citation_source_types": ctx.citation_source_types,
-        "image_composition_style": ctx.image_composition_style,
         "yt_title_examples": ctx.yt_title_examples,
         "yt_title_bad_examples": ctx.yt_title_bad_examples,
         "carousel_cta_topic": ctx.carousel_cta_topic,
@@ -683,8 +680,6 @@ async def generate_reel_examples_batch(
         brand_context_parts.append(f"Content brief: {ctx.content_brief}")
     if ctx.content_tone:
         brand_context_parts.append(f"Tone: {', '.join(ctx.content_tone)}")
-    if ctx.image_composition_style:
-        brand_context_parts.append(f"Visual style: {ctx.image_composition_style}")
     brand_context = "\n".join(brand_context_parts)
 
     # Format seed examples

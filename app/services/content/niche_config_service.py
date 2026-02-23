@@ -108,7 +108,6 @@ class NicheConfigService:
             'disclaimer_text': 'disclaimer_text',
             'citation_style': 'citation_style',
             'citation_source_types': 'citation_source_types',
-            'image_composition_style': 'image_composition_style',
             'yt_title_examples': 'yt_title_examples',
             'yt_title_bad_examples': 'yt_title_bad_examples',
             'carousel_cta_topic': 'carousel_cta_topic',

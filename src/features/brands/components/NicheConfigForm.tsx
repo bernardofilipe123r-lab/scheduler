@@ -35,7 +35,6 @@ const DEFAULT_CONFIG: NicheConfig = {
   post_examples: [],
   image_style_description: '',
   image_palette_keywords: [],
-  image_composition_style: '',
   brand_personality: null,
   brand_focus_areas: [],
   parent_brand_name: '',
@@ -162,7 +161,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   // Section completion checks
   const generalComplete = Boolean(
-    values.niche_name?.trim() && values.content_brief?.trim() && values.image_composition_style?.trim()
+    values.niche_name?.trim() && values.content_brief?.trim()
   )
   const reelsComplete = Boolean(
     values.reel_examples.length >= 5 &&
@@ -310,27 +309,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             </p>
           </div>
 
-          {/* Image Composition Style */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Image Composition Style</label>
-            <textarea
-              value={values.image_composition_style}
-              onChange={(e) => update('image_composition_style', e.target.value)}
-              placeholder="e.g. food/product shots with natural lighting, architecture photography, tech product mockups"
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              This controls the visual style of AI-generated background images used in your reels and posts.
-              Describe the type of imagery, lighting, composition, and aesthetic you want. For example:
-            </p>
-            <ul className="text-xs text-gray-400 mt-1 ml-4 list-disc space-y-0.5">
-              <li><strong>Health/Food:</strong> "overhead flat-lay food photography, soft natural light, clean marble surfaces, colorful fresh ingredients"</li>
-              <li><strong>Tech:</strong> "minimal tech product mockups, dark gradient backgrounds, neon accent lighting"</li>
-              <li><strong>Lifestyle:</strong> "candid lifestyle moments, warm golden hour lighting, shallow depth of field"</li>
-              <li><strong>Finance:</strong> "clean data visualizations, professional office settings, muted corporate tones"</li>
-            </ul>
-          </div>
         </div>}
       </div>
 

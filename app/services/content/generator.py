@@ -591,7 +591,7 @@ class ContentGeneratorV2:
             f"Be specific about how and why this works in the context of {niche_mechanism}."
         )
         image_style = ctx.image_style_description or "High-end professional photography style"
-        composition_hint = ctx.image_composition_style or "Close-up, full-frame where the subject fills the entire frame"
+        composition_hint = "Close-up, full-frame where the subject fills the entire frame"
 
         from app.core.cta import get_carousel_cta_line
         carousel_cta_line = get_carousel_cta_line(ctx)

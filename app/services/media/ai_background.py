@@ -613,8 +613,6 @@ class AIBackgroundGenerator:
             prompt = user_prompt
         elif _ctx.image_style_description:
             prompt = f"{_ctx.image_style_description}. Premium close-up photography style."
-        elif _ctx.image_composition_style:
-            prompt = f"{_ctx.image_composition_style}. Clean, close-up, professional studio shot."
         else:
             prompt = (
                 "Soft cinematic premium still-life with elegant contemporary objects "

@@ -45,8 +45,6 @@ export interface NicheConfig {
   // Visual
   image_style_description: string
   image_palette_keywords: string[]
-  image_composition_style: string
-
   // Brand Identity
   brand_personality: string | null
   brand_focus_areas: string[]
@@ -72,7 +70,7 @@ export type ConfigStrength = 'basic' | 'good' | 'excellent'
 
 export function getConfigStrength(config: NicheConfig): ConfigStrength {
   let score = 0
-  const maxScore = 13
+  const maxScore = 12
 
   // Core identity (3 points)
   if (config.niche_name) score++
@@ -89,9 +87,6 @@ export function getConfigStrength(config: NicheConfig): ConfigStrength {
 
   // Carousel CTAs (1 point)
   if (config.carousel_cta_options.length > 0 && config.carousel_cta_options.some(c => c.text.trim())) score++
-
-  // Visual & content style (1 point)
-  if (config.image_composition_style && config.image_composition_style.trim()) score++
 
   // YouTube titles (1 point)
   if ((config.yt_title_examples || []).length >= 2) score++

@@ -62,9 +62,6 @@ class NicheConfig(Base):
     # Source databases/organizations for citations (overrides built-in defaults when set)
     citation_source_types = Column(JSONB, default=[])
 
-    # Visual composition style — replaces REEL_BASE_STYLE per niche
-    image_composition_style = Column(Text, default="")
-
     # YouTube title examples — good titles that show format for this niche
     yt_title_examples = Column(JSONB, default=[])
 

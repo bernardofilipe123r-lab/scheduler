@@ -347,15 +347,7 @@ def build_reel_base_style(ctx: PromptContext = None) -> str:
     if ctx is None:
         ctx = PromptContext()
 
-    # Priority 1: explicit composition style from NicheConfig (most specific)
-    if ctx.image_composition_style:
-        return (
-            f"{ctx.image_composition_style} "
-            "Full-frame composition. Dense, detailed layout filling the entire frame. "
-            "Polished, high-detail surfaces. Magazine-quality output."
-        )
-
-    # Priority 2: general image style description (medium specificity)
+    # Priority 1: image style description from NicheConfig
     if ctx.image_style_description:
         return (
             f"{ctx.image_style_description} "
@@ -376,7 +368,7 @@ REEL_BASE_STYLE = build_reel_base_style()
 def build_image_prompt_system(ctx: PromptContext = None) -> str:
     if ctx is None:
         ctx = PromptContext()
-    composition_hint = ctx.image_composition_style if ctx.image_composition_style else "Close-up, full-frame composition where the subject fills the entire frame — NOT wide shots"
+    composition_hint = "Close-up, full-frame composition where the subject fills the entire frame — NOT wide shots"
     return f"""You are a visual prompt engineer specializing in {ctx.niche_name.lower()} imagery for Instagram.
 
 Given a title, generate a DETAILED cinematic image prompt suitable for AI image generation (DALL-E / Flux).
@@ -574,10 +566,7 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
     title_examples = _build_post_title_examples(ctx)
 
     # Image composition hint — from ctx, never a niche-specific fallback
-    composition_hint = (
-        ctx.image_composition_style
-        or "Close-up, full-frame where subject fills the entire frame with minimal background"
-    )
+    composition_hint = "Close-up, full-frame where subject fills the entire frame with minimal background"
     image_style_hint = ctx.image_style_description or "High-quality studio photography style"
 
     # Post examples from user (few-shot, highest quality signal)

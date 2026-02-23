@@ -43,7 +43,6 @@ class PromptContext:
     # Visual Style
     image_style_description: str = ""
     image_palette_keywords: List[str] = field(default_factory=list)
-    image_composition_style: str = ""  # replaces REEL_BASE_STYLE per niche
 
     # Citation / Source
     citation_style: str = ""  # "academic_doi"|"financial_data"|"case_study"|"expert_quote"|"none"
