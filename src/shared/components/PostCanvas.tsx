@@ -279,11 +279,11 @@ export function GradientOverlay() {
         0,
         'rgba(0,0,0,0)',
         0.45,
-        'rgba(0,0,0,0.10)',
+        'rgba(0,0,0,0.13)',
         0.7,
-        'rgba(0,0,0,0.35)',
+        'rgba(0,0,0,0.44)',
         1,
-        'rgba(0,0,0,0.65)',
+        'rgba(0,0,0,0.81)',
       ]}
       listening={false}
     />
