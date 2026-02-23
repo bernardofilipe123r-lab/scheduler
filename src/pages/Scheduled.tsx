@@ -127,8 +127,6 @@ export function ScheduledPage() {
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
-  const [allSlidesReady, setAllSlidesReady] = useState(false)
-  const [slidesLoadProgress, setSlidesLoadProgress] = useState({ loaded: 0, total: 0 })
   const [showFilters, setShowFilters] = useState(false)
 
   // Post preview: brand logos + layout settings (mirrors PostJobDetail)
@@ -152,36 +150,6 @@ export function ScheduledPage() {
     fetchLogo()
   }, [selectedPost?.brand])
 
-  // Preload ALL carousel images upfront — unlock swiping only when all are cached
-  useEffect(() => {
-    if (!selectedPost) {
-      setAllSlidesReady(false)
-      setSlidesLoadProgress({ loaded: 0, total: 0 })
-      return
-    }
-    const paths: string[] = selectedPost.metadata?.carousel_paths || []
-    if (paths.length === 0) { setAllSlidesReady(true); return }
-
-    setAllSlidesReady(false)
-    setSlidesLoadProgress({ loaded: 0, total: paths.length })
-    let loaded = 0
-    let cancelled = false
-
-    paths.forEach((url: string) => {
-      const img = new Image()
-      const done = () => {
-        if (cancelled) return
-        loaded++
-        setSlidesLoadProgress({ loaded, total: paths.length })
-        if (loaded >= paths.length) setAllSlidesReady(true)
-      }
-      img.onload = done
-      img.onerror = done
-      img.src = url
-    })
-
-    return () => { cancelled = true }
-  }, [selectedPost?.metadata?.carousel_paths])
 
   
   const calendarDays = useMemo(() => {
@@ -1317,21 +1285,10 @@ export function ScheduledPage() {
         size="lg"
       >
         {selectedPost && (() => {
-          // Pre-rendered images: new format has cover + slides in one array
-          const allCarouselPaths = selectedPost.metadata?.carousel_paths || []
-          const legacyCarouselPaths = selectedPost.metadata?.carousel_image_paths || []
-          const slideTexts = selectedPost.metadata?.slide_texts || []
+          const allCarouselPaths: string[] = selectedPost.metadata?.carousel_paths || []
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
-          // If we have pre-rendered carousel_paths (cover+slides), use those
-          const hasPreRendered = allCarouselPaths.length > 0
-          const totalSlides = hasPreRendered
-            ? allCarouselPaths.length
-            : isPost ? 1 + Math.max(legacyCarouselPaths.length, slideTexts.length) : 1
-          // Derive raw AI background URL from reel_id
-          // Ensure we have a valid URL, not an empty string
-          const rawBgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
-          const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
-          const selectedBrandData = dynamicBrands.find(b => b.id === selectedPost.brand)
+          const totalSlides = allCarouselPaths.length
+          const bgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
 
           return (
           <div className="space-y-4">
@@ -1375,56 +1332,25 @@ export function ScheduledPage() {
             </h3>
             
             <div className={isPost ? '' : 'grid grid-cols-2 gap-4'}>
-              {/* Post carousel: cover + text slides — uses same Konva components as PostJobDetail */}
               {isPost ? (
                 <div className="flex flex-col items-center">
                   <div className="relative" style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}>
-                    {/* Slide content — pre-rendered images */}
                     <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100"
                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE), height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}>
-                      {hasPreRendered ? (
-                        <div className="relative w-full h-full">
-                          {/* Loading state — preloading all slides before allowing navigation */}
-                          {!allSlidesReady && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-zinc-100 z-10">
-                              <div className="flex flex-col items-center gap-3">
-                                <Loader2 className="w-8 h-8 text-zinc-400 animate-spin" />
-                                <span className="text-xs text-zinc-400">
-                                  Loading slides... {slidesLoadProgress.loaded}/{slidesLoadProgress.total}
-                                </span>
-                                {slidesLoadProgress.total > 0 && (
-                                  <div className="w-32 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
-                                    <div
-                                      className="h-full bg-blue-400 rounded-full transition-all duration-300"
-                                      style={{ width: `${(slidesLoadProgress.loaded / slidesLoadProgress.total) * 100}%` }}
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          <img
-                            key={allCarouselPaths[detailSlideIndex]}
-                            src={allCarouselPaths[detailSlideIndex]}
-                            alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
-                            style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
-                            className="w-full object-contain"
-                            draggable={false}
-                          />
-                        </div>
-                      ) : legacyCarouselPaths[detailSlideIndex - 1] ? (
+                      {totalSlides > 0 ? (
                         <img
-                          src={detailSlideIndex === 0 ? (bgUrl || '') : legacyCarouselPaths[detailSlideIndex - 1]}
+                          key={allCarouselPaths[detailSlideIndex]}
+                          src={allCarouselPaths[detailSlideIndex]}
                           alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
-                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE), height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}
                           className="w-full object-contain"
                           draggable={false}
                         />
-                      ) : bgUrl && detailSlideIndex === 0 ? (
+                      ) : bgUrl ? (
                         <img
                           src={bgUrl}
                           alt="Cover"
-                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE), height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}
                           className="w-full object-contain"
                           draggable={false}
                         />
@@ -1441,14 +1367,14 @@ export function ScheduledPage() {
                       <>
                         <button
                           onClick={() => setDetailSlideIndex(i => Math.max(0, i - 1))}
-                          disabled={detailSlideIndex === 0 || !allSlidesReady}
+                          disabled={detailSlideIndex === 0}
                           className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronLeft className="w-5 h-5 text-white" />
                         </button>
                         <button
                           onClick={() => setDetailSlideIndex(i => Math.min(totalSlides - 1, i + 1))}
-                          disabled={detailSlideIndex >= totalSlides - 1 || !allSlidesReady}
+                          disabled={detailSlideIndex >= totalSlides - 1}
                           className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronRight className="w-5 h-5 text-white" />
@@ -1465,14 +1391,11 @@ export function ScheduledPage() {
                           <button
                             key={i}
                             onClick={() => setDetailSlideIndex(i)}
-                            disabled={!allSlidesReady}
                             className={clsx(
                               'w-2 h-2 rounded-full transition-all',
                               i === detailSlideIndex
                                 ? 'bg-blue-500 scale-125'
-                                : !allSlidesReady
-                                  ? 'bg-gray-200 cursor-not-allowed'
-                                  : 'bg-gray-300 hover:bg-gray-400'
+                                : 'bg-gray-300 hover:bg-gray-400'
                             )}
                           />
                         ))}
@@ -1497,7 +1420,7 @@ export function ScheduledPage() {
               ) : !selectedPost.video_path && (
                 <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden flex flex-col items-center justify-center p-4 text-center"
                      style={{
-                       borderLeft: `4px solid ${selectedBrandData?.color || '#a1a1aa'}`,
+                       borderLeft: `4px solid ${dynamicBrands.find(b => b.id === selectedPost.brand)?.color || '#a1a1aa'}`,
                      }}>
                   <BrandBadge brand={selectedPost.brand} size="md" />
                   <p className="mt-3 text-sm font-semibold text-gray-800 leading-snug whitespace-pre-line line-clamp-6">
