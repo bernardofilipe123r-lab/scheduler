@@ -1289,10 +1289,16 @@ export function ScheduledPage() {
         size="lg"
       >
         {selectedPost && (() => {
-          const carouselPaths = selectedPost.metadata?.carousel_image_paths || []
+          // Pre-rendered images: new format has cover + slides in one array
+          const allCarouselPaths = selectedPost.metadata?.carousel_paths || []
+          const legacyCarouselPaths = selectedPost.metadata?.carousel_image_paths || []
           const slideTexts = selectedPost.metadata?.slide_texts || []
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
-          const totalSlides = isPost ? 1 + Math.max(carouselPaths.length, slideTexts.length) : 1
+          // If we have pre-rendered carousel_paths (cover+slides), use those
+          const hasPreRendered = allCarouselPaths.length > 0
+          const totalSlides = hasPreRendered
+            ? allCarouselPaths.length
+            : isPost ? 1 + Math.max(legacyCarouselPaths.length, slideTexts.length) : 1
           // Derive raw AI background URL from reel_id
           // Ensure we have a valid URL, not an empty string
           const rawBgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
@@ -1348,7 +1354,14 @@ export function ScheduledPage() {
                   <div className="relative" style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}>
                     {/* Slide content — Konva canvas for cover, CarouselTextSlide for text slides */}
                     <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100">
-                      {detailSlideIndex === 0 ? (
+                      {hasPreRendered ? (
+                        <img
+                          src={allCarouselPaths[detailSlideIndex]}
+                          alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
+                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                          className="w-full object-contain"
+                        />
+                      ) : detailSlideIndex === 0 ? (
                         <PostCanvas
                           brand={selectedPost.brand}
                           title={selectedPost.title}
@@ -1371,10 +1384,10 @@ export function ScheduledPage() {
                           brandColor={selectedBrandData?.color}
                         />
                       ) : (
-                        /* Fallback to pre-rendered image if no slide_texts available */
-                        carouselPaths[detailSlideIndex - 1] ? (
+                        /* Fallback to legacy pre-rendered image if no slide_texts available */
+                        legacyCarouselPaths[detailSlideIndex - 1] ? (
                           <img
-                            src={carouselPaths[detailSlideIndex - 1]}
+                            src={legacyCarouselPaths[detailSlideIndex - 1]}
                             alt={`Slide ${detailSlideIndex}`}
                             style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
                             className="w-full object-contain"

@@ -136,128 +136,9 @@ else:
 
 
 def _render_slides_node(brand: str, title: str, background_image: str, slide_texts: list, reel_id: str, user_id: str = "system") -> dict | None:
-    """Render carousel slides using Node.js Konva (pixel-perfect match to frontend)."""
-    import json
-    import subprocess
-    import tempfile
-
-    uid8 = reel_id[:8] if reel_id else "unknown"
-
-    # Render to a temp directory
-    tmp_dir = tempfile.mkdtemp(prefix="slides_")
-    cover_out = os.path.join(tmp_dir, f"post_{brand}_{uid8}.png")
-    slide_outputs = [
-        os.path.join(tmp_dir, f"post_{brand}_{uid8}_slide{idx}.png")
-        for idx in range(len(slide_texts))
-    ]
-
-    # Build brand config from DB for the Node.js renderer
-    brand_config_data = {}
-    logo_local_path = None
-    try:
-        from app.services.brands.resolver import brand_resolver
-        b = brand_resolver.get_brand(brand)
-        if b:
-            colors = b.colors or {}
-            # Ensure handle has exactly one @ prefix
-            raw_handle = b.instagram_handle or ""
-            handle = raw_handle if raw_handle.startswith("@") else f"@{raw_handle}"
-            if not handle or handle == "@":
-                handle = brand
-            brand_config_data = {
-                "name": b.display_name or brand,
-                "displayName": b.display_name or brand,
-                "color": colors.get("primary", "#888888"),
-                "accentColor": colors.get("accent", "#666666"),
-                "abbreviation": b.short_name or (brand[0].upper() + "CO"),
-                "handle": handle,
-            }
-            # Download brand logo to temp file for Node.js renderer
-            if b.logo_path:
-                try:
-                    import urllib.request
-                    logo_url = b.logo_path
-                    if logo_url.startswith("http"):
-                        logo_ext = os.path.splitext(logo_url.split("?")[0])[1] or ".png"
-                        logo_local_path = os.path.join(tmp_dir, f"{brand}_logo{logo_ext}")
-                        urllib.request.urlretrieve(logo_url, logo_local_path)
-                    elif os.path.isfile(logo_url):
-                        logo_local_path = logo_url
-                except Exception as logo_err:
-                    print(f"[NODE-RENDER] Logo download warning: {logo_err}", flush=True)
-                    logo_local_path = None
-    except Exception:
-        pass
-
-    input_data = {
-        "brand": brand,
-        "brandConfig": brand_config_data,
-        "title": title,
-        "backgroundImage": background_image,
-        "slideTexts": slide_texts,
-        "coverOutput": cover_out,
-        "slideOutputs": slide_outputs,
-        "logoPath": logo_local_path,
-        "shareIconPath": "/app/assets/icons/share.png",
-        "saveIconPath": "/app/assets/icons/save.png",
-        "fontPaths": {
-            "anton": "/app/assets/fonts/Anton-Regular.ttf",
-            "inter": "/app/assets/fonts/InterVariable.ttf",
-        },
-    }
-
-    # Write input JSON to temp file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-        json.dump(input_data, f)
-        json_path = f.name
-
-    try:
-        result = subprocess.run(
-            ["node", "/app/scripts/render-slides.cjs", json_path],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if result.returncode != 0:
-            print(f"[NODE-RENDER] stderr: {result.stderr}", flush=True)
-            return None
-        output = json.loads(result.stdout.strip())
-        if output.get("success"):
-            # Upload rendered slides to Supabase Storage
-            try:
-                from app.services.storage.supabase_storage import upload_from_path, storage_path
-                cover_path = output.get("coverPath", "")
-                if cover_path and Path(cover_path).exists():
-                    cover_name = Path(cover_path).name
-                    cover_remote = storage_path(user_id, brand, "posts", cover_name)
-                    output["coverUrl"] = upload_from_path("media", cover_remote, cover_path)
-                slide_urls = []
-                for sp in output.get("slidePaths", []):
-                    if sp and Path(sp).exists():
-                        slide_name = Path(sp).name
-                        slide_remote = storage_path(user_id, brand, "posts", slide_name)
-                        slide_urls.append(upload_from_path("media", slide_remote, sp))
-                output["slideUrls"] = slide_urls
-            except Exception as upload_err:
-                print(f"[NODE-RENDER] Supabase upload warning: {upload_err}", flush=True)
-            return output
-        else:
-            print(f"[NODE-RENDER] Error: {output.get('error')}", flush=True)
-            return None
-    except subprocess.TimeoutExpired:
-        print("[NODE-RENDER] Timeout after 60s", flush=True)
-        return None
-    except Exception as e:
-        print(f"[NODE-RENDER] Exception: {e}", flush=True)
-        return None
-    finally:
-        import shutil as _shutil
-        os.unlink(json_path)
-        # Clean up temp rendered slides directory
-        try:
-            _shutil.rmtree(tmp_dir, ignore_errors=True)
-        except Exception:
-            pass
+    """Render carousel slides using Node.js Konva (delegates to extracted utility)."""
+    from app.services.media.carousel_renderer import render_carousel_images
+    return render_carousel_images(brand, title, background_image, slide_texts, reel_id, user_id)
 
 
 def _repair_missing_carousel_images():
@@ -563,15 +444,18 @@ async def startup_event():
                             
                             print(f"      🖼️  Image post cover URL: {image_url}")
                             
-                            # ── Just-in-time composition at publish time (Node.js Konva) ──
-                            # Note: JIT composition needs a local background image.
-                            # If slide_texts are present, download the background from Supabase
-                            # to a temp file, render slides, and use the resulting Supabase URLs.
+                            # Check for pre-rendered carousel images (cover + text slides)
+                            pre_rendered = metadata.get('carousel_paths') or []
                             post_title = metadata.get('title', '')
                             slide_texts = metadata.get('slide_texts') or []
                             supabase_slide_urls = []
 
-                            if (post_title or slide_texts) and image_url.startswith("https://"):
+                            if pre_rendered:
+                                # Use stored pre-rendered images — no JIT needed
+                                image_url = pre_rendered[0]  # composed cover
+                                supabase_slide_urls = pre_rendered[1:]  # text slides
+                                print(f"      ✅ Using {len(pre_rendered)} pre-rendered carousel images")
+                            elif (post_title or slide_texts) and image_url.startswith("https://"):
                                 try:
                                     import tempfile
                                     import requests as _req

@@ -781,7 +781,9 @@ export function PostJobDetail({ job }: Props) {
           const brandCaption = output?.caption || ''
           const logoUrl = brandLogos[brand] || null
           const slideTexts = output?.slide_texts || []
-          const totalSlides = 1 + slideTexts.length
+          const carouselPaths = output?.carousel_paths || []
+          const hasPreRendered = carouselPaths.length > 0
+          const totalSlides = hasPreRendered ? carouselPaths.length : 1 + slideTexts.length
           const currentSlide = brandSlideIndex[brand] || 0
 
           return (
@@ -872,7 +874,17 @@ export function PostJobDetail({ job }: Props) {
                   </div>
                 )}
                 {status === 'completed' || status === 'scheduled' ? (
-                  currentSlide === 0 ? (
+                  hasPreRendered ? (
+                    <img
+                      src={carouselPaths[currentSlide]}
+                      alt={currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`}
+                      style={{
+                        width: CANVAS_WIDTH * GRID_PREVIEW_SCALE,
+                        height: CANVAS_HEIGHT * GRID_PREVIEW_SCALE,
+                      }}
+                      className="w-full object-contain"
+                    />
+                  ) : currentSlide === 0 ? (
                     <PostCanvas
                       brand={brand}
                       title={brandTitle}
@@ -925,7 +937,7 @@ export function PostJobDetail({ job }: Props) {
               </div>
 
               {/* Carousel slide navigation */}
-              {(status === 'completed' || status === 'scheduled') && slideTexts.length > 0 && (
+              {(status === 'completed' || status === 'scheduled') && totalSlides > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <button
                     onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: Math.max(0, currentSlide - 1) }))}
@@ -948,8 +960,8 @@ export function PostJobDetail({ job }: Props) {
                     ))}
                   </div>
                   <button
-                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: Math.min(slideTexts.length, currentSlide + 1) }))}
-                    disabled={currentSlide >= slideTexts.length}
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: Math.min(totalSlides - 1, currentSlide + 1) }))}
+                    disabled={currentSlide >= totalSlides - 1}
                     className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
@@ -1312,10 +1324,12 @@ export function PostJobDetail({ job }: Props) {
         const rawBgUrl = output?.thumbnail_path || null
         const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
         const slideTexts = output?.slide_texts || []
+        const expandedCarouselPaths = output?.carousel_paths || []
+        const expandedHasPreRendered = expandedCarouselPaths.length > 0
         const brandTitle = getBrandTitle(expandedBrand)
         const logoUrl = brandLogos[expandedBrand] || null
         const currentSlide = brandSlideIndex[expandedBrand] || 0
-        const totalSlides = 1 + slideTexts.length
+        const totalSlides = expandedHasPreRendered ? expandedCarouselPaths.length : 1 + slideTexts.length
         const FULL_SCALE = 0.45
 
         return (
@@ -1337,7 +1351,17 @@ export function PostJobDetail({ job }: Props) {
 
               {/* Canvas at higher scale — capped for viewport fit */}
               <div className="rounded-xl overflow-hidden shadow-2xl shrink-0">
-                {currentSlide === 0 ? (
+                {expandedHasPreRendered ? (
+                  <img
+                    src={expandedCarouselPaths[currentSlide]}
+                    alt={currentSlide === 0 ? 'Cover' : `Slide ${currentSlide}`}
+                    style={{
+                      width: CANVAS_WIDTH * FULL_SCALE,
+                      height: CANVAS_HEIGHT * FULL_SCALE,
+                    }}
+                    className="object-contain"
+                  />
+                ) : currentSlide === 0 ? (
                   <PostCanvas
                     brand={expandedBrand}
                     title={brandTitle}
@@ -1367,7 +1391,7 @@ export function PostJobDetail({ job }: Props) {
               </div>
 
               {/* Navigation */}
-              {slideTexts.length > 0 && (
+              {totalSlides > 1 && (
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [expandedBrand]: Math.max(0, currentSlide - 1) }))}
@@ -1390,8 +1414,8 @@ export function PostJobDetail({ job }: Props) {
                     ))}
                   </div>
                   <button
-                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [expandedBrand]: Math.min(slideTexts.length, currentSlide + 1) }))}
-                    disabled={currentSlide >= slideTexts.length}
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [expandedBrand]: Math.min(totalSlides - 1, currentSlide + 1) }))}
+                    disabled={currentSlide >= totalSlides - 1}
                     className="p-2 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-5 h-5 text-white" />

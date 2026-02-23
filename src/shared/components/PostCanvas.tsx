@@ -278,10 +278,10 @@ export function GradientOverlay() {
       fillLinearGradientColorStops={[
         0,
         'rgba(0,0,0,0)',
-        0.4,
-        'rgba(0,0,0,0.25)',
+        0.3,
+        'rgba(0,0,0,0.5)',
         1,
-        'rgba(0,0,0,0.7)',
+        'rgba(0,0,0,0.95)',
       ]}
       listening={false}
     />

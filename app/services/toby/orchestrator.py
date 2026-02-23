@@ -209,6 +209,15 @@ def _execute_content_plan(db: Session, plan):
         )
         result = results[0] if results else generator._fallback_post_title()
 
+        # Validate slide_texts — retry once if AI returned empty
+        if not result.get("slide_texts"):
+            print("[TOBY] slide_texts empty — retrying generation once...", flush=True)
+            retry = generator.generate_post_titles_batch(count=1, topic_hint=plan.topic_bucket, ctx=ctx)
+            if retry and retry[0].get("slide_texts"):
+                result = retry[0]
+            else:
+                print("[TOBY] Retry also returned no slide_texts", flush=True)
+
     if not result or not result.get("title"):
         raise ValueError("Content generation returned empty result")
 
@@ -282,6 +291,56 @@ def _execute_content_plan(db: Session, plan):
     job_manager.update_job_status(job_id, "completed", progress_percent=100)
     print(f"[TOBY] Job {job_id} completed — media ready", flush=True)
 
+    # ── Step 6b: Pre-render carousel images ──────────────────
+    # Render cover + text slides as PNGs and store in Supabase so the
+    # calendar / job-detail page can show simple <img> tags instead of
+    # re-rendering via live Konva on the frontend.
+    carousel_paths = []
+    if variant == "post" and slide_texts and brand_data.get("thumbnail_path"):
+        try:
+            import tempfile
+            import requests as _req
+
+            bg_url = brand_data["thumbnail_path"]
+            if bg_url.startswith("https://"):
+                resp = _req.get(bg_url, timeout=60)
+                resp.raise_for_status()
+                tmp_bg = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                tmp_bg.write(resp.content)
+                tmp_bg.close()
+                tmp_bg_path = tmp_bg.name
+            else:
+                tmp_bg_path = bg_url
+
+            from app.services.media.carousel_renderer import render_carousel_images
+            composed = render_carousel_images(
+                brand=plan.brand_id,
+                title=result["title"],
+                background_image=tmp_bg_path,
+                slide_texts=slide_texts,
+                reel_id=brand_data.get("reel_id", f"{job_id}_{plan.brand_id}"),
+                user_id=plan.user_id,
+            )
+            if composed:
+                cover_url = composed.get("coverUrl")
+                slide_urls = composed.get("slideUrls", [])
+                if cover_url:
+                    carousel_paths = [cover_url] + slide_urls
+                    # Store in brand_outputs so frontend can grab them
+                    job_manager.update_brand_output(job_id, plan.brand_id, {
+                        "carousel_paths": carousel_paths,
+                    })
+                    print(f"[TOBY] Pre-rendered {len(carousel_paths)} carousel images for {plan.brand_id}", flush=True)
+            # Clean up temp file
+            if bg_url.startswith("https://"):
+                try:
+                    import os as _os
+                    _os.unlink(tmp_bg_path)
+                except Exception:
+                    pass
+        except Exception as render_err:
+            print(f"[TOBY] Pre-render warning (non-fatal): {render_err}", flush=True)
+
     # ── Step 7: Auto-schedule with real media URLs ───────────
     scheduler = DatabaseSchedulerService()
     reel_id = brand_data.get("reel_id", f"{job_id}_{plan.brand_id}")
@@ -300,6 +359,7 @@ def _execute_content_plan(db: Session, plan):
         variant=variant,
         post_title=result["title"],
         slide_texts=slide_texts,
+        carousel_paths=carousel_paths or None,
         job_id=job_id,
     )
 

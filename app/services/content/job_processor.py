@@ -568,12 +568,14 @@ class JobProcessor:
                         print(f"   ✓ Generated image prompt: {image_prompt[:80]}...", flush=True)
 
                     # Apply the SAME title + prompt to each brand
+                    # Preserve any existing slide_texts (e.g. set by Toby orchestrator)
                     for brand in job.brands:
+                        existing = (job.brand_outputs or {}).get(brand, {})
                         self._manager.update_brand_output(job_id, brand, {
                             "title": job.title,
-                            "caption": "",
+                            "caption": existing.get("caption", ""),
                             "ai_prompt": image_prompt,
-                            "slide_texts": [],
+                            "slide_texts": existing.get("slide_texts", job.content_lines or []),
                             "status": "pending",
                         })
                         print(f"   📝 {brand}: {job.title[:60]}...", flush=True)

@@ -32,6 +32,7 @@ export interface BrandOutput {
   title?: string            // Per-brand unique title (posts)
   ai_prompt?: string        // Per-brand image prompt (posts)
   slide_texts?: string[]    // Carousel text slide content (posts)
+  carousel_paths?: string[] // Pre-rendered carousel image URLs (cover + text slides)
 }
 
 // Job entity
