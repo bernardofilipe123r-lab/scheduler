@@ -106,6 +106,22 @@ export function useGeneratePostExamplesBatch() {
   })
 }
 
+// Generate Reel Examples Batch via DeepSeek
+
+interface GeneratedReelExamplesBatch {
+  reels: { title: string; content_lines: string[] }[]
+}
+
+async function fetchGenerateReelExamplesBatch(data: { brand_id?: string; count: number }): Promise<GeneratedReelExamplesBatch> {
+  return apiClient.post<GeneratedReelExamplesBatch>('/api/v2/brands/niche-config/generate-reel-examples-batch', data)
+}
+
+export function useGenerateReelExamplesBatch() {
+  return useMutation({
+    mutationFn: fetchGenerateReelExamplesBatch,
+  })
+}
+
 // Suggest YouTube Titles via DeepSeek
 
 interface SuggestedYtTitles {

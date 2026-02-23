@@ -157,6 +157,8 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
     setDirty(true)
   }
 
+  const generalFilled = Boolean(values.niche_name?.trim() && values.content_brief?.trim())
+
   const handleSave = async () => {
     try {
       await updateMutation.mutateAsync({ ...values, brand_id: brandId ?? null })
@@ -325,6 +327,12 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.reels ? '-rotate-90' : ''}`} />
         </button>
         {!collapsed.reels && <div className="px-6 py-5 space-y-6">
+          {!generalFilled && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-center">
+              <p className="text-sm text-amber-700 font-medium">Fill in the General section first</p>
+              <p className="text-xs text-amber-600 mt-0.5">Add your niche name and content brief to unlock AI-powered reel generation.</p>
+            </div>
+          )}
           {/* Reel Examples */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Reel Examples</h4>
@@ -338,6 +346,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               onPostExamplesChange={(v) => update('post_examples', v)}
               brandId={brandId}
               showOnly="reels"
+              generalFilled={generalFilled}
             />
           </div>
 
@@ -521,6 +530,12 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.posts ? '-rotate-90' : ''}`} />
         </button>
         {!collapsed.posts && <div className="px-6 py-5 space-y-6">
+          {!generalFilled && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-center">
+              <p className="text-sm text-amber-700 font-medium">Fill in the General section first</p>
+              <p className="text-xs text-amber-600 mt-0.5">Add your niche name and content brief to unlock AI-powered post generation.</p>
+            </div>
+          )}
           {/* Post Examples */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Post Examples</h4>
@@ -534,6 +549,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               onPostExamplesChange={(v) => update('post_examples', v)}
               brandId={brandId}
               showOnly="posts"
+              generalFilled={generalFilled}
             />
           </div>
 

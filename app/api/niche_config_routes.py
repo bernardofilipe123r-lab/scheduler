@@ -601,6 +601,165 @@ OUTPUT FORMAT (JSON only — array of {request.count} objects):
     raise HTTPException(status_code=500, detail="Failed to generate post examples")
 
 
+# --- Generate Reel Examples Batch endpoint ---
+
+# 10 seed examples from Health & Wellness to teach the format
+_SEED_REEL_EXAMPLES = [
+    {"title": "5 SIGNS YOUR BODY IS TRYING TO WARN YOU", "content_lines": [
+        "Constant fatigue? Could be iron deficiency.", "Craving ice? Often linked to anemia.",
+        "Hair falling out? Check your thyroid.", "Bruising easily? Low vitamin C or K.",
+        "Tingling hands? Possible B12 deficiency."]},
+    {"title": "SILENT HEALTH MISTAKES YOU DON'T NOTICE", "content_lines": [
+        "Drinking water only when thirsty — you're already dehydrated.", "Sitting cross-legged compresses nerves.",
+        "Brushing teeth right after eating erodes enamel.", "Sleeping with your phone charges EMF exposure.",
+        "Skipping breakfast slows your metabolism by 5%."]},
+    {"title": "EAT THIS IF YOU ARE SICK", "content_lines": [
+        "Sore throat? Honey + warm water.", "Nausea? Ginger tea, not ginger ale.",
+        "Cold? Chicken broth with garlic.", "Headache? Magnesium-rich almonds.",
+        "Bloating? Peppermint tea settles the gut."]},
+    {"title": "DO THESE 10 HABITS IF YOU WANT TO STILL WALK AT 80", "content_lines": [
+        "Walk 8,000 steps daily — non-negotiable.", "Stretch hip flexors every morning.",
+        "Eat protein with every meal for muscle.", "Balance on one foot while brushing teeth.",
+        "Sleep 7-8 hours — your joints repair overnight.", "Hydrate before coffee.",
+        "Lift weights at least twice a week.", "Avoid sitting longer than 45 minutes.",
+        "Eat anti-inflammatory foods: berries, turmeric.", "Wear supportive shoes daily."]},
+    {"title": "8 HARSH TRUTHS", "content_lines": [
+        "Your metabolism slows 2-3% per decade after 30.", "Stress ages you faster than smoking.",
+        "Most supplements are poorly absorbed.", "Fruit juice spikes blood sugar like soda.",
+        "8 glasses of water is a myth — it depends on you.", "Sleep debt cannot be fully repaid.",
+        "Organic doesn't always mean healthier.", "Your gut health controls your mood."]},
+    {"title": "DOCTORS DON'T WANT YOU TO KNOW THIS", "content_lines": [
+        "Fasting 16 hours triggers autophagy — cellular cleanup.", "Cold showers boost norepinephrine by 200-300%.",
+        "Magnesium glycinate beats melatonin for sleep.", "Walking after meals cuts blood sugar spikes by 30%.",
+        "Sunlight in the first 30 min sets your circadian clock."]},
+    {"title": "HOW MUCH SLEEP DO YOU REALLY NEED?", "content_lines": [
+        "Teens: 8-10 hours.", "Adults 26-64: 7-9 hours.", "Over 65: 7-8 hours.",
+        "Less than 6 hours doubles heart disease risk.", "Quality matters more than quantity.",
+        "Deep sleep peaks between 10 PM and 2 AM."]},
+    {"title": "FOODS THAT SHOULD NOT BE STORED IN THE FRIDGE", "content_lines": [
+        "Tomatoes — cold kills flavor and texture.", "Bread — it goes stale faster refrigerated.",
+        "Honey — it crystallizes in cold.", "Bananas — they ripen better at room temp.",
+        "Potatoes — cold converts starch to sugar.", "Garlic — it sprouts in humidity."]},
+    {"title": "WARNING: NEVER EAT THESE FOODS LIKE THIS", "content_lines": [
+        "Raw kidney beans contain toxic lectin.", "Green potatoes have solanine — trim or discard.",
+        "Bitter almonds have cyanide compounds.", "Cherry pits if crushed release amygdalin.",
+        "Raw elderberries cause severe nausea."]},
+    {"title": "EARLY SIGNS OF HEART DISEASE MOST PEOPLE IGNORE", "content_lines": [
+        "Jaw pain during exertion.", "Swollen ankles without injury.",
+        "Unexplained fatigue lasting weeks.", "Shortness of breath climbing one flight.",
+        "Cold hands and feet — poor circulation.", "Snoring loudly — linked to sleep apnea and heart strain."]},
+]
+
+
+class GenerateReelExamplesBatchRequest(BaseModel):
+    brand_id: Optional[str] = None
+    count: int = Field(default=50, ge=1, le=50)
+
+
+@router.post("/generate-reel-examples-batch")
+async def generate_reel_examples_batch(
+    request: GenerateReelExamplesBatchRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Generate reel examples via DeepSeek using seed Health & Wellness examples + user's brand config."""
+    user_id = user["id"]
+    service = get_niche_config_service()
+    ctx = service.get_context(brand_id=request.brand_id, user_id=user_id)
+
+    # Require General section to be filled
+    if not ctx.content_brief and not ctx.niche_name:
+        raise HTTPException(status_code=400, detail="Fill in the General section first (niche name and content brief)")
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    # Build brand context from General info
+    brand_context_parts = []
+    if ctx.niche_name:
+        brand_context_parts.append(f"Niche: {ctx.niche_name}")
+    if ctx.content_brief:
+        brand_context_parts.append(f"Content brief: {ctx.content_brief}")
+    if ctx.content_tone:
+        brand_context_parts.append(f"Tone: {', '.join(ctx.content_tone)}")
+    if ctx.image_composition_style:
+        brand_context_parts.append(f"Visual style: {ctx.image_composition_style}")
+    brand_context = "\n".join(brand_context_parts)
+
+    # Format seed examples
+    seed_block = ""
+    for ex in _SEED_REEL_EXAMPLES:
+        lines_text = "\n".join(f"  - {line}" for line in ex["content_lines"])
+        seed_block += f"\nTitle: {ex['title']}\nContent lines:\n{lines_text}\n"
+
+    prompt = f"""You are a viral short-form content expert. Generate {request.count} reel content ideas in the format Title + Content Lines for a brand with this identity:
+
+{brand_context}
+
+Here are 10 examples from the Health & Wellness niche to show you the EXACT format and style. Adapt the same format, energy, and structure for the brand's niche described above:
+
+{seed_block}
+
+RULES:
+- Each reel has a Title (ALL CAPS, 6-14 words, attention-grabbing, curiosity-driven) and 5-10 Content Lines (short fragments, facts, cause-effect pairs)
+- Content lines should be punchy, educational, and surprising — each line is ONE idea or fact
+- Do NOT include CTAs like "Follow for more" — those are added automatically
+- Titles must vary in opening patterns: use numbers, questions, warnings, revelations, challenges
+- Every idea must be unique — never repeat a topic across the {request.count} reels
+- Adapt the TOPICS to match the brand's niche, but keep the same viral format
+
+OUTPUT FORMAT (JSON only):
+{{{{
+    "reels": [
+        {{{{
+            "title": "REEL TITLE IN ALL CAPS",
+            "content_lines": ["Line 1", "Line 2", "Line 3", "..."]
+        }}}},
+        ...
+    ]
+}}}}"""
+
+    try:
+        response = http_requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.9,
+                "max_tokens": min(request.count * 300, 8000),
+            },
+            timeout=90,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            content_text = data["choices"][0]["message"]["content"].strip()
+            if content_text.startswith("```"):
+                content_text = content_text.split("```")[1]
+                if content_text.startswith("json"):
+                    content_text = content_text[4:]
+                content_text = content_text.strip()
+            result = json.loads(content_text)
+            reels = result.get("reels", [])
+            return {
+                "reels": [
+                    {
+                        "title": r.get("title", ""),
+                        "content_lines": r.get("content_lines", []),
+                    }
+                    for r in reels[:request.count]
+                ]
+            }
+    except Exception as e:
+        print(f"Reel examples batch generation failed: {e}", flush=True)
+
+    raise HTTPException(status_code=500, detail="Failed to generate reel examples")
+
+
 # --- Suggest YouTube Titles endpoint ---
 
 @router.post("/suggest-yt-titles")
