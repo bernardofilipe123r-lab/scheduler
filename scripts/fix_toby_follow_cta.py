@@ -20,7 +20,7 @@ def main():
             md = sr.extra_data or {}
             if md.get("variant") != "post":
                 continue
-            slides = md.get("slide_texts") or []
+            slides = list(md.get("slide_texts") or [])  # independent copy
             if not slides:
                 continue
             last = slides[-1]
