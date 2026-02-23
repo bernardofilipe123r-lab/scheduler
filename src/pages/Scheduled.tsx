@@ -127,8 +127,8 @@ export function ScheduledPage() {
   const [isCleaning, setIsCleaning] = useState(false)
   const [isCleaningReels, setIsCleaningReels] = useState(false)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
-  const [slideLoadedMap, setSlideLoadedMap] = useState<Record<string, boolean>>({})
-  const [slideLoading, setSlideLoading] = useState(false)
+  const [allSlidesReady, setAllSlidesReady] = useState(false)
+  const [slidesLoadProgress, setSlidesLoadProgress] = useState({ loaded: 0, total: 0 })
   const [showFilters, setShowFilters] = useState(false)
 
   // Post preview: brand logos + layout settings (mirrors PostJobDetail)
@@ -152,31 +152,36 @@ export function ScheduledPage() {
     fetchLogo()
   }, [selectedPost?.brand])
 
-  // Preload all carousel images when a post is selected
+  // Preload ALL carousel images upfront — unlock swiping only when all are cached
   useEffect(() => {
     if (!selectedPost) {
-      setSlideLoadedMap({})
+      setAllSlidesReady(false)
+      setSlidesLoadProgress({ loaded: 0, total: 0 })
       return
     }
-    const paths = selectedPost.metadata?.carousel_paths || []
-    if (paths.length === 0) return
+    const paths: string[] = selectedPost.metadata?.carousel_paths || []
+    if (paths.length === 0) { setAllSlidesReady(true); return }
+
+    setAllSlidesReady(false)
+    setSlidesLoadProgress({ loaded: 0, total: paths.length })
+    let loaded = 0
+    let cancelled = false
 
     paths.forEach((url: string) => {
-      if (!url || slideLoadedMap[url]) return
       const img = new Image()
-      img.onload = () => setSlideLoadedMap(prev => ({ ...prev, [url]: true }))
-      img.onerror = () => setSlideLoadedMap(prev => ({ ...prev, [url]: true }))
+      const done = () => {
+        if (cancelled) return
+        loaded++
+        setSlidesLoadProgress({ loaded, total: paths.length })
+        if (loaded >= paths.length) setAllSlidesReady(true)
+      }
+      img.onload = done
+      img.onerror = done
       img.src = url
     })
-  }, [selectedPost?.metadata?.carousel_paths])
 
-  // Track loading state per slide change
-  const currentSlideUrl = selectedPost?.metadata?.carousel_paths?.[detailSlideIndex] || null
-  useEffect(() => {
-    if (!currentSlideUrl) { setSlideLoading(false); return }
-    if (slideLoadedMap[currentSlideUrl]) { setSlideLoading(false); return }
-    setSlideLoading(true)
-  }, [currentSlideUrl, slideLoadedMap])
+    return () => { cancelled = true }
+  }, [selectedPost?.metadata?.carousel_paths])
 
   
   const calendarDays = useMemo(() => {
@@ -1379,12 +1384,22 @@ export function ScheduledPage() {
                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE), height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}>
                       {hasPreRendered ? (
                         <div className="relative w-full h-full">
-                          {/* Loading skeleton — shown while current slide is loading */}
-                          {slideLoading && (
+                          {/* Loading state — preloading all slides before allowing navigation */}
+                          {!allSlidesReady && (
                             <div className="absolute inset-0 flex items-center justify-center bg-zinc-100 z-10">
-                              <div className="flex flex-col items-center gap-2">
-                                <Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
-                                <span className="text-xs text-zinc-400">Loading slide...</span>
+                              <div className="flex flex-col items-center gap-3">
+                                <Loader2 className="w-8 h-8 text-zinc-400 animate-spin" />
+                                <span className="text-xs text-zinc-400">
+                                  Loading slides... {slidesLoadProgress.loaded}/{slidesLoadProgress.total}
+                                </span>
+                                {slidesLoadProgress.total > 0 && (
+                                  <div className="w-32 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-blue-400 rounded-full transition-all duration-300"
+                                      style={{ width: `${(slidesLoadProgress.loaded / slidesLoadProgress.total) * 100}%` }}
+                                    />
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -1393,11 +1408,7 @@ export function ScheduledPage() {
                             src={allCarouselPaths[detailSlideIndex]}
                             alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
                             style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
-                            className={clsx('w-full object-contain transition-opacity duration-200', slideLoading ? 'opacity-0' : 'opacity-100')}
-                            onLoad={() => {
-                              setSlideLoadedMap(prev => ({ ...prev, [allCarouselPaths[detailSlideIndex]]: true }))
-                              setSlideLoading(false)
-                            }}
+                            className="w-full object-contain"
                           />
                         </div>
                       ) : legacyCarouselPaths[detailSlideIndex - 1] ? (
@@ -1427,14 +1438,14 @@ export function ScheduledPage() {
                       <>
                         <button
                           onClick={() => setDetailSlideIndex(i => Math.max(0, i - 1))}
-                          disabled={detailSlideIndex === 0 || slideLoading}
+                          disabled={detailSlideIndex === 0 || !allSlidesReady}
                           className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronLeft className="w-5 h-5 text-white" />
                         </button>
                         <button
                           onClick={() => setDetailSlideIndex(i => Math.min(totalSlides - 1, i + 1))}
-                          disabled={detailSlideIndex >= totalSlides - 1 || slideLoading}
+                          disabled={detailSlideIndex >= totalSlides - 1 || !allSlidesReady}
                           className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronRight className="w-5 h-5 text-white" />
@@ -1451,12 +1462,12 @@ export function ScheduledPage() {
                           <button
                             key={i}
                             onClick={() => setDetailSlideIndex(i)}
-                            disabled={slideLoading}
+                            disabled={!allSlidesReady}
                             className={clsx(
                               'w-2 h-2 rounded-full transition-all',
                               i === detailSlideIndex
                                 ? 'bg-blue-500 scale-125'
-                                : slideLoading
+                                : !allSlidesReady
                                   ? 'bg-gray-200 cursor-not-allowed'
                                   : 'bg-gray-300 hover:bg-gray-400'
                             )}
