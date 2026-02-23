@@ -90,6 +90,22 @@ export function useGeneratePostExample() {
   })
 }
 
+// Generate Post Examples Batch via DeepSeek
+
+interface GeneratedPostExamplesBatch {
+  posts: GeneratedPostExample[]
+}
+
+async function fetchGeneratePostExamplesBatch(data: { brand_id?: string; count: number; num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExamplesBatch> {
+  return apiClient.post<GeneratedPostExamplesBatch>('/api/v2/brands/niche-config/generate-post-examples-batch', data)
+}
+
+export function useGeneratePostExamplesBatch() {
+  return useMutation({
+    mutationFn: fetchGeneratePostExamplesBatch,
+  })
+}
+
 // Suggest YouTube Titles via DeepSeek
 
 interface SuggestedYtTitles {

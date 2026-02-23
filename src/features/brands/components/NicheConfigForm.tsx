@@ -116,7 +116,12 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   useEffect(() => {
     if (data) {
       const brief = data.content_brief || CONTENT_BRIEF_PLACEHOLDER
-      setValues({ ...DEFAULT_CONFIG, ...data, content_brief: brief })
+      const merged = { ...DEFAULT_CONFIG, ...data, content_brief: brief }
+      // Keep defaults for carousel_cta_options when the API returns empty
+      if (!data.carousel_cta_options || data.carousel_cta_options.length === 0) {
+        merged.carousel_cta_options = DEFAULT_CONFIG.carousel_cta_options
+      }
+      setValues(merged)
       setDirty(!data.content_brief) // dirty if we pre-filled the template
     }
   }, [data])
@@ -511,7 +516,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
               📱 Carousel Posts
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and CTA topic for carousel content.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and weighted CTAs for carousel content.</p>
           </div>
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.posts ? '-rotate-90' : ''}`} />
         </button>
@@ -555,7 +560,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           <div className="border-t border-gray-100 pt-5">
             <h4 className="text-sm font-medium text-gray-700 mb-1">💬 Carousel CTA</h4>
             <p className="text-xs text-gray-400 mb-4">
-              These CTAs appear on the <strong>last slide</strong> of carousel posts. The AI randomly picks one based on weights. Use <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> for the topic and <code className="text-xs bg-gray-100 px-1 rounded">@{'{brandhandle}'}</code> for the brand handle.
+              These CTAs appear on the <strong>last slide</strong> of carousel posts. The AI randomly picks one based on weights. <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> is auto-filled from your niche/keywords. <code className="text-xs bg-gray-100 px-1 rounded">@{'{brandhandle}'}</code> uses your brand's Instagram handle.
             </p>
 
             {/* CTA Options (weighted) */}

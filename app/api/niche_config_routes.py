@@ -492,6 +492,115 @@ OUTPUT FORMAT (JSON only):
     raise HTTPException(status_code=500, detail="Failed to generate post example")
 
 
+# --- Generate Post Examples Batch endpoint ---
+
+class GeneratePostExamplesBatchRequest(BaseModel):
+    brand_id: Optional[str] = None
+    count: int = Field(default=5, ge=1, le=10)
+    num_slides: int = Field(default=4, ge=3, le=4)
+    existing_titles: List[str] = Field(default_factory=list, max_length=50)
+
+
+@router.post("/generate-post-examples-batch")
+async def generate_post_examples_batch(
+    request: GeneratePostExamplesBatchRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Generate multiple post examples via DeepSeek in a single call."""
+    user_id = user["id"]
+    service = get_niche_config_service()
+    ctx = service.get_context(brand_id=request.brand_id, user_id=user_id)
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    config_parts = []
+    if ctx.niche_name:
+        config_parts.append(f"Niche: {ctx.niche_name}")
+    if ctx.content_brief:
+        config_parts.append(f"Brief: {ctx.content_brief}")
+    if ctx.content_tone:
+        config_parts.append(f"Tone: {', '.join(ctx.content_tone)}")
+    config_text = "\n".join(config_parts) if config_parts else "General educational content"
+
+    exclusion_block = ""
+    if request.existing_titles:
+        exclusion_block = "\n\nALREADY USED TOPICS (NEVER repeat, rephrase, or cover the same study/domain):\n"
+        for t in request.existing_titles:
+            exclusion_block += f"- {t}\n"
+        exclusion_block += "\nEach post MUST cover a completely different scientific domain and study."
+
+    prompt = f"""Generate {request.count} carousel post examples, each BASED ON A DIFFERENT REAL SCIENTIFIC STUDY, for this brand:
+
+{config_text}{exclusion_block}
+
+Requirements for EACH post:
+- Title: ALL CAPS, 8-14 words, referencing a real study finding
+- TITLE VARIETY IS CRITICAL: Do NOT start titles the same way. Vary opening words — use patterns like:
+  "A NEW STUDY REVEALS...", "RESEARCHERS FOUND THAT...", "THIS COMMON HABIT...", "SCIENCE SAYS...",
+  "THE SURPRISING LINK BETWEEN...", "HOW [THING] AFFECTS...", "WHAT HAPPENS WHEN...",
+  "ONE SIMPLE CHANGE THAT...", "THE HIDDEN DANGER OF...", "WHY [THING] MATTERS MORE THAN..."
+- Each topic MUST be unique and from a DIFFERENT scientific domain — choose surprising, lesser-known studies
+- {request.num_slides} content slides per post (not counting the cover). Each slide: 3-5 sentences of educational content
+- Do NOT include a CTA in any slide — the CTA is added automatically by the system
+- A study_ref string per post: "Study short name — Journal or Institution, Year" (must be REAL, verifiable)
+- Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc.
+
+OUTPUT FORMAT (JSON only — array of {request.count} objects):
+{{{{
+    "posts": [
+        {{{{
+            "title": "POST TITLE IN ALL CAPS",
+            "slides": ["slide 1 text...", "slide 2 text...", ...],
+            "study_ref": "Study name — Journal, Year"
+        }}}},
+        ...
+    ]
+}}}}"""
+
+    try:
+        response = http_requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.95,
+                "max_tokens": request.count * 800,
+            },
+            timeout=60,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            content_text = data["choices"][0]["message"]["content"].strip()
+            if content_text.startswith("```"):
+                content_text = content_text.split("```")[1]
+                if content_text.startswith("json"):
+                    content_text = content_text[4:]
+                content_text = content_text.strip()
+            result = json.loads(content_text)
+            posts = result.get("posts", [])
+            return {
+                "posts": [
+                    {
+                        "title": p.get("title", ""),
+                        "slides": p.get("slides", [])[:request.num_slides],
+                        "study_ref": p.get("study_ref", ""),
+                    }
+                    for p in posts[:request.count]
+                ]
+            }
+    except Exception as e:
+        print(f"Post examples batch generation failed: {e}", flush=True)
+
+    raise HTTPException(status_code=500, detail="Failed to generate post examples")
+
+
 # --- Suggest YouTube Titles endpoint ---
 
 @router.post("/suggest-yt-titles")
