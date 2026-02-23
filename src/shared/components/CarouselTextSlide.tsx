@@ -280,6 +280,22 @@ export function CarouselTextSlide({
             />
           )}
 
+          {/* Follow CTA on last slide — centered where SWIPE was */}
+          {isLastSlide && (
+            <Text
+              text={`Follow ${handle}`}
+              fontSize={24}
+              fontFamily="Inter, Arial, sans-serif"
+              fontStyle="bold"
+              fill={brandColor}
+              x={0}
+              y={2}
+              width={CANVAS_WIDTH}
+              align="center"
+              letterSpacing={1}
+            />
+          )}
+
           {/* SAVE icon + text — right-aligned, icon on left of text */}
           {saveImg && (
             <KonvaImage

@@ -361,7 +361,7 @@ export function ContentExamplesSection({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-medium text-gray-700">
-              Reel Examples ({reelExamples.length} of 20)
+              Reel Examples ({reelExamples.length} of 50)
             </h4>
           </div>
           <p className="text-xs text-gray-400 mb-3">
@@ -381,7 +381,7 @@ export function ContentExamplesSection({
           <button
             type="button"
             onClick={addReelExample}
-            disabled={reelExamples.length >= 20}
+            disabled={reelExamples.length >= 50}
             className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
           >
             <Plus className="w-4 h-4" /> Add Reel Example
@@ -394,7 +394,7 @@ export function ContentExamplesSection({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-medium text-gray-700">
-              Post Examples ({postExamples.length} of 20)
+              Post Examples ({postExamples.length} of 50)
             </h4>
           </div>
           <p className="text-xs text-gray-400 mb-2">
@@ -449,7 +449,7 @@ export function ContentExamplesSection({
             <button
               type="button"
               onClick={addPostExample}
-              disabled={postExamples.length >= 20 || generateMutation.isPending}
+              disabled={postExamples.length >= 50 || generateMutation.isPending}
               className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
             >
               {generateMutation.isPending ? (

@@ -21,8 +21,8 @@ router = APIRouter(prefix="/niche-config", tags=["niche-config"])
 # --- Validation constants ---
 
 EXAMPLE_LIMITS = {
-    "max_reel_examples": 20,
-    "max_post_examples": 20,
+    "max_reel_examples": 50,
+    "max_post_examples": 50,
     "max_content_lines_per_reel": 15,
     "max_slides_per_post": 15,
     "max_title_length": 200,

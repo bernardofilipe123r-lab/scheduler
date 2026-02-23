@@ -46,6 +46,7 @@ import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   loadGeneralSettings,
+  PostCanvas,
 } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import { apiClient } from '@/shared/api/client'
@@ -1348,28 +1349,14 @@ export function ScheduledPage() {
                     {/* Slide content — Konva canvas for cover, CarouselTextSlide for text slides */}
                     <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100">
                       {detailSlideIndex === 0 ? (
-                        bgUrl ? (
-                          <img
-                            src={bgUrl}
-                            alt="Cover"
-                            className="w-full"
-                            style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center p-6 text-center"
-                               style={{
-                                 height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE),
-                                 width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE),
-                                 backgroundColor: selectedBrandData?.color ? `${selectedBrandData.color}15` : '#f4f4f5',
-                                 borderLeft: `4px solid ${selectedBrandData?.color || '#a1a1aa'}`,
-                               }}>
-                            <BrandBadge brand={selectedPost.brand} size="md" />
-                            <p className="mt-3 text-sm font-semibold text-gray-800 leading-snug whitespace-pre-line line-clamp-4">
-                              {selectedPost.title}
-                            </p>
-                            <span className="mt-2 text-xs text-gray-400">Cover preview pending</span>
-                          </div>
-                        )
+                        <PostCanvas
+                          brand={selectedPost.brand}
+                          title={selectedPost.title}
+                          backgroundImage={bgUrl}
+                          settings={postSettings}
+                          scale={DETAIL_PREVIEW_SCALE}
+                          logoUrl={logoUrl}
+                        />
                       ) : slideTexts.length > 0 ? (
                         <CarouselTextSlide
                           brand={selectedPost.brand}
