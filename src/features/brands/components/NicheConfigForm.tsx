@@ -10,7 +10,9 @@ import { PostCanvas, DEFAULT_GENERAL_SETTINGS, getBrandConfig } from '@/shared/c
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import { NicheConfigSkeleton } from '@/shared/components'
 
-const CONTENT_BRIEF_PLACEHOLDER = `Viral short-form health content for women 35+ on Instagram and TikTok.
+const CONTENT_BRIEF_PLACEHOLDER = `Example for Health & Wellness (@thelongevitycollege):
+
+Viral short-form health content for women 35+ on Instagram and TikTok.
 
 Topics include: foods that fight inflammation vs. foods that secretly cause it, superfoods and their specific benefits (e.g. magnesium for sleep, omega-3 for joints), surprising facts about everyday habits (sleep position, hydration timing, meal order), hormonal health after 35, gut-brain connection, metabolism myths, longevity habits backed by science, skin health from the inside out.
 
@@ -114,15 +116,14 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   useEffect(() => {
     if (data) {
-      const brief = data.content_brief || CONTENT_BRIEF_PLACEHOLDER
-      const merged = { ...DEFAULT_CONFIG, ...data, content_brief: brief }
+      const merged = { ...DEFAULT_CONFIG, ...data }
       // Keep defaults for carousel_cta_options when the API returns empty or all-blank entries
       const ctaOpts = data.carousel_cta_options
       if (!ctaOpts || ctaOpts.length === 0 || ctaOpts.every((o: { text?: string }) => !o.text?.trim())) {
         merged.carousel_cta_options = DEFAULT_CONFIG.carousel_cta_options
       }
       setValues(merged)
-      setDirty(!data.content_brief) // dirty if we pre-filled the template
+      setDirty(false)
     }
   }, [data])
 
@@ -288,7 +289,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             <input
               value={values.niche_name}
               onChange={(e) => update('niche_name', e.target.value)}
-              placeholder="Health & Wellness"
+              placeholder="Example: Health & Wellness"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
             <p className="text-xs text-gray-400 mt-1">A short label for your niche (e.g. "Health & Wellness", "Personal Finance")</p>
