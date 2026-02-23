@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown } from 'lucide-react'
+import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles } from '../api/use-niche-config'
 import { useBrands } from '../api/use-brands'
@@ -160,6 +160,22 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   const generalFilled = Boolean(values.niche_name?.trim() && values.content_brief?.trim())
 
+  // Section completion checks
+  const generalComplete = Boolean(
+    values.niche_name?.trim() && values.content_brief?.trim() && values.image_composition_style?.trim()
+  )
+  const reelsComplete = Boolean(
+    values.reel_examples.length >= 5 &&
+    values.cta_options.some(o => o.text?.trim()) &&
+    values.yt_title_examples?.length
+  )
+  const postsComplete = Boolean(
+    values.post_examples.length >= 1 &&
+    values.carousel_cta_options.some(o => o.text?.trim()) &&
+    values.citation_style && values.citation_style !== 'none'
+  )
+  const aiComplete = Boolean(aiResult)
+
   const handleSave = async () => {
     try {
       await updateMutation.mutateAsync({ ...values, brand_id: brandId ?? null })
@@ -218,22 +234,20 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   return (
     <div className="space-y-4 min-w-0">
-      {/* Header */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              <Dna className="w-5 h-5 text-primary-500" />
-              Content DNA
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Define what your AI-generated content is about. These settings control every reel, post, and visual.
-            </p>
+      {/* Sticky Save Bar */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Dna className="w-5 h-5 text-primary-500" />
+            <div>
+              <h2 className="font-semibold text-gray-900 text-sm">Content DNA</h2>
+              <p className="text-xs text-gray-500">These settings control every reel, post, and visual.</p>
+            </div>
           </div>
           <button
             onClick={handleSave}
             disabled={!dirty || updateMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="flex items-center gap-2 px-5 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
           >
             {updateMutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -243,7 +257,10 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
             Save
           </button>
         </div>
+      </div>
 
+      {/* Config Strength */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4">
           <ConfigStrengthMeter config={values} />
         </div>
@@ -253,12 +270,15 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           BLOCK 1: GENERAL
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('general')} className="w-full px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
-          <div className="text-left">
-            <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-              🧬 General
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">Core identity and visual style shared across all content types.</p>
+        <button type="button" onClick={() => toggleSection('general')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${generalComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
+          <div className="text-left flex items-center gap-2">
+            <div>
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+                🧬 General
+                {generalComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Core identity and visual style shared across all content types.</p>
+            </div>
           </div>
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.general ? '-rotate-90' : ''}`} />
         </button>
@@ -318,12 +338,15 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           BLOCK 2: REELS
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('reels')} className="w-full px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
-          <div className="text-left">
-            <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-              🎬 Reels
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">Reel examples, CTAs, and YouTube title style for short-form video content.</p>
+        <button type="button" onClick={() => toggleSection('reels')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${reelsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
+          <div className="text-left flex items-center gap-2">
+            <div>
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+                🎬 Reels
+                {reelsComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Reel examples, CTAs, and YouTube title style for short-form video content.</p>
+            </div>
           </div>
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.reels ? '-rotate-90' : ''}`} />
         </button>
@@ -523,12 +546,15 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           BLOCK 3: CAROUSEL POSTS
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('posts')} className="w-full px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
-          <div className="text-left">
-            <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-              📱 Carousel Posts
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and weighted CTAs for carousel content.</p>
+        <button type="button" onClick={() => toggleSection('posts')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${postsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
+          <div className="text-left flex items-center gap-2">
+            <div>
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
+                📱 Carousel Posts
+                {postsComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and weighted CTAs for carousel content.</p>
+            </div>
           </div>
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.posts ? '-rotate-90' : ''}`} />
         </button>
@@ -680,12 +706,13 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
           BLOCK 4: AI UNDERSTANDING
          ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('ai')} className="w-full px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200 cursor-pointer hover:from-indigo-100 hover:to-purple-100 transition-colors">
+        <button type="button" onClick={() => toggleSection('ai')} className={`w-full px-6 py-4 border-b border-gray-200 cursor-pointer transition-colors ${aiComplete ? 'bg-gradient-to-r from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100' : 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100'}`}>
           <div className="flex items-center justify-between">
             <div className="text-left">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-500" />
+                <Sparkles className={`w-4 h-4 ${aiComplete ? 'text-emerald-500' : 'text-indigo-500'}`} />
                 AI Understanding of Your Brand
+                {aiComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
               </h3>
               <p className="text-xs text-gray-500 mt-0.5">
                 Ask the AI to describe how it interprets your Content DNA configuration
