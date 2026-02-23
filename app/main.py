@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -100,7 +100,13 @@ app.include_router(health_router)  # Deep health check at /api/system/health-che
 app.include_router(toby_router)  # Toby autonomous agent endpoints at /api/toby/*
 
 
-# Serve React frontend (SPA catch-all)
+@app.get("/health", tags=["system"])
+async def health_check():
+    """Simple health check endpoint for Railway."""
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+
+# Serve React frontend (SPA catch-all) — MUST be the LAST route group
 if FRONTEND_DIR.exists():
     print(f"⚛️ React frontend: {FRONTEND_DIR}")
     
@@ -116,6 +122,9 @@ if FRONTEND_DIR.exists():
     @app.get("/{full_path:path}", tags=["frontend"])
     async def serve_spa(full_path: str):
         """Catch-all: serve React app for any non-API route (SPA client-side routing)."""
+        # Never intercept API or health-check paths — let FastAPI return proper 404s
+        if full_path.startswith("api/") or full_path in ("health", "docs", "redoc", "openapi.json"):
+            raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(FRONTEND_DIR / "index.html")
 else:
     print(f"⚠️ React frontend not found at {FRONTEND_DIR}. Run 'npm run build' to build.")
@@ -124,12 +133,6 @@ else:
     async def serve_root():
         """Placeholder when frontend not built."""
         return {"message": "Frontend not built. Run 'npm run build' from project root."}
-
-
-@app.get("/health", tags=["system"])
-async def health_check():
-    """Simple health check endpoint for Railway."""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 def _render_slides_node(brand: str, title: str, background_image: str, slide_texts: list, reel_id: str, user_id: str = "system") -> dict | None:
