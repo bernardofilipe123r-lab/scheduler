@@ -15,7 +15,7 @@ DATA = {
     "niche_description": "Viral short-form health content that educates and empowers audiences through proven patterns — body signals, nutrition tips, daily habits, longevity advice, and psychological insights.",
     "target_audience": "U.S. women aged 35+",
     "audience_description": "Women 35+ interested in healthy aging, energy, hormones, and longevity. Health-conscious consumers who scroll Instagram/TikTok for quick, actionable wellness tips.",
-    "parent_brand_name": "InLight",
+    "parent_brand_name": "",
     "topic_categories": ["Body & Warning Signs", "Nutrition & Food Benefits", "Daily Habits & Lifestyle", "Mindset & Psychology", "Aging & Longevity", "Symptoms & Deficiencies", "Food Safety & Storage", "Natural Remedies"],
     "topic_keywords": ["health", "wellness", "body", "nutrition", "digestion", "immunity", "inflammation", "hormones", "energy", "sleep", "aging", "longevity", "detox", "vitamins", "minerals", "hydration", "metabolism", "gut health", "circulation", "stress", "weight loss", "heart health", "brain fog", "thyroid", "magnesium", "vitamin D", "collagen", "antioxidants"],
     "topic_avoid": ["political topics", "religious content", "extreme medical claims", "pharmaceutical promotions", "controversial diets", "body shaming", "fear-mongering without solutions"],

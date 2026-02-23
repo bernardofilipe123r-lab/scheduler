@@ -206,30 +206,28 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   const handleAiUnderstanding = useCallback(async () => {
     setAiResult(null)
     setReelImages(null)
+    const storageKey = `ai-understanding-${brandId || 'global'}`
     try {
       // Step 1: AI text generation (~15–30s)
       const result = await aiMutation.mutateAsync(brandId)
 
-      // Step 2: Reel image rendering — wait for both before showing any results
-      let preview = null
+      // Persist immediately so results survive if user navigates away during reel render
+      localStorage.setItem(storageKey, JSON.stringify(result))
+      setAiResult(result)
+
+      // Step 2: Reel image rendering (non-blocking — result already visible)
       if (result.example_reel) {
         try {
-          preview = await reelPreviewMutation.mutateAsync({
+          const preview = await reelPreviewMutation.mutateAsync({
             brand_id: effectiveBrand,
             title: result.example_reel.title,
             content_lines: result.example_reel.content_lines,
           })
+          setReelImages(preview)
         } catch {
           toast.error('Reel render failed — showing text results only')
         }
       }
-
-      // Set both at once so partial state is never visible to the user
-      setAiResult(result)
-      setReelImages(preview)
-
-      // Persist so results survive page navigation
-      localStorage.setItem(`ai-understanding-${brandId || 'global'}`, JSON.stringify(result))
     } catch {
       toast.error('Failed to generate AI understanding')
     }
