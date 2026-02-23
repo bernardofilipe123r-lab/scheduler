@@ -74,6 +74,9 @@ class NicheConfig(Base):
     # Carousel CTA topic word — the niche-relevant word used in slide 4 CTA
     carousel_cta_topic = Column(String, default="")
 
+    # Carousel CTA options — weighted templates for last slide CTA (like cta_options for reels)
+    carousel_cta_options = Column(JSONB, default=[])
+
     # Caption sections — empty until configured
     follow_section_text = Column(Text, default="")
     save_section_text = Column(Text, default="")

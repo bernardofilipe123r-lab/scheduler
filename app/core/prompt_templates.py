@@ -572,7 +572,6 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
     citation_block = _build_citation_block(ctx)
     slide1_instruction = _build_slide1_instruction(ctx)
     title_examples = _build_post_title_examples(ctx)
-    cta_topic = _build_carousel_cta_topic(ctx)
 
     # Image composition hint — from ctx, never a niche-specific fallback
     composition_hint = (
@@ -613,11 +612,14 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
         title_style_note = "focused on a compelling insight or truth about the topic"
         title_type_note = f"A bold, impactful {niche_label} statement written in ALL CAPS"
 
-    # Slide 4: conclusion + CTA
-    slide4_cta_line = f"Follow @{{{{brandhandle}}}} to learn more about your {cta_topic}."
+    # Slide 4: conclusion + CTA (randomly selected from carousel CTA options)
+    from app.core.cta import get_carousel_cta_line
+    slide4_cta_line = get_carousel_cta_line(ctx)
+    # Ensure @{{brandhandle}} placeholder uses prompt-safe double braces
+    slide4_cta_line = slide4_cta_line.replace("@{brandhandle}", "@{{{{brandhandle}}}}")
     slide4_instruction = (
         f"A concluding takeaway paragraph (2-3 sentences summarizing the key insight or actionable advice for {audience_label}). "
-        f"Then on a NEW paragraph: \"{slide4_cta_line}\""
+        f"Then on a NEW paragraph (separated by a blank line): \"{slide4_cta_line}\""
     )
 
     # Caption mechanism instruction — uses niche description, not body/health

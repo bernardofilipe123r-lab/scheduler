@@ -54,6 +54,7 @@ export interface NicheConfig {
 
   // CTAs
   cta_options: CtaOption[]
+  carousel_cta_options: CtaOption[]
   hashtags: string[]
   carousel_cta_topic: string
   follow_section_text: string
@@ -71,7 +72,7 @@ export type ConfigStrength = 'basic' | 'good' | 'excellent'
 
 export function getConfigStrength(config: NicheConfig): ConfigStrength {
   let score = 0
-  const maxScore = 12
+  const maxScore = 13
 
   // Core identity (3 points)
   if (config.niche_name) score++
@@ -86,9 +87,11 @@ export function getConfigStrength(config: NicheConfig): ConfigStrength {
   // CTAs (1 point)
   if (config.cta_options.length > 0 && config.cta_options.some(c => c.text.trim())) score++
 
-  // Visual & content style (2 points)
+  // Carousel CTAs (1 point)
+  if (config.carousel_cta_options.length > 0 && config.carousel_cta_options.some(c => c.text.trim())) score++
+
+  // Visual & content style (1 point)
   if (config.image_composition_style && config.image_composition_style.trim()) score++
-  if (config.carousel_cta_topic && config.carousel_cta_topic.trim()) score++
 
   // YouTube titles (1 point)
   if ((config.yt_title_examples || []).length >= 2) score++

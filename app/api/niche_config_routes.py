@@ -63,6 +63,7 @@ class NicheConfigUpdate(BaseModel):
     yt_title_examples: Optional[list] = None
     yt_title_bad_examples: Optional[list] = None
     carousel_cta_topic: Optional[str] = Field(None, max_length=255)
+    carousel_cta_options: Optional[list] = None
     follow_section_text: Optional[str] = None
     save_section_text: Optional[str] = None
     disclaimer_text: Optional[str] = None
@@ -152,6 +153,7 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
         "yt_title_examples": cfg.yt_title_examples or [],
         "yt_title_bad_examples": cfg.yt_title_bad_examples or [],
         "carousel_cta_topic": cfg.carousel_cta_topic or "",
+        "carousel_cta_options": cfg.carousel_cta_options or [],
         "follow_section_text": cfg.follow_section_text,
         "save_section_text": cfg.save_section_text,
         "disclaimer_text": cfg.disclaimer_text,
@@ -213,6 +215,7 @@ async def get_niche_config(
         "yt_title_examples": ctx.yt_title_examples,
         "yt_title_bad_examples": ctx.yt_title_bad_examples,
         "carousel_cta_topic": ctx.carousel_cta_topic,
+        "carousel_cta_options": ctx.carousel_cta_options,
         "follow_section_text": ctx.follow_section_text,
         "save_section_text": ctx.save_section_text,
         "disclaimer_text": ctx.disclaimer_text,

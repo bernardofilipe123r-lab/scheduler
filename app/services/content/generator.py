@@ -593,6 +593,10 @@ class ContentGeneratorV2:
         image_style = ctx.image_style_description or "High-end professional photography style"
         composition_hint = ctx.image_composition_style or "Close-up, full-frame where the subject fills the entire frame"
 
+        from app.core.cta import get_carousel_cta_line
+        carousel_cta_line = get_carousel_cta_line(ctx)
+        carousel_cta_line = carousel_cta_line.replace("@{brandhandle}", "@{{{{brandhandle}}}}")
+
         prompt = f"""You are a {niche_label} content creator for {brand_label}, targeting {audience_label}.
 
 Generate a SINGLE carousel post that is {title_style_note}.
@@ -617,7 +621,7 @@ Generate a SINGLE carousel post that is {title_style_note}.
 ### CAPTION (4-5 paragraphs):
 - Paragraph 1: Hook — expand on the title with a surprising angle
 - {caption_mechanism}
-- Paragraph 4: Takeaway — conclude with: "Follow @{{{{brandhandle}}}} to learn more about your {ctx.carousel_cta_topic or ctx.niche_name.lower() or 'health'}."
+- Paragraph 4: Takeaway — conclude with a CTA on a new paragraph (separated by a blank line): "{carousel_cta_line}"
 {citation_block}
 - End with: \u26a0\ufe0f Disclaimer: {disclaimer}
 

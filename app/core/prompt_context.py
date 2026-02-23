@@ -55,6 +55,7 @@ class PromptContext:
 
     # Carousel
     carousel_cta_topic: str = ""
+    carousel_cta_options: List[dict] = field(default_factory=list)
 
     # Brand Personality
     brand_personality: Optional[str] = None

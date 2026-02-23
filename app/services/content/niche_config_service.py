@@ -112,6 +112,7 @@ class NicheConfigService:
             'yt_title_examples': 'yt_title_examples',
             'yt_title_bad_examples': 'yt_title_bad_examples',
             'carousel_cta_topic': 'carousel_cta_topic',
+            'carousel_cta_options': 'carousel_cta_options',
         }
 
         for db_field, ctx_field in field_map.items():
