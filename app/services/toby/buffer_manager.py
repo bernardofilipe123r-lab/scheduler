@@ -108,6 +108,23 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     empty_slots = [s for s in all_slots if not s["filled"]]
     next_empty = empty_slots[0]["time"] if empty_slots else None
 
+    # Per-brand breakdown
+    brand_breakdown = []
+    for brand in brands:
+        brand_slots = [s for s in all_slots if s["brand_id"] == brand.id]
+        brand_filled = sum(1 for s in brand_slots if s["filled"])
+        brand_total = len(brand_slots)
+        brand_reels = sum(1 for s in brand_slots if s["content_type"] == "reel")
+        brand_posts = sum(1 for s in brand_slots if s["content_type"] == "post")
+        brand_breakdown.append({
+            "brand_id": brand.id,
+            "display_name": brand.display_name or brand.id,
+            "total": brand_total,
+            "filled": brand_filled,
+            "reels": brand_reels,
+            "posts": brand_posts,
+        })
+
     return {
         "health": health,
         "total_slots": total,
@@ -116,6 +133,11 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         "percent": round(filled / total * 100, 1) if total > 0 else 100.0,
         "next_empty_slot": next_empty,
         "slots": all_slots,
+        "brand_breakdown": brand_breakdown,
+        "brand_count": len(brands),
+        "reel_slots_per_day": state.reel_slots_per_day or 6,
+        "post_slots_per_day": state.post_slots_per_day or 2,
+        "buffer_days": state.buffer_days or 2,
     }
 
 

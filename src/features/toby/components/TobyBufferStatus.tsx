@@ -1,4 +1,4 @@
-import { BatteryLow, BatteryWarning, BatteryFull, Calendar, Info } from 'lucide-react'
+import { BatteryLow, BatteryWarning, BatteryFull, Calendar, Info, Film, LayoutGrid } from 'lucide-react'
 import { useTobyBuffer } from '../hooks'
 
 const HEALTH_CONFIG = {
@@ -102,6 +102,56 @@ export function TobyBufferStatus() {
           <Info className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
           <p className="text-xs text-gray-500 leading-relaxed">{cfg.message}</p>
         </div>
+
+        {/* Slot formula explanation */}
+        {buffer.brand_count > 0 && (
+          <div className="px-3 py-2 bg-gray-50 rounded-lg mb-3">
+            <p className="text-[10px] text-gray-400 leading-relaxed">
+              <span className="font-semibold text-gray-500">{buffer.brand_count}</span> brand{buffer.brand_count !== 1 ? 's' : ''}{' × ('}
+              <span className="font-semibold text-blue-500">{buffer.reel_slots_per_day}</span> reels{' + '}
+              <span className="font-semibold text-purple-500">{buffer.post_slots_per_day}</span> posts{') / day × '}
+              <span className="font-semibold text-gray-500">{buffer.buffer_days}</span>{' day'}{buffer.buffer_days !== 1 ? 's' : ''}{' buffer'}
+            </p>
+          </div>
+        )}
+
+        {/* Per-brand breakdown */}
+        {Array.isArray(buffer.brand_breakdown) && buffer.brand_breakdown.length > 0 && (
+          <div className="mb-3">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Per-brand breakdown
+            </p>
+            <div className="space-y-1.5">
+              {buffer.brand_breakdown.map((b) => {
+                const pct = b.total > 0 ? Math.round((b.filled / b.total) * 100) : 100
+                return (
+                  <div key={b.brand_id} className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-700 w-28 truncate" title={b.display_name}>
+                      {b.display_name}
+                    </span>
+                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          pct === 100 ? 'bg-emerald-500' : pct > 50 ? 'bg-amber-400' : 'bg-red-400'
+                        }`}
+                        style={{ width: `${Math.max(pct, 2)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-gray-500 w-10 text-right">{b.filled}/{b.total}</span>
+                    <div className="flex items-center gap-1.5 min-w-[72px]">
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-500">
+                        <Film className="w-2.5 h-2.5" />{b.reels}
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-purple-500">
+                        <LayoutGrid className="w-2.5 h-2.5" />{b.posts}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Empty slots grouped by date */}
         {Object.keys(slotsByDate).length > 0 && (

@@ -8,7 +8,7 @@ const PHASE_CONFIG: Record<TobyPhase, { label: string; color: string; bg: string
     color: 'text-amber-700',
     bg: 'bg-amber-50 border-amber-200',
     icon: Shield,
-    desc: 'Learning the basics — filling the content buffer and gathering first signals',
+    desc: 'Filling the content calendar across all brands — creating reels and carousels for the next scheduled slots',
   },
   learning: {
     label: 'Learning',
@@ -83,7 +83,14 @@ export function TobyStatusBar() {
           </div>
 
           {status.enabled ? (
-            <p className="text-xs text-gray-500">{phaseInfo.desc}</p>
+            <div>
+              <p className="text-xs text-gray-500">{phaseInfo.desc}</p>
+              {status.buffer && status.buffer.brand_count > 0 && (
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {status.buffer.brand_count} brand{status.buffer.brand_count !== 1 ? 's' : ''} × ({status.buffer.reel_slots_per_day} reels + {status.buffer.post_slots_per_day} posts)/day × {status.buffer.buffer_days} days = {status.buffer.total_slots} slots
+                </p>
+              )}
+            </div>
           ) : (
             <p className="text-xs text-gray-500">Enable Toby to start autonomous content generation and optimization.</p>
           )}

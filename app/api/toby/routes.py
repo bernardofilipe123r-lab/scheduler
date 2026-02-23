@@ -342,6 +342,11 @@ def _format_buffer(raw: dict | None) -> dict | None:
         "filled_slots": raw.get("filled_slots", 0),
         "fill_percent": raw.get("percent", 0),
         "empty_slots": empty_list,
+        "brand_breakdown": raw.get("brand_breakdown", []),
+        "brand_count": raw.get("brand_count", 0),
+        "reel_slots_per_day": raw.get("reel_slots_per_day", 6),
+        "post_slots_per_day": raw.get("post_slots_per_day", 2),
+        "buffer_days": raw.get("buffer_days", 2),
     }
 
 # Intervals must match orchestrator.py

@@ -8,6 +8,15 @@ export interface TobyConfig {
   daily_budget_cents?: number
 }
 
+export interface TobyBufferBrand {
+  brand_id: string
+  display_name: string
+  total: number
+  filled: number
+  reels: number
+  posts: number
+}
+
 export interface TobyBufferStatus {
   health: 'healthy' | 'low' | 'critical'
   total_slots: number
@@ -19,6 +28,11 @@ export interface TobyBufferStatus {
     time: string
     content_type: string
   }>
+  brand_breakdown: TobyBufferBrand[]
+  brand_count: number
+  reel_slots_per_day: number
+  post_slots_per_day: number
+  buffer_days: number
 }
 
 export interface TobyLiveAction {
