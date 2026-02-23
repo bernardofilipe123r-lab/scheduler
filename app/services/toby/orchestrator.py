@@ -215,6 +215,18 @@ def _execute_content_plan(db: Session, plan):
         variant = "light" if slot_index % 2 == 0 else "dark"
     else:
         variant = "post"
+        # For posts, split caption paragraphs into slide_texts for carousel
+        caption_text = result.get("caption", "")
+        if caption_text and not result.get("content_lines"):
+            slide_paras = [p.strip() for p in caption_text.split("\n\n") if p.strip()]
+            # Filter out disclaimer/CTA paragraphs (keep substantive slides)
+            slide_texts = []
+            for para in slide_paras:
+                lower = para.lower()
+                if lower.startswith("⚠️") or lower.startswith("disclaimer"):
+                    continue  # Skip disclaimer
+                slide_texts.append(para)
+            result["content_lines"] = slide_texts
 
     # ── Step 4: Create a GenerationJob ───────────────────────
     job_manager = JobManager(db)
@@ -233,12 +245,16 @@ def _execute_content_plan(db: Session, plan):
     job_id = job.job_id
 
     # Store per-brand content in brand_outputs (so regenerate_brand finds it)
-    job_manager.update_brand_output(job_id, plan.brand_id, {
+    brand_output_data = {
         "title": result["title"],
         "content_lines": result.get("content_lines", []),
         "ai_prompt": result.get("image_prompt", ""),
         "status": "pending",
-    })
+    }
+    if variant == "post":
+        brand_output_data["slide_texts"] = result.get("content_lines", [])
+        brand_output_data["caption"] = result.get("caption", "")
+    job_manager.update_brand_output(job_id, plan.brand_id, brand_output_data)
 
     print(f"[TOBY] Created job {job_id} for {plan.brand_id} ({variant})", flush=True)
 
