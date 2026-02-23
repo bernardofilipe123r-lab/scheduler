@@ -42,13 +42,9 @@ import {
 import { useScheduledPosts, useDeleteScheduled, useDeleteScheduledForDay, useRetryFailed, useReschedule, usePublishNow } from '@/features/scheduling'
 import { BrandBadge, getBrandColor, getBrandLabel, useDynamicBrands } from '@/features/brands'
 import { ScheduledSkeleton, Modal } from '@/shared/components'
-import {
-  CANVAS_WIDTH,
-  CANVAS_HEIGHT,
-  loadGeneralSettings,
-  PostCanvas,
-} from '@/shared/components/PostCanvas'
-import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
+// Calendar is a pure image previewer — no canvas rendering
+const CANVAS_WIDTH = 1080
+const CANVAS_HEIGHT = 1350
 import { apiClient } from '@/shared/api/client'
 import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 
@@ -135,7 +131,6 @@ export function ScheduledPage() {
 
   // Post preview: brand logos + layout settings (mirrors PostJobDetail)
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
-  const postSettings = useMemo(() => loadGeneralSettings(), [])
   const DETAIL_PREVIEW_SCALE = 320 / CANVAS_WIDTH
 
   // Fetch brand logo when a post is selected
@@ -1303,7 +1298,6 @@ export function ScheduledPage() {
           // Ensure we have a valid URL, not an empty string
           const rawBgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
           const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
-          const logoUrl = brandLogos[selectedPost.brand] || null
           const selectedBrandData = dynamicBrands.find(b => b.id === selectedPost.brand)
 
           return (
@@ -1352,7 +1346,7 @@ export function ScheduledPage() {
               {isPost ? (
                 <div className="flex flex-col items-center">
                   <div className="relative" style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}>
-                    {/* Slide content — Konva canvas for cover, CarouselTextSlide for text slides */}
+                    {/* Slide content — pre-rendered images */}
                     <div className="rounded-lg overflow-hidden shadow-lg bg-zinc-100">
                       {hasPreRendered ? (
                         <img
@@ -1361,43 +1355,25 @@ export function ScheduledPage() {
                           style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
                           className="w-full object-contain"
                         />
-                      ) : detailSlideIndex === 0 ? (
-                        <PostCanvas
-                          brand={selectedPost.brand}
-                          title={selectedPost.title}
-                          backgroundImage={bgUrl}
-                          settings={postSettings}
-                          scale={DETAIL_PREVIEW_SCALE}
-                          logoUrl={logoUrl}
+                      ) : legacyCarouselPaths[detailSlideIndex - 1] ? (
+                        <img
+                          src={detailSlideIndex === 0 ? (bgUrl || '') : legacyCarouselPaths[detailSlideIndex - 1]}
+                          alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
+                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                          className="w-full object-contain"
                         />
-                      ) : slideTexts.length > 0 ? (
-                        <CarouselTextSlide
-                          brand={selectedPost.brand}
-                          text={slideTexts[detailSlideIndex - 1] || ''}
-                          allSlideTexts={slideTexts}
-                          isLastSlide={detailSlideIndex === slideTexts.length}
-                          scale={DETAIL_PREVIEW_SCALE}
-                          logoUrl={logoUrl}
-                          fontFamily={postSettings.slideFontFamily}
-                          brandHandle={selectedBrandData?.instagram_handle}
-                          brandDisplayName={selectedBrandData?.label}
-                          brandColor={selectedBrandData?.color}
+                      ) : bgUrl && detailSlideIndex === 0 ? (
+                        <img
+                          src={bgUrl}
+                          alt="Cover"
+                          style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
+                          className="w-full object-contain"
                         />
                       ) : (
-                        /* Fallback to legacy pre-rendered image if no slide_texts available */
-                        legacyCarouselPaths[detailSlideIndex - 1] ? (
-                          <img
-                            src={legacyCarouselPaths[detailSlideIndex - 1]}
-                            alt={`Slide ${detailSlideIndex}`}
-                            style={{ width: Math.round(CANVAS_WIDTH * DETAIL_PREVIEW_SCALE) }}
-                            className="w-full object-contain"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center text-zinc-500 text-sm"
-                               style={{ height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}>
-                            Image not available
-                          </div>
-                        )
+                        <div className="flex items-center justify-center text-zinc-500 text-sm"
+                             style={{ height: Math.round(CANVAS_HEIGHT * DETAIL_PREVIEW_SCALE) }}>
+                          Image not available
+                        </div>
                       )}
                     </div>
 
