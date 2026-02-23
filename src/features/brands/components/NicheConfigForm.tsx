@@ -117,8 +117,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
     if (data) {
       const brief = data.content_brief || CONTENT_BRIEF_PLACEHOLDER
       const merged = { ...DEFAULT_CONFIG, ...data, content_brief: brief }
-      // Keep defaults for carousel_cta_options when the API returns empty
-      if (!data.carousel_cta_options || data.carousel_cta_options.length === 0) {
+      // Keep defaults for carousel_cta_options when the API returns empty or all-blank entries
+      const ctaOpts = data.carousel_cta_options
+      if (!ctaOpts || ctaOpts.length === 0 || ctaOpts.every((o: { text?: string }) => !o.text?.trim())) {
         merged.carousel_cta_options = DEFAULT_CONFIG.carousel_cta_options
       }
       setValues(merged)
@@ -347,6 +348,8 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               brandId={brandId}
               showOnly="reels"
               generalFilled={generalFilled}
+              nicheName={values.niche_name}
+              contentBrief={values.content_brief}
             />
           </div>
 

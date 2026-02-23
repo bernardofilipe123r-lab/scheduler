@@ -12,6 +12,8 @@ interface ContentExamplesSectionProps {
   brandId?: string
   showOnly?: 'reels' | 'posts'
   generalFilled?: boolean
+  nicheName?: string
+  contentBrief?: string
 }
 
 function ReelExampleCard({
@@ -250,6 +252,37 @@ function PostExampleCard({
   )
 }
 
+function ReelGenTooltip({ generalFilled, nicheName, contentBrief }: { generalFilled?: boolean; nicheName?: string; contentBrief?: string }) {
+  if (!generalFilled) {
+    return (
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+        Fill in the General section first (niche name + content brief)
+      </div>
+    )
+  }
+
+  const briefPreview = (contentBrief || '').length > 180
+    ? contentBrief!.slice(0, 180) + '…'
+    : contentBrief || ''
+
+  return (
+    <div className="absolute bottom-full left-0 mb-2 w-[380px] bg-gray-900 text-white text-xs rounded-lg p-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+      <p className="font-semibold text-[11px] text-indigo-300 uppercase tracking-wide mb-2">What this does</p>
+      <p className="text-gray-300 mb-3 leading-relaxed">
+        Sends your Content DNA to DeepSeek AI along with 10 format examples. 
+        The AI generates <span className="text-white font-medium">50 unique reel ideas</span> (title + content lines) adapted to your niche. 
+        Existing reels will be <span className="text-amber-300 font-medium">replaced</span>.
+      </p>
+      <p className="font-semibold text-[11px] text-indigo-300 uppercase tracking-wide mb-1.5">Prompt context from your General section</p>
+      <div className="bg-gray-800 rounded p-2.5 space-y-1 text-[11px] font-mono leading-relaxed">
+        {nicheName && <p><span className="text-gray-400">Niche:</span> <span className="text-green-300">{nicheName}</span></p>}
+        {briefPreview && <p><span className="text-gray-400">Brief:</span> <span className="text-green-300">{briefPreview}</span></p>}
+      </div>
+      <p className="text-gray-500 mt-2 text-[10px]">+ 10 H&W format examples · DeepSeek · temp 0.9</p>
+    </div>
+  )
+}
+
 export function ContentExamplesSection({
   reelExamples,
   postExamples,
@@ -258,6 +291,8 @@ export function ContentExamplesSection({
   brandId,
   showOnly,
   generalFilled = false,
+  nicheName,
+  contentBrief,
 }: ContentExamplesSectionProps) {
   const [newPostSlideCount, setNewPostSlideCount] = useState<3 | 4>(4)
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null)
@@ -399,11 +434,7 @@ export function ContentExamplesSection({
                   {reelBatchGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                   {reelBatchGenerating ? 'Generating 50...' : 'Generate reels with AI'}
                 </button>
-                {!generalFilled && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    Fill in the General section first (niche name + content brief)
-                  </div>
-                )}
+                <ReelGenTooltip generalFilled={generalFilled} nicheName={nicheName} contentBrief={contentBrief} />
               </div>
             </div>
           )}
@@ -469,17 +500,13 @@ export function ContentExamplesSection({
               <button
                 type="button"
                 onClick={generateReelBatch}
-                disabled={reelExamples.length >= 50 || reelBatchGenerating || !generalFilled}
+                disabled={reelBatchGenerating || !generalFilled}
                 className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {reelBatchGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {reelBatchGenerating ? 'Generating 50...' : 'Generate reels with AI'}
+                {reelBatchGenerating ? 'Generating 50...' : reelExamples.length >= 50 ? 'Regenerate reels with AI' : 'Generate reels with AI'}
               </button>
-              {!generalFilled && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  Fill in the General section first (niche name + content brief)
-                </div>
-              )}
+              <ReelGenTooltip generalFilled={generalFilled} nicheName={nicheName} contentBrief={contentBrief} />
             </div>
           </div>
         </div>
