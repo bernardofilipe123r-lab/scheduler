@@ -3,6 +3,7 @@ import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles } from '../api/use-niche-config'
 import { useBrands } from '../api/use-brands'
+import { apiClient } from '@/shared/api/client'
 import { ConfigStrengthMeter } from './ConfigStrengthMeter'
 import { ContentExamplesSection } from './ContentExamplesSection'
 import type { NicheConfig } from '../types/niche-config'
@@ -113,6 +114,22 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
     () => brandsData?.find(b => b.id === effectiveBrand),
     [brandsData, effectiveBrand]
   )
+
+  // Fetch brand logo URL from theme endpoint
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!effectiveBrand) { setBrandLogoUrl(null); return }
+    apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${effectiveBrand}/theme`)
+      .then(data => {
+        const logo = data.theme?.logo
+        if (logo) {
+          setBrandLogoUrl(logo.startsWith('http') ? logo : `/brand-logos/${logo}`)
+        } else {
+          setBrandLogoUrl(null)
+        }
+      })
+      .catch(() => setBrandLogoUrl(null))
+  }, [effectiveBrand])
 
   useEffect(() => {
     if (data) {
@@ -826,6 +843,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                           backgroundImage={null}
                           settings={DEFAULT_GENERAL_SETTINGS}
                           scale={0.2}
+                          logoUrl={brandLogoUrl}
                         />
                       </div>
                       {aiResult.example_post.slides.map((slide, i) => {
@@ -845,6 +863,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
                               allSlideTexts={aiResult.example_post!.slides.map(s => s.replace(/^Slide\s*\d+\s*:\s*/i, ''))}
                               isLastSlide={i === aiResult.example_post!.slides.length - 1}
                               scale={0.2}
+                              logoUrl={brandLogoUrl}
                               brandHandle={effectiveBrandData?.instagram_handle}
                               brandDisplayName={effectiveBrandData?.display_name}
                               brandColor={effectiveBrandData?.colors?.primary}
