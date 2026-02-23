@@ -1427,14 +1427,14 @@ export function ScheduledPage() {
                       <>
                         <button
                           onClick={() => setDetailSlideIndex(i => Math.max(0, i - 1))}
-                          disabled={detailSlideIndex === 0}
+                          disabled={detailSlideIndex === 0 || slideLoading}
                           className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronLeft className="w-5 h-5 text-white" />
                         </button>
                         <button
                           onClick={() => setDetailSlideIndex(i => Math.min(totalSlides - 1, i + 1))}
-                          disabled={detailSlideIndex >= totalSlides - 1}
+                          disabled={detailSlideIndex >= totalSlides - 1 || slideLoading}
                           className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                         >
                           <ChevronRight className="w-5 h-5 text-white" />
@@ -1451,11 +1451,14 @@ export function ScheduledPage() {
                           <button
                             key={i}
                             onClick={() => setDetailSlideIndex(i)}
+                            disabled={slideLoading}
                             className={clsx(
                               'w-2 h-2 rounded-full transition-all',
                               i === detailSlideIndex
                                 ? 'bg-blue-500 scale-125'
-                                : 'bg-gray-300 hover:bg-gray-400'
+                                : slideLoading
+                                  ? 'bg-gray-200 cursor-not-allowed'
+                                  : 'bg-gray-300 hover:bg-gray-400'
                             )}
                           />
                         ))}
