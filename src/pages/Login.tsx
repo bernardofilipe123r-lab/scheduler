@@ -59,7 +59,7 @@ function InputField({
           placeholder={placeholder}
           autoFocus={autoFocus}
           autoComplete={autoComplete}
-          className={`w-full !pl-11 ${rightElement ? '!pr-12' : '!pr-4'} py-2.5 border border-gray-200 rounded-xl focus:outline-none text-[14px] bg-white placeholder:text-gray-300 text-gray-800`}
+          className={`w-full !pl-11 ${rightElement ? '!pr-12' : '!pr-4'} !py-2.5 border border-gray-200 rounded-xl focus:outline-none text-[14px] bg-white placeholder:text-gray-300 text-gray-800`}
         />
         {rightElement}
       </div>
