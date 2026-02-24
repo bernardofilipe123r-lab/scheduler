@@ -7,8 +7,6 @@ import { apiClient } from '@/shared/api/client'
 import type { User } from '@supabase/supabase-js'
 import type { AuthUser } from './api/auth-api'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
-
 interface AuthContextType {
   user: AuthUser | null
   isLoading: boolean
@@ -93,20 +91,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const register = async (email: string, password: string, name: string) => {
-    // Use backend admin API to create user (bypasses email rate limits)
-    const res = await fetch(`${API_BASE}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
+        emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
+      },
     })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: 'Registration failed' }))
-      throw new Error(body.detail || 'Registration failed')
+    if (error) throw new Error(error.message)
+    // Supabase silently returns success with empty identities when email is already registered
+    if (data.user && data.user.identities?.length === 0) {
+      throw new Error('An account with this email already exists. Please sign in instead.')
     }
-    // User is auto-confirmed — sign in immediately
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-    if (signInError) throw new Error(signInError.message)
-    return { needsEmailConfirmation: false }
+    // If session is null, email confirmation is required
+    return { needsEmailConfirmation: !data.session }
   }
 
   const logout = async () => {
