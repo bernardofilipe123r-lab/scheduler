@@ -17,31 +17,31 @@ export default defineConfig({
     proxy: {
       // Dev proxy — forwards API calls to the production backend (avoids CORS)
       '/api': {
-        target: 'https://scheduler-production-29d5.up.railway.app',
+        target: 'https://scheduler-production-29d4.up.railway.app',
         changeOrigin: true,
       },
       '/reels': {
-        target: 'https://scheduler-production-29d5.up.railway.app',
+        target: 'https://scheduler-production-29d4.up.railway.app',
         changeOrigin: true,
       },
       '/health': {
-        target: 'https://scheduler-production-29d5.up.railway.app',
+        target: 'https://scheduler-production-29d4.up.railway.app',
         changeOrigin: true,
       },
       '/logs': {
-        target: 'https://scheduler-production-29d5.up.railway.app',
+        target: 'https://scheduler-production-29d4.up.railway.app',
         changeOrigin: true,
       },
       '/output': {
-        target: 'https://scheduler-production-29d5.up.railway.app',
+        target: 'https://scheduler-production-29d4.up.railway.app',
         changeOrigin: true,
       },
       '/docs': {
-        target: 'https://scheduler-production-29d5.up.railway.app',
+        target: 'https://scheduler-production-29d4.up.railway.app',
         changeOrigin: true,
       },
       '/jobs': {
-        target: 'https://scheduler-production-29d5.up.railway.app',
+        target: 'https://scheduler-production-29d4.up.railway.app',
         changeOrigin: true,
       },
     },

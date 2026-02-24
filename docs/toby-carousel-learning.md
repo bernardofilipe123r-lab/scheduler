@@ -51,7 +51,7 @@ A rich prompt is assembled from your Content DNA:
 7. **Anti-repetition context**: recent titles and topics to avoid
 
 ### Step 4 — AI Generates Content (with Quality Loop)
-**Model**: DeepSeek Chat (`deepseek-chat`) — temperature 0.85, max 8,000 tokens for batch generation.
+**Model**: DeepSeek Chat (`deepseek-chat`) — temperature 0.85, max 2,000 tokens per single post (or 8,000 tokens for batch generation of multiple posts).
 
 The generation has up to **3 attempts** with escalating fixes (same quality loop as reels):
 1. **Attempt 1**: Standard prompt with anti-repetition history
@@ -74,10 +74,16 @@ Returns for each post:
 - `caption` — 4–5 paragraphs with optional citation + disclaimer
 - `image_prompt` — cinematic image description for the background
 - `quality_breakdown` — per-dimension scores for transparency
+- `topic_category` — which topic bucket was used
+- `hook_type` — which emotional hook was used
+- `generated_at` — ISO datetime of generation
+- `generator_version` — `"v2"`
 
 ### Step 5 — Generate Visual Assets
-1. **AI Background Image**: DeepSeek crafts a professional image prompt → sent to `deAPI` using the `ZImageTurbo_INT8` model (8 steps) → returns a background PNG
+1. **AI Background Image**: DeepSeek crafts a professional image prompt (temperature 0.8, max 300 tokens) → sent to `deAPI` using the `Flux1schnell` model (4 steps, rounds to 128px) for posts → returns a background PNG
 2. Background is uploaded to Supabase Storage
+
+> **Note:** Reels use a different, higher-quality image model (`ZImageTurbo_INT8`, 8 steps, rounds to 16px). Posts use the faster `Flux1schnell` model since the background is heavily overlaid with text slides.
 
 ### Step 6 — Render Carousel Slides
 A **Node.js Konva script** (`scripts/render-slides.cjs`) composites the final carousel:
@@ -180,13 +186,15 @@ This produces functional carousels, but they won't match your brand's specific v
 |---|---|
 | No Post Examples | Prompt runs without few-shot block; uses generic citation-style title examples. Content is functional but less on-brand |
 | No Content Brief | Omitted from prompt — AI generates generic content for the niche |
-| No Citation Style | Treated as "none" — no source references required |
+| No Citation Style | Treated as `"none"` — no source references required |
 | No Carousel CTA Options | Falls back to 3 built-in defaults: "Follow @{brandhandle} for more {cta_topic}" variants |
 | No Image Style | "Premium studio photography. Clean, full-frame composition." |
-| No Topic Categories | Falls back to "general" |
+| No Topic Categories | Falls back to `"general"` |
 | No NicheConfig at all | All defaults — completely generic content |
 | AI generation fails | `_fallback_post_title()` returns "Content generation temporarily unavailable" |
 | All 3 attempts score below 80 | Uses the best attempt from all 3 tries |
+| Quality score < 50 after 3 tries | Falls back to placeholder content |
+| deAPI image fails | `_fallback_prompt()` assembles a template image prompt from content data |
 
 ---
 
@@ -194,10 +202,11 @@ This produces functional carousels, but they won't match your brand's specific v
 
 **Toby doesn't need pre-existing "post ideas" to generate carousels.** The old system had 59 hardcoded viral ideas (`VIRAL_IDEAS`), but those were removed. The current system is **entirely generative**:
 
-1. **Strategy engine** picks topic + personality + hook + format randomly (or from learned preferences)
+1. **Strategy engine** picks topic + personality + hook + format randomly (or from learned preferences via Thompson Sampling)
 2. **DeepSeek AI** generates original title, slides, caption, and image prompt from scratch
 3. **Content Brief + Citation Style + Topic Keywords** guide the AI even without examples
 4. **The AI itself is the idea source** — it creates new content based on your niche configuration
+5. **Anti-repetition system** tracks the last 20 titles and enforces 3-day topic cooldowns + 30-day fingerprint cooldowns to prevent stale content
 
 So even with zero post examples, Toby:
 - Uses your Content Brief to understand what to write about

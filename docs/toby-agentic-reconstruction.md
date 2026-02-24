@@ -32,7 +32,7 @@
 ### 1.1 The Pipeline (Exactly How It Runs Today)
 
 ```
-APScheduler (5-min interval)
+APScheduler (5-min interval, job_id='toby_orchestrator')
   └→ toby_tick()                                    # orchestrator.py
        └→ _process_user(db, state) per enabled user
             ├→ 1. Buffer Check (every 5 min)
@@ -50,7 +50,7 @@ APScheduler (5-min interval)
             │     learning_engine.update_strategy_score()   # Welford's variance
             │     learning_engine.update_experiment_results()
             │
-            ├→ 4. Discovery Check (bootstrap: 20min, normal: 360-720min)
+            ├→ 4. Discovery Check (bootstrap: 20min, normal: 360min)
             │     TrendScout.scan_own_accounts()
             │     TrendScout.scan_competitors()
             │     TrendScout.scan_hashtags(max=3)
@@ -69,9 +69,9 @@ This is `_execute_content_plan()` in `app/services/toby/orchestrator.py` (line ~
 |---|---|---|
 | 1 | Build `PromptContext` from `NicheConfigService.get_context()` + inject `personality_modifier` | `ctx = niche_svc.get_context(user_id, brand_id)` |
 | 2 | Generate text via `ContentGeneratorV2` — reels: `generate_viral_content()`, posts: `generate_post_titles_batch(count=1)` | Both use 3-attempt quality loop internally |
-| 3 | Determine variant: reels → `"light"/"dark"` from `slot_index % 2`, posts → `"post"` | Time-of-day based |
-| 4 | Create `GenerationJob` via `JobManager.create_job()` with `created_by="toby"` | Stores in `generation_jobs` table |
-| 5 | Run media pipeline: `JobProcessor.process_post_brand()` (posts) or `regenerate_brand()` (reels) | Calls deAPI for images, FFmpeg for video |
+| 3 | Determine variant: reels → `"light"/"dark"` from `slot_index % 2` (even=light, odd=dark), posts → `"post"` | Time-of-day based |
+| 4 | Create `GenerationJob` via `JobManager.create_job()` with `created_by="toby"` → job_id `"TOBY-XXXXXX"` | Stores in `generation_jobs` table |
+| 5 | Run media pipeline: `JobProcessor.process_post_brand()` (posts) or `regenerate_brand()` (reels) | deAPI for images, FFmpeg for video |
 | 6 | Read `brand_outputs` from completed job + pre-render carousel PNGs via `render_carousel_images()` | Node.js Konva for carousels |
 | 7 | Auto-schedule via `DatabaseSchedulerService.schedule_reel()` | Creates `ScheduledReel` row |
 | 8 | Mark `created_by = "toby"` + `record_content_tag()` for learning | Creates `TobyContentTag` row |
@@ -81,16 +81,16 @@ This is `_execute_content_plan()` in `app/services/toby/orchestrator.py` (line ~
 ```
 app/services/toby/
 ├── __init__.py                    # Package docstring only
-├── orchestrator.py       (470 lines)  # Main pipeline + toby_tick()
-├── learning_engine.py    (360 lines)  # Thompson Sampling, strategy selection
-├── analysis_engine.py    (155 lines)  # Performance scoring (Toby Score)
-├── state.py              (125 lines)  # Phase management, enable/disable/reset
-├── buffer_manager.py     (140 lines)  # Buffer health calculation
-├── content_planner.py    (130 lines)  # ContentPlan creation, record_content_tag
-└── discovery_manager.py  (100 lines)  # TrendScout coordination
+├── orchestrator.py       (465 lines)  # Main pipeline + toby_tick()
+├── learning_engine.py    (354 lines)  # Thompson Sampling, strategy selection
+├── analysis_engine.py    (167 lines)  # Performance scoring (Toby Score)
+├── state.py              (141 lines)  # Phase management, enable/disable/reset
+├── buffer_manager.py     (147 lines)  # Buffer health calculation
+├── content_planner.py    (122 lines)  # ContentPlan creation, record_content_tag
+└── discovery_manager.py  (106 lines)  # TrendScout coordination
 
 app/core/
-├── prompt_context.py     (160 lines)  # PromptContext dataclass (34 fields)
+├── prompt_context.py     (167 lines)  # PromptContext dataclass (30+ fields)
 ├── prompt_templates.py   (733 lines)  # All prompt builders (reel + carousel)
 ├── quality_scorer.py     (474 lines)  # 5-dimension quality scoring
 ├── viral_patterns.py     (384 lines)  # PatternSelector, archetypes, formats, hooks
@@ -100,22 +100,24 @@ app/core/
 app/services/content/
 ├── generator.py         (1126 lines)  # ContentGeneratorV2 — DeepSeek API calls
 ├── tracker.py            (719 lines)  # ContentTracker — history, dedup, cooldowns
-├── job_manager.py                     # GenerationJob CRUD
-├── job_processor.py                   # Full media pipeline (images, video, uploads)
+├── job_manager.py        (267 lines)  # GenerationJob CRUD (create, update, query)
+├── job_processor.py      (977 lines)  # Full media pipeline (images, video, uploads)
 └── niche_config_service.py            # NicheConfig → PromptContext conversion
 
 app/services/media/
-├── ai_background.py                   # deAPI image generation (ZImageTurbo_INT8)
+├── ai_background.py      (641 lines)  # deAPI image generation
+│                                       # Reels: ZImageTurbo_INT8 (8 steps)
+│                                       # Posts: Flux1schnell (4 steps)
 ├── carousel_renderer.py               # Node.js Konva bridge
 └── ...
 
-app/models/toby.py       (237 lines)  # 5 models: TobyState, TobyExperiment,
+app/models/toby.py       (232 lines)  # 5 models: TobyState, TobyExperiment,
                                        # TobyStrategyScore, TobyActivityLog,
                                        # TobyContentTag
 
 app/api/toby/
 ├── routes.py             (422 lines)  # 12 authenticated endpoints
-└── schemas.py             (10 lines)  # TobyConfigUpdate
+└── schemas.py             (11 lines)  # TobyConfigUpdate
 ```
 
 ### 1.4 Current Database Schema (Toby-Owned Tables)
@@ -180,7 +182,7 @@ app/api/toby/
 |---|---|---|
 | `action_type` | String(30) | 13 types: `content_generated`, `analysis_completed`, `error`, etc. |
 | `description` | Text | Human-readable |
-| `action_metadata` | JSON | Structured data |
+| `action_metadata` | JSON (column `metadata`) | Structured data |
 | `level` | String(10) | `"info"`, `"success"`, `"error"`, `"warning"` |
 
 ### 1.5 Current AI Configuration
@@ -194,15 +196,19 @@ app/api/toby/
 | Max tokens (reels) | `1200` | `generator.py` |
 | Max tokens (single post) | `2000` | `generator.py` |
 | Max tokens (batch posts) | `8000` | `generator.py` |
-| Image model (reels) | `ZImageTurbo_INT8` (8 steps) | `ai_background.py` |
-| Image model (posts) | `ZImageTurbo_INT8` (8 steps) | `prompt_templates.py` |
+| Image prompt temperature | `0.8` | `generator.py` |
+| Image prompt max tokens | `300` | `generator.py` |
+| Image model (reels) | `ZImageTurbo_INT8` (8 steps, rounds to 16px) | `ai_background.py` |
+| Image model (posts) | `Flux1schnell` (4 steps, rounds to 128px) | `ai_background.py` |
 | Quality threshold (publish) | `≥ 80` | `quality_scorer.py` |
 | Quality threshold (regenerate) | `65–79` | `quality_scorer.py` |
-| Quality threshold (reject) | `< 65` | `quality_scorer.py` |
+| Quality threshold (reject/fallback) | `< 50` (reels fallback), `< 65` (scorer reject) | `quality_scorer.py` / `generator.py` |
 | Max regeneration attempts | `3` | `generator.py` |
 | History window (dedup) | 20 recent | `quality_scorer.py` |
 | Fingerprint cooldown | 30 days | `tracker.py` |
 | Topic cooldown | 3 days | `tracker.py` |
+| Brand history window | 60 days | `tracker.py` |
+| High performer threshold | 85.0 | `tracker.py` |
 
 ### 1.6 Current Learning Algorithm
 
@@ -222,14 +228,14 @@ app/api/toby/
 - Engagement quality: 40% — `(saves*2 + shares*3) / views * 10,000`
 - Follower context: 10% — `(views / followers) * 10`
 
-### 1.7 Current Frontend (15 files, 1,577 lines)
+### 1.7 Current Frontend (13 files, ~1,570 lines)
 
 ```
 src/pages/Toby.tsx                    (90 lines)   # 4-tab layout: Overview | Experiments | Insights | Settings
 src/features/toby/
 ├── types.ts                         (140 lines)   # 15 interfaces/types
 ├── api/toby-api.ts                  (64 lines)    # 12 API methods
-├── hooks/use-toby.ts               (115 lines)    # 12 React Query hooks (15s polling)
+├── hooks/use-toby.ts               (115 lines)    # 12 React Query hooks (useTobyStatus refetches every 15s)
 └── components/
     ├── TobyStatusBar.tsx            (140 lines)   # Enable/disable + phase badge + buffer %
     ├── TobyLiveStatus.tsx           (199 lines)   # Live action hero card + 4-step pipeline viz
@@ -241,6 +247,20 @@ src/features/toby/
 ```
 
 **No "thinking" UI exists.** The closest is `TobyLiveStatus` which shows "Working"/"Idle" with a 4-step pipeline indicator (Buffer → Metrics → Analysis → Discovery).
+
+> **PromptContext Field Categories** (30+ fields in `prompt_context.py`):
+> - **Core Identity:** `niche_name`, `content_brief`, `target_audience`, `content_tone`, `tone_avoid`
+> - **Topic Config:** `topic_categories`, `topic_keywords`, `topic_avoid`
+> - **Philosophy:** `content_philosophy`, `hook_themes`
+> - **Examples:** `reel_examples`, `post_examples` (list of dicts)
+> - **Visual:** `image_style_description`, `image_palette_keywords`
+> - **Citation:** `citation_style`, `citation_source_types`
+> - **YouTube:** `yt_title_examples`, `yt_title_bad_examples`
+> - **Carousel:** `carousel_cta_topic`, `carousel_cta_options`, `carousel_cover_overlay_opacity` (default 55), `carousel_content_overlay_opacity` (default 85)
+> - **Brand:** `brand_personality`, `brand_focus_areas`, `parent_brand_name`
+> - **CTA/Caption:** `cta_options`, `hashtags`, `follow_section_text`, `save_section_text`, `disclaimer_text`
+> - **Discovery:** `competitor_accounts`, `discovery_hashtags`
+> - **Toby:** `personality_modifier` (str, default "")
 
 ---
 

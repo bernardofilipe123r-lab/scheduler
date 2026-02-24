@@ -3,7 +3,7 @@
 ## Architecture Specification v2.0
 
 **Date:** 22 February 2026  
-**Status:** Proposal — Pending Review  
+**Status:** Implemented — Toby v2.0 pipeline is live  
 **Depends on:** [toby-architecture-spec.md](toby-architecture-spec.md) (v1.0)
 
 ---
@@ -164,7 +164,14 @@ The user-triggered content creation follows this exact flow:
     "content_lines": ["73% of people...", "The hidden danger...", "Try this instead..."],
     "caption": "Full Instagram caption with hashtags...",
     "image_prompt": "A dramatic scene of coffee beans and gut bacteria...",
-    "reel_id": "GEN-587421",  # auto-generated ID
+    "format_style": "FULL_SENTENCE",
+    "topic_category": "nutrition",
+    "hook_type": "curiosity",
+    "generated_at": "2026-02-22T14:30:00",
+    "success": True,
+    "generator_version": "v2",
+    "quality_score": 82.5,
+    "quality_breakdown": {"structure": 85, "familiarity": 80, "novelty": 78, "hook": 90, "plausibility": 82},
 }
 
 # For posts (generate_post_title):
@@ -253,10 +260,10 @@ The manual pipeline supports multi-brand jobs (one job → N brands). Toby creat
 
 | Component | Current State | Target State | Change Required |
 |---|---|---|---|
-| **`_execute_content_plan()`** | Calls `schedule_reel()` directly with text only | Creates `GenerationJob` → runs `JobProcessor` → schedules with media | **Major rewrite** |
-| **`GenerationJob` model** | No `created_by` column | Has `created_by` column (`"user"` or `"toby"`) | **DB migration + model change** |
-| **`JobManager.create_job()`** | No `created_by` parameter | Accepts `created_by` parameter | **Parameter addition** |
-| **`GenerationJob.to_dict()`** | Doesn't include `created_by` | Returns `created_by` in API response | **Method update** |
+| **`_execute_content_plan()`** | Creates `GenerationJob` → runs `JobProcessor` → schedules with media | Already implemented (v2.0) | **Done** |
+| **`GenerationJob` model** | Has `created_by` column (`"user"` or `"toby"`) | Has `created_by` column (`"user"` or `"toby"`) | **Done** |
+| **`JobManager.create_job()`** | Has `created_by` parameter, generates `"TOBY-XXXXXX"` IDs | Accepts `created_by` parameter | **Done** |
+| **`GenerationJob.to_dict()`** | Includes `created_by` | Returns `created_by` in API response | **Done** |
 | **Frontend `Job` type** | No `created_by` field | Has `created_by?: 'user' \| 'toby'` | **Type addition** |
 | **Frontend `ScheduledPost` type** | No `created_by` field | Has `created_by?: 'user' \| 'toby'` | **Type addition** |
 | **History page** | No Toby filter | "🤖 Toby" badge + creator filter | **UI addition** |
@@ -265,7 +272,7 @@ The manual pipeline supports multi-brand jobs (one job → N brands). Toby creat
 | **Buffer manager** | Calculates empty slots | No change needed | **None** |
 | **Content planner** | Creates `ContentPlan` objects | No change needed | **None** |
 | **Learning engine** | Tracks experiments/scores | No change needed | **None** |
-| **Toby tick interval** | 5 minutes | May need adjustment (media gen takes 60-90s per brand) | **Config tuning** |
+| **Toby tick interval** | 5 minutes | No change needed — `max_plans=1` means ~90s per plan is well within interval | **None** |
 
 ### 4.2 Timing Implications
 
@@ -286,13 +293,9 @@ Currently, `_execute_content_plan()` takes ~5-10 seconds (text generation only).
 | **Total per reel (dark)** | **~60-100s** |
 | **Total per post** | **~40-70s** |
 
-**Impact on the Toby tick:** Currently `max_plans=3` per tick. With media generation, 3 dark-mode reels could take ~5 minutes — the entire tick interval. Options:
+**Impact on the Toby tick:** The orchestrator uses `max_plans=1` per tick (note: `create_plans_for_empty_slots()` default is `max_plans=6`, but the orchestrator overrides to 1). With 5-minute ticks and ~90s per plan, this ensures the tick always completes within the interval.
 
-1. **Reduce `max_plans` to 1-2 per tick** — Safer, fills buffer more slowly but reliably
-2. **Run media generation in background threads** — More complex but fills buffer faster
-3. **Keep `max_plans=3` but increase tick interval** — Simple but slower to react
-
-**Recommendation:** Start with `max_plans=1` per tick. Since the tick runs every 5 minutes and a single reel takes ~60-100s, Toby can generate ~60-70 pieces per day (more than enough for 6 reels + 2 posts × 5 brands = 40 slots). If buffer gets critical, temporarily increase to `max_plans=2`.
+**Current implementation:** `max_plans=1` per tick. Since the tick runs every 5 minutes and a single reel takes ~60-100s, Toby can generate ~60-70 pieces per day (more than enough for 6 reels + 2 posts × N brands). If buffer becomes critical, increasing to `max_plans=2` is safe.
 
 ---
 
@@ -447,18 +450,20 @@ created_by = Column(String(20), default="user", nullable=True)
 ALTER TABLE generation_jobs ADD COLUMN created_by VARCHAR(20) DEFAULT 'user';
 ```
 
-### 5.3 `JobManager.create_job()` — Add `created_by` Parameter
+### 5.3 `JobManager.create_job()` — Actual Signature
 
 ```python
 def create_job(
     self, user_id, title, content_lines, brands, variant,
     ai_prompt=None, cta_type=None, platforms=None, fixed_title=False,
     image_model=None,
-    created_by="user",  # ← NEW
-) -> str:
+    created_by="user",
+) -> GenerationJob:
+    # When created_by="toby", job_id format is "TOBY-XXXXXX"
+    # When created_by="user", job_id format is "GEN-XXXXXX"
     job = GenerationJob(
         ...,
-        created_by=created_by,  # ← NEW
+        created_by=created_by,
     )
 ```
 
@@ -820,7 +825,7 @@ If Railway deploys while `regenerate_brand()` is running:
 | Service | Rate Limit | Toby's Usage | Safety Margin |
 |---|---|---|---|
 | DeepSeek API | ~60 req/min | ~2-3 calls/plan (text + caption + yt_title) | Plenty — 1 plan per 5min tick = 0.6 req/min |
-| deAPI (image gen) | ~10 req/min | 1-2 calls/plan (background + yt_thumb) | OK with `max_plans=1` |
+| deAPI (image gen) | ~10 req/min | 1-2 calls/plan (background + yt_thumb). Queue timeout: 90s, max 5 retries | OK with `max_plans=1` |
 | Supabase Storage | ~100 uploads/min | 4 files/plan | Plenty |
 | Instagram Graph API | 200 req/hour | Only during metrics check (every 6h) | Plenty |
 

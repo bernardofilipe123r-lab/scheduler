@@ -114,6 +114,10 @@ Returns:
 - `format_style` — which format was used
 - `topic_category` — which topic bucket
 - `hook_type` — which emotional hook
+- `generated_at` — ISO datetime
+- `generator_version` — `"v2"`
+- `quality_score` — total score from the quality scorer
+- `quality_breakdown` — per-dimension scores (structure, familiarity, novelty, hook, plausibility)
 
 ### Step 5 — Determine Visual Variant
 Based on time slot: `slot_index = hour ÷ 4` → even = **light mode**, odd = **dark mode**. This alternates visual styles throughout the day.
@@ -129,8 +133,12 @@ Based on time slot: `slot_index = hour ÷ 4` → even = **light mode**, odd = **
 
 **AI Background Generation** (for dark mode + YouTube thumbnails):
 1. Content is parsed into structured data
-2. DeepSeek crafts a professional image prompt
-3. Prompt is sent to `deAPI` using the `ZImageTurbo_INT8` model (8 steps, 1152×1920) for higher quality backgrounds
+2. DeepSeek crafts a professional image prompt (temperature 0.8, max 300 tokens)
+3. Prompt is sent to `deAPI` using the `ZImageTurbo_INT8` model (8 steps, 1152×1920, rounds to 16px) for higher quality reel backgrounds
+4. Image is darkened by a factor of 0.95 (5% darker) for overlay readability
+
+> **Note:** Posts/carousels use a different model (`Flux1schnell`, 4 steps, rounds to 128px) since carousel backgrounds are more heavily overlaid with text.
+> **Retry config:** Queue timeout of 90s, max 5 retries with exponential backoff (5s initial, 60s max), minimum 0.5s between requests.
 
 **Caption**: DeepSeek generates an AI first paragraph → assembled with: follow section + save section + CTA (weighted random) + disclaimer + hashtags.
 
@@ -166,7 +174,9 @@ After the 7-day score, each of the 5 strategy dimensions gets its running averag
 - If `edu_calm` + `curiosity` hook + `health` topic scored 90 → those options all get boosted
 - If `provoc` + `bold_claim` scored 25 → those get dampened
 
-Running averages, variance, and the last 10 scores are tracked per dimension per brand. Next time Toby generates, it **exploits** high-scoring combinations more often.
+Running averages, variance (Welford's algorithm), and the last 10 scores are tracked per dimension per brand. Next time Toby generates, it **exploits** high-scoring combinations more often.
+
+> **Anti-repetition safeguards:** Topic cooldown is 3 days, content fingerprint cooldown is 30 days, and brand history looks back 60 days. High-performing content (score ≥ 85) is tracked separately for safe fallback generation during API outages.
 
 ### Phase Progression
 | Phase | When | Behavior |
@@ -259,8 +269,9 @@ The strategy engine picks the format, and the AI generates content matching that
 | No NicheConfig at all | All defaults — completely generic content |
 | DeepSeek API fails | `_fallback_content()` returns "CONTENT GENERATION TEMPORARILY UNAVAILABLE" |
 | Quality < 50 after 3 tries | Falls back to placeholder content |
-| deAPI image fails | `_fallback_prompt()` assembles a template image prompt from content data |
+| deAPI image fails | `_fallback_prompt()` assembles a template image prompt from content data; max 5 retries with exponential backoff |
 | No brand baseline metrics | Relative score defaults to 50 |
+| Job processor timeout | 600s timeout (`BRAND_GENERATION_TIMEOUT`); job marked as failed, retried next tick |
 
 ---
 
@@ -273,7 +284,7 @@ The strategy engine picks the format, and the AI generates content matching that
 | **Formats** | SHORT_FRAGMENT, FULL_SENTENCE, CAUSE_EFFECT, PURE_LIST | Paragraph-based educational content |
 | **Citations** | None | Based on citation_style setting |
 | **Visual output** | PNG image → MP4 video (7–8s with music) | Carousel PNGs (cover + slides) rendered via Konva |
-| **Image model** | `ZImageTurbo_INT8` (8 steps, high quality) | `ZImageTurbo_INT8` (8 steps, high quality) |
+| **Image model** | `ZImageTurbo_INT8` (8 steps, high quality, rounds to 16px) | `Flux1schnell` (4 steps, faster, rounds to 128px) |
 | **Quality loop** | 3-attempt escalation with quality scorer | 3-attempt escalation with quality scorer (same engine) |
 | **AI temperature** | 0.85 | 0.85 |
 | **Default slots/day** | 6 per brand | 2 per brand |

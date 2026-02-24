@@ -4,7 +4,9 @@
 
 **Date:** February 2026  
 **Audience:** Investors, Product Team, Engineers, Designers  
-**Status:** Proposal — Pending Review
+**Status:** Partially Implemented — Core architecture is live; some advanced features (cross-brand intelligence, spending limits) are planned
+
+> **Implementation status:** Sections 1-8 reflect the live system. Sections 9-13 include both implemented features and planned enhancements. See inline status notes for specifics.
 
 ---
 
@@ -76,10 +78,12 @@ Toby is a **background orchestration layer** that ties together existing service
 - `PostPerformance` — Performance scoring and percentile ranking
 
 **What Toby adds:**
-- An **orchestrator** that decides when to create, what to create, and how to improve
-- A **learning engine** that tracks experiments and allocates more resources to winners
-- A **content buffer** that pre-generates 2 days of content to guarantee slots never go empty
-- A **personality/angle testing framework** (A/B testing for AI prompts)
+- An **orchestrator** (`app/services/toby/orchestrator.py`, 465 lines) that decides when to create, what to create, and how to improve
+- A **learning engine** (`app/services/toby/learning_engine.py`, 354 lines) that tracks experiments and allocates more resources to winners
+- A **content buffer** (`app/services/toby/buffer_manager.py`, 147 lines) that pre-generates 2 days of content to guarantee slots never go empty
+- A **personality/angle testing framework** (A/B testing for AI prompts via Thompson Sampling)
+- An **analysis engine** (`app/services/toby/analysis_engine.py`, 167 lines) for 48h and 7d performance scoring
+- A **state machine** (`app/services/toby/state.py`, 141 lines) managing bootstrap → learning → optimizing phases
 
 ---
 
@@ -187,18 +191,18 @@ Toby sits **above** the existing service layer and calls into it. This means:
 
 ## 5. Backend Architecture
 
-### 5.1 New Module: `app/services/toby/`
+### 5.1 New Module: `app/services/toby/` (Implemented)
 
 ```
 app/services/toby/
 ├── __init__.py
-├── orchestrator.py        # Main loop — the "brain" that coordinates everything
-├── content_planner.py     # Decides WHAT to create and WHEN
-├── analysis_engine.py     # Evaluates performance, computes scores
-├── learning_engine.py     # A/B testing framework, personality optimization
-├── discovery_manager.py   # Coordinates TrendScout scanning schedules
-├── buffer_manager.py      # Ensures 2-day content buffer stays full
-└── state.py               # Toby state machine (OFF → BOOTSTRAP → LEARNING → OPTIMIZING)
+├── orchestrator.py        (465 lines) # Main loop — the "brain" that coordinates everything
+├── content_planner.py     (122 lines) # Decides WHAT to create and WHEN
+├── analysis_engine.py     (167 lines) # Evaluates performance, computes scores
+├── learning_engine.py     (354 lines) # Thompson Sampling, personality optimization
+├── discovery_manager.py   (106 lines) # Coordinates TrendScout scanning schedules
+├── buffer_manager.py      (147 lines) # Ensures 2-day content buffer stays full
+└── state.py               (141 lines) # Toby state machine (OFF → BOOTSTRAP → LEARNING → OPTIMIZING)
 ```
 
 ### 5.2 Orchestrator — The Brain
@@ -236,19 +240,23 @@ class ContentPlan:
     user_id: str
     brand_id: str
     content_type: str          # "reel" or "post" (carousel)
-    variant: str               # "light" or "dark"
-    scheduled_time: datetime
+    scheduled_time: str        # ISO datetime string
     
-    # Strategy fields — filled by the learning engine
-    personality_id: str        # Which AI personality to use
-    topic_bucket: str          # Which topic category
-    hook_strategy: str         # Which hook pattern
-    angle: str                 # The creative angle/framing
+    # Strategy fields — filled by the learning engine via StrategyChoice
+    personality_id: str        # Which AI personality to use (e.g. "edu_calm", "deep_edu")
+    personality_prompt: str    # The actual system prompt modifier text
+    topic_bucket: str          # Which topic category (from NicheConfig)
+    hook_strategy: str         # Which hook pattern (e.g. "question", "myth_buster")
+    title_format: str          # Which title structure (e.g. "how_x_does_y")
+    visual_style: str          # Which visual approach (e.g. "dark_cinematic")
     
     # Optional — if experimenting
-    experiment_id: str | None  # Links to an active A/B test
-    is_control: bool           # Is this the "safe" variant or the experimental one?
+    experiment_id: Optional[str] = None  # Links to an active A/B test
+    is_experiment: bool = False          # Part of an experiment?
+    is_control: bool = False             # Is this the control variant?
 ```
+
+> **Note:** `variant` (light/dark) is NOT in the ContentPlan. It's determined at execution time from the scheduled_time: `slot_index = hour // 4`, even index = light, odd = dark.
 
 **Planning algorithm:**
 
@@ -288,11 +296,11 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
     """
     Score a post's performance relative to the brand's baseline.
     
-    Components:
-    1. Raw views score (absolute performance matters — 100k+ is always great)
-    2. Relative views score (how this post compares to the brand's average)
-    3. Engagement quality (saves + shares weighted heavily)
-    4. Follower context (mild normalization — not extreme)
+    Components (actual implemented weights):
+    1. Raw views score — 20% (absolute performance, logarithmic scale)
+    2. Relative views score — 30% (compared to brand's 14-day rolling average)
+    3. Engagement quality — 40% (saves + shares, primary learning signal)
+    4. Follower context — 10% (mild normalization)
     
     Returns: 0-100 score
     """
@@ -300,44 +308,41 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
     brand_avg_views = brand_stats["avg_views"]
     brand_followers = brand_stats["followers"]
     
-    # 1. Raw views (30%) — absolute performance
+    # 1. Raw views (20%) — absolute performance
     #    Logarithmic scale: 1k=20, 10k=50, 50k=75, 100k=90, 500k=100
     raw_views_score = min(100, math.log10(max(views, 1)) / math.log10(500_000) * 100)
     
-    # 2. Relative views (35%) — THE most important signal
-    #    How many X above/below brand average?
+    # 2. Relative views (30%) — how this post compares to brand average
     if brand_avg_views > 0:
         relative_ratio = views / brand_avg_views
-        #  0.5x avg = 25,  1x avg = 50,  2x avg = 75,  4x+ avg = 100
+        #  0.5x avg = 12.5,  1x avg = 25,  2x avg = 50,  4x+ avg = 100
         relative_score = min(100, relative_ratio * 25)
     else:
         relative_score = 50  # No baseline yet
     
-    # 3. Engagement quality (25%) — saves and shares are strongest signals
+    # 3. Engagement quality (40%) — THE most important signal
+    #    Saves and shares are strongest signals for content value
     saves = metrics.get("saves", 0)
     shares = metrics.get("shares", 0)
     engagement_score = min(100, (saves * 2 + shares * 3) / max(views, 1) * 10000)
     
     # 4. Follower context (10%) — mild normalization
-    #    A post getting 40k views on a 5k-follower brand is more impressive
-    #    than 40k views on a 100k-follower brand
     if brand_followers > 0:
         views_per_follower = views / brand_followers
-        # 0.1x followers = 30,  1x = 60,  5x = 85,  10x+ = 100
         follower_context_score = min(100, views_per_follower * 10)
     else:
         follower_context_score = 50
     
     final = (
-        raw_views_score * 0.30 +
-        relative_score * 0.35 +
-        engagement_score * 0.25 +
+        raw_views_score * 0.20 +
+        relative_score * 0.30 +
+        engagement_score * 0.40 +
         follower_context_score * 0.10
     )
     return round(final, 1)
 ```
 
-**Key: the most important signal is relative performance within the brand.** If a brand averages 10k views and one post gets 40k, that's a strong winner signal regardless of follower count.
+**Key: engagement quality (saves + shares) is the dominant signal at 40%.** This ensures Toby optimizes for save-worthy, high-value content rather than just views. Relative performance within the brand (30%) is the secondary signal.
 
 ### 5.5 Learning Engine — A/B Testing Framework
 
@@ -415,29 +420,36 @@ When buffer is LOW or CRITICAL:
 
 Wraps the existing `TrendScout` service with a smart scheduling layer.
 
-**Scanning schedule:**
+**Scanning schedule (actual implementation):**
 
 | Scan Type | Frequency | What It Does |
 |---|---|---|
-| Own accounts | Every 6 hours | Discover our own brand's recent posts and their engagement |
-| Competitors (reels) | Every 8 hours | Monitor competitor reel performance, find viral patterns |
-| Competitors (carousels) | Every 8 hours | Monitor competitor carousel performance separately |
-| Hashtag search (reels) | Every 12 hours | Find trending reel content in the niche |
-| Hashtag search (carousels) | Every 12 hours | Find trending carousel content in the niche |
-| Bootstrap (cold start) | Every 20 minutes | Aggressive scanning during first 7 days to build data |
+| Bootstrap mode (all scans) | Every 20 minutes | Aggressive scanning during first 7 days to build data |
+| Normal mode (own + competitors + hashtags) | Every 6 hours (360 min) | All scans run in sequence per tick |
+
+> **Note:** The initial design proposed separate intervals per scan type (6h/8h/12h), but the implementation uses a single discovery interval: 20 min (bootstrap) or 360 min (normal). In normal mode, `scan_own_accounts()`, `scan_competitors()`, and `scan_hashtags(max=3)` run sequentially in a single discovery tick.
 
 The discovery manager feeds trending content into the learning engine, which may use it to inspire new experiments (e.g., "Competitor X got 500k likes on a 'myth buster' reel about sleep — let's test myth_buster hooks for sleep content").
 
-### 5.8 API Routes: `app/api/toby/`
+### 5.8 API Routes: `app/api/toby/` (Implemented)
 
 ```
 app/api/toby/
 ├── __init__.py
-├── routes.py              # Main Toby API endpoints
-└── schemas.py             # Pydantic schemas for request/response
+├── routes.py              (422 lines) # Main Toby API endpoints
+└── schemas.py             (11 lines)  # Pydantic schemas for request/response
 ```
 
-**Endpoints:**
+**Single schema (`TobyConfigUpdate`):**
+```python
+class TobyConfigUpdate(BaseModel):
+    buffer_days: Optional[int] = Field(None, ge=1, le=7)
+    explore_ratio: Optional[float] = Field(None, ge=0.0, le=1.0)
+    reel_slots_per_day: Optional[int] = Field(None, ge=0, le=24)
+    post_slots_per_day: Optional[int] = Field(None, ge=0, le=24)
+```
+
+**Endpoints (all require `get_current_user` auth):**
 
 | Method | Path | Description |
 |---|---|---|
@@ -469,32 +481,37 @@ Add a **"Toby"** entry to the sidebar navigation between "Analytics" and "Brands
 
 The icon will be `Bot` from `lucide-react` (a robot icon). When Toby is enabled, the icon gets a subtle green pulse animation to indicate it's active.
 
-### 6.2 Page Structure
+### 6.2 Page Structure (Implemented)
 
 ```
 src/
 ├── pages/
-│   └── Toby.tsx                     # Main Toby page (tab container)
+│   └── Toby.tsx                     (90 lines)  # Main Toby page (4-tab layout)
 ├── features/
 │   └── toby/
-│       ├── index.ts                 # Public exports
-│       ├── api.ts                   # React Query hooks for Toby endpoints
-│       ├── types.ts                 # TypeScript types for Toby data
-│       ├── components/
-│       │   ├── TobyStatusBar.tsx     # ON/OFF toggle + phase indicator + buffer health
-│       │   ├── TobyActivityFeed.tsx  # Real-time activity log
-│       │   ├── TobyPublished.tsx     # Gallery of Toby-published content
-│       │   ├── TobyExperiments.tsx   # A/B test dashboard
-│       │   ├── TobyInsights.tsx      # Performance insights and trends
-│       │   ├── TobyDiscovery.tsx     # Competitor/hashtag scan results
-│       │   ├── TobySettings.tsx      # Configuration panel
-│       │   └── TobyBufferStatus.tsx  # Visual slot buffer gauge
-│       └── hooks/
-│           ├── useTobyStatus.ts     # Poll Toby status every 30s
-│           └── useTobyActivity.ts   # Poll activity feed
+│       ├── types.ts                 (140 lines) # 15 TypeScript types/interfaces
+│       ├── api/toby-api.ts          (64 lines)  # 12 API methods (1:1 with endpoints)
+│       ├── hooks/use-toby.ts        (115 lines) # 12 React Query hooks (status refetches every 15s)
+│       └── components/
+│           ├── index.ts             (7 lines)   # Public exports
+│           ├── TobyStatusBar.tsx    (140 lines) # ON/OFF toggle + phase indicator + buffer health
+│           ├── TobyLiveStatus.tsx   (199 lines) # Live action hero card + 4-step pipeline viz
+│           ├── TobyActivityFeed.tsx (259 lines) # Timeline grouped by time period
+│           ├── TobyExperiments.tsx  (120 lines) # A/B test cards with variant comparison
+│           ├── TobyInsights.tsx     (75 lines)  # Ranked strategy bars per dimension
+│           ├── TobyBufferStatus.tsx (191 lines) # Health indicator + per-brand breakdown
+│           └── TobySettings.tsx     (170 lines) # Config sliders + danger zone
 ```
 
-### 6.3 Toby Page — Tab Layout
+**Total frontend: ~1,570 lines across 13 files.**
+
+**TypeScript types in `types.ts`:** `TobyPhase`, `TobyConfig`, `TobyBufferBrand`, `TobyBufferStatus`, `TobyLiveAction`, `TobyLiveInfo`, `TobyTimestamps`, `TobyStats`, `TobyStatus`, `TobyActivityItem`, `TobyExperiment`, `TobyInsight`, `TobyInsights`, `TobyContentTag`, `TobyDiscoveryItem`
+
+### 6.3 Toby Page — Tab Layout (Implemented)
+
+The page has 4 tabs: **Overview** | **Experiments** | **Insights** | **Settings**
+
+> **Note:** The original design proposed 5 tabs (Activity, Published, Experiments, Insights, Discovery). The implementation consolidated these into 4 tabs: Overview (combines Activity Feed + Live Status + Buffer Status), Experiments, Insights, and Settings.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -712,6 +729,7 @@ CREATE TABLE toby_activity_log (
     description TEXT NOT NULL,
     
     -- Structured metadata (varies by action_type)
+    -- Note: SQLAlchemy column name is "metadata" (mapped from action_metadata field)
     metadata    JSONB,
     
     -- Severity for filtering
@@ -928,6 +946,11 @@ Toby maintains a pool of AI personalities that modify how DeepSeek generates con
 | `compare` | Comparison | "'This vs That' format. Compare foods, habits, routines side-by-side." |
 | `protocol` | Protocol/How-To | "Step-by-step guides and daily protocols. Actionable and specific." |
 
+**Additional strategy dimensions:**
+- **Hook strategies:** `question`, `myth_buster`, `shocking_stat`, `personal_story`, `bold_claim`
+- **Title formats:** `how_x_does_y`, `number_one_mistake`, `why_experts_say`, `stop_doing_this`, `hidden_truth`
+- **Visual styles:** `dark_cinematic`, `light_clean`, `vibrant_bold`
+
 Personalities are stored in `toby_strategy_scores` with `dimension='personality'` and scored like any other strategy.
 
 ### 9.2 Seasonal & Algorithmic Adaptation
@@ -1079,73 +1102,72 @@ This lets us roll out Toby incrementally and disable any subsystem that's misbeh
 
 ## 12. Implementation Phases
 
-### Phase 1: Foundation (Week 1-2)
+### Phase 1: Foundation ✅ Complete
 
-**Goal:** Toby exists as a data model and can be turned on/off. No autonomous actions yet.
+**Goal:** Toby exists as a data model and can be turned on/off.
 
-- [ ] Create all new database tables (migrations)
-- [ ] Implement `TobyState` model + `toby_state` CRUD
-- [ ] Create `/api/toby/status`, `/api/toby/enable`, `/api/toby/disable`, `/api/toby/reset` endpoints
-- [ ] Create frontend Toby page with status bar and ON/OFF toggle
-- [ ] Add Toby to sidebar navigation (with active indicator)
-- [ ] Add `created_by` column to `scheduled_reels`
-- [ ] Register Toby scheduler tick in `main.py` startup (initially a no-op)
+- [x] Create all new database tables (migrations)
+- [x] Implement `TobyState` model + `toby_state` CRUD
+- [x] Create `/api/toby/status`, `/api/toby/enable`, `/api/toby/disable`, `/api/toby/reset` endpoints
+- [x] Create frontend Toby page with status bar and ON/OFF toggle
+- [x] Add Toby to sidebar navigation (with active indicator)
+- [x] Add `created_by` column to `scheduled_reels`
+- [x] Register Toby scheduler tick in `main.py` startup (job_id `'toby_orchestrator'`, 5-min interval)
 
-### Phase 2: Buffer Manager (Week 2-3)
+### Phase 2: Buffer Manager + Media Pipeline ✅ Complete
 
-**Goal:** Toby can fill empty slots with content. Slots never fail.
+**Goal:** Toby can fill empty slots with content including full media. Slots never fail.
 
-- [ ] Implement `BufferManager` — detect empty slots, calculate what's needed
-- [ ] Implement `ContentPlanner` — decide topic/personality for each slot (random initially)
-- [ ] Wire planner → `ContentGeneratorV2` → `JobProcessor` → `Scheduler` pipeline
-- [ ] Implement content generation throttling (max 3 concurrent)
-- [ ] Implement DeepSeek retry + safe fallback
-- [ ] Show buffer status on Toby dashboard
-- [ ] Activity log for generated content
+- [x] Implement `BufferManager` — detect empty slots, calculate what's needed (healthy/low/critical)
+- [x] Implement `ContentPlanner` — decide topic/personality for each slot via `StrategyChoice`
+- [x] Wire planner → `ContentGeneratorV2` → `JobProcessor` → `Scheduler` pipeline
+- [x] Full media pipeline integration: Toby creates `GenerationJob` records, runs `regenerate_brand()` for reels and `process_post_brand()` for posts
+- [x] `max_plans=1` per tick (orchestrator overrides default of 6)
+- [x] Job IDs: `"TOBY-XXXXXX"` format for Toby-created jobs
+- [x] Show buffer status on Toby dashboard (TobyBufferStatus component)
+- [x] Activity log for generated content (TobyActivityFeed component)
 
-### Phase 3: Metrics & Analysis (Week 3-4)
+### Phase 3: Metrics & Analysis ✅ Complete
 
 **Goal:** Toby collects performance metrics and scores content.
 
-- [ ] Implement `AnalysisEngine` — 48h and 7d scoring with Toby's composite formula
-- [ ] Wire metrics collection into Toby tick (leveraging existing `MetricsCollector`)
-- [ ] Implement `toby_content_tags` — link strategy metadata to scheduled content
-- [ ] Show published content with scores on Toby dashboard
-- [ ] Compute brand baselines (rolling 14-day averages)
+- [x] Implement `AnalysisEngine` — 48h and 7d scoring with Toby Score composite formula (20/30/40/10 weights)
+- [x] Wire metrics collection into Toby tick (leveraging existing `MetricsCollector`)
+- [x] Implement `toby_content_tags` — link strategy metadata to scheduled content
+- [x] Compute brand baselines (rolling 14-day averages)
 
-### Phase 4: Learning Engine (Week 4-6)
+### Phase 4: Learning Engine ✅ Complete
 
 **Goal:** Toby learns from performance data and improves strategy selection.
 
-- [ ] Implement `LearningEngine` — Thompson Sampling for strategy selection
-- [ ] Implement `toby_strategy_scores` — running aggregates per strategy option
-- [ ] Implement personality system (system prompt modifiers for DeepSeek)
-- [ ] Implement 70/30 exploit/explore ratio in ContentPlanner
-- [ ] Implement experiment tracking (`toby_experiments`)
-- [ ] Show experiments dashboard on frontend
-- [ ] Show insights (best topics, hooks, personalities) on frontend
+- [x] Implement `LearningEngine` — Thompson Sampling for strategy selection
+- [x] Implement `toby_strategy_scores` — running aggregates with Welford's variance
+- [x] Implement personality system (5 reel + 5 carousel personalities as system prompt modifiers)
+- [x] Implement 70/30 exploit/explore ratio via `choose_strategy()`
+- [x] Implement experiment tracking (`toby_experiments`, min_samples=5)
+- [x] Show experiments dashboard on frontend (TobyExperiments component)
+- [x] Show insights (best topics, hooks, personalities) on frontend (TobyInsights component)
 
-### Phase 5: Discovery Integration (Week 6-7)
+### Phase 5: Discovery Integration ✅ Complete
 
 **Goal:** Toby uses competitor/hashtag intelligence to inspire content.
 
-- [ ] Implement `DiscoveryManager` — scheduling layer on top of TrendScout
-- [ ] Feed discovery results into LearningEngine (trending topics → experiment inspiration)
-- [ ] Bootstrap mode (aggressive scanning for first 7 days)
-- [ ] Show discovery results on Toby dashboard
-- [ ] Seasonal/drift detection and adaptive explore ratio
+- [x] Implement `DiscoveryManager` — scheduling layer on top of TrendScout
+- [x] Bootstrap mode (20-min scanning for first 7 days, 360-min normal)
+- [ ] Feed discovery results into LearningEngine (trending topics → experiment inspiration) — **planned enhancement**
+- [ ] Seasonal/drift detection and adaptive explore ratio — **planned enhancement**
 
-### Phase 6: Polish & Production Hardening (Week 7-8)
+### Phase 6: Polish & Production Hardening — Partially Complete
 
 **Goal:** Toby is reliable, observable, and production-ready.
 
-- [ ] Comprehensive error handling and retry logic across all Toby services
-- [ ] Activity log filtering and pagination
-- [ ] Feature flags for each Toby subsystem
-- [ ] Admin panel: view all users' Toby states, override settings
-- [ ] Rate limit protection (DeepSeek, Meta API, Supabase)
-- [ ] Monitoring/alerting for Toby failures (if buffer goes to 0% for any user)
-- [ ] Documentation and runbook
+- [x] Error handling for content generation failures (slot stays empty, retry on next tick)
+- [x] Activity log with action types: `content_generated`, `analysis_completed`, `error`, etc.
+- [x] Rate limit protection via `max_plans=1` per tick + existing deAPI retry logic
+- [ ] Feature flags for each Toby subsystem — **planned**
+- [ ] Admin panel: view all users' Toby states — **planned**
+- [ ] Monitoring/alerting for Toby failures — **planned**
+- [ ] Per-user budget limits (daily_budget_cents already in schema) — **planned**
 
 ---
 
