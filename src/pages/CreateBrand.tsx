@@ -299,7 +299,7 @@ export function CreateBrandPage() {
       display_name: displayName,
       short_name: shortName,
       instagram_handle: instagramHandle || undefined,
-      posts_per_day: 2,
+      posts_per_day: 6,
       colors,
       facebook_page_id: facebookPageId || undefined,
       instagram_business_account_id: instagramBusinessAccountId || undefined,

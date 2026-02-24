@@ -34,7 +34,7 @@ export function BrandSettingsModal({ brand, connections, allBrands, onClose }: B
   const v2Brand = v2Brands?.find(b => b.id === brand.id)
   const schedule = {
     offset: v2Brand?.schedule_offset ?? 0,
-    postsPerDay: v2Brand?.posts_per_day ?? 2,
+    postsPerDay: v2Brand?.posts_per_day ?? 6,
   }
   
   const [offset, setOffset] = useState(schedule.offset)
