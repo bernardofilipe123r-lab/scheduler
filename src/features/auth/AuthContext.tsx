@@ -100,6 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     })
     if (error) throw new Error(error.message)
+    // Supabase silently returns success with empty identities when email is already registered
+    if (data.user && data.user.identities?.length === 0) {
+      throw new Error('An account with this email already exists. Please sign in instead.')
+    }
     // If session is null, email confirmation is required
     return { needsEmailConfirmation: !data.session }
   }
