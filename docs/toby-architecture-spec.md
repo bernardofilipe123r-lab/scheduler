@@ -258,24 +258,27 @@ class ContentPlan:
 
 > **Note:** `variant` (light/dark) is NOT in the ContentPlan. It's determined at execution time from the scheduled_time: `slot_index = hour // 4`, even index = light, odd = dark.
 
-**Planning algorithm:**
+**Planning algorithm (actual implementation):**
 
 ```
 1. Get all brands for this user
 2. For each brand:
-   a. Get the slot schedule (reel slots + carousel slots per day)
-   b. Check which slots in the next 2 days are already filled
-   c. For each empty slot:
-      - Ask LearningEngine: "What should we try?"
-      - LearningEngine returns: personality, topic, hook, angle
-      - ~70% of slots use PROVEN strategies (top-performing combos)
-      - ~30% of slots use EXPERIMENTAL strategies (new angles/personalities)
-      - Create a ContentPlan
+   a. Get the slot schedule (reel_slots_per_day + post_slots_per_day)
+   b. Check which slots in the next 2 days (buffer_days) are already filled
+   c. For each empty slot (up to max_plans=1 per tick):
+      - Ask LearningEngine.choose_strategy() for a StrategyChoice
+      - choose_strategy() picks 5 dimensions using Thompson Sampling:
+        personality, topic_bucket, hook_strategy, title_format, visual_style
+      - ~70% of selections use PROVEN strategies (highest avg_score)
+      - ~30% of selections use EXPLORATION (random picks)
+      - Create a ContentPlan with the strategy + personality_prompt text
 3. For each ContentPlan:
-   a. Call ContentGeneratorV2 to generate title + content_lines
-   b. Call JobProcessor to create images/videos
-   c. Schedule via DatabaseSchedulerService
-   d. Tag the scheduled item with Toby metadata (experiment_id, personality, etc.)
+   a. Build PromptContext from NicheConfig, inject personality_modifier
+   b. Call ContentGeneratorV2 to generate title + content_lines (3-attempt quality loop)
+   c. Create GenerationJob (job_id "TOBY-XXXXXX")
+   d. Run JobProcessor.regenerate_brand() or process_post_brand()
+   e. Schedule via DatabaseSchedulerService with full media URLs
+   f. Record TobyContentTag with strategy metadata for learning
 ```
 
 ### 5.4 Analysis Engine
@@ -1198,7 +1201,7 @@ This lets us roll out Toby incrementally and disable any subsystem that's misbeh
 | **Explore** | Choosing a random or new strategy to test whether it might outperform current winners. |
 | **Personality** | A system prompt modifier that changes DeepSeek's content generation style. |
 | **Experiment** | An A/B test tracking how different options for a specific dimension perform. |
-| **Toby Score** | A composite 0-100 metric that combines raw views, relative performance, engagement quality, and follower context. |
+| **Toby Score** | A composite 0-100 metric: 20% raw views + 30% relative views + 40% engagement quality (saves/shares) + 10% follower context. |
 | **Phase** | Toby's maturity stage: Bootstrap (collecting data), Learning (running experiments), Optimizing (exploiting winners). |
 | **Game Changer** | A post that scores 4x+ above the brand's rolling average — triggers special analysis to understand what worked. |
 | **Safe Fallback** | When API failures prevent normal content generation, Toby re-uses the best-performing strategy with slight modifications. |
