@@ -51,6 +51,7 @@ function mapUser(supaUser: User | null): AuthUser | null {
     name: supaUser.user_metadata?.name || '',
     id: supaUser.id,
     avatarUrl: supaUser.user_metadata?.avatar_url || '',
+    onboardingCompleted: Boolean(supaUser.user_metadata?.onboarding_completed),
     ...extractRoleAndAdmin(supaUser),
   }
 }
@@ -120,8 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    setUser(mapUser(session?.user ?? null))
+    const { data: { user: freshUser } } = await supabase.auth.getUser()
+    setUser(mapUser(freshUser ?? null))
   }
 
   return (

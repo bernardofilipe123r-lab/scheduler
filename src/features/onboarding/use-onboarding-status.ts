@@ -4,16 +4,18 @@ import { useNicheConfig } from '@/features/brands/api/use-niche-config'
 import { getConfigStrength } from '@/features/brands/types/niche-config'
 
 export function useOnboardingStatus() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const { data: brands, isLoading: brandsLoading } = useBrands()
   const { data: config, isLoading: configLoading } = useNicheConfig()
 
   const hasBrand = (brands?.length ?? 0) > 0
   const strength = config ? getConfigStrength(config) : 'basic'
   const hasDNA = strength === 'good' || strength === 'excellent'
+  const onboardingCompleted = Boolean(user?.onboardingCompleted)
 
-  // Brand creation is the only gate — DNA steps are freely navigable
-  const needsOnboarding = isAuthenticated && !hasBrand
+  // New users: need onboarding until they explicitly complete it
+  // Existing users (pre-onboarding-tracking): have brand but no flag → skip onboarding
+  const needsOnboarding = isAuthenticated && !onboardingCompleted && !hasBrand
   const onboardingStep: 1 | 2 = !hasBrand ? 1 : 2
 
   return {
@@ -21,6 +23,7 @@ export function useOnboardingStatus() {
     onboardingStep,
     hasBrand,
     hasDNA,
+    onboardingCompleted,
     isLoading: brandsLoading || configLoading,
   }
 }

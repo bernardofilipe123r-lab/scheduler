@@ -26,6 +26,7 @@ import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useOnboardingStatus } from '@/features/onboarding/use-onboarding-status'
+import { useAuth } from '@/features/auth'
 import {
   useBrands,
   useCreateBrand,
@@ -54,6 +55,7 @@ export function OnboardingPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { onboardingStep, hasBrand } = useOnboardingStatus()
+  const { refreshUser } = useAuth()
   const { data: existingBrands } = useBrands()
   const createBrandMutation = useCreateBrand()
   const updateCredentialsMutation = useUpdateBrandCredentials()
@@ -186,6 +188,9 @@ export function OnboardingPage() {
 
   const handleComplete = async () => {
     setCompleting(true)
+    // Mark onboarding as completed in Supabase user metadata
+    await supabase.auth.updateUser({ data: { onboarding_completed: true } })
+    await refreshUser()
     await queryClient.invalidateQueries()
     // Brief success moment
     setTimeout(() => {
@@ -680,27 +685,36 @@ export function OnboardingPage() {
           )}
 
           {step === 5 && (
-            <button
-              onClick={handleCompleteWithCredentials}
-              disabled={completing || updateCredentialsMutation.isPending}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
-                isStep3Valid
-                  ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {(completing || updateCredentialsMutation.isPending) ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Complete Setup
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleComplete}
+                disabled={completing || updateCredentialsMutation.isPending}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Skip for now
+              </button>
+              <button
+                onClick={handleCompleteWithCredentials}
+                disabled={completing || updateCredentialsMutation.isPending || !isStep3Valid}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
+                  isStep3Valid
+                    ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {(completing || updateCredentialsMutation.isPending) ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Complete Setup
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
       </footer>

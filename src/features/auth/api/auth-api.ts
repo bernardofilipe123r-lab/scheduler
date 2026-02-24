@@ -12,6 +12,7 @@ export interface AuthUser {
   role: string
   isAdmin: boolean
   isSuperAdmin: boolean
+  onboardingCompleted: boolean
 }
 
 function extractRoleAndAdmin(rawUser: {
