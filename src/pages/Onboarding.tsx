@@ -4,7 +4,7 @@
  * Step 2: Content DNA (NicheConfigForm, gated by strength ≥ 'good')
  * Step 3: Meta platform credentials
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   ArrowRight,
   ArrowLeft,
@@ -34,7 +34,7 @@ import {
 import { useNicheConfig } from '@/features/brands/api/use-niche-config'
 import { getConfigStrength } from '@/features/brands/types/niche-config'
 import {
-  COLOR_PRESETS,
+  getRandomPresets,
   generateModeColors,
   adjustColorBrightness,
 } from '@/features/brands/constants'
@@ -71,12 +71,22 @@ export function OnboardingPage() {
   const [shortName, setShortName] = useState('')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const colorPresets = useMemo(() => getRandomPresets(12), [])
   const [selectedPreset, setSelectedPreset] = useState<number | null>(0)
-  const [primaryColor, setPrimaryColor] = useState(COLOR_PRESETS[0].primary)
-  const [accentColor, setAccentColor] = useState(COLOR_PRESETS[0].accent)
-  const [colorName, setColorName] = useState(COLOR_PRESETS[0].colorName)
+  const [primaryColor, setPrimaryColor] = useState('')
+  const [accentColor, setAccentColor] = useState('')
+  const [colorName, setColorName] = useState('')
   const [useCustomColors, setUseCustomColors] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Apply first random preset on mount
+  useEffect(() => {
+    if (colorPresets.length > 0 && !primaryColor) {
+      setPrimaryColor(colorPresets[0].primary)
+      setAccentColor(colorPresets[0].accent)
+      setColorName(colorPresets[0].colorName)
+    }
+  }, [colorPresets]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Step 3 state: Platform Credentials ──
   const [metaAccessToken, setMetaAccessToken] = useState('')
@@ -104,7 +114,7 @@ export function OnboardingPage() {
   }
 
   const applyPreset = (index: number) => {
-    const preset = COLOR_PRESETS[index]
+    const preset = colorPresets[index]
     setSelectedPreset(index)
     setPrimaryColor(preset.primary)
     setAccentColor(preset.accent)
@@ -382,8 +392,8 @@ export function OnboardingPage() {
                   {/* Color Presets */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Brand Color</label>
-                    <div className="grid grid-cols-5 sm:grid-cols-7 gap-2">
-                      {COLOR_PRESETS.map((preset, index) => (
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                      {colorPresets.map((preset, index) => (
                         <button
                           key={preset.name}
                           onClick={() => applyPreset(index)}

@@ -26,7 +26,7 @@ import { useBrands, useCreateBrand, type CreateBrandInput, type BrandColors } fr
 import { apiClient } from '@/shared/api/client'
 import { supabase } from '@/shared/api/supabase'
 import {
-  COLOR_PRESETS,
+  getRandomPresets,
   generateModeColors,
   adjustColorBrightness,
 } from '@/features/brands/constants'
@@ -105,6 +105,7 @@ export function CreateBrandPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
   // Step 2: Colors & Preview
+  const colorPresets = useMemo(() => getRandomPresets(12), [])
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
   const [primaryColor, setPrimaryColor] = useState('#6366f1')
   const [accentColor, setAccentColor] = useState('#818cf8')
@@ -181,7 +182,7 @@ export function CreateBrandPage() {
   }
 
   const applyPreset = (index: number) => {
-    const preset = COLOR_PRESETS[index]
+    const preset = colorPresets[index]
     setSelectedPreset(index)
     setPrimaryColor(preset.primary)
     setAccentColor(preset.accent)
@@ -549,7 +550,7 @@ export function CreateBrandPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Color Presets</label>
                   <div className="grid grid-cols-4 gap-2">
-                    {COLOR_PRESETS.map((preset, index) => (
+                    {colorPresets.map((preset, index) => (
                       <button
                         key={preset.name}
                         onClick={() => applyPreset(index)}
