@@ -4,6 +4,7 @@ import {
   ShieldCheck, Users, Search, RefreshCw, AlertCircle,
   Ban, UserCheck, Shield,
   Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2, ExternalLink,
+  Bot, Power, Loader2, Zap, Sparkles, Activity,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -141,7 +142,7 @@ function UserDetail({
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
   const isSelf = currentUser?.id === user.id
-  const [activeTab, setActiveTab] = useState<'brands' | 'logs'>('brands')
+  const [activeTab, setActiveTab] = useState<'brands' | 'logs' | 'toby'>('brands')
   const [logPage, setLogPage] = useState(1)
   const [logOrder, setLogOrder] = useState<'desc' | 'asc'>('desc')
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null)
@@ -161,6 +162,42 @@ function UserDetail({
       ),
     enabled: activeTab === 'logs',
   })
+
+  // Toby status
+  const tobyStatusQuery = useQuery<{
+    enabled: boolean
+    phase: string
+    phase_started_at: string | null
+    enabled_at: string | null
+    buffer: { health: string; total_slots: number; filled_slots: number; fill_percent: number; brand_count: number; reel_slots_per_day: number; post_slots_per_day: number; buffer_days: number } | null
+    active_experiments: number
+    config: Record<string, unknown>
+    timestamps: { last_buffer_check_at: string | null; last_metrics_check_at: string | null; last_analysis_at: string | null; last_discovery_at: string | null }
+    stats: { total_created: number; total_scored: number }
+  }>({
+    queryKey: ['admin-toby-status', user.id],
+    queryFn: () => apiClient.get(`/api/toby/status?user_id=${user.id}`),
+    enabled: activeTab === 'toby',
+    refetchInterval: activeTab === 'toby' ? 15_000 : false,
+  })
+
+  // Toby activity
+  const tobyActivityQuery = useQuery<{ total: number; items: Array<{ id: number; action_type: string; description: string; metadata: Record<string, unknown>; created_at: string }> }>({
+    queryKey: ['admin-toby-activity', user.id],
+    queryFn: () => apiClient.get(`/api/toby/activity?user_id=${user.id}&limit=20`),
+    enabled: activeTab === 'toby',
+  })
+
+  // Toby enable/disable
+  const tobyEnableMut = useMutation({
+    mutationFn: () => apiClient.post(`/api/toby/enable?user_id=${user.id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-toby-status', user.id] }),
+  })
+  const tobyDisableMut = useMutation({
+    mutationFn: () => apiClient.post(`/api/toby/disable?user_id=${user.id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-toby-status', user.id] }),
+  })
+  const tobyToggling = tobyEnableMut.isPending || tobyDisableMut.isPending
 
   // Role mutation
   const roleMutation = useMutation({
@@ -324,6 +361,17 @@ function UserDetail({
           >
             <ScrollText className="w-4 h-4" /> System Logs
           </button>
+          <button
+            onClick={() => setActiveTab('toby')}
+            className={clsx(
+              'flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors',
+              activeTab === 'toby'
+                ? 'border-stone-900 text-stone-900'
+                : 'border-transparent text-gray-500 hover:text-gray-700',
+            )}
+          >
+            <Bot className="w-4 h-4" /> Toby AI
+          </button>
         </div>
 
         {/* Content */}
@@ -477,6 +525,170 @@ function UserDetail({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'toby' && (
+            <div className="p-6 space-y-5">
+              {tobyStatusQuery.isLoading ? (
+                <div className="flex justify-center py-10"><Spinner size={24} className="text-gray-400" /></div>
+              ) : tobyStatusQuery.isError ? (
+                <div className="text-center py-10 text-gray-400">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-300" />
+                  <p className="text-sm text-red-600">Failed to load Toby status</p>
+                  <p className="text-xs text-gray-400 mt-1">{(tobyStatusQuery.error as Error).message}</p>
+                </div>
+              ) : tobyStatusQuery.data ? (() => {
+                const ts = tobyStatusQuery.data
+                const phaseConfig: Record<string, { label: string; color: string; bg: string; icon: typeof Shield }> = {
+                  bootstrap: { label: 'Bootstrap', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', icon: Shield },
+                  learning: { label: 'Learning', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', icon: Zap },
+                  optimizing: { label: 'Optimizing', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', icon: Sparkles },
+                }
+                const pi = phaseConfig[ts.phase] || phaseConfig.bootstrap
+                const PhaseIcon = pi.icon
+                return (
+                  <>
+                    {/* Status card */}
+                    <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className={`relative shrink-0 w-11 h-11 rounded-xl flex items-center justify-center ${ts.enabled ? 'bg-emerald-50' : 'bg-gray-100'}`}>
+                        <Bot className={`w-5 h-5 ${ts.enabled ? 'text-emerald-600' : 'text-gray-400'}`} />
+                        {ts.enabled && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white">
+                            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${ts.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500'}`}>
+                            {ts.enabled ? 'Active' : 'Inactive'}
+                          </span>
+                          {ts.enabled && (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full border ${pi.bg} ${pi.color}`}>
+                              <PhaseIcon className="w-3 h-3" />
+                              {pi.label}
+                            </span>
+                          )}
+                          {ts.active_experiments > 0 && (
+                            <span className="text-[10px] text-gray-500">{ts.active_experiments} experiment{ts.active_experiments !== 1 ? 's' : ''}</span>
+                          )}
+                        </div>
+                        {ts.enabled_at && (
+                          <p className="text-[10px] text-gray-400">Enabled {formatDate(ts.enabled_at)}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => ts.enabled ? tobyDisableMut.mutate() : tobyEnableMut.mutate()}
+                        disabled={tobyToggling}
+                        className={clsx(
+                          'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50',
+                          ts.enabled
+                            ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            : 'bg-emerald-600 text-white hover:bg-emerald-700',
+                        )}
+                      >
+                        {tobyToggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
+                        {ts.enabled ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
+
+                    {/* Buffer health */}
+                    {ts.buffer && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Buffer Health</h4>
+                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className={`font-medium ${
+                              ts.buffer.health === 'healthy' ? 'text-emerald-600' :
+                              ts.buffer.health === 'low' ? 'text-amber-600' : 'text-red-600'
+                            }`}>
+                              {ts.buffer.health === 'healthy' ? '● Healthy' : ts.buffer.health === 'low' ? '● Low' : '● Critical'}
+                            </span>
+                            <span className="text-gray-500 text-xs">{ts.buffer.filled_slots}/{ts.buffer.total_slots} slots ({ts.buffer.fill_percent}%)</span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                ts.buffer.health === 'healthy' ? 'bg-emerald-500' :
+                                ts.buffer.health === 'low' ? 'bg-amber-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${Math.min(ts.buffer.fill_percent, 100)}%` }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-gray-400">
+                            {ts.buffer.brand_count} brand{ts.buffer.brand_count !== 1 ? 's' : ''} · {ts.buffer.reel_slots_per_day} reels + {ts.buffer.post_slots_per_day} posts/day · {ts.buffer.buffer_days} day buffer
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stats & timestamps */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-xs text-gray-400 mb-1">Content Created</p>
+                        <p className="text-lg font-bold text-gray-900">{ts.stats.total_created}</p>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-xs text-gray-400 mb-1">Content Scored</p>
+                        <p className="text-lg font-bold text-gray-900">{ts.stats.total_scored}</p>
+                      </div>
+                    </div>
+
+                    {/* Timestamps */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Actions</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {[
+                          { label: 'Buffer check', val: ts.timestamps.last_buffer_check_at },
+                          { label: 'Metrics check', val: ts.timestamps.last_metrics_check_at },
+                          { label: 'Analysis', val: ts.timestamps.last_analysis_at },
+                          { label: 'Discovery', val: ts.timestamps.last_discovery_at },
+                        ].map(t => (
+                          <div key={t.label} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100">
+                            <Clock className="w-3 h-3 text-gray-400 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-gray-500 truncate">{t.label}</p>
+                              <p className="text-gray-700 font-medium truncate">{t.val ? formatDate(t.val) : '—'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Recent activity */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5" /> Recent Activity
+                      </h4>
+                      {tobyActivityQuery.isLoading ? (
+                        <div className="flex justify-center py-6"><Spinner size={20} className="text-gray-400" /></div>
+                      ) : (tobyActivityQuery.data?.items ?? []).length === 0 ? (
+                        <p className="text-xs text-gray-400 py-4 text-center">No activity yet</p>
+                      ) : (
+                        <div className="space-y-1 max-h-72 overflow-y-auto">
+                          {(tobyActivityQuery.data?.items ?? []).map(a => (
+                            <div key={a.id} className="flex items-start gap-2 px-3 py-2 text-xs bg-gray-50 rounded border border-gray-100">
+                              <span className="text-gray-400 whitespace-nowrap shrink-0 mt-0.5">{formatTimestamp(a.created_at)}</span>
+                              <span className={clsx(
+                                'inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0',
+                                a.action_type.includes('error') ? 'bg-red-50 text-red-600' :
+                                a.action_type.includes('create') || a.action_type.includes('generate') ? 'bg-violet-50 text-violet-700' :
+                                a.action_type.includes('publish') ? 'bg-green-50 text-green-700' :
+                                a.action_type.includes('experiment') ? 'bg-blue-50 text-blue-700' :
+                                'bg-gray-100 text-gray-600'
+                              )}>
+                                {a.action_type.replace(/_/g, ' ')}
+                              </span>
+                              <span className="text-gray-600 truncate">{a.description}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )
+              })() : null}
             </div>
           )}
         </div>
