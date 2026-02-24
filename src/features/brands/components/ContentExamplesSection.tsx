@@ -448,8 +448,8 @@ export function ContentExamplesSection({
               <button
                 type="button"
                 onClick={() => generateBatch(5)}
-                disabled={batchGenerating}
-                className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50"
+                disabled={batchGenerating || !generalFilled}
+                className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {batchGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {batchGenerating ? 'Generating...' : 'Generate 5 with AI'}
@@ -583,8 +583,8 @@ export function ContentExamplesSection({
             <button
               type="button"
               onClick={() => generateBatch(5)}
-              disabled={postExamples.length >= 46 || batchGenerating || generateMutation.isPending}
-              className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50"
+              disabled={postExamples.length >= 46 || batchGenerating || generateMutation.isPending || !generalFilled}
+              className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {batchGenerating ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

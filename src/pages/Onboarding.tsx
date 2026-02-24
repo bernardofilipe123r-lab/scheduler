@@ -2,6 +2,7 @@
  * Onboarding Page — fullscreen wizard for new users.
  * Step 1: Create first brand (Identity + Colors)
  * Step 2: Content DNA (NicheConfigForm, gated by strength ≥ 'good')
+ * Step 3: Meta platform credentials
  */
 import { useState, useEffect } from 'react'
 import {
@@ -14,6 +15,9 @@ import {
   X,
   Dna,
   PartyPopper,
+  Link2,
+  Facebook,
+  Instagram,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -23,6 +27,7 @@ import { useOnboardingStatus } from '@/features/onboarding/use-onboarding-status
 import {
   useBrands,
   useCreateBrand,
+  useUpdateBrandCredentials,
   type CreateBrandInput,
   type BrandColors,
 } from '@/features/brands/api/use-brands'
@@ -38,8 +43,9 @@ import { supabase } from '@/shared/api/supabase'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
 const STEP_INFO = [
-  { num: 1, label: 'Create your first brand', sub: 'Give your brand an identity. You can always update it later.' },
+  { num: 1, label: 'Create your first brand', sub: 'A brand is an account associated with one or more social media platforms. Every user needs at least one.' },
   { num: 2, label: 'Define your Content DNA', sub: 'Tell the AI what you\'re about. The more detail, the better your content.' },
+  { num: 3, label: 'Connect your platforms', sub: 'Link your Meta accounts so the app can publish content on your behalf.' },
 ]
 
 export function OnboardingPage() {
@@ -49,6 +55,7 @@ export function OnboardingPage() {
   const { data: existingBrands } = useBrands()
   const { data: nicheConfig } = useNicheConfig()
   const createBrandMutation = useCreateBrand()
+  const updateCredentialsMutation = useUpdateBrandCredentials()
 
   const [step, setStep] = useState<number>(onboardingStep)
   const [completing, setCompleting] = useState(false)
@@ -70,6 +77,16 @@ export function OnboardingPage() {
   const [colorName, setColorName] = useState(COLOR_PRESETS[0].colorName)
   const [useCustomColors, setUseCustomColors] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // ── Step 3 state: Platform Credentials ──
+  const [metaAccessToken, setMetaAccessToken] = useState('')
+  const [facebookPageId, setFacebookPageId] = useState('')
+  const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
+  const [step3Attempted, setStep3Attempted] = useState(false)
+
+  const isStep3Valid =
+    metaAccessToken.trim().length > 0 &&
+    (facebookPageId.trim().length > 0 || instagramBusinessAccountId.trim().length > 0)
 
   const handleNameChange = (name: string) => {
     setDisplayName(name)
@@ -169,6 +186,27 @@ export function OnboardingPage() {
     }, 1500)
   }
 
+  const handleCompleteWithCredentials = async () => {
+    setStep3Attempted(true)
+    if (!isStep3Valid) {
+      setError('Meta Access Token is required, plus at least one of Facebook Page ID or Instagram Business Account ID.')
+      return
+    }
+    setError(null)
+
+    try {
+      await updateCredentialsMutation.mutateAsync({
+        id: brandId,
+        meta_access_token: metaAccessToken.trim(),
+        ...(facebookPageId.trim() && { facebook_page_id: facebookPageId.trim() }),
+        ...(instagramBusinessAccountId.trim() && { instagram_business_account_id: instagramBusinessAccountId.trim() }),
+      })
+      handleComplete()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save credentials')
+    }
+  }
+
   const currentStep = STEP_INFO[step - 1]
 
   // ── Completion screen ──
@@ -206,13 +244,13 @@ export function OnboardingPage() {
             </div>
             <div>
               <p className="text-[14px] font-semibold text-gray-900 tracking-tight">Let's get you set up</p>
-              <p className="text-[12px] text-gray-400">Step {step} of 2</p>
+              <p className="text-[12px] text-gray-400">Step {step} of 3</p>
             </div>
           </div>
 
           {/* Progress dots */}
           <div className="flex items-center gap-2">
-            {[1, 2].map(s => (
+            {[1, 2, 3].map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
                   s < step ? 'bg-green-500 text-white' :
@@ -221,7 +259,7 @@ export function OnboardingPage() {
                 }`}>
                   {s < step ? <Check className="w-3.5 h-3.5" /> : s}
                 </div>
-                {s < 2 && (
+                {s < 3 && (
                   <div className={`w-10 h-0.5 rounded-full transition-colors ${s < step ? 'bg-green-500' : 'bg-gray-200'}`} />
                 )}
               </div>
@@ -420,9 +458,9 @@ export function OnboardingPage() {
                     </div>
                   )}
 
-                  {/* Social accounts note */}
+                  {/* Platform connection note */}
                   <p className="text-xs text-gray-400 text-center">
-                    You can connect your social accounts later under Brands → Connections.
+                    You'll connect your social media platforms in Step 3.
                   </p>
                 </div>
               </motion.div>
@@ -476,6 +514,101 @@ export function OnboardingPage() {
                 <NicheConfigForm />
               </motion.div>
             )}
+
+            {/* ═══ Step 3: Platform Credentials ═══ */}
+            {step === 3 && (
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-center mb-8">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Link2 className="w-7 h-7 text-primary-500" />
+                  </div>
+                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
+                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
+                </div>
+
+                <div className="max-w-xl mx-auto space-y-6">
+                  {/* Error banner */}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
+                      <X className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                  )}
+
+                  {/* Meta Section */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
+                        <Facebook className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
+                        <Instagram className="w-4 h-4 text-white" />
+                      </div>
+                      <span className="text-sm font-semibold text-gray-800">Meta (Instagram & Facebook)</span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      One Meta access token works for both platforms. Provide at least one of Facebook Page ID or Instagram Business Account ID.
+                    </p>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Meta Access Token <span className="text-red-500">*</span>
+                        <span className="text-gray-400 font-normal"> — long-lived page token</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={metaAccessToken}
+                        onChange={(e) => setMetaAccessToken(e.target.value)}
+                        placeholder="EAAx..."
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step3Attempted && !metaAccessToken.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Facebook Page ID
+                        {!instagramBusinessAccountId.trim() && <span className="text-red-500"> *</span>}
+                        <span className="text-gray-400 font-normal"> — found in Page Settings → Transparency</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={facebookPageId}
+                        onChange={(e) => setFacebookPageId(e.target.value)}
+                        placeholder="e.g., 421725411022067"
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step3Attempted && !facebookPageId.trim() && !instagramBusinessAccountId.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Instagram Business Account ID
+                        {!facebookPageId.trim() && <span className="text-red-500"> *</span>}
+                        <span className="text-gray-400 font-normal"> — from Graph API Explorer</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={instagramBusinessAccountId}
+                        onChange={(e) => setInstagramBusinessAccountId(e.target.value)}
+                        placeholder="e.g., 17841468847801005"
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step3Attempted && !instagramBusinessAccountId.trim() && !facebookPageId.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                      />
+                    </div>
+
+                    {step3Attempted && !isStep3Valid && (
+                      <p className="text-xs text-red-600">
+                        Meta Access Token is required, plus at least one of Facebook Page ID or Instagram Business Account ID.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
       </main>
@@ -485,7 +618,7 @@ export function OnboardingPage() {
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           {step > 1 && !hasBrand ? (
             <button
-              onClick={() => setStep(step - 1)}
+              onClick={() => { setError(null); setStep(step - 1) }}
               className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -495,7 +628,7 @@ export function OnboardingPage() {
             <div />
           )}
 
-          {step === 1 ? (
+          {step === 1 && (
             <button
               onClick={handleCreateBrand}
               disabled={!isStep1Valid || createBrandMutation.isPending}
@@ -513,19 +646,41 @@ export function OnboardingPage() {
                 </>
               )}
             </button>
-          ) : (
+          )}
+
+          {step === 2 && (
             <button
-              onClick={handleComplete}
+              onClick={() => setStep(3)}
               disabled={!canComplete}
+              className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              title={!canComplete ? 'Keep adding details to reach "Good" strength' : undefined}
+            >
+              Continue
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+
+          {step === 3 && (
+            <button
+              onClick={handleCompleteWithCredentials}
+              disabled={completing || updateCredentialsMutation.isPending}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
-                canComplete
+                isStep3Valid
                   ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
-              title={!canComplete ? 'Keep adding details to reach "Good" strength' : undefined}
             >
-              <Check className="w-4 h-4" />
-              Complete Setup
+              {(completing || updateCredentialsMutation.isPending) ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Complete Setup
+                </>
+              )}
             </button>
           )}
         </div>
