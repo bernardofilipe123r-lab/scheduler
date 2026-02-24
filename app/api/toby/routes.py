@@ -24,14 +24,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.db_connection import get_db
-from app.api.auth.middleware import get_current_user
+from app.api.auth.middleware import get_current_user, is_super_admin_user
 from app.api.toby.schemas import TobyConfigUpdate
 
 router = APIRouter(prefix="/api/toby", tags=["toby"])
 
 
+def _resolve_user_id(user: dict, target_user_id: str | None) -> str:
+    """Return the effective user_id.
+    
+    Super-admins can pass ?user_id=<id> to access any user's Toby.
+    Regular users always get their own id.
+    """
+    if target_user_id and is_super_admin_user(user):
+        return target_user_id
+    return user["id"]
+
+
 @router.get("/status")
 def get_status(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -40,13 +52,14 @@ def get_status(
     from app.services.toby.buffer_manager import get_buffer_status
     from app.models.toby import TobyExperiment, TobyActivityLog, TobyContentTag
 
-    state = get_or_create_state(db, user["id"])
-    raw_buffer = get_buffer_status(db, user["id"], state) if state.enabled else None
+    uid = _resolve_user_id(user, target_user_id)
+    state = get_or_create_state(db, uid)
+    raw_buffer = get_buffer_status(db, uid, state) if state.enabled else None
     buffer = _format_buffer(raw_buffer)
 
     active_experiments = (
         db.query(TobyExperiment)
-        .filter(TobyExperiment.user_id == user["id"], TobyExperiment.status == "active")
+        .filter(TobyExperiment.user_id == uid, TobyExperiment.status == "active")
         .count()
     )
 
@@ -59,7 +72,7 @@ def get_status(
     # Last activity log entry
     last_log = (
         db.query(TobyActivityLog)
-        .filter(TobyActivityLog.user_id == user["id"])
+        .filter(TobyActivityLog.user_id == uid)
         .order_by(TobyActivityLog.created_at.desc())
         .first()
     )
@@ -67,12 +80,12 @@ def get_status(
     # Stats
     total_created = (
         db.query(TobyContentTag)
-        .filter(TobyContentTag.user_id == user["id"])
+        .filter(TobyContentTag.user_id == uid)
         .count()
     )
     total_scored = (
         db.query(TobyContentTag)
-        .filter(TobyContentTag.user_id == user["id"], TobyContentTag.toby_score.isnot(None))
+        .filter(TobyContentTag.user_id == uid, TobyContentTag.toby_score.isnot(None))
         .count()
     )
 
@@ -109,6 +122,7 @@ def get_status(
 
 @router.post("/enable")
 def enable(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -117,8 +131,9 @@ def enable(
     Performs pre-flight validation and returns structured errors if setup is incomplete.
     """
     from app.services.toby.state import enable_toby
+    uid = _resolve_user_id(user, target_user_id)
     try:
-        state = enable_toby(db, user["id"])
+        state = enable_toby(db, uid)
         db.commit()
         return {"status": "enabled", "phase": state.phase}
     except ValueError as e:
@@ -145,24 +160,28 @@ def enable(
 
 @router.post("/disable")
 def disable(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Turn Toby off — stops content generation, keeps analysis running."""
     from app.services.toby.state import disable_toby
-    state = disable_toby(db, user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    state = disable_toby(db, uid)
     db.commit()
     return {"status": "disabled"}
 
 
 @router.post("/reset")
 def reset(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Reset all Toby learning data. Does NOT delete published content."""
     from app.services.toby.state import reset_toby
-    state = reset_toby(db, user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    state = reset_toby(db, uid)
     db.commit()
     return {"status": "reset", "phase": state.phase}
 
@@ -172,13 +191,15 @@ def get_activity(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     action_type: str = Query(None),
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Paginated activity log — what Toby has done recently."""
     from app.models.toby import TobyActivityLog
 
-    query = db.query(TobyActivityLog).filter(TobyActivityLog.user_id == user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    query = db.query(TobyActivityLog).filter(TobyActivityLog.user_id == uid)
     if action_type:
         query = query.filter(TobyActivityLog.action_type == action_type)
 
@@ -200,6 +221,7 @@ def get_activity(
 def get_published(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -207,9 +229,10 @@ def get_published(
     from app.models.toby import TobyContentTag
     from app.models.scheduling import ScheduledReel
 
+    uid = _resolve_user_id(user, target_user_id)
     tags = (
         db.query(TobyContentTag)
-        .filter(TobyContentTag.user_id == user["id"])
+        .filter(TobyContentTag.user_id == uid)
         .order_by(TobyContentTag.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -230,7 +253,7 @@ def get_published(
 
     total = (
         db.query(TobyContentTag)
-        .filter(TobyContentTag.user_id == user["id"])
+        .filter(TobyContentTag.user_id == uid)
         .count()
     )
 
@@ -240,13 +263,15 @@ def get_published(
 @router.get("/experiments")
 def get_experiments(
     status: str = Query(None),
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Active and completed experiments with results."""
     from app.models.toby import TobyExperiment
 
-    query = db.query(TobyExperiment).filter(TobyExperiment.user_id == user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    query = db.query(TobyExperiment).filter(TobyExperiment.user_id == uid)
     if status:
         query = query.filter(TobyExperiment.status == status)
 
@@ -256,26 +281,30 @@ def get_experiments(
 
 @router.get("/insights")
 def get_insights(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Aggregated insights — best topics, hooks, personalities."""
     from app.services.toby.learning_engine import get_insights as _get_insights
-    return _get_insights(db, user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    return _get_insights(db, uid)
 
 
 @router.get("/discovery")
 def get_discovery(
     limit: int = Query(20, ge=1, le=100),
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """What Toby found from competitor/hashtag scanning."""
     from app.models.analytics import TrendingContent
 
+    uid = _resolve_user_id(user, target_user_id)
     trending = (
         db.query(TrendingContent)
-        .filter(TrendingContent.user_id == user["id"])
+        .filter(TrendingContent.user_id == uid)
         .order_by(TrendingContent.discovered_at.desc())
         .limit(limit)
         .all()
@@ -285,6 +314,7 @@ def get_discovery(
 
 @router.get("/buffer")
 def get_buffer(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -292,19 +322,22 @@ def get_buffer(
     from app.services.toby.state import get_or_create_state
     from app.services.toby.buffer_manager import get_buffer_status
 
-    state = get_or_create_state(db, user["id"])
-    return _format_buffer(get_buffer_status(db, user["id"], state))
+    uid = _resolve_user_id(user, target_user_id)
+    state = get_or_create_state(db, uid)
+    return _format_buffer(get_buffer_status(db, uid, state))
 
 
 @router.get("/config")
 def get_config(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Toby's configuration."""
     from app.services.toby.state import get_or_create_state
 
-    state = get_or_create_state(db, user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    state = get_or_create_state(db, uid)
     return {
         "buffer_days": state.buffer_days,
         "explore_ratio": state.explore_ratio,
@@ -317,13 +350,15 @@ def get_config(
 @router.patch("/config")
 def update_config(
     body: TobyConfigUpdate,
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Update Toby's configuration."""
     from app.services.toby.state import get_or_create_state
 
-    state = get_or_create_state(db, user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    state = get_or_create_state(db, uid)
 
     if body.buffer_days is not None:
         state.buffer_days = body.buffer_days
@@ -383,6 +418,7 @@ def update_feature_flag(
 
 @router.get("/budget")
 def get_budget(
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -390,7 +426,8 @@ def get_budget(
     from app.services.toby.state import get_or_create_state
     from app.services.toby.feature_flags import is_enabled
 
-    state = get_or_create_state(db, user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    state = get_or_create_state(db, uid)
     return {
         "enabled": is_enabled("budget_enforcement"),
         "daily_budget_cents": state.daily_budget_cents,
@@ -406,13 +443,15 @@ class BudgetUpdate(BaseModel):
 @router.put("/budget")
 def update_budget(
     body: BudgetUpdate,
+    target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Set or clear the daily budget for Toby."""
     from app.services.toby.state import get_or_create_state
 
-    state = get_or_create_state(db, user["id"])
+    uid = _resolve_user_id(user, target_user_id)
+    state = get_or_create_state(db, uid)
     state.daily_budget_cents = body.daily_budget_cents
     state.updated_at = datetime.now(timezone.utc)
     db.commit()

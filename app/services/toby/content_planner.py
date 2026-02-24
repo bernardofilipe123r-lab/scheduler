@@ -44,16 +44,38 @@ def create_plans_for_empty_slots(
 
     Integrates with the learning engine to choose strategies.
     Limits to max_plans per tick to avoid overwhelming the system.
+    Distributes across brands round-robin (picks the earliest empty slot
+    per brand, then cycles) instead of filling one brand at a time.
     """
     empty_slots = get_empty_slots(db, user_id, state)
     if not empty_slots:
         return []
 
+    # Round-robin: group by brand, interleave so each brand gets served
+    from collections import defaultdict
+    by_brand: dict[str, list[dict]] = defaultdict(list)
+    for slot in empty_slots:
+        by_brand[slot["brand_id"]].append(slot)
+
+    # Interleave: take 1 from each brand in turn
+    interleaved: list[dict] = []
+    brand_iters = [iter(slots) for slots in by_brand.values()]
+    while brand_iters and len(interleaved) < max_plans:
+        next_round = []
+        for it in brand_iters:
+            slot = next(it, None)
+            if slot is not None:
+                interleaved.append(slot)
+                next_round.append(it)
+                if len(interleaved) >= max_plans:
+                    break
+        brand_iters = next_round
+
     # Get available topics from NicheConfig
     available_topics = _get_available_topics(db, user_id)
 
     plans = []
-    for slot in empty_slots[:max_plans]:
+    for slot in interleaved:
         strategy = choose_strategy(
             db=db,
             user_id=user_id,

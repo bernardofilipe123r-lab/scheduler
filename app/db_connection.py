@@ -80,6 +80,22 @@ def run_migrations():
                 ),
                 {"key": key, "desc": desc},
             )
+
+        # Toby V2: new columns on toby_content_tags
+        for col, coltype, default in [
+            ("metrics_unreliable", "BOOLEAN", "FALSE"),
+            ("human_modified", "BOOLEAN", "FALSE"),
+            ("used_fallback", "BOOLEAN", "FALSE"),
+        ]:
+            conn.execute(text(
+                f"ALTER TABLE toby_content_tags ADD COLUMN IF NOT EXISTS {col} {coltype} DEFAULT {default}"
+            ))
+
+        # Toby V2: budget columns on toby_state
+        conn.execute(text("ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS daily_budget_cents INTEGER"))
+        conn.execute(text("ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS spent_today_cents INTEGER DEFAULT 0"))
+        conn.execute(text("ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS budget_reset_at TIMESTAMPTZ"))
+
         conn.commit()
 
 

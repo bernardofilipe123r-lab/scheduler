@@ -26,11 +26,20 @@ ANALYSIS_CHECK_INTERVAL = 360    # 6 hours
 _error_log_timestamps: dict[str, datetime] = {}
 ERROR_LOG_DEBOUNCE_MINUTES = 30
 
+# Generation rate-limiting: prevent burst-posting
+# Track recent generations per brand to enforce cooldown
+_recent_generations: dict[str, list[datetime]] = {}  # "user:brand" -> [timestamps]
+MAX_GENERATIONS_PER_BRAND_PER_HOUR = 2   # Max 2 pieces per brand per hour
+MAX_GENERATIONS_PER_USER_PER_HOUR = 6    # Max 6 pieces per user per hour
+GENERATION_COOLDOWN_MINUTES = 15         # Min gap between generations for same brand
+
 
 def toby_tick():
     """
     Main orchestrator tick — called by APScheduler every 5 minutes.
     Iterates over all users with Toby enabled and runs their actions.
+    Each step is committed independently so a failure in one step
+    does not roll back earlier steps (prevents cascade-rerun bugs).
     """
     from app.db_connection import SessionLocal
 
@@ -42,7 +51,6 @@ def toby_tick():
         for state in enabled_states:
             try:
                 _process_user(db, state)
-                db.commit()
             except Exception as e:
                 db.rollback()
                 print(f"[TOBY] Error processing user {state.user_id}: {e}", flush=True)
@@ -58,68 +66,95 @@ def toby_tick():
 
 
 def _process_user(db: Session, state: TobyState):
-    """Process one user's Toby tick — runs the highest-priority action."""
+    """Process one user's Toby tick — runs the highest-priority action.
+    
+    Each step is wrapped in its own try/commit so that a failure in a
+    later step (e.g. phase check) does not roll back timestamp updates
+    from earlier steps (e.g. buffer check). This prevents the cascade
+    where content gets re-generated on every tick.
+    """
     now = datetime.now(timezone.utc)
     user_id = state.user_id
 
-    # 1. BUFFER CHECK
+    # 1. BUFFER CHECK — isolated commit
     if _should_check(state.last_buffer_check_at, BUFFER_CHECK_INTERVAL):
-        _run_buffer_check(db, user_id, state)
-        state.last_buffer_check_at = now
-        state.updated_at = now
+        try:
+            _run_buffer_check(db, user_id, state)
+            state.last_buffer_check_at = now
+            state.updated_at = now
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"[TOBY] Buffer check failed for {user_id}: {e}", flush=True)
 
-    # 2. METRICS CHECK
+    # 2. METRICS CHECK — isolated commit
     if _should_check(state.last_metrics_check_at, METRICS_CHECK_INTERVAL):
-        _run_metrics_check(db, user_id, state)
-        state.last_metrics_check_at = now
-        state.updated_at = now
+        try:
+            _run_metrics_check(db, user_id, state)
+            state.last_metrics_check_at = now
+            state.updated_at = now
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"[TOBY] Metrics check failed for {user_id}: {e}", flush=True)
 
-    # 3. ANALYSIS CHECK
+    # 3. ANALYSIS CHECK — isolated commit
     if _should_check(state.last_analysis_at, ANALYSIS_CHECK_INTERVAL):
-        _run_analysis_check(db, user_id, state)
+        try:
+            _run_analysis_check(db, user_id, state)
 
-        # E6: Check for stalled experiments and force-complete them
-        from app.services.toby.learning_engine import check_experiment_timeouts
-        timed_out = check_experiment_timeouts(db, user_id)
-        if timed_out > 0:
-            print(f"[TOBY] Force-completed {timed_out} stalled experiments for {user_id}", flush=True)
+            # E6: Check for stalled experiments and force-complete them
+            from app.services.toby.learning_engine import check_experiment_timeouts
+            timed_out = check_experiment_timeouts(db, user_id)
+            if timed_out > 0:
+                print(f"[TOBY] Force-completed {timed_out} stalled experiments for {user_id}", flush=True)
 
-        # 9.2: Drift detection (weekly, using analysis interval)
-        from app.services.toby.analysis_engine import detect_drift
-        drift_result = detect_drift(db, user_id)
-        if drift_result.get("ratio_change") is not None:
-            state.explore_ratio = drift_result["ratio_change"]
-            print(f"[TOBY] Drift detected for {user_id}: adjusting explore_ratio to {drift_result['ratio_change']}", flush=True)
+            # 9.2: Drift detection (weekly, using analysis interval)
+            from app.services.toby.analysis_engine import detect_drift
+            drift_result = detect_drift(db, user_id)
+            if drift_result.get("ratio_change") is not None:
+                state.explore_ratio = drift_result["ratio_change"]
+                print(f"[TOBY] Drift detected for {user_id}: adjusting explore_ratio to {drift_result['ratio_change']}", flush=True)
 
-        state.last_analysis_at = now
-        state.updated_at = now
+            state.last_analysis_at = now
+            state.updated_at = now
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"[TOBY] Analysis check failed for {user_id}: {e}", flush=True)
 
-    # 4. DISCOVERY CHECK — skip during bootstrap if buffer is critically low
-    from app.services.toby.discovery_manager import should_run_discovery, run_discovery_tick
-    if should_run_discovery(state):
-        # During bootstrap, prioritise buffer filling over scanning
-        if state.phase == "bootstrap":
-            from app.services.toby.buffer_manager import get_buffer_status
-            buf = get_buffer_status(db, user_id, state)
-            if buf["health"] in ("critical", "low"):
-                # Postpone discovery — buffer needs filling first
-                pass
+    # 4. DISCOVERY CHECK — isolated commit
+    try:
+        from app.services.toby.discovery_manager import should_run_discovery, run_discovery_tick
+        if should_run_discovery(state):
+            if state.phase == "bootstrap":
+                from app.services.toby.buffer_manager import get_buffer_status
+                buf = get_buffer_status(db, user_id, state)
+                if buf["health"] not in ("critical", "low"):
+                    run_discovery_tick(db, user_id, state)
             else:
                 run_discovery_tick(db, user_id, state)
-        else:
-            run_discovery_tick(db, user_id, state)
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[TOBY] Discovery check failed for {user_id}: {e}", flush=True)
 
-    # 5. PHASE CHECK
-    from app.services.toby.state import check_phase_transition
-    scored_count = (
-        db.query(TobyContentTag)
-        .filter(
-            TobyContentTag.user_id == user_id,
-            TobyContentTag.toby_score.isnot(None),
+    # 5. PHASE CHECK — isolated commit
+    try:
+        from app.services.toby.state import check_phase_transition
+        scored_count = (
+            db.query(TobyContentTag)
+            .filter(
+                TobyContentTag.user_id == user_id,
+                TobyContentTag.toby_score.isnot(None),
+            )
+            .count()
         )
-        .count()
-    )
-    check_phase_transition(db, state, scored_count)
+        check_phase_transition(db, state, scored_count)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[TOBY] Phase check failed for {user_id}: {e}", flush=True)
 
 
 def _should_check(last_at: datetime, interval_minutes: int) -> bool:
@@ -135,7 +170,7 @@ def _should_check(last_at: datetime, interval_minutes: int) -> bool:
 
 
 def _run_buffer_check(db: Session, user_id: str, state: TobyState):
-    """Check buffer and create plans for empty slots."""
+    """Check buffer and create plans for empty slots (rate-limited)."""
     from app.services.toby.buffer_manager import get_buffer_status
     from app.services.toby.content_planner import create_plans_for_empty_slots
 
@@ -154,6 +189,10 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
     if _check_budget_exceeded(state):
         return
 
+    # Rate-limit: check user-level hourly cap before even querying buffer
+    if _user_at_hourly_cap(user_id):
+        return
+
     status = get_buffer_status(db, user_id, state)
     if status["health"] == "healthy":
         return
@@ -165,9 +204,15 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
     # Execute each plan by calling into existing services
     generated = 0
     for plan in plans:
+        # Rate-limit: skip if this brand was generated for recently
+        if _brand_at_cooldown(user_id, plan.brand_id):
+            print(f"[TOBY] Skipping {plan.brand_id} — generation cooldown active", flush=True)
+            continue
+
         try:
             _execute_content_plan(db, plan)
             generated += 1
+            _record_generation(user_id, plan.brand_id)
             _increment_budget(state)  # Section 13.2
         except Exception as e:
             print(f"[TOBY] Content generation failed for {plan.brand_id}: {e}", flush=True)
@@ -553,6 +598,47 @@ def _cleanup_supabase_on_failure(job_id: str, brand_id: str):
         print(f"[TOBY] Cleaned up Supabase files for failed job {job_id}", flush=True)
     except Exception as e:
         print(f"[TOBY] Supabase cleanup warning (non-fatal): {e}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+#  Generation rate-limiting helpers
+# ---------------------------------------------------------------------------
+
+def _prune_old_timestamps(key: str):
+    """Remove generation timestamps older than 1 hour."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    if key in _recent_generations:
+        _recent_generations[key] = [t for t in _recent_generations[key] if t > cutoff]
+
+def _brand_at_cooldown(user_id: str, brand_id: str) -> bool:
+    """Return True if this brand has been generated for too recently."""
+    key = f"{user_id}:{brand_id}"
+    _prune_old_timestamps(key)
+    timestamps = _recent_generations.get(key, [])
+    if not timestamps:
+        return False
+    # Check cooldown (min gap between consecutive generations for same brand)
+    last = max(timestamps)
+    if (datetime.now(timezone.utc) - last).total_seconds() < GENERATION_COOLDOWN_MINUTES * 60:
+        return True
+    # Check hourly cap per brand
+    return len(timestamps) >= MAX_GENERATIONS_PER_BRAND_PER_HOUR
+
+def _user_at_hourly_cap(user_id: str) -> bool:
+    """Return True if the user has hit the hourly generation cap across all brands."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    total = 0
+    for key, timestamps in _recent_generations.items():
+        if key.startswith(f"{user_id}:"):
+            total += sum(1 for t in timestamps if t > cutoff)
+    return total >= MAX_GENERATIONS_PER_USER_PER_HOUR
+
+def _record_generation(user_id: str, brand_id: str):
+    """Record that a piece of content was generated for rate-limiting."""
+    key = f"{user_id}:{brand_id}"
+    if key not in _recent_generations:
+        _recent_generations[key] = []
+    _recent_generations[key].append(datetime.now(timezone.utc))
 
 
 def _check_budget_exceeded(state: TobyState) -> bool:
