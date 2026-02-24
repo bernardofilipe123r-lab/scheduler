@@ -372,7 +372,10 @@ class BrandManager:
         return brand.to_dict()
     
     def delete_brand(self, brand_id: str, user_id: Optional[str] = None) -> bool:
-        """Delete a brand (soft delete - sets active=False)."""
+        """Delete a brand (soft delete - sets active=False) with cascade cleanup.
+
+        Gap 4: Also cancels future scheduled slots and deletes stale strategy scores.
+        """
         Brand = self._get_brand_model()
         
         query = self.db.query(Brand).filter(Brand.id == brand_id)
@@ -381,12 +384,52 @@ class BrandManager:
         brand = query.first()
         if not brand:
             return False
+
+        effective_user_id = user_id or brand.user_id
         
         brand.active = False
+
+        # Gap 4: Cancel future scheduled slots for this brand
+        slots_cancelled = 0
+        try:
+            from sqlalchemy import text
+            result = self.db.execute(
+                text("UPDATE scheduled_reels SET status='cancelled' WHERE user_id=:uid AND extra_data->>'brand'=:bid AND scheduled_time > NOW() AND status NOT IN ('published', 'cancelled')"),
+                {"uid": effective_user_id, "bid": brand_id},
+            )
+            slots_cancelled = result.rowcount
+        except Exception as e:
+            logger.warning(f"Failed to cancel scheduled slots for brand {brand_id}: {e}")
+
+        # Gap 4: Delete stale strategy scores for the brand
+        try:
+            from app.models.toby import TobyStrategyScore
+            self.db.query(TobyStrategyScore).filter(
+                TobyStrategyScore.user_id == effective_user_id,
+                TobyStrategyScore.brand_id == brand_id,
+            ).delete()
+        except Exception as e:
+            logger.warning(f"Failed to delete strategy scores for brand {brand_id}: {e}")
+
+        # Gap 4: Emit activity log
+        try:
+            from app.models.toby import TobyActivityLog
+            from datetime import datetime, timezone
+            self.db.add(TobyActivityLog(
+                user_id=effective_user_id,
+                action_type="brand_removed",
+                description=f"Brand {brand_id} deactivated. Cancelled {slots_cancelled} future scheduled slots and cleaned up strategy scores.",
+                action_metadata={"brand_id": brand_id, "slots_cancelled": slots_cancelled},
+                level="info",
+                created_at=datetime.now(timezone.utc),
+            ))
+        except Exception as e:
+            logger.warning(f"Failed to emit brand_removed activity log: {e}")
+
         self.db.commit()
         
         self._invalidate_cache()
-        logger.info(f"Deactivated brand: {brand_id}")
+        logger.info(f"Deactivated brand: {brand_id} (cancelled {slots_cancelled} scheduled slots)")
         
         return True
     

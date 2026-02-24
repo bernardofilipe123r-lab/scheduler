@@ -4,7 +4,7 @@ Toby State Machine — manages per-user Toby lifecycle.
 States: OFF → BOOTSTRAP → LEARNING → OPTIMIZING
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyActivityLog
 
@@ -147,6 +147,84 @@ def check_phase_transition(db: Session, state: TobyState, scored_post_count: int
                 level="success",
             )
             return True
+
+    return False
+
+
+def check_phase_regression(db: Session, user_id: str) -> bool:
+    """Check if performance has regressed enough to move from optimizing → learning.
+
+    Aggregates Toby Score across all active brands for the user.
+    If the 14-day avg drops below 80% of the 90-day baseline while in
+    'optimizing' phase, resets to 'learning' with explore_ratio = 0.50.
+
+    Returns True if a regression was triggered.
+    """
+    from app.models.toby import TobyContentTag
+    from app.models.brands import Brand
+    from sqlalchemy import func
+
+    state = get_or_create_state(db, user_id)
+    if state.phase != "optimizing":
+        return False
+
+    now = datetime.now(timezone.utc)
+
+    # Get active brand IDs for this user
+    active_brands = (
+        db.query(Brand.id)
+        .filter(Brand.user_id == user_id, Brand.active == True)
+        .all()
+    )
+    if not active_brands:
+        return False
+
+    # 14-day recent avg across all brands
+    recent_cutoff = now - timedelta(days=14)
+    recent_avg = (
+        db.query(func.avg(TobyContentTag.toby_score))
+        .filter(
+            TobyContentTag.user_id == user_id,
+            TobyContentTag.toby_score.isnot(None),
+            TobyContentTag.metrics_unreliable != True,
+            TobyContentTag.scored_at >= recent_cutoff,
+        )
+        .scalar()
+    )
+
+    # 90-day baseline avg across all brands
+    baseline_cutoff = now - timedelta(days=90)
+    baseline_avg = (
+        db.query(func.avg(TobyContentTag.toby_score))
+        .filter(
+            TobyContentTag.user_id == user_id,
+            TobyContentTag.toby_score.isnot(None),
+            TobyContentTag.metrics_unreliable != True,
+            TobyContentTag.scored_at >= baseline_cutoff,
+        )
+        .scalar()
+    )
+
+    if not recent_avg or not baseline_avg:
+        return False
+
+    if recent_avg < baseline_avg * 0.80:
+        state.phase = "learning"
+        state.phase_started_at = now
+        state.explore_ratio = 0.50
+        state.updated_at = now
+        _log_activity(
+            db, user_id, "phase_regression",
+            f"Performance regression detected: 14-day avg {recent_avg:.1f} vs 90-day baseline {baseline_avg:.1f} "
+            f"(ratio {recent_avg / baseline_avg:.2f}). Reverting to learning phase with explore_ratio 0.50",
+            metadata={
+                "recent_avg": round(float(recent_avg), 1),
+                "baseline_avg": round(float(baseline_avg), 1),
+                "ratio": round(float(recent_avg / baseline_avg), 2),
+            },
+            level="warning",
+        )
+        return True
 
     return False
 

@@ -116,6 +116,38 @@ def _process_user(db: Session, state: TobyState):
                 state.explore_ratio = drift_result["ratio_change"]
                 print(f"[TOBY] Drift detected for {user_id}: adjusting explore_ratio to {drift_result['ratio_change']}", flush=True)
 
+            # Gap 5: LLM Strategy Agent (advisory mode behind feature flag)
+            try:
+                from app.services.toby.feature_flags import is_enabled
+                if is_enabled("llm_strategy_agent"):
+                    import concurrent.futures
+                    from app.services.toby.strategy_agent import get_strategy_recommendation, apply_recommendation
+                    from app.services.toby.learning_engine import get_insights
+
+                    insights = get_insights(db, user_id)
+                    performance_summary = {
+                        "reel_insights": insights.get("reel", {}),
+                        "post_insights": insights.get("post", {}),
+                        "explore_ratio": state.explore_ratio,
+                        "phase": state.phase,
+                    }
+                    current_strategy = {"explore_ratio": state.explore_ratio, "phase": state.phase}
+
+                    # 10s timeout to prevent slow LLM calls from blocking the tick
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(
+                            get_strategy_recommendation,
+                            db, user_id, "reel", performance_summary, current_strategy,
+                        )
+                        recommendation = future.result(timeout=10)
+
+                    if recommendation:
+                        apply_recommendation(db, user_id, recommendation)
+            except concurrent.futures.TimeoutError:
+                print(f"[TOBY] LLM strategy agent timed out for {user_id} — skipping", flush=True)
+            except Exception as agent_err:
+                print(f"[TOBY] LLM strategy agent error for {user_id}: {agent_err}", flush=True)
+
             state.last_analysis_at = now
             state.updated_at = now
             db.commit()
@@ -141,7 +173,7 @@ def _process_user(db: Session, state: TobyState):
 
     # 5. PHASE CHECK — isolated commit
     try:
-        from app.services.toby.state import check_phase_transition
+        from app.services.toby.state import check_phase_transition, check_phase_regression
         scored_count = (
             db.query(TobyContentTag)
             .filter(
@@ -151,6 +183,10 @@ def _process_user(db: Session, state: TobyState):
             .count()
         )
         check_phase_transition(db, state, scored_count)
+
+        # Gap 3: Check for phase regression (optimizing → learning)
+        check_phase_regression(db, user_id)
+
         db.commit()
     except Exception as e:
         db.rollback()
@@ -480,12 +516,22 @@ def _run_metrics_check(db: Session, user_id: str, state: TobyState):
         brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
 
         total_collected = 0
+        expired_brands = []
         for brand in brands:
             try:
                 result = collector.collect_for_brand(brand.id)
+                # Gap 1: Track brands with expired tokens
+                if isinstance(result, dict) and result.get("token_expired"):
+                    expired_brands.append(brand.id)
+                    continue
                 total_collected += result.get("new_metrics", 0) if isinstance(result, dict) else 0
             except Exception as e:
                 print(f"[TOBY] Metrics collection failed for {brand.id}: {e}", flush=True)
+
+        # Gap 1: Store expired brand IDs on state for analysis check to skip
+        if expired_brands:
+            state._token_expired_brands = expired_brands
+            print(f"[TOBY] Token expired for brands: {expired_brands} — skipping strategy score updates", flush=True)
 
         if total_collected > 0:
             db.add(TobyActivityLog(

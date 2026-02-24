@@ -185,8 +185,9 @@ def _feed_discovery_to_learning(db: Session, user_id: str, results: dict):
 
     When a trending topic is discovered that isn't currently being tested,
     auto-create an experiment comparing it against the current best.
+    Gap 2: Also feeds trending hashtags as new experiment arms.
     """
-    from app.services.toby.learning_engine import create_experiment, get_insights
+    from app.services.toby.learning_engine import create_experiment, get_insights, add_option_to_experiment
 
     try:
         insights = get_insights(db, user_id)
@@ -196,17 +197,39 @@ def _feed_discovery_to_learning(db: Session, user_id: str, results: dict):
         current_best = reel_topics[0]["option"] if reel_topics else None
 
         # Check if any trending topics from discovery are worth testing
-        # This is a simplified version — real implementation would parse
-        # specific trending topics from the scout results
         total_found = results.get("competitors", 0) + results.get("hashtags", 0)
         if total_found > 5 and current_best:
-            # Significant discovery — there might be new trending topics
-            # The learning engine's Thompson Sampling will naturally explore
-            # these through its prior distributions
+            # Gap 2: Feed discovered hashtags into the learning engine as new arms
+            # Extract trending hashtags from the discovery results
+            trending_hashtags = results.get("trending_hashtags", [])
+            added = 0
+            for hashtag in trending_hashtags:
+                if isinstance(hashtag, str) and hashtag.strip():
+                    was_added = add_option_to_experiment(
+                        db, user_id,
+                        dimension="hashtag_style",
+                        new_option=hashtag.strip(),
+                        content_type="reel",
+                    )
+                    if was_added:
+                        added += 1
+                    # Also add to post experiments
+                    add_option_to_experiment(
+                        db, user_id,
+                        dimension="hashtag_style",
+                        new_option=hashtag.strip(),
+                        content_type="post",
+                    )
+
+            desc = f"Strong discovery signal ({total_found} items)"
+            if added > 0:
+                desc += f" — added {added} new hashtag arms to experiments"
+            else:
+                desc += " — learning engine will incorporate via exploration"
+
             _log(db, user_id, "discovery_learning_signal",
-                 f"Strong discovery signal ({total_found} items) — learning engine will incorporate via exploration",
-                 level="info",
-                 metadata={"total_found": total_found, "current_best_topic": current_best})
+                 desc, level="info",
+                 metadata={"total_found": total_found, "current_best_topic": current_best, "arms_added": added})
     except Exception as e:
         _log(db, user_id, "discovery_learning_error",
              f"Failed to feed discovery to learning: {str(e)[:200]}",

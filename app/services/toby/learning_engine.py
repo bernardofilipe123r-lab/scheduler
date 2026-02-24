@@ -519,6 +519,10 @@ def _pick_dimension(
         return random.choice(options)
 
 
+# ── Max arms per experiment ──
+MAX_EXPERIMENT_ARMS = 8
+
+
 def _log(db, user_id, action_type, description, level="info", metadata=None):
     db.add(TobyActivityLog(
         user_id=user_id,
@@ -528,3 +532,64 @@ def _log(db, user_id, action_type, description, level="info", metadata=None):
         level=level,
         created_at=datetime.now(timezone.utc),
     ))
+
+
+def add_option_to_experiment(
+    db: Session,
+    user_id: str,
+    dimension: str,
+    new_option: str,
+    content_type: str = "reel",
+) -> bool:
+    """Add a new option to an active experiment for the given dimension.
+
+    Gap 2: Called by discovery_manager when trending hashtags are found.
+    Appends the new option with a prior score equal to the current
+    experiment mean (fair cold-start). Skips if already present or
+    experiment already has MAX_EXPERIMENT_ARMS.
+
+    Returns True if the option was added.
+    """
+    exp = (
+        db.query(TobyExperiment)
+        .filter(
+            TobyExperiment.user_id == user_id,
+            TobyExperiment.content_type == content_type,
+            TobyExperiment.dimension == dimension,
+            TobyExperiment.status == "active",
+        )
+        .first()
+    )
+    if not exp:
+        return False
+
+    options = list(exp.options or [])
+
+    # Already present
+    if new_option in options:
+        return False
+
+    # Guard: max arms
+    if len(options) >= MAX_EXPERIMENT_ARMS:
+        return False
+
+    # Compute current experiment mean for cold-start prior
+    results = dict(exp.results or {})
+    all_avgs = [r.get("avg_score", 0) for r in results.values() if r.get("count", 0) > 0]
+    mean_score = sum(all_avgs) / len(all_avgs) if all_avgs else 0
+
+    # Append new option
+    options.append(new_option)
+    exp.options = options
+
+    # Initialize results entry with cold-start prior
+    results[new_option] = {"count": 0, "total_score": 0, "avg_score": mean_score, "scores": []}
+    exp.results = results
+
+    _log(db, user_id, "experiment_arm_added",
+         f"Added '{new_option}' to {dimension} experiment ({content_type}) — "
+         f"cold-start prior {mean_score:.1f}, now {len(options)} arms",
+         level="info",
+         metadata={"dimension": dimension, "new_option": new_option, "total_arms": len(options)})
+
+    return True

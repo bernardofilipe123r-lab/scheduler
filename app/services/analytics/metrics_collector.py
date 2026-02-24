@@ -118,6 +118,18 @@ class MetricsCollector:
                 pass
         return False
 
+    def _is_token_expired_response(self, response: requests.Response) -> bool:
+        """Gap 1: Detect expired Instagram tokens from HTTP 401 or IG error code 190."""
+        if response.status_code == 401:
+            return True
+        try:
+            err = response.json().get("error", {})
+            if err.get("code") == 190:
+                return True
+        except Exception:
+            pass
+        return False
+
     def _get_token_for_brand(self, brand: str) -> Optional[str]:
         creds = self._brand_tokens.get(brand) or self._brand_tokens.get("default")
         return creds["token"] if creds else None
@@ -135,6 +147,7 @@ class MetricsCollector:
         Fetch metrics for a single Instagram media item.
 
         Returns dict with: views, likes, comments, saves, shares, reach
+        Returns {"token_expired": True} if the token is expired (HTTP 401 / code 190).
         """
         metrics = {
             "views": 0, "likes": 0, "comments": 0,
@@ -154,6 +167,11 @@ class MetricsCollector:
                 "fields": "like_count,comments_count,timestamp,media_type",
                 "access_token": access_token,
             }, timeout=15)
+
+            # Gap 1: Detect expired token (HTTP 401 or IG error code 190)
+            if self._is_token_expired_response(basic_resp):
+                _log("Token Expired", f"Token expired for media {ig_media_id} (HTTP {basic_resp.status_code})", "🔑", "api")
+                return {"token_expired": True}
 
             if basic_resp.status_code == 200:
                 data = basic_resp.json()
@@ -317,6 +335,7 @@ class MetricsCollector:
 
             updated = 0
             errors = 0
+            token_expired = False
 
             for sched in published:
                 extra = sched.extra_data or {}
@@ -341,6 +360,12 @@ class MetricsCollector:
 
                 # Fetch fresh metrics
                 raw = self.fetch_media_metrics(ig_media_id, token)
+
+                # Gap 1: Detect expired token from API response
+                if isinstance(raw, dict) and raw.get("token_expired"):
+                    token_expired = True
+                    break  # No point continuing — all requests will fail
+
                 if not raw:
                     errors += 1
                     continue
@@ -414,6 +439,11 @@ class MetricsCollector:
                 time.sleep(0.5)
 
             db.commit()
+
+            # Gap 1: Emit debounced token_expired event if detected
+            if token_expired:
+                self._emit_token_expired_event(db, brand)
+                return {"brand": brand, "updated": updated, "errors": errors, "token_expired": True}
 
             # Update percentile ranks
             self._update_percentile_ranks(db, brand)
@@ -595,6 +625,48 @@ class MetricsCollector:
             }
         finally:
             db.close()
+
+    # ──────────────────────────────────────────────────────────
+    # GAP 1: TOKEN EXPIRY EVENT
+    # ──────────────────────────────────────────────────────────
+
+    def _emit_token_expired_event(self, db, brand: str):
+        """Emit a debounced token_expired activity log entry (max once per 24h per brand)."""
+        from app.models.toby import TobyActivityLog
+        from app.models.brands import Brand
+
+        try:
+            brand_row = db.query(Brand).filter(Brand.id == brand).first()
+            user_id = brand_row.user_id if brand_row else None
+            if not user_id:
+                return
+
+            # Debounce: check for existing token_expired entry in last 24h
+            cutoff = datetime.utcnow() - timedelta(hours=24)
+            existing = (
+                db.query(TobyActivityLog)
+                .filter(
+                    TobyActivityLog.user_id == user_id,
+                    TobyActivityLog.action_type == "token_expired",
+                    TobyActivityLog.created_at >= cutoff,
+                )
+                .first()
+            )
+            if existing:
+                return  # Already emitted recently
+
+            db.add(TobyActivityLog(
+                user_id=user_id,
+                action_type="token_expired",
+                description=f"Instagram access token expired for brand {brand}. Metrics collection paused — please reconnect Instagram.",
+                action_metadata={"brand_id": brand},
+                level="error",
+                created_at=datetime.utcnow(),
+            ))
+            db.commit()
+            _log("Token Expired", f"Emitted token_expired event for brand {brand}", "🔑")
+        except Exception as e:
+            _log("Token Expired", f"Failed to emit token_expired event: {e}", "❌")
 
     # ──────────────────────────────────────────────────────────
     # CROSS-BRAND INTELLIGENCE (pure DB — zero API calls)
