@@ -12,6 +12,8 @@ Decision priority (highest to lowest):
   5. PHASE CHECK   — Should Toby transition to the next phase?
 """
 import traceback
+import concurrent.futures
+import threading
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyContentTag, TobyActivityLog
@@ -29,9 +31,19 @@ ERROR_LOG_DEBOUNCE_MINUTES = 30
 # Generation rate-limiting: prevent burst-posting
 # Track recent generations per brand to enforce cooldown
 _recent_generations: dict[str, list[datetime]] = {}  # "user:brand" -> [timestamps]
+_generation_lock = threading.Lock()  # Thread-safe access to _recent_generations
+
+# --- Normal rate limits (steady-state) ---
 MAX_GENERATIONS_PER_BRAND_PER_HOUR = 2   # Max 2 pieces per brand per hour
 MAX_GENERATIONS_PER_USER_PER_HOUR = 6    # Max 6 pieces per user per hour
 GENERATION_COOLDOWN_MINUTES = 15         # Min gap between generations for same brand
+
+# --- Bootstrap / critical rate limits (aggressive fill) ---
+BOOTSTRAP_MAX_PER_BRAND_PER_HOUR = 6    # 6 per brand per hour in bootstrap
+BOOTSTRAP_MAX_PER_USER_PER_HOUR = 20    # 20 total per hour in bootstrap
+BOOTSTRAP_COOLDOWN_MINUTES = 2          # Only 2-min gap between same-brand gens
+BOOTSTRAP_MAX_PLANS_PER_TICK = 4        # Generate up to 4 plans per tick
+BOOTSTRAP_MAX_PARALLEL_WORKERS = 3      # Run up to 3 generations in parallel
 
 
 def toby_tick():
@@ -225,48 +237,48 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
     if _check_budget_exceeded(state):
         return
 
+    # Determine if we're in aggressive mode (bootstrap or critical buffer)
+    is_bootstrap = state.phase == "bootstrap"
+
     # Rate-limit: check user-level hourly cap before even querying buffer
-    if _user_at_hourly_cap(user_id):
+    if _user_at_hourly_cap(user_id, aggressive=is_bootstrap):
         return
 
     status = get_buffer_status(db, user_id, state)
     if status["health"] == "healthy":
         return
 
-    plans = create_plans_for_empty_slots(db, user_id, state, max_plans=1)
+    is_aggressive = is_bootstrap or status["health"] == "critical"
+    max_plans = BOOTSTRAP_MAX_PLANS_PER_TICK if is_aggressive else 1
+
+    plans = create_plans_for_empty_slots(db, user_id, state, max_plans=max_plans)
     if not plans:
         return
 
-    # Execute each plan by calling into existing services
-    generated = 0
+    # Filter out plans that hit brand cooldown
+    eligible_plans = []
     for plan in plans:
-        # Rate-limit: skip if this brand was generated for recently
-        if _brand_at_cooldown(user_id, plan.brand_id):
+        if _brand_at_cooldown(user_id, plan.brand_id, aggressive=is_aggressive):
             print(f"[TOBY] Skipping {plan.brand_id} — generation cooldown active", flush=True)
-            continue
+        else:
+            eligible_plans.append(plan)
 
-        try:
-            _execute_content_plan(db, plan)
-            generated += 1
-            _record_generation(user_id, plan.brand_id)
-            _increment_budget(state)  # Section 13.2
-        except Exception as e:
-            print(f"[TOBY] Content generation failed for {plan.brand_id}: {e}", flush=True)
-            db.add(TobyActivityLog(
-                user_id=user_id,
-                action_type="error",
-                description=f"Content generation failed for {plan.brand_id}: {str(e)[:300]}",
-                level="error",
-                created_at=datetime.now(timezone.utc),
-            ))
+    if not eligible_plans:
+        return
+
+    # Execute plans — parallel in aggressive mode, sequential otherwise
+    if is_aggressive and len(eligible_plans) > 1:
+        generated = _execute_plans_parallel(eligible_plans, user_id, state)
+    else:
+        generated = _execute_plans_sequential(db, eligible_plans, user_id, state)
 
     if generated > 0:
         db.add(TobyActivityLog(
             user_id=user_id,
             action_type="content_generated",
-            description=f"Generated {generated} pieces of content to fill buffer",
+            description=f"Toby created {generated} piece{'s' if generated != 1 else ''} of content to fill empty buffer slots",
             level="success",
-            action_metadata={"count": generated, "buffer_health": status["health"]},
+            action_metadata={"count": generated, "buffer_health": status["health"], "parallel": is_aggressive and len(eligible_plans) > 1},
             created_at=datetime.now(timezone.utc),
         ))
 
@@ -633,6 +645,77 @@ def _log_debounced(db: Session, user_id: str, action_type: str,
         db.rollback()
 
 
+def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: TobyState) -> int:
+    """Execute content plans one at a time (steady-state mode)."""
+    generated = 0
+    for plan in plans:
+        try:
+            _execute_content_plan(db, plan)
+            generated += 1
+            _record_generation(user_id, plan.brand_id)
+            _increment_budget(state)
+        except Exception as e:
+            print(f"[TOBY] Content generation failed for {plan.brand_id}: {e}", flush=True)
+            db.add(TobyActivityLog(
+                user_id=user_id,
+                action_type="error",
+                description=f"Content generation failed for {plan.brand_id}: {str(e)[:300]}",
+                level="error",
+                created_at=datetime.now(timezone.utc),
+            ))
+    return generated
+
+
+def _execute_plans_parallel(plans: list, user_id: str, state: TobyState) -> int:
+    """Execute content plans in parallel using separate DB sessions per thread.
+
+    Each plan gets its own DB session so SQLAlchemy sessions stay thread-local.
+    """
+    from app.db_connection import SessionLocal
+
+    max_workers = min(len(plans), BOOTSTRAP_MAX_PARALLEL_WORKERS)
+    generated = 0
+    print(f"[TOBY] Parallel generation: {len(plans)} plans, {max_workers} workers", flush=True)
+
+    def _run_one(plan):
+        """Run a single content plan in its own DB session."""
+        thread_db = SessionLocal()
+        try:
+            _execute_content_plan(thread_db, plan)
+            _record_generation(plan.user_id, plan.brand_id)
+            thread_db.commit()
+            return {"success": True, "brand_id": plan.brand_id}
+        except Exception as e:
+            thread_db.rollback()
+            print(f"[TOBY] Parallel gen failed for {plan.brand_id}: {e}", flush=True)
+            thread_db.add(TobyActivityLog(
+                user_id=plan.user_id,
+                action_type="error",
+                description=f"Content generation failed for {plan.brand_id}: {str(e)[:300]}",
+                level="error",
+                created_at=datetime.now(timezone.utc),
+            ))
+            try:
+                thread_db.commit()
+            except Exception:
+                thread_db.rollback()
+            return {"success": False, "brand_id": plan.brand_id, "error": str(e)}
+        finally:
+            thread_db.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_run_one, plan): plan for plan in plans}
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result["success"]:
+                generated += 1
+                _increment_budget(state)
+                print(f"[TOBY] ✓ Parallel gen completed for {result['brand_id']}", flush=True)
+
+    print(f"[TOBY] Parallel generation done: {generated}/{len(plans)} succeeded", flush=True)
+    return generated
+
+
 def _cleanup_supabase_on_failure(job_id: str, brand_id: str):
     """D4: Clean up orphaned Supabase storage files when media generation fails."""
     try:
@@ -656,35 +739,42 @@ def _prune_old_timestamps(key: str):
     if key in _recent_generations:
         _recent_generations[key] = [t for t in _recent_generations[key] if t > cutoff]
 
-def _brand_at_cooldown(user_id: str, brand_id: str) -> bool:
+def _brand_at_cooldown(user_id: str, brand_id: str, aggressive: bool = False) -> bool:
     """Return True if this brand has been generated for too recently."""
+    cooldown = BOOTSTRAP_COOLDOWN_MINUTES if aggressive else GENERATION_COOLDOWN_MINUTES
+    max_per_brand = BOOTSTRAP_MAX_PER_BRAND_PER_HOUR if aggressive else MAX_GENERATIONS_PER_BRAND_PER_HOUR
+
     key = f"{user_id}:{brand_id}"
-    _prune_old_timestamps(key)
-    timestamps = _recent_generations.get(key, [])
+    with _generation_lock:
+        _prune_old_timestamps(key)
+        timestamps = _recent_generations.get(key, [])
     if not timestamps:
         return False
     # Check cooldown (min gap between consecutive generations for same brand)
     last = max(timestamps)
-    if (datetime.now(timezone.utc) - last).total_seconds() < GENERATION_COOLDOWN_MINUTES * 60:
+    if (datetime.now(timezone.utc) - last).total_seconds() < cooldown * 60:
         return True
     # Check hourly cap per brand
-    return len(timestamps) >= MAX_GENERATIONS_PER_BRAND_PER_HOUR
+    return len(timestamps) >= max_per_brand
 
-def _user_at_hourly_cap(user_id: str) -> bool:
+def _user_at_hourly_cap(user_id: str, aggressive: bool = False) -> bool:
     """Return True if the user has hit the hourly generation cap across all brands."""
+    max_per_user = BOOTSTRAP_MAX_PER_USER_PER_HOUR if aggressive else MAX_GENERATIONS_PER_USER_PER_HOUR
     cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
     total = 0
-    for key, timestamps in _recent_generations.items():
-        if key.startswith(f"{user_id}:"):
-            total += sum(1 for t in timestamps if t > cutoff)
-    return total >= MAX_GENERATIONS_PER_USER_PER_HOUR
+    with _generation_lock:
+        for key, timestamps in _recent_generations.items():
+            if key.startswith(f"{user_id}:"):
+                total += sum(1 for t in timestamps if t > cutoff)
+    return total >= max_per_user
 
 def _record_generation(user_id: str, brand_id: str):
     """Record that a piece of content was generated for rate-limiting."""
     key = f"{user_id}:{brand_id}"
-    if key not in _recent_generations:
-        _recent_generations[key] = []
-    _recent_generations[key].append(datetime.now(timezone.utc))
+    with _generation_lock:
+        if key not in _recent_generations:
+            _recent_generations[key] = []
+        _recent_generations[key].append(datetime.now(timezone.utc))
 
 
 def _check_budget_exceeded(state: TobyState) -> bool:
