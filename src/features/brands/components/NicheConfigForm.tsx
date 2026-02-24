@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles } from '../api/use-niche-config'
@@ -177,6 +177,25 @@ export function NicheConfigForm() {
     setDirty(true)
   }
 
+  // Auto-save: debounce 1.5s after any change
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const valuesRef = useRef(values)
+  valuesRef.current = values
+
+  useEffect(() => {
+    if (!dirty) return
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => {
+      updateMutation.mutateAsync({ ...valuesRef.current }).then(() => {
+        setDirty(false)
+      }).catch(() => {
+        // silent — user can still manually save
+      })
+    }, 1500)
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, values])
+
   const generalFilled = Boolean(values.niche_name?.trim() && values.content_brief?.trim())
 
   // Section completion checks
@@ -205,7 +224,19 @@ export function NicheConfigForm() {
     }
   }
 
+  // Flush any pending auto-save immediately (used before AI generation)
+  const flushSave = useCallback(async () => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    if (dirty) {
+      await updateMutation.mutateAsync({ ...valuesRef.current })
+      setDirty(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty])
+
   const handleAiUnderstanding = useCallback(async () => {
+    // Flush unsaved changes before AI reads from DB
+    await flushSave()
     setAiResult(null)
     setReelImages(null)
     const storageKey = 'ai-understanding-global'
@@ -368,6 +399,7 @@ export function NicheConfigForm() {
               generalFilled={generalFilled}
               nicheName={values.niche_name}
               contentBrief={values.content_brief}
+              onBeforeGenerate={flushSave}
             />
           </div>
 
@@ -480,7 +512,8 @@ export function NicheConfigForm() {
               <h4 className="text-sm font-medium text-gray-700">🎬 YouTube Title Style</h4>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  await flushSave()
                   ytSuggestMutation.mutate(undefined, {
                     onSuccess: (data) => {
                       if (data.good_titles?.length) {
@@ -573,6 +606,7 @@ export function NicheConfigForm() {
               onPostExamplesChange={(v) => update('post_examples', v)}
               showOnly="posts"
               generalFilled={generalFilled}
+              onBeforeGenerate={flushSave}
             />
           </div>
 

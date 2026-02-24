@@ -1,9 +1,11 @@
 """API routes for niche configuration (Content DNA)."""
 
 import os
+import asyncio
 import base64
 import tempfile
 import json
+import logging
 import requests as http_requests
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,7 +17,38 @@ from app.api.auth.middleware import get_current_user
 from app.models.niche_config import NicheConfig
 from app.services.content.niche_config_service import get_niche_config_service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/niche-config", tags=["niche-config"])
+
+
+def _deepseek_call(api_key: str, prompt: str, temperature: float, max_tokens: int, timeout: int = 60):
+    """Synchronous DeepSeek API call — meant to be run via asyncio.to_thread."""
+    return http_requests.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+        timeout=timeout,
+    )
+
+
+def _parse_deepseek_json(response) -> dict:
+    """Parse JSON from DeepSeek response, handling markdown fences."""
+    content_text = response.json()["choices"][0]["message"]["content"].strip()
+    if content_text.startswith("```"):
+        content_text = content_text.split("```")[1]
+        if content_text.startswith("json"):
+            content_text = content_text[4:]
+        content_text = content_text.strip()
+    return json.loads(content_text)
 
 
 # --- Validation constants ---
@@ -362,38 +395,19 @@ OUTPUT FORMAT (JSON only):
 }}}}"""
 
     try:
-        response = http_requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
-                "max_tokens": 1500,
-            },
-            timeout=30,
-        )
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.7, 1500, 30)
 
         if response.status_code == 200:
-            import json
-            data = response.json()
-            content_text = data["choices"][0]["message"]["content"].strip()
-            if content_text.startswith("```"):
-                content_text = content_text.split("```")[1]
-                if content_text.startswith("json"):
-                    content_text = content_text[4:]
-                content_text = content_text.strip()
-            result = json.loads(content_text)
+            result = _parse_deepseek_json(response)
             return {
                 "understanding": result.get("understanding", ""),
                 "example_reel": result.get("example_reel"),
                 "example_post": result.get("example_post"),
             }
+        else:
+            logger.error("DeepSeek AI understanding returned %s: %s", response.status_code, response.text[:500])
     except Exception as e:
-        print(f"AI understanding generation failed: {e}", flush=True)
+        logger.error("AI understanding generation failed: %s", e, exc_info=True)
 
     return {
         "understanding": "I wasn't able to generate an understanding right now. Please try again.",
@@ -465,36 +479,18 @@ OUTPUT FORMAT (JSON only):
 }}}}"""
 
     try:
-        response = http_requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.95,
-                "max_tokens": 1000,
-            },
-            timeout=30,
-        )
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.95, 1000, 30)
         if response.status_code == 200:
-            data = response.json()
-            content_text = data["choices"][0]["message"]["content"].strip()
-            if content_text.startswith("```"):
-                content_text = content_text.split("```")[1]
-                if content_text.startswith("json"):
-                    content_text = content_text[4:]
-                content_text = content_text.strip()
-            result = json.loads(content_text)
+            result = _parse_deepseek_json(response)
             return {
                 "title": result.get("title", ""),
                 "slides": result.get("slides", [])[:request.num_slides],
                 "study_ref": result.get("study_ref", ""),
             }
+        else:
+            logger.error("DeepSeek post example returned %s: %s", response.status_code, response.text[:500])
     except Exception as e:
-        print(f"Post example generation failed: {e}", flush=True)
+        logger.error("Post example generation failed: %s", e, exc_info=True)
 
     raise HTTPException(status_code=500, detail="Failed to generate post example")
 
@@ -567,29 +563,9 @@ OUTPUT FORMAT (JSON only — array of {request.count} objects):
 }}}}"""
 
     try:
-        response = http_requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.95,
-                "max_tokens": request.count * 800,
-            },
-            timeout=60,
-        )
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.95, request.count * 800, 60)
         if response.status_code == 200:
-            data = response.json()
-            content_text = data["choices"][0]["message"]["content"].strip()
-            if content_text.startswith("```"):
-                content_text = content_text.split("```")[1]
-                if content_text.startswith("json"):
-                    content_text = content_text[4:]
-                content_text = content_text.strip()
-            result = json.loads(content_text)
+            result = _parse_deepseek_json(response)
             posts = result.get("posts", [])
             return {
                 "posts": [
@@ -601,8 +577,10 @@ OUTPUT FORMAT (JSON only — array of {request.count} objects):
                     for p in posts[:request.count]
                 ]
             }
+        else:
+            logger.error("DeepSeek post batch returned %s: %s", response.status_code, response.text[:500])
     except Exception as e:
-        print(f"Post examples batch generation failed: {e}", flush=True)
+        logger.error("Post examples batch generation failed: %s", e, exc_info=True)
 
     raise HTTPException(status_code=500, detail="Failed to generate post examples")
 
@@ -724,41 +702,27 @@ OUTPUT FORMAT (JSON only):
 }}}}"""
 
     try:
-        response = http_requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.9,
-                "max_tokens": min(request.count * 300, 8000),
-            },
-            timeout=90,
-        )
-        if response.status_code == 200:
-            data = response.json()
-            content_text = data["choices"][0]["message"]["content"].strip()
-            if content_text.startswith("```"):
-                content_text = content_text.split("```")[1]
-                if content_text.startswith("json"):
-                    content_text = content_text[4:]
-                content_text = content_text.strip()
-            result = json.loads(content_text)
-            reels = result.get("reels", [])
-            return {
-                "reels": [
-                    {
-                        "title": r.get("title", ""),
-                        "content_lines": r.get("content_lines", []),
-                    }
-                    for r in reels[:request.count]
-                ]
-            }
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 16000, 120)
+
+        if response.status_code != 200:
+            logger.error("DeepSeek reel batch returned %s: %s", response.status_code, response.text[:500])
+            raise HTTPException(status_code=502, detail=f"AI service returned {response.status_code}")
+
+        result = _parse_deepseek_json(response)
+        reels = result.get("reels", [])
+        return {
+            "reels": [
+                {
+                    "title": r.get("title", ""),
+                    "content_lines": r.get("content_lines", []),
+                }
+                for r in reels[:request.count]
+            ]
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Reel examples batch generation failed: {e}", flush=True)
+        logger.error("Reel examples batch generation failed: %s", e, exc_info=True)
 
     raise HTTPException(status_code=500, detail="Failed to generate reel examples")
 
@@ -807,35 +771,17 @@ OUTPUT FORMAT (JSON only):
 }}}}"""
 
     try:
-        response = http_requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
-                "max_tokens": 500,
-            },
-            timeout=30,
-        )
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.7, 500, 30)
         if response.status_code == 200:
-            data = response.json()
-            content_text = data["choices"][0]["message"]["content"].strip()
-            if content_text.startswith("```"):
-                content_text = content_text.split("```")[1]
-                if content_text.startswith("json"):
-                    content_text = content_text[4:]
-                content_text = content_text.strip()
-            result = json.loads(content_text)
+            result = _parse_deepseek_json(response)
             return {
                 "good_titles": result.get("good_titles", []),
                 "bad_titles": result.get("bad_titles", []),
             }
+        else:
+            logger.error("DeepSeek YT titles returned %s: %s", response.status_code, response.text[:500])
     except Exception as e:
-        print(f"YT title suggestion failed: {e}", flush=True)
+        logger.error("YT title suggestion failed: %s", e, exc_info=True)
 
     raise HTTPException(status_code=500, detail="Failed to generate title suggestions")
 

@@ -13,6 +13,7 @@ interface ContentExamplesSectionProps {
   generalFilled?: boolean
   nicheName?: string
   contentBrief?: string
+  onBeforeGenerate?: () => Promise<void>
 }
 
 function ReelExampleCard({
@@ -291,6 +292,7 @@ export function ContentExamplesSection({
   generalFilled = false,
   nicheName,
   contentBrief,
+  onBeforeGenerate,
 }: ContentExamplesSectionProps) {
   const [newPostSlideCount, setNewPostSlideCount] = useState<3 | 4>(4)
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null)
@@ -304,7 +306,8 @@ export function ContentExamplesSection({
     onReelExamplesChange([...reelExamples, { title: '', content_lines: [''] }])
   }
 
-  const addPostExample = () => {
+  const addPostExample = async () => {
+    if (onBeforeGenerate) await onBeforeGenerate()
     const newIndex = postExamples.length
     const emptySlides = Array.from({ length: newPostSlideCount }, () => '')
     const newExample: PostExample = { title: '', slides: emptySlides, _maxSlides: newPostSlideCount }
@@ -356,7 +359,8 @@ export function ContentExamplesSection({
     onPostExamplesChange(postExamples.filter((_, i) => i !== index))
   }
 
-  const generateReelBatch = () => {
+  const generateReelBatch = async () => {
+    if (onBeforeGenerate) await onBeforeGenerate()
     setReelBatchGenerating(true)
     reelBatchMutation.mutate(
       { count: 50 },
@@ -374,7 +378,8 @@ export function ContentExamplesSection({
     )
   }
 
-  const generateBatch = (count: number) => {
+  const generateBatch = async (count: number) => {
+    if (onBeforeGenerate) await onBeforeGenerate()
     const existingTitles = postExamples.map(ex => ex.title).filter(Boolean)
     setBatchGenerating(true)
     batchMutation.mutate(
