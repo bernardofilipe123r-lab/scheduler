@@ -20,7 +20,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.db_connection import get_db, get_db_session
-from app.models import YouTubeChannel
+from app.models import YouTubeChannel, Brand
 from app.services.youtube.publisher import YouTubePublisher, YouTubeCredentials
 from app.services.brands.resolver import brand_resolver
 from app.api.auth.middleware import get_current_user
@@ -65,8 +65,10 @@ async def youtube_connect(brand: str = Query(..., description="Brand to connect 
             detail="YouTube OAuth not configured. Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET."
         )
     
-    # Use brand as state parameter for CSRF protection and brand tracking
-    auth_url = youtube_publisher.get_authorization_url(state=brand)
+    # Encode brand + user_id in state for the callback
+    user_id = user.get("id", "")
+    state_value = f"{brand}:{user_id}" if user_id else brand
+    auth_url = youtube_publisher.get_authorization_url(state=state_value)
     
     logger.info(f"Starting YouTube OAuth flow for brand: {brand}")
     return {"auth_url": auth_url, "brand": brand}
@@ -113,6 +115,12 @@ async def youtube_callback(
         """)
     
     brand = (state or "unknown").lower()
+    # Parse state: may be "brand:user_id" or just "brand" (legacy)
+    real_user_id = None
+    if ":" in brand:
+        parts = brand.split(":", 1)
+        brand = parts[0]
+        real_user_id = parts[1] if parts[1] else None
     
     # Exchange authorization code for tokens
     # This gives us both access_token (short-lived) and refresh_token (long-lived)
@@ -222,9 +230,17 @@ async def youtube_callback(
             existing.status = "connected"
             existing.last_error = None
             existing.updated_at = datetime.utcnow()
+            # Fix user_id if we have the real one
+            if real_user_id:
+                existing.user_id = real_user_id
             logger.info(f"Updated YouTube connection for {brand}: {result['channel_name']}")
         else:
-            # Create new record
+            # Resolve user_id: prefer real_user_id from state, fallback to brand's owner
+            fallback_user_id = brand
+            if not real_user_id:
+                brand_obj = db.query(Brand).filter(Brand.id == brand, Brand.active.is_(True)).first()
+                if brand_obj:
+                    fallback_user_id = brand_obj.user_id
             youtube_channel = YouTubeChannel(
                 brand=brand,
                 channel_id=result["channel_id"],
@@ -232,7 +248,7 @@ async def youtube_callback(
                 refresh_token=result["refresh_token"],
                 status="connected",
                 connected_at=datetime.utcnow(),
-                user_id=state  # Use state (brand) as fallback; real user_id set via auth context
+                user_id=real_user_id or fallback_user_id
             )
             db.add(youtube_channel)
             logger.info(f"Created YouTube connection for {brand}: {result['channel_name']}")
@@ -397,16 +413,13 @@ async def youtube_status(db: Session = Depends(get_db), user: dict = Depends(get
     
     Returns which brands have YouTube connected and quota information.
     """
-    # Get all connected channels from database
-    user_id = user.get("id")
-    query = db.query(YouTubeChannel)
-    if user_id:
-        query = query.filter(YouTubeChannel.user_id == user_id)
-    channels = query.all()
+    # Get all connected channels for user's brands
+    user_brands = brand_resolver.get_all_brand_ids(user.get("id"))
+    channels = db.query(YouTubeChannel).filter(YouTubeChannel.brand.in_(user_brands)).all()
     channel_map = {ch.brand: ch for ch in channels}
     
     status = {}
-    for brand in brand_resolver.get_all_brand_ids():
+    for brand in user_brands:
         if brand in channel_map:
             ch = channel_map[brand]
             status[brand] = {
@@ -461,11 +474,11 @@ async def youtube_disconnect(brand: str, db: Session = Depends(get_db), user: di
     """
     brand = brand.lower()
     
-    channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand)
-    user_id = user.get("id")
-    if user_id:
-        channel = channel.filter(YouTubeChannel.user_id == user_id)
-    channel = channel.first()
+    # Verify user owns this brand
+    user_brands = brand_resolver.get_all_brand_ids(user.get("id"))
+    if brand not in user_brands:
+        return {"success": False, "message": f"Brand {brand} not found"}
+    channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand).first()
     
     if channel:
         db.delete(channel)
