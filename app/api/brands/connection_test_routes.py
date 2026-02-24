@@ -57,6 +57,7 @@ async def test_meta_connection(
     access_token = creds.get("meta_access_token") or creds.get("instagram_access_token")
     ig_account_id = creds.get("instagram_business_account_id")
     fb_page_id = creds.get("facebook_page_id")
+    ig_handle = creds.get("instagram_handle", "")  # For handle mismatch validation
 
     results: Dict[str, Any] = {
         "brand_id": brand_id,
@@ -116,6 +117,17 @@ async def test_meta_connection(
                     "username": ig_data.get("username"),
                     "name": ig_data.get("name"),
                 }
+                # Validate that the IG username matches the configured handle
+                returned_username = (ig_data.get("username") or "").lower().lstrip("@")
+                configured_handle = (ig_handle or "").lower().lstrip("@")
+                if configured_handle and returned_username and returned_username != configured_handle:
+                    results["instagram"]["handle_mismatch"] = True
+                    results["instagram"]["expected_handle"] = configured_handle
+                    results["instagram"]["actual_handle"] = returned_username
+                    results["errors"].append(
+                        f"Instagram handle mismatch: brand is configured as @{configured_handle} "
+                        f"but IG Business Account ID {ig_account_id} belongs to @{returned_username}"
+                    )
         except Exception as e:
             results["instagram"]["error"] = str(e)
             results["errors"].append(f"Instagram validation failed: {str(e)}")

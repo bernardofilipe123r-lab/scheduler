@@ -121,6 +121,7 @@ export function CreateBrandPage() {
   const [metaAccessToken, setMetaAccessToken] = useState('')
   const [step4Attempted, setStep4Attempted] = useState(false)
   const [metaTestResult, setMetaTestResult] = useState<TestResult>({ status: 'idle' })
+  const [lastTestedMetaValues, setLastTestedMetaValues] = useState<string | null>(null)
   const [youtubeNote] = useState('YouTube uses OAuth — connect after brand creation from the Connections tab.')
 
   // Pre-fill Meta token from existing brands
@@ -151,8 +152,9 @@ export function CreateBrandPage() {
     ].filter(l => l.trim())
   }, [previewTitle])
 
+  const MAX_BULLET_POINTS = 6
   const contentLines = useMemo(() => {
-    return previewContent.split('\n').filter(l => l.trim())
+    return previewContent.split('\n').filter(l => l.trim()).slice(0, MAX_BULLET_POINTS)
   }, [previewContent])
 
   // Preview colors
@@ -230,6 +232,10 @@ export function CreateBrandPage() {
     setStep(step - 1)
   }
 
+  // Fingerprint of current Meta field values for dirty-checking
+  const currentMetaFingerprint = `${instagramHandle}|${facebookPageId}|${instagramBusinessAccountId}|${metaAccessToken}`
+  const metaFieldsUnchanged = lastTestedMetaValues !== null && lastTestedMetaValues === currentMetaFingerprint
+
   // Test Meta connection
   const handleTestMeta = async () => {
     if (!facebookPageId || !instagramBusinessAccountId || !metaAccessToken) {
@@ -252,16 +258,28 @@ export function CreateBrandPage() {
         if (igData.error) {
           setMetaTestResult({ status: 'error', message: `Token valid but IG account error: ${igData.error.message}` })
         } else {
-          setMetaTestResult({
-            status: 'success',
-            message: `Connected! IG: @${igData.username || instagramBusinessAccountId}`,
-          })
+          // Validate that the returned IG username matches the entered handle
+          const returnedUsername = (igData.username || '').toLowerCase().replace(/^@/, '')
+          const enteredHandle = instagramHandle.toLowerCase().replace(/^@/, '')
+          if (enteredHandle && returnedUsername && returnedUsername !== enteredHandle) {
+            setMetaTestResult({
+              status: 'error',
+              message: `Instagram handle mismatch: you entered @${enteredHandle} but the IG Business Account ID ${instagramBusinessAccountId} belongs to @${returnedUsername}. Please verify the correct Account ID for @${enteredHandle}.`,
+            })
+          } else {
+            setMetaTestResult({
+              status: 'success',
+              message: `Connected! IG: @${returnedUsername || instagramBusinessAccountId}`,
+            })
+          }
         }
       } else {
         setMetaTestResult({ status: 'error', message: data.data?.error?.message || 'Token is invalid or expired' })
       }
+      setLastTestedMetaValues(currentMetaFingerprint)
     } catch (err) {
       setMetaTestResult({ status: 'error', message: err instanceof Error ? err.message : 'Connection test failed' })
+      setLastTestedMetaValues(currentMetaFingerprint)
     }
   }
 
@@ -606,8 +624,21 @@ export function CreateBrandPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Content Lines</label>
-                    <textarea value={previewContent} onChange={(e) => setPreviewContent(e.target.value)} rows={3} placeholder="One line per row" className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm resize-none" />
-                    <p className="text-[10px] text-gray-400 mt-0.5">One bullet point per line</p>
+                    <textarea value={previewContent} onChange={(e) => {
+                      const lines = e.target.value.split('\n').filter(l => l.trim())
+                      if (lines.length <= MAX_BULLET_POINTS) {
+                        setPreviewContent(e.target.value)
+                      } else {
+                        // Keep only the first MAX_BULLET_POINTS non-empty lines
+                        const kept = e.target.value.split('\n').reduce<string[]>((acc, line) => {
+                          const nonEmpty = acc.filter(l => l.trim()).length
+                          if (!line.trim() || nonEmpty < MAX_BULLET_POINTS) acc.push(line)
+                          return acc
+                        }, [])
+                        setPreviewContent(kept.join('\n'))
+                      }
+                    }} rows={3} placeholder="One line per row" className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm resize-none" />
+                    <p className="text-[10px] text-gray-400 mt-0.5">One bullet point per line (max {MAX_BULLET_POINTS})</p>
                   </div>
                 </div>
               </div>
@@ -791,7 +822,7 @@ export function CreateBrandPage() {
               <div className="pt-2">
                 <button
                   onClick={handleTestMeta}
-                  disabled={metaTestResult.status === 'testing' || !metaAccessToken || !instagramBusinessAccountId}
+                  disabled={metaTestResult.status === 'testing' || !metaAccessToken || !instagramBusinessAccountId || metaFieldsUnchanged}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
                 >
                   {metaTestResult.status === 'testing' ? (
@@ -799,7 +830,7 @@ export function CreateBrandPage() {
                   ) : (
                     <Zap className="w-4 h-4" />
                   )}
-                  {metaTestResult.status === 'testing' ? 'Testing...' : 'Test Meta Connection'}
+                  {metaTestResult.status === 'testing' ? 'Testing...' : metaFieldsUnchanged ? 'Already Tested' : 'Test Meta Connection'}
                 </button>
 
                 {metaTestResult.status === 'success' && (
