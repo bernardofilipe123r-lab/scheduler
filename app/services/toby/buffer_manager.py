@@ -64,32 +64,45 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         brand_id = ed.get("brand", "")
         filled_set.add((brand_id, s.scheduled_time.strftime("%Y-%m-%d %H:%M")))
 
+    # Slot definitions — must match frontend (Home.tsx) and scheduler (scheduler.py)
+    BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]   # 6 reels/day, 4h apart
+    BASE_POST_HOURS = [8, 14]                   # 2 posts/day
+
     # Calculate expected slots per brand
     all_slots = []
     for brand in brands:
-        reel_slots = state.reel_slots_per_day or 6
-        post_slots = state.post_slots_per_day or 2
-        total_per_day = reel_slots + post_slots
+        offset_hours = brand.schedule_offset or 0
 
         # Generate expected slot times for this brand
         for day_offset in range(state.buffer_days or 2):
             day = now.date() + timedelta(days=day_offset)
-            offset_hours = brand.schedule_offset or 0
-            for slot_idx in range(total_per_day):
-                # Distribute slots evenly across the day
-                hour = (offset_hours + int(slot_idx * 24 / total_per_day)) % 24
+
+            # Reel slots: base hours + brand offset
+            for base_hour in BASE_REEL_HOURS:
+                hour = (base_hour + offset_hours) % 24
                 slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
                 if slot_time <= now:
-                    continue  # Skip past slots
-
-                ct = "reel" if slot_idx < reel_slots else "post"
+                    continue
                 key = (brand.id, slot_time.strftime("%Y-%m-%d %H:%M"))
-                filled = key in filled_set
                 all_slots.append({
                     "brand_id": brand.id,
                     "time": slot_time.isoformat(),
-                    "content_type": ct,
-                    "filled": filled,
+                    "content_type": "reel",
+                    "filled": key in filled_set,
+                })
+
+            # Post slots: base hours + brand offset
+            for base_hour in BASE_POST_HOURS:
+                hour = (base_hour + offset_hours) % 24
+                slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
+                if slot_time <= now:
+                    continue
+                key = (brand.id, slot_time.strftime("%Y-%m-%d %H:%M"))
+                all_slots.append({
+                    "brand_id": brand.id,
+                    "time": slot_time.isoformat(),
+                    "content_type": "post",
+                    "filled": key in filled_set,
                 })
 
     total = len(all_slots)

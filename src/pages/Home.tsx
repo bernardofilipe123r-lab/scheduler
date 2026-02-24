@@ -38,7 +38,7 @@ const BASE_REEL_SLOTS: Array<{ hour: number; variant: 'light' | 'dark' }> = [
   { hour: 16, variant: 'light' },
   { hour: 20, variant: 'dark' },
 ]
-const BASE_POST_HOURS_DAY = [0, 12]                   // 2 posts/day: midnight + noon
+const BASE_POST_HOURS_DAY = [8, 14]                    // 2 posts/day: 8 AM + 2 PM (+ brand offset)
 
 function fmtSlotHour(h: number): string {
   if (h === 0) return '12AM'
@@ -176,7 +176,8 @@ export function HomePage() {
           : expectedVariant
         return { hour, filled, isPast, isSoon, variant: slotVariant }
       })
-      const postSlots = BASE_POST_HOURS_DAY.map(h => {
+      const postSlots = BASE_POST_HOURS_DAY.map(base => {
+        const h = (base + offset) % 24
         const t = new Date(dayStart); t.setHours(h, 0, 0, 0)
         const isPast = t < n
         const isSoon = !isPast && t.getTime() - n.getTime() < 7_200_000
