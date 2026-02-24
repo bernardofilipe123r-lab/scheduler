@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   BarChart3,
   Users,
@@ -32,6 +33,7 @@ import {
 import {
   useAnalytics,
   useRefreshAnalytics,
+  useRefreshStatus,
   useSnapshots,
   useBackfillHistoricalData,
   type BrandMetrics,
@@ -336,12 +338,28 @@ function EmptyChart({ message }: { message: string }) {
 // ─── Main Page ──────────────────────────────────────────────────────
 
 export function AnalyticsPage() {
-  const { data, isLoading, error } = useAnalytics()
+  const { data, isLoading, error, refetch: refetchAnalytics } = useAnalytics()
   const refreshMutation = useRefreshAnalytics()
+  const { data: refreshStatus } = useRefreshStatus()
   const backfillMutation = useBackfillHistoricalData()
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [backfillSuccess, setBackfillSuccess] = useState<string | null>(null)
   const { brands: dynamicBrands } = useDynamicBrands()
+  const queryClient = useQueryClient()
+
+  // Server-side refresh tracking — is_refreshing comes from backend poll
+  const isRefreshing = refreshStatus?.is_refreshing ?? false
+  // Track previous refreshing state to detect completion
+  const [wasRefreshing, setWasRefreshing] = useState(false)
+
+  useEffect(() => {
+    if (wasRefreshing && !isRefreshing) {
+      // Refresh just completed — reload analytics data + snapshots
+      refetchAnalytics()
+      queryClient.invalidateQueries({ queryKey: ['analytics-snapshots'] })
+    }
+    setWasRefreshing(isRefreshing)
+  }, [isRefreshing])
 
   // 3-hour cooldown tracked in localStorage
   const COOLDOWN_MS = 3 * 60 * 60 * 1000
@@ -512,12 +530,12 @@ export function AnalyticsPage() {
             )}
             <button
               onClick={handleRefresh}
-              disabled={refreshMutation.isPending || cooldownMs > 0}
+              disabled={isRefreshing || refreshMutation.isPending || cooldownMs > 0}
               className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
-              title={cooldownMs > 0 ? `Available in ${Math.ceil(cooldownMs / 60000)}m` : undefined}
+              title={isRefreshing ? 'Refresh in progress…' : cooldownMs > 0 ? `Available in ${Math.ceil(cooldownMs / 60000)}m` : undefined}
             >
-              <RefreshCw className={`w-4 h-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-              {refreshMutation.isPending
+              <RefreshCw className={`w-4 h-4 ${isRefreshing || refreshMutation.isPending ? 'animate-spin' : ''}`} />
+              {isRefreshing
                 ? 'Refreshing…'
                 : cooldownMs > 0
                   ? `${Math.ceil(cooldownMs / 60000)}m cooldown`
@@ -536,7 +554,12 @@ export function AnalyticsPage() {
         </div>
 
         {/* ── Status messages ── */}
-        {refreshMutation.isSuccess && !refreshError && (
+        {isRefreshing && (
+          <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-blue-700 text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Analytics refresh in progress…
+          </div>
+        )}
+        {!isRefreshing && refreshMutation.isSuccess && !refreshError && (
           <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 text-sm">
             <CheckCircle2 className="w-4 h-4" /> Analytics refreshed successfully!
           </div>
@@ -728,11 +751,11 @@ export function AnalyticsPage() {
             </p>
             <button
               onClick={handleRefresh}
-              disabled={refreshMutation.isPending}
+              disabled={isRefreshing || refreshMutation.isPending}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
             >
-              <RefreshCw className={`w-4 h-4 inline mr-2 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-              Fetch Analytics
+              <RefreshCw className={`w-4 h-4 inline mr-2 ${isRefreshing || refreshMutation.isPending ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing…' : 'Fetch Analytics'}
             </button>
           </div>
         )}

@@ -8,11 +8,13 @@ import {
   fetchRateLimitStatus,
   fetchSnapshots,
   backfillHistoricalData,
+  fetchRefreshStatus,
   type AnalyticsResponse,
   type RefreshResponse,
   type RateLimitInfo,
   type SnapshotsResponse,
-  type BackfillResponse
+  type BackfillResponse,
+  type RefreshStatusResponse
 } from '../api'
 
 /**
@@ -55,30 +57,38 @@ export function useSnapshots(params?: {
 }
 
 /**
- * Hook to refresh analytics data
- * Rate limited to 3 refreshes per hour
+ * Hook to poll refresh status from the server.
+ * When a refresh is in progress, polls every 3 seconds.
+ * When idle, polls every 30 seconds to catch server-side auto-refreshes.
+ */
+export function useRefreshStatus() {
+  return useQuery<RefreshStatusResponse>({
+    queryKey: ['analytics-refresh-status'],
+    queryFn: fetchRefreshStatus,
+    refetchInterval: (query) => {
+      // Poll faster when refreshing is in progress
+      return query.state.data?.is_refreshing ? 3000 : 30000
+    },
+    staleTime: 2000,
+  })
+}
+
+/**
+ * Hook to refresh analytics data.
+ * Now triggers a background refresh on the server and relies on
+ * useRefreshStatus for tracking completion.
  */
 export function useRefreshAnalytics() {
   const queryClient = useQueryClient()
   
   return useMutation<RefreshResponse, Error>({
     mutationFn: refreshAnalytics,
-    onSuccess: (data) => {
-      // Update the analytics cache with new data
-      if (data.analytics) {
-        queryClient.setQueryData(['analytics'], {
-          brands: data.analytics,
-          rate_limit: data.rate_limit,
-          last_refresh: new Date().toISOString()
-        })
-      }
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['analytics-rate-limit'] })
-      queryClient.invalidateQueries({ queryKey: ['analytics-snapshots'] })
+    onSuccess: () => {
+      // Immediately poll refresh status
+      queryClient.invalidateQueries({ queryKey: ['analytics-refresh-status'] })
     },
     onError: () => {
-      // Invalidate rate limit query on error too
-      queryClient.invalidateQueries({ queryKey: ['analytics-rate-limit'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics-refresh-status'] })
     }
   })
 }

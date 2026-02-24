@@ -362,6 +362,7 @@ def check_endpoints():
         # Analytics (Auth) — representative subset
         ("GET", "/api/analytics", "Analytics (all brands)"),
         ("POST", "/api/analytics/refresh", "Refresh analytics"),
+        ("GET", "/api/analytics/refresh-status", "Refresh status"),
         ("GET", "/api/analytics/snapshots", "Analytics snapshots"),
         # Auth
         ("GET", "/api/auth/me", "Auth: get current user"),

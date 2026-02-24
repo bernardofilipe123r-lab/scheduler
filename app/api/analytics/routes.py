@@ -3,9 +3,11 @@ Analytics API routes for brand metrics.
 
 Provides endpoints for:
 - Getting cached analytics data for all brands
-- Refreshing analytics data (rate limited to 3/hour)
+- Refreshing analytics data (runs in background)
+- Checking refresh status (in-progress tracking)
 - Getting rate limit status
 """
+import threading
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
@@ -52,7 +54,7 @@ class AnalyticsResponse(BaseModel):
     brands: List[BrandMetrics]
     rate_limit: RateLimitInfo
     last_refresh: Optional[str] = None
-    needs_refresh: bool = False  # True if data is stale (>12 hours old)
+    needs_refresh: bool = False  # True if data is stale (>6 hours old)
 
 
 class RefreshResponse(BaseModel):
@@ -63,6 +65,13 @@ class RefreshResponse(BaseModel):
     errors: Optional[List[str]] = None
     rate_limit: RateLimitInfo
     analytics: Optional[List[BrandMetrics]] = None
+
+
+class RefreshStatusResponse(BaseModel):
+    """Response for refresh status check."""
+    is_refreshing: bool
+    started_at: Optional[str] = None
+    last_refresh: Optional[str] = None
 
 
 def _get_brand_display_info() -> dict:
@@ -170,47 +179,90 @@ async def get_analytics(db: Session = Depends(get_db), user: dict = Depends(get_
 @router.post("/refresh", response_model=RefreshResponse)
 async def refresh_analytics(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
-    Refresh analytics data for all brands.
+    Refresh analytics data for all brands in the background.
     
-    No rate limits - refreshes on demand and auto-refreshes every 12 hours.
+    Kicks off a background refresh and returns immediately.
+    Use GET /api/analytics/refresh-status to poll for completion.
     
     This fetches fresh data from:
     - Instagram Business API (followers, reach, likes)
     - Facebook Page API (followers, impressions, likes)
     - YouTube Data API (subscribers, views, likes)
     """
-    service = AnalyticsService(db)
     user_id = user.get("id")
     
-    # Perform refresh (no rate limits)
-    result = service.refresh_all_analytics(user_id=user_id)
-    
-    if result["success"]:
+    # Check if already refreshing
+    if AnalyticsService.is_refresh_in_progress(user_id):
         return RefreshResponse(
             success=True,
-            message=f"Successfully refreshed analytics for {result['updated_count']} platform connections.",
-            updated_count=result.get("updated_count"),
-            errors=result.get("errors"),
+            message="Analytics refresh is already in progress.",
             rate_limit=RateLimitInfo(
                 remaining=9999,
                 max_per_day=9999,
                 next_available_at=None,
-                can_refresh=True
-            ),
-            analytics=format_analytics_response(result.get("analytics", []), db)
-        )
-    else:
-        return RefreshResponse(
-            success=False,
-            message=result.get("error", "Failed to refresh analytics"),
-            errors=result.get("errors"),
-            rate_limit=RateLimitInfo(
-                remaining=9999,
-                max_per_day=9999,
-                next_available_at=None,
-                can_refresh=True
+                can_refresh=False
             )
         )
+    
+    # Mark as started
+    AnalyticsService.mark_refresh_started(user_id)
+    
+    def _do_refresh(uid: str):
+        """Run analytics refresh in background thread."""
+        from app.db_connection import SessionLocal
+        bg_db = SessionLocal()
+        try:
+            service = AnalyticsService(bg_db)
+            service.refresh_all_analytics(user_id=uid)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Background refresh failed for user {uid}: {e}")
+        finally:
+            bg_db.close()
+            AnalyticsService.mark_refresh_finished(uid)
+    
+    # Start background thread
+    t = threading.Thread(target=_do_refresh, args=(user_id,), daemon=True)
+    t.start()
+    
+    return RefreshResponse(
+        success=True,
+        message="Analytics refresh started in background.",
+        rate_limit=RateLimitInfo(
+            remaining=9999,
+            max_per_day=9999,
+            next_available_at=None,
+            can_refresh=False
+        )
+    )
+
+
+@router.get("/refresh-status", response_model=RefreshStatusResponse)
+async def get_refresh_status(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    """
+    Check if an analytics refresh is currently in progress for this user.
+    The frontend polls this endpoint to track background refresh state.
+    """
+    user_id = user.get("id")
+    is_refreshing = AnalyticsService.is_refresh_in_progress(user_id)
+    started_at = AnalyticsService.get_refresh_started_at(user_id)
+    
+    # Get last completed refresh
+    from app.models import AnalyticsRefreshLog
+    from sqlalchemy import desc
+    
+    query = db.query(AnalyticsRefreshLog)
+    if user_id:
+        query = query.filter(AnalyticsRefreshLog.user_id == user_id)
+    last_log = query.order_by(
+        desc(AnalyticsRefreshLog.refreshed_at)
+    ).first()
+    
+    return RefreshStatusResponse(
+        is_refreshing=is_refreshing,
+        started_at=started_at.isoformat() if started_at else None,
+        last_refresh=last_log.refreshed_at.isoformat() if last_log else None,
+    )
 
 
 @router.get("/rate-limit", response_model=RateLimitInfo)

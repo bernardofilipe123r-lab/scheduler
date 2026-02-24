@@ -52,6 +52,13 @@ export interface RefreshResponse {
   analytics?: BrandMetrics[]
 }
 
+// Response from /api/analytics/refresh-status
+export interface RefreshStatusResponse {
+  is_refreshing: boolean
+  started_at: string | null
+  last_refresh: string | null
+}
+
 // Single analytics snapshot for historical data
 export interface AnalyticsSnapshot {
   id: number
@@ -90,6 +97,13 @@ export async function refreshAnalytics(): Promise<RefreshResponse> {
  */
 export async function fetchRateLimitStatus(): Promise<RateLimitInfo> {
   return get<RateLimitInfo>('/api/analytics/rate-limit')
+}
+
+/**
+ * Check if an analytics refresh is currently in progress
+ */
+export async function fetchRefreshStatus(): Promise<RefreshStatusResponse> {
+  return get<RefreshStatusResponse>('/api/analytics/refresh-status')
 }
 
 /**

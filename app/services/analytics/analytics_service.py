@@ -46,6 +46,254 @@ class AnalyticsService:
         # No rate limits - always allow refresh
         return True, 9999, None
     
+    # ── Refresh status tracking ───────────────────────────────
+    
+    @staticmethod
+    def mark_refresh_started(user_id: str) -> None:
+        """Mark that a refresh is in progress for a user."""
+        with _refresh_lock:
+            _refresh_in_progress[user_id] = datetime.now(timezone.utc)
+    
+    @staticmethod
+    def mark_refresh_finished(user_id: str) -> None:
+        """Mark that a refresh has finished for a user."""
+        with _refresh_lock:
+            _refresh_in_progress.pop(user_id, None)
+    
+    @staticmethod
+    def is_refresh_in_progress(user_id: str) -> bool:
+        """Check if a refresh is currently running for a user."""
+        with _refresh_lock:
+            started_at = _refresh_in_progress.get(user_id)
+            if not started_at:
+                return False
+            # Consider stale after timeout
+            elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
+            if elapsed > _REFRESH_TIMEOUT_SECONDS:
+                _refresh_in_progress.pop(user_id, None)
+                return False
+            return True
+    
+    @staticmethod
+    def get_refresh_started_at(user_id: str) -> Optional[datetime]:
+        """Get when the current refresh started for a user."""
+        with _refresh_lock:
+            return _refresh_in_progress.get(user_id)
+    
+    # ── Per-user auto-refresh ─────────────────────────────────
+    
+    def get_all_user_ids(self) -> List[str]:
+        """Get all distinct user_ids that have brands or analytics data."""
+        user_ids = set()
+        # From brands table
+        brand_users = self.db.query(distinct(Brand.user_id)).filter(
+            Brand.active.is_(True)
+        ).all()
+        for (uid,) in brand_users:
+            if uid:
+                user_ids.add(uid)
+        # From YouTube channels
+        yt_users = self.db.query(distinct(YouTubeChannel.user_id)).filter(
+            YouTubeChannel.status == "connected"
+        ).all()
+        for (uid,) in yt_users:
+            if uid:
+                user_ids.add(uid)
+        return list(user_ids)
+    
+    def refresh_all_users(self) -> Dict[str, Any]:
+        """
+        Auto-refresh analytics for ALL users. Called by the scheduler.
+        Iterates each user and refreshes their analytics individually.
+        """
+        user_ids = self.get_all_user_ids()
+        total_updated = 0
+        all_errors = []
+        
+        for user_id in user_ids:
+            try:
+                result = self.refresh_all_analytics(user_id=user_id)
+                total_updated += result.get("updated_count", 0)
+                if result.get("errors"):
+                    all_errors.extend(result["errors"])
+            except Exception as e:
+                logger.error(f"Failed to refresh analytics for user {user_id}: {e}")
+                all_errors.append(f"User {user_id}: {str(e)}")
+        
+        return {
+            "success": True,
+            "updated_count": total_updated,
+            "users_refreshed": len(user_ids),
+            "errors": all_errors if all_errors else None
+        }
+    
+    def cleanup_disconnected_platforms(self, user_id: str = None) -> int:
+        """
+        Remove stale analytics for disconnected YouTube channels and 
+        brands that no longer exist. Returns count of removed records.
+        """
+        removed = 0
+        
+        # Get active brand IDs for this user
+        active_brand_ids = set(brand_resolver.get_all_brand_ids(user_id))
+        
+        # Get connected YouTube channel brands
+        yt_query = self.db.query(YouTubeChannel.brand).filter(
+            YouTubeChannel.status == "connected"
+        )
+        if user_id:
+            yt_query = yt_query.filter(YouTubeChannel.user_id == user_id)
+        connected_yt_brands = {row[0] for row in yt_query.all()}
+        
+        # Find analytics records to clean up
+        analytics_query = self.db.query(BrandAnalytics)
+        if user_id:
+            analytics_query = analytics_query.filter(BrandAnalytics.user_id == user_id)
+        all_analytics = analytics_query.all()
+        
+        for record in all_analytics:
+            should_remove = False
+            # Remove if brand no longer active
+            if record.brand not in active_brand_ids:
+                should_remove = True
+            # Remove YouTube analytics if channel disconnected
+            elif record.platform == "youtube" and record.brand not in connected_yt_brands:
+                should_remove = True
+            
+            if should_remove:
+                self.db.delete(record)
+                removed += 1
+        
+        if removed > 0:
+            self.db.commit()
+            logger.info(f"Cleaned up {removed} stale analytics records (user={user_id})")
+        
+        return removed
+    
+    # ── Refresh status tracking ───────────────────────────────
+    
+    @staticmethod
+    def mark_refresh_started(user_id: str) -> None:
+        """Mark that a refresh is in progress for a user."""
+        with _refresh_lock:
+            _refresh_in_progress[user_id] = datetime.now(timezone.utc)
+    
+    @staticmethod
+    def mark_refresh_finished(user_id: str) -> None:
+        """Mark that a refresh has finished for a user."""
+        with _refresh_lock:
+            _refresh_in_progress.pop(user_id, None)
+    
+    @staticmethod
+    def is_refresh_in_progress(user_id: str) -> bool:
+        """Check if a refresh is currently running for a user."""
+        with _refresh_lock:
+            started_at = _refresh_in_progress.get(user_id)
+            if not started_at:
+                return False
+            # Consider stale after timeout
+            elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
+            if elapsed > _REFRESH_TIMEOUT_SECONDS:
+                _refresh_in_progress.pop(user_id, None)
+                return False
+            return True
+    
+    @staticmethod
+    def get_refresh_started_at(user_id: str) -> Optional[datetime]:
+        """Get when the current refresh started for a user."""
+        with _refresh_lock:
+            return _refresh_in_progress.get(user_id)
+    
+    # ── Per-user auto-refresh ─────────────────────────────────
+    
+    def get_all_user_ids(self) -> List[str]:
+        """Get all distinct user_ids that have brands or analytics data."""
+        user_ids = set()
+        # From brands table
+        brand_users = self.db.query(distinct(Brand.user_id)).filter(
+            Brand.active.is_(True)
+        ).all()
+        for (uid,) in brand_users:
+            if uid:
+                user_ids.add(uid)
+        # From YouTube channels
+        yt_users = self.db.query(distinct(YouTubeChannel.user_id)).filter(
+            YouTubeChannel.status == "connected"
+        ).all()
+        for (uid,) in yt_users:
+            if uid:
+                user_ids.add(uid)
+        return list(user_ids)
+    
+    def refresh_all_users(self) -> Dict[str, Any]:
+        """
+        Auto-refresh analytics for ALL users. Called by the scheduler.
+        Iterates each user and refreshes their analytics individually.
+        """
+        user_ids = self.get_all_user_ids()
+        total_updated = 0
+        all_errors = []
+        
+        for user_id in user_ids:
+            try:
+                result = self.refresh_all_analytics(user_id=user_id)
+                total_updated += result.get("updated_count", 0)
+                if result.get("errors"):
+                    all_errors.extend(result["errors"])
+            except Exception as e:
+                logger.error(f"Failed to refresh analytics for user {user_id}: {e}")
+                all_errors.append(f"User {user_id}: {str(e)}")
+        
+        return {
+            "success": True,
+            "updated_count": total_updated,
+            "users_refreshed": len(user_ids),
+            "errors": all_errors if all_errors else None
+        }
+    
+    def cleanup_disconnected_platforms(self, user_id: str = None) -> int:
+        """
+        Remove stale analytics for disconnected YouTube channels and 
+        brands that no longer exist. Returns count of removed records.
+        """
+        removed = 0
+        
+        # Get active brand IDs for this user
+        active_brand_ids = set(brand_resolver.get_all_brand_ids(user_id))
+        
+        # Get connected YouTube channel brands
+        yt_query = self.db.query(YouTubeChannel.brand).filter(
+            YouTubeChannel.status == "connected"
+        )
+        if user_id:
+            yt_query = yt_query.filter(YouTubeChannel.user_id == user_id)
+        connected_yt_brands = {row[0] for row in yt_query.all()}
+        
+        # Find analytics records to clean up
+        analytics_query = self.db.query(BrandAnalytics)
+        if user_id:
+            analytics_query = analytics_query.filter(BrandAnalytics.user_id == user_id)
+        all_analytics = analytics_query.all()
+        
+        for record in all_analytics:
+            should_remove = False
+            # Remove if brand no longer active
+            if record.brand not in active_brand_ids:
+                should_remove = True
+            # Remove YouTube analytics if channel disconnected
+            elif record.platform == "youtube" and record.brand not in connected_yt_brands:
+                should_remove = True
+            
+            if should_remove:
+                self.db.delete(record)
+                removed += 1
+        
+        if removed > 0:
+            self.db.commit()
+            logger.info(f"Cleaned up {removed} stale analytics records (user={user_id})")
+        
+        return removed
+    
     def needs_auto_refresh(self, user_id: str = None) -> bool:
         """
         Check if analytics data is stale and needs auto-refresh.
@@ -100,9 +348,10 @@ class AnalyticsService:
     
     def refresh_all_analytics(self, user_id: str = None) -> Dict[str, Any]:
         """
-        Refresh analytics for all brands on all platforms.
+        Refresh analytics for all brands on all platforms for a specific user.
         
-        Rate limited to 3 refreshes per hour.
+        Dynamically discovers connected platforms (IG, FB, YouTube) and
+        cleans up stale analytics for disconnected platforms/brands.
         
         Returns:
             Dict with success status, data, and rate limit info
@@ -122,9 +371,17 @@ class AnalyticsService:
         errors = []
         updated_count = 0
         
-        # Fetch Instagram analytics for all brands
-        for brand_name in brand_resolver.get_all_brand_ids():
-            config = brand_resolver.get_brand_config(brand_name)
+        # Clean up stale analytics for disconnected platforms/brands
+        if user_id:
+            try:
+                self.cleanup_disconnected_platforms(user_id)
+            except Exception as e:
+                logger.warning(f"Cleanup disconnected platforms failed: {e}")
+        
+        # Fetch Instagram and Facebook analytics for all brands
+        brand_ids = brand_resolver.get_all_brand_ids(user_id)
+        for brand_name in brand_ids:
+            config = brand_resolver.get_brand_config(brand_name, user_id)
             if not config:
                 continue
             
@@ -155,21 +412,29 @@ class AnalyticsService:
                 errors.append(f"Facebook/{brand_name}: {str(e)}")
         
         # Fetch YouTube analytics for connected channels
-        query = self.db.query(YouTubeChannel).filter(
+        yt_query = self.db.query(YouTubeChannel).filter(
             YouTubeChannel.status == "connected"
         )
         if user_id:
-            query = query.filter(YouTubeChannel.user_id == user_id)
-        youtube_channels = query.all()
+            yt_query = yt_query.filter(YouTubeChannel.user_id == user_id)
+        youtube_channels = yt_query.all()
         
         for channel in youtube_channels:
             try:
                 yt_data = self._fetch_youtube_analytics(channel)
-                self._update_analytics(channel.brand, "youtube", yt_data, user_id=user_id)
+                self._update_analytics(channel.brand, "youtube", yt_data, user_id=user_id or channel.user_id)
                 updated_count += 1
             except Exception as e:
                 logger.error(f"Failed to fetch YouTube analytics for {channel.brand}: {e}")
                 errors.append(f"YouTube/{channel.brand}: {str(e)}")
+                # Mark channel as error if token issue
+                if "access token" in str(e).lower() or "401" in str(e) or "403" in str(e):
+                    try:
+                        channel.status = "error"
+                        channel.last_error = str(e)
+                        self.db.commit()
+                    except Exception:
+                        pass
         
         # Log the refresh
         self.log_refresh(

@@ -670,7 +670,7 @@ async def startup_event():
             print(f"❌ Auto-publish check failed: {str(e)}")
     
     def refresh_analytics():
-        """Auto-refresh analytics data every 6 hours."""
+        """Auto-refresh analytics data for all users every 6 hours."""
         try:
             from app.services.analytics.analytics_service import AnalyticsService
             from app.db_connection import get_db_session
@@ -679,10 +679,10 @@ async def startup_event():
             
             with get_db_session() as db:
                 service = AnalyticsService(db)
-                result = service.refresh_all_analytics()
+                result = service.refresh_all_users()
                 
                 if result["success"]:
-                    print(f"   ✅ Analytics refreshed: {result['updated_count']} platforms updated")
+                    print(f"   ✅ Analytics refreshed: {result['updated_count']} platforms updated across {result.get('users_refreshed', 0)} users")
                 else:
                     print(f"   ⚠️ Analytics refresh had issues: {result.get('errors', [])}")
                     
