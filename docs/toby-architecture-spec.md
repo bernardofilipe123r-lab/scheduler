@@ -24,13 +24,14 @@
 7. [Data Model](#7-data-model)
 8. [Core Loops](#8-core-loops)
 9. [Intelligence Engine](#9-intelligence-engine)
-10. [Toby Today vs. True AI Autonomy](#10-toby-today-vs-true-ai-autonomy)
-11. [The Path to Multi-Agent Autonomy](#11-the-path-to-multi-agent-autonomy)
-12. [Deployment & Resilience](#12-deployment--resilience)
-13. [Scalability & Future-Proofing](#13-scalability--future-proofing)
-14. [Implementation Phases](#14-implementation-phases)
-15. [Risk Matrix](#15-risk-matrix)
-16. [Glossary](#16-glossary)
+10. [Edge Cases & Autonomous Behavior](#10-edge-cases--autonomous-behavior)
+11. [Toby Today vs. True AI Autonomy](#11-toby-today-vs-true-ai-autonomy)
+12. [The Path to Multi-Agent Autonomy](#12-the-path-to-multi-agent-autonomy)
+13. [Deployment & Resilience](#13-deployment--resilience)
+14. [Scalability & Future-Proofing](#14-scalability--future-proofing)
+15. [Implementation Phases](#15-implementation-phases)
+16. [Risk Matrix](#16-risk-matrix)
+17. [Glossary](#17-glossary)
 
 ---
 
@@ -985,7 +986,1038 @@ See Section 11.3 for the concrete implementation roadmap.
 
 ---
 
-## 10. Toby Today vs. True AI Autonomy
+## 10. Edge Cases & Autonomous Behavior
+
+### How to Read This Section
+
+Each edge case is documented with five fields:
+
+| Field | Meaning |
+|---|---|
+| **Trigger** | The exact condition or event that causes this edge case |
+| **Current Behavior** | What the code actually does right now |
+| **Correct Autonomous Behavior** | The desired behavior for a production-grade autonomous system |
+| **Status** | ✅ Handled / ⚠️ Partial / 🔧 Planned / ❌ Bug |
+| **User Visibility** | Whether this should appear in the Toby activity feed |
+
+---
+
+### A. Brand Lifecycle Events
+
+#### A1. User Adds a New Brand While Toby Is Running
+
+**Trigger:** User creates a new brand while the Toby orchestrator tick is active.
+
+**Current Behavior:** The buffer manager queries `Brand.active == True` live on every 5-minute tick. A brand created between two ticks is picked up automatically on the next tick with no code change needed.
+
+**Correct Autonomous Behavior:** Within 5 minutes, the new brand's empty slots appear in the buffer and Toby begins generating content for them. The activity feed shows `content_generated` entries including the brand ID.
+
+**Status:** ✅ Handled — brand pickup is fully dynamic.
+
+**User Visibility:** Yes — first generated content for the new brand appears in the activity feed.
+
+---
+
+#### A2. User Hard-Deletes a Brand
+
+**Trigger:** User deletes a brand row from the `brands` table.
+
+**Current Behavior:**
+- `NicheConfig` rows are CASCADE deleted (FK defined in `niche_config.py:17`).
+- The brand disappears from buffer manager queries on the next tick — no new content is planned.
+- **Existing `ScheduledReel` rows are NOT automatically deleted.** They remain as `scheduled` and will fail at publish time when `brand_resolver.get_brand_config` returns `None`.
+- `TobyStrategyScore` and `TobyContentTag` rows are NOT deleted.
+
+**Correct Autonomous Behavior:**
+1. On brand deletion, all future `ScheduledReel` rows for that brand in `scheduled` status should be soft-deleted or marked `cancelled`.
+2. `TobyStrategyScore` rows should be retained (valuable for future re-adds).
+3. The activity feed should log `brand_removed`.
+
+**Status:** ⚠️ Partial — Buffer correctly stops planning. Existing scheduled posts for deleted brands will fail at publish time rather than being cleaned up proactively.
+
+**User Visibility:** Yes — emit `brand_removed` at `info` level. Upcoming failing publish attempts will appear as `publish_failed` entries pointing to the deleted brand.
+
+---
+
+#### A3. User Deactivates (Soft-Disables) a Brand
+
+**Trigger:** User sets `Brand.active = False` without deleting the brand.
+
+**Current Behavior:** Buffer manager filters `Brand.active == True` — inactive brands are excluded from all new content planning. `_run_metrics_check` also filters by active brands, so metrics collection stops. Posts already in `scheduled` status for an inactive brand still publish (scheduler does not filter by brand active status).
+
+**Correct Autonomous Behavior:** New content generation stops immediately (✅ this works). Existing scheduled posts should be optionally paused. Metrics for already-published posts from the inactive brand could continue collecting for the `days_back` window — currently they do not, creating a minor learning data gap.
+
+**Status:** ⚠️ Partial — Content generation stops correctly. Metrics collection stops for inactive brands, creating a gap. Scheduled posts still publish.
+
+**User Visibility:** Emit `brand_deactivated` at `info` level.
+
+---
+
+#### A4. User Disconnects Instagram Credentials (Token Nulled)
+
+**Trigger:** User removes `meta_access_token` / `instagram_business_account_id` from a brand.
+
+**Current Behavior:** `MetricsCollector` is a singleton that loads credentials at startup. If credentials are removed after startup, the in-memory `_brand_tokens` dict still holds stale credentials until the process restarts. Publishing calls `brand_resolver.get_brand_config` on every attempt (live DB read) — a brand with no `instagram_business_account_id` returns `credential_error: True` and the post is marked `failed`. **Content generation continues producing content that will never publish.**
+
+**Correct Autonomous Behavior:**
+1. `MetricsCollector` must re-load credentials from DB on each `collect_for_brand` call, not only at startup.
+2. Before planning content for a brand, check that it has valid credentials. Skip brands with no `instagram_business_account_id`.
+3. Emit `credential_warning` at `warning` level in the activity feed immediately, not after the first failed publish.
+
+**Status:** ❌ Bug — Publishing fails correctly. Metrics collection silently uses stale credentials. Content is generated and wasted for credential-less brands. No user notification until publish fails.
+
+**User Visibility:** Yes — `credential_warning` at `warning` level is critical. Users need to reconnect before the next scheduled post time.
+
+---
+
+#### A5. User Reconnects Instagram to a Different Account
+
+**Trigger:** User updates `instagram_business_account_id` to a different IG account.
+
+**Current Behavior:** Publishing picks up new credentials immediately (live DB read). MetricsCollector singleton uses old credentials until restart. Historical `PostPerformance` from the old account mixes with new account data in the same brand bucket, distorting the learning baseline.
+
+**Correct Autonomous Behavior:** Publishing works immediately (✅). A `brand_reconnected` event should invalidate the MetricsCollector credential cache. Old `PostPerformance` data should be flagged with a `credential_change_at` timestamp so `get_brand_baseline` can optionally filter to post-reconnect data only.
+
+**Status:** ⚠️ Partial — Publish works. Metrics and baseline do not account for account switches.
+
+**User Visibility:** Yes — emit `brand_reconnected` at `info` level.
+
+---
+
+#### A6. Brand Has No Instagram Credentials (Toby Enabled But Not Connected)
+
+**Trigger:** Toby is enabled for a user with a brand that has no `instagram_business_account_id`.
+
+**Current Behavior:** Content generation proceeds fully — DeepSeek API called, images generated, Supabase uploads succeed, `ScheduledReel` created. At publish time, `brand_resolver` returns `credential_error: True` and the post is marked `failed`. The buffer manager then sees the failed slot as empty and generates **another** post for the same slot on the next tick, creating an **infinite resource-wasting loop** every 5 minutes.
+
+**Correct Autonomous Behavior:** Before planning content for a brand, validate that `instagram_business_account_id` is configured. Skip unconfigured brands and emit `credential_warning` with explicit "Connect Instagram to start publishing" guidance.
+
+**Status:** ❌ Bug — Toby generates real content (DeepSeek + image API quota) that will never publish, repeating every 5 minutes indefinitely.
+
+**User Visibility:** Yes — `credential_warning` at `error` level with brand ID and setup guidance.
+
+---
+
+#### A7. Multiple Brands — One Loses Credentials While Others Are Fine
+
+**Trigger:** One brand's token expires or is revoked in a multi-brand setup.
+
+**Current Behavior:** Per-brand exceptions in `collector.collect_for_brand` are caught and logged but do not halt the loop for other brands. Other brands' metrics are unaffected. The failing brand silently accumulates errors with no persistent notification.
+
+**Correct Autonomous Behavior:** Per-brand isolation is correct (✅). Additionally, after 3 consecutive failures for a specific brand over 18 hours, emit one `credential_expired` warning per brand per day — debounced to prevent activity feed flooding.
+
+**Status:** ⚠️ Partial — Isolation works. Per-brand error notifications are absent.
+
+**User Visibility:** Yes — `credential_expired` at `warning` level, debounced to once per brand per day.
+
+---
+
+### B. Content/Post Lifecycle Events
+
+#### B1. User Manually Deletes a Scheduled (Not Yet Published) Post
+
+**Trigger:** User deletes a Toby-created `ScheduledReel` row in `scheduled` status.
+
+**Current Behavior:** The `ScheduledReel` is hard-deleted. The slot immediately appears empty to the buffer manager on the next tick — **the slot is automatically refilled** (this works correctly). The `TobyContentTag` for that `schedule_id` is NOT deleted (no FK cascade). It persists with `toby_score = NULL`, inflating `total_created` counts but not corrupting learning (scoring queries skip `NULL` scores where no `PostPerformance` exists).
+
+**Correct Autonomous Behavior:** Slot refill is correct (✅). The orphaned `TobyContentTag` is a cosmetic data integrity issue. The activity feed should log `slot_refilled` with the slot time so the user understands why new content appeared.
+
+**Status:** ⚠️ Partial — Slot refill works. Orphaned tags inflate counts. See G1 for the full orphan tag analysis.
+
+**User Visibility:** Yes — `slot_refilled` at `info` level when regenerating a manually deleted slot.
+
+---
+
+#### B2. User Manually Deletes a Published Post From the UI
+
+**Trigger:** User deletes a `ScheduledReel` with `status = published` from the dashboard.
+
+**Current Behavior:** The `ScheduledReel` row is deleted. The associated `PostPerformance` row and `TobyContentTag` with its score remain untouched. The slot is already past (published), so no refill is triggered. Toby's learning data is fully preserved.
+
+**Correct Autonomous Behavior:** This is correct behavior — published post deletion does not affect future content planning and preserves all learning data.
+
+**Status:** ✅ Handled.
+
+**User Visibility:** No Toby activity log needed. User-initiated UI action.
+
+---
+
+#### B3. User Manually Deletes a Published Post Directly on Instagram
+
+**Trigger:** User deletes a post on Instagram directly. Toby receives no webhook.
+
+**Current Behavior:** The next `MetricsCollector` call for that `ig_media_id` receives HTTP 404 and returns `None`. The existing `PostPerformance` row (if already created) is not updated — it retains its last-known metric values. If no `PostPerformance` row exists yet (post deleted before first metric collection), `score_pending_posts` never finds a matching row and `toby_score` remains `NULL` forever — **correctly excluded from learning**. If the post was deleted after metrics were already collected, the real metrics are used for scoring — also correct.
+
+The critical risk: if a post is deleted before 48h scoring, the `TobyContentTag` is never scored, the experiment option loses a data point, and experiment completion is delayed (see E6).
+
+**Correct Autonomous Behavior:**
+1. After 3 consecutive 404 responses for the same `ig_media_id`, mark `PostPerformance.deleted_on_platform = True` and set metrics to `NULL` (not 0) to distinguish "deleted" from "zero-performance."
+2. The `TobyContentTag` should be marked `invalidated = True` so its missing score does not count as an experiment non-result.
+3. Emit `post_deleted_on_platform` at `info` level.
+
+**Status:** ❌ Bug — No distinction between a deleted post and a zero-performing post. Deleted posts before scoring cause experiment stalls. No user notification.
+
+**User Visibility:** Yes — `post_deleted_on_platform` at `info` level.
+
+---
+
+#### B4. User Manually Creates Content in a Slot Toby Was Going to Fill
+
+**Trigger:** User schedules a post at a time slot that Toby's buffer would have targeted.
+
+**Current Behavior:** The buffer manager builds `filled_set` from `ScheduledReel` rows matching `(extra_data["brand"], slot_time_str)`. User-created posts also store `brand` in `extra_data["brand"]`. As long as the user creates the post at **exactly** the slot hour (00 minutes) with the correct brand name in `extra_data`, the slot appears as filled and Toby does not generate for it.
+
+Risk: if the user creates a post at 8:03 AM instead of 8:00 AM, or if `extra_data["brand"]` is missing, the slot is not recognized as filled and Toby generates a duplicate.
+
+**Correct Autonomous Behavior:** Slot matching should use a fuzzy ±15-minute window rather than exact minute matching, making the system robust to user posts created at non-exact times.
+
+**Status:** ⚠️ Partial — Exact-time manual posts correctly prevent duplicates. Off-by-minutes entries cause duplicates.
+
+**User Visibility:** Users see two posts in the calendar for the same hour in the duplicate case.
+
+---
+
+#### B5. User Reschedules a Toby-Created Post to a Different Time
+
+**Trigger:** User calls `reschedule(schedule_id, new_time)` on a Toby post.
+
+**Current Behavior:** `scheduled_time` is updated in DB. The original slot now appears empty to the buffer manager and is refilled on the next tick (correct). The `TobyContentTag` retains the original `schedule_id` — when the post eventually publishes at the new time and is scored, the learning attribution is correct. Risk: if the user reschedules to a time where a post already exists, two posts sit at the same slot.
+
+**Correct Autonomous Behavior:** Current behavior is mostly correct. No conflict detection exists at the destination time slot when rescheduling creates a collision.
+
+**Status:** ⚠️ Partial — Rescheduling works and learning is preserved. No conflict detection at the destination slot.
+
+**User Visibility:** The UI calendar view makes double-booking visible.
+
+---
+
+#### B6. User Edits or Overwrites a Toby-Created Post's Content
+
+**Trigger:** User modifies the title, caption, or media of a Toby-created scheduled post.
+
+**Current Behavior:** The `TobyContentTag` retains the original strategy metadata (personality, hook, visual style). When the post publishes and is scored, the score is attributed to Toby's original strategy, even though the content was human-modified. The correlation is broken.
+
+**Correct Autonomous Behavior:** When a Toby-created post is edited, the `TobyContentTag` should be flagged `human_modified = True`. Scores from human-modified posts should be excluded from strategy learning or down-weighted.
+
+**Status:** 🔧 Planned — No `human_modified` flag exists. Edited posts corrupt strategy learning with false attribution.
+
+**User Visibility:** No — internal data quality concern.
+
+---
+
+#### B7. Post Stuck in "Publishing" State (Server Crash During Publish)
+
+**Trigger:** Railway receives a deploy or crash signal while a post is mid-publish, leaving it in `status = "publishing"`.
+
+**Current Behavior:** `reset_stuck_publishing(max_age_minutes=10)` runs on startup. Any post in `publishing` status older than 10 minutes is reset to `scheduled` for retry.
+
+**Critical race condition:** If the IG API call completed (post went live) but the DB commit of `status = "published"` did not happen before the crash, resetting to `scheduled` causes the post to be **published again to Instagram — a duplicate**.
+
+**Correct Autonomous Behavior:**
+1. Before resetting a stuck post, check if an `ig_media_id` was stored in `extra_data["post_ids"]`. If yes, the IG API call completed — mark the post `published`, not `scheduled`.
+2. If no `post_ids` exist, the API call never completed — safe to retry.
+3. Track a `reset_count` column on `ScheduledReel` and escalate to `failed` after 3 resets to prevent infinite retry loops.
+
+**Status:** ❌ Bug — Server crash during publishing can cause duplicate posts on Instagram. This is the distributed systems two-phase commit problem.
+
+**User Visibility:** Yes — emit `post_reset_after_crash` at `warning` level so the user can manually check Instagram for duplicates.
+
+---
+
+#### B8. Post Fails to Publish (Instagram API Error)
+
+**Trigger:** Instagram Graph API returns a non-2xx error during `check_and_publish`.
+
+**Current Behavior:** Publisher returns `{"success": False, "error": "..."}`. Post is marked `failed`. The slot appears empty to the buffer manager. Toby generates a new post for the same time on the next tick — but if the failure happened near the slot time, the slot is now in the past and cannot be filled. Toby naturally moves on.
+
+For **transient errors** (rate limiting, temporary outage), the post is permanently marked `failed` requiring manual user retry (`retry_failed` endpoint). No automatic retry logic exists for transient errors.
+
+**Correct Autonomous Behavior:** For transient errors (e.g., HTTP 503, timeout), implement automatic retry with exponential backoff (15 min, 1 hour, 4 hours) before marking `failed`. For permanent errors (e.g., invalid credentials, duplicate media), fail immediately.
+
+**Status:** ⚠️ Partial — Failure isolation is correct. No automatic retry for transient errors.
+
+**User Visibility:** Yes — `publish_failed` at `error` level with error message and brand name.
+
+---
+
+#### B9. Post Published as "Partial" (Instagram OK, Facebook/YouTube Fails)
+
+**Trigger:** Multi-platform publish loop succeeds for Instagram but fails for one or more other platforms.
+
+**Current Behavior:** Post is marked `status = "partial"`. Failed platforms and errors are stored in `extra_data["publish_results"]`. Manual retry via `retry_failed(schedule_id)` re-attempts only failed platforms. Instagram metrics are collected normally (scoring unaffected). Toby does NOT automatically retry partial failures.
+
+**Correct Autonomous Behavior:** Current partial handling is well-designed (✅ for tracking and manual retry). Add autonomous retry of `partial` posts after a configurable delay (30 minutes) without user intervention.
+
+**Status:** ⚠️ Partial — Partial status tracking and manual retry implemented. Autonomous retry of partial failures is not.
+
+**User Visibility:** Yes — `publish_partial` at `warning` level showing which platforms succeeded and failed.
+
+---
+
+### C. Instagram API Failures
+
+#### C1. Instagram Access Token Expires (60-Day TTL)
+
+**Trigger:** `meta_access_token` reaches its 60-day expiration. All subsequent Graph API calls return `{"error": {"code": 190, "type": "OAuthException"}}`.
+
+**Current Behavior:** `fetch_media_metrics` receives HTTP 401, returns `None`. `collect_for_brand` increments `errors` and continues. **No persistent notification is written. No user alert. MetricsCollector continues attempting failed calls every 6 hours forever.** Publishing attempts fail with the post marked `failed` — this IS visible to the user, but the root cause (token expiry) is not distinguished.
+
+**Correct Autonomous Behavior:**
+1. When HTTP 190 (OAuthException / token expired) is received, emit `token_expired` at `error` level in the activity feed — **once per 24-hour window per brand**, not once per collection cycle.
+2. Skip content generation for the affected brand until credentials are refreshed (currently generation continues, publishing fails).
+3. Long-term: implement Meta long-lived token refresh flow.
+
+**Status:** ❌ Bug — Token expiry silently kills all metrics collection with no user notification. The activity feed never shows why scores stopped updating.
+
+**User Visibility:** Yes — `token_expired` at `error` level. This is the highest-priority user action notification in the entire system.
+
+---
+
+#### C2. Rate Limiting (429 Too Many Requests)
+
+**Trigger:** The Instagram Graph API returns HTTP 429.
+
+**Current Behavior:** `fetch_media_metrics` returns `None` on any non-200 status. The fallback to individual metric requests (on insights failure) actually **increases** the number of API calls made on failure, potentially worsening rate limit pressure. There is a `time.sleep(0.5)` between brands but no rate limit detection or backoff.
+
+**Correct Autonomous Behavior:** On HTTP 429, stop all metric collection immediately and wait for the retry-after window (typically 1 hour per IG documentation). Suppress the individual-metric fallback when the failure is a rate limit (not a metric unavailability). Implement exponential backoff: first 429 → wait 1 hour, second consecutive → 4 hours, third → 24 hours.
+
+**Status:** ❌ Bug — No rate limit detection. The fallback mechanism can amplify rate limit pressure.
+
+**User Visibility:** No — rate limiting is infrastructure, not a user action event. Internal logging only.
+
+---
+
+#### C3. Account-Level Restrictions or Shadowban
+
+**Trigger:** Instagram restricts the brand account (reduced reach, shadowban, or formal warning) — not detectable via API.
+
+**Current Behavior:** No detection mechanism. Metrics continue to be collected. If a shadowban causes views to drop from 10,000 to 200, the scoring engine records the strategies used during this period as "these strategies score low," contaminating learned preferences with false negatives for potentially weeks.
+
+**Correct Autonomous Behavior:**
+1. Monitor for sustained drops in `avg_views` relative to the 14-day baseline. If brand average drops more than 80% in one week and remains low for 14 days, emit `performance_anomaly` at `warning` level.
+2. Mark scores from the suspected restriction period as `low_confidence = True`. Down-weight them in `update_strategy_score`.
+
+**Status:** 🔧 Planned — No anomaly detection. Performance drops from external causes corrupt learning data.
+
+**User Visibility:** Yes — `performance_anomaly` at `warning` level if a sustained 80%+ drop is detected.
+
+---
+
+#### C4. IG Graph API Outage or Degraded Performance
+
+**Trigger:** The Meta Graph API is partially or fully unavailable.
+
+**Current Behavior:** `requests.get` with `timeout=15` raises `Timeout` or `ConnectionError`. These are caught and return `None`. The metric collection tick completes with errors, and the next attempt runs in 6 hours. For publishing: timeout causes the post to be permanently marked `failed`.
+
+**Correct Autonomous Behavior:** Metrics gracefully degrade (✅ — skip and retry in 6 hours is correct). For publishing: timeouts should trigger automatic retry (see B8) rather than permanent failure.
+
+**Status:** ⚠️ Partial — Metrics graceful degradation works. Publishing fails permanently on timeout.
+
+**User Visibility:** Publishing timeout: `publish_failed` at `error` level. Metric collection timeout: no user visibility needed.
+
+---
+
+#### C5. Metrics Unavailable for Certain Post Types
+
+**Trigger:** Some IG media types (carousels, images) do not support `plays` as a metric.
+
+**Current Behavior:** The insights endpoint returns HTTP 400. The fallback tries individual metrics (`plays`, then `reach`). If `plays` is unavailable for a carousel post, `metrics["views"]` defaults to 0. `compute_toby_score` computes a false low score based on 0 views — a false negative specific to content type.
+
+**Correct Autonomous Behavior:** `compute_toby_score` should use content-type-aware metric weights. For carousel posts (where `plays` is not applicable), substitute `reach` as the primary view signal. The `content_type` from `ScheduledReel` is available at scoring time.
+
+**Status:** ⚠️ Partial — Fallback handles API errors gracefully. Metric weighting does not account for content type capabilities, causing systematic scoring bias against carousel posts.
+
+**User Visibility:** No — internal data quality concern.
+
+---
+
+#### C6. Instagram Changes or Deprecates Metric Fields
+
+**Trigger:** Meta renames a metric field (e.g., `plays` → `video_views`) or removes it entirely.
+
+**Current Behavior:** The metric mapping uses hardcoded field names (`if name == "plays"`, `elif name == "saved"`). A renamed field silently produces 0 for all subsequent collections. No error is raised. All posts scored after the deprecation receive systematically wrong scores.
+
+**Correct Autonomous Behavior:** Log a warning when an unrecognized field name appears in the API response, and when an expected field name is absent for 3+ consecutive collection cycles. The metric field mapping should be configurable without a code deploy.
+
+**Status:** 🔧 Planned — No field-level deprecation detection. Silent data corruption on API changes.
+
+**User Visibility:** No direct user visibility. Engineering alert is appropriate.
+
+---
+
+### D. Content Generation Failures
+
+#### D1. DeepSeek API Outage or Rate Limit
+
+**Trigger:** `ContentGeneratorV2` cannot reach the DeepSeek API.
+
+**Current Behavior:** Exception propagates to `_run_buffer_check`, is caught, a `TobyActivityLog` error entry is written, and the slot remains empty. On the next tick (5 minutes), Toby tries again. This retry pattern is correct. However, with an extended outage, the error log entry is written **every 5 minutes**, flooding the activity feed.
+
+**Correct Autonomous Behavior:** Retry on next tick is correct (✅). Debounce error logging: emit one `content_generation_failed` entry per hour per brand, not one per tick.
+
+**Status:** ⚠️ Partial — Retry is correct. Activity log flooding during outages is not controlled.
+
+**User Visibility:** Yes — `content_generation_failed` at `error` level, debounced to once per hour.
+
+---
+
+#### D2. All 3 Content Generation Quality Retries Fail
+
+**Trigger:** `ContentGeneratorV2`'s quality gate rejects all 3 generation attempts.
+
+**Current Behavior:** The generator silently falls back to `_fallback_post_title()` — a generic, non-personalized title. The content plan proceeds with fallback content. The user is not notified. The fallback content is treated identically to quality-passing content for learning purposes.
+
+**Correct Autonomous Behavior:** When fallback content is used, the `TobyContentTag` should note `used_fallback = True`. Fallback content scores should not update strategy weights (the content was not chosen by the learning engine — it's arbitrary). Optionally, skip the slot entirely and retry on the next tick rather than publishing fallback content.
+
+**Status:** ⚠️ Partial — Fallback prevents crashes. Fallback content is silently treated the same as normally generated content, polluting learning data.
+
+**User Visibility:** No — generic content quality fallbacks are transparent to the user.
+
+---
+
+#### D3. Image Generation Service Down
+
+**Trigger:** The AI image generation API is unavailable.
+
+**Current Behavior:** Exception propagates, job is marked `failed`, slot remains empty, retried on next tick. Correct behavior.
+
+**Status:** ✅ Handled — See D1 for the activity log debounce improvement needed.
+
+**User Visibility:** Yes — `content_generation_failed` at `error` level (shared with D1 pattern).
+
+---
+
+#### D4. Video Rendering Fails Mid-Pipeline (Thumbnail Uploaded, Video Fails)
+
+**Trigger:** FFmpeg video rendering fails after the thumbnail has already been successfully uploaded to Supabase.
+
+**Current Behavior:** `JobProcessor.regenerate_brand` returns `{"success": False}`. The `ScheduledReel` is never created (correct). The thumbnail file already uploaded to Supabase remains (orphaned storage asset). `JobManager.cleanup_job_files` exists but is only called in the periodic `cleanup_published_jobs` task, not on generation failure.
+
+**Correct Autonomous Behavior:** On any generation failure, clean up all Supabase files uploaded for that `job_id` immediately. `JobManager.cleanup_job_files(job_id)` should be called in the failure path of `_execute_content_plan`.
+
+**Status:** ⚠️ Partial — Generation failure correctly prevents scheduling. Supabase cleanup on failure is not called, leading to orphaned storage files accumulating over time.
+
+**User Visibility:** Yes — `content_generation_failed` at `error` level.
+
+---
+
+#### D5. Supabase Upload Fails (Auth or Storage Quota)
+
+**Trigger:** Supabase storage returns a `StorageError` during media upload.
+
+**Current Behavior:** Per project guidelines: always `raise Exception(f"Failed to upload: {str(e)}")`. The exception propagates, job fails, slot remains empty, retried on next tick. Correct for transient errors.
+
+**Gap:** Storage quota exceeded is a permanent error — no amount of retrying will succeed. It is not distinguished from transient errors.
+
+**Correct Autonomous Behavior:** Detect quota errors from the Supabase error response. On quota exceeded, emit `storage_quota_exceeded` at `error` level and pause all content generation until the issue is resolved.
+
+**Status:** ⚠️ Partial — Transient upload failures handled correctly. Permanent errors (quota) are not distinguished.
+
+**User Visibility:** Yes — `storage_quota_exceeded` at `error` level requires immediate user action.
+
+---
+
+#### D6. Partial Media Pipeline (Thumbnail OK, Video Fails)
+
+Same as D4 — see above.
+
+---
+
+### E. Learning Engine Edge Cases
+
+#### E1. No Strategy Scores Exist Yet (Cold Start)
+
+**Trigger:** First enable, or after a reset. `TobyStrategyScore` table has zero rows.
+
+**Current Behavior:** `_pick_dimension` finds no scores, falls through to `return random.choice(options)`. Every dimension is chosen randomly — correct cold-start behavior.
+
+**Correct Autonomous Behavior:** Random cold start is correct (✅). Enhancement: when the same user has other brands with performance history, use cross-brand scores as warm-start priors rather than pure random (see Section 12, Phase C).
+
+**Status:** ✅ Handled — cold start works correctly.
+
+**User Visibility:** No — cold start is transparent to the user.
+
+---
+
+#### E2. All Strategy Options Have Equal Average Scores (No Winner)
+
+**Trigger:** Multiple options have identical `avg_score` values.
+
+**Current Behavior:** The exploit path uses `ORDER BY avg_score DESC LIMIT 1`. On exact ties, the DB returns an arbitrary row based on insertion order. The same option may "win" ties consistently due to row ordering rather than genuine performance difference.
+
+**Correct Autonomous Behavior:** Break ties by `sample_count` (prefer the better-sampled option) or randomly among tied options to maintain exploration. True Thompson Sampling (roadmap, Section 12) resolves this elegantly through probabilistic sampling.
+
+**Status:** ⚠️ Partial — Works in the non-tie case. Ties resolved by DB insertion order.
+
+**User Visibility:** No — internal learning engine behavior.
+
+---
+
+#### E3. A Strategy Option Is Removed from NicheConfig After Scoring
+
+**Trigger:** User removes a topic category from their Content DNA. Existing `TobyStrategyScore` rows for that topic remain.
+
+**Current Behavior:** `_pick_dimension` checks `if scores and scores.option_value in options` (where `options` = current NicheConfig topics). The removed topic falls through to random selection from remaining options. Stale score records remain but are never selected.
+
+**Status:** ✅ Handled — correct behavior. Removed options are naturally excluded.
+
+**User Visibility:** No.
+
+---
+
+#### E4. Post Scores 0 Because Instagram Deleted It, Not Because Content Was Bad
+
+**Trigger:** User deletes a post from Instagram before metrics are collected.
+
+**Current Behavior:** `fetch_media_metrics` returns `None` (404). `PostPerformance` row is never created. `score_pending_posts` finds no matching row and `toby_score` remains `NULL`. The strategy receives no feedback — neither positive nor negative. This is actually **correct behavior** (`NULL` scores are excluded from learning).
+
+**Status:** ✅ Handled — `NULL` scores correctly exclude deleted posts from strategy learning. The experiment stall risk is documented in E6.
+
+**User Visibility:** No.
+
+---
+
+#### E5. Post Scores ~20 Because Metrics API Failed, Not Because Content Performed Poorly
+
+**Trigger:** `MetricsCollector` returns 0 metrics for a post due to API failure (timeout, 429, etc.) — not because the post actually performed poorly.
+
+**Current Behavior:** If a `PostPerformance` row exists with `views = 0` (metrics were collected but API returned zeros due to failure), `compute_toby_score` calculates:
+- `raw_views_score = 0` (log of 1 = 0)
+- `relative_score = 50` (no baseline fallback)
+- `engagement_score = 0`
+- `follower_context_score = 50`
+- **Final score = 20**
+
+This false score of **20** is fed into `update_strategy_score`. Strategies used during API outage periods are systematically penalized with phantom `20` scores.
+
+**Correct Autonomous Behavior:** `PostPerformance` rows created from zero-metric API failure responses should be flagged `metrics_unreliable = True`. Scores computed from unreliable metrics should be tagged `score_confidence = "low"` on `TobyContentTag` and excluded (or down-weighted at 0.2×) in `update_strategy_score`.
+
+**Status:** ❌ Bug — Zero-metric records from API failures produce a false score of 20, systematically penalizing strategies used during API outage periods.
+
+**User Visibility:** No direct user visibility. Internal data quality concern.
+
+---
+
+#### E6. Experiment Never Reaches min_samples (One Option Never Explored)
+
+**Trigger:** An active `TobyExperiment` with `options = ["story", "provoc"]` and `min_samples = 5`. The 30% explore phase randomly selects `story` for all explore slots and never selects `provoc`. The `all_sufficient` check requires ALL options to reach `min_samples` — `provoc` stays at count=0 and the experiment never completes.
+
+**Current Behavior:** The experiment remains in `active` status forever. No timeout exists. Every new experiment on the same dimension is blocked because of the unique constraint `(user_id, content_type, dimension, status='active')`.
+
+**Correct Autonomous Behavior:** Implement an experiment timeout: after `max_days` (suggested: 21 days for a 5-sample experiment) without completion, force-complete the experiment by selecting the option with the highest current `avg_score` as the winner, even if `min_samples` was not reached for all options. Log `experiment_timeout` at `warning` level.
+
+**Status:** ❌ Bug — No experiment timeout. Stalled experiments permanently block the experiment slot for that dimension.
+
+**User Visibility:** Yes — `experiment_timeout` at `warning` level after 21 days without completion.
+
+---
+
+#### E7. Extreme Outlier Post (10x Brand Average — Goes Viral)
+
+**Trigger:** A post goes viral with 10x the brand's average views.
+
+**Current Behavior:** `compute_toby_score` caps relative performance at `min(100, ratio * 25)` — a 10x post receives `relative_score = 100`. `avg_score` is used for exploit selection (not `best_score`), so a single viral outlier moves the average but does not permanently dominate selection. Welford's variance update tracks consistency.
+
+**Correct Autonomous Behavior:** The capping mechanism limits outlier inflation, and `avg_score`-based selection is correct (✅). Enhancement: emit a `viral_post_detected` success entry in the activity feed with the post's score and strategy used — valuable feedback for the user.
+
+**Status:** ✅ Handled — outlier inflation is capped. Variance is tracked. Selection correctly uses `avg_score`.
+
+**User Visibility:** Yes — emit `viral_post_detected` at `success` level with the strategy that produced the viral post.
+
+---
+
+### F. Concurrency & Race Conditions
+
+#### F1. Two Toby Ticks Run Simultaneously (APScheduler Overlap)
+
+**Trigger:** The `toby_tick` job takes longer than 5 minutes (e.g., multi-user scenario). APScheduler starts a new tick before the previous one completes.
+
+**Current Behavior:** `max_instances` is not set on the `toby_orchestrator` APScheduler job. APScheduler's default allows multiple concurrent instances of the same job. Two concurrent `toby_tick` calls both query the same empty slots and both call `_execute_content_plan` for the same slot — both succeed, scheduling two `ScheduledReel` rows at the same `scheduled_time` and `brand_id`. There is **no UNIQUE constraint** on `(user_id, brand_id, scheduled_time)` in `scheduled_reels` to prevent this.
+
+**Correct Autonomous Behavior:**
+1. Set `max_instances=1` on the `toby_orchestrator` APScheduler job — first line of defense.
+2. Add a UNIQUE DB constraint on `(user_id, scheduled_time, (extra_data->>'brand'))` — second line of defense.
+3. Introduce a slot reservation step (write `status = "generating"` placeholder row before generation begins) — third line of defense.
+
+```python
+# Fix: APScheduler concurrency protection
+scheduler.add_job(
+    toby_tick, 'interval', minutes=5,
+    id='toby_orchestrator', replace_existing=True,
+    max_instances=1,  # ADD THIS
+)
+```
+
+```sql
+-- Fix: Prevent duplicate slots at DB level
+ALTER TABLE scheduled_reels
+  ADD CONSTRAINT uq_brand_slot
+  UNIQUE (user_id, scheduled_time, (extra_data->>'brand'));
+```
+
+**Status:** ❌ Bug — No concurrency protection at either the scheduler or DB level. Concurrent ticks can produce duplicate posts for the same slot.
+
+**User Visibility:** Users see two posts in the calendar for the same time slot.
+
+---
+
+#### F2. Toby and User Create Content for the Same Slot Simultaneously
+
+**Trigger:** User manually schedules a post via the UI at the exact moment Toby is generating content for the same slot.
+
+**Current Behavior:** Both `schedule_reel` calls succeed (no DB uniqueness constraint). The buffer manager's `filled_set` deduplicates on the next query, preventing a third generation. But two posts now exist for the same slot.
+
+**Correct Autonomous Behavior:** Same UNIQUE constraint as F1 prevents this at the DB level. The `_run_buffer_check` should also re-query the buffer status immediately before `_execute_content_plan` (double-checked locking) to confirm the slot is still empty after content generation completes.
+
+**Status:** ❌ Bug — Same root cause as F1.
+
+**User Visibility:** Two posts appear in the calendar for the same slot.
+
+---
+
+#### F3. Slot Appears Empty While Content Is Being Generated (In-Flight Gap)
+
+**Trigger:** Toby begins generating content for a slot (Steps 1-6 of `_execute_content_plan`). A second tick fires during the 5-30 seconds of generation. The second tick sees the slot as empty (no `ScheduledReel` row yet) and plans another piece of content.
+
+**Current Behavior:** No "generation in progress" state is tracked in the DB. The `ScheduledReel` row is only created at Step 7. Any concurrent tick that overlaps Steps 1-6 sees the slot as empty.
+
+**Correct Autonomous Behavior:** Before beginning `_execute_content_plan`, write a placeholder `ScheduledReel` row with `status = "generating"`. On successful completion, update to `status = "scheduled"` with real media URLs. On failure, delete the placeholder so the slot reverts to empty. This closes the in-flight generation gap.
+
+**Status:** ❌ Bug — No slot reservation. In-flight generation is invisible to concurrent ticks.
+
+**User Visibility:** No — background race condition.
+
+---
+
+#### F4. Railway Deploy Interrupts an In-Progress Generation
+
+**Trigger:** Railway deployment sends SIGTERM while `_execute_content_plan` is running.
+
+**Current Behavior:** Steps 1-3 (NicheConfig loading, DeepSeek text generation) are ephemeral — no persistent state. A crash during Steps 1-3 leaves the slot empty; the next tick refills it. A crash during Steps 4-6 (after `GenerationJob` is created) is recoverable via the existing `resume_job` mechanism in `startup_event`.
+
+**Correct Autonomous Behavior:** The current design is correct — crash during Steps 1-3 is safe (slot remains empty, retried next tick). Crash during Steps 4-6 is handled by startup job recovery. The slot reservation in F3 would further improve recovery.
+
+**Status:** ✅ Handled — crash recovery is correct for all stages of the pipeline.
+
+**User Visibility:** No — brief generation interruptions are transparent to the user.
+
+---
+
+#### F5. User Disables Toby While a Generation Is in Progress
+
+**Trigger:** User calls `POST /api/toby/disable` while `_execute_content_plan` is executing.
+
+**Current Behavior:** `disable_toby` sets `enabled = False` in the DB. The in-progress generation does not check `state.enabled` mid-execution. The generation completes, the post is scheduled, and it appears in the calendar — even though Toby is now disabled. On the next tick, Toby is excluded from processing (`enabled = False` filter). No more content is generated.
+
+**Correct Autonomous Behavior:** Completing an in-flight generation is preferable to crashing mid-pipeline (which would leave orphaned Supabase files). The one in-flight post completing after disable is correct behavior.
+
+**Status:** ✅ Handled — in-flight generation completes gracefully after disable.
+
+**User Visibility:** The scheduled post appears in the calendar after Toby is disabled. The `created_by = "toby"` field identifies it as Toby-created. User can delete it if unwanted.
+
+---
+
+### G. Data Integrity & Orphaned Records
+
+#### G1. TobyContentTag Orphaned When Parent ScheduledReel Is Hard-Deleted
+
+**Trigger:** `delete_scheduled(schedule_id)` removes the `ScheduledReel` row. No FK cascade exists on `toby_content_tags.schedule_id`.
+
+**Current Behavior:** The `TobyContentTag` row persists with `toby_score = NULL`. In `score_pending_posts`, when no `PostPerformance` row exists, the tag is correctly skipped (no learning corruption). However: `total_created` counts in the status API include orphaned tags, inflating the reported number. If the orphaned tag had an `experiment_id`, the experiment is waiting for this option to reach `min_samples` — it never will (see E6).
+
+**Correct Autonomous Behavior:**
+1. Add a FK: `FOREIGN KEY (schedule_id) REFERENCES scheduled_reels(schedule_id) ON DELETE SET NULL` — when a parent is deleted, set `schedule_id = NULL` on the tag.
+2. Filter `total_created` to exclude tags with `schedule_id IS NULL`.
+3. For experiment tracking, dereference orphaned tags' experiment links.
+
+```sql
+ALTER TABLE toby_content_tags
+  ADD CONSTRAINT fk_toby_tag_schedule
+  FOREIGN KEY (schedule_id) REFERENCES scheduled_reels(schedule_id)
+  ON DELETE SET NULL;
+```
+
+**Status:** ❌ Bug — No FK constraint. Orphaned tags inflate counts and contribute to experiment stalls.
+
+**User Visibility:** No direct user visibility. Inflated `total_created` count is a cosmetic issue.
+
+---
+
+#### G2. Strategy Scores After Their Experiment Completes or Is Deleted
+
+**Trigger:** `TobyExperiment` is marked `completed`. `TobyStrategyScore` rows for the winning option persist.
+
+**Current Behavior:** `reset_toby` deletes all experiments and strategy scores (clean reset). Completed experiments leave score data intact, which continues informing the exploit path — this is correct. Post-completion strategy scores remain as the "learned preference" for that dimension.
+
+**Status:** ✅ Handled — completed experiment scores correctly persist as learned preferences.
+
+**User Visibility:** No.
+
+---
+
+#### G3. Brand Historical Performance Data Is Wiped
+
+**Trigger:** `PostPerformance` rows are deleted (manual cleanup, migration error).
+
+**Current Behavior:** `get_brand_baseline` returns `{"avg_views": 0, ...}`. `compute_toby_score` returns `relative_score = 50` (neutral fallback). System continues functioning with degraded scoring — same as cold start.
+
+**Status:** ✅ Handled — graceful fallback to neutral scoring.
+
+**User Visibility:** No.
+
+---
+
+#### G4. Long-Term Data Accumulation
+
+**Trigger:** Toby has been running for 6-12 months. `toby_activity_log` has millions of entries.
+
+**Current Behavior:** `cleanup_old_logs` deletes log entries older than 7 days. `cleanup_published_jobs` deletes published `ScheduledReel` rows. `PostPerformance`, `TobyStrategyScore`, and `TobyContentTag` rows are never cleaned up. The `get_brand_baseline` query is bounded by `days_back` (14 days), so it does not scan all history. `get_insights` queries all `TobyStrategyScore` rows — manageable at current scale (~50 rows per user).
+
+**Status:** ✅ Handled at current scale. Index on `(brand, published_at)` in `PostPerformance` is recommended when table exceeds 100k rows.
+
+**User Visibility:** No.
+
+---
+
+### H. Phase & State Edge Cases
+
+#### H1. User Resets Toby During Active Experiments
+
+**Trigger:** User clicks "Reset Toby" while experiments are in `active` status.
+
+**Current Behavior:** `reset_toby` deletes all `TobyExperiment`, `TobyStrategyScore`, and `TobyContentTag` rows. Phase resets to `bootstrap`. A `toby_reset` log entry is written at `warning` level.
+
+**Correct Autonomous Behavior:** Current behavior is intentional and correct — the user explicitly requested a reset. Enhancement: before deletion, serialize the current experiment state as metadata in the activity log, giving the user a historical record of what was in progress.
+
+**Status:** ✅ Handled — clean reset as designed.
+
+**User Visibility:** Yes — `toby_reset` at `warning` level, visible in activity feed.
+
+---
+
+#### H2. User Disables Toby Mid-Analysis
+
+**Trigger:** User disables Toby while `_run_analysis_check` is executing.
+
+**Current Behavior:** The in-progress analysis completes — it reads metrics, computes scores, writes `TobyContentTag.toby_score` values and `TobyStrategyScore` updates. Each tag is scored atomically. Completing a partial analysis is correct — aborthing mid-write could leave inconsistent state.
+
+**Status:** ✅ Handled — analysis completes gracefully after disable.
+
+**User Visibility:** No.
+
+---
+
+#### H3. Phase Transition When Nothing Has Published Yet
+
+**Trigger:** Toby has been in bootstrap for 7+ days and has generated 10+ posts, but none have published (e.g., all stuck as `scheduled` due to credential failures).
+
+**Current Behavior:** `check_phase_transition` requires `scored_post_count >= BOOTSTRAP_MIN_POSTS` where `scored_post_count` = count of `TobyContentTag` rows with `toby_score IS NOT NULL`. If no posts have published, `scored_post_count = 0`. Phase stays in bootstrap — **correct behavior**.
+
+**Correct Autonomous Behavior:** Phase transitions correctly require real scored data. Toby staying in bootstrap while publishing is broken is a safeguard. The root cause (publishing failures) is surfaced in the activity feed.
+
+**Status:** ✅ Handled — phase transition requires real data, not just generated data.
+
+**User Visibility:** The user sees Toby stuck in "bootstrap" phase. Repeated `publish_failed` entries in the activity feed explain why.
+
+---
+
+#### H4. Phase Regression: Optimizing Brand Drops in Performance
+
+**Trigger:** A brand in the `optimizing` phase experiences sustained performance drop (algorithm change, shadowban, seasonal shift).
+
+**Current Behavior:** Phase transitions only go forward (`bootstrap → learning → optimizing`). No regression mechanism exists (`state.py:86-121`). A brand stays in `optimizing` forever regardless of performance trajectory. The learning engine continues using exploit-heavy selection (low `explore_ratio`), reinforcing failing strategies.
+
+**Correct Autonomous Behavior:**
+1. Add a performance monitoring check comparing the brand's 14-day average score against the rolling 90-day average.
+2. If the 14-day average drops below 50% of the 90-day average for 2 consecutive analysis cycles, temporarily increase `explore_ratio` to 0.60 for the next 14 days to force re-exploration.
+3. Automatically restore `explore_ratio` when performance recovers.
+4. Log `performance_regression_detected` at `warning` level.
+
+**Status:** 🔧 Planned — No dynamic `explore_ratio` adjustment. Performance regressions in optimizing phase are silent.
+
+**User Visibility:** Yes — `performance_regression_detected` at `warning` level.
+
+---
+
+#### H5. Multiple Brands at Different Maturity Levels
+
+**Trigger:** User has Brand A (new, bootstrapping) and Brand B (6 months old, optimizing). Both processed by the same `TobyState`.
+
+**Current Behavior:** `TobyState` is per-user, not per-brand. The phase, `explore_ratio`, and all configuration values apply uniformly to all brands. Brand A (with zero history) receives the same exploit-heavy selection as Brand B, skipping cold-start exploration.
+
+**Correct Autonomous Behavior:** `choose_strategy` should use a brand's own `PostPerformance` history length to determine its effective explore ratio dynamically: if Brand A has 0 records, use `explore_ratio = 1.0` (pure explore). If Brand B has 200, use the configured ratio. No schema change required — query `PostPerformance` count per brand at strategy selection time.
+
+**Status:** ⚠️ Partial — Phase and explore_ratio are per-user. New brands added to mature accounts get suboptimal cold-start behavior.
+
+**User Visibility:** No direct user visibility. New brand content quality may be suboptimal in early weeks.
+
+---
+
+### I. Discovery & Trend Intelligence
+
+#### I1. Competitor Account Becomes Private or Gets Deleted
+
+**Trigger:** A competitor in `NicheConfig.competitor_accounts` makes their IG account private or deletes it.
+
+**Current Behavior:** `TrendScout.scan_competitors` calls the Business Discovery API. A private/deleted account returns empty `business_discovery`. `discover_competitor` returns an empty list silently. The error is logged in the discovery tick. **No circuit breaker exists** — Toby permanently retries the inaccessible account on every discovery cycle (every 6 hours).
+
+**Correct Autonomous Behavior:** Track per-competitor failure counts. After 3 consecutive failures for a competitor, mark it as `unreachable` and stop scanning it. Emit `competitor_unreachable` at `info` level suggesting the user update their Content DNA.
+
+**Status:** ❌ Bug — No circuit breaker for persistent competitor account failures. Toby permanently wastes API quota on inaccessible accounts.
+
+**User Visibility:** Yes — `competitor_unreachable` at `info` level after 3 consecutive failures.
+
+---
+
+#### I2. Hashtag Gets Banned by Instagram
+
+**Trigger:** A hashtag in `NicheConfig.discovery_hashtags` is banned by Instagram.
+
+**Current Behavior:** The hashtag search returns empty results or an error. `scan_hashtags` returns `{"total_found": 0}`. The same hashtag is retried on every discovery cycle indefinitely.
+
+**Correct Autonomous Behavior:** After 5 consecutive empty-result discovery cycles for a hashtag, flag it as `potentially_banned` and reduce scan frequency to weekly. After 4 weeks of empty results, emit `hashtag_potentially_banned` at `info` level.
+
+**Status:** ❌ Bug — No detection of permanently ineffective hashtags. Toby wastes the weekly hashtag quota on banned hashtags.
+
+**User Visibility:** Yes — `hashtag_potentially_banned` at `info` level with hashtag name.
+
+---
+
+#### I3. Own Brand Instagram Account Gets Deleted or Renamed
+
+**Trigger:** The brand's own IG account is deleted or renamed.
+
+**Current Behavior:** Account IDs (numeric `ig_user_id`) do not change on rename — renames are handled gracefully. Deletion causes API errors in `scan_own_accounts`, caught by error handling, logged, retried on next cycle. No critical distinction from a competitor account failure.
+
+**Correct Autonomous Behavior:** Own account discovery failure after 3 consecutive cycles is a critical event (all publishing will also fail). Emit `own_account_unreachable` at `error` level — more severe than competitor failures.
+
+**Status:** ⚠️ Partial — Rename gracefully handled. Deletion caught by error handling but not surfaced as a critical event.
+
+**User Visibility:** Yes — `own_account_unreachable` at `error` level after 3 consecutive failures.
+
+---
+
+#### I4. TrendScout Returns Empty Results for Entire Discovery Cycle
+
+**Trigger:** All scans (own accounts, competitors, hashtags) return 0 results in one cycle.
+
+**Current Behavior:** `run_discovery_tick` returns `{"own_accounts": 0, "competitors": 0, "hashtags": 0}`. Activity log records `discovery_scan` with zero counts. Content generation is unaffected (Toby uses NicheConfig topics regardless of discovery data).
+
+**Correct Autonomous Behavior:** Single zero-result cycles are not inherently a problem. After 5 consecutive zero-result cycles, emit `discovery_dry_spell` at `info` level prompting the user to review their competitor and hashtag lists.
+
+**Status:** ⚠️ Partial — Individual zero-result cycles are graceful. Sustained dry spells are not detected.
+
+**User Visibility:** Yes — `discovery_dry_spell` at `info` level after 5 consecutive zero-result cycles.
+
+---
+
+### J. First-Enable Validation (Pre-Flight Checks)
+
+The `POST /api/toby/enable` endpoint currently has **zero validation** — it sets `enabled = True` regardless of system state.
+
+#### J1. No Brands Exist for User
+
+**Trigger:** User enables Toby before creating any brands.
+
+**Current Behavior:** Toby enables successfully. The buffer manager queries `Brand.active == True`, gets zero brands, returns `{"health": "healthy", "total_slots": 0}`. Toby silently does nothing forever. The user has no feedback that Toby is not working.
+
+**Correct Autonomous Behavior:** `enable_toby` must perform pre-flight validation:
+1. At least one active brand exists for the user.
+2. At least one brand has `instagram_business_account_id` configured.
+3. A `NicheConfig` with at least 1 topic category exists.
+
+If validation fails, return a structured error:
+```json
+{
+  "error": "preflight_failed",
+  "preflight_failures": [
+    "no_active_brands",
+    "no_instagram_credentials",
+    "niche_config_empty"
+  ],
+  "guidance": "Create a brand and connect Instagram before enabling Toby."
+}
+```
+
+```python
+# Required code change in state.py:enable_toby
+def enable_toby(db: Session, user_id: str) -> TobyState:
+    brands = db.query(Brand).filter(
+        Brand.user_id == user_id, Brand.active == True
+    ).all()
+    if not brands:
+        raise ValueError("preflight:no_active_brands")
+    credentialed = [b for b in brands if b.instagram_business_account_id]
+    if not credentialed:
+        raise ValueError("preflight:no_instagram_credentials")
+    configs = db.query(NicheConfig).filter(NicheConfig.user_id == user_id).all()
+    if not any(c.topic_categories for c in configs):
+        raise ValueError("preflight:niche_config_empty")
+    # ... proceed with enable
+```
+
+**Status:** ❌ Bug — No pre-flight validation. Users can enable Toby into a broken state with no feedback. The system silently wastes resources indefinitely.
+
+**User Visibility:** The enable API response must include `preflight_failures` so the UI can show specific setup guidance.
+
+---
+
+#### J2. Brand Exists But NicheConfig Is Empty or Incomplete
+
+**Trigger:** User creates a brand but never configures Content DNA. `NicheConfig` exists with empty arrays.
+
+**Current Behavior:** `_get_available_topics` returns `["general"]`. Content is generated with `topic_hint="general"` — generic wellness content with no niche specificity. The brand's voice, tone, and CTA preferences are all defaults. Content publishes but is off-brand and likely to underperform.
+
+**Correct Autonomous Behavior:** Pre-flight blocks on completely empty config (see J1). For partially configured NicheConfig (fewer than 3 topics, no tone), emit `content_dna_incomplete` at `warning` level after first generation to prompt the user to improve their setup.
+
+**Status:** ⚠️ Partial — Content generates gracefully using defaults. No warning that output will be generic due to incomplete setup.
+
+**User Visibility:** Yes — `content_dna_incomplete` at `warning` level after first content generation with incomplete NicheConfig.
+
+---
+
+#### J3. Brand Exists But No Instagram Credentials
+
+**Trigger:** User adds a brand without connecting Instagram before enabling Toby.
+
+**Current Behavior:** See A6 — infinite content generation waste cycle.
+
+**Correct Autonomous Behavior:** Pre-flight check in `enable_toby` — see J1.
+
+**Status:** ❌ Bug — see A6.
+
+---
+
+#### J4. Content DNA Has Fewer Than 2 Topic Categories (Insufficient for Experimentation)
+
+**Trigger:** `NicheConfig.topic_categories` has 0-1 entries.
+
+**Current Behavior:** `create_experiment` can create an experiment with `options = ["general"]` — a single-option experiment. The `all_sufficient` check requires ALL options to reach `min_samples`, but with 1 option there is no comparison, and the `len(options) > 1` winner check (line 224) never fires. The experiment remains `active` forever, permanently blocking the `topic` dimension experiment slot.
+
+**Correct Autonomous Behavior:**
+1. `create_experiment` must enforce `len(options) >= 2`. Return `None` if fewer options are provided.
+2. The topic experiment should only start when at least 2 topic categories exist.
+3. Surface as pre-flight warning: "Add at least 2 topic categories to enable topic experimentation."
+
+**Status:** ❌ Bug — Single-option experiments create a permanent stall for the topic dimension experiment slot.
+
+**User Visibility:** Yes — `insufficient_topics_for_experiment` at `info` level on first enable.
+
+---
+
+#### J5. All Brands Are Inactive
+
+**Trigger:** User has brands configured but all have `active = False`.
+
+**Current Behavior:** Same as J1 — zero active brands found, buffer is "healthy" with zero slots, Toby silently does nothing.
+
+**Correct Autonomous Behavior:** Pre-flight check blocks enable if all brands are inactive. If brands are deactivated after Toby is already enabled, emit `no_active_brands` at `warning` level.
+
+**Status:** ❌ Bug — Same root cause as J1. No detection that all brands are inactive after enable.
+
+**User Visibility:** Yes — `no_active_brands` at `warning` level.
+
+---
+
+### Edge Case Status Summary
+
+| Status | Count | Examples |
+|---|---|---|
+| ✅ Handled | 12 | A1, B2, B4 (exact match), D3, E1, E3, E4, E7, F4, F5, G2, G3, H1, H2, H3 |
+| ⚠️ Partial | 16 | A2, A3, A5, A7, B1, B5, B8, B9, C4, C5, D1, D2, D4, D5, E2, G4, H5, I4 |
+| 🔧 Planned | 4 | B6, C3, C6, H4 |
+| ❌ Bug | 15 | A4, A6, B3, B7, C1, C2, E5, E6, F1, F2, F3, G1, I1, I2, J1, J3, J4, J5 |
+
+### Critical Bugs Requiring Immediate Attention
+
+These bugs cause real data corruption, duplicate posts, or wasted API resources in production:
+
+| Priority | Bug | Impact |
+|---|---|---|
+| P0 | F1/F2 — No UNIQUE constraint on `(user_id, brand_id, scheduled_time)` | Concurrent ticks can publish duplicate posts to Instagram |
+| P0 | B7 — `reset_stuck_publishing` can cause duplicate IG posts | Server crash + recovery can publish same post twice |
+| P0 | A4/A6/J1 — No pre-flight validation on `enable_toby` | Infinite wasted DeepSeek + image API quota for credential-less brands |
+| P1 | C1 — Token expiry kills metrics silently with no notification | Scores stop updating after 60 days; user has no idea |
+| P1 | E5 — Zero-metric API failures produce false score of ~20 | Strategies penalized during outage periods; learning corrupted |
+| P1 | E6 — No experiment timeout | Stalled experiments permanently block dimension slots |
+| P1 | J4 — Single-option experiments can be created | Permanent topic dimension stall for users with 1 topic |
+| P2 | G1 — No FK on `toby_content_tags.schedule_id` | Orphaned tags inflate counts and contribute to experiment stalls |
+| P2 | I1/I2 — No circuit breaker for competitor/hashtag failures | Permanent API quota waste on inaccessible accounts/banned hashtags |
+
+### Implementation Notes
+
+**Required Database Changes:**
+
+```sql
+-- P0: Prevent duplicate slot scheduling (Fixes F1, F2)
+ALTER TABLE scheduled_reels
+  ADD CONSTRAINT uq_brand_slot
+  UNIQUE (user_id, scheduled_time, (extra_data->>'brand'));
+
+-- P2: Orphan tag prevention (Fixes G1)
+ALTER TABLE toby_content_tags
+  ADD CONSTRAINT fk_toby_tag_schedule
+  FOREIGN KEY (schedule_id) REFERENCES scheduled_reels(schedule_id)
+  ON DELETE SET NULL;
+```
+
+**Required Code Changes:**
+
+```python
+# P0: APScheduler concurrency protection (orchestrator.py)
+scheduler.add_job(
+    toby_tick, 'interval', minutes=5,
+    id='toby_orchestrator', replace_existing=True,
+    max_instances=1,  # ADD THIS
+)
+
+# P0: Pre-flight validation (state.py:enable_toby)
+def enable_toby(db: Session, user_id: str) -> TobyState:
+    brands = db.query(Brand).filter(
+        Brand.user_id == user_id, Brand.active == True
+    ).all()
+    if not brands:
+        raise ValueError("preflight:no_active_brands")
+    if not any(b.instagram_business_account_id for b in brands):
+        raise ValueError("preflight:no_instagram_credentials")
+    configs = db.query(NicheConfig).filter(NicheConfig.user_id == user_id).all()
+    if not any(c.topic_categories for c in configs):
+        raise ValueError("preflight:niche_config_empty")
+    # ... proceed
+
+# P1: Experiment timeout (learning_engine.py)
+EXPERIMENT_TIMEOUT_DAYS = 21
+
+def check_experiment_timeout(db, user_id: str) -> None:
+    cutoff = datetime.utcnow() - timedelta(days=EXPERIMENT_TIMEOUT_DAYS)
+    stale = db.query(TobyExperiment).filter(
+        TobyExperiment.user_id == user_id,
+        TobyExperiment.status == "active",
+        TobyExperiment.started_at <= cutoff,
+    ).all()
+    for exp in stale:
+        # Force-complete with current best option
+        best = max(exp.results.items(),
+                   key=lambda x: x[1].get("avg_score", 0),
+                   default=(None, {}))[0]
+        exp.status = "completed"
+        exp.winner = best
+        exp.completed_at = datetime.utcnow()
+        log_activity(db, user_id, "experiment_timeout", ...)
+
+# P1: Credential refresh on each collection (metrics_collector.py)
+def collect_for_brand(self, brand: str, days_back: int = 14) -> Dict:
+    # Refresh credentials from DB on each call — not only at init
+    self._load_brand_credentials()
+    token = self._brand_tokens.get(brand, {}).get("access_token")
+    if not token:
+        return {"error": "no_credentials", "skipped": True}
+    # ... existing logic
+```
+
+---
+
+## 11. Toby Today vs. True AI Autonomy
 
 ### 10.1 Honest Assessment: What Toby Is
 
@@ -1077,7 +2109,7 @@ The current system is a strong foundation precisely because the data layer is co
 
 ---
 
-## 11. The Path to Multi-Agent Autonomy
+## 12. The Path to Multi-Agent Autonomy
 
 This section is a concrete technical roadmap. Each phase includes specific code changes and the capability it unlocks.
 
@@ -1238,7 +2270,7 @@ Strategy Agent  → Updates posteriors, decides next experiment
 
 ---
 
-## 12. Deployment & Resilience
+## 13. Deployment & Resilience
 
 ### 12.1 Railway Deployment Safety
 
@@ -1293,7 +2325,7 @@ Error during scoring/analysis:
 
 ---
 
-## 13. Scalability & Future-Proofing
+## 14. Scalability & Future-Proofing
 
 ### 13.1 Multi-User Scaling
 
@@ -1347,7 +2379,7 @@ This would let us roll out Toby incrementally and disable any subsystem that's m
 
 ---
 
-## 14. Implementation Phases
+## 15. Implementation Phases
 
 ### Phase 1: Foundation ✅ Complete
 
@@ -1444,23 +2476,45 @@ This would let us roll out Toby incrementally and disable any subsystem that's m
 
 ---
 
-## 15. Risk Matrix
+## 16. Risk Matrix
+
+### 16.1 Critical Bugs — Immediate Fix Required (from Section 10 Audit)
+
+These risks reflect confirmed bugs in the current production codebase, discovered during the Section 10 edge case audit. Each has a specific fix identified.
+
+| Priority | Bug ID | Risk | Impact | Likelihood | Required Fix |
+|---|---|---|---|---|---|
+| **P0** | F1 | APScheduler `max_instances` not set — concurrent tick execution | **Critical** — duplicate scheduled slots, duplicate IG posts, duplicate experiments | **High** — every Railway deploy or tick overlap | Add `max_instances=1` to `orchestrator.py` APScheduler job + DB unique constraint on `(user_id, scheduled_time, brand)` |
+| **P0** | J1 | No pre-flight validation in `enable_toby` — Toby enables with no brands, no credentials, no NicheConfig | **Critical** — infinite wasted generation cycles, zero publishable content | **Medium** — any new user who clicks Enable before setup | Add pre-flight check in `state.py:enable_toby`: validate active brands, Instagram credentials, non-empty topic list |
+| **P0** | B7 | `reset_stuck_publishing` does not verify Instagram before re-queuing — server crash can cause duplicate IG post | **Critical** — duplicate published content, spam, brand reputation damage | **Low** — only on server crash mid-publish | Check `extra_data["post_ids"]` before re-publishing; implement idempotency key on IG container creation |
+| **P1** | C1 | Instagram access token expiry (60-day TTL) silently kills all metrics collection — no 401 handling, no user notification | **High** — all performance data stops; Toby keeps publishing blind; strategy learning stalls | **High** — every 60 days, every user | Refresh credentials from DB on each `collect_for_brand` call; emit `token_expired` activity event; surface in frontend |
+| **P1** | E5 | API-failure posts (0 metrics) score as ~20 — false signal corrupts strategy learning | **High** — epsilon-greedy learns to avoid strategies that actually perform well | **Medium** — any IG API outage or 404 post | Flag zero-metric records as `metrics_unreliable`; exclude from `update_strategy_score()` |
+| **P1** | E6 | No experiment timeout — single-option experiment stalls Toby's learning loop indefinitely | **High** — topic dimension with 1 topic creates a permanent stall; Toby never advances | **Medium** — any user with only 1 topic category | Add `EXPERIMENT_TIMEOUT_DAYS = 21`; force-complete stalled experiments with current winner |
+| **P1** | J4 | `create_experiment` allows single-option experiments (e.g., NicheConfig with 1 topic) | **High** — single-option experiment can never conclude; permanent stall | **Medium** — any user with sparse NicheConfig | Guard: `if len(options) < 2: skip_experiment(dimension)` in `learning_engine.py:create_experiment` |
+| **P2** | G1 | No FK from `toby_content_tags.schedule_id` → orphaned tags inflate experiment counts after post deletion | **Medium** — artificially inflated exposure counts; skewed strategy scores | **High** — every deleted post creates orphans | Add FK with `ON DELETE SET NULL`; filter `NULL schedule_id` in experiment queries |
+| **P2** | I1 | Deleted/private competitor accounts in `trend_scout.py` retry forever — no circuit breaker | **Low** — wasted API quota, slower discovery ticks | **Medium** — any competitor that goes private or is deleted | Track consecutive 404/403 failures per account; disable after 3 failures; surface in frontend |
+| **P2** | B5 | Buffer manager slot detection uses exact minute match — user-created posts can be missed, slot appears empty | **Medium** — Toby overwrites a user-created post for that slot | **Low** — only when user manually creates content for a Toby slot | Widen buffer detection to ±2 min window OR use `scheduled_by = "toby"` flag for reliable filtering |
+
+---
+
+### 16.2 Operational Risks
 
 | Risk | Impact | Likelihood | Mitigation |
 |---|---|---|---|
 | DeepSeek API outage during buffer fill | High — slots could go empty | Medium | 2-day buffer + safe fallback (re-use winning strategy with modified prompt) |
-| AI image generation failure | High — incomplete content | Medium | Retry 3x, then use light-mode variant (no AI background needed) |
+| AI image generation failure | High — incomplete content | Medium | Retry 3×, then use light-mode variant (no AI background needed) |
 | Meta API rate limits during metrics collection | Low — delayed analysis | Medium | Respect rate limits, spread requests over time, skip and retry later |
-| Toby generates poor-quality content | Medium — brand reputation | Low | Quality scoring gate already exists in `ContentGeneratorV2`, plus user can review |
-| Epsilon-greedy converges on local optimum | Medium — content gets stale | Low | 30% exploration ratio always tests new strategies; Thompson Sampling in roadmap |
-| Database growth from logs/experiments | Low — cost increase | High | Auto-cleanup older than 30 days for activity logs, archive old experiments |
-| Railway deploy during active generation | Medium — interrupted generation | Medium | Existing job recovery handles this; buffer manager catches gaps on next tick |
-| User Content DNA is empty/poorly configured | High — Toby creates off-brand content | Low | Validation check before enabling Toby: NicheConfig must have core fields filled |
-| Over-fitting to early performance data | Medium — strategies based on small samples | Medium | Minimum sample thresholds per experiment; Thompson Sampling (roadmap) handles this better |
+| Toby generates poor-quality content | Medium — brand reputation | Low | Quality scoring gate exists in `ContentGeneratorV2`; user can review via Observatory |
+| Epsilon-greedy converges on local optimum | Medium — content gets stale | Low | 30% exploration ratio always tests new strategies; Thompson Sampling planned (Section 12, Phase A) |
+| Database growth from logs/experiments | Low — cost increase | High | Auto-cleanup activity logs older than 30 days; archive completed experiments |
+| Railway deploy during active content generation | Medium — interrupted generation | Medium | Job recovery on next tick catches gaps; buffer provides coverage |
+| User Content DNA is empty/poorly configured | High — Toby creates off-brand content | Low | Fixed by P0 bug J1 (pre-flight validation before `enable_toby`) |
+| Over-fitting to early performance data | Medium — strategies based on small samples | Medium | Minimum sample thresholds per experiment; Thompson Sampling handles this better (roadmap) |
+| Multi-brand partial failure (one brand's credentials expire) | Medium — that brand stops but others continue | Medium | Per-brand error isolation; surface per-brand health status in frontend |
 
 ---
 
-## 16. Glossary
+## 17. Glossary
 
 | Term | Definition |
 |---|---|
