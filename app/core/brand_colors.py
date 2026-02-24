@@ -90,6 +90,17 @@ def get_brand_colors(brand_name: str, variant: str) -> BrandModeColors:
                     content_title_text_color=hex_to_rgb(title_text),
                     content_title_bg_color=hex_to_rgba(title_bg),
                 )
+
+            # Flat keys missing — derive from nested light_mode / dark_mode
+            mode_colors = colors.get(f"{variant}_mode", {})
+            if mode_colors:
+                default_text = "#000000" if variant == "light" else "#ffffff"
+                default_bg = "#e5e7eb" if variant == "light" else "#374151"
+                return BrandModeColors(
+                    thumbnail_text_color=hex_to_rgb(thumb or mode_colors.get("text", default_text)),
+                    content_title_text_color=hex_to_rgb(title_text or mode_colors.get("text", default_text)),
+                    content_title_bg_color=hex_to_rgba(title_bg or mode_colors.get("background", default_bg)),
+                )
     except Exception:
         pass
 

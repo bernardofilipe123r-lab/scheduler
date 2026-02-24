@@ -114,6 +114,37 @@ class BrandResponse(BaseModel):
 
 
 # ============================================================================
+# HELPERS
+# ============================================================================
+
+def _ensure_rendering_colors(colors: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Populate flat rendering keys (light_thumbnail_text_color, etc.) from
+    the nested light_mode / dark_mode sub-dicts when they are absent.
+    
+    This bridges the gap between the color structure written during brand
+    creation (nested) and the flat keys expected by the rendering engine.
+    """
+    light = colors.get("light_mode") or {}
+    dark = colors.get("dark_mode") or {}
+
+    defaults = {
+        "light_thumbnail_text_color": light.get("text", "#000000"),
+        "light_content_title_text_color": light.get("text", "#000000"),
+        "light_content_title_bg_color": light.get("background", "#e5e7eb"),
+        "dark_thumbnail_text_color": dark.get("text", "#ffffff"),
+        "dark_content_title_text_color": dark.get("text", "#ffffff"),
+        "dark_content_title_bg_color": dark.get("background", "#374151"),
+    }
+
+    for key, fallback in defaults.items():
+        if not colors.get(key):
+            colors[key] = fallback
+
+    return colors
+
+
+# ============================================================================
 # CRUD ENDPOINTS
 # ============================================================================
 
@@ -500,6 +531,10 @@ async def create_brand(
             short_name = request.id[:3].upper()
     
     try:
+        colors = request.colors.dict() if request.colors else {}
+        # Auto-populate flat rendering keys from nested light_mode/dark_mode
+        colors = _ensure_rendering_colors(colors)
+
         brand_data = {
             "id": request.id.lower(),
             "display_name": request.display_name,
@@ -509,7 +544,7 @@ async def create_brand(
             "youtube_channel_name": request.youtube_channel_name,
             "schedule_offset": request.schedule_offset,  # None = auto-assigned by manager
             "posts_per_day": request.posts_per_day,
-            "colors": request.colors.dict() if request.colors else {},
+            "colors": colors,
             # Platform credentials
             "meta_access_token": request.meta_access_token,
             "instagram_business_account_id": request.instagram_business_account_id,
@@ -540,6 +575,10 @@ async def update_brand(
     
     # Build updates dict from non-None fields
     updates = {k: v for k, v in request.dict().items() if v is not None}
+    
+    # Auto-populate flat rendering keys when colors are updated
+    if "colors" in updates and isinstance(updates["colors"], dict):
+        updates["colors"] = _ensure_rendering_colors(updates["colors"])
     
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
@@ -664,6 +703,9 @@ async def get_brand_theme(
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
     
     colors = brand.get("colors", {})
+    
+    # Ensure flat rendering keys are populated from nested structure
+    colors = _ensure_rendering_colors(colors)
     
     # Format for legacy theme endpoint + rendering colors
     theme = {
