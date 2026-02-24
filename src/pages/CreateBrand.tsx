@@ -16,7 +16,6 @@ import {
   AlertCircle,
   Type,
   Layers,
-  Dna,
   ClipboardList,
   Zap,
   CheckCircle2,
@@ -80,9 +79,8 @@ function hexToRgba(hex: string, opacity: number): string {
 const STEPS = [
   { num: 1, label: 'Identity', icon: Sparkles },
   { num: 2, label: 'Theme', icon: Palette },
-  { num: 3, label: 'Content DNA', icon: Dna },
-  { num: 4, label: 'Connections', icon: Link2 },
-  { num: 5, label: 'Review', icon: ClipboardList },
+  { num: 3, label: 'Connections', icon: Link2 },
+  { num: 4, label: 'Review', icon: ClipboardList },
 ]
 
 interface TestResult {
@@ -116,12 +114,7 @@ export function CreateBrandPage() {
   const [previewTitle, setPreviewTitle] = useState(SAMPLE_TITLE)
   const [previewContent, setPreviewContent] = useState(SAMPLE_CONTENT.join('\n'))
 
-  // Step 3: Content DNA (basic fields — full config available after creation)
-  const [nicheName, setNicheName] = useState('')
-  const [contentBrief, setContentBrief] = useState('')
-  const [targetAudience, setTargetAudience] = useState('')
-
-  // Step 4: Platform credentials
+  // Step 3: Platform credentials
   const [instagramHandle, setInstagramHandle] = useState('')
   const [facebookPageId, setFacebookPageId] = useState('')
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
@@ -218,7 +211,7 @@ export function CreateBrandPage() {
       if (existingBrands?.some(b => b.id === brandId)) { setError('A brand with this ID already exists'); return false }
       if (!shortName.trim()) { setError('Short name is required'); return false }
     }
-    if (step === 4) {
+    if (step === 3) {
       if (!isStep4Valid) {
         setError('All Meta platform fields are required')
         setStep4Attempted(true)
@@ -320,20 +313,6 @@ export function CreateBrandPage() {
         }
       }
 
-      // Save Content DNA if provided
-      if (nicheName || contentBrief || targetAudience) {
-        try {
-          await apiClient.put(`/api/v2/niche-config`, {
-            brand_id: brandId,
-            niche_name: nicheName || undefined,
-            content_brief: contentBrief || undefined,
-            target_audience: targetAudience || undefined,
-          })
-        } catch {
-          console.warn('Content DNA save failed — can be configured later')
-        }
-      }
-
       toast.success(`Brand "${displayName}" created successfully!`)
       navigate('/brands')
     } catch (err) {
@@ -351,7 +330,7 @@ export function CreateBrandPage() {
             Create New Brand
           </h1>
           <p className="text-gray-500 mt-1">
-            Set up a new brand with identity, theme, content DNA, and platform connections
+            Set up a new brand with identity, theme, and platform connections
           </p>
         </div>
         <button
@@ -721,76 +700,8 @@ export function CreateBrandPage() {
         </div>
       )}
 
-      {/* ═══ Step 3: Content DNA ═══ */}
+      {/* ═══ Step 3: Platform Connections ═══ */}
       {step === 3 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              <Dna className="w-5 h-5 text-primary-500" />
-              Content DNA
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Define what your AI-generated content is about. You can refine these settings in detail after creation.
-            </p>
-          </div>
-
-          <div className="px-6 py-6 max-w-2xl mx-auto space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Niche Name</label>
-              <input
-                type="text"
-                value={nicheName}
-                onChange={(e) => setNicheName(e.target.value)}
-                placeholder="e.g., Health & Wellness, Personal Finance, Fitness"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-400 mt-1">A short label for your content niche</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
-              <input
-                type="text"
-                value={targetAudience}
-                onChange={(e) => setTargetAudience(e.target.value)}
-                placeholder="e.g., Women 35+ interested in healthy aging and longevity"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-400 mt-1">Who is your content for?</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Content Brief</label>
-              <textarea
-                value={contentBrief}
-                onChange={(e) => setContentBrief(e.target.value)}
-                placeholder={`Describe your content strategy, topics, tone, and style...\n\nExample: Viral short-form content about personal finance for millennials. Topics include: budgeting tips, investing basics, debt payoff strategies, side hustles. Tone: friendly, approachable, no-nonsense. Target: U.S. adults aged 25-40.`}
-                rows={8}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y text-sm"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                This goes directly into every AI prompt. Be as detailed as you want — topics, tone, audience, philosophy.
-              </p>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <Sparkles className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-700">
-                  <p className="font-medium">These are optional during creation</p>
-                  <p className="text-blue-600 mt-1">
-                    You can skip this step and configure your full Content DNA later from the Brands → Content DNA tab,
-                    including content examples, CTAs, hashtags, and AI understanding previews.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ Step 4: Platform Connections ═══ */}
-      {step === 4 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -924,8 +835,8 @@ export function CreateBrandPage() {
         </div>
       )}
 
-      {/* ═══ Step 5: Review ═══ */}
-      {step === 5 && (
+      {/* ═══ Step 4: Review ═══ */}
+      {step === 4 && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
@@ -973,25 +884,6 @@ export function CreateBrandPage() {
                     <p className="text-sm font-medium text-gray-700">{colorName}</p>
                     <p className="text-xs text-gray-500">{primaryColor} / {accentColor}</p>
                   </div>
-                </div>
-              </div>
-
-              {/* Content DNA */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Dna className="w-4 h-4 text-primary-500" />
-                  Content DNA
-                </h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  {nicheName || contentBrief || targetAudience ? (
-                    <div className="space-y-2 text-sm">
-                      {nicheName && <p><span className="font-medium text-gray-700">Niche:</span> <span className="text-gray-600">{nicheName}</span></p>}
-                      {targetAudience && <p><span className="font-medium text-gray-700">Audience:</span> <span className="text-gray-600">{targetAudience}</span></p>}
-                      {contentBrief && <p className="text-gray-600 mt-1 line-clamp-3">{contentBrief}</p>}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Not configured — can be set up later from Content DNA tab</p>
-                  )}
                 </div>
               </div>
 
@@ -1064,7 +956,7 @@ export function CreateBrandPage() {
             Cancel
           </button>
         )}
-        {step < 5 ? (
+        {step < 4 ? (
           <button
             onClick={handleNext}
             disabled={step === 1 && !isStep1Valid}
