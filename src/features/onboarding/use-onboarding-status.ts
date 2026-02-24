@@ -12,7 +12,8 @@ export function useOnboardingStatus() {
   const strength = config ? getConfigStrength(config) : 'basic'
   const hasDNA = strength === 'good' || strength === 'excellent'
 
-  const needsOnboarding = isAuthenticated && (!hasBrand || !hasDNA)
+  // Brand creation is the only gate — DNA steps are freely navigable
+  const needsOnboarding = isAuthenticated && !hasBrand
   const onboardingStep: 1 | 2 = !hasBrand ? 1 : 2
 
   return {

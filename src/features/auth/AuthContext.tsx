@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Sync backend user profile on every sign-in (idempotent)
       if (event === 'SIGNED_IN' && session?.user) {
         const u = session.user
-        apiClient.post('/users', {
+        apiClient.post('/reels/users', {
           user_id: u.id,
           email: u.email ?? '',
           user_name: u.user_metadata?.name ?? '',

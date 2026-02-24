@@ -702,7 +702,7 @@ OUTPUT FORMAT (JSON only):
 }}}}"""
 
     try:
-        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 16000, 120)
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 8192, 120)
 
         if response.status_code != 200:
             logger.error("DeepSeek reel batch returned %s: %s", response.status_code, response.text[:500])

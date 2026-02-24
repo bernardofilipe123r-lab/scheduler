@@ -1,8 +1,10 @@
 /**
  * Onboarding Page — fullscreen wizard for new users.
  * Step 1: Create first brand (Identity + Colors)
- * Step 2: Content DNA (NicheConfigForm, gated by strength ≥ 'good')
- * Step 3: Meta platform credentials
+ * Step 2: General Content DNA
+ * Step 3: Reels Configuration
+ * Step 4: Carousel Posts
+ * Step 5: Connect Platforms (Meta credentials)
  */
 import { useState, useEffect, useMemo } from 'react'
 import {
@@ -31,8 +33,6 @@ import {
   type CreateBrandInput,
   type BrandColors,
 } from '@/features/brands/api/use-brands'
-import { useNicheConfig } from '@/features/brands/api/use-niche-config'
-import { getConfigStrength } from '@/features/brands/types/niche-config'
 import {
   getRandomPresets,
   generateModeColors,
@@ -44,8 +44,10 @@ import vaLogo from '@/assets/icons/va-logo.svg'
 
 const STEP_INFO = [
   { num: 1, label: 'Create your first brand', sub: 'A brand is an account associated with one or more social media platforms. Every user needs at least one.' },
-  { num: 2, label: 'Define your Content DNA', sub: 'Tell the AI what you\'re about. The more detail, the better your content.' },
-  { num: 3, label: 'Connect your platforms', sub: 'Link your Meta accounts so the app can publish content on your behalf.' },
+  { num: 2, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
+  { num: 3, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
+  { num: 4, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
+  { num: 5, label: 'Connect your platforms', sub: 'Link your Meta accounts so the app can publish content on your behalf.' },
 ]
 
 export function OnboardingPage() {
@@ -53,7 +55,6 @@ export function OnboardingPage() {
   const queryClient = useQueryClient()
   const { onboardingStep, hasBrand } = useOnboardingStatus()
   const { data: existingBrands } = useBrands()
-  const { data: nicheConfig } = useNicheConfig()
   const createBrandMutation = useCreateBrand()
   const updateCredentialsMutation = useUpdateBrandCredentials()
 
@@ -88,7 +89,7 @@ export function OnboardingPage() {
     }
   }, [colorPresets]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Step 3 state: Platform Credentials ──
+  // ── Step 5 state: Platform Credentials ──
   const [metaAccessToken, setMetaAccessToken] = useState('')
   const [facebookPageId, setFacebookPageId] = useState('')
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
@@ -183,10 +184,6 @@ export function OnboardingPage() {
     }
   }
 
-  // ── Step 2: DNA completion check ──
-  const strength = nicheConfig ? getConfigStrength(nicheConfig) : 'basic'
-  const canComplete = strength === 'good' || strength === 'excellent'
-
   const handleComplete = async () => {
     setCompleting(true)
     await queryClient.invalidateQueries()
@@ -254,26 +251,29 @@ export function OnboardingPage() {
             </div>
             <div>
               <p className="text-[14px] font-semibold text-gray-900 tracking-tight">Let's get you set up</p>
-              <p className="text-[12px] text-gray-400">Step {step} of 3</p>
+              <p className="text-[12px] text-gray-400">Step {step} of {STEP_INFO.length}</p>
             </div>
           </div>
 
           {/* Progress dots */}
-          <div className="flex items-center gap-2">
-            {[1, 2, 3].map(s => (
-              <div key={s} className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
-                  s < step ? 'bg-green-500 text-white' :
-                  s === step ? 'bg-primary-500 text-white' :
-                  'bg-gray-200 text-gray-400'
-                }`}>
-                  {s < step ? <Check className="w-3.5 h-3.5" /> : s}
+          <div className="flex items-center gap-1.5">
+            {STEP_INFO.map((_, i) => {
+              const s = i + 1
+              return (
+                <div key={s} className="flex items-center gap-1.5">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium transition-all ${
+                    s < step ? 'bg-green-500 text-white' :
+                    s === step ? 'bg-primary-500 text-white' :
+                    'bg-gray-200 text-gray-400'
+                  }`}>
+                    {s < step ? <Check className="w-3 h-3" /> : s}
+                  </div>
+                  {s < STEP_INFO.length && (
+                    <div className={`w-6 h-0.5 rounded-full transition-colors ${s < step ? 'bg-green-500' : 'bg-gray-200'}`} />
+                  )}
                 </div>
-                {s < 3 && (
-                  <div className={`w-10 h-0.5 rounded-full transition-colors ${s < step ? 'bg-green-500' : 'bg-gray-200'}`} />
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </header>
@@ -470,13 +470,13 @@ export function OnboardingPage() {
 
                   {/* Platform connection note */}
                   <p className="text-xs text-gray-400 text-center">
-                    You'll connect your social media platforms in Step 3.
+                    You'll connect your social media platforms in Step 5.
                   </p>
                 </div>
               </motion.div>
             )}
 
-            {/* ═══ Step 2: Content DNA ═══ */}
+            {/* ═══ Step 2: General Content DNA ═══ */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -492,43 +492,54 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-
-                {/* Strength gate banner */}
-                <div className={`mb-6 rounded-xl border p-4 ${
-                  canComplete
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-amber-50 border-amber-200'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className={`text-sm font-medium ${canComplete ? 'text-green-800' : 'text-amber-800'}`}>
-                        Configuration Strength: <span className="uppercase">{strength}</span>
-                      </p>
-                      <p className={`text-xs mt-0.5 ${canComplete ? 'text-green-600' : 'text-amber-600'}`}>
-                        {canComplete
-                          ? 'Your configuration is strong enough to complete setup!'
-                          : 'Fill in more details below to reach "Good" strength and unlock the dashboard.'}
-                      </p>
-                    </div>
-                    <div className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${
-                      strength === 'basic' ? 'bg-red-100 text-red-700' :
-                      strength === 'good' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {strength}
-                    </div>
-                  </div>
-                </div>
-
-                {/* NicheConfigForm — renders its own hooks & UI */}
-                <NicheConfigForm />
+                <NicheConfigForm section="general" />
               </motion.div>
             )}
 
-            {/* ═══ Step 3: Platform Credentials ═══ */}
+            {/* ═══ Step 3: Reels Configuration ═══ */}
             {step === 3 && (
               <motion.div
                 key="step3"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Dna className="w-7 h-7 text-primary-500" />
+                  </div>
+                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
+                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
+                </div>
+                <NicheConfigForm section="reels" />
+              </motion.div>
+            )}
+
+            {/* ═══ Step 4: Carousel Posts ═══ */}
+            {step === 4 && (
+              <motion.div
+                key="step4"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Dna className="w-7 h-7 text-primary-500" />
+                  </div>
+                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
+                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
+                </div>
+                <NicheConfigForm section="posts" />
+              </motion.div>
+            )}
+
+            {/* ═══ Step 5: Platform Credentials ═══ */}
+            {step === 5 && (
+              <motion.div
+                key="step5"
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
@@ -626,7 +637,7 @@ export function OnboardingPage() {
       {/* ── Sticky footer ── */}
       <footer className="flex-shrink-0 z-30 bg-white/80 backdrop-blur-md border-t border-gray-200/60">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          {step > 1 && !hasBrand ? (
+          {step > 1 ? (
             <button
               onClick={() => { setError(null); setStep(step - 1) }}
               className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
@@ -658,19 +669,17 @@ export function OnboardingPage() {
             </button>
           )}
 
-          {step === 2 && (
+          {step >= 2 && step <= 4 && (
             <button
-              onClick={() => setStep(3)}
-              disabled={!canComplete}
-              className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-              title={!canComplete ? 'Keep adding details to reach "Good" strength' : undefined}
+              onClick={() => setStep(step + 1)}
+              className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium"
             >
               Continue
               <ArrowRight className="w-4 h-4" />
             </button>
           )}
 
-          {step === 3 && (
+          {step === 5 && (
             <button
               onClick={handleCompleteWithCredentials}
               disabled={completing || updateCredentialsMutation.isPending}

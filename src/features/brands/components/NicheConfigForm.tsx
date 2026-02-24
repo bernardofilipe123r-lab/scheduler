@@ -81,7 +81,12 @@ function useFontPreload() {
   return loaded
 }
 
-export function NicheConfigForm() {
+export interface NicheConfigFormProps {
+  /** When set, only render this single section (no save bar, no strength meter, no AI block). */
+  section?: 'general' | 'reels' | 'posts'
+}
+
+export function NicheConfigForm({ section }: NicheConfigFormProps = {}) {
   const { data, isLoading } = useNicheConfig()
   const { data: brandsData } = useBrands()
   const updateMutation = useUpdateNicheConfig()
@@ -280,10 +285,15 @@ export function NicheConfigForm() {
 
   if (isLoading) return <NicheConfigSkeleton />
 
+  const showAll = !section
+  const showGeneral = showAll || section === 'general'
+  const showReels = showAll || section === 'reels'
+  const showPosts = showAll || section === 'posts'
+
   return (
     <div className="space-y-4 min-w-0">
-      {/* Sticky Save Bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm">
+      {/* Sticky Save Bar — only in full mode */}
+      {showAll && <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm">
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Dna className="w-5 h-5 text-primary-500" />
@@ -305,19 +315,19 @@ export function NicheConfigForm() {
             Save
           </button>
         </div>
-      </div>
+      </div>}
 
-      {/* Config Strength */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Config Strength — only in full mode */}
+      {showAll && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4">
           <ConfigStrengthMeter config={values} />
         </div>
-      </div>
+      </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 1: GENERAL
          ═══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {showGeneral && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <button type="button" onClick={() => toggleSection('general')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${generalComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
           <div className="text-left flex items-center gap-2">
             <div>
@@ -359,12 +369,12 @@ export function NicheConfigForm() {
           </div>
 
         </div>}
-      </div>
+      </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 2: REELS
          ═══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {showReels && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <button type="button" onClick={() => toggleSection('reels')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${reelsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
           <div className="text-left flex items-center gap-2">
             <div>
@@ -568,12 +578,12 @@ export function NicheConfigForm() {
             </div>
           </div>
         </div>}
-      </div>
+      </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 3: CAROUSEL POSTS
          ═══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {showPosts && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <button type="button" onClick={() => toggleSection('posts')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${postsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
           <div className="text-left flex items-center gap-2">
             <div>
@@ -768,12 +778,12 @@ export function NicheConfigForm() {
             </div>
           </div>
         </div>}
-      </div>
+      </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          BLOCK 4: AI UNDERSTANDING
+          BLOCK 4: AI UNDERSTANDING — only in full mode
          ═══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {showAll && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <button type="button" onClick={() => toggleSection('ai')} className={`w-full px-6 py-4 border-b border-gray-200 cursor-pointer transition-colors ${aiComplete ? 'bg-gradient-to-r from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100' : 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100'}`}>
           <div className="flex items-center justify-between">
             <div className="text-left">
@@ -974,7 +984,7 @@ export function NicheConfigForm() {
           </div>
         )}
         </>}
-      </div>
+      </div>}
     </div>
   )
 }
