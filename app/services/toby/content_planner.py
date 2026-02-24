@@ -30,6 +30,7 @@ class ContentPlan:
     experiment_id: Optional[str] = None
     is_experiment: bool = False
     is_control: bool = False
+    used_fallback: bool = False  # D2: Set when content generation used fallback
 
 
 def create_plans_for_empty_slots(
@@ -103,6 +104,7 @@ def record_content_tag(
         experiment_id=plan.experiment_id,
         is_experiment=plan.is_experiment,
         is_control=plan.is_control,
+        used_fallback=plan.used_fallback,
         created_at=datetime.now(timezone.utc),
     )
     db.add(tag)

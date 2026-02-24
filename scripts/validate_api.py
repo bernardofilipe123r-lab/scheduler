@@ -159,6 +159,8 @@ CRITICAL_MODULES = [
     ("app.services.toby.buffer_manager", "Toby buffer manager"),
     ("app.services.toby.content_planner", "Toby content planner"),
     ("app.services.toby.discovery_manager", "Toby discovery manager"),
+    ("app.services.toby.feature_flags", "Toby feature flags"),
+    ("app.services.toby.strategy_agent", "Toby strategy agent"),
     # ── Utilities ──
     ("app.utils.ffmpeg", "FFmpeg utils"),
     ("app.utils.fonts", "Font utils"),

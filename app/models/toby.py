@@ -209,6 +209,9 @@ class TobyContentTag(Base):
     toby_score = Column(Float, nullable=True)
     scored_at = Column(DateTime(timezone=True), nullable=True)
     score_phase = Column(String(10), nullable=True)  # "48h" | "7d"
+    metrics_unreliable = Column(Boolean, default=False)  # E5: flagged when metrics are likely from API failure
+    human_modified = Column(Boolean, default=False)  # B6: set when user edits Toby-created content
+    used_fallback = Column(Boolean, default=False)   # D2: set when content generation used fallback
 
     created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
 
@@ -228,5 +231,8 @@ class TobyContentTag(Base):
             "toby_score": self.toby_score,
             "scored_at": self.scored_at.isoformat() if self.scored_at else None,
             "score_phase": self.score_phase,
+            "metrics_unreliable": self.metrics_unreliable,
+            "human_modified": self.human_modified,
+            "used_fallback": self.used_fallback,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -2,21 +2,26 @@
 Toby API Routes — all Toby-related endpoints.
 
 Endpoints:
-  GET    /api/toby/status       — Current state, phase, buffer health
-  POST   /api/toby/enable       — Turn Toby on
-  POST   /api/toby/disable      — Turn Toby off
-  POST   /api/toby/reset        — Reset all learnings
-  GET    /api/toby/activity     — Paginated activity log
-  GET    /api/toby/published    — All Toby-published content
-  GET    /api/toby/experiments  — Active and completed experiments
-  GET    /api/toby/insights     — Aggregated insights
-  GET    /api/toby/discovery    — Discovery results
-  GET    /api/toby/buffer       — Buffer status
-  GET    /api/toby/config       — Configuration
-  PATCH  /api/toby/config       — Update configuration
+  GET    /api/toby/status         — Current state, phase, buffer health
+  POST   /api/toby/enable         — Turn Toby on
+  POST   /api/toby/disable        — Turn Toby off
+  POST   /api/toby/reset          — Reset all learnings
+  GET    /api/toby/activity       — Paginated activity log
+  GET    /api/toby/published      — All Toby-published content
+  GET    /api/toby/experiments    — Active and completed experiments
+  GET    /api/toby/insights       — Aggregated insights
+  GET    /api/toby/discovery      — Discovery results
+  GET    /api/toby/buffer         — Buffer status
+  GET    /api/toby/config         — Configuration
+  PATCH  /api/toby/config         — Update configuration
+  GET    /api/toby/feature-flags  — Feature flag states
+  PUT    /api/toby/feature-flags/{flag} — Toggle a feature flag
+  GET    /api/toby/budget         — Budget status
+  PUT    /api/toby/budget         — Set daily budget
 """
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.db_connection import get_db
 from app.api.auth.middleware import get_current_user
@@ -107,11 +112,35 @@ def enable(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Turn Toby on — starts buffer fill and autonomous loop."""
+    """Turn Toby on — starts buffer fill and autonomous loop.
+
+    Performs pre-flight validation and returns structured errors if setup is incomplete.
+    """
     from app.services.toby.state import enable_toby
-    state = enable_toby(db, user["id"])
-    db.commit()
-    return {"status": "enabled", "phase": state.phase}
+    try:
+        state = enable_toby(db, user["id"])
+        db.commit()
+        return {"status": "enabled", "phase": state.phase}
+    except ValueError as e:
+        error_str = str(e)
+        if error_str.startswith("preflight:"):
+            failures = error_str[len("preflight:"):].split(",")
+            guidance_map = {
+                "no_active_brands": "Create at least one active brand before enabling Toby.",
+                "no_instagram_credentials": "Connect Instagram to at least one brand before enabling Toby.",
+                "niche_config_empty": "Add at least one topic category to your Content DNA before enabling Toby.",
+            }
+            guidance = " ".join(guidance_map.get(f, f) for f in failures)
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": "preflight_failed",
+                    "preflight_failures": failures,
+                    "guidance": guidance,
+                },
+            )
+        raise
 
 
 @router.post("/disable")
@@ -314,6 +343,84 @@ def update_config(
         "reel_slots_per_day": state.reel_slots_per_day,
         "post_slots_per_day": state.post_slots_per_day,
     }}
+
+
+# ---------------------------------------------------------------------------
+#  Feature Flags (Section 13.4)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/feature-flags")
+def get_feature_flags(user: dict = Depends(get_current_user)):
+    """Get all Toby feature flags and their current states."""
+    from app.services.toby.feature_flags import get_all_flags
+    return {"flags": get_all_flags()}
+
+
+class FeatureFlagUpdate(BaseModel):
+    enabled: bool
+
+
+@router.put("/feature-flags/{flag_name}")
+def update_feature_flag(
+    flag_name: str,
+    body: FeatureFlagUpdate,
+    user: dict = Depends(get_current_user),
+):
+    """Toggle a Toby feature flag on or off."""
+    from app.services.toby.feature_flags import set_flag, get_all_flags
+
+    if not set_flag(flag_name, body.enabled):
+        raise HTTPException(status_code=404, detail=f"Unknown feature flag: {flag_name}")
+
+    return {"status": "updated", "flags": get_all_flags()}
+
+
+# ---------------------------------------------------------------------------
+#  Budget (Section 13.2)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/budget")
+def get_budget(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get current budget status for Toby."""
+    from app.services.toby.state import get_or_create_state
+    from app.services.toby.feature_flags import is_enabled
+
+    state = get_or_create_state(db, user["id"])
+    return {
+        "enabled": is_enabled("budget_enforcement"),
+        "daily_budget_cents": state.daily_budget_cents,
+        "spent_today_cents": state.spent_today_cents or 0,
+        "budget_reset_at": state.budget_reset_at.isoformat() if state.budget_reset_at else None,
+    }
+
+
+class BudgetUpdate(BaseModel):
+    daily_budget_cents: int | None = Field(None, ge=0, le=100000)
+
+
+@router.put("/budget")
+def update_budget(
+    body: BudgetUpdate,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Set or clear the daily budget for Toby."""
+    from app.services.toby.state import get_or_create_state
+
+    state = get_or_create_state(db, user["id"])
+    state.daily_budget_cents = body.daily_budget_cents
+    state.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {
+        "status": "updated",
+        "daily_budget_cents": state.daily_budget_cents,
+    }
 
 
 # ---------------------------------------------------------------------------

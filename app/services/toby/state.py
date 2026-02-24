@@ -33,7 +33,37 @@ def get_or_create_state(db: Session, user_id: str) -> TobyState:
 
 
 def enable_toby(db: Session, user_id: str) -> TobyState:
-    """Enable Toby for a user. Starts/resumes the autonomous loop."""
+    """Enable Toby for a user. Starts/resumes the autonomous loop.
+
+    Performs pre-flight validation (J1):
+    - At least one active brand exists
+    - At least one brand has instagram_business_account_id
+    - NicheConfig has at least 1 topic category
+    """
+    from app.models.brands import Brand
+    from app.models.niche_config import NicheConfig
+
+    # Pre-flight validation
+    preflight_failures = []
+
+    brands = db.query(Brand).filter(
+        Brand.user_id == user_id, Brand.active == True
+    ).all()
+    if not brands:
+        preflight_failures.append("no_active_brands")
+
+    if brands and not any(b.instagram_business_account_id for b in brands):
+        preflight_failures.append("no_instagram_credentials")
+
+    configs = db.query(NicheConfig).filter(NicheConfig.user_id == user_id).all()
+    if not configs or not any(
+        c.topic_categories and len(c.topic_categories) > 0 for c in configs
+    ):
+        preflight_failures.append("niche_config_empty")
+
+    if preflight_failures:
+        raise ValueError(f"preflight:{','.join(preflight_failures)}")
+
     state = get_or_create_state(db, user_id)
     now = datetime.now(timezone.utc)
     state.enabled = True

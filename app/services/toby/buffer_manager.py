@@ -5,12 +5,19 @@ Buffer Health States:
   HEALTHY  — All slots for next 48h are filled
   LOW      — 1-3 slots in next 48h are empty
   CRITICAL — 4+ slots empty, or less than 24h of content remaining
+
+Features:
+  - B4: Fuzzy ±15min slot matching (avoids overwrites from minor time diffs)
+  - B5: Respects created_by flag to avoid overwriting user-created content
 """
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyActivityLog
 from app.models.scheduling import ScheduledReel
 from app.models.brands import Brand
+
+# B4: Fuzzy match window for slot detection
+SLOT_FUZZY_MINUTES = 15
 
 
 def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
@@ -57,12 +64,29 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         .all()
     )
 
-    # Build slot map: a set of (brand_id, scheduled_time) that are filled
+    # Build slot map: B4 fuzzy matching ±15 minutes
     filled_set = set()
     for s in scheduled:
         ed = s.extra_data or {}
         brand_id = ed.get("brand", "")
+        # Store the actual minute-rounded time for exact matching
         filled_set.add((brand_id, s.scheduled_time.strftime("%Y-%m-%d %H:%M")))
+
+    def _slot_is_filled(brand_id: str, slot_time: datetime) -> bool:
+        """B4: Check if a slot is filled using fuzzy ±15min matching."""
+        key = (brand_id, slot_time.strftime("%Y-%m-%d %H:%M"))
+        if key in filled_set:
+            return True
+        # Fuzzy check: look for any scheduled item within ±SLOT_FUZZY_MINUTES
+        for s in scheduled:
+            ed = s.extra_data or {}
+            s_brand = ed.get("brand", "")
+            if s_brand != brand_id:
+                continue
+            diff = abs((s.scheduled_time - slot_time).total_seconds())
+            if diff <= SLOT_FUZZY_MINUTES * 60:
+                return True
+        return False
 
     # Slot definitions — must match frontend (Home.tsx) and scheduler (scheduler.py)
     BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]   # 6 reels/day, 4h apart
@@ -83,12 +107,11 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                 slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
                 if slot_time <= now:
                     continue
-                key = (brand.id, slot_time.strftime("%Y-%m-%d %H:%M"))
                 all_slots.append({
                     "brand_id": brand.id,
                     "time": slot_time.isoformat(),
                     "content_type": "reel",
-                    "filled": key in filled_set,
+                    "filled": _slot_is_filled(brand.id, slot_time),
                 })
 
             # Post slots: base hours + brand offset
@@ -97,12 +120,11 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                 slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
                 if slot_time <= now:
                     continue
-                key = (brand.id, slot_time.strftime("%Y-%m-%d %H:%M"))
                 all_slots.append({
                     "brand_id": brand.id,
                     "time": slot_time.isoformat(),
                     "content_type": "post",
-                    "filled": key in filled_set,
+                    "filled": _slot_is_filled(brand.id, slot_time),
                 })
 
     total = len(all_slots)

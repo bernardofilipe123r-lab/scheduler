@@ -22,6 +22,10 @@ BUFFER_CHECK_INTERVAL = 5
 METRICS_CHECK_INTERVAL = 360     # 6 hours
 ANALYSIS_CHECK_INTERVAL = 360    # 6 hours
 
+# D1: Error log debouncing — suppress repeated error logs for the same action
+_error_log_timestamps: dict[str, datetime] = {}
+ERROR_LOG_DEBOUNCE_MINUTES = 30
+
 
 def toby_tick():
     """
@@ -43,18 +47,9 @@ def toby_tick():
                 db.rollback()
                 print(f"[TOBY] Error processing user {state.user_id}: {e}", flush=True)
                 traceback.print_exc()
-                # Log error but continue with other users
-                try:
-                    db.add(TobyActivityLog(
-                        user_id=state.user_id,
-                        action_type="error",
-                        description=f"Toby tick error: {str(e)[:500]}",
-                        level="error",
-                        created_at=datetime.now(timezone.utc),
-                    ))
-                    db.commit()
-                except Exception:
-                    db.rollback()
+                # D1: Debounced error logging
+                _log_debounced(db, state.user_id, "error",
+                               f"Toby tick error: {str(e)[:500]}", level="error")
     except Exception as e:
         print(f"[TOBY] Critical orchestrator error: {e}", flush=True)
         traceback.print_exc()
@@ -82,6 +77,20 @@ def _process_user(db: Session, state: TobyState):
     # 3. ANALYSIS CHECK
     if _should_check(state.last_analysis_at, ANALYSIS_CHECK_INTERVAL):
         _run_analysis_check(db, user_id, state)
+
+        # E6: Check for stalled experiments and force-complete them
+        from app.services.toby.learning_engine import check_experiment_timeouts
+        timed_out = check_experiment_timeouts(db, user_id)
+        if timed_out > 0:
+            print(f"[TOBY] Force-completed {timed_out} stalled experiments for {user_id}", flush=True)
+
+        # 9.2: Drift detection (weekly, using analysis interval)
+        from app.services.toby.analysis_engine import detect_drift
+        drift_result = detect_drift(db, user_id)
+        if drift_result.get("ratio_change") is not None:
+            state.explore_ratio = drift_result["ratio_change"]
+            print(f"[TOBY] Drift detected for {user_id}: adjusting explore_ratio to {drift_result['ratio_change']}", flush=True)
+
         state.last_analysis_at = now
         state.updated_at = now
 
@@ -130,6 +139,21 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
     from app.services.toby.buffer_manager import get_buffer_status
     from app.services.toby.content_planner import create_plans_for_empty_slots
 
+    # A4/A6: Verify at least one brand has valid credentials before generating
+    from app.models.brands import Brand
+    brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
+    valid_brands = [
+        b for b in brands
+        if (b.meta_access_token or b.instagram_access_token)
+        and b.instagram_business_account_id
+    ]
+    if not valid_brands:
+        return  # No brands with credentials — skip buffer fill to avoid wasting resources
+
+    # Section 13.2: Budget enforcement — skip if daily budget exhausted
+    if _check_budget_exceeded(state):
+        return
+
     status = get_buffer_status(db, user_id, state)
     if status["health"] == "healthy":
         return
@@ -144,6 +168,7 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
         try:
             _execute_content_plan(db, plan)
             generated += 1
+            _increment_budget(state)  # Section 13.2
         except Exception as e:
             print(f"[TOBY] Content generation failed for {plan.brand_id}: {e}", flush=True)
             db.add(TobyActivityLog(
@@ -163,6 +188,23 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
             action_metadata={"count": generated, "buffer_health": status["health"]},
             created_at=datetime.now(timezone.utc),
         ))
+
+    # B8/B9/C4: Auto-retry any Toby-created posts that failed due to transient errors
+    try:
+        from app.services.publishing.scheduler import DatabaseSchedulerService
+        sched_svc = DatabaseSchedulerService()
+        retried = sched_svc.auto_retry_failed_toby_posts(user_id)
+        if retried > 0:
+            db.add(TobyActivityLog(
+                user_id=user_id,
+                action_type="auto_retry",
+                description=f"Auto-retried {retried} failed posts with transient errors",
+                level="info",
+                action_metadata={"retried": retried},
+                created_at=datetime.now(timezone.utc),
+            ))
+    except Exception as e:
+        print(f"[TOBY] Auto-retry check error: {e}", flush=True)
 
 
 def _execute_content_plan(db: Session, plan):
@@ -206,10 +248,15 @@ def _execute_content_plan(db: Session, plan):
             topic_hint=plan.topic_bucket,
             ctx=ctx,
         )
-        result = results[0] if results else generator._fallback_post_title()
+        result = results[0] if results else None
 
+    # D2: Detect fallback content and tag it
     if not result or not result.get("title"):
-        raise ValueError("Content generation returned empty result")
+        if plan.content_type == "post":
+            result = generator._fallback_post_title()
+        if not result or not result.get("title"):
+            raise ValueError("Content generation returned empty result")
+        plan.used_fallback = True
 
     # ── Step 3: Determine variant from slot pattern ──────────
     if plan.content_type == "reel":
@@ -264,12 +311,14 @@ def _execute_content_plan(db: Session, plan):
         if not media_result.get("success"):
             error = media_result.get("error", "Unknown media generation error")
             job_manager.update_job_status(job_id, "failed", error_message=error)
+            _cleanup_supabase_on_failure(job_id, plan.brand_id)  # D4
             raise ValueError(f"Media generation failed: {error}")
     except Exception:
         # Ensure job is marked failed on any exception
         job = job_manager.get_job(job_id)
         if job and job.status != "failed":
             job_manager.update_job_status(job_id, "failed", error_message="Media pipeline exception")
+        _cleanup_supabase_on_failure(job_id, plan.brand_id)  # D4
         raise
 
     # ── Step 6: Read completed brand_outputs ─────────────────
@@ -419,12 +468,15 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
 
     if scored_7d > 0:
         # Update strategy scores from final (7d) scores
+        # E5: Exclude posts flagged as metrics_unreliable
         tags = (
             db.query(TobyContentTag)
             .filter(
                 TobyContentTag.user_id == user_id,
                 TobyContentTag.score_phase == "7d",
                 TobyContentTag.toby_score.isnot(None),
+                TobyContentTag.metrics_unreliable != True,
+                TobyContentTag.human_modified != True,
             )
             .order_by(TobyContentTag.scored_at.desc())
             .limit(scored_7d)
@@ -461,5 +513,86 @@ def start_toby_scheduler(scheduler):
         minutes=5,
         id='toby_orchestrator',
         replace_existing=True,
+        max_instances=1,  # F1: Prevent concurrent tick execution
     )
     print("🤖 Toby orchestrator registered (5-minute ticks)", flush=True)
+
+
+def _log_debounced(db: Session, user_id: str, action_type: str,
+                   description: str, level: str = "error"):
+    """D1: Log an error only if it hasn't been logged recently for this action."""
+    key = f"{user_id}:{action_type}"
+    now = datetime.now(timezone.utc)
+    last = _error_log_timestamps.get(key)
+
+    if last and (now - last).total_seconds() < ERROR_LOG_DEBOUNCE_MINUTES * 60:
+        return  # Suppressed — already logged recently
+
+    _error_log_timestamps[key] = now
+    try:
+        db.add(TobyActivityLog(
+            user_id=user_id,
+            action_type=action_type,
+            description=description,
+            level=level,
+            created_at=now,
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def _cleanup_supabase_on_failure(job_id: str, brand_id: str):
+    """D4: Clean up orphaned Supabase storage files when media generation fails."""
+    try:
+        from app.services.storage.supabase_storage import get_supabase_storage
+        storage = get_supabase_storage()
+        # Clean up any files uploaded for this job
+        prefix = f"reels/{brand_id}/{job_id}"
+        storage.delete_folder(prefix)
+        print(f"[TOBY] Cleaned up Supabase files for failed job {job_id}", flush=True)
+    except Exception as e:
+        print(f"[TOBY] Supabase cleanup warning (non-fatal): {e}", flush=True)
+
+
+def _check_budget_exceeded(state: TobyState) -> bool:
+    """Section 13.2: Check if daily budget is exceeded.
+
+    Returns True if generation should be skipped.
+    """
+    from app.services.toby.feature_flags import is_enabled
+    if not is_enabled("budget_enforcement"):
+        return False
+
+    if not state.daily_budget_cents or state.daily_budget_cents <= 0:
+        return False  # No budget set — unlimited
+
+    # Reset budget counter if it's a new day
+    now = datetime.now(timezone.utc)
+    if state.budget_reset_at:
+        reset_at = state.budget_reset_at
+        if reset_at.tzinfo is None:
+            reset_at = reset_at.replace(tzinfo=timezone.utc)
+        if now.date() > reset_at.date():
+            state.spent_today_cents = 0
+            state.budget_reset_at = now
+
+    spent = state.spent_today_cents or 0
+    if spent >= state.daily_budget_cents:
+        return True
+
+    return False
+
+
+def _increment_budget(state: TobyState, cost_cents: int = 5):
+    """Section 13.2: Increment daily spend counter after content generation.
+
+    Default cost: 5 cents per generation (approximate DeepSeek + image API cost).
+    """
+    from app.services.toby.feature_flags import is_enabled
+    if not is_enabled("budget_enforcement"):
+        return
+
+    state.spent_today_cents = (state.spent_today_cents or 0) + cost_cents
+    if not state.budget_reset_at:
+        state.budget_reset_at = datetime.now(timezone.utc)

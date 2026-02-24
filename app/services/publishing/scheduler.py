@@ -372,7 +372,10 @@ class DatabaseSchedulerService:
         """
         Reset any posts stuck in 'publishing' status for too long.
         This handles cases where the server crashed during publishing.
-        
+
+        B7 fix: Check if IG API already completed (post_ids exist) before
+        resetting — avoids duplicate Instagram posts on crash recovery.
+
         Args:
             max_age_minutes: Max minutes a post can be in 'publishing' before reset
             
@@ -394,13 +397,37 @@ class DatabaseSchedulerService:
             
             count = 0
             for reel in stuck:
-                reel.status = "scheduled"  # Reset to allow retry
-                reel.publish_error = f"Reset after being stuck in publishing for >{max_age_minutes} minutes"
+                extra = reel.extra_data or {}
+                post_ids = extra.get("post_ids", {})
+
+                if post_ids.get("instagram"):
+                    # B7: IG API call completed — mark as published, not scheduled
+                    reel.status = "published"
+                    reel.published_at = reel.published_at or datetime.now(timezone.utc)
+                    reel.publish_error = f"Recovered after crash — IG post already live (id: {post_ids['instagram']})"
+                    print(f"⚠️ Post {reel.schedule_id} already published to IG — marking as published", flush=True)
+                else:
+                    # No post_ids — safe to retry
+                    reset_count = extra.get("reset_count", 0) + 1
+                    extra["reset_count"] = reset_count
+                    reel.extra_data = extra
+
+                    if reset_count >= 3:
+                        # Escalate to failed after 3 resets
+                        reel.status = "failed"
+                        reel.publish_error = f"Failed after {reset_count} reset attempts"
+                        print(f"❌ Post {reel.schedule_id} failed after {reset_count} reset attempts", flush=True)
+                    else:
+                        reel.status = "scheduled"
+                        reel.publish_error = f"Reset #{reset_count} after stuck in publishing >{max_age_minutes} min"
+
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(reel, "extra_data")
                 count += 1
             
             if count > 0:
                 db.commit()
-                print(f"⚠️ Reset {count} stuck publishing post(s)")
+                print(f"⚠️ Processed {count} stuck publishing post(s)")
             
             return count
     
@@ -519,6 +546,72 @@ class DatabaseSchedulerService:
             db.commit()
             print(f"📅 Rescheduled post {schedule_id} to {new_time.isoformat()}")
             return True
+
+    def auto_retry_failed_toby_posts(self, user_id: str, max_age_hours: int = 24) -> int:
+        """
+        B8/B9/C4: Auto-retry Toby-created posts that failed due to transient errors.
+
+        Only retries posts created by Toby within the last max_age_hours,
+        and only if they haven't been retried too many times.
+
+        Returns number of posts queued for retry.
+        """
+        TRANSIENT_KEYWORDS = ["timeout", "rate limit", "429", "500", "502", "503",
+                              "connection", "temporarily", "unavailable"]
+        MAX_AUTO_RETRIES = 3
+
+        with get_db_session() as db:
+            from datetime import timedelta
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+
+            failed = db.query(ScheduledReel).filter(
+                ScheduledReel.user_id == user_id,
+                ScheduledReel.status.in_(["failed", "partial"]),
+                ScheduledReel.scheduled_time >= cutoff,
+            ).all()
+
+            retried = 0
+            for reel in failed:
+                extra = reel.extra_data or {}
+                # Only retry Toby-created content
+                if extra.get("created_by") != "toby" and not hasattr(reel, 'created_by'):
+                    continue
+                if hasattr(reel, 'created_by') and reel.created_by != "toby":
+                    continue
+
+                # Check retry count
+                auto_retries = extra.get("auto_retry_count", 0)
+                if auto_retries >= MAX_AUTO_RETRIES:
+                    continue
+
+                # Check if error is transient
+                error = (reel.publish_error or "").lower()
+                is_transient = any(kw in error for kw in TRANSIENT_KEYWORDS)
+
+                # For partial failures, always retry
+                if reel.status == "partial":
+                    is_transient = True
+
+                if not is_transient:
+                    continue
+
+                # Increment auto_retry_count and queue for retry
+                extra["auto_retry_count"] = auto_retries + 1
+                reel.extra_data = extra
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(reel, "extra_data")
+
+                reel.status = "scheduled"
+                reel.publish_error = None
+                reel.scheduled_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+                retried += 1
+
+                print(f"[TOBY] Auto-retry #{auto_retries + 1} for {reel.schedule_id}", flush=True)
+
+            if retried > 0:
+                db.commit()
+
+            return retried
     
     def publish_scheduled_now(self, schedule_id: str) -> bool:
         """

@@ -32,6 +32,10 @@ METRIC_WINDOWS = {
     "7d":  timedelta(days=7),
 }
 
+# ── Rate limit backoff ──
+RATE_LIMIT_BACKOFF_SECONDS = 60
+MAX_RATE_LIMIT_RETRIES = 3
+
 
 def _log(action: str, detail: str = "", emoji: str = "🤖", level: str = "detail"):
     """Log metrics activity."""
@@ -49,6 +53,8 @@ class MetricsCollector:
 
     def __init__(self):
         self._brand_tokens: Dict[str, Dict] = {}
+        self._last_credential_refresh: Optional[datetime] = None
+        self._rate_limited_until: Optional[datetime] = None
         self._load_brand_credentials()
         print(f"✅ MetricsCollector initialized ({len(self._brand_tokens)} brands)", flush=True)
 
@@ -60,6 +66,7 @@ class MetricsCollector:
         """Load IG access tokens per brand from the database brands table."""
         from app.services.brands.resolver import brand_resolver
 
+        self._brand_tokens.clear()
         for brand_id in brand_resolver.get_all_brand_ids():
             brand = brand_resolver.get_brand(brand_id)
             if not brand:
@@ -71,6 +78,45 @@ class MetricsCollector:
                     "token": token,
                     "account_id": account_id,
                 }
+        self._last_credential_refresh = datetime.utcnow()
+
+    def refresh_credentials(self):
+        """C1 fix: Refresh credentials from DB. Called before each collection."""
+        self._load_brand_credentials()
+        _log("Credentials", f"Refreshed: {len(self._brand_tokens)} brands with valid tokens", "🔑")
+
+    def _check_token_validity(self, brand: str) -> Optional[str]:
+        """C1: Check if a brand's token appears expired and emit a warning."""
+        token = self._get_token_for_brand(brand)
+        if not token:
+            _log("Token Missing", f"No access token for brand {brand} — token may have expired", "⚠️")
+            return None
+        return token
+
+    def _is_rate_limited(self) -> bool:
+        """C2: Check if we're in a rate limit backoff window."""
+        if self._rate_limited_until and datetime.utcnow() < self._rate_limited_until:
+            return True
+        return False
+
+    def _handle_rate_limit(self, response: requests.Response) -> bool:
+        """C2: Detect 429 responses and set backoff window. Returns True if rate limited."""
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", RATE_LIMIT_BACKOFF_SECONDS))
+            self._rate_limited_until = datetime.utcnow() + timedelta(seconds=retry_after)
+            _log("Rate Limited", f"429 received — backing off for {retry_after}s", "🚫")
+            return True
+        # Meta Graph API also returns error code 4 for rate limits
+        if response.status_code == 400:
+            try:
+                err = response.json().get("error", {})
+                if err.get("code") == 4:  # Application-level rate limit
+                    self._rate_limited_until = datetime.utcnow() + timedelta(seconds=RATE_LIMIT_BACKOFF_SECONDS)
+                    _log("Rate Limited", f"Meta API code 4 — backing off {RATE_LIMIT_BACKOFF_SECONDS}s", "🚫")
+                    return True
+            except Exception:
+                pass
+        return False
 
     def _get_token_for_brand(self, brand: str) -> Optional[str]:
         creds = self._brand_tokens.get(brand) or self._brand_tokens.get("default")
@@ -95,6 +141,11 @@ class MetricsCollector:
             "saves": 0, "shares": 0, "reach": 0,
         }
 
+        # C2: Respect rate limit backoff
+        if self._is_rate_limited():
+            _log("Rate Limited", f"Skipping {ig_media_id} — in backoff window", "🚫", "api")
+            return None
+
         try:
             # 1. Basic fields (likes, comments)
             basic_url = f"{self.BASE_URL}/{ig_media_id}"
@@ -109,6 +160,8 @@ class MetricsCollector:
                 metrics["likes"] = data.get("like_count", 0)
                 metrics["comments"] = data.get("comments_count", 0)
                 _log("API Response: Media", f"HTTP 200 — {metrics['likes']} likes, {metrics['comments']} comments", "✅", "api")
+            elif self._handle_rate_limit(basic_resp):
+                return None
             else:
                 _log("API Error: Media", f"HTTP {basic_resp.status_code} for media {ig_media_id}", "❌", "api")
                 return None
@@ -242,9 +295,9 @@ class MetricsCollector:
         from app.db_connection import SessionLocal
         from app.models import ScheduledReel
 
-        token = self._get_token_for_brand(brand)
+        token = self._check_token_validity(brand)
         if not token:
-            return {"error": f"No access token for brand {brand}", "updated": 0}
+            return {"error": f"No access token for brand {brand} — may be expired", "updated": 0, "token_expired": True}
 
         db = SessionLocal()
         try:
@@ -377,6 +430,9 @@ class MetricsCollector:
 
     def collect_all_brands(self, days_back: int = 14) -> List[Dict]:
         """Collect metrics for all brands."""
+        # C1: Refresh credentials from DB before each collection run
+        self.refresh_credentials()
+
         _log("Metrics collection", f"Starting metrics collection for {len(self._brand_tokens) - (1 if 'default' in self._brand_tokens else 0)} brands", "📊", "detail")
 
         results = []

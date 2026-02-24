@@ -943,6 +943,21 @@ async def update_brand_content(job_id: str, brand: str, request: BrandContentUpd
             if updates:
                 manager.update_brand_output(job_id, brand, updates)
 
+                # B6: Mark Toby-created content as human_modified
+                if job.created_by == "toby":
+                    from app.models.toby import TobyContentTag
+                    # Find any content tags linked to schedules from this job
+                    from app.models.scheduling import ScheduledReel
+                    scheds = db.query(ScheduledReel).filter(
+                        ScheduledReel.extra_data["job_id"].astext == job_id,
+                    ).all()
+                    for sched in scheds:
+                        tag = db.query(TobyContentTag).filter(
+                            TobyContentTag.schedule_id == sched.schedule_id,
+                        ).first()
+                        if tag:
+                            tag.human_modified = True
+
             return {
                 "success": True,
                 "job_id": job_id,
