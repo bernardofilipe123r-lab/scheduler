@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '../layout'
 import { useAuth } from '@/features/auth'
+import { useOnboardingStatus } from '@/features/onboarding/use-onboarding-status'
 import { LoginPage } from '@/pages/Login'
+import { OnboardingPage } from '@/pages/Onboarding'
 import { ProfilePage } from '@/pages/Profile'
 import { HomePage } from '@/pages/Home'
 import { GeneratorPage } from '@/pages/Generator'
@@ -67,12 +69,30 @@ function SuperAdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const { needsOnboarding, isLoading } = useOnboardingStatus()
+  if (isLoading) return <AppLoader />
+  if (needsOnboarding) return <Navigate to="/onboarding" replace />
+  return <>{children}</>
+}
+
+function OnboardingPageGuard() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { needsOnboarding, isLoading: onboardingLoading } = useOnboardingStatus()
+
+  if (authLoading || onboardingLoading) return <AppLoader />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (!needsOnboarding) return <Navigate to="/" replace />
+  return <OnboardingPage />
+}
+
 export function AppRoutes() {
   return (
     <>
       <Routes>
         <Route path="/login" element={<LoginGuard />} />
-        <Route path="/" element={<AuthGuard><AppLayout /></AuthGuard>}>
+        <Route path="/onboarding" element={<OnboardingPageGuard />} />
+        <Route path="/" element={<AuthGuard><OnboardingGuard><AppLayout /></OnboardingGuard></AuthGuard>}>
         <Route index element={<HomePage />} />
         <Route path="reels" element={<GeneratorPage />} />
         <Route path="jobs" element={<HistoryPage />} />

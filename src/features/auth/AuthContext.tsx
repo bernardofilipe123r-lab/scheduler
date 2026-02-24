@@ -3,6 +3,7 @@
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '@/shared/api/supabase'
+import { apiClient } from '@/shared/api/client'
 import type { User } from '@supabase/supabase-js'
 import type { AuthUser } from './api/auth-api'
 
@@ -11,6 +12,7 @@ interface AuthContextType {
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, name: string) => Promise<{ needsEmailConfirmation: boolean }>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
@@ -65,9 +67,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(mapUser(session?.user ?? null))
       setIsLoading(false)
+
+      // Sync backend user profile on every sign-in (idempotent)
+      if (event === 'SIGNED_IN' && session?.user) {
+        const u = session.user
+        apiClient.post('/users', {
+          user_id: u.id,
+          email: u.email ?? '',
+          user_name: u.user_metadata?.name ?? '',
+        }).catch(() => {})
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -76,6 +88,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error(error.message)
+  }
+
+  const register = async (email: string, password: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
+        emailRedirectTo: window.location.origin,
+      },
+    })
+    if (error) throw new Error(error.message)
+    // If session is null, email confirmation is required
+    return { needsEmailConfirmation: !data.session }
   }
 
   const logout = async () => {
@@ -89,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

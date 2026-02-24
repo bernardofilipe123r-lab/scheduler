@@ -57,6 +57,19 @@ export async function loginApi(email: string, password: string) {
   }
 }
 
+export async function registerApi(email: string, password: string, name: string) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { name },
+      emailRedirectTo: window.location.origin,
+    },
+  })
+  if (error) throw new Error(error.message)
+  return data
+}
+
 export async function logoutApi() {
   const { error } = await supabase.auth.signOut()
   if (error) throw new Error(error.message)
