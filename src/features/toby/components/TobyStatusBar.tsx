@@ -1,4 +1,4 @@
-import { Power, Loader2, Bot, Shield, Zap, Sparkles } from 'lucide-react'
+import { Play, Power, Loader2, Bot, Shield, Zap, Sparkles } from 'lucide-react'
 import { useTobyStatus, useTobyEnable, useTobyDisable } from '../hooks'
 import type { TobyPhase } from '../types'
 
@@ -127,11 +127,11 @@ export function TobyStatusBar() {
           disabled={toggling}
           className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             status.enabled
-              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-red-600 text-white hover:bg-red-700'
               : 'bg-emerald-600 text-white hover:bg-emerald-700'
           } disabled:opacity-50`}
         >
-          {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+          {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : status.enabled ? <Power className="w-4 h-4" /> : <Play className="w-4 h-4" />}
           {status.enabled ? 'Disable' : 'Enable'}
         </button>
       </div>

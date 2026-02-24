@@ -4,7 +4,7 @@ import {
   ShieldCheck, Users, Search, RefreshCw, AlertCircle,
   Ban, UserCheck, Shield,
   Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2, ExternalLink,
-  Bot, Power, Loader2, Zap, Sparkles, Activity,
+  Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -584,11 +584,11 @@ function UserDetail({
                         className={clsx(
                           'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50',
                           ts.enabled
-                            ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            ? 'bg-red-600 text-white hover:bg-red-700'
                             : 'bg-emerald-600 text-white hover:bg-emerald-700',
                         )}
                       >
-                        {tobyToggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
+                        {tobyToggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : ts.enabled ? <Power className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                         {ts.enabled ? 'Disable' : 'Enable'}
                       </button>
                     </div>
