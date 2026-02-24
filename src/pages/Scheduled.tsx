@@ -261,6 +261,11 @@ export function ScheduledPage() {
     const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     let dayPosts = postsByDate[dateKey] || []
     
+    // Apply brand filter
+    if (brandFilter) {
+      dayPosts = dayPosts.filter(post => post.brand === brandFilter)
+    }
+
     // Apply platform filter
     if (platformFilter !== 'all') {
       dayPosts = dayPosts.filter(post => {
