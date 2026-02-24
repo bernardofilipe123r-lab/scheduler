@@ -60,9 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(mapUser(session?.user ?? null))
+    // Validate session server-side (catches deleted users whose JWT is still cached)
+    supabase.auth.getUser().then(({ data: { user: validatedUser }, error }) => {
+      if (error || !validatedUser) {
+        // Session is stale or user was deleted — clear local state
+        supabase.auth.signOut().catch(() => {})
+        setUser(null)
+      } else {
+        setUser(mapUser(validatedUser))
+      }
       setIsLoading(false)
     })
 

@@ -47,6 +47,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       // Ignore JSON parse errors
     }
+    // If the server says 401, the session is invalid — force sign-out
+    if (response.status === 401) {
+      supabase.auth.signOut().catch(() => {})
+    }
     throw error
   }
   return response.json()
