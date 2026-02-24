@@ -590,13 +590,19 @@ class AIBackgroundGenerator:
     # POST BACKGROUND (unaffected by the 3-layer reel pipeline)
     # ================================================================
 
-    def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, model_override: str = None, ctx=None) -> Image.Image:
+    def generate_post_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, model_override: str = None, ctx=None, content_context: str = None) -> Image.Image:
         """
         Generate a HIGH QUALITY AI background for carousel posts.
 
-        Posts get their image prompts from DeepSeek during content generation
-        (via ContentGenerator.generate_post_titles_batch), so this method
-        receives the prompt directly — NO Layer 2 call needed.
+        Uses the same Layer 2 (DeepSeek prompt engineering) pipeline as reels
+        to produce content-driven, object-based image prompts.
+
+        Args:
+            brand_name: Brand name
+            user_prompt: Explicit user-typed prompt (bypasses Layer 2)
+            content_context: Title + slide texts for Layer 2 prompt engineering
+            model_override: Force a specific deAPI model
+            ctx: Optional PromptContext
 
         Uses 1080x1350 post dimensions.
         """
@@ -610,7 +616,14 @@ class AIBackgroundGenerator:
         _ctx = ctx if ctx is not None else _PC()
 
         if user_prompt:
+            # Explicit user-typed prompt — use directly
             prompt = user_prompt
+        elif content_context:
+            # Content-driven: run through Layer 2 (DeepSeek prompt engineering)
+            if progress_callback:
+                progress_callback("Generating image prompt via DeepSeek...", 15)
+            content_data = self._extract_content(content_context, _ctx, brand_name)
+            prompt = self._generate_prompt_via_deepseek(content_data)
         elif _ctx.image_style_description:
             prompt = f"{_ctx.image_style_description}. Premium close-up photography style."
         else:
@@ -618,7 +631,16 @@ class AIBackgroundGenerator:
                 "Soft cinematic premium still-life with elegant contemporary objects "
                 "on a clean surface in soft studio light."
             )
+
+        # Ensure no-text instruction
+        no_text_tag = "no text, no letters, no numbers, no words, no symbols, no logos, no watermarks"
+        if no_text_tag not in prompt.lower():
+            prompt = f"{prompt} Absolutely {no_text_tag}."
+
         prompt = f"{prompt} {POST_QUALITY_SUFFIX}"
+
+        # Store the final prompt so callers can read it back
+        self.last_deapi_prompt = prompt
 
         print(f"\n{'='*80}")
         print(f"🎨 POST BACKGROUND GENERATION (HQ)")

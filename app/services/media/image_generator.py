@@ -120,9 +120,12 @@ class ImageGenerator:
         print(f"   📝 Content context: {content_context[:100] if content_context else 'None'}...", flush=True)
         
         ai_generator = AIBackgroundGenerator()
+        # Never pass ai_prompt as user_prompt — always let Layer 2 (DeepSeek)
+        # engineer the image prompt from content context. This produces
+        # content-driven, object-based prompts instead of generic stock-photo ones.
         self._ai_background = ai_generator.generate_background(
             self.brand_name, 
-            self.ai_prompt,
+            user_prompt=None,
             content_context=content_context,
             model_override=self.image_model,
             ctx=self.ctx
@@ -178,9 +181,10 @@ class ImageGenerator:
             # Generate new AI background for YouTube
             print(f"      🎨 Generating AI background for YouTube thumbnail...", flush=True)
             ai_generator = AIBackgroundGenerator()
+            # Always let Layer 2 engineer the prompt from content context
             image = ai_generator.generate_background(
                 self.brand_name, 
-                self.ai_prompt,
+                user_prompt=None,
                 content_context=content_context,
                 model_override=self.image_model,
                 ctx=self.ctx

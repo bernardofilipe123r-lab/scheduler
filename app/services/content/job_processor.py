@@ -418,7 +418,6 @@ class JobProcessor:
 
         # Get per-brand content from brand_outputs
         brand_data = (job.brand_outputs or {}).get(brand, {})
-        brand_ai_prompt = brand_data.get("ai_prompt") or job.ai_prompt or job.title
 
         self._manager.update_brand_output(job_id, brand, {
             "status": "generating",
@@ -437,10 +436,13 @@ class JobProcessor:
             from app.services.content.niche_config_service import NicheConfigService
             ctx = NicheConfigService().get_context(brand_id=brand, user_id=user_id)
 
-            # Generate AI background using per-brand prompt
-            ai_prompt = brand_ai_prompt
+            # Build content context from title + slide_texts for Layer 2
+            brand_title = brand_data.get("title", "") or job.title or ""
+            brand_slides = brand_data.get("slide_texts", []) or job.content_lines or []
+            content_context = " | ".join([brand_title] + brand_slides[:4]) if brand_title else None
+
             generator = AIBackgroundGenerator()
-            print(f"   Prompt: {ai_prompt[:80]}...", flush=True)
+            print(f"   Content context: {content_context[:100] if content_context else 'None'}...", flush=True)
 
             self._manager.update_brand_output(job_id, brand, {
                 "status": "generating",
@@ -450,7 +452,7 @@ class JobProcessor:
 
             image = generator.generate_post_background(
                 brand_name=brand,
-                user_prompt=ai_prompt,
+                content_context=content_context,
                 model_override=getattr(job, 'image_model', None),
                 ctx=ctx,
             )
@@ -461,6 +463,14 @@ class JobProcessor:
             bg_path = Path(tmp_bg.name)
             image.save(str(bg_path), format="PNG")
             print(f"   ✓ Background saved to temp: {bg_path}", flush=True)
+
+            # Store the actual deAPI prompt so the UI shows what was really sent
+            actual_prompt = getattr(generator, 'last_deapi_prompt', None)
+            if actual_prompt:
+                self._manager.update_brand_output(job_id, brand, {
+                    "ai_prompt": actual_prompt,
+                })
+                print(f"   ✓ Updated ai_prompt with actual deAPI prompt", flush=True)
 
             # Upload to Supabase - CRITICAL: must succeed for post to be valid
             try:
