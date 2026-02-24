@@ -4,6 +4,10 @@
 **Source:** Audit of production codebase vs `docs/toby-architecture-spec.md`
 **Scope:** Everything in the spec not yet fully live
 
+> **Environment access available for implementation:**
+> - ✅ **Supabase** — full access via `DATABASE_URL` connection string (run migrations directly, inspect tables, alter schema)
+> - ✅ **Railway CLI** — full access to deploy, run one-off commands, inspect logs, and trigger restarts on the production environment
+
 > **Status legend:**
 > - ⚠️ **Partial** — structure/skeleton exists, logic incomplete
 > - ❌ **Missing** — no code exists at all
