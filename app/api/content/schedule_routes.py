@@ -848,8 +848,10 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
     try:
         from datetime import timedelta, datetime as dt
 
-        # Load brand offsets dynamically from DB
-        all_brands = brand_resolver.get_all_brands()
+        user_id = user["id"]
+
+        # Load brand offsets dynamically from DB for this user
+        all_brands = brand_resolver.get_all_brands(user_id=user_id)
         BRAND_REEL_OFFSETS = {b.id: b.schedule_offset for b in all_brands}
 
         # Base slot pattern (every 4 hours, alternating L/D)
@@ -899,7 +901,7 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
             tomorrow = after + timedelta(days=1)
             return tomorrow.replace(hour=matching_hours[0], minute=0, second=0, microsecond=0)
 
-        all_scheduled = scheduler_service.get_all_scheduled()
+        all_scheduled = scheduler_service.get_all_scheduled(user_id=user_id)
 
         # Collect only reel-type scheduled entries (variant != 'post')
         reels: list[dict] = []
@@ -1092,8 +1094,10 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
         from datetime import timedelta, datetime as dt
         import math
         
-        # Load brand reel offsets dynamically from DB
-        all_brands = brand_resolver.get_all_brands()
+        user_id = user["id"]
+        
+        # Load brand reel offsets dynamically from DB for this user
+        all_brands = brand_resolver.get_all_brands(user_id=user_id)
         BRAND_REEL_OFFSETS = {b.id: b.schedule_offset for b in all_brands}
         
         def get_post_slots_for_brand(brand: str, ppd: int) -> list[tuple[int, int]]:
@@ -1127,7 +1131,7 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
             h, m = slots[0]
             return tomorrow.replace(hour=h, minute=m, second=0, microsecond=0)
         
-        all_scheduled = scheduler_service.get_all_scheduled()
+        all_scheduled = scheduler_service.get_all_scheduled(user_id=user_id)
         
         # Collect only post-type scheduled entries that are still pending
         posts_by_slot: dict[str, list[dict]] = {}  # key = "brand|datetime"
