@@ -80,7 +80,7 @@ Toby is a **background orchestration layer** that ties together existing service
 - `DatabaseSchedulerService` — Scheduling and auto-publishing every 60 seconds
 - `MetricsCollector` — Per-post Instagram metrics (views, likes, saves, shares, reach)
 - `TrendScout` — Hashtag search and competitor discovery via IG Graph API
-- `NicheConfig` — Content DNA configuration per user/brand
+- `NicheConfig` — Content DNA configuration per user (one config shared across all brands)
 - `PostPerformance` — Performance scoring and percentile ranking
 
 **What Toby adds:**
@@ -600,6 +600,20 @@ When Toby is enabled, the sidebar icon shows a **green dot** and a subtle glow:
 
 ## 7. Data Model
 
+### 7.0 Scoping Model (Architectural Decision)
+
+The following scoping rules are intentional and define how data is partitioned:
+
+| Entity | Scope | Rationale |
+|---|---|---|
+| `NicheConfig` (Content DNA) | **Per-user** | One niche configuration shared across all brands. Users are assumed to operate within a single niche. |
+| `TobyState` (phase, explore_ratio) | **Per-user** | One state machine governs all brands. Phase transitions and learning are user-level. |
+| `TobyExperiment` | **Per-user** | Experiments run at the user level — a discovery from Brand A seeds an arm tested across all brands. |
+| `TobyStrategyScore` | **Per-brand** | Strategy performance is tracked per-brand so Brand A's metrics don't pollute Brand B's strategy. `brand_id = NULL` rows serve as cross-brand cold-start priors for new brands. |
+| `MetricsCollector` / `PostPerformance` | **Per-brand** | Instagram metrics and publishing are inherently per-brand (each brand has its own IG account). |
+
+**Constraint:** All brands for a user share the same Content DNA topics and tone. If a user needs brands in fundamentally different niches, they should use separate user accounts. The frontend should surface this constraint clearly in the Content DNA setup flow.
+
 ### 7.1 New Tables
 
 #### `toby_state` — Per-user Toby configuration and state ✅ Live
@@ -681,7 +695,7 @@ CREATE INDEX idx_toby_exp_user_status ON toby_experiments(user_id, status);
 CREATE TABLE toby_strategy_scores (
     id              VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         VARCHAR(100) NOT NULL,
-    brand_id        VARCHAR(50),  -- [Partial: always stored as NULL in v1.0; per-brand tracking planned]
+    brand_id        VARCHAR(50),  -- NULL = cross-brand aggregate. Per-brand scores track how each strategy performs for a specific brand. Topics come from user-level NicheConfig (one niche per user).
     content_type    VARCHAR(10) NOT NULL,         -- "reel" or "post"
 
     -- What strategy dimension this tracks
@@ -827,6 +841,8 @@ No schema changes needed — Toby's `analysis_engine` reads directly from this t
 │       → transition to learning phase                  │
 │     If learning and 30+ days:                        │
 │       → transition to optimizing phase               │
+│     If optimizing and 14d avg < 80% of 90d baseline: │
+│       → regression to learning phase (explore 0.50)  │
 │                                                       │
 └──────────────────────────────────────────────────────┘
 ```
