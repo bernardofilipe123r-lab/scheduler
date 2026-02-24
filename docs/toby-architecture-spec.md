@@ -1,12 +1,15 @@
-# Toby — Autonomous AI Content Agent
+# Toby — AI Content Automation Agent
 
-## Architecture Specification v1.0
+## Architecture Specification v2.0 — Verified Implementation Record
 
-**Date:** February 2026  
-**Audience:** Investors, Product Team, Engineers, Designers  
-**Status:** Partially Implemented — Core architecture is live; some advanced features (cross-brand intelligence, spending limits) are planned
+**Date:** February 2026
+**Audience:** Investors, Product Team, Engineers, Designers
+**Status:** v2.0 — All claims verified against production source code (February 2026)
 
-> **Implementation status:** Sections 1-8 reflect the live system. Sections 9-13 include both implemented features and planned enhancements. See inline status notes for specifics.
+> **Status legend used throughout this document:**
+> - ✅ **Live** — implemented and running in production
+> - ⚠️ **Partial** — schema/structure exists, full logic not yet built
+> - 🔧 **Planned** — designed but not yet implemented
 
 ---
 
@@ -21,17 +24,19 @@
 7. [Data Model](#7-data-model)
 8. [Core Loops](#8-core-loops)
 9. [Intelligence Engine](#9-intelligence-engine)
-10. [Deployment & Resilience](#10-deployment--resilience)
-11. [Scalability & Future-Proofing](#11-scalability--future-proofing)
-12. [Implementation Phases](#12-implementation-phases)
-13. [Risk Matrix](#13-risk-matrix)
-14. [Glossary](#14-glossary)
+10. [Toby Today vs. True AI Autonomy](#10-toby-today-vs-true-ai-autonomy)
+11. [The Path to Multi-Agent Autonomy](#11-the-path-to-multi-agent-autonomy)
+12. [Deployment & Resilience](#12-deployment--resilience)
+13. [Scalability & Future-Proofing](#13-scalability--future-proofing)
+14. [Implementation Phases](#14-implementation-phases)
+15. [Risk Matrix](#15-risk-matrix)
+16. [Glossary](#16-glossary)
 
 ---
 
 ## 1. Executive Summary
 
-Toby is a **per-user autonomous AI agent** that takes over the entire content lifecycle — from ideation to publishing to performance analysis — so the user doesn't have to press a single button.
+Toby is a **per-user AI content automation agent** that takes over the entire content lifecycle — from ideation to publishing to performance analysis — so the user doesn't have to press a single button.
 
 Toby operates as if it were a human social media manager: it creates reels and carousels, publishes them on schedule, tracks how they perform, learns what works, and continuously improves. The user's only job is to set up their brand's Content DNA (niche, tone, topics) and turn Toby on.
 
@@ -79,9 +84,9 @@ Toby is a **background orchestration layer** that ties together existing service
 
 **What Toby adds:**
 - An **orchestrator** (`app/services/toby/orchestrator.py`, 465 lines) that decides when to create, what to create, and how to improve
-- A **learning engine** (`app/services/toby/learning_engine.py`, 354 lines) that tracks experiments and allocates more resources to winners
+- A **learning engine** (`app/services/toby/learning_engine.py`, 354 lines) that tracks experiments and allocates more resources to winners using epsilon-greedy bandit selection
 - A **content buffer** (`app/services/toby/buffer_manager.py`, 147 lines) that pre-generates 2 days of content to guarantee slots never go empty
-- A **personality/angle testing framework** (A/B testing for AI prompts via Thompson Sampling)
+- A **personality/angle testing framework** (strategy A/B testing via epsilon-greedy bandit) ✅ Live
 - An **analysis engine** (`app/services/toby/analysis_engine.py`, 167 lines) for 48h and 7d performance scoring
 - A **state machine** (`app/services/toby/state.py`, 141 lines) managing bootstrap → learning → optimizing phases
 
@@ -115,7 +120,7 @@ Day 7-30 (Learning phase):
 
 Day 30+ (Optimization phase):
         → Toby has a rich performance history per brand
-        → Cross-brand intelligence helps cold-start new brands faster
+        → Cross-brand intelligence helps cold-start new brands faster [Planned]
         → Continuously A/B tests new angles while maximizing winning formulas
         → User can see a clear improvement trend in the Toby dashboard
 ```
@@ -124,15 +129,15 @@ Day 30+ (Optimization phase):
 
 The Toby page in the sidebar shows:
 
-| Section | What It Shows |
-|---|---|
-| **Status Bar** | Toby ON/OFF toggle, current phase (bootstrap/learning/optimizing), content buffer health |
-| **Activity Feed** | Real-time log of what Toby is doing — "Published reel to @brand", "Analyzing 48h metrics for 5 posts", "Discovered 12 trending reels" |
-| **Published Content** | Gallery of everything Toby has published, with performance scores |
-| **Experiments** | Active A/B tests — which personalities/angles are being tested, preliminary results |
-| **Insights** | Top-performing topics, best hooks, winning personalities, improvement trends |
-| **Discovery** | What Toby found from competitor/hashtag scanning, what influenced content decisions |
-| **Settings** | Buffer size, slot configuration, reset button, spending (future: per-user limits) |
+| Section | What It Shows | Status |
+|---|---|---|
+| **Status Bar** | Toby ON/OFF toggle, current phase (bootstrap/learning/optimizing), content buffer health | ✅ Live |
+| **Activity Feed** | Real-time log of what Toby is doing — "Published reel to @brand", "Analyzing 48h metrics for 5 posts", "Discovered 12 trending reels" | ✅ Live |
+| **Published Content** | Gallery of everything Toby has published, with performance scores | ✅ Live |
+| **Experiments** | Active A/B tests — which personalities/angles are being tested, preliminary results | ✅ Live |
+| **Insights** | Top-performing topics, best hooks, winning personalities, improvement trends | ✅ Live |
+| **Discovery** | Trending competitor content and hashtag intelligence visible in activity feed; dedicated Discovery tab | 🔧 Planned |
+| **Settings** | Buffer size, slot configuration, reset button, spending limits | ⚠️ Partial |
 
 ---
 
@@ -156,7 +161,7 @@ The Toby page in the sidebar shows:
 │  └───────────────────────────┬───────────────────────────────┘  │
 │                              │                                  │
 │  ┌───────────────────────────┴───────────────────────────────┐  │
-│  │              TOBY ORCHESTRATOR (New)                       │  │
+│  │              TOBY ORCHESTRATOR                             │  │
 │  │  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌────────────┐  │  │
 │  │  │ Content  │ │ Analysis │ │ Discovery │ │  Learning  │  │  │
 │  │  │ Planner  │ │  Engine  │ │  Manager  │ │  Engine    │  │  │
@@ -191,7 +196,7 @@ Toby sits **above** the existing service layer and calls into it. This means:
 
 ## 5. Backend Architecture
 
-### 5.1 New Module: `app/services/toby/` (Implemented)
+### 5.1 New Module: `app/services/toby/` ✅ Live
 
 ```
 app/services/toby/
@@ -199,7 +204,7 @@ app/services/toby/
 ├── orchestrator.py        (465 lines) # Main loop — the "brain" that coordinates everything
 ├── content_planner.py     (122 lines) # Decides WHAT to create and WHEN
 ├── analysis_engine.py     (167 lines) # Evaluates performance, computes scores
-├── learning_engine.py     (354 lines) # Thompson Sampling, personality optimization
+├── learning_engine.py     (354 lines) # Epsilon-greedy bandit, personality optimization
 ├── discovery_manager.py   (106 lines) # Coordinates TrendScout scanning schedules
 ├── buffer_manager.py      (147 lines) # Ensures 2-day content buffer stays full
 └── state.py               (141 lines) # Toby state machine (OFF → BOOTSTRAP → LEARNING → OPTIMIZING)
@@ -213,18 +218,18 @@ The orchestrator is a **periodic background task** (via APScheduler, already use
 class TobyOrchestrator:
     """
     Main coordination loop. Runs every 5 minutes per user.
-    
+
     Decision priority (highest to lowest):
     1. BUFFER CHECK   — Are all slots for next 2 days filled? If not, generate.
-    2. PUBLISH CHECK   — Any due posts? (Handled by existing scheduler, Toby just monitors)
-    3. METRICS CHECK   — Any posts older than 48h without metrics? Collect them.
-    4. ANALYSIS CHECK   — New metrics available? Re-score and update learnings.
-    5. DISCOVERY CHECK  — Time for a discovery scan? Run TrendScout tick.
+    2. PUBLISH CHECK  — Any due posts? (Handled by existing scheduler, Toby just monitors)
+    3. METRICS CHECK  — Any posts older than 48h without metrics? Collect them.
+    4. ANALYSIS CHECK — New metrics available? Re-score and update learnings.
+    5. DISCOVERY CHECK — Time for a discovery scan? Run TrendScout tick.
     6. EXPERIMENT CHECK — Time to start a new A/B test? Plan one.
     """
 ```
 
-**Why 5 minutes?** 
+**Why 5 minutes?**
 - Fast enough to react to empty slots or failed content generation
 - Slow enough to not waste CPU on a system that mostly needs hourly actions
 - Each tick is lightweight — it checks DB state and only acts if needed
@@ -241,7 +246,7 @@ class ContentPlan:
     brand_id: str
     content_type: str          # "reel" or "post" (carousel)
     scheduled_time: str        # ISO datetime string
-    
+
     # Strategy fields — filled by the learning engine via StrategyChoice
     personality_id: str        # Which AI personality to use (e.g. "edu_calm", "deep_edu")
     personality_prompt: str    # The actual system prompt modifier text
@@ -249,7 +254,7 @@ class ContentPlan:
     hook_strategy: str         # Which hook pattern (e.g. "question", "myth_buster")
     title_format: str          # Which title structure (e.g. "how_x_does_y")
     visual_style: str          # Which visual approach (e.g. "dark_cinematic")
-    
+
     # Optional — if experimenting
     experiment_id: Optional[str] = None  # Links to an active A/B test
     is_experiment: bool = False          # Part of an experiment?
@@ -267,7 +272,7 @@ class ContentPlan:
    b. Check which slots in the next 2 days (buffer_days) are already filled
    c. For each empty slot (up to max_plans=1 per tick):
       - Ask LearningEngine.choose_strategy() for a StrategyChoice
-      - choose_strategy() picks 5 dimensions using Thompson Sampling:
+      - choose_strategy() picks 5 dimensions using epsilon-greedy logic:
         personality, topic_bucket, hook_strategy, title_format, visual_style
       - ~70% of selections use PROVEN strategies (highest avg_score)
       - ~30% of selections use EXPLORATION (random picks)
@@ -281,7 +286,7 @@ class ContentPlan:
    f. Record TobyContentTag with strategy metadata for learning
 ```
 
-### 5.4 Analysis Engine
+### 5.4 Analysis Engine ✅ Live
 
 The analysis engine evaluates post performance and feeds results back to the learning engine.
 
@@ -298,23 +303,23 @@ The analysis engine evaluates post performance and feeds results back to the lea
 def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
     """
     Score a post's performance relative to the brand's baseline.
-    
+
     Components (actual implemented weights):
     1. Raw views score — 20% (absolute performance, logarithmic scale)
     2. Relative views score — 30% (compared to brand's 14-day rolling average)
     3. Engagement quality — 40% (saves + shares, primary learning signal)
     4. Follower context — 10% (mild normalization)
-    
+
     Returns: 0-100 score
     """
     views = metrics["views"]
     brand_avg_views = brand_stats["avg_views"]
     brand_followers = brand_stats["followers"]
-    
+
     # 1. Raw views (20%) — absolute performance
     #    Logarithmic scale: 1k=20, 10k=50, 50k=75, 100k=90, 500k=100
     raw_views_score = min(100, math.log10(max(views, 1)) / math.log10(500_000) * 100)
-    
+
     # 2. Relative views (30%) — how this post compares to brand average
     if brand_avg_views > 0:
         relative_ratio = views / brand_avg_views
@@ -322,20 +327,20 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
         relative_score = min(100, relative_ratio * 25)
     else:
         relative_score = 50  # No baseline yet
-    
+
     # 3. Engagement quality (40%) — THE most important signal
     #    Saves and shares are strongest signals for content value
     saves = metrics.get("saves", 0)
     shares = metrics.get("shares", 0)
     engagement_score = min(100, (saves * 2 + shares * 3) / max(views, 1) * 10000)
-    
+
     # 4. Follower context (10%) — mild normalization
     if brand_followers > 0:
         views_per_follower = views / brand_followers
         follower_context_score = min(100, views_per_follower * 10)
     else:
         follower_context_score = 50
-    
+
     final = (
         raw_views_score * 0.20 +
         relative_score * 0.30 +
@@ -347,7 +352,7 @@ def compute_toby_score(metrics: dict, brand_stats: dict) -> float:
 
 **Key: engagement quality (saves + shares) is the dominant signal at 40%.** This ensures Toby optimizes for save-worthy, high-value content rather than just views. Relative performance within the brand (30%) is the secondary signal.
 
-### 5.5 Learning Engine — A/B Testing Framework
+### 5.5 Learning Engine — Strategy Selection Framework ✅ Live
 
 The learning engine is Toby's "memory." It tracks what strategies have been tried, how they performed, and decides what to try next.
 
@@ -363,45 +368,54 @@ Toby tracks experiments across these independent dimensions, **separately for re
 | **Title Format** | "How X Does Y", "The #1 Mistake...", "Why Doctors Say..." | Title structure template |
 | **Visual Style** | "dark_cinematic", "light_clean", "vibrant_bold" | Image generation prompt modifiers |
 
-#### Multi-Armed Bandit (Not Pure A/B)
+#### Epsilon-Greedy Multi-Armed Bandit (Not Pure A/B)
 
-Traditional A/B testing requires statistical significance (hundreds of samples per variant). Social media content doesn't generate enough volume for that. Instead, Toby uses a **Thompson Sampling (Multi-Armed Bandit)** approach:
+Traditional A/B testing requires statistical significance (hundreds of samples per variant). Social media content doesn't generate enough volume for that. Instead, Toby uses an **epsilon-greedy multi-armed bandit** — a well-understood algorithm that is simple, effective, and honest about what it is:
 
+```python
+# Simplified view of the actual implementation in learning_engine.py
+
+def choose_strategy(explore_ratio=0.30, ...):
+    is_explore = random.random() < explore_ratio  # 30% of the time: EXPLORE
+
+    if is_explore:
+        return random.choice(options)             # Pick any option at random
+    else:
+        return db.query(best_avg_score).first()   # Pick the proven winner (highest avg)
+
+# After each post's 7d final score arrives:
+def update_strategy_score(option, score):
+    record.sample_count += 1
+    record.avg_score = record.total_score / record.sample_count  # Running average
+    record.score_variance = welford_update(...)                   # Tracked for observability
 ```
-For each dimension (personality, topic, hook, etc.):
-  1. Maintain a performance distribution per option
-     (e.g., "educational" personality has mean score 72, std 15)
-  2. When choosing what to create next:
-     - 70% of the time: pick the option with the highest expected score (EXPLOIT)
-     - 30% of the time: pick a random option (EXPLORE)
-  3. After each post's final score comes in:
-     - Update the distribution for the options used in that post
-  
+
 This naturally:
-  - Converges on the best strategies over time
-  - Never stops exploring (catches seasonal shifts, algorithm changes)
-  - Works with small sample sizes (doesn't need statistical significance)
-```
+- Converges on the best strategies as sample counts grow
+- Never stops exploring (catches seasonal shifts, algorithm changes)
+- Works with small sample sizes — no statistical significance required
+
+> **Note on naming:** Thompson Sampling is a related but distinct algorithm that uses Bayesian posterior distributions (Beta distributions per option) for selection — it is statistically more principled. Toby's current implementation is epsilon-greedy. True Thompson Sampling is on the roadmap (see Section 11.1).
 
 #### Separate Worlds: Reels vs. Carousels
 
 **Reels** and **carousels** have completely separate:
 - Experiment pools
-- Performance baselines  
+- Performance baselines
 - Winning strategies
 - Scoring parameters
 
 A hook that works for a 7-second reel ("You're destroying your gut with THIS food") may not work for a 4-slide educational carousel. Toby never transfers learnings between these two content types.
 
-### 5.6 Buffer Manager
+### 5.6 Buffer Manager ✅ Live
 
 The buffer manager ensures every slot for the next 2 days has content ready.
 
 ```
 Buffer Health States:
-  🟢 HEALTHY    — All slots for next 48h are filled
-  🟡 LOW        — 1-3 slots in next 48h are empty
-  🔴 CRITICAL   — 4+ slots empty, or less than 24h of content remaining
+  HEALTHY    — All slots for next 48h are filled
+  LOW        — 1-3 slots in next 48h are empty
+  CRITICAL   — 4+ slots empty, or less than 24h of content remaining
 
 When buffer is LOW or CRITICAL:
   1. Content Planner generates plans for empty slots
@@ -419,7 +433,7 @@ When buffer is LOW or CRITICAL:
 3. Uses a throttled queue (max 3 concurrent generations) to avoid API rate limits
 4. Shows progress on the Toby dashboard: "Filling buffer: 8/16 slots ready"
 
-### 5.7 Discovery Manager
+### 5.7 Discovery Manager ✅ Live (with partial integration)
 
 Wraps the existing `TrendScout` service with a smart scheduling layer.
 
@@ -428,13 +442,15 @@ Wraps the existing `TrendScout` service with a smart scheduling layer.
 | Scan Type | Frequency | What It Does |
 |---|---|---|
 | Bootstrap mode (all scans) | Every 20 minutes | Aggressive scanning during first 7 days to build data |
-| Normal mode (own + competitors + hashtags) | Every 6 hours (360 min) | All scans run in sequence per tick |
+| Normal mode (own + competitors + hashtags) | Every 6 hours (360 min) | All scans run in sequence per single discovery tick |
 
-> **Note:** The initial design proposed separate intervals per scan type (6h/8h/12h), but the implementation uses a single discovery interval: 20 min (bootstrap) or 360 min (normal). In normal mode, `scan_own_accounts()`, `scan_competitors()`, and `scan_hashtags(max=3)` run sequentially in a single discovery tick.
+> **Interval clarification:** The module defines separate constants (`NORMAL_COMPETITORS_INTERVAL = 480`, `NORMAL_HASHTAG_INTERVAL = 720`) but `should_run_discovery()` gates all scans on a single threshold: `NORMAL_OWN_ACCOUNTS_INTERVAL = 360`. All three scan types execute together in a single tick. Per-type independent scheduling is a planned enhancement.
 
-The discovery manager feeds trending content into the learning engine, which may use it to inspire new experiments (e.g., "Competitor X got 500k likes on a 'myth buster' reel about sleep — let's test myth_buster hooks for sleep content").
+**Discovery → LearningEngine integration status: 🔧 Planned**
 
-### 5.8 API Routes: `app/api/toby/` (Implemented)
+Discovery results are stored in Supabase and visible in the activity feed. The code path from discovery findings into experiment creation does not yet exist. The intended design: when a trending competitor topic is discovered, Toby automatically creates an experiment to test it against the current best topic. This closes the feedback loop: discover → experiment → score → learn. See Section 11.2 for the implementation roadmap.
+
+### 5.8 API Routes: `app/api/toby/` ✅ Live
 
 ```
 app/api/toby/
@@ -473,18 +489,18 @@ class TobyConfigUpdate(BaseModel):
 
 ## 6. Frontend Architecture
 
-### 6.1 New Sidebar Item
+### 6.1 Sidebar Item ✅ Live
 
-Add a **"Toby"** entry to the sidebar navigation between "Analytics" and "Brands":
+A **"Toby"** entry in the sidebar navigation between "Analytics" and "Brands":
 
 ```typescript
 // In AppLayout.tsx NAV_ITEMS:
 { to: '/toby', icon: Bot, label: 'Toby', end: false },
 ```
 
-The icon will be `Bot` from `lucide-react` (a robot icon). When Toby is enabled, the icon gets a subtle green pulse animation to indicate it's active.
+The icon is `Bot` from `lucide-react`. When Toby is enabled, the icon gets a subtle green pulse animation to indicate it's active.
 
-### 6.2 Page Structure (Implemented)
+### 6.2 Page Structure ✅ Live
 
 ```
 src/
@@ -510,11 +526,9 @@ src/
 
 **TypeScript types in `types.ts`:** `TobyPhase`, `TobyConfig`, `TobyBufferBrand`, `TobyBufferStatus`, `TobyLiveAction`, `TobyLiveInfo`, `TobyTimestamps`, `TobyStats`, `TobyStatus`, `TobyActivityItem`, `TobyExperiment`, `TobyInsight`, `TobyInsights`, `TobyContentTag`, `TobyDiscoveryItem`
 
-### 6.3 Toby Page — Tab Layout (Implemented)
+### 6.3 Toby Page — Tab Layout ✅ Live
 
-The page has 4 tabs: **Overview** | **Experiments** | **Insights** | **Settings**
-
-> **Note:** The original design proposed 5 tabs (Activity, Published, Experiments, Insights, Discovery). The implementation consolidated these into 4 tabs: Overview (combines Activity Feed + Live Status + Buffer Status), Experiments, Insights, and Settings.
+The page has **4 tabs:** Overview | Experiments | Insights | Settings
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -523,7 +537,7 @@ The page has 4 tabs: **Overview** | **Experiments** | **Insights** | **Settings*
 │  Buffer: ████████████░░ 85% (14/16 slots filled)             │
 │  Phase: Learning (Day 12)    Next action: Metrics check 3m   │
 ├──────────────────────────────────────────────────────────────┤
-│  [Activity] [Published] [Experiments] [Insights] [Discovery] │
+│         [Overview] [Experiments] [Insights] [Settings]       │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
 │  (Tab content rendered here)                                 │
@@ -533,22 +547,14 @@ The page has 4 tabs: **Overview** | **Experiments** | **Insights** | **Settings*
 
 ### 6.4 Tab Details
 
-**Activity Tab** — Reverse-chronological feed of Toby actions:
+**Overview Tab** — Combines Activity Feed + Live Status + Buffer Status:
 ```
-🟢 2m ago    Published carousel to @healthycollege (experiment: storytelling-hook-A)
-📊 15m ago   Analyzed 48h metrics for 5 reels — 2 above average, 1 outlier (32k views!)
-🔍 1h ago    Discovered 8 trending reels via #healthylifestyle
-🎨 2h ago    Generated 3 reels for tomorrow's slots (buffer now 100%)
-📈 3h ago    Updated experiment results: "data-driven" personality +12% vs baseline
+2m ago    Published carousel to @healthycollege (experiment: storytelling-hook-A)
+15m ago   Analyzed 48h metrics for 5 reels — 2 above average, 1 outlier (32k views!)
+1h ago    Discovered 8 trending reels via #healthylifestyle
+2h ago    Generated 3 reels for tomorrow's slots (buffer now 100%)
+3h ago    Updated experiment results: "data-driven" personality +12% vs baseline
 ```
-
-**Published Tab** — Grid/list of content Toby created:
-- Thumbnail preview
-- Brand badge
-- Content type (reel/carousel)
-- Performance score + views + engagement
-- Which experiment/personality was used
-- "Winner" / "Average" / "Underperformer" badge
 
 **Experiments Tab** — Live A/B test dashboard:
 ```
@@ -556,22 +562,11 @@ The page has 4 tabs: **Overview** | **Experiments** | **Insights** | **Settings*
 │ REELS — Personality Test                         │
 │ Status: Running (started 5 days ago, 18 samples) │
 │                                                  │
-│ 📊 educational     ████████████  Score: 72 (8x) │
-│ 🔥 provocative     ██████████████ Score: 81 (5x)│
-│ 📖 storytelling    ████████     Score: 63 (5x)  │
+│ educational     ████████████  Score: 72 (8x)    │
+│ provocative     ██████████████ Score: 81 (5x)   │
+│ storytelling    ████████     Score: 63 (5x)     │
 │                                                  │
 │ Current leader: provocative (+12% vs baseline)   │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│ CAROUSELS — Hook Strategy Test                   │
-│ Status: Running (started 3 days ago, 8 samples)  │
-│                                                  │
-│ ❓ question_hook   ████████████  Score: 68 (3x) │
-│ 💥 myth_buster     ██████████     Score: 59 (3x)│
-│ 📊 shocking_stat   ████████████  Score: 71 (2x) │
-│                                                  │
-│ Current leader: shocking_stat (+5% vs baseline)  │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -582,17 +577,13 @@ The page has 4 tabs: **Overview** | **Experiments** | **Insights** | **Settings*
 - "Game changers" — posts that got 4x+ the brand average
 - Per-brand breakdown
 
-**Discovery Tab** — What Toby found externally:
-- Trending competitor content (thumbnails + engagement counts)
-- Top hashtags by engagement
-- Content inspiration feed (what Toby might adapt next)
+**Settings Tab** — Config sliders + danger zone (reset learning data).
 
 ### 6.5 Sidebar Active Indicator
 
 When Toby is enabled, the sidebar icon shows a **green dot** and a subtle glow:
 
 ```tsx
-// Toby nav item with active indicator
 <NavLink to="/toby" ...>
   <div className="relative shrink-0">
     <Bot className="w-5 h-5" />
@@ -610,134 +601,124 @@ When Toby is enabled, the sidebar icon shows a **green dot** and a subtle glow:
 
 ### 7.1 New Tables
 
-#### `toby_state` — Per-user Toby configuration and state
+#### `toby_state` — Per-user Toby configuration and state ✅ Live
 
 ```sql
 CREATE TABLE toby_state (
     id            VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id       VARCHAR(100) NOT NULL UNIQUE,
-    
+
     -- ON/OFF
     enabled       BOOLEAN NOT NULL DEFAULT FALSE,
     enabled_at    TIMESTAMPTZ,
     disabled_at   TIMESTAMPTZ,
-    
+
     -- Phase: bootstrap | learning | optimizing
     phase         VARCHAR(20) NOT NULL DEFAULT 'bootstrap',
     phase_started_at TIMESTAMPTZ,
-    
+
     -- Configuration
     buffer_days           INTEGER DEFAULT 2,       -- How many days ahead to buffer
     explore_ratio         FLOAT DEFAULT 0.30,      -- % of slots for experiments (0.0-1.0)
     reel_slots_per_day    INTEGER DEFAULT 6,        -- From brand config
     post_slots_per_day    INTEGER DEFAULT 2,        -- From brand config
-    
+
     -- Scheduling state (prevents duplicate work)
     last_buffer_check_at    TIMESTAMPTZ,
     last_metrics_check_at   TIMESTAMPTZ,
     last_analysis_at        TIMESTAMPTZ,
     last_discovery_at       TIMESTAMPTZ,
-    
-    -- Future: spending limits
+
+    -- Spending limits [Planned — columns exist, enforcement logic not yet implemented]
     daily_budget_cents    INTEGER,                  -- NULL = unlimited
     spent_today_cents     INTEGER DEFAULT 0,
     budget_reset_at       TIMESTAMPTZ,
-    
+
     -- Timestamps
     created_at   TIMESTAMPTZ DEFAULT now(),
     updated_at   TIMESTAMPTZ DEFAULT now()
 );
 ```
 
-#### `toby_experiments` — A/B test definitions and results
+#### `toby_experiments` — A/B test definitions and results ✅ Live
 
 ```sql
 CREATE TABLE toby_experiments (
     id              VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         VARCHAR(100) NOT NULL,
-    
+
     -- What we're testing
     content_type    VARCHAR(10) NOT NULL,        -- "reel" or "post"
     dimension       VARCHAR(30) NOT NULL,        -- "personality", "topic", "hook", "title_format", "visual_style"
-    
+
     -- The options being tested (JSONB array)
     -- e.g., ["educational", "provocative", "storytelling"]
     options         JSONB NOT NULL,
-    
+
     -- Results per option (updated after each post scores)
     -- e.g., {"educational": {"count": 8, "total_score": 576, "avg_score": 72, "scores": [70, 75, ...]}}
     results         JSONB NOT NULL DEFAULT '{}',
-    
+
     -- Status
     status          VARCHAR(20) NOT NULL DEFAULT 'active',  -- active | paused | completed
     winner          VARCHAR(100),   -- Winning option (set when completed)
-    
+
     -- Timing
     started_at      TIMESTAMPTZ DEFAULT now(),
     completed_at    TIMESTAMPTZ,
     min_samples     INTEGER DEFAULT 5,  -- Min samples per option before declaring winner
-    
-    -- Indexes
+
     CONSTRAINT uq_toby_exp_active UNIQUE (user_id, content_type, dimension, status)
 );
 
 CREATE INDEX idx_toby_exp_user_status ON toby_experiments(user_id, status);
 ```
 
-#### `toby_strategy_scores` — Performance aggregates per strategy option
+#### `toby_strategy_scores` — Performance aggregates per strategy option ✅ Live
 
 ```sql
 CREATE TABLE toby_strategy_scores (
     id              VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         VARCHAR(100) NOT NULL,
-    brand_id        VARCHAR(50),                 -- NULL = cross-brand
+    brand_id        VARCHAR(50),  -- [Partial: always stored as NULL in v1.0; per-brand tracking planned]
     content_type    VARCHAR(10) NOT NULL,         -- "reel" or "post"
-    
+
     -- What strategy dimension this tracks
     dimension       VARCHAR(30) NOT NULL,         -- "personality", "topic", "hook", etc.
     option_value    VARCHAR(100) NOT NULL,        -- e.g., "educational", "superfoods"
-    
-    -- Running aggregates (Thompson Sampling parameters)
+
+    -- Running aggregates (epsilon-greedy selection uses avg_score)
     sample_count    INTEGER DEFAULT 0,
     total_score     FLOAT DEFAULT 0,
     avg_score       FLOAT DEFAULT 0,
-    score_variance  FLOAT DEFAULT 0,
+    score_variance  FLOAT DEFAULT 0,   -- Tracked for observability; not used in selection
     best_score      FLOAT DEFAULT 0,
     worst_score     FLOAT DEFAULT 100,
-    
+
     -- Recent trend (last 10 scores)
     recent_scores   JSONB DEFAULT '[]',
-    
+
     updated_at      TIMESTAMPTZ DEFAULT now(),
-    
+
     CONSTRAINT uq_toby_strategy UNIQUE (user_id, brand_id, content_type, dimension, option_value)
 );
 
 CREATE INDEX idx_toby_strategy_user ON toby_strategy_scores(user_id, content_type, dimension);
 ```
 
-#### `toby_activity_log` — Audit trail of all Toby actions
+#### `toby_activity_log` — Audit trail of all Toby actions ✅ Live
 
 ```sql
 CREATE TABLE toby_activity_log (
     id          SERIAL PRIMARY KEY,
     user_id     VARCHAR(100) NOT NULL,
-    
-    -- Action categorization
+
     action_type VARCHAR(30) NOT NULL,  -- "content_generated", "published", "metrics_collected",
                                        -- "analysis_completed", "discovery_scan", "experiment_started",
                                        -- "experiment_completed", "buffer_filled", "error"
-    
-    -- Human-readable description
     description TEXT NOT NULL,
-    
-    -- Structured metadata (varies by action_type)
-    -- Note: SQLAlchemy column name is "metadata" (mapped from action_metadata field)
-    metadata    JSONB,
-    
-    -- Severity for filtering
+    metadata    JSONB,                 -- Structured metadata (varies by action_type)
     level       VARCHAR(10) DEFAULT 'info',  -- "info", "success", "warning", "error"
-    
     created_at  TIMESTAMPTZ DEFAULT now()
 );
 
@@ -745,14 +726,14 @@ CREATE INDEX idx_toby_activity_user_time ON toby_activity_log(user_id, created_a
 CREATE INDEX idx_toby_activity_type ON toby_activity_log(user_id, action_type);
 ```
 
-#### `toby_content_tags` — Links Toby metadata to scheduled content
+#### `toby_content_tags` — Links Toby metadata to scheduled content ✅ Live
 
 ```sql
 CREATE TABLE toby_content_tags (
     id              VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         VARCHAR(100) NOT NULL,
     schedule_id     VARCHAR(36) NOT NULL REFERENCES scheduled_reels(schedule_id) ON DELETE CASCADE,
-    
+
     -- Which strategies were used for this content
     content_type    VARCHAR(10) NOT NULL,      -- "reel" or "post"
     personality     VARCHAR(50),
@@ -760,17 +741,17 @@ CREATE TABLE toby_content_tags (
     hook_strategy   VARCHAR(50),
     title_format    VARCHAR(50),
     visual_style    VARCHAR(50),
-    
+
     -- Experiment link
     experiment_id   VARCHAR(36) REFERENCES toby_experiments(id) ON DELETE SET NULL,
     is_experiment   BOOLEAN DEFAULT FALSE,
     is_control      BOOLEAN DEFAULT FALSE,
-    
+
     -- Performance (filled after scoring)
     toby_score      FLOAT,          -- The Toby-specific composite score
     scored_at       TIMESTAMPTZ,
     score_phase     VARCHAR(10),    -- "48h" or "7d"
-    
+
     created_at      TIMESTAMPTZ DEFAULT now()
 );
 
@@ -781,7 +762,7 @@ CREATE INDEX idx_toby_tags_schedule ON toby_content_tags(schedule_id);
 
 ### 7.2 Modifications to Existing Tables
 
-#### `scheduled_reels` — Add Toby flag
+#### `scheduled_reels` — Add Toby flag ✅ Live
 
 ```sql
 ALTER TABLE scheduled_reels ADD COLUMN created_by VARCHAR(20) DEFAULT 'user';
@@ -790,7 +771,7 @@ ALTER TABLE scheduled_reels ADD COLUMN created_by VARCHAR(20) DEFAULT 'user';
 
 This single column lets us distinguish Toby-created content from user-created content everywhere in the UI and analytics.
 
-#### `post_performance` — Already sufficient
+#### `post_performance` — Already sufficient ✅ Live
 
 The existing `PostPerformance` table already has everything Toby needs:
 - `views`, `likes`, `comments`, `saves`, `shares`, `reach`
@@ -804,7 +785,7 @@ No schema changes needed — Toby's `analysis_engine` reads directly from this t
 
 ## 8. Core Loops
 
-### 8.1 The Toby Tick (Every 5 Minutes)
+### 8.1 The Toby Tick (Every 5 Minutes) ✅ Live
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -825,30 +806,31 @@ No schema changes needed — Toby's `analysis_engine` reads directly from this t
 │       → MetricsCollector.collect_for_brand(brand)    │
 │       → Log activity: "Collected metrics for N posts" │
 │                                                       │
-│  4. ANALYSIS CHECK (after metrics)                   │
+│  4. ANALYSIS CHECK (every 6 hours, after metrics)    │
 │     Query: posts with new metrics not yet analyzed    │
 │     If found:                                         │
 │       → AnalysisEngine.score_and_learn(posts)        │
 │       → LearningEngine.update_strategies(scores)     │
 │       → Log activity: "Analyzed N posts, updated..."  │
 │                                                       │
-│  5. DISCOVERY CHECK (every 8-12 hours)               │
+│  5. DISCOVERY CHECK                                   │
 │     If in bootstrap phase: every 20 minutes           │
 │       → TrendScout.bootstrap_scan_tick()             │
-│     If in normal phase: every 8-12 hours              │
+│     If in normal phase: every 6 hours (360 min)       │
 │       → DiscoveryManager.scan_tick()                 │
-│       → Log activity: "Discovered N trending items"   │
+│       (runs own_accounts + competitors + hashtags     │
+│        sequentially in a single tick)                 │
 │                                                       │
 │  6. PHASE CHECK                                       │
-│     If bootstrap and enough data → transition to      │
-│     learning phase                                    │
-│     If learning and 30+ days → transition to          │
-│     optimizing phase                                  │
+│     If bootstrap and 10+ posts + 7 days:             │
+│       → transition to learning phase                  │
+│     If learning and 30+ days:                        │
+│       → transition to optimizing phase               │
 │                                                       │
 └──────────────────────────────────────────────────────┘
 ```
 
-### 8.2 Content Generation Flow (Toby-initiated)
+### 8.2 Content Generation Flow (Toby-initiated) ✅ Live
 
 ```
 ContentPlanner                ContentGeneratorV2          JobProcessor           Scheduler
@@ -887,7 +869,7 @@ ContentPlanner                ContentGeneratorV2          JobProcessor          
      │                              │                        │                      │
 ```
 
-### 8.3 Learning Feedback Loop
+### 8.3 Learning Feedback Loop ✅ Live
 
 ```
 Post published (Day 0)
@@ -925,7 +907,7 @@ If experiment is active for this dimension:
 
 ## 9. Intelligence Engine
 
-### 9.1 Personality System
+### 9.1 Personality System ✅ Live
 
 Toby maintains a pool of AI personalities that modify how DeepSeek generates content. These are **system prompt modifiers**, not separate AI models.
 
@@ -956,48 +938,309 @@ Toby maintains a pool of AI personalities that modify how DeepSeek generates con
 
 Personalities are stored in `toby_strategy_scores` with `dimension='personality'` and scored like any other strategy.
 
-### 9.2 Seasonal & Algorithmic Adaptation
+### 9.2 Baseline Drift Detection 🔧 Planned
 
-Toby's 30% exploration ratio ensures it continuously tests new approaches. But it also has specific mechanisms for detecting shifts:
+> **Status: Planned — not implemented in v1.0.** The fixed 30% explore ratio is Toby's current mechanism for catching algorithm changes and seasonal shifts.
 
-**Baseline drift detection:**
+The intended design — adaptive explore ratio based on detected performance drift:
+
 ```python
-# Every 7 days, recalculate brand baseline
-new_avg = avg(last 14 days of scores)
-old_avg = avg(previous 14 days of scores)
+# PLANNED — not yet implemented
+# Every 7 days, compare brand performance windows
 
-if new_avg < old_avg * 0.8:
-    # Performance dropped 20%+ → algorithm may have changed
-    # Increase explore ratio to 50% for next 7 days
-    toby_state.explore_ratio = 0.50
-    log("Performance drop detected — increasing exploration")
-elif new_avg > old_avg * 1.2:
-    # Performance improved 20%+ → current strategy is working
-    # Decrease explore ratio to 20% to exploit more
-    toby_state.explore_ratio = 0.20
-    log("Performance surge — exploiting winning strategies")
+def detect_drift(user_id: str) -> None:
+    new_avg = avg(scores from last 14 days)
+    old_avg = avg(scores from previous 14 days)
+
+    if new_avg < old_avg * 0.80:
+        # Performance dropped 20%+ → algorithm change or content fatigue
+        # Increase explore ratio to 50% for next 7 days
+        toby_state.explore_ratio = 0.50
+        log("Performance drop detected — increasing exploration")
+
+    elif new_avg > old_avg * 1.20:
+        # Performance improved 20%+ → current strategy is working
+        # Reduce explore ratio to 20% to exploit winners more
+        toby_state.explore_ratio = 0.20
+        log("Performance surge — exploiting winning strategies")
 ```
 
-**Seasonal topic rotation:**
-- Toby tracks which topics perform well over time
-- If a top topic starts declining (3 consecutive posts below baseline), it deprioritizes it
-- A previously deprioritized topic can come back if a new experiment shows it's working again
+**Why it's not implemented yet:** Detecting statistically meaningful drift requires enough historical data and a defined response policy. The fixed 30% explore ratio is a safe default while that history accumulates.
 
-### 9.3 Cross-Brand Intelligence
+**Seasonal topic rotation** is similarly planned: if a top-scoring topic shows 3 consecutive below-baseline posts, deprioritize it and re-test it later. This logic is not in the current codebase.
 
-When a user has multiple brands (all sharing the same niche, per your requirement):
+### 9.3 Cross-Brand Intelligence ⚠️ Partial
 
-1. **New brand cold-start:** When Toby starts with a new brand that has no performance history, it borrows the best strategies from other brands of the same user. This avoids wasting time re-testing strategies that already won elsewhere.
+> **Status: Partial** — The database schema supports per-brand and cross-brand tracking (`brand_id` column in `toby_strategy_scores`). In v1.0, all strategy scores are stored with `brand_id = NULL`, meaning scores are aggregated at the user level across all brands. The cold-start transfer logic is planned but not yet implemented.
 
-2. **Cross-brand insights:** The insights dashboard shows which strategies work differently across brands. "Brand A does better with 'story' personality, Brand B with 'data-driven'" — this is expected behavior (different audiences).
+When a user has multiple brands, the **intended** cross-brand design is:
 
-3. **Follower-adjusted comparison:** When comparing cross-brand, Toby uses the relative score (vs. brand baseline), not absolute views. A 2x-above-average post is equally impressive whether the brand has 1k or 100k followers.
+1. **New brand cold-start [Planned]:** When Toby starts with a new brand that has no performance history, it borrows the best strategies from other brands of the same user. This avoids wasting time re-testing strategies that already won elsewhere.
+
+2. **Cross-brand insights [Planned]:** The insights dashboard will show which strategies work differently across brands. "Brand A does better with 'story' personality, Brand B with 'data-driven'" — this is expected behavior (different audiences).
+
+3. **Follower-adjusted comparison [Live]:** When comparing cross-brand, Toby uses the relative score (vs. brand baseline), not absolute views. A 2x-above-average post is equally impressive whether the brand has 1k or 100k followers.
+
+See Section 11.3 for the concrete implementation roadmap.
 
 ---
 
-## 10. Deployment & Resilience
+## 10. Toby Today vs. True AI Autonomy
 
-### 10.1 Railway Deployment Safety
+### 10.1 Honest Assessment: What Toby Is
+
+Toby v1.0 is **sophisticated automation with statistical learning** — not autonomous AI in the research sense. This distinction matters because it correctly sets expectations and maps out what "true AI" would actually require to build.
+
+| Dimension | Toby v1.0 (Live) | True Autonomous AI |
+|---|---|---|
+| **Decision-making** | Deterministic priority queue — buffer first, then metrics, then analysis | LLM-based reasoning: reads data, forms hypotheses, decides strategy in natural language |
+| **Strategy selection** | Epsilon-greedy: 70% pick best avg_score, 30% random | True Thompson Sampling (Bayesian Beta distributions) or policy gradient RL |
+| **Adaptation** | Fixed 30% exploration forever | Adaptive explore ratio based on detected performance drift |
+| **Performance understanding** | Tracks correlation: "this hook got high scores" | Causal reasoning: "this hook works because the audience for this topic responds to urgency" |
+| **Discovery integration** | Stores discovered trends, does not act on them | Discovery Agent signals Strategy Agent: "sleep content is spiking — start a hook experiment" |
+| **Multi-brand** | All brands share a single strategy pool (brand_id=NULL) | True per-brand learning with cold-start transfer from other brands |
+| **Agent architecture** | One orchestrator calling functions sequentially | Specialized agents (Content, Analysis, Discovery, Strategy) communicating asynchronously |
+| **Self-modification** | Cannot change its own logic; engineers change code | Strategy Agent adjusts its own experiment priorities based on observed patterns |
+
+### 10.2 What Makes Something "True AI"
+
+For Toby to be accurately called an autonomous AI agent (in the technical sense), it would need to satisfy at minimum:
+
+**1. LLM Reasoning Layer**
+
+The most impactful single addition. Instead of a fixed `choose_strategy()` function that calls `ORDER BY avg_score`, Toby would send a structured prompt to Claude or DeepSeek:
+
+```
+You are Toby's Strategy Agent. Here is the performance summary for the last 30 days:
+
+- "educational" personality: avg score 72, 24 samples, declining trend (last 5: 68, 65, 63, 62, 60)
+- "provocative" personality: avg score 81, 12 samples, improving trend (last 5: 75, 79, 82, 83, 84)
+- "superfoods" topic: avg score 68, saturating (8 posts in last 14 days)
+- "sleep" topic: avg score 55, only 3 posts, no conclusion yet
+
+Discovery found: 3 competitors got 500k+ views on "gut microbiome" content this week.
+
+What strategy should Toby use for the next 5 content slots? Explain your reasoning.
+```
+
+The LLM response would drive actual decisions. This makes the system capable of reasoning that current code cannot: "The educational personality is declining despite historical strength — this suggests content fatigue. Recommend a 2-week moratorium on educational tone while aggressively testing storytelling."
+
+**2. True Thompson Sampling**
+
+Replace epsilon-greedy with proper Bayesian bandit:
+
+```python
+# PLANNED — True Thompson Sampling
+# For each option, maintain Beta distribution parameters (alpha, beta)
+
+def thompson_sample(alpha: float, beta: float) -> float:
+    return np.random.beta(alpha, beta)  # Sample from posterior
+
+# Selection: for each option, draw a sample from its Beta distribution.
+# Pick the option whose sample is highest.
+# This naturally handles uncertainty: options with few samples have wide
+# distributions, so exploration emerges from math, not a fixed random ratio.
+```
+
+This is strictly more principled than epsilon-greedy: exploration automatically decreases for well-understood options and increases for uncertain ones.
+
+**3. Causal Inference**
+
+Current Toby measures correlation: "When we use provocative personality, scores are higher." It cannot ask: "Is that because provocative content is genuinely better, or because we happened to use it for sleep-topic content, which performs well regardless?" Causal reasoning requires controlled experiment design and confound tracking.
+
+**4. Agent-to-Agent Communication**
+
+In a true multi-agent system, each agent operates independently and communicates through a shared message bus:
+
+```
+Discovery Agent → "Trending: gut microbiome, 3 competitors, high engagement"
+                                    ↓
+Strategy Agent  → "Received trend signal. Starting gut microbiome hook experiment.
+                   Allocating 4 explore slots over next 48h."
+                                    ↓
+Content Agent   → "Received experiment parameters. Generating 4 content variants."
+                                    ↓
+Analysis Agent  → "Scoring results. Will report to Strategy Agent in 48h."
+```
+
+In Toby v1.0, the orchestrator calls all of these functions sequentially in a single process. There is no agent-to-agent communication.
+
+### 10.3 The Accurate Positioning
+
+For investor communications, the correct framing is:
+
+> **Today:** Toby is an autonomous content pipeline — it removes the human from the creation-scheduling-publishing loop entirely. The intelligence layer is statistical (epsilon-greedy bandit, composite performance scoring). It works, it learns, and it measurably improves.
+>
+> **18 months from now:** Toby evolves to AI-native decision-making — an LLM reasoning layer that reads performance data and makes strategy decisions in natural language, true Bayesian exploration, and a multi-agent architecture where specialized agents collaborate.
+
+The current system is a strong foundation precisely because the data layer is correct. `toby_strategy_scores`, `toby_experiments`, and `toby_content_tags` will feed the LLM reasoning layer and Thompson Sampling implementation without any schema changes.
+
+---
+
+## 11. The Path to Multi-Agent Autonomy
+
+This section is a concrete technical roadmap. Each phase includes specific code changes and the capability it unlocks.
+
+### Phase A: Smarter Selection (3-6 months)
+
+**Goal:** Replace epsilon-greedy with algorithms that are statistically principled.
+
+**A1. True Thompson Sampling**
+
+In `learning_engine.py`, replace `_pick_dimension()`:
+
+```python
+# Current: epsilon-greedy
+def _pick_dimension(..., is_explore: bool) -> str:
+    if is_explore:
+        return random.choice(options)
+    return db.query(best_avg_score).first()
+
+# Target: Thompson Sampling
+def _pick_dimension_thompson(...) -> str:
+    samples = {}
+    for option in options:
+        record = get_strategy_score(option)
+        # Convert avg_score to Beta distribution parameters
+        # alpha = "successes" (scores above threshold, weighted by sample count)
+        # beta  = "failures"  (scores below threshold, weighted by sample count)
+        alpha = max(1.0, record.sample_count * (record.avg_score / 100))
+        beta  = max(1.0, record.sample_count * (1 - record.avg_score / 100))
+        samples[option] = np.random.beta(alpha, beta)
+    return max(samples, key=samples.get)
+```
+
+No schema migration required — computes `alpha` and `beta` from existing `sample_count` and `avg_score` at runtime.
+
+**A2. Adaptive Explore Ratio (Drift Detection)**
+
+Implement `detect_drift()` described in Section 9.2. Runs weekly as part of the Toby tick. Updates `toby_state.explore_ratio` dynamically. New function in `analysis_engine.py` or a dedicated `drift_detector.py`.
+
+### Phase B: Discovery → Strategy Feedback Loop (3-6 months)
+
+**Goal:** Make discovery results actually influence content decisions.
+
+Currently `run_discovery_tick()` stores results but they are never read by `choose_strategy()` or experiment creation logic.
+
+**Required change in `discovery_manager.py`:**
+
+```python
+# PLANNED — after discovery scan in discovery_manager.py
+def seed_experiments_from_discovery(db, user_id, discovery_results):
+    """If discovery finds a trending topic not currently being tested, start an experiment."""
+    trending_topics = extract_trending_topics(discovery_results)
+    for topic in trending_topics:
+        if topic not in current_experiment_options(db, user_id):
+            create_experiment(
+                db, user_id, content_type="reel",
+                dimension="topic", options=[topic, current_best_topic],
+            )
+            log(f"Discovery seeded experiment: {topic} vs {current_best_topic}")
+```
+
+This closes the feedback loop: discover → experiment → score → learn.
+
+### Phase C: Cross-Brand Cold-Start (2-3 months)
+
+**Goal:** New brands benefit from existing brand learnings.
+
+Two changes required:
+
+1. Pass the actual `brand_id` in `_run_analysis_check()` in `orchestrator.py` (currently hardcoded as `None`)
+2. Implement cold-start fallback in `choose_strategy()`:
+
+```python
+# PLANNED — in choose_strategy()
+COLD_START_THRESHOLD = 10  # samples per option
+
+def choose_strategy(db, user_id, brand_id, content_type, ...):
+    brand_scores = get_scores(user_id, brand_id, content_type, dimension)
+
+    if len(brand_scores) < COLD_START_THRESHOLD:
+        # Not enough brand-specific data — fall back to cross-brand scores
+        cross_brand_scores = get_scores(user_id, None, content_type, dimension)
+        return _pick_from(cross_brand_scores)
+
+    return _pick_from(brand_scores)
+```
+
+No schema change required — `brand_id` column already exists in `toby_strategy_scores`.
+
+### Phase D: LLM Strategy Agent (6-12 months)
+
+**Goal:** Add a reasoning layer that reads performance data and makes strategy decisions in natural language.
+
+This is the step that transforms Toby from automation into AI.
+
+```
+StrategyAgent.reason(user_id) → calls Claude/DeepSeek with:
+  - Last 30 days of toby_strategy_scores (aggregated)
+  - Last 10 experiments and their outcomes
+  - Recent discovery results (trending topics, competitor performance)
+  - Current phase and explore_ratio
+  - Any anomalies (score drops, outlier posts, drift signals)
+
+→ Claude returns structured JSON:
+  {
+    "recommended_strategy": {...},
+    "reasoning": "The provocative personality has shown consistent gains...",
+    "new_experiments": [...],
+    "explore_ratio_adjustment": 0.25,
+    "deprioritize_topics": ["superfoods"]
+  }
+
+→ Orchestrator applies recommendations as overrides to epsilon-greedy defaults
+```
+
+**Implementation approach:** The LLM layer starts advisory — recommendations are logged and applied with a confidence weight alongside the existing statistical output. This lets us A/B test LLM strategy quality against the epsilon-greedy baseline before fully trusting it.
+
+### Phase E: True Multi-Agent Architecture (12-18 months)
+
+**Goal:** Specialized agents with independent state and async communication.
+
+```
+┌─────────────────────────────────────────────────┐
+│              MESSAGE BUS (Redis/Postgres)         │
+└──┬────────────┬────────────┬──────────────┬──────┘
+   │            │            │              │
+┌──┴────┐ ┌────┴───┐ ┌──────┴──┐ ┌────────┴────┐
+│Content│ │Analysis│ │Discovery│ │  Strategy   │
+│ Agent │ │ Agent  │ │  Agent  │ │    Agent    │
+│       │ │        │ │         │ │  (LLM core) │
+└───────┘ └────────┘ └─────────┘ └─────────────┘
+```
+
+Each agent:
+- Runs on its own schedule (not a single 5-minute tick)
+- Has its own state and memory
+- Communicates through typed messages, not function calls
+- Can be scaled, restarted, or replaced independently
+
+The current Toby codebase is already architected with boundaries that roughly correspond to the agent boundaries above: `orchestrator.py`, `learning_engine.py`, `discovery_manager.py`, and `analysis_engine.py` become the four agents. The refactor is large but not a rewrite.
+
+**Message exchange example:**
+
+```
+Discovery Agent → {type: "TREND_DETECTED", topic: "gut_microbiome",
+                   competitor_avg_views: 520000, sample_count: 3}
+
+Strategy Agent  → {type: "START_EXPERIMENT", dimension: "topic",
+                   options: ["gut_microbiome", "superfoods"],
+                   priority: "high", slots_to_allocate: 4}
+
+Content Agent   → Generates 4 gut_microbiome pieces over next 48h
+                → {type: "CONTENT_CREATED", experiment_id: "...", slots: [...]}
+
+Analysis Agent  → After 48h: {type: "SCORES_READY", results: {...}}
+
+Strategy Agent  → Updates posteriors, decides next experiment
+```
+
+---
+
+## 12. Deployment & Resilience
+
+### 12.1 Railway Deployment Safety
 
 **Current situation:** The app runs on Railway with Docker. On every deploy, the container restarts. APScheduler runs in-process.
 
@@ -1026,7 +1269,7 @@ start_toby_scheduler(app.state.scheduler)
 print("✅ Toby scheduler registered (5-minute ticks)")
 ```
 
-### 10.2 Error Recovery
+### 12.2 Error Recovery
 
 ```
 Error during content generation:
@@ -1050,11 +1293,11 @@ Error during scoring/analysis:
 
 ---
 
-## 11. Scalability & Future-Proofing
+## 13. Scalability & Future-Proofing
 
-### 11.1 Multi-User Scaling
+### 13.1 Multi-User Scaling
 
-**Current:** Single-user, single-process. Toby tick checks one user.  
+**Current:** Single-user, single-process. Toby tick checks one user.
 **Future:** N users, each running their own Toby.
 
 **Scaling strategy:**
@@ -1065,7 +1308,7 @@ Error during scoring/analysis:
 
 3. **Phase 3 (100+ users):** Per-user task queues. Each user's Toby runs on an independent schedule. Priority queues for buffer-critical checks. Horizontal scaling via worker replicas.
 
-### 11.2 Per-User Budget Limits (Future)
+### 13.2 Per-User Budget Limits 🔧 Planned
 
 The `toby_state` table already has `daily_budget_cents` and `spent_today_cents` columns. When activated:
 
@@ -1075,7 +1318,7 @@ The `toby_state` table already has `daily_budget_cents` and `spent_today_cents` 
 - If budget exceeded: pause generation until reset (midnight UTC)
 - Admin can set/change budget per user via admin panel
 
-### 11.3 New Platform Support
+### 13.3 New Platform Support
 
 Toby's architecture is platform-agnostic in the intelligence layer. Adding a new platform (TikTok, YouTube Shorts, LinkedIn) requires:
 
@@ -1085,9 +1328,9 @@ Toby's architecture is platform-agnostic in the intelligence layer. Adding a new
 
 The learning engine, experiments, and buffer manager work identically regardless of platform.
 
-### 11.4 Feature Flags
+### 13.4 Feature Flags 🔧 Planned
 
-Toby features should be gated behind feature flags from the start:
+> **Status: Planned** — Feature flags are not implemented in v1.0. The `TOBY_FEATURES` dict below represents the intended design when feature gating is added.
 
 ```python
 TOBY_FEATURES = {
@@ -1095,15 +1338,16 @@ TOBY_FEATURES = {
     "auto_publish": True,          # Can Toby publish automatically?
     "experiments": True,           # Is A/B testing enabled?
     "discovery": True,             # Is competitor/hashtag scanning enabled?
-    "cross_brand_learning": True,  # Can Toby share intelligence across brands?
+    "cross_brand_learning": False, # Can Toby share intelligence across brands? [Planned]
+    "llm_strategy_agent": False,   # LLM reasoning layer [Planned]
 }
 ```
 
-This lets us roll out Toby incrementally and disable any subsystem that's misbehaving without turning off the whole agent.
+This would let us roll out Toby incrementally and disable any subsystem that's misbehaving without turning off the whole agent.
 
 ---
 
-## 12. Implementation Phases
+## 14. Implementation Phases
 
 ### Phase 1: Foundation ✅ Complete
 
@@ -1141,9 +1385,9 @@ This lets us roll out Toby incrementally and disable any subsystem that's misbeh
 
 ### Phase 4: Learning Engine ✅ Complete
 
-**Goal:** Toby learns from performance data and improves strategy selection.
+**Goal:** Toby learns from performance data and improves strategy selection using epsilon-greedy bandit logic.
 
-- [x] Implement `LearningEngine` — Thompson Sampling for strategy selection
+- [x] Implement `LearningEngine` — Epsilon-Greedy Bandit for strategy selection (70% exploit / 30% explore)
 - [x] Implement `toby_strategy_scores` — running aggregates with Welford's variance
 - [x] Implement personality system (5 reel + 5 carousel personalities as system prompt modifiers)
 - [x] Implement 70/30 exploit/explore ratio via `choose_strategy()`
@@ -1151,30 +1395,56 @@ This lets us roll out Toby incrementally and disable any subsystem that's misbeh
 - [x] Show experiments dashboard on frontend (TobyExperiments component)
 - [x] Show insights (best topics, hooks, personalities) on frontend (TobyInsights component)
 
-### Phase 5: Discovery Integration ✅ Complete
+### Phase 5: Discovery Integration ✅ Partially Complete
 
 **Goal:** Toby uses competitor/hashtag intelligence to inspire content.
 
 - [x] Implement `DiscoveryManager` — scheduling layer on top of TrendScout
 - [x] Bootstrap mode (20-min scanning for first 7 days, 360-min normal)
-- [ ] Feed discovery results into LearningEngine (trending topics → experiment inspiration) — **planned enhancement**
-- [ ] Seasonal/drift detection and adaptive explore ratio — **planned enhancement**
+- [ ] Feed discovery results into LearningEngine (trending topics → experiment inspiration) — **planned, see Section 11.2**
+- [ ] Seasonal/drift detection and adaptive explore ratio — **planned, see Section 11, Phase A2**
 
-### Phase 6: Polish & Production Hardening — Partially Complete
+> **Note:** Discovery scans run and results are stored in Supabase. The code path from discovery findings to experiment creation does not yet exist — results are visible in the activity feed but do not influence strategy decisions.
+
+### Phase 6: Polish & Production Hardening ⚠️ Partially Complete
 
 **Goal:** Toby is reliable, observable, and production-ready.
 
 - [x] Error handling for content generation failures (slot stays empty, retry on next tick)
 - [x] Activity log with action types: `content_generated`, `analysis_completed`, `error`, etc.
-- [x] Rate limit protection via `max_plans=1` per tick + existing deAPI retry logic
+- [x] Rate limit protection via `max_plans=1` per tick + existing API retry logic
 - [ ] Feature flags for each Toby subsystem — **planned**
 - [ ] Admin panel: view all users' Toby states — **planned**
 - [ ] Monitoring/alerting for Toby failures — **planned**
 - [ ] Per-user budget limits (daily_budget_cents already in schema) — **planned**
 
+### Phase 7: AI Reasoning Layer 🔧 Planned
+
+**Goal:** Elevate Toby from statistical automation to LLM-powered strategy reasoning.
+
+- [ ] Replace epsilon-greedy `_pick_dimension()` with Thompson Sampling (Section 11, Phase A)
+- [ ] Implement drift detection and adaptive explore ratio (Section 11, Phase A2)
+- [ ] Implement discovery → LearningEngine seeding (Section 11, Phase B)
+- [ ] Implement cross-brand cold-start (Section 11, Phase C)
+- [ ] Implement `StrategyAgent` — sends performance summaries to Claude/DeepSeek, receives structured strategy recommendations (Section 11, Phase D)
+- [ ] A/B test LLM strategy recommendations against epsilon-greedy baseline
+
+### Phase 8: Multi-Agent Architecture 🔧 Planned
+
+**Goal:** Decompose the monolithic orchestrator into specialized, independently deployable agents.
+
+- [ ] Define agent message schema (typed events: TREND_DETECTED, START_EXPERIMENT, SCORES_READY, etc.)
+- [ ] Implement message bus (Redis pub/sub or Postgres LISTEN/NOTIFY)
+- [ ] Extract Content Agent from `orchestrator._run_buffer_check()`
+- [ ] Extract Analysis Agent from `orchestrator._run_analysis_check()`
+- [ ] Extract Discovery Agent from `discovery_manager.run_discovery_tick()`
+- [ ] Implement Strategy Agent (LLM-powered coordinator)
+- [ ] Migrate from APScheduler in-process to per-agent independent schedulers
+- [ ] Scale workers per agent independently
+
 ---
 
-## 13. Risk Matrix
+## 15. Risk Matrix
 
 | Risk | Impact | Likelihood | Mitigation |
 |---|---|---|---|
@@ -1182,14 +1452,15 @@ This lets us roll out Toby incrementally and disable any subsystem that's misbeh
 | AI image generation failure | High — incomplete content | Medium | Retry 3x, then use light-mode variant (no AI background needed) |
 | Meta API rate limits during metrics collection | Low — delayed analysis | Medium | Respect rate limits, spread requests over time, skip and retry later |
 | Toby generates poor-quality content | Medium — brand reputation | Low | Quality scoring gate already exists in `ContentGeneratorV2`, plus user can review |
-| Learning engine converges on local optimum | Medium — content gets stale | Low | 30% exploration ratio always tests new strategies |
+| Epsilon-greedy converges on local optimum | Medium — content gets stale | Low | 30% exploration ratio always tests new strategies; Thompson Sampling in roadmap |
 | Database growth from logs/experiments | Low — cost increase | High | Auto-cleanup older than 30 days for activity logs, archive old experiments |
 | Railway deploy during active generation | Medium — interrupted generation | Medium | Existing job recovery handles this; buffer manager catches gaps on next tick |
 | User Content DNA is empty/poorly configured | High — Toby creates off-brand content | Low | Validation check before enabling Toby: NicheConfig must have core fields filled |
+| Over-fitting to early performance data | Medium — strategies based on small samples | Medium | Minimum sample thresholds per experiment; Thompson Sampling (roadmap) handles this better |
 
 ---
 
-## 14. Glossary
+## 16. Glossary
 
 | Term | Definition |
 |---|---|
@@ -1197,16 +1468,19 @@ This lets us roll out Toby incrementally and disable any subsystem that's misbeh
 | **Toby Tick** | The 5-minute background check loop that determines what action Toby should take next. |
 | **Buffer** | Pre-generated content ready to be published when its time slot arrives. Target: 2 days ahead. |
 | **Slot** | A specific date + time + brand + content type (reel or post) when content should be published. |
-| **Exploit** | Choosing the strategy that has the highest proven performance. |
+| **Exploit** | Choosing the strategy that has the highest proven average performance score. |
 | **Explore** | Choosing a random or new strategy to test whether it might outperform current winners. |
 | **Personality** | A system prompt modifier that changes DeepSeek's content generation style. |
-| **Experiment** | An A/B test tracking how different options for a specific dimension perform. |
+| **Experiment** | An A/B test tracking how different options for a specific dimension perform against each other. |
 | **Toby Score** | A composite 0-100 metric: 20% raw views + 30% relative views + 40% engagement quality (saves/shares) + 10% follower context. |
 | **Phase** | Toby's maturity stage: Bootstrap (collecting data), Learning (running experiments), Optimizing (exploiting winners). |
+| **Epsilon-Greedy Bandit** | Toby's current strategy selection algorithm. 70% of the time picks the option with the highest average score (exploit). 30% of the time picks randomly (explore). Simple, effective, and interpretable. |
+| **Thompson Sampling** | A Bayesian multi-armed bandit algorithm that maintains Beta probability distributions per option and samples from them for selection. More principled than epsilon-greedy — exploration emerges from statistical uncertainty rather than a fixed random ratio. Planned for Toby Phase 7 (see Section 11, Phase A). |
+| **Drift Detection** | Planned mechanism to detect when brand performance shifts significantly (20%+ change in rolling averages) and automatically adjust the explore ratio in response. |
+| **LLM Strategy Agent** | A planned component that uses a large language model (Claude or DeepSeek) to reason about performance data in natural language and produce strategy recommendations that override or augment statistical selection. |
 | **Game Changer** | A post that scores 4x+ above the brand's rolling average — triggers special analysis to understand what worked. |
-| **Safe Fallback** | When API failures prevent normal content generation, Toby re-uses the best-performing strategy with slight modifications. |
-| **Thompson Sampling** | A multi-armed bandit algorithm that balances exploitation and exploration without needing large sample sizes. |
+| **Safe Fallback** | When API failures prevent normal content generation, Toby re-uses the best-performing strategy with slight prompt modifications to guarantee slot fill. |
 
 ---
 
-*Document authored by the engineering team. For questions, ping the #toby-architecture channel.*
+*Document v2.0 — verified against production source code, February 2026. All implementation status annotations reflect actual code state, not aspirational design.*

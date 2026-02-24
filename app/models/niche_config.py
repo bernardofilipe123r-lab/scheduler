@@ -75,7 +75,7 @@ class NicheConfig(Base):
     carousel_cta_options = Column(JSONB, default=[])
 
     # Carousel overlay opacity — controls dark overlay strength on carousel slides (0-100)
-    carousel_cover_overlay_opacity = Column(Integer, default=55)
+    carousel_cover_overlay_opacity = Column(Integer, default=65)
     carousel_content_overlay_opacity = Column(Integer, default=85)
 
     # Caption sections — empty until configured

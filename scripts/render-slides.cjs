@@ -248,9 +248,9 @@ async function renderCoverSlide(input) {
     fillLinearGradientEndPoint: { x: 0, y: CANVAS_HEIGHT },
     fillLinearGradientColorStops: [
       0, 'rgba(0,0,0,0)',
-      0.45, 'rgba(0,0,0,0.16)',
-      0.7, 'rgba(0,0,0,0.53)',
-      1, 'rgba(0,0,0,0.97)',
+      0.45, 'rgba(0,0,0,0.26)',
+      0.7, 'rgba(0,0,0,0.63)',
+      1, 'rgba(0,0,0,1.0)',
     ],
   });
   layer.add(gradRect);

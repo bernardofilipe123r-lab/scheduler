@@ -154,7 +154,7 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
         "yt_title_bad_examples": cfg.yt_title_bad_examples or [],
         "carousel_cta_topic": cfg.carousel_cta_topic or "",
         "carousel_cta_options": cfg.carousel_cta_options or [],
-        "carousel_cover_overlay_opacity": cfg.carousel_cover_overlay_opacity if cfg.carousel_cover_overlay_opacity is not None else 55,
+        "carousel_cover_overlay_opacity": cfg.carousel_cover_overlay_opacity if cfg.carousel_cover_overlay_opacity is not None else 65,
         "carousel_content_overlay_opacity": cfg.carousel_content_overlay_opacity if cfg.carousel_content_overlay_opacity is not None else 85,
         "follow_section_text": cfg.follow_section_text,
         "save_section_text": cfg.save_section_text,

@@ -249,7 +249,7 @@ class ImageGenerator:
             image = ai_bg.copy()
             
             # Apply dark overlay for thumbnail (configurable via niche config)
-            cover_opacity = getattr(self.ctx, 'carousel_cover_overlay_opacity', 55) if self.ctx else 55
+            cover_opacity = getattr(self.ctx, 'carousel_cover_overlay_opacity', 65) if self.ctx else 65
             overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, int(255 * cover_opacity / 100)))
             image = image.convert('RGBA')
             image = Image.alpha_composite(image, overlay)
