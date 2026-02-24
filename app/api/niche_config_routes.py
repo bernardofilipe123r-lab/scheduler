@@ -281,7 +281,7 @@ async def get_ai_understanding(
     """
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(user_id=user_id)
+    ctx = service.get_context(user_id=user_id, db=db)
 
     config_summary = []
     if ctx.niche_name:
@@ -418,7 +418,7 @@ async def generate_post_example(
     """Generate a single post example via DeepSeek based on brand config."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(user_id=user_id)
+    ctx = service.get_context(user_id=user_id, db=db)
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -516,7 +516,7 @@ async def generate_post_examples_batch(
     """Generate multiple post examples via DeepSeek in a single call."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(user_id=user_id)
+    ctx = service.get_context(user_id=user_id, db=db)
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -670,7 +670,7 @@ async def generate_reel_examples_batch(
     """Generate reel examples via DeepSeek using seed Health & Wellness examples + user's brand config."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(user_id=user_id)
+    ctx = service.get_context(user_id=user_id, db=db)
 
     # Require General section to be filled
     if not ctx.content_brief and not ctx.niche_name:
@@ -773,7 +773,7 @@ async def suggest_yt_titles(
     """Generate suggested YouTube title examples based on brand config."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(user_id=user_id)
+    ctx = service.get_context(user_id=user_id, db=db)
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:

@@ -244,9 +244,9 @@ export function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafa] flex flex-col">
+    <div className="h-screen bg-[#fafafa] flex flex-col">
       {/* ── Sticky header ── */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+      <header className="flex-shrink-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-1 rounded-lg bg-gray-100 border border-gray-200">
@@ -624,7 +624,7 @@ export function OnboardingPage() {
       </main>
 
       {/* ── Sticky footer ── */}
-      <footer className="sticky bottom-0 z-30 bg-white/80 backdrop-blur-md border-t border-gray-200/60">
+      <footer className="flex-shrink-0 z-30 bg-white/80 backdrop-blur-md border-t border-gray-200/60">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           {step > 1 && !hasBrand ? (
             <button

@@ -4,9 +4,12 @@ NicheConfigService — loads and caches niche configuration per user.
 Content DNA is user-level, not per-brand.
 """
 
+import logging
 from typing import Optional
 from datetime import datetime, timedelta
 from app.core.prompt_context import PromptContext
+
+logger = logging.getLogger(__name__)
 
 
 class NicheConfigService:
@@ -15,7 +18,7 @@ class NicheConfigService:
     _cache_ttl = timedelta(minutes=5)
     _cache_timestamps: dict = {}
 
-    def get_context(self, user_id: Optional[str] = None, **kwargs) -> PromptContext:
+    def get_context(self, user_id: Optional[str] = None, db=None, **kwargs) -> PromptContext:
         # Accept and ignore brand_id for backward compat with callers
         cache_key = f"{user_id}"
 
@@ -24,7 +27,7 @@ class NicheConfigService:
             if cached_at and datetime.utcnow() - cached_at < self._cache_ttl:
                 return self._cache[cache_key]
 
-        ctx = self._load(user_id)
+        ctx = self._load(user_id, db=db)
 
         self._cache[cache_key] = ctx
         self._cache_timestamps[cache_key] = datetime.utcnow()
@@ -39,8 +42,7 @@ class NicheConfigService:
             self._cache.clear()
             self._cache_timestamps.clear()
 
-    def _load(self, user_id: Optional[str]) -> PromptContext:
-        from app.db_connection import get_db_session
+    def _load(self, user_id: Optional[str], db=None) -> PromptContext:
         from app.models.niche_config import NicheConfig
 
         ctx = PromptContext()  # Defaults = current hardcoded values
@@ -49,18 +51,27 @@ class NicheConfigService:
             return ctx
 
         try:
-            with get_db_session() as db:
+            if db:
                 cfg = (
                     db.query(NicheConfig)
                     .filter(NicheConfig.user_id == user_id)
                     .first()
                 )
-
                 if cfg:
                     ctx = self._apply_config(ctx, cfg)
+            else:
+                from app.db_connection import get_db_session
+                with get_db_session() as session:
+                    cfg = (
+                        session.query(NicheConfig)
+                        .filter(NicheConfig.user_id == user_id)
+                        .first()
+                    )
+                    if cfg:
+                        ctx = self._apply_config(ctx, cfg)
 
         except Exception as e:
-            print(f"Warning: Could not load niche config, using defaults: {e}")
+            logger.error("Failed to load niche config for user %s: %s", user_id, e, exc_info=True)
 
         return ctx
 
