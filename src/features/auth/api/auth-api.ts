@@ -63,7 +63,7 @@ export async function registerApi(email: string, password: string, name: string)
     password,
     options: {
       data: { name },
-      emailRedirectTo: window.location.origin,
+      emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
     },
   })
   if (error) throw new Error(error.message)
