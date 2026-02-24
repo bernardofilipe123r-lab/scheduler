@@ -1,12 +1,7 @@
 """
-NicheConfigService — loads, merges, and caches niche configuration.
+NicheConfigService — loads and caches niche configuration per user.
 
-Strategy:
-1. Load global config (brand_id IS NULL)
-2. Load per-brand config (brand_id = ?)
-3. Merge: per-brand values override global values (non-NULL fields only)
-4. Return as PromptContext
-5. Cache with 5-minute TTL
+Content DNA is user-level, not per-brand.
 """
 
 from typing import Optional
@@ -20,31 +15,31 @@ class NicheConfigService:
     _cache_ttl = timedelta(minutes=5)
     _cache_timestamps: dict = {}
 
-    def get_context(self, brand_id: Optional[str] = None, user_id: Optional[str] = None) -> PromptContext:
-        cache_key = f"{user_id}:{brand_id or 'global'}"
+    def get_context(self, user_id: Optional[str] = None, **kwargs) -> PromptContext:
+        # Accept and ignore brand_id for backward compat with callers
+        cache_key = f"{user_id}"
 
         if cache_key in self._cache:
             cached_at = self._cache_timestamps.get(cache_key)
             if cached_at and datetime.utcnow() - cached_at < self._cache_ttl:
                 return self._cache[cache_key]
 
-        ctx = self._load_and_merge(brand_id, user_id)
+        ctx = self._load(user_id)
 
         self._cache[cache_key] = ctx
         self._cache_timestamps[cache_key] = datetime.utcnow()
 
         return ctx
 
-    def invalidate_cache(self, brand_id: Optional[str] = None, user_id: Optional[str] = None):
-        if brand_id and user_id:
-            self._cache.pop(f"{user_id}:{brand_id}", None)
+    def invalidate_cache(self, user_id: Optional[str] = None, **kwargs):
+        # Accept and ignore brand_id for backward compat with callers
         if user_id:
-            self._cache.pop(f"{user_id}:global", None)
+            self._cache.pop(f"{user_id}", None)
         else:
             self._cache.clear()
             self._cache_timestamps.clear()
 
-    def _load_and_merge(self, brand_id: Optional[str], user_id: Optional[str]) -> PromptContext:
+    def _load(self, user_id: Optional[str]) -> PromptContext:
         from app.db_connection import get_db_session
         from app.models.niche_config import NicheConfig
 
@@ -55,23 +50,14 @@ class NicheConfigService:
 
         try:
             with get_db_session() as db:
-                global_cfg = (
+                cfg = (
                     db.query(NicheConfig)
-                    .filter(NicheConfig.user_id == user_id, NicheConfig.brand_id.is_(None))
+                    .filter(NicheConfig.user_id == user_id)
                     .first()
                 )
 
-                if global_cfg:
-                    ctx = self._apply_config(ctx, global_cfg)
-
-                if brand_id:
-                    brand_cfg = (
-                        db.query(NicheConfig)
-                        .filter(NicheConfig.user_id == user_id, NicheConfig.brand_id == brand_id)
-                        .first()
-                    )
-                    if brand_cfg:
-                        ctx = self._apply_config(ctx, brand_cfg)
+                if cfg:
+                    ctx = self._apply_config(ctx, cfg)
 
         except Exception as e:
             print(f"Warning: Could not load niche config, using defaults: {e}")

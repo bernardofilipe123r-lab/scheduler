@@ -1,7 +1,7 @@
-"""NicheConfig model — stores niche configuration per user/brand."""
+"""NicheConfig model — stores niche configuration per user."""
 
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, UniqueConstraint, ForeignKey, Integer
+from sqlalchemy import Column, String, Text, DateTime, UniqueConstraint, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from app.models.base import Base
 import uuid
@@ -12,9 +12,6 @@ class NicheConfig(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(100), nullable=False)
-
-    # NULL brand_id = global config; non-NULL = per-brand override
-    brand_id = Column(String(50), ForeignKey("brands.id", ondelete="CASCADE"), nullable=True)
 
     # Core Identity — all empty by default, user fills in everything
     niche_name = Column(String(100), nullable=False, default="")
@@ -88,5 +85,5 @@ class NicheConfig(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint("user_id", "brand_id", name="uq_niche_config_user_brand"),
+        UniqueConstraint("user_id", name="uq_niche_config_user"),
     )

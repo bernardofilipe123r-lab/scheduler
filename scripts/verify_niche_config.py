@@ -16,7 +16,6 @@ cur.execute("""
            follow_section_text, save_section_text, disclaimer_text
     FROM niche_config
     WHERE user_id = '7c7bdcc7-ad79-4554-8d32-e5ef02608e84'
-      AND brand_id IS NULL
 """)
 
 row = cur.fetchone()

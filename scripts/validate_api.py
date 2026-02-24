@@ -468,7 +468,7 @@ def check_niche_config_fields():
         # Check NicheConfig columns
         nc_columns = {c.name for c in NicheConfig.__table__.columns}
         # Ignore meta columns
-        nc_columns -= {"id", "user_id", "brand_id", "created_at", "updated_at"}
+        nc_columns -= {"id", "user_id", "created_at", "updated_at"}
 
         # Every NicheConfig column should map to a PromptContext field
         missing_in_ctx = nc_columns - ctx_fields

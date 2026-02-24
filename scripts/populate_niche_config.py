@@ -8,7 +8,6 @@ import json
 import psycopg2
 
 USER_ID = "7c7bdcc7-ad79-4554-8d32-e5ef02608e84"
-BRAND_ID = None  # Global config
 
 DATA = {
     "niche_name": "Health & Wellness",
@@ -373,10 +372,10 @@ def main():
     cur = conn.cursor()
 
     # Build column lists
-    columns = ["id", "user_id", "brand_id"] + list(DATA.keys())
+    columns = ["id", "user_id"] + list(DATA.keys())
     placeholders = ["%s"] * len(columns)
 
-    values = [config_id, USER_ID, BRAND_ID]
+    values = [config_id, USER_ID]
     for col in DATA.keys():
         val = DATA[col]
         if col in JSONB_COLUMNS:
@@ -384,7 +383,7 @@ def main():
         else:
             values.append(val)
 
-    # Build SET clause for ON CONFLICT (skip id, user_id, brand_id)
+    # Build SET clause for ON CONFLICT (skip id, user_id)
     update_cols = list(DATA.keys())
     set_clause = ", ".join(
         f"{col} = EXCLUDED.{col}" for col in update_cols
@@ -394,12 +393,11 @@ def main():
     sql = f"""
         INSERT INTO niche_config ({', '.join(columns)})
         VALUES ({', '.join(placeholders)})
-        ON CONFLICT ON CONSTRAINT uq_niche_config_user_brand
+        ON CONFLICT ON CONSTRAINT uq_niche_config_user
         DO UPDATE SET {set_clause}
     """
 
-    print(f"Inserting global niche_config for user {USER_ID}...")
-    print(f"  brand_id: {BRAND_ID} (global)")
+    print(f"Inserting niche_config for user {USER_ID}...")
     print(f"  niche_name: {DATA['niche_name']}")
     print(f"  reel_examples count: {len(DATA['reel_examples'])}")
 
@@ -410,7 +408,7 @@ def main():
     # Verify
     cur.execute(
         """
-        SELECT id, user_id, brand_id, niche_name,
+        SELECT id, user_id, niche_name,
                jsonb_array_length(reel_examples) as reel_count,
                jsonb_array_length(post_examples) as post_count,
                jsonb_array_length(topic_categories) as cat_count,
@@ -418,7 +416,7 @@ def main():
                jsonb_array_length(hashtags) as hashtag_count,
                created_at, updated_at
         FROM niche_config
-        WHERE user_id = %s AND brand_id IS NULL
+        WHERE user_id = %s
         """,
         (USER_ID,),
     )
@@ -427,16 +425,15 @@ def main():
         print("\n--- Verification ---")
         print(f"  id:               {row[0]}")
         print(f"  user_id:          {row[1]}")
-        print(f"  brand_id:         {row[2]}")
-        print(f"  niche_name:       {row[3]}")
-        print(f"  reel_examples:    {row[4]} items")
-        print(f"  post_examples:    {row[5]} items")
-        print(f"  topic_categories: {row[6]} items")
-        print(f"  content_tone:     {row[7]} items")
-        print(f"  hashtags:         {row[8]} items")
-        print(f"  created_at:       {row[9]}")
-        print(f"  updated_at:       {row[10]}")
-        print("\nAll 20 reel examples confirmed." if row[4] == 20 else f"\nWARNING: Expected 20 reel examples, got {row[4]}")
+        print(f"  niche_name:       {row[2]}")
+        print(f"  reel_examples:    {row[3]} items")
+        print(f"  post_examples:    {row[4]} items")
+        print(f"  topic_categories: {row[5]} items")
+        print(f"  content_tone:     {row[6]} items")
+        print(f"  hashtags:         {row[7]} items")
+        print(f"  created_at:       {row[8]}")
+        print(f"  updated_at:       {row[9]}")
+        print("\nAll 20 reel examples confirmed." if row[3] == 20 else f"\nWARNING: Expected 20 reel examples, got {row[3]}")
     else:
         print("ERROR: Row not found after insert!")
 

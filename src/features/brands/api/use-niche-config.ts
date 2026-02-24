@@ -4,21 +4,18 @@ import type { NicheConfig } from '../types/niche-config'
 
 const NICHE_CONFIG_KEY = ['niche-config'] as const
 
-async function fetchNicheConfig(brandId?: string): Promise<NicheConfig> {
-  const url = brandId
-    ? `/api/v2/brands/niche-config?brand_id=${encodeURIComponent(brandId)}`
-    : '/api/v2/brands/niche-config'
-  return apiClient.get<NicheConfig>(url)
+async function fetchNicheConfig(): Promise<NicheConfig> {
+  return apiClient.get<NicheConfig>('/api/v2/brands/niche-config')
 }
 
-async function updateNicheConfig(data: Partial<NicheConfig> & { brand_id?: string | null }): Promise<NicheConfig> {
+async function updateNicheConfig(data: Partial<NicheConfig>): Promise<NicheConfig> {
   return apiClient.put<NicheConfig>('/api/v2/brands/niche-config', data)
 }
 
-export function useNicheConfig(brandId?: string) {
+export function useNicheConfig() {
   return useQuery({
-    queryKey: [...NICHE_CONFIG_KEY, brandId ?? 'global'],
-    queryFn: () => fetchNicheConfig(brandId),
+    queryKey: [...NICHE_CONFIG_KEY],
+    queryFn: () => fetchNicheConfig(),
     staleTime: 5 * 60 * 1000,
   })
 }
@@ -42,11 +39,8 @@ interface AiUnderstanding {
   example_post: { title: string; slides: string[] } | null
 }
 
-async function fetchAiUnderstanding(brandId?: string): Promise<AiUnderstanding> {
-  const url = brandId
-    ? `/api/v2/brands/niche-config/ai-understanding?brand_id=${encodeURIComponent(brandId)}`
-    : '/api/v2/brands/niche-config/ai-understanding'
-  return apiClient.post<AiUnderstanding>(url, {})
+async function fetchAiUnderstanding(): Promise<AiUnderstanding> {
+  return apiClient.post<AiUnderstanding>('/api/v2/brands/niche-config/ai-understanding', {})
 }
 
 export function useAiUnderstanding() {
@@ -80,7 +74,7 @@ interface GeneratedPostExample {
   study_ref: string
 }
 
-async function fetchGeneratePostExample(data: { brand_id?: string; num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExample> {
+async function fetchGeneratePostExample(data: { num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExample> {
   return apiClient.post<GeneratedPostExample>('/api/v2/brands/niche-config/generate-post-example', data)
 }
 
@@ -96,7 +90,7 @@ interface GeneratedPostExamplesBatch {
   posts: GeneratedPostExample[]
 }
 
-async function fetchGeneratePostExamplesBatch(data: { brand_id?: string; count: number; num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExamplesBatch> {
+async function fetchGeneratePostExamplesBatch(data: { count: number; num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExamplesBatch> {
   return apiClient.post<GeneratedPostExamplesBatch>('/api/v2/brands/niche-config/generate-post-examples-batch', data)
 }
 
@@ -112,7 +106,7 @@ interface GeneratedReelExamplesBatch {
   reels: { title: string; content_lines: string[] }[]
 }
 
-async function fetchGenerateReelExamplesBatch(data: { brand_id?: string; count: number }): Promise<GeneratedReelExamplesBatch> {
+async function fetchGenerateReelExamplesBatch(data: { count: number }): Promise<GeneratedReelExamplesBatch> {
   return apiClient.post<GeneratedReelExamplesBatch>('/api/v2/brands/niche-config/generate-reel-examples-batch', data)
 }
 
@@ -129,11 +123,8 @@ interface SuggestedYtTitles {
   bad_titles: string[]
 }
 
-async function fetchSuggestYtTitles(brandId?: string): Promise<SuggestedYtTitles> {
-  const url = brandId
-    ? `/api/v2/brands/niche-config/suggest-yt-titles?brand_id=${encodeURIComponent(brandId)}`
-    : '/api/v2/brands/niche-config/suggest-yt-titles'
-  return apiClient.post<SuggestedYtTitles>(url, {})
+async function fetchSuggestYtTitles(): Promise<SuggestedYtTitles> {
+  return apiClient.post<SuggestedYtTitles>('/api/v2/brands/niche-config/suggest-yt-titles', {})
 }
 
 export function useSuggestYtTitles() {

@@ -9,7 +9,6 @@ interface ContentExamplesSectionProps {
   postExamples: PostExample[]
   onReelExamplesChange: (examples: ReelExample[]) => void
   onPostExamplesChange: (examples: PostExample[]) => void
-  brandId?: string
   showOnly?: 'reels' | 'posts'
   generalFilled?: boolean
   nicheName?: string
@@ -288,7 +287,6 @@ export function ContentExamplesSection({
   postExamples,
   onReelExamplesChange,
   onPostExamplesChange,
-  brandId,
   showOnly,
   generalFilled = false,
   nicheName,
@@ -316,7 +314,7 @@ export function ContentExamplesSection({
     const existingTitles = postExamples.map(ex => ex.title).filter(Boolean)
     setGeneratingIndex(newIndex)
     generateMutation.mutate(
-      { brand_id: brandId, num_slides: newPostSlideCount, existing_titles: existingTitles },
+      { num_slides: newPostSlideCount, existing_titles: existingTitles },
       {
         onSuccess: (data) => {
           const updated = [...postExamples, newExample]
@@ -361,7 +359,7 @@ export function ContentExamplesSection({
   const generateReelBatch = () => {
     setReelBatchGenerating(true)
     reelBatchMutation.mutate(
-      { brand_id: brandId, count: 50 },
+      { count: 50 },
       {
         onSuccess: (data) => {
           onReelExamplesChange(data.reels.map(r => ({ title: r.title, content_lines: r.content_lines })))
@@ -380,7 +378,7 @@ export function ContentExamplesSection({
     const existingTitles = postExamples.map(ex => ex.title).filter(Boolean)
     setBatchGenerating(true)
     batchMutation.mutate(
-      { brand_id: brandId, count, num_slides: newPostSlideCount, existing_titles: existingTitles },
+      { count, num_slides: newPostSlideCount, existing_titles: existingTitles },
       {
         onSuccess: (data) => {
           const newExamples = data.posts.map(p => ({

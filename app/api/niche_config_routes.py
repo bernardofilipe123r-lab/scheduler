@@ -7,7 +7,7 @@ import json
 import requests as http_requests
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from app.db_connection import get_db
@@ -33,7 +33,6 @@ EXAMPLE_LIMITS = {
 # --- Pydantic schemas ---
 
 class NicheConfigUpdate(BaseModel):
-    brand_id: Optional[str] = None
     niche_name: Optional[str] = Field(None, max_length=100)
     niche_description: Optional[str] = None
     content_brief: Optional[str] = None
@@ -124,7 +123,6 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
     """Convert a NicheConfig row to a JSON-serializable dict."""
     return {
         "id": cfg.id,
-        "brand_id": cfg.brand_id,
         "niche_name": cfg.niche_name,
         "niche_description": cfg.niche_description,
         "content_brief": cfg.content_brief or "",
@@ -166,16 +164,15 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
 
 @router.get("")
 async def get_niche_config(
-    brand_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Get niche config — global or per-brand."""
+    """Get niche config for the current user."""
     user_id = user["id"]
 
     cfg = (
         db.query(NicheConfig)
-        .filter(NicheConfig.user_id == user_id, NicheConfig.brand_id == brand_id)
+        .filter(NicheConfig.user_id == user_id)
         .first()
     )
 
@@ -187,7 +184,6 @@ async def get_niche_config(
     ctx = PromptContext()
     return {
         "id": None,
-        "brand_id": brand_id,
         "niche_name": ctx.niche_name,
         "niche_description": ctx.niche_description,
         "content_brief": ctx.content_brief,
@@ -231,9 +227,8 @@ async def update_niche_config(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Create or update niche config — global or per-brand."""
+    """Create or update niche config for the current user."""
     user_id = user["id"]
-    brand_id = request.brand_id  # None = global
 
     # Validate examples if provided
     try:
@@ -247,16 +242,16 @@ async def update_niche_config(
     # Find existing or create new
     cfg = (
         db.query(NicheConfig)
-        .filter(NicheConfig.user_id == user_id, NicheConfig.brand_id == brand_id)
+        .filter(NicheConfig.user_id == user_id)
         .first()
     )
 
     if not cfg:
-        cfg = NicheConfig(user_id=user_id, brand_id=brand_id)
+        cfg = NicheConfig(user_id=user_id)
         db.add(cfg)
 
     # Update fields that were provided (non-None)
-    update_data = request.model_dump(exclude_unset=True, exclude={"brand_id"})
+    update_data = request.model_dump(exclude_unset=True)
     for field_name, value in update_data.items():
         if value is not None:
             setattr(cfg, field_name, value)
@@ -266,14 +261,13 @@ async def update_niche_config(
 
     # Invalidate cache
     service = get_niche_config_service()
-    service.invalidate_cache(brand_id=brand_id, user_id=user_id)
+    service.invalidate_cache(user_id=user_id)
 
     return _cfg_to_dict(cfg)
 
 
 @router.post("/ai-understanding")
 async def get_ai_understanding(
-    brand_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -287,15 +281,7 @@ async def get_ai_understanding(
     """
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(brand_id=brand_id, user_id=user_id)
-
-    # Resolve brand display name from brands table (not niche_config.parent_brand_name)
-    brand_display_name = None
-    if brand_id:
-        from app.models.brands import Brand
-        brand_row = db.query(Brand.display_name).filter(Brand.id == brand_id).first()
-        if brand_row:
-            brand_display_name = brand_row.display_name
+    ctx = service.get_context(user_id=user_id)
 
     config_summary = []
     if ctx.niche_name:
@@ -312,9 +298,7 @@ async def get_ai_understanding(
         config_summary.append(f"Topics: {', '.join(ctx.topic_categories[:10])}")
     if ctx.content_philosophy:
         config_summary.append(f"Philosophy: {ctx.content_philosophy}")
-    if brand_display_name:
-        config_summary.append(f"Brand: {brand_display_name}")
-    elif ctx.parent_brand_name:
+    if ctx.parent_brand_name:
         config_summary.append(f"Brand: {ctx.parent_brand_name}")
     if ctx.image_style_description:
         config_summary.append(f"Visual style: {ctx.image_style_description}")
@@ -421,7 +405,6 @@ OUTPUT FORMAT (JSON only):
 # --- Generate Post Example endpoint ---
 
 class GeneratePostExampleRequest(BaseModel):
-    brand_id: Optional[str] = None
     num_slides: int = Field(default=4, ge=3, le=4)
     existing_titles: List[str] = Field(default_factory=list, max_length=20)
 
@@ -435,7 +418,7 @@ async def generate_post_example(
     """Generate a single post example via DeepSeek based on brand config."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(brand_id=request.brand_id, user_id=user_id)
+    ctx = service.get_context(user_id=user_id)
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -519,7 +502,6 @@ OUTPUT FORMAT (JSON only):
 # --- Generate Post Examples Batch endpoint ---
 
 class GeneratePostExamplesBatchRequest(BaseModel):
-    brand_id: Optional[str] = None
     count: int = Field(default=5, ge=1, le=10)
     num_slides: int = Field(default=4, ge=3, le=4)
     existing_titles: List[str] = Field(default_factory=list, max_length=50)
@@ -534,7 +516,7 @@ async def generate_post_examples_batch(
     """Generate multiple post examples via DeepSeek in a single call."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(brand_id=request.brand_id, user_id=user_id)
+    ctx = service.get_context(user_id=user_id)
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -676,7 +658,6 @@ _SEED_REEL_EXAMPLES = [
 
 
 class GenerateReelExamplesBatchRequest(BaseModel):
-    brand_id: Optional[str] = None
     count: int = Field(default=50, ge=1, le=50)
 
 
@@ -689,7 +670,7 @@ async def generate_reel_examples_batch(
     """Generate reel examples via DeepSeek using seed Health & Wellness examples + user's brand config."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(brand_id=request.brand_id, user_id=user_id)
+    ctx = service.get_context(user_id=user_id)
 
     # Require General section to be filled
     if not ctx.content_brief and not ctx.niche_name:
@@ -786,14 +767,13 @@ OUTPUT FORMAT (JSON only):
 
 @router.post("/suggest-yt-titles")
 async def suggest_yt_titles(
-    brand_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Generate suggested YouTube title examples based on brand config."""
     user_id = user["id"]
     service = get_niche_config_service()
-    ctx = service.get_context(brand_id=brand_id, user_id=user_id)
+    ctx = service.get_context(user_id=user_id)
 
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:

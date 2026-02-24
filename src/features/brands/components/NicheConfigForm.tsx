@@ -81,8 +81,8 @@ function useFontPreload() {
   return loaded
 }
 
-export function NicheConfigForm({ brandId }: { brandId?: string }) {
-  const { data, isLoading } = useNicheConfig(brandId)
+export function NicheConfigForm() {
+  const { data, isLoading } = useNicheConfig()
   const { data: brandsData } = useBrands()
   const updateMutation = useUpdateNicheConfig()
   const aiMutation = useAiUnderstanding()
@@ -108,8 +108,8 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
     return available[Math.floor(Math.random() * available.length)] || ''
   }, [brandsData])
 
-  // Effective brand for reel preview API — previewBrand fallback when no brandId selected
-  const effectiveBrand = brandId || previewBrand
+  // Effective brand for reel preview API
+  const effectiveBrand = previewBrand
 
   // Brand data from DB for the effective brand (handle, display name, color)
   const effectiveBrandData = useMemo(
@@ -146,9 +146,9 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
     }
   }, [data])
 
-  // On mount / brandId change: restore persisted AI result from localStorage
+  // On mount: restore persisted AI result from localStorage
   useEffect(() => {
-    const storageKey = `ai-understanding-${brandId || 'global'}`
+    const storageKey = 'ai-understanding-global'
     try {
       const saved = localStorage.getItem(storageKey)
       if (!saved) return
@@ -170,7 +170,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
       localStorage.removeItem(storageKey)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId])
+  }, [])
 
   const update = <K extends keyof NicheConfig>(key: K, value: NicheConfig[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -197,7 +197,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
 
   const handleSave = async () => {
     try {
-      await updateMutation.mutateAsync({ ...values, brand_id: brandId ?? null })
+      await updateMutation.mutateAsync({ ...values })
       toast.success('Content DNA saved')
       setDirty(false)
     } catch {
@@ -208,10 +208,10 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
   const handleAiUnderstanding = useCallback(async () => {
     setAiResult(null)
     setReelImages(null)
-    const storageKey = `ai-understanding-${brandId || 'global'}`
+    const storageKey = 'ai-understanding-global'
     try {
       // Step 1: AI text generation (~15–30s)
-      const result = await aiMutation.mutateAsync(brandId)
+      const result = await aiMutation.mutateAsync()
 
       // Persist immediately so results survive if user navigates away during reel render
       localStorage.setItem(storageKey, JSON.stringify(result))
@@ -234,15 +234,15 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
       toast.error('Failed to generate AI understanding')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, effectiveBrand])
+  }, [effectiveBrand])
 
   const handleRegenerate = useCallback(() => {
-    localStorage.removeItem(`ai-understanding-${brandId || 'global'}`)
+    localStorage.removeItem('ai-understanding-global')
     setAiResult(null)
     setReelImages(null)
     handleAiUnderstanding()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, handleAiUnderstanding])
+  }, [handleAiUnderstanding])
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ general: false, reels: false, posts: false, ai: false })
   const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
@@ -364,7 +364,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               postExamples={values.post_examples}
               onReelExamplesChange={(v) => update('reel_examples', v)}
               onPostExamplesChange={(v) => update('post_examples', v)}
-              brandId={brandId}
               showOnly="reels"
               generalFilled={generalFilled}
               nicheName={values.niche_name}
@@ -482,7 +481,7 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               <button
                 type="button"
                 onClick={() => {
-                  ytSuggestMutation.mutate(brandId, {
+                  ytSuggestMutation.mutate(undefined, {
                     onSuccess: (data) => {
                       if (data.good_titles?.length) {
                         update('yt_title_examples', data.good_titles)
@@ -572,7 +571,6 @@ export function NicheConfigForm({ brandId }: { brandId?: string }) {
               postExamples={values.post_examples}
               onReelExamplesChange={(v) => update('reel_examples', v)}
               onPostExamplesChange={(v) => update('post_examples', v)}
-              brandId={brandId}
               showOnly="posts"
               generalFilled={generalFilled}
             />

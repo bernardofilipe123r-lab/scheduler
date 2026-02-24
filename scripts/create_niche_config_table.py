@@ -10,7 +10,6 @@ cur.execute("""
 CREATE TABLE IF NOT EXISTS niche_config (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(100) NOT NULL,
-    brand_id VARCHAR(50) REFERENCES brands(id) ON DELETE CASCADE,
     niche_name VARCHAR(100) NOT NULL DEFAULT '',
     niche_description TEXT DEFAULT '',
     target_audience VARCHAR(255) DEFAULT '',
@@ -36,13 +35,11 @@ CREATE TABLE IF NOT EXISTS niche_config (
     disclaimer_text TEXT DEFAULT '',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT uq_niche_config_user_brand UNIQUE (user_id, brand_id)
+    CONSTRAINT uq_niche_config_user UNIQUE (user_id)
 );
 """)
 
 cur.execute("CREATE INDEX IF NOT EXISTS idx_niche_config_user_id ON niche_config(user_id);")
-cur.execute("CREATE INDEX IF NOT EXISTS idx_niche_config_brand_id ON niche_config(brand_id);")
-
 conn.commit()
 print("niche_config table created successfully")
 

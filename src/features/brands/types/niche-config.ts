@@ -18,7 +18,6 @@ export interface CtaOption {
 
 export interface NicheConfig {
   id?: string | null
-  brand_id?: string | null
 
   // Core Identity
   niche_name: string
