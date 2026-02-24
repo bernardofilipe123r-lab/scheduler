@@ -232,7 +232,7 @@ function UserDetail({
   }
 
   const confirmDeleteUser = () => {
-    if (!window.confirm(`Permanently delete ${user.email}? This cannot be undone.`)) return
+    if (!window.confirm(`Permanently delete ${user.email} and ALL their data (brands, jobs, analytics, etc.)? This cannot be undone.`)) return
     deleteUserMutation.mutate()
   }
 

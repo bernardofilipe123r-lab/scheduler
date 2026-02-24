@@ -141,6 +141,7 @@ async def get_user_brands(
 @router.delete("/api/admin/users/{target_user_id}", summary="Delete a user permanently (super admin only)")
 async def delete_user(
     target_user_id: str,
+    db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     _require_super_admin(user)
@@ -148,6 +149,34 @@ async def delete_user(
     if target_user_id == user.get("id"):
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
 
+    from app.models import (
+        Brand, GenerationJob, ScheduledReel, NicheConfig, UserProfile,
+        BrandAnalytics, AnalyticsRefreshLog, AnalyticsSnapshot, ContentHistory,
+        PostPerformance, TrendingContent, YouTubeChannel,
+        TobyState, TobyExperiment, TobyStrategyScore, TobyActivityLog, TobyContentTag,
+    )
+
+    # Delete all user data from application tables (order matters for FK safety)
+    db.query(TobyContentTag).filter(TobyContentTag.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(TobyActivityLog).filter(TobyActivityLog.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(TobyStrategyScore).filter(TobyStrategyScore.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(TobyExperiment).filter(TobyExperiment.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(TobyState).filter(TobyState.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(TrendingContent).filter(TrendingContent.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(PostPerformance).filter(PostPerformance.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(ContentHistory).filter(ContentHistory.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(AnalyticsSnapshot).filter(AnalyticsSnapshot.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(AnalyticsRefreshLog).filter(AnalyticsRefreshLog.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(BrandAnalytics).filter(BrandAnalytics.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(YouTubeChannel).filter(YouTubeChannel.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(ScheduledReel).filter(ScheduledReel.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(GenerationJob).filter(GenerationJob.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(NicheConfig).filter(NicheConfig.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(Brand).filter(Brand.user_id == target_user_id).delete(synchronize_session=False)
+    db.query(UserProfile).filter(UserProfile.user_id == target_user_id).delete(synchronize_session=False)
+    db.commit()
+
+    # Finally, remove from Supabase Auth so they can no longer sign in
     supabase = get_supabase_client()
     await asyncio.to_thread(
         lambda: supabase.auth.admin.delete_user(target_user_id)
