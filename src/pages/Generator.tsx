@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
 import { useDynamicBrands, useNicheConfig } from '@/features/brands'
+import { GeneratorSkeleton } from '@/shared/components'
 import type { BrandName, Variant } from '@/shared/types'
 
 type Platform = 'instagram' | 'facebook' | 'youtube'
@@ -22,8 +23,8 @@ export function GeneratorPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
   const navigate = useNavigate()
-  const { brands: dynamicBrands, brandIds } = useDynamicBrands()
-  const { data: nicheConfig } = useNicheConfig()
+  const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
+  const { data: nicheConfig, isLoading: configLoading } = useNicheConfig()
   
   // CTA options from settings (weighted)
   const ctaOptions = (nicheConfig?.cta_options ?? []).filter(o => o.text && o.weight > 0)
@@ -243,11 +244,13 @@ export function GeneratorPage() {
     }
   }
   
+  if (brandsLoading || configLoading) return <GeneratorSkeleton />
+
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Instagram Reels Generator</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Create Reels</h1>
         <p className="text-gray-500 text-sm mt-1">Create viral content for all brands in seconds</p>
       </div>
 

@@ -19,6 +19,7 @@ import toast from 'react-hot-toast'
 import { useCreateJob } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDynamicBrands } from '@/features/brands'
+import { PostsSkeleton } from '@/shared/components'
 import {
   DEFAULT_GENERAL_SETTINGS,
   SLIDE_FONT_OPTIONS,
@@ -38,8 +39,8 @@ export function PostsPage() {
   const queryClient = useQueryClient()
   const createJob = useCreateJob()
   const navigate = useNavigate()
-  const { brands: dynamicBrands, brandIds } = useDynamicBrands()
-  const { data: dbSettings } = useLayoutSettings()
+  const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
+  const { data: dbSettings, isLoading: settingsLoading } = useLayoutSettings()
   const updateDbSettings = useUpdateLayoutSettings()
   const brandMap = useMemo(() => {
     const map: Record<string, { name: string; color: string }> = {}
@@ -224,10 +225,12 @@ export function PostsPage() {
 
   const previewBrand = selectedBrands[0] || brandIds[0] || ''
 
+  if (brandsLoading || settingsLoading) return <PostsSkeleton />
+
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-6">
+      <div>
         <h1 className="text-2xl font-bold text-gray-900">Create Posts</h1>
         <p className="text-gray-500 text-sm mt-1">
           Each brand gets a unique post with different topic, title, and image.

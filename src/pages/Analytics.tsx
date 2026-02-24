@@ -483,7 +483,7 @@ export function AnalyticsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to load analytics</h2>
@@ -508,10 +508,9 @@ export function AnalyticsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="space-y-6">
         {/* ── Header ── */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <BarChart3 className="w-7 h-7" />
@@ -759,7 +758,6 @@ export function AnalyticsPage() {
             </button>
           </div>
         )}
-      </div>
     </div>
   )
 }

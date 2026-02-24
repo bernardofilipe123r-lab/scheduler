@@ -90,48 +90,153 @@ export function AppLoader() {
 // ── Analytics skeleton ──────────────────────────────────────
 export function AnalyticsSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="space-y-2">
-            <Sk className="h-8 w-44 rounded-lg" />
-            <Sk className="h-4 w-72 rounded" />
-          </div>
-          <div className="flex gap-2">
-            <Sk className="h-9 w-28 rounded-lg" />
-            <Sk className="h-9 w-24 rounded-lg" />
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <Sk className="h-8 w-44 rounded-lg" />
+          <Sk className="h-4 w-72 rounded" />
         </div>
-
-        {/* Filter bar */}
-        <div className="bg-white rounded-xl p-4 border border-gray-200 mb-6 flex items-center gap-4">
-          <Sk className="h-4 w-16 rounded" />
-          <Sk className="h-9 w-32 rounded-lg" />
-          <Sk className="h-9 w-36 rounded-lg" />
+        <div className="flex gap-2">
+          <Sk className="h-9 w-28 rounded-lg" />
+          <Sk className="h-9 w-24 rounded-lg" />
         </div>
+      </div>
 
-        {/* 3 Metric cards */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <Sk className="w-5 h-5 rounded" />
-                <Sk className="h-4 w-28 rounded" />
-              </div>
-              <Sk className="h-8 w-24 rounded" />
+      {/* Filter bar */}
+      <div className="bg-white rounded-xl p-4 border border-gray-200 flex items-center gap-4">
+        <Sk className="h-4 w-16 rounded" />
+        <Sk className="h-9 w-32 rounded-lg" />
+        <Sk className="h-9 w-36 rounded-lg" />
+      </div>
+
+      {/* 3 Metric cards */}
+      <div className="grid grid-cols-3 gap-4">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <Sk className="w-5 h-5 rounded" />
+              <Sk className="h-4 w-28 rounded" />
             </div>
-          ))}
-        </div>
-
-        {/* Chart panels */}
-        {[0, 1].map((i) => (
-          <div key={i} className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm mb-6">
-            <Sk className="h-5 w-52 rounded mb-2" />
-            <Sk className="h-3 w-80 rounded mb-6" />
-            <Sk className="h-[280px] w-full rounded-lg" />
+            <Sk className="h-8 w-24 rounded" />
           </div>
         ))}
+      </div>
+
+      {/* Chart panels */}
+      {[0, 1].map((i) => (
+        <div key={i} className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <Sk className="h-5 w-52 rounded mb-2" />
+          <Sk className="h-3 w-80 rounded mb-6" />
+          <Sk className="h-[280px] w-full rounded-lg" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Posts skeleton ──────────────────────────────────────────
+export function PostsSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <Sk className="h-8 w-40 rounded-lg" />
+        <Sk className="h-4 w-80 rounded" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5">
+        {/* Left column */}
+        <div className="space-y-5">
+          {/* Title card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <Sk className="h-4 w-20 rounded" />
+            <Sk className="h-16 w-full rounded-lg" />
+          </div>
+          {/* AI Prompt card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <Sk className="h-4 w-28 rounded" />
+            <Sk className="h-16 w-full rounded-lg" />
+            <Sk className="h-7 w-32 rounded-lg" />
+          </div>
+          {/* Layout settings card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <Sk className="h-4 w-44 rounded" />
+          </div>
+        </div>
+        {/* Right column */}
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <Sk className="h-3 w-16 rounded" />
+            <div className="grid grid-cols-2 gap-2">
+              {[0, 1, 2, 3].map((i) => (
+                <Sk key={i} className="h-9 rounded-lg" />
+              ))}
+            </div>
+            <div className="border-t border-gray-100" />
+            <Sk className="h-3 w-24 rounded" />
+            <div className="grid grid-cols-2 gap-2">
+              <Sk className="h-14 rounded-lg" />
+              <Sk className="h-14 rounded-lg" />
+            </div>
+          </div>
+          <Sk className="h-11 w-full rounded-xl" />
+          <Sk className="h-11 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Generator / Create Reels skeleton ───────────────────────
+export function GeneratorSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <Sk className="h-8 w-44 rounded-lg" />
+        <Sk className="h-4 w-72 rounded" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5">
+        {/* Left column */}
+        <div className="space-y-5">
+          {/* Title card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <Sk className="h-4 w-14 rounded" />
+            <Sk className="h-16 w-full rounded-lg" />
+          </div>
+          {/* Script card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <Sk className="h-4 w-20 rounded" />
+            <Sk className="h-24 w-full rounded-lg" />
+          </div>
+          {/* AI Prompt card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <Sk className="h-4 w-28 rounded" />
+            <Sk className="h-16 w-full rounded-lg" />
+          </div>
+        </div>
+        {/* Right column */}
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <Sk className="h-3 w-16 rounded" />
+            <div className="grid grid-cols-2 gap-2">
+              {[0, 1, 2, 3].map((i) => (
+                <Sk key={i} className="h-9 rounded-lg" />
+              ))}
+            </div>
+            <div className="border-t border-gray-100" />
+            <Sk className="h-3 w-20 rounded" />
+            <div className="flex gap-2">
+              {[0, 1, 2].map((i) => (
+                <Sk key={i} className="h-10 w-24 rounded-lg" />
+              ))}
+            </div>
+          </div>
+          <Sk className="h-11 w-full rounded-xl" />
+          <Sk className="h-11 w-full rounded-xl" />
+        </div>
       </div>
     </div>
   )

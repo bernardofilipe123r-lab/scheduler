@@ -8,6 +8,8 @@ export {
   AppLoader,
   HomeSkeleton,
   AnalyticsSkeleton,
+  PostsSkeleton,
+  GeneratorSkeleton,
   JobsSkeleton,
   JobDetailSkeleton,
   ScheduledSkeleton,
