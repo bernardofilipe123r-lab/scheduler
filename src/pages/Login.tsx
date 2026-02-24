@@ -1,7 +1,7 @@
 /**
  * Login / Register / Verify-Email Page
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, ArrowLeft, Zap, BarChart3, Globe, User, CheckCircle2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -49,7 +49,7 @@ function InputField({
     <div>
       <label className="block text-[13px] font-medium text-gray-600 mb-1.5">{label}</label>
       <div className={`relative rounded-xl transition-all duration-200 ${focusedField === fieldName ? 'ring-2 ring-primary-500/25 ring-offset-1 ring-offset-[#fafafa]' : ''}`}>
-        <Icon className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-[16px] h-[16px] transition-colors duration-200 ${focusedField === fieldName ? 'text-primary-500' : 'text-gray-300'}`} />
+        <Icon className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-[16px] h-[16px] z-10 pointer-events-none transition-colors duration-200 ${focusedField === fieldName ? 'text-primary-500' : 'text-gray-300'}`} />
         <input
           type={type}
           value={value}
@@ -59,7 +59,7 @@ function InputField({
           placeholder={placeholder}
           autoFocus={autoFocus}
           autoComplete={autoComplete}
-          className={`w-full pl-11 ${rightElement ? 'pr-12' : 'pr-4'} py-3 border border-gray-200 rounded-xl focus:outline-none text-[14px] bg-white placeholder:text-gray-300 text-gray-800`}
+          className={`w-full pl-10 ${rightElement ? 'pr-12' : 'pr-4'} py-2.5 border border-gray-200 rounded-xl focus:outline-none text-[14px] bg-white placeholder:text-gray-300 text-gray-800`}
         />
         {rightElement}
       </div>
@@ -70,6 +70,13 @@ function InputField({
 export function LoginPage() {
   const { login, register } = useAuth()
   const [mode, setMode] = useState<Mode>('login')
+
+  // Set dark overscroll background while on login page
+  useEffect(() => {
+    const prev = document.documentElement.style.backgroundColor
+    document.documentElement.style.backgroundColor = '#060a10'
+    return () => { document.documentElement.style.backgroundColor = prev }
+  }, [])
 
   // Shared
   const [email, setEmail] = useState('')
@@ -134,7 +141,7 @@ export function LoginPage() {
       type="button"
       onClick={toggle}
       tabIndex={-1}
-      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors duration-150"
+      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors duration-150"
     >
       {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
     </button>
@@ -313,7 +320,7 @@ export function LoginPage() {
         </aside>
 
         {/* ── Right panel ── */}
-        <section className="bg-[#fafafa] p-7 sm:p-10 lg:p-12 xl:p-14 flex flex-col justify-center min-h-[560px]">
+        <section className="bg-[#fafafa] p-7 sm:p-10 lg:p-12 xl:p-14 flex flex-col justify-center">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
             <div className="p-1.5 rounded-xl bg-gray-100 border border-gray-200">
