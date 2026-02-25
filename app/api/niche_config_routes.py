@@ -381,18 +381,18 @@ Also generate:
 Write in first person ("I create...", "I understand...", "My goal is..."). Be specific about the niche, not generic. Show that you deeply understand the brand identity.
 
 OUTPUT FORMAT (JSON only):
-{{{{
+{{
     "understanding": "Your 2-3 paragraph first-person summary here...",
-    "example_reel": {{{{
+    "example_reel": {{
         "title": "REEL TITLE IN ALL CAPS",
         "content_lines": ["Standalone fact 1.", "Standalone fact 2.", "Standalone fact 3.", "..."]
-    }}}},
-    "example_post": {{{{
+    }},
+    "example_post": {{
         "title": "POST TITLE IN ALL CAPS REFERENCING A STUDY",
-        "slides": ["Detailed study findings paragraph...", "Mechanism explanation paragraph...", "Practical implications paragraph...", "Concluding takeaway sentences.\\n\\nFollow @brand for more..."],
+        "slides": ["Detailed study findings paragraph...", "Mechanism explanation paragraph...", "Practical implications paragraph...", "Concluding takeaway sentences.\n\nFollow @brand for more..."],
         "study_ref": "Iron absorption and tea tannins — Cell Metabolism, 2022"
-    }}}}
-}}}}"""
+    }}
+}}"""
 
     try:
         response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.7, 1500, 30)
@@ -472,11 +472,11 @@ Requirements:
 - IMPORTANT: Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc.
 
 OUTPUT FORMAT (JSON only):
-{{{{
+{{
     "title": "POST TITLE IN ALL CAPS",
     "slides": ["slide 1 text...", "slide 2 text...", ...],
     "study_ref": "Tannin-iron absorption interaction — Cell Metabolism, 2022"
-}}}}"""
+}}"""
 
     try:
         response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.95, 1000, 30)
@@ -551,16 +551,16 @@ Requirements for EACH post:
 - Do NOT prefix slide text with "Slide 1:", "Slide 2:" etc.
 
 OUTPUT FORMAT (JSON only — array of {request.count} objects):
-{{{{
+{{
     "posts": [
-        {{{{
+        {{
             "title": "POST TITLE IN ALL CAPS",
             "slides": ["slide 1 text...", "slide 2 text...", ...],
             "study_ref": "Study name — Journal, Year"
-        }}}},
+        }},
         ...
     ]
-}}}}"""
+}}"""
 
     try:
         response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.95, request.count * 800, 60)
@@ -691,18 +691,18 @@ RULES:
 - Adapt the TOPICS to match the brand's niche, but keep the same viral format
 
 OUTPUT FORMAT (JSON only):
-{{{{
+{{
     "reels": [
-        {{{{
+        {{
             "title": "REEL TITLE IN ALL CAPS",
             "content_lines": ["Line 1", "Line 2", "Line 3", "..."]
-        }}}},
+        }},
         ...
     ]
-}}}}"""
+}}"""
 
     try:
-        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 8192, 120)
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 16384, 180)
 
         if response.status_code != 200:
             logger.error("DeepSeek reel batch returned %s: %s", response.status_code, response.text[:500])
@@ -765,10 +765,10 @@ Generate:
 - 3 bad title examples that this brand should avoid (overly clickbaity, all-caps screaming, misleading)
 
 OUTPUT FORMAT (JSON only):
-{{{{
+{{
     "good_titles": ["title 1", "title 2", "title 3", "title 4", "title 5"],
     "bad_titles": ["bad title 1", "bad title 2", "bad title 3"]
-}}}}"""
+}}"""
 
     try:
         response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.7, 500, 30)

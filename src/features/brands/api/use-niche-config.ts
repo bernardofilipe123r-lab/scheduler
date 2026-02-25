@@ -91,7 +91,7 @@ interface GeneratedPostExamplesBatch {
 }
 
 async function fetchGeneratePostExamplesBatch(data: { count: number; num_slides: number; existing_titles?: string[] }): Promise<GeneratedPostExamplesBatch> {
-  return apiClient.post<GeneratedPostExamplesBatch>('/api/v2/brands/niche-config/generate-post-examples-batch', data)
+  return apiClient.post<GeneratedPostExamplesBatch>('/api/v2/brands/niche-config/generate-post-examples-batch', data, { timeout: 180_000 })
 }
 
 export function useGeneratePostExamplesBatch() {
@@ -107,7 +107,7 @@ interface GeneratedReelExamplesBatch {
 }
 
 async function fetchGenerateReelExamplesBatch(data: { count: number }): Promise<GeneratedReelExamplesBatch> {
-  return apiClient.post<GeneratedReelExamplesBatch>('/api/v2/brands/niche-config/generate-reel-examples-batch', data)
+  return apiClient.post<GeneratedReelExamplesBatch>('/api/v2/brands/niche-config/generate-reel-examples-batch', data, { timeout: 180_000 })
 }
 
 export function useGenerateReelExamplesBatch() {
