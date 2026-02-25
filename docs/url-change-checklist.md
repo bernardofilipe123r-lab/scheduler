@@ -67,13 +67,36 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://NEW_URL
 
 ## 5. Meta / Facebook Developer Console — Instagram OAuth
 
-**URL:** https://developers.facebook.com → Your App → Facebook Login → Settings
+**URL:** https://developers.facebook.com → Your App
 
-- Under **Valid OAuth Redirect URIs**, add: `https://NEW_URL/api/auth/meta/callback`
-- Under **App Domains**, add the new domain
-- Also check **Instagram Basic Display** → **Valid OAuth Redirect URIs** if configured
+### 5a. App Settings → Basic
 
-> Update env var `META_REDIRECT_URI` in Railway and `.env` to match.
+- **App Domains:** Add the new domain (e.g. `scheduler-production-29d4.up.railway.app`)
+- **Privacy Policy URL:** Update if it includes the old domain
+- **Terms of Service URL:** Update if it includes the old domain
+- **Site URL** (under Website): `https://NEW_URL`
+
+### 5b. Facebook Login for Business → Settings
+
+- **Valid OAuth Redirect URIs:** Add `https://NEW_URL/api/auth/meta/callback`
+- Remove the old URL once confirmed working
+
+### 5c. Instagram → Basic Display (if configured)
+
+- **Valid OAuth Redirect URIs:** Add `https://NEW_URL/api/auth/meta/callback`
+- **Deauthorize Callback URL:** Update to `https://NEW_URL/api/auth/meta/deauthorize`
+- **Data Deletion Request URL:** Update to `https://NEW_URL/api/auth/meta/data-deletion`
+
+### 5d. Environment Variables
+
+Update in Railway **and** local `.env`:
+
+| Variable | Value |
+|---|---|
+| `INSTAGRAM_REDIRECT_URI` | `https://NEW_URL/api/auth/meta/callback` |
+| `SITE_URL` | `https://NEW_URL` |
+
+> ⚠️ The redirect URI in the env var must **exactly** match what's registered in the Facebook Developer Console — including protocol, path, and no trailing slash.
 
 ---
 
