@@ -96,6 +96,7 @@ export function OnboardingPage() {
   const [facebookPageId, setFacebookPageId] = useState('')
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
   const [step3Attempted, setStep3Attempted] = useState(false)
+  const [aiGenerating, setAiGenerating] = useState(false)
 
   const isStep3Valid =
     metaAccessToken.trim().length > 0 &&
@@ -517,7 +518,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm section="reels" />
+                <NicheConfigForm section="reels" onGeneratingChange={setAiGenerating} />
               </motion.div>
             )}
 
@@ -537,7 +538,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm section="posts" />
+                <NicheConfigForm section="posts" onGeneratingChange={setAiGenerating} />
               </motion.div>
             )}
 
@@ -645,7 +646,8 @@ export function OnboardingPage() {
           {step > 1 ? (
             <button
               onClick={() => { setError(null); setStep(step - 1) }}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              disabled={aiGenerating}
+              className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ArrowLeft className="w-4 h-4" />
               Back
@@ -677,10 +679,20 @@ export function OnboardingPage() {
           {step >= 2 && step <= 4 && (
             <button
               onClick={() => setStep(step + 1)}
-              className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium"
+              disabled={aiGenerating}
+              className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Continue
-              <ArrowRight className="w-4 h-4" />
+              {aiGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Please wait...
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           )}
 

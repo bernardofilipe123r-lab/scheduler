@@ -1,8 +1,19 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, Trash2, X, Loader2, Sparkles } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ChevronDown, ChevronRight, Plus, Trash2, X, Loader2, Sparkles, Brain } from 'lucide-react'
 import type { ReelExample, PostExample } from '../types/niche-config'
 import { useGeneratePostExample, useGeneratePostExamplesBatch, useGenerateReelExamplesBatch } from '../api/use-niche-config'
 import toast from 'react-hot-toast'
+
+const AI_THINKING_MESSAGES = [
+  'Our AI is analyzing your content DNA...',
+  'Crafting unique reel ideas for your niche...',
+  'Generating attention-grabbing titles...',
+  'Building punchy content lines...',
+  'Almost there — polishing your reels...',
+  'DeepSeek is working its magic...',
+  'Creating viral-worthy content...',
+  'Fine-tuning ideas to match your brand...',
+]
 
 interface ContentExamplesSectionProps {
   reelExamples: ReelExample[]
@@ -14,6 +25,7 @@ interface ContentExamplesSectionProps {
   nicheName?: string
   contentBrief?: string
   onBeforeGenerate?: () => Promise<void>
+  onGeneratingChange?: (generating: boolean) => void
 }
 
 function ReelExampleCard({
@@ -270,8 +282,8 @@ function ReelGenTooltip({ generalFilled, nicheName, contentBrief }: { generalFil
       <p className="font-semibold text-[11px] text-indigo-300 uppercase tracking-wide mb-2">What this does</p>
       <p className="text-gray-300 mb-3 leading-relaxed">
         Sends your Content DNA to DeepSeek AI along with 10 format examples. 
-        The AI generates <span className="text-white font-medium">50 unique reel ideas</span> (title + content lines) adapted to your niche. 
-        Existing reels will be <span className="text-amber-300 font-medium">replaced</span>.
+        The AI generates <span className="text-white font-medium">10 unique reel ideas</span> (title + content lines) adapted to your niche. 
+        New reels are <span className="text-emerald-300 font-medium">added</span> to your existing examples.
       </p>
       <p className="font-semibold text-[11px] text-indigo-300 uppercase tracking-wide mb-1.5">Prompt context from your General section</p>
       <div className="bg-gray-800 rounded p-2.5 space-y-1 text-[11px] font-mono leading-relaxed">
@@ -279,6 +291,35 @@ function ReelGenTooltip({ generalFilled, nicheName, contentBrief }: { generalFil
         {briefPreview && <p><span className="text-gray-400">Brief:</span> <span className="text-green-300">{briefPreview}</span></p>}
       </div>
       <p className="text-gray-500 mt-2 text-[10px]">+ 10 H&W format examples · DeepSeek · temp 0.9</p>
+    </div>
+  )
+}
+
+function AiThinkingOverlay() {
+  const [msgIndex, setMsgIndex] = useState(0)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMsgIndex(prev => (prev + 1) % AI_THINKING_MESSAGES.length)
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6 text-center">
+      <div className="flex items-center justify-center gap-3 mb-3">
+        <div className="relative">
+          <Brain className="w-8 h-8 text-indigo-500" />
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full animate-ping" />
+        </div>
+        <div className="flex gap-1">
+          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+      </div>
+      <p className="text-sm font-semibold text-indigo-700 mb-1">AI is generating your reels</p>
+      <p className="text-xs text-indigo-500 transition-opacity duration-500">{AI_THINKING_MESSAGES[msgIndex]}</p>
+      <p className="text-[10px] text-indigo-400 mt-3">Please wait — this usually takes 30-60 seconds. Do not navigate away.</p>
     </div>
   )
 }
@@ -293,6 +334,7 @@ export function ContentExamplesSection({
   nicheName,
   contentBrief,
   onBeforeGenerate,
+  onGeneratingChange,
 }: ContentExamplesSectionProps) {
   const [newPostSlideCount, setNewPostSlideCount] = useState<3 | 4>(4)
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null)
@@ -301,6 +343,13 @@ export function ContentExamplesSection({
   const generateMutation = useGeneratePostExample()
   const batchMutation = useGeneratePostExamplesBatch()
   const reelBatchMutation = useGenerateReelExamplesBatch()
+
+  const isAnyGenerating = reelBatchGenerating || batchGenerating
+  useEffect(() => {
+    onGeneratingChange?.(isAnyGenerating)
+  }, [isAnyGenerating]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const reelLimitReached = reelExamples.length >= 40
 
   const addReelExample = () => {
     onReelExamplesChange([...reelExamples, { title: '', content_lines: [''] }])
@@ -362,15 +411,16 @@ export function ContentExamplesSection({
   const generateReelBatch = async () => {
     if (onBeforeGenerate) await onBeforeGenerate()
     setReelBatchGenerating(true)
-    console.log('[ReelBatch] Starting batch generation of 50 reels...')
+    console.log('[ReelBatch] Starting batch generation of 10 reels...')
     reelBatchMutation.mutate(
-      { count: 50 },
+      { count: 10 },
       {
         onSuccess: (data) => {
           console.log(`[ReelBatch] Success — received ${data.reels.length} reels`)
-          onReelExamplesChange(data.reels.map(r => ({ title: r.title, content_lines: r.content_lines })))
+          const newReels = data.reels.map(r => ({ title: r.title, content_lines: r.content_lines }))
+          onReelExamplesChange([...reelExamples, ...newReels])
           setReelBatchGenerating(false)
-          toast.success(`${data.reels.length} reel examples generated by AI — review and edit as needed`)
+          toast.success(`${data.reels.length} reel examples generated — you now have ${reelExamples.length + newReels.length} total`)
         },
         onError: (error: unknown) => {
           const err = error as { message?: string; status?: number; detail?: string }
@@ -444,7 +494,7 @@ export function ContentExamplesSection({
                   className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {reelBatchGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  {reelBatchGenerating ? 'Generating 50...' : 'Generate reels with AI'}
+                  {reelBatchGenerating ? 'Generating...' : 'Generate 10 reels with AI'}
                 </button>
                 <ReelGenTooltip generalFilled={generalFilled} nicheName={nicheName} contentBrief={contentBrief} />
               </div>
@@ -482,12 +532,14 @@ export function ContentExamplesSection({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-medium text-gray-700">
-              Reel Examples ({reelExamples.length} of 50)
+              Reel Examples ({reelExamples.length})
+              {reelLimitReached && <span className="text-xs text-green-600 ml-2">✓ Great coverage!</span>}
             </h4>
           </div>
           <p className="text-xs text-gray-400 mb-3">
             CTA is automatically added as the final line — don't include it here.
           </p>
+          {reelBatchGenerating && <AiThinkingOverlay />}
           <div className="space-y-2">
             {reelExamples.map((ex, i) => (
               <ReelExampleCard
@@ -508,18 +560,20 @@ export function ContentExamplesSection({
             >
               <Plus className="w-4 h-4" /> Add Reel Example
             </button>
-            <div className="relative group">
-              <button
-                type="button"
-                onClick={generateReelBatch}
-                disabled={reelBatchGenerating || !generalFilled}
-                className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {reelBatchGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {reelBatchGenerating ? 'Generating 50...' : reelExamples.length >= 50 ? 'Regenerate reels with AI' : 'Generate reels with AI'}
-              </button>
-              <ReelGenTooltip generalFilled={generalFilled} nicheName={nicheName} contentBrief={contentBrief} />
-            </div>
+            {!reelLimitReached && (
+              <div className="relative group">
+                <button
+                  type="button"
+                  onClick={generateReelBatch}
+                  disabled={reelBatchGenerating || !generalFilled}
+                  className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {reelBatchGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {reelBatchGenerating ? 'Generating...' : `Generate 10 more with AI`}
+                </button>
+                <ReelGenTooltip generalFilled={generalFilled} nicheName={nicheName} contentBrief={contentBrief} />
+              </div>
+            )}
           </div>
         </div>
       )}

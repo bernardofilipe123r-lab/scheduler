@@ -84,9 +84,11 @@ function useFontPreload() {
 export interface NicheConfigFormProps {
   /** When set, only render this single section (no save bar, no strength meter, no AI block). */
   section?: 'general' | 'reels' | 'posts'
+  /** Called when AI generation starts/stops — parent can block navigation. */
+  onGeneratingChange?: (generating: boolean) => void
 }
 
-export function NicheConfigForm({ section }: NicheConfigFormProps = {}) {
+export function NicheConfigForm({ section, onGeneratingChange }: NicheConfigFormProps = {}) {
   const { data, isLoading } = useNicheConfig()
   const { data: brandsData } = useBrands()
   const updateMutation = useUpdateNicheConfig()
@@ -410,6 +412,7 @@ export function NicheConfigForm({ section }: NicheConfigFormProps = {}) {
               nicheName={values.niche_name}
               contentBrief={values.content_brief}
               onBeforeGenerate={flushSave}
+              onGeneratingChange={onGeneratingChange}
             />
           </div>
 
@@ -617,6 +620,7 @@ export function NicheConfigForm({ section }: NicheConfigFormProps = {}) {
               showOnly="posts"
               generalFilled={generalFilled}
               onBeforeGenerate={flushSave}
+              onGeneratingChange={onGeneratingChange}
             />
           </div>
 
