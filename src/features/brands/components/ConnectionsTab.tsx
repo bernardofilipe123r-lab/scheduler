@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
+import { AlertTriangle, RefreshCw, CheckCircle2, XCircle, Instagram } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
+import { getInstagramConnectUrl } from '@/features/brands'
 import { apiClient } from '@/shared/api/client'
 import { ConnectionsSkeleton } from '@/shared/components'
 import { ConnectionSummaryBar } from './ConnectionSummaryBar'
@@ -11,21 +12,29 @@ export function ConnectionsTab() {
   const { data, isLoading, refetch } = useBrandConnections()
   const [searchParams, setSearchParams] = useSearchParams()
   const [igNotification, setIgNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [newBrandId, setNewBrandId] = useState<string | null>(null)
 
-  // Handle Instagram OAuth redirect params
+  // Handle Instagram OAuth redirect params & new brand prompt
   useEffect(() => {
     const igConnected = searchParams.get('ig_connected')
     const igError = searchParams.get('ig_error')
+    const newBrand = searchParams.get('new_brand')
 
     if (igConnected) {
       setIgNotification({ type: 'success', message: `Instagram connected successfully for ${igConnected}!` })
+      setNewBrandId(null)
       refetch()
-      // Clean URL params
       searchParams.delete('ig_connected')
       setSearchParams(searchParams, { replace: true })
     } else if (igError) {
       setIgNotification({ type: 'error', message: `Instagram connection failed: ${igError}` })
       searchParams.delete('ig_error')
+      setSearchParams(searchParams, { replace: true })
+    }
+
+    if (newBrand) {
+      setNewBrandId(newBrand)
+      searchParams.delete('new_brand')
       setSearchParams(searchParams, { replace: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -81,6 +90,38 @@ export function ConnectionsTab() {
 
   return (
     <div className="space-y-6">
+      {/* New brand: prompt to connect Instagram */}
+      {newBrandId && (
+        <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border border-purple-200 rounded-xl p-5">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center flex-shrink-0">
+              <Instagram className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900">Connect Instagram for {newBrandId}</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Your brand was created! Click below to connect your Instagram account — it only takes a few seconds.
+              </p>
+              <div className="flex items-center gap-3 mt-3">
+                <a
+                  href={getInstagramConnectUrl(newBrandId)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white hover:opacity-90 transition-opacity"
+                >
+                  <Instagram className="w-4 h-4" />
+                  Connect Instagram
+                </a>
+                <button
+                  onClick={() => setNewBrandId(null)}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline"
+                >
+                  Skip for now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Instagram OAuth notification */}
       {igNotification && (
         <div className={`flex items-center gap-3 p-4 rounded-xl border ${

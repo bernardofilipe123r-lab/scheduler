@@ -116,6 +116,7 @@ export function CreateBrandPage() {
   const [previewContent, setPreviewContent] = useState(SAMPLE_CONTENT.join('\n'))
 
   // Step 3: Platform credentials
+  const [connectionMode, setConnectionMode] = useState<'oauth-later' | 'manual'>('oauth-later')
   const [instagramHandle, setInstagramHandle] = useState('')
   const [facebookPageId, setFacebookPageId] = useState('')
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
@@ -123,7 +124,6 @@ export function CreateBrandPage() {
   const [step4Attempted, setStep4Attempted] = useState(false)
   const [metaTestResult, setMetaTestResult] = useState<TestResult>({ status: 'idle' })
   const [lastTestedMetaValues, setLastTestedMetaValues] = useState<string | null>(null)
-  const [youtubeNote] = useState('YouTube uses OAuth — connect after brand creation from the Connections tab.')
 
   // Pre-fill Meta token from existing brands
   useEffect(() => {
@@ -198,11 +198,13 @@ export function CreateBrandPage() {
     shortName.trim().length > 0 &&
     !existingBrands?.some(b => b.id === brandId)
 
-  const isStep4Valid =
+  const isManualMetaFilled =
     instagramHandle.trim().length > 0 &&
     facebookPageId.trim().length > 0 &&
     instagramBusinessAccountId.trim().length > 0 &&
     metaAccessToken.trim().length > 0
+
+  // Step 3 is always valid — connections are optional (can be set up after creation)
 
   const validateStep = (): boolean => {
     setError(null)
@@ -215,10 +217,13 @@ export function CreateBrandPage() {
       if (!shortName.trim()) { setError('Short name is required'); return false }
     }
     if (step === 3) {
-      if (!isStep4Valid) {
-        setError('All Meta platform fields are required')
-        setStep4Attempted(true)
-        return false
+      if (connectionMode === 'manual') {
+        const hasAnyManualField = instagramHandle.trim() || facebookPageId.trim() || instagramBusinessAccountId.trim() || metaAccessToken.trim()
+        if (hasAnyManualField && !isManualMetaFilled) {
+          setError('Please fill in all Meta fields or switch to OAuth mode')
+          setStep4Attempted(true)
+          return false
+        }
       }
     }
     return true
@@ -333,7 +338,12 @@ export function CreateBrandPage() {
       }
 
       toast.success(`Brand "${displayName}" created successfully!`)
-      navigate('/brands')
+      if (connectionMode === 'oauth-later') {
+        // Redirect to connections tab so user can immediately connect IG via OAuth
+        navigate(`/brands?tab=connections&new_brand=${brandId}`)
+      } else {
+        navigate('/brands')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create brand')
     }
@@ -740,114 +750,175 @@ export function CreateBrandPage() {
               <Link2 className="w-5 h-5 text-primary-500" />
               Platform Connections
             </h2>
-            <p className="text-sm text-gray-500 mt-1">Connect your social accounts to enable auto-publishing</p>
+            <p className="text-sm text-gray-500 mt-1">Choose how you want to connect your social accounts</p>
           </div>
 
           <div className="px-6 py-6 max-w-xl mx-auto space-y-5">
-            {/* Meta Section */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
+            {/* Instagram Connection Mode Selector */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
+                  <Instagram className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-sm font-semibold text-gray-800">Instagram</span>
+              </div>
+
+              {/* Option A: OAuth (Recommended) */}
+              <button
+                type="button"
+                onClick={() => setConnectionMode('oauth-later')}
+                className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                  connectionMode === 'oauth-later'
+                    ? 'border-green-500 bg-green-50 ring-1 ring-green-200'
+                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    connectionMode === 'oauth-later' ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                  }`}>
+                    {connectionMode === 'oauth-later' && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-800">Connect with Instagram Login</span>
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">Recommended</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      After creating the brand, just click "Connect Instagram" — you'll log in to Instagram and it's done. No tokens or IDs needed.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option B: Manual */}
+              <button
+                type="button"
+                onClick={() => setConnectionMode('manual')}
+                className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                  connectionMode === 'manual'
+                    ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
+                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    connectionMode === 'manual' ? 'border-primary-500 bg-primary-500' : 'border-gray-300'
+                  }`}>
+                    {connectionMode === 'manual' && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-gray-800">Enter credentials manually</span>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 ml-2">Advanced</span>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter your Meta access token, Page ID, and IG Business Account ID directly. For System User tokens or custom setups.
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Manual Meta fields — only shown when manual mode selected */}
+            {connectionMode === 'manual' && (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4 animate-in slide-in-from-top-2">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
                     <Facebook className="w-4 h-4 text-white" />
                   </div>
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
-                    <Instagram className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-800">Meta (Instagram & Facebook)</span>
+                  <span className="text-sm font-semibold text-gray-800">Meta Credentials</span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  One Meta access token works for both Instagram and Facebook. The Page ID and IG Account ID are specific to this brand.
+                </p>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Instagram Handle
+                  </label>
+                  <input
+                    type="text"
+                    value={instagramHandle}
+                    onChange={(e) => setInstagramHandle(e.target.value)}
+                    placeholder="@yourbrand"
+                    className={`w-full px-3 py-2 rounded-lg text-sm border ${step4Attempted && connectionMode === 'manual' && !instagramHandle.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Facebook Page ID
+                    <span className="text-gray-400 font-normal"> — found in Page Settings → Transparency</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={facebookPageId}
+                    onChange={(e) => setFacebookPageId(e.target.value)}
+                    placeholder="e.g., 421725411022067"
+                    className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step4Attempted && connectionMode === 'manual' && !facebookPageId.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Instagram Business Account ID
+                    <span className="text-gray-400 font-normal"> — from Graph API Explorer</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={instagramBusinessAccountId}
+                    onChange={(e) => setInstagramBusinessAccountId(e.target.value)}
+                    placeholder="e.g., 17841468847801005"
+                    className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step4Attempted && connectionMode === 'manual' && !instagramBusinessAccountId.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Meta Access Token
+                    <span className="text-gray-400 font-normal"> — long-lived page token</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={metaAccessToken}
+                    onChange={(e) => setMetaAccessToken(e.target.value)}
+                    placeholder="EAAx..."
+                    className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step4Attempted && connectionMode === 'manual' && !metaAccessToken.trim() ? 'border-red-500' : 'border-gray-300'}`}
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Shared across all brands — pre-filled from existing brands if available.
+                  </p>
+                </div>
+
+                {/* Test Connection Button */}
+                <div className="pt-2">
+                  <button
+                    onClick={handleTestMeta}
+                    disabled={metaTestResult.status === 'testing' || !metaAccessToken || !instagramBusinessAccountId || metaFieldsUnchanged}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+                  >
+                    {metaTestResult.status === 'testing' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Zap className="w-4 h-4" />
+                    )}
+                    {metaTestResult.status === 'testing' ? 'Testing...' : metaFieldsUnchanged ? 'Already Tested' : 'Test Meta Connection'}
+                  </button>
+
+                  {metaTestResult.status === 'success' && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                      {metaTestResult.message}
+                    </div>
+                  )}
+                  {metaTestResult.status === 'error' && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      <XCircle className="w-4 h-4 flex-shrink-0" />
+                      {metaTestResult.message}
+                    </div>
+                  )}
                 </div>
               </div>
-              <p className="text-xs text-gray-500">
-                One Meta access token works for both platforms. The Page ID and IG Account ID are specific to this brand.
-              </p>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Instagram Handle <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={instagramHandle}
-                  onChange={(e) => setInstagramHandle(e.target.value)}
-                  placeholder="@yourbrand"
-                  className={`w-full px-3 py-2 rounded-lg text-sm border ${step4Attempted && !instagramHandle.trim() ? 'border-red-500' : 'border-gray-300'}`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Facebook Page ID <span className="text-red-500">*</span>
-                  <span className="text-gray-400 font-normal"> — found in Page Settings → Transparency</span>
-                </label>
-                <input
-                  type="text"
-                  value={facebookPageId}
-                  onChange={(e) => setFacebookPageId(e.target.value)}
-                  placeholder="e.g., 421725411022067"
-                  className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step4Attempted && !facebookPageId.trim() ? 'border-red-500' : 'border-gray-300'}`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Instagram Business Account ID <span className="text-red-500">*</span>
-                  <span className="text-gray-400 font-normal"> — from Graph API Explorer</span>
-                </label>
-                <input
-                  type="text"
-                  value={instagramBusinessAccountId}
-                  onChange={(e) => setInstagramBusinessAccountId(e.target.value)}
-                  placeholder="e.g., 17841468847801005"
-                  className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step4Attempted && !instagramBusinessAccountId.trim() ? 'border-red-500' : 'border-gray-300'}`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Meta Access Token <span className="text-red-500">*</span>
-                  <span className="text-gray-400 font-normal"> — long-lived page token</span>
-                </label>
-                <input
-                  type="text"
-                  value={metaAccessToken}
-                  onChange={(e) => setMetaAccessToken(e.target.value)}
-                  placeholder="EAAx..."
-                  className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step4Attempted && !metaAccessToken.trim() ? 'border-red-500' : 'border-gray-300'}`}
-                />
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Shared across all brands — pre-filled from existing brands if available.
-                </p>
-              </div>
-
-              {/* Test Connection Button */}
-              <div className="pt-2">
-                <button
-                  onClick={handleTestMeta}
-                  disabled={metaTestResult.status === 'testing' || !metaAccessToken || !instagramBusinessAccountId || metaFieldsUnchanged}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
-                >
-                  {metaTestResult.status === 'testing' ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Zap className="w-4 h-4" />
-                  )}
-                  {metaTestResult.status === 'testing' ? 'Testing...' : metaFieldsUnchanged ? 'Already Tested' : 'Test Meta Connection'}
-                </button>
-
-                {metaTestResult.status === 'success' && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                    {metaTestResult.message}
-                  </div>
-                )}
-                {metaTestResult.status === 'error' && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                    <XCircle className="w-4 h-4 flex-shrink-0" />
-                    {metaTestResult.message}
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* YouTube */}
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
@@ -857,7 +928,7 @@ export function CreateBrandPage() {
                 </div>
                 <span className="text-sm font-semibold text-gray-800">YouTube</span>
               </div>
-              <p className="text-xs text-gray-500 mb-3">{youtubeNote}</p>
+              <p className="text-xs text-gray-500 mb-3">YouTube uses OAuth — connect after brand creation from the Connections tab.</p>
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg border border-gray-200">
                 <AlertCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <span className="text-xs text-gray-600">Available after creation via Brands → Connections tab</span>
@@ -932,20 +1003,27 @@ export function CreateBrandPage() {
                     </div>
                     <div className="text-sm">
                       <span className="font-medium text-gray-700">Instagram:</span>{' '}
-                      <span className="text-gray-600">{instagramHandle || 'Not set'}</span>
+                      {connectionMode === 'oauth-later' ? (
+                        <span className="text-primary-600">Connect via OAuth after creation</span>
+                      ) : (
+                        <span className="text-gray-600">{instagramHandle || 'Manual — not set'}</span>
+                      )}
                     </div>
-                    {instagramHandle && <Check className="w-4 h-4 text-green-500 ml-auto" />}
+                    {connectionMode === 'oauth-later' && <Check className="w-4 h-4 text-green-500 ml-auto" />}
+                    {connectionMode === 'manual' && instagramHandle && <Check className="w-4 h-4 text-green-500 ml-auto" />}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-                      <Facebook className="w-4 h-4 text-white" />
+                  {connectionMode === 'manual' && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
+                        <Facebook className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-medium text-gray-700">Facebook:</span>{' '}
+                        <span className="text-gray-600">{facebookPageId ? `Page ${facebookPageId}` : 'Not set'}</span>
+                      </div>
+                      {facebookPageId && <Check className="w-4 h-4 text-green-500 ml-auto" />}
                     </div>
-                    <div className="text-sm">
-                      <span className="font-medium text-gray-700">Facebook:</span>{' '}
-                      <span className="text-gray-600">{facebookPageId ? `Page ${facebookPageId}` : 'Not set'}</span>
-                    </div>
-                    {facebookPageId && <Check className="w-4 h-4 text-green-500 ml-auto" />}
-                  </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <div className="w-7 h-7 rounded-lg bg-red-500 flex items-center justify-center">
                       <Youtube className="w-4 h-4 text-white" />
@@ -955,7 +1033,7 @@ export function CreateBrandPage() {
                       <span className="text-gray-400">Connect after creation</span>
                     </div>
                   </div>
-                  {metaAccessToken && (
+                  {connectionMode === 'manual' && metaAccessToken && (
                     <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
                       <Check className="w-3 h-3" />
                       Meta access token configured
@@ -999,7 +1077,7 @@ export function CreateBrandPage() {
         ) : (
           <button
             onClick={handleCreate}
-            disabled={!isStep4Valid || createBrandMutation.isPending}
+            disabled={createBrandMutation.isPending}
             className="flex-1 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {createBrandMutation.isPending ? (
