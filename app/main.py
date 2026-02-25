@@ -125,7 +125,7 @@ if FRONTEND_DIR.exists():
     async def serve_spa(full_path: str):
         """Catch-all: serve React app for any non-API route (SPA client-side routing)."""
         # Never intercept API or health-check paths — let FastAPI return proper 404s
-        if full_path.startswith("api/") or full_path in ("health", "docs", "redoc", "openapi.json", "privacy-policy", "data-deletion"):
+        if full_path.startswith("api/") or full_path in ("health", "docs", "redoc", "openapi.json"):
             raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(FRONTEND_DIR / "index.html")
 else:
