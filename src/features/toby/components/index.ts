@@ -1,4 +1,5 @@
 export { TobyHero } from './TobyHero'
+export { TobyGuide } from './TobyGuide'
 export { TobyPipeline } from './TobyPipeline'
 export { TobyBufferHealth } from './TobyBufferHealth'
 export { TobyExperiments } from './TobyExperiments'

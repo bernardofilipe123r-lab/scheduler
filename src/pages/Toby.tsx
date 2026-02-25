@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Settings, ChevronDown } from 'lucide-react'
 import { useTobyStatus } from '@/features/toby'
 import {
   TobyHero,
+  TobyGuide,
   TobyPipeline,
   TobyBufferHealth,
   TobyExperiments,
@@ -13,11 +14,17 @@ import {
 export function TobyPage() {
   const { data: status } = useTobyStatus()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const showGuide = useCallback(() => setGuideOpen(true), [])
+  const hideGuide = useCallback(() => setGuideOpen(false), [])
 
   return (
     <div className="space-y-6">
       {/* Hero — status, phase journey, metrics */}
-      <TobyHero />
+      <TobyHero onLearnMore={showGuide} />
+
+      {/* Onboarding guide — shown on first visit, re-openable via Learn more */}
+      <TobyGuide forceOpen={guideOpen} onClose={hideGuide} />
 
       {status?.enabled && (
         <>

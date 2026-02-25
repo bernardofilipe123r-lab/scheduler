@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import {
   Bot, Play, Power, Loader2, Sparkles, Shield, Zap,
-  BarChart3, FlaskConical, Calendar, Check,
+  BarChart3, FlaskConical, Calendar, Check, HelpCircle,
 } from 'lucide-react'
 import { useTobyStatus, useTobyEnable, useTobyDisable } from '../hooks'
 import type { TobyPhase } from '../types'
@@ -12,7 +12,7 @@ const PHASES: Array<{ id: TobyPhase; label: string; hint: string; icon: typeof S
   { id: 'optimizing', label: 'Optimizing', hint: 'Running proven strategies', icon: Sparkles },
 ]
 
-export function TobyHero() {
+export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
   const { data: status, isLoading } = useTobyStatus()
   const enableMut = useTobyEnable()
   const disableMut = useTobyDisable()
@@ -105,6 +105,15 @@ export function TobyHero() {
                 </Fragment>
               )
             })}
+            {onLearnMore && (
+              <button
+                onClick={onLearnMore}
+                className="flex items-center gap-1 px-3 py-2 rounded-full bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors ml-1"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">Learn more</span>
+              </button>
+            )}
           </div>
         )}
 
