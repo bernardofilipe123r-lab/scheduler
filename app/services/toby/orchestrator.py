@@ -495,6 +495,11 @@ def _execute_content_plan(db: Session, plan):
         job_id=job_id,
     )
 
+    # Deduplication: if scheduler detected a duplicate, skip remaining steps
+    if sched_result.get("deduplicated"):
+        print(f"[TOBY] Skipping duplicate slot for {plan.brand_id} at {plan.scheduled_time}", flush=True)
+        return
+
     # ── Step 8: Mark brand as scheduled + Toby-created + record tags ──
     # Update the job's brand_output status so Jobs page shows "scheduled"
     job_manager.update_brand_output(job_id, plan.brand_id, {

@@ -139,6 +139,21 @@ class MetricsCollector:
         return creds["account_id"] if creds else None
 
     # ──────────────────────────────────────────────────────────
+    # DELETED POST HANDLING
+    # ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _flag_deleted_post(db, schedule_id: str, brand: str):
+        """Flag a deleted post's content tag as unreliable so Toby excludes it from learning."""
+        from app.models.toby import TobyContentTag
+        tag = db.query(TobyContentTag).filter(
+            TobyContentTag.schedule_id == schedule_id,
+        ).first()
+        if tag and not tag.metrics_unreliable:
+            tag.metrics_unreliable = True
+            _log("Deleted: Flagged", f"Flagged content tag {tag.id} for {brand} as metrics_unreliable (post deleted from IG)", "🗑️", "data")
+
+    # ──────────────────────────────────────────────────────────
     # FETCH METRICS FOR A SINGLE MEDIA
     # ──────────────────────────────────────────────────────────
 
@@ -180,6 +195,10 @@ class MetricsCollector:
                 _log("API Response: Media", f"HTTP 200 — {metrics['likes']} likes, {metrics['comments']} comments", "✅", "api")
             elif self._handle_rate_limit(basic_resp):
                 return None
+            elif basic_resp.status_code in (400, 404):
+                # Post was likely deleted from Instagram by user
+                _log("Deleted: Media", f"HTTP {basic_resp.status_code} for media {ig_media_id} — post likely deleted", "🗑️", "api")
+                return {"deleted": True}
             else:
                 _log("API Error: Media", f"HTTP {basic_resp.status_code} for media {ig_media_id}", "❌", "api")
                 return None
@@ -368,6 +387,12 @@ class MetricsCollector:
 
                 if not raw:
                     errors += 1
+                    continue
+
+                # Handle deleted posts: flag content tag as unreliable
+                # so Toby's learning engine excludes them from scoring
+                if isinstance(raw, dict) and raw.get("deleted"):
+                    self._flag_deleted_post(db, sched.schedule_id, brand)
                     continue
 
                 engagement_rate = self.compute_engagement_rate(raw)

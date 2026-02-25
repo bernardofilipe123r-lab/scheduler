@@ -53,13 +53,17 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         }
 
     # Get all scheduled reels for this user in the buffer window
+    # CRITICAL: Include "partial" and "published" statuses to prevent
+    # duplicate content generation for slots that already have content.
+    # "partial" = published to some platforms but not all (still counts as filled)
+    # "published" = fully published (definitely counts as filled)
     scheduled = (
         db.query(ScheduledReel)
         .filter(
             ScheduledReel.user_id == user_id,
             ScheduledReel.scheduled_time >= now,
             ScheduledReel.scheduled_time <= horizon,
-            ScheduledReel.status.in_(["scheduled", "publishing"]),
+            ScheduledReel.status.in_(["scheduled", "publishing", "partial", "published"]),
         )
         .all()
     )

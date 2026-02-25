@@ -70,6 +70,9 @@ const ACTIVITY_LABELS: Record<string, string> = {
   metrics_collected: 'Collected performance metrics',
   analysis_completed: 'Completed performance analysis',
   discovery_completed: 'Found new trending content',
+  discovery_scan: 'Scanned Instagram for trends',
+  discovery_seeded: 'Auto-discovered competitor accounts',
+  discovery_seed_failed: 'Auto-discovery in progress',
   experiment_created: 'Started a new A/B test',
   phase_transition: 'Moved to a new phase',
 }

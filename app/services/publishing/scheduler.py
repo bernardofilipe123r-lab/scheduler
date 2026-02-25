@@ -99,6 +99,33 @@ class DatabaseSchedulerService:
                 }
                 print(f"   ✅ Metadata prepared: {metadata}")
                 
+                # ── DEDUPLICATION GUARD ──────────────────────────────
+                # Prevent scheduling duplicate content for the same brand
+                # in the same time slot (±30 min window). This catches
+                # races between parallel Toby ticks and auto-retries.
+                if brand and scheduled_time:
+                    from datetime import timedelta as _td
+                    window_start = scheduled_time - _td(minutes=30)
+                    window_end = scheduled_time + _td(minutes=30)
+                    existing = db.query(ScheduledReel).filter(
+                        ScheduledReel.user_id == user_id,
+                        ScheduledReel.scheduled_time >= window_start,
+                        ScheduledReel.scheduled_time <= window_end,
+                        ScheduledReel.status.in_(["scheduled", "publishing", "partial", "published"]),
+                    ).all()
+                    for ex in existing:
+                        ex_brand = (ex.extra_data or {}).get("brand", "")
+                        ex_variant = (ex.extra_data or {}).get("variant", "")
+                        # Same brand + same variant type (reel vs post)
+                        is_same_type = (
+                            (variant in ("light", "dark") and ex_variant in ("light", "dark"))
+                            or (variant == "post" and ex_variant == "post")
+                        )
+                        if ex_brand == brand and is_same_type:
+                            print(f"   ⚠️ DEDUP: Slot already filled for {brand} "
+                                  f"at {scheduled_time} (existing: {ex.schedule_id})")
+                            return {"schedule_id": ex.schedule_id, "deduplicated": True}
+
                 # Create scheduled reel
                 print("   🔄 Creating ScheduledReel object...")
                 scheduled_reel = ScheduledReel(
@@ -603,7 +630,12 @@ class DatabaseSchedulerService:
 
                 reel.status = "scheduled"
                 reel.publish_error = None
-                reel.scheduled_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+                # Keep the ORIGINAL scheduled_time for the slot — changing it
+                # causes the original slot to look empty, triggering duplicate
+                # content generation by Toby's buffer manager.
+                # Only set to now+5min if the original time is in the past.
+                if reel.scheduled_time < datetime.now(timezone.utc):
+                    reel.scheduled_time = datetime.now(timezone.utc) + timedelta(minutes=5)
                 retried += 1
 
                 print(f"[TOBY] Auto-retry #{auto_retries + 1} for {reel.schedule_id}", flush=True)

@@ -52,19 +52,42 @@ def should_run_discovery(state: TobyState) -> bool:
 
 def run_discovery_tick(db: Session, user_id: str, state: TobyState) -> dict:
     """
-    Run a discovery scan tick using the existing TrendScout service.
+    Run a discovery scan tick using TrendScout.
+
+    Auto-seeds competitor accounts and hashtags from Content DNA if none
+    are configured (fully autonomous — no manual input required).
 
     Returns summary of what was discovered.
     """
+    # Step 0: Auto-seed discovery sources from Content DNA if needed
+    from app.services.toby.seed_discovery import maybe_seed_discovery
+    seed_result = maybe_seed_discovery(db, user_id)
+    if seed_result.get("seeded"):
+        _log(db, user_id, "info",
+             f"Discovery auto-seeded: {seed_result.get('competitors_added', 0)} competitors, "
+             f"{seed_result.get('hashtags_added', 0)} hashtags from Content DNA",
+             level="info", metadata=seed_result)
+
+    # Step 1: Create a fresh TrendScout with this user's config
+    # (not the singleton — ensures latest NicheConfig is loaded)
     try:
-        from app.services.analytics.trend_scout import get_trend_scout
-        scout = get_trend_scout()
-        scout.user_id = user_id
+        from app.services.analytics.trend_scout import TrendScout
+        scout = TrendScout(user_id=user_id)
     except Exception as e:
         _log(db, user_id, "error", f"Failed to init TrendScout: {e}", level="error")
         return {"error": str(e)}
 
     results = {"own_accounts": 0, "competitors": 0, "hashtags": 0}
+
+    # Check if any discovery sources are configured
+    has_competitors = bool(scout.competitors) or bool(scout.post_competitors)
+    has_hashtags = bool(scout.hashtags) or bool(scout.post_hashtags)
+
+    # If still no sources after seeding attempt, skip silently
+    if not has_competitors and not has_hashtags:
+        state.last_discovery_at = datetime.now(timezone.utc)
+        state.updated_at = datetime.now(timezone.utc)
+        return results
 
     try:
         if state.phase == "bootstrap":
@@ -72,9 +95,12 @@ def run_discovery_tick(db: Session, user_id: str, state: TobyState) -> dict:
             scan_result = scout.bootstrap_scan_tick()
             results["bootstrap"] = scan_result
             total = sum(v if isinstance(v, int) else 0 for v in scan_result.values()) if isinstance(scan_result, dict) else 0
-            _log(db, user_id, "discovery_scan",
-                 f"Bootstrap scan: discovered {total} items",
-                 level="info", metadata=scan_result)
+            # Only log when items are actually discovered to avoid spam
+            if total > 0:
+                _log(db, user_id, "discovery_scan",
+                     f"Bootstrap scan: discovered {total} new trending items",
+                     level="info", metadata=scan_result)
+            # If 0, it just means all existing items were already scanned — not noteworthy
         else:
             # Normal: scan own accounts
             own = scout.scan_own_accounts()

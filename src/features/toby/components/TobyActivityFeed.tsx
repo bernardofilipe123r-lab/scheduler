@@ -101,6 +101,24 @@ const ACTION_CONFIG: Record<string, ActionConfig> = {
     bgColor: 'bg-purple-50',
     humanLabel: 'Scanned trends',
   },
+  discovery_scan: {
+    icon: Search,
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50',
+    humanLabel: 'Trend scan',
+  },
+  discovery_seeded: {
+    icon: Search,
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-50',
+    humanLabel: 'Auto-discovered sources',
+  },
+  discovery_seed_failed: {
+    icon: Search,
+    color: 'text-orange-500',
+    bgColor: 'bg-orange-50',
+    humanLabel: 'Discovery setup pending',
+  },
 }
 
 const DEFAULT_CONFIG: ActionConfig = {
@@ -158,6 +176,12 @@ function humanizeDescription(item: TobyActivityItem): string {
       return item.description || 'Toby started a new A/B test to find better strategies'
     case 'error':
       return `Something went wrong: ${item.description}`
+    case 'discovery_scan':
+      return item.description || 'Toby scanned Instagram for trending content in your niche'
+    case 'discovery_seeded':
+      return item.description || 'Toby auto-discovered competitor accounts and hashtags from your Content DNA'
+    case 'discovery_seed_failed':
+      return 'Toby tried to find competitor accounts but couldn\'t validate any yet — will retry later'
     default:
       return item.description
   }
