@@ -98,7 +98,7 @@ def instagram_connect(
     }
     auth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params, quote_via=quote)}"
 
-    return RedirectResponse(url=auth_url)
+    return {"auth_url": auth_url, "brand_id": brand_id}
 
 
 # ---------------------------------------------------------------------------

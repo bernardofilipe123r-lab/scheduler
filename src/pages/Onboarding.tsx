@@ -43,7 +43,7 @@ import {
 } from '@/features/brands/constants'
 import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 import { supabase } from '@/shared/api/supabase'
-import { connectYouTube, getInstagramConnectUrl, fetchBrandConnections } from '@/features/brands/api/connections-api'
+import { connectYouTube, connectInstagram, fetchBrandConnections } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
 const STEP_INFO = [
@@ -281,11 +281,16 @@ export function OnboardingPage() {
     }
   }
 
-  const handleConnectInstagram = () => {
+  const handleConnectInstagram = async () => {
     setConnectingIg(true)
     setConnectionError(null)
-    // Redirect to IG OAuth with return_to=onboarding
-    window.location.href = getInstagramConnectUrl(brandId, 'onboarding')
+    try {
+      const authUrl = await connectInstagram(brandId, 'onboarding')
+      window.location.href = authUrl
+    } catch (err) {
+      setConnectingIg(false)
+      setConnectionError(err instanceof Error ? err.message : 'Failed to start Instagram connection')
+    }
   }
 
   const handleConnectYouTube = async () => {

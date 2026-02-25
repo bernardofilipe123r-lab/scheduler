@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, RefreshCw, CheckCircle2, XCircle, Instagram } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
-import { getInstagramConnectUrl } from '@/features/brands'
+import { connectInstagram } from '@/features/brands'
 import { apiClient } from '@/shared/api/client'
 import { ConnectionsSkeleton } from '@/shared/components'
 import { ConnectionSummaryBar } from './ConnectionSummaryBar'
@@ -103,13 +103,20 @@ export function ConnectionsTab() {
                 Your brand was created! Click below to connect your Instagram account — it only takes a few seconds.
               </p>
               <div className="flex items-center gap-3 mt-3">
-                <a
-                  href={getInstagramConnectUrl(newBrandId)}
+                <button
+                  onClick={async () => {
+                    try {
+                      const authUrl = await connectInstagram(newBrandId)
+                      window.location.href = authUrl
+                    } catch (error) {
+                      console.error('Failed to start Instagram connection:', error)
+                    }
+                  }}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white hover:opacity-90 transition-opacity"
                 >
                   <Instagram className="w-4 h-4" />
                   Connect Instagram
-                </a>
+                </button>
                 <button
                   onClick={() => setNewBrandId(null)}
                   className="text-sm text-gray-500 hover:text-gray-700 underline"

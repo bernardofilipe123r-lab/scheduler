@@ -19,7 +19,7 @@ import {
   connectYouTube,
   testMetaConnection,
   testYouTubeConnection,
-  getInstagramConnectUrl,
+  connectInstagram,
   disconnectInstagram,
   type BrandConnectionStatus,
   type PlatformConnection,
@@ -116,8 +116,13 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     }
   }
 
-  const handleInstagramConnect = () => {
-    window.location.href = getInstagramConnectUrl(brand.brand)
+  const handleInstagramConnect = async () => {
+    try {
+      const authUrl = await connectInstagram(brand.brand)
+      window.location.href = authUrl
+    } catch (error) {
+      console.error('Failed to start Instagram connection:', error)
+    }
   }
 
   const handleInstagramDisconnect = async () => {
