@@ -66,7 +66,7 @@ export function TobyExperiments() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
         <div className="h-5 bg-gray-100 rounded w-36 mb-4 animate-pulse" />
         <div className="grid grid-cols-2 gap-4">
           {[...Array(4)].map((_, i) => (
@@ -82,8 +82,8 @@ export function TobyExperiments() {
   const completed = experiments.filter(e => e.status === 'completed')
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900">Experiments</h3>
         {active.length > 0 && (
           <span className="text-xs text-blue-600 font-medium">{active.length} running</span>
@@ -91,9 +91,12 @@ export function TobyExperiments() {
       </div>
 
       {experiments.length === 0 ? (
-        <div className="p-8 text-center text-gray-400">
-          <FlaskConical className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">No experiments yet. Toby auto-creates A/B tests during the learning phase.</p>
+        <div className="p-8 text-center">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center mx-auto mb-3">
+            <FlaskConical className="w-6 h-6 text-indigo-400" />
+          </div>
+          <p className="text-sm font-medium text-gray-600 mb-1">No experiments yet</p>
+          <p className="text-xs text-gray-400">Toby will automatically create A/B tests during the learning phase to find your best strategies.</p>
         </div>
       ) : (
         <div className="p-4">

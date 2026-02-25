@@ -12,7 +12,7 @@ export function TobySettings() {
 
   if (isLoading || !config) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 animate-pulse">
         <div className="h-5 bg-gray-100 rounded w-28 mb-4" />
         <div className="space-y-4">
           {[...Array(4)].map((_, i) => (
@@ -39,8 +39,8 @@ export function TobySettings() {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
           <Settings className="w-4 h-4 text-gray-400" />
           Configuration

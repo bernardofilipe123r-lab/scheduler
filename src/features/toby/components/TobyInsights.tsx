@@ -6,7 +6,7 @@ export function TobyInsights() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
         <div className="h-5 bg-gray-100 rounded w-24 mb-4 animate-pulse" />
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
@@ -22,16 +22,19 @@ export function TobyInsights() {
   const dimensions = Object.entries(data.top_strategies || {})
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900">Insights</h3>
         <span className="text-xs text-gray-400">{data.total_scored_posts} posts scored</span>
       </div>
 
       {dimensions.length === 0 ? (
-        <div className="p-8 text-center text-gray-400">
-          <Lightbulb className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">Insights will appear after Toby scores enough published posts.</p>
+        <div className="p-8 text-center">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center mx-auto mb-3">
+            <Lightbulb className="w-6 h-6 text-amber-400" />
+          </div>
+          <p className="text-sm font-medium text-gray-600 mb-1">Building intelligence</p>
+          <p className="text-xs text-gray-400">Insights will appear once Toby starts scoring published content — usually within the first week.</p>
         </div>
       ) : (
         <div className="p-4 space-y-5">
