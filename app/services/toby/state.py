@@ -69,6 +69,25 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
     state.enabled = True
     state.enabled_at = now
     state.disabled_at = None
+
+    # Validate phase matches reality: if scored posts don't justify the current
+    # phase, reset to the correct one (fixes stale phase from prior runs/tests).
+    from app.models.toby import TobyContentTag
+    scored = (
+        db.query(TobyContentTag)
+        .filter(TobyContentTag.user_id == user_id, TobyContentTag.toby_score.isnot(None))
+        .count()
+    )
+    if state.phase == "optimizing" or state.phase == "learning":
+        if scored < BOOTSTRAP_MIN_POSTS:
+            state.phase = "bootstrap"
+            state.phase_started_at = now
+            _log_activity(
+                db, user_id, "phase_correction",
+                f"Phase reset to bootstrap on enable (only {scored} scored posts — need {BOOTSTRAP_MIN_POSTS})",
+                level="warning",
+            )
+
     if not state.phase_started_at:
         state.phase_started_at = now
     state.updated_at = now
@@ -123,6 +142,19 @@ def check_phase_transition(db: Session, state: TobyState, scored_post_count: int
     if phase_start.tzinfo is None:
         phase_start = phase_start.replace(tzinfo=timezone.utc)
     days_in_phase = (now - phase_start).days
+
+    # Safety: if phase is ahead of reality, regress to match scored post count
+    if state.phase in ("learning", "optimizing") and scored_post_count < BOOTSTRAP_MIN_POSTS:
+        old_phase = state.phase
+        state.phase = "bootstrap"
+        state.phase_started_at = now
+        state.updated_at = now
+        _log_activity(
+            db, state.user_id, "phase_correction",
+            f"Phase corrected from {old_phase} to bootstrap (only {scored_post_count} scored posts)",
+            level="warning",
+        )
+        return True
 
     if state.phase == "bootstrap":
         if scored_post_count >= BOOTSTRAP_MIN_POSTS and days_in_phase >= BOOTSTRAP_MIN_DAYS:
