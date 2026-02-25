@@ -11,7 +11,7 @@ import os
 import secrets
 import logging
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -96,8 +96,9 @@ def instagram_connect(
         "scope": REQUIRED_SCOPES,
         "state": state_token,
     }
-    auth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params, quote_via=quote)}"
+    auth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
 
+    logger.info(f"Instagram OAuth redirect_uri: {INSTAGRAM_REDIRECT_URI}")
     return {"auth_url": auth_url, "brand_id": brand_id}
 
 
