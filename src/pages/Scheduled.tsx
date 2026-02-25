@@ -381,8 +381,19 @@ export function ScheduledPage() {
     setShowRescheduleModal(true)
   }
   
+  const isRescheduleInPast = (() => {
+    if (!rescheduleDate || !rescheduleTime) return false
+    const selected = new Date(`${rescheduleDate}T${rescheduleTime}:00`)
+    return selected <= new Date()
+  })()
+
   const handleReschedule = async () => {
     if (!selectedPost || !rescheduleDate || !rescheduleTime) return
+    
+    if (isRescheduleInPast) {
+      toast.error('Cannot reschedule to a time in the past')
+      return
+    }
     
     try {
       const isoString = `${rescheduleDate}T${rescheduleTime}:00`
@@ -1624,6 +1635,7 @@ export function ScheduledPage() {
               type="date"
               value={rescheduleDate}
               onChange={(e) => setRescheduleDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
@@ -1647,9 +1659,12 @@ export function ScheduledPage() {
             >
               Cancel
             </button>
+            {isRescheduleInPast && (
+              <p className="text-sm text-red-500">Cannot schedule in the past.</p>
+            )}
             <button
               onClick={handleReschedule}
-              disabled={reschedule.isPending || !rescheduleDate || !rescheduleTime}
+              disabled={reschedule.isPending || !rescheduleDate || !rescheduleTime || isRescheduleInPast}
               className="btn btn-primary flex-1"
             >
               {reschedule.isPending ? (

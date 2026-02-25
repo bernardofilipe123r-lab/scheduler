@@ -92,6 +92,12 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
         )
         print(f"✅ Parsed datetime: {scheduled_datetime.isoformat()}")
         
+        if scheduled_datetime <= datetime.now():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot schedule in the past"
+            )
+        
         # Extract job_id from reel_id (format: {job_id}_{brand})
         parts = request.reel_id.rsplit('_', 1)
         extracted_job_id = parts[0] if len(parts) > 1 else request.reel_id
@@ -220,6 +226,12 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             if next_slot.tzinfo is not None:
                 next_slot = next_slot.replace(tzinfo=None)
             print(f"📅 Using custom time: {next_slot.isoformat()}")
+            
+            if next_slot <= datetime.now():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot schedule in the past"
+                )
         else:
             # Get next available slot using magic scheduling
             next_slot = scheduler_service.get_next_available_slot(
@@ -549,6 +561,14 @@ async def reschedule_post(schedule_id: str, request: RescheduleRequest, user: di
         # Parse the new scheduled time
         new_time = datetime.fromisoformat(request.scheduled_time.replace('Z', '+00:00'))
         
+        # Strip timezone for comparison
+        new_time_naive = new_time.replace(tzinfo=None) if new_time.tzinfo else new_time
+        if new_time_naive <= datetime.now():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot reschedule to a time in the past"
+            )
+        
         success = scheduler_service.reschedule(schedule_id, new_time)
         
         if not success:
@@ -703,6 +723,15 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
     """Schedule a single post image for a specific brand at a given time."""
     try:
         from datetime import datetime
+        
+        # Validate schedule time is not in the past
+        schedule_dt = datetime.fromisoformat(request.schedule_time.replace('Z', '+00:00'))
+        schedule_dt_naive = schedule_dt.replace(tzinfo=None) if schedule_dt.tzinfo else schedule_dt
+        if schedule_dt_naive <= datetime.now():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot schedule in the past"
+            )
         
         print(f"\n{'='*80}")
         print(f"📸 SCHEDULING POST IMAGE")

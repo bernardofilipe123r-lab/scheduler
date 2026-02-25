@@ -326,9 +326,20 @@ export function JobDetailPage() {
     setCustomScheduleModalOpen(true)
   }
   
+  const isCustomScheduleInPast = (() => {
+    if (!customScheduleDate || !customScheduleTime) return false
+    const selected = new Date(`${customScheduleDate}T${customScheduleTime}`)
+    return selected <= new Date()
+  })()
+
   const handleCustomScheduleAll = async () => {
     if (!job || !customScheduleDate || !customScheduleTime) {
       toast.error('Please select a date and time')
+      return
+    }
+    
+    if (isCustomScheduleInPast) {
+      toast.error('Cannot schedule in the past')
       return
     }
     
@@ -1262,7 +1273,11 @@ export function JobDetailPage() {
             </div>
           </div>
           
-          {customScheduleDate && customScheduleTime && completedCount > 0 && (
+          {isCustomScheduleInPast && (
+            <p className="text-sm text-red-500">Cannot schedule in the past. Please select a future date and time.</p>
+          )}
+
+          {customScheduleDate && customScheduleTime && !isCustomScheduleInPast && completedCount > 0 && (
             <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
               <p className="font-medium mb-1">Schedule Preview:</p>
               <ul className="space-y-1">
@@ -1292,7 +1307,7 @@ export function JobDetailPage() {
             </button>
             <button
               onClick={handleCustomScheduleAll}
-              disabled={schedulingCustom || !customScheduleDate || !customScheduleTime}
+              disabled={schedulingCustom || !customScheduleDate || !customScheduleTime || isCustomScheduleInPast}
               className="btn btn-primary flex-1"
             >
               {schedulingCustom ? (

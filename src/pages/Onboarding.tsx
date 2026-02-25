@@ -894,22 +894,13 @@ export function OnboardingPage() {
 
           {step === 5 && (
             <div className="flex items-center gap-3">
-              {!igConnected && !ytConnected && (
-                <button
-                  onClick={handleComplete}
-                  disabled={completing}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
-                >
-                  Skip for now
-                </button>
-              )}
               <button
                 onClick={handleComplete}
-                disabled={completing}
+                disabled={completing || (!igConnected && !ytConnected)}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
                   igConnected || ytConnected
                     ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
-                    : 'hidden'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 {completing ? (

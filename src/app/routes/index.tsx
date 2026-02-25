@@ -80,12 +80,12 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
 function OnboardingPageGuard() {
   const { isAuthenticated, user, isLoading: authLoading } = useAuth()
-  const { isLoading: onboardingLoading } = useOnboardingStatus()
+  const { isLoading: onboardingLoading, hasConnection } = useOnboardingStatus()
 
   if (authLoading || onboardingLoading) return <AppLoader />
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  // Only exit onboarding when the user explicitly completes it (not just creating a brand mid-flow)
-  if (user?.onboardingCompleted) return <Navigate to="/" replace />
+  // Only exit onboarding when user has completed it AND has at least one platform connected
+  if (user?.onboardingCompleted && hasConnection) return <Navigate to="/" replace />
   return <OnboardingPage />
 }
 
