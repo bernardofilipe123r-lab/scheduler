@@ -739,7 +739,7 @@ class DatabaseSchedulerService:
                 print(f"   📸 Instagram Account ID: {resolved_config.instagram_business_account_id}")
                 print(f"   📘 Facebook Page ID: {resolved_config.facebook_page_id}")
                 
-                # Validate credentials only for the platforms being published to
+                # Validate credentials only for the platforms being published to (avoid error)
                 if "instagram" in platforms and not resolved_config.instagram_business_account_id:
                     error_msg = f"CRITICAL: Brand '{brand_name}' has no Instagram Business Account ID configured! Cannot publish."
                     print(f"   ❌ {error_msg}")
