@@ -160,12 +160,74 @@ def _process_user(db: Session, state: TobyState):
             except Exception as agent_err:
                 print(f"[TOBY] LLM strategy agent error for {user_id}: {agent_err}", flush=True)
 
+            # v3: Cognitive analyst loop (Loop 2) — anomaly detection + episodic backfill
+            try:
+                from app.services.toby.feature_flags import is_enabled
+                if is_enabled("memory_system"):
+                    from app.services.toby.agents.analyst import analyst_loop
+                    analyst_loop(db, user_id)
+            except Exception as analyst_err:
+                print(f"[TOBY] Cognitive analyst error for {user_id}: {analyst_err}", flush=True)
+
             state.last_analysis_at = now
             state.updated_at = now
             db.commit()
         except Exception as e:
             db.rollback()
             print(f"[TOBY] Analysis check failed for {user_id}: {e}", flush=True)
+
+    # 3b. DELIBERATION LOOP (v3 Loop 3) — daily pattern analysis via DeepSeek R1
+    try:
+        from app.services.toby.feature_flags import is_enabled
+        if is_enabled("deliberation_loop") and _should_check(state.last_deliberation_at, 1440):  # 24h
+            from app.services.toby.agents.pattern_analyzer import pattern_analysis_loop
+            from app.services.toby.agents.experiment_designer import design_experiment
+            pattern_analysis_loop(db, user_id)
+            # After pattern analysis, check if we should design new experiments
+            design_experiment(db, user_id)
+            state.last_deliberation_at = now
+            state.updated_at = now
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[TOBY] Deliberation loop failed for {user_id}: {e}", flush=True)
+
+    # 3c. META-COGNITIVE LOOP (v3 Loop 4) — weekly self-tuning
+    try:
+        from app.services.toby.feature_flags import is_enabled
+        if is_enabled("meta_learning") and _should_check(state.last_meta_cognition_at, 10080):  # 7 days
+            from app.services.toby.agents.meta_learner import meta_cognitive_loop
+            meta_cognitive_loop(db, user_id, state)
+            state.last_meta_cognition_at = now
+            state.updated_at = now
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[TOBY] Meta-cognitive loop failed for {user_id}: {e}", flush=True)
+
+    # 3d. INTELLIGENCE PIPELINE (v3) — process raw signals
+    try:
+        from app.services.toby.feature_flags import is_enabled
+        if is_enabled("intelligence_pipeline") and _should_check(state.last_intelligence_at, 720):  # 12h
+            from app.services.toby.agents.intelligence import process_raw_signals
+            process_raw_signals(db, user_id)
+            state.last_intelligence_at = now
+            state.updated_at = now
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[TOBY] Intelligence pipeline failed for {user_id}: {e}", flush=True)
+
+    # 3e. HISTORICAL MINING (v3) — one-time retroactive learning
+    try:
+        from app.services.toby.feature_flags import is_enabled
+        if is_enabled("historical_mining") and not state.historical_mining_complete:
+            from app.services.toby.historical_miner import mine_historical_content
+            mine_historical_content(db, user_id, state)
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[TOBY] Historical mining failed for {user_id}: {e}", flush=True)
 
     # 4. DISCOVERY CHECK — isolated commit
     try:
@@ -612,6 +674,14 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
                             dim, val, tag.toby_score,
                         )
 
+            # v3: Record combo performance for strategy-combination tracking
+            try:
+                from app.services.toby.feature_flags import is_enabled
+                if is_enabled("memory_system"):
+                    _record_strategy_combo(db, user_id, tag)
+            except Exception:
+                pass  # Non-critical — don't break scoring
+
 
 def start_toby_scheduler(scheduler):
     """Register Toby's 5-minute tick with APScheduler."""
@@ -823,3 +893,45 @@ def _increment_budget(state: TobyState, cost_cents: int = 5):
     state.spent_today_cents = (state.spent_today_cents or 0) + cost_cents
     if not state.budget_reset_at:
         state.budget_reset_at = datetime.now(timezone.utc)
+
+
+def _record_strategy_combo(db: Session, user_id: str, tag):
+    """v3: Record strategy-combination performance for combo tracking."""
+    from app.models.toby_cognitive import TobyStrategyCombos
+
+    combo_key = f"{tag.personality}|{tag.topic_bucket}|{tag.hook_strategy}"
+    existing = (
+        db.query(TobyStrategyCombos)
+        .filter(
+            TobyStrategyCombos.user_id == user_id,
+            TobyStrategyCombos.brand_id == tag.brand_id,
+            TobyStrategyCombos.combo_key == combo_key,
+        )
+        .first()
+    )
+
+    if existing:
+        n = existing.sample_count + 1
+        existing.total_score += tag.toby_score
+        existing.avg_score = existing.total_score / n
+        existing.sample_count = n
+        existing.last_used_at = datetime.now(timezone.utc)
+    else:
+        combo = TobyStrategyCombos(
+            user_id=user_id,
+            brand_id=tag.brand_id,
+            content_type=tag.content_type,
+            combo_key=combo_key,
+            dimensions={
+                "personality": tag.personality,
+                "topic": tag.topic_bucket,
+                "hook": tag.hook_strategy,
+                "title_format": tag.title_format,
+                "visual_style": tag.visual_style,
+            },
+            sample_count=1,
+            total_score=tag.toby_score,
+            avg_score=tag.toby_score,
+            last_used_at=datetime.now(timezone.utc),
+        )
+        db.add(combo)

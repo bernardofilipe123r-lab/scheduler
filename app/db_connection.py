@@ -96,6 +96,37 @@ def run_migrations():
         conn.execute(text("ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS spent_today_cents INTEGER DEFAULT 0"))
         conn.execute(text("ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS budget_reset_at TIMESTAMPTZ"))
 
+        # ── Toby V3: Cognitive loop columns ──
+        v3_state_cols = [
+            "ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS last_deliberation_at TIMESTAMPTZ",
+            "ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS last_meta_cognition_at TIMESTAMPTZ",
+            "ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS last_intelligence_at TIMESTAMPTZ",
+            "ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS meta_explore_ratio_adjustment FLOAT",
+            "ALTER TABLE toby_state ADD COLUMN IF NOT EXISTS historical_mining_complete BOOLEAN DEFAULT FALSE",
+        ]
+        for sql in v3_state_cols:
+            conn.execute(text(sql))
+
+        # Toby V3: extra columns on toby_content_tags
+        v3_tag_cols = [
+            "ALTER TABLE toby_content_tags ADD COLUMN IF NOT EXISTS reasoning_trace_id VARCHAR(36)",
+            "ALTER TABLE toby_content_tags ADD COLUMN IF NOT EXISTS critic_scores JSONB",
+            "ALTER TABLE toby_content_tags ADD COLUMN IF NOT EXISTS strategy_combo_id VARCHAR(36)",
+            "ALTER TABLE toby_content_tags ADD COLUMN IF NOT EXISTS cognitive_metadata JSONB",
+        ]
+        for sql in v3_tag_cols:
+            conn.execute(text(sql))
+
+        # Toby V3: extra columns on toby_experiments
+        v3_exp_cols = [
+            "ALTER TABLE toby_experiments ADD COLUMN IF NOT EXISTS hypothesis TEXT",
+            "ALTER TABLE toby_experiments ADD COLUMN IF NOT EXISTS p_value FLOAT",
+            "ALTER TABLE toby_experiments ADD COLUMN IF NOT EXISTS effect_size FLOAT",
+            "ALTER TABLE toby_experiments ADD COLUMN IF NOT EXISTS early_stopped BOOLEAN DEFAULT FALSE",
+        ]
+        for sql in v3_exp_cols:
+            conn.execute(text(sql))
+
         conn.commit()
 
 

@@ -24,6 +24,16 @@ from app.models.toby import (
     TobyActivityLog,
     TobyContentTag,
 )
+from app.models.toby_cognitive import (
+    TobyEpisodicMemory,
+    TobySemanticMemory,
+    TobyProceduralMemory,
+    TobyWorldModel,
+    TobyStrategyCombos,
+    TobyRawSignal,
+    TobyMetaReport,
+    TobyReasoningTrace,
+)
 
 __all__ = [
     "Base",
@@ -46,4 +56,12 @@ __all__ = [
     "TobyStrategyScore",
     "TobyActivityLog",
     "TobyContentTag",
+    "TobyEpisodicMemory",
+    "TobySemanticMemory",
+    "TobyProceduralMemory",
+    "TobyWorldModel",
+    "TobyStrategyCombos",
+    "TobyRawSignal",
+    "TobyMetaReport",
+    "TobyReasoningTrace",
 ]

@@ -44,6 +44,13 @@ class TobyState(Base):
     spent_today_cents = Column(Integer, default=0)
     budget_reset_at = Column(DateTime(timezone=True), nullable=True)
 
+    # v3 cognitive loop timestamps
+    last_deliberation_at = Column(DateTime(timezone=True), nullable=True)
+    last_meta_cognition_at = Column(DateTime(timezone=True), nullable=True)
+    last_intelligence_at = Column(DateTime(timezone=True), nullable=True)
+    meta_explore_ratio_adjustment = Column(Float, nullable=True)
+    historical_mining_complete = Column(Boolean, default=False)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)
@@ -67,6 +74,11 @@ class TobyState(Base):
             "last_discovery_at": self.last_discovery_at.isoformat() if self.last_discovery_at else None,
             "daily_budget_cents": self.daily_budget_cents,
             "spent_today_cents": self.spent_today_cents,
+            "last_deliberation_at": self.last_deliberation_at.isoformat() if self.last_deliberation_at else None,
+            "last_meta_cognition_at": self.last_meta_cognition_at.isoformat() if self.last_meta_cognition_at else None,
+            "last_intelligence_at": self.last_intelligence_at.isoformat() if self.last_intelligence_at else None,
+            "meta_explore_ratio_adjustment": self.meta_explore_ratio_adjustment,
+            "historical_mining_complete": self.historical_mining_complete,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

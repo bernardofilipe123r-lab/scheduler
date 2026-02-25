@@ -416,16 +416,28 @@ def get_insights(db: Session, user_id: str) -> dict:
 
 
 def _thompson_sample(avg_score: float, sample_count: int) -> float:
-    """Phase A1: Sample from a Beta distribution for Thompson Sampling.
+    """Phase A1 / v3: Sample from a Beta distribution for Thompson Sampling.
 
     Converts the avg_score (0-100) and sample_count into Beta distribution
     parameters (alpha, beta) and draws a sample. Options with fewer samples
     have wider distributions, naturally encouraging exploration.
+
+    v3: Uses numpy for proper Beta sampling and caps effective_n at 50
+    to prevent posterior from collapsing too tight.
     """
-    p = max(0.01, min(0.99, avg_score / 100.0))
-    alpha = max(1.0, sample_count * p)
-    beta = max(1.0, sample_count * (1 - p))
-    return random.betavariate(alpha, beta)
+    try:
+        import numpy as np
+        p = max(0.01, min(0.99, avg_score / 100.0))
+        effective_n = min(sample_count, 50)  # v3: cap to prevent collapse
+        alpha = max(1.0, effective_n * p)
+        beta_param = max(1.0, effective_n * (1 - p))
+        return float(np.random.beta(alpha, beta_param))
+    except ImportError:
+        # Fallback to stdlib if numpy unavailable
+        p = max(0.01, min(0.99, avg_score / 100.0))
+        alpha = max(1.0, min(sample_count, 50) * p)
+        beta = max(1.0, min(sample_count, 50) * (1 - p))
+        return random.betavariate(alpha, beta)
 
 
 def _pick_dimension(
