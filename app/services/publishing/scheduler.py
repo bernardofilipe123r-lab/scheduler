@@ -458,13 +458,14 @@ class DatabaseSchedulerService:
             
             return count
     
-    def retry_failed(self, schedule_id: str) -> bool:
+    def retry_failed(self, schedule_id: str, user_id: Optional[str] = None) -> bool:
         """
         Reset a failed or partial post to 'scheduled' status for retry.
         For partial failures, only retry the failed platforms.
         
         Args:
             schedule_id: ID of the failed/partial schedule
+            user_id: Optional user filter for security
             
         Returns:
             True if reset successfully, False if not found or not retriable
@@ -472,9 +473,12 @@ class DatabaseSchedulerService:
         print(f"\n🔄 [RETRY] retry_failed called for schedule_id: {schedule_id}", flush=True)
         
         with get_db_session() as db:
-            scheduled_reel = db.query(ScheduledReel).filter(
+            query = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
-            ).first()
+            )
+            if user_id:
+                query = query.filter(ScheduledReel.user_id == user_id)
+            scheduled_reel = query.first()
             
             if not scheduled_reel:
                 print(f"   ❌ [RETRY] Schedule not found: {schedule_id}", flush=True)
@@ -539,21 +543,25 @@ class DatabaseSchedulerService:
             print(f"🔄 Reset post {schedule_id} for retry")
             return True
     
-    def reschedule(self, schedule_id: str, new_time: datetime) -> bool:
+    def reschedule(self, schedule_id: str, new_time: datetime, user_id: Optional[str] = None) -> bool:
         """
         Reschedule a post to a new date/time.
         
         Args:
             schedule_id: ID of the scheduled post
             new_time: New datetime to schedule for
+            user_id: Optional user filter for security
             
         Returns:
             True if rescheduled successfully, False if not found
         """
         with get_db_session() as db:
-            scheduled_reel = db.query(ScheduledReel).filter(
+            query = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
-            ).first()
+            )
+            if user_id:
+                query = query.filter(ScheduledReel.user_id == user_id)
+            scheduled_reel = query.first()
             
             if not scheduled_reel:
                 return False
@@ -645,21 +653,25 @@ class DatabaseSchedulerService:
 
             return retried
     
-    def publish_scheduled_now(self, schedule_id: str) -> bool:
+    def publish_scheduled_now(self, schedule_id: str, user_id: Optional[str] = None) -> bool:
         """
         Set a scheduled post to publish immediately.
         Updates scheduled_time to now so the auto-publisher picks it up.
         
         Args:
             schedule_id: ID of the scheduled post
+            user_id: Optional user filter for security
             
         Returns:
             True if updated successfully, False if not found
         """
         with get_db_session() as db:
-            scheduled_reel = db.query(ScheduledReel).filter(
+            query = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
-            ).first()
+            )
+            if user_id:
+                query = query.filter(ScheduledReel.user_id == user_id)
+            scheduled_reel = query.first()
             
             if not scheduled_reel:
                 return False

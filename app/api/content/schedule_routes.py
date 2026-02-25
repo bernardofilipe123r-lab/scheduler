@@ -318,9 +318,7 @@ async def get_scheduled_posts(user: dict = Depends(get_current_user)):
     Get all scheduled posts (reels and posts from all sources).
     """
     try:
-        schedules = scheduler_service.get_all_scheduled()
-        
-        # Format the response with human-readable data
+        schedules = scheduler_service.get_all_scheduled(user_id=user["id"])
         formatted_schedules = []
         for schedule in schedules:
             metadata = schedule.get("metadata", {})
@@ -385,6 +383,7 @@ async def delete_scheduled_from_date(from_date: str, user: dict = Depends(get_cu
         entries = (
             db.query(ScheduledReel)
             .filter(ScheduledReel.scheduled_time >= cutoff)
+            .filter(ScheduledReel.user_id == user["id"])
             .all()
         )
 
@@ -397,7 +396,7 @@ async def delete_scheduled_from_date(from_date: str, user: dict = Depends(get_cu
             if not job_id or not brand:
                 continue
             if job_id not in job_cache:
-                job_cache[job_id] = db.query(GenerationJob).filter(GenerationJob.job_id == job_id).first()
+                job_cache[job_id] = db.query(GenerationJob).filter(GenerationJob.job_id == job_id, GenerationJob.user_id == user["id"]).first()
             job = job_cache[job_id]
             if job and job.brand_outputs and brand in job.brand_outputs:
                 job.brand_outputs[brand]["status"] = "cancelled"
@@ -433,6 +432,7 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
             db.query(ScheduledReel)
             .filter(ScheduledReel.scheduled_time >= day_start)
             .filter(ScheduledReel.scheduled_time < day_end)
+            .filter(ScheduledReel.user_id == user["id"])
         )
         if variant == "post":
             query = query.filter(
@@ -454,7 +454,7 @@ async def delete_scheduled_for_day(date: str, variant: Optional[str] = None, use
             if not job_id or not brand:
                 continue
             if job_id not in job_cache:
-                job_cache[job_id] = db.query(GenerationJob).filter(GenerationJob.job_id == job_id).first()
+                job_cache[job_id] = db.query(GenerationJob).filter(GenerationJob.job_id == job_id, GenerationJob.user_id == user["id"]).first()
             job = job_cache[job_id]
             if job and job.brand_outputs and brand in job.brand_outputs:
                 job.brand_outputs[brand]["status"] = "cancelled"
@@ -484,7 +484,10 @@ async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_curre
 
     db = SessionLocal()
     try:
-        entry = db.query(ScheduledReel).filter(ScheduledReel.schedule_id == schedule_id).first()
+        entry = db.query(ScheduledReel).filter(
+            ScheduledReel.schedule_id == schedule_id,
+            ScheduledReel.user_id == user["id"]
+        ).first()
         if not entry:
             raise HTTPException(status_code=404, detail=f"Scheduled post {schedule_id} not found")
 
@@ -525,7 +528,7 @@ async def retry_failed_post(schedule_id: str, user: dict = Depends(get_current_u
     This allows the auto-publisher to pick it up again on the next check.
     """
     try:
-        success = scheduler_service.retry_failed(schedule_id)
+        success = scheduler_service.retry_failed(schedule_id, user_id=user["id"])
         
         if not success:
             raise HTTPException(
@@ -569,7 +572,7 @@ async def reschedule_post(schedule_id: str, request: RescheduleRequest, user: di
                 detail="Cannot reschedule to a time in the past"
             )
         
-        success = scheduler_service.reschedule(schedule_id, new_time)
+        success = scheduler_service.reschedule(schedule_id, new_time, user_id=user["id"])
         
         if not success:
             raise HTTPException(
@@ -607,7 +610,7 @@ async def publish_scheduled_now(schedule_id: str, user: dict = Depends(get_curre
     try:
         from datetime import datetime, timezone
         
-        success = scheduler_service.publish_scheduled_now(schedule_id)
+        success = scheduler_service.publish_scheduled_now(schedule_id, user_id=user["id"])
         
         if not success:
             raise HTTPException(
@@ -656,7 +659,8 @@ async def get_next_available_slot(brand: str, variant: str, user: dict = Depends
         
         next_slot = scheduler_service.get_next_available_slot(
             brand=brand.lower(),
-            variant=variant.lower()
+            variant=variant.lower(),
+            user_id=user["id"]
         )
         
         return {
@@ -695,7 +699,8 @@ async def get_all_next_slots(user: dict = Depends(get_current_user)):
             for variant in ["light", "dark"]:
                 next_slot = scheduler_service.get_next_available_slot(
                     brand=brand,
-                    variant=variant
+                    variant=variant,
+                    user_id=user["id"]
                 )
                 slots[brand][variant] = {
                     "next_slot": next_slot.isoformat(),
@@ -836,7 +841,7 @@ async def get_occupied_post_slots(user: dict = Depends(get_current_user)):
     Frontend uses this to avoid scheduling collisions.
     """
     try:
-        all_scheduled = scheduler_service.get_all_scheduled()
+        all_scheduled = scheduler_service.get_all_scheduled(user_id=user["id"])
         
         # Build dict of brand -> list of ISO datetime strings
         occupied: dict[str, list[str]] = {}
@@ -1002,7 +1007,7 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
                 brand_occupied[brand].add(new_key)
 
                 try:
-                    scheduler_service.reschedule(schedule_id, new_time)
+                    scheduler_service.reschedule(schedule_id, new_time, user_id=user_id)
                     wrong_slot_fixed += 1
                     details.append(f"Wrong slot: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
                     print(f"   🔧 Wrong slot: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
@@ -1026,7 +1031,7 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
                         brand_occupied[brand] = set()
                     brand_occupied[brand].add(new_key)
                     try:
-                        scheduler_service.reschedule(schedule_id, new_time)
+                        scheduler_service.reschedule(schedule_id, new_time, user_id=user_id)
                         wrong_slot_fixed += 1
                         details.append(f"Wrong variant: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
                         print(f"   🔧 Wrong variant: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
@@ -1081,7 +1086,7 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
                 brand_occupied[brand].add(new_key)
 
                 try:
-                    scheduler_service.reschedule(schedule_id, new_time)
+                    scheduler_service.reschedule(schedule_id, new_time, user_id=user_id)
                     collision_fixed += 1
                     details.append(f"Collision: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
                     print(f"   🔧 Collision fix: {schedule_id} ({brand}/{variant}) {sched_time} → {new_time}")
@@ -1235,7 +1240,7 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
                 
                 # Update in DB
                 try:
-                    scheduler_service.reschedule(schedule_id, new_time)
+                    scheduler_service.reschedule(schedule_id, new_time, user_id=user_id)
                     fixed += 1
                     print(f"   🔧 Moved {schedule_id} ({brand}) from {sched_time} → {new_time}")
                 except Exception as e:

@@ -1,10 +1,11 @@
 /**
  * Onboarding Page — fullscreen wizard for new users.
- * Step 1: Create first brand (Identity + Colors)
- * Step 2: General Content DNA
- * Step 3: Reels Configuration
- * Step 4: Carousel Posts
- * Step 5: Connect Platforms (Meta credentials)
+ * Step 1: Create first brand (Identity)
+ * Step 2: Brand Theme (colors + pixel-accurate preview)
+ * Step 3: General Content DNA
+ * Step 4: Reels Configuration
+ * Step 5: Carousel Posts
+ * Step 6: Connect Platforms (Meta credentials)
  */
 import { useState, useEffect, useMemo } from 'react'
 import {
@@ -13,6 +14,7 @@ import {
   Check,
   Loader2,
   Sparkles,
+  Palette,
   Upload,
   X,
   Dna,
@@ -22,6 +24,7 @@ import {
   Youtube,
   ChevronDown,
   ExternalLink,
+  Type,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -46,12 +49,58 @@ import { supabase } from '@/shared/api/supabase'
 import { connectYouTube, connectInstagram, fetchBrandConnections } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
+/* ── Proportional scale: 1080px canvas → 200px preview ────────── */
+const CANVAS_W = 1080
+const CANVAS_H = 1920
+const PREVIEW_W = 200
+const SC = PREVIEW_W / CANVAS_W
+const PREVIEW_H = Math.round(CANVAS_H * SC)
+
+const PX = {
+  thumbTitleFont: Math.round(80 * SC),
+  thumbSideMargin: Math.round(80 * SC),
+  thumbLineSpacing: Math.round(20 * SC),
+  thumbBrandFont: Math.max(6, Math.round(28 * SC)),
+  thumbBrandGap: Math.round(254 * SC),
+  barStartY: Math.round(280 * SC),
+  barHeight: Math.round(100 * SC),
+  hPadding: Math.round(20 * SC),
+  barTitleFont: Math.round(56 * SC),
+  titleContentGap: Math.round(70 * SC),
+  contentSidePad: Math.round(108 * SC),
+  contentFont: Math.round(44 * SC),
+  contentLineH: Math.round(44 * 1.5 * SC),
+  bulletSpacing: Math.round(44 * 0.6 * SC),
+  brandFont: Math.max(4, Math.round(15 * SC)),
+  brandBottom: Math.round(12 * SC),
+}
+
+const DARK_BG =
+  'linear-gradient(145deg, #1a3a2a 0%, #0d1f15 25%, #1a2030 50%, #2d1a0a 75%, #1a0a1a 100%)'
+
+const SAMPLE_TITLE = 'SURPRISING TRUTHS ABOUT DETOXIFICATION'
+const SAMPLE_CONTENT = [
+  'Your liver does an incredible job filtering toxins',
+  'Drinking more water supports natural detox',
+  'Sleep is the most underrated detox mechanism',
+]
+
+function hexToRgba(hex: string, opacity: number): string {
+  const h = hex.replace('#', '')
+  if (h.length < 6) return `rgba(0,0,0,${opacity})`
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  return `rgba(${r},${g},${b},${opacity})`
+}
+
 const STEP_INFO = [
   { num: 1, label: 'Create your first brand', sub: 'A brand is an account associated with one or more social media platforms. Every user needs at least one.' },
-  { num: 2, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
-  { num: 3, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
-  { num: 4, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
-  { num: 5, label: 'Connect your platforms', sub: 'Link your Instagram and YouTube accounts so the app can publish content for you.' },
+  { num: 2, label: 'Brand Theme', sub: 'Choose your brand colors and preview how your content will look.' },
+  { num: 3, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
+  { num: 4, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
+  { num: 5, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
+  { num: 6, label: 'Connect your platforms', sub: 'Link your Instagram and YouTube accounts so the app can publish content for you.' },
 ]
 
 export function OnboardingPage() {
@@ -64,10 +113,10 @@ export function OnboardingPage() {
   const updateCredentialsMutation = useUpdateBrandCredentials()
 
   const [step, setStep] = useState<number>(() => {
-    // If returning from OAuth redirect, jump straight to step 5
+    // If returning from OAuth redirect, jump straight to step 6
     const params = new URLSearchParams(window.location.search)
     if (params.has('ig_connected') || params.has('yt_connected') || params.has('ig_error')) {
-      return 5
+      return 6
     }
     return onboardingStep
   })
@@ -80,7 +129,7 @@ export function OnboardingPage() {
 
   // Sync step and brandId if user already has a brand (e.g. returning mid-flow or after OAuth)
   useEffect(() => {
-    if (hasBrand && step === 1) setStep(2)
+    if (hasBrand && step === 1) setStep(3)
     if (hasBrand && existingBrands?.length && !brandId) {
       setBrandId(existingBrands[0].id)
     }
@@ -93,6 +142,10 @@ export function OnboardingPage() {
   const [accentColor, setAccentColor] = useState('')
   const [colorName, setColorName] = useState('')
   const [useCustomColors, setUseCustomColors] = useState(false)
+  const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
+  const [previewTitle, setPreviewTitle] = useState(SAMPLE_TITLE)
+  const [previewContent, setPreviewContent] = useState(SAMPLE_CONTENT.join('\n'))
+  const [savingTheme, setSavingTheme] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Apply first random preset on mount
@@ -104,7 +157,31 @@ export function OnboardingPage() {
     }
   }, [colorPresets]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Step 5 state: Platform Connections (OAuth) ──
+  // ── Step 2: Theme preview computations ──
+  const MAX_BULLET_POINTS = 6
+  const titleLines = useMemo(() => {
+    const words = previewTitle.split(/\s+/).filter(Boolean)
+    if (words.length <= 2) return [previewTitle]
+    const third = Math.ceil(words.length / 3)
+    return [
+      words.slice(0, third).join(' '),
+      words.slice(third, third * 2).join(' '),
+      words.slice(third * 2).join(' '),
+    ].filter(l => l.trim())
+  }, [previewTitle])
+
+  const contentLines = useMemo(() => {
+    return previewContent.split('\n').filter(l => l.trim()).slice(0, MAX_BULLET_POINTS)
+  }, [previewContent])
+
+  const thumbnailTextColor = previewMode === 'light' ? primaryColor : '#ffffff'
+  const contentTitleTextColor = '#ffffff'
+  const contentTitleBgColor = primaryColor
+  const contentTextColor = previewMode === 'light' ? '#000000' : '#ffffff'
+  const brandNameColor = previewMode === 'light' ? primaryColor : '#ffffff'
+  const contentStartY = PX.barStartY + titleLines.length * PX.barHeight + PX.titleContentGap
+
+  // ── Step 6 state: Platform Connections (OAuth) ──
   const [igConnected, setIgConnected] = useState(false)
   const [igHandle, setIgHandle] = useState<string | null>(null)
   const [ytConnected, setYtConnected] = useState(false)
@@ -119,9 +196,9 @@ export function OnboardingPage() {
   const [aiGenerating, setAiGenerating] = useState(false)
   const [ytSectionValid, setYtSectionValid] = useState(false)
 
-  // Check connection status when entering step 5 or returning from OAuth
+  // Check connection status when entering step 6 or returning from OAuth
   useEffect(() => {
-    if (step !== 5 || !brandId) return
+    if (step !== 6 || !brandId) return
     const params = new URLSearchParams(window.location.search)
     const igSuccess = params.get('ig_connected')
     const ytSuccess = params.get('yt_connected')
@@ -220,7 +297,37 @@ export function OnboardingPage() {
 
     try {
       await createBrandMutation.mutateAsync(input)
+      toast.success('Brand created!')
+      setStep(2)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create brand')
+    }
+  }
 
+  const handleSaveTheme = async () => {
+    setSavingTheme(true)
+    setError(null)
+    try {
+      const modeColors = generateModeColors(primaryColor, accentColor)
+      const colors: BrandColors = {
+        primary: primaryColor,
+        accent: accentColor,
+        color_name: colorName,
+        ...modeColors,
+      }
+      // Update brand colors
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      await fetch(`${import.meta.env.VITE_API_URL || ''}/api/v2/brands/${brandId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ colors }),
+      })
+
+      // Upload logo if provided
       if (logoFile) {
         try {
           const formData = new FormData()
@@ -230,8 +337,6 @@ export function OnboardingPage() {
           formData.append('light_bg_color', adjustColorBrightness(primaryColor, 180))
           formData.append('dark_title_color', '#ffffff')
           formData.append('dark_bg_color', adjustColorBrightness(primaryColor, -40))
-          const { data: sessionData } = await supabase.auth.getSession()
-          const token = sessionData.session?.access_token
           await fetch(`${import.meta.env.VITE_API_URL || ''}/api/brands/${brandId}/theme`, {
             method: 'POST',
             headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -242,10 +347,12 @@ export function OnboardingPage() {
         }
       }
 
-      toast.success('Brand created!')
-      setStep(2)
+      toast.success('Theme saved!')
+      setStep(3)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create brand')
+      setError(err instanceof Error ? err.message : 'Failed to save theme')
+    } finally {
+      setSavingTheme(false)
     }
   }
 
@@ -445,132 +552,258 @@ export function OnboardingPage() {
                     </div>
                   </div>
 
-                  {/* Logo Upload */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Brand Logo <span className="text-xs font-normal text-gray-400">(optional)</span></label>
-                    <div className="flex items-center gap-4">
-                      {logoPreview ? (
-                        <div className="relative">
-                          <img src={logoPreview} alt="Logo preview" className="w-16 h-16 object-contain rounded-xl border border-gray-200 bg-white p-1" />
-                          <button
-                            onClick={() => { setLogoPreview(null); setLogoFile(null) }}
-                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="cursor-pointer group">
-                          <input type="file" accept="image/*" onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file) {
-                              setLogoFile(file)
-                              const reader = new FileReader()
-                              reader.onload = (ev) => setLogoPreview(ev.target?.result as string)
-                              reader.readAsDataURL(file)
-                            }
-                          }} className="hidden" />
-                          <div className="w-16 h-16 rounded-xl bg-gray-100 flex flex-col items-center justify-center group-hover:bg-gray-200 transition-colors border-2 border-dashed border-gray-300">
-                            <Upload className="w-5 h-5 text-gray-400" />
-                            <span className="text-[10px] text-gray-400 mt-1">Upload</span>
-                          </div>
-                        </label>
-                      )}
-                      <p className="text-xs text-gray-400">PNG or SVG. If no logo, <strong>{shortName || '???'}</strong> will be used.</p>
-                    </div>
-                  </div>
-
-                  {/* Color Presets */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Brand Color</label>
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                      {colorPresets.map((preset, index) => (
-                        <button
-                          key={preset.name}
-                          onClick={() => applyPreset(index)}
-                          className={`relative p-2 rounded-xl border-2 transition-all ${
-                            selectedPreset === index && !useCustomColors
-                              ? 'border-primary-500 ring-2 ring-primary-200'
-                              : 'border-gray-100 hover:border-gray-200'
-                          }`}
-                          title={preset.name}
-                        >
-                          <div className="flex gap-1 justify-center">
-                            <div className="w-5 h-5 rounded-full" style={{ backgroundColor: preset.primary }} />
-                            <div className="w-5 h-5 rounded-full" style={{ backgroundColor: preset.accent }} />
-                          </div>
-                          <p className="text-[10px] text-gray-500 truncate mt-1 text-center">{preset.name}</p>
-                          {selectedPreset === index && !useCustomColors && (
-                            <Check className="absolute top-0.5 right-0.5 w-3.5 h-3.5 text-primary-500" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Custom toggle */}
-                    <div className="flex items-center gap-2 mt-3">
-                      <input
-                        type="checkbox"
-                        id="customColors"
-                        checked={useCustomColors}
-                        onChange={(e) => { setUseCustomColors(e.target.checked); if (e.target.checked) setSelectedPreset(null) }}
-                        className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
-                      />
-                      <label htmlFor="customColors" className="text-sm text-gray-600">Custom colors</label>
-                    </div>
-                    {useCustomColors && (
-                      <div className="mt-3 grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Primary</label>
-                          <div className="flex items-center gap-2">
-                            <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="w-9 h-9 rounded cursor-pointer border-0" />
-                            <input type="text" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-mono" />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Accent</label>
-                          <div className="flex items-center gap-2">
-                            <input type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="w-9 h-9 rounded cursor-pointer border-0" />
-                            <input type="text" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-mono" />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
                   {/* Live preview card */}
                   {displayName && (
                     <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
-                      {logoPreview ? (
-                        <img src={logoPreview} alt="Logo" className="w-14 h-14 object-contain rounded-xl" />
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
-                          <span className="text-white font-bold text-lg">{shortName || '?'}</span>
-                        </div>
-                      )}
+                      <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
+                        <span className="text-white font-bold text-lg">{shortName || '?'}</span>
+                      </div>
                       <div>
                         <p className="font-semibold text-gray-900">{displayName}</p>
                         <p className="text-xs text-gray-400 font-mono">{brandId || 'brand-id'}</p>
                       </div>
-                      <div className="ml-auto flex gap-1.5">
-                        <div className="w-6 h-6 rounded-full border border-gray-200" style={{ backgroundColor: primaryColor }} />
-                        <div className="w-6 h-6 rounded-full border border-gray-200" style={{ backgroundColor: accentColor }} />
-                      </div>
                     </div>
                   )}
 
-                  {/* Platform connection note */}
                   <p className="text-xs text-gray-400 text-center">
-                    You'll connect your social media platforms in Step 5.
+                    You'll configure colors, logo, and preview in the next step.
                   </p>
                 </div>
               </motion.div>
             )}
 
-            {/* ═══ Step 2: General Content DNA ═══ */}
+            {/* ═══ Step 2: Brand Theme ═══ */}
             {step === 2 && (
               <motion.div
                 key="step2"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Palette className="w-7 h-7 text-primary-500" />
+                  </div>
+                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
+                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
+                </div>
+
+                {/* Error banner */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 mb-4 max-w-4xl mx-auto">
+                    <X className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-6 max-w-4xl mx-auto">
+                  {/* Left: Controls */}
+                  <div className="flex-1 space-y-5 min-w-0">
+                    {/* Mode toggle */}
+                    <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setPreviewMode('light')}
+                        className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                          previewMode === 'light' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        ☀️ Light Mode
+                      </button>
+                      <button
+                        onClick={() => setPreviewMode('dark')}
+                        className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                          previewMode === 'dark' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        🌙 Dark Mode
+                      </button>
+                    </div>
+
+                    {/* Preview text editing */}
+                    <div className="space-y-3 p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Type className="w-4 h-4 text-gray-500" />
+                        <label className="text-sm font-medium text-gray-700">Preview Text</label>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Preview Title</label>
+                        <input type="text" value={previewTitle} onChange={(e) => setPreviewTitle(e.target.value.toUpperCase())} className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm uppercase" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Preview Content (one per line)</label>
+                        <textarea value={previewContent} onChange={(e) => {
+                          const lines = e.target.value.split('\n').filter(l => l.trim())
+                          if (lines.length <= MAX_BULLET_POINTS) {
+                            setPreviewContent(e.target.value)
+                          } else {
+                            const kept = e.target.value.split('\n').reduce<string[]>((acc, line) => {
+                              const nonEmpty = acc.filter(l => l.trim()).length
+                              if (!line.trim() || nonEmpty < MAX_BULLET_POINTS) acc.push(line)
+                              return acc
+                            }, [])
+                            setPreviewContent(kept.join('\n'))
+                          }
+                        }} rows={3} placeholder="One line per row" className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm resize-none" />
+                        <p className="text-[10px] text-gray-400 mt-0.5">One bullet point per line (max {MAX_BULLET_POINTS})</p>
+                      </div>
+                    </div>
+
+                    {/* Abbreviation */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Abbreviation</label>
+                      <input
+                        type="text"
+                        value={shortName}
+                        onChange={(e) => setShortName(e.target.value.toUpperCase().substring(0, 5))}
+                        maxLength={5}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500/25 focus:border-primary-500 focus:outline-none text-[14px] font-mono uppercase"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Short code used on rendered posts & reels (max 5 chars).</p>
+                    </div>
+
+                    {/* Logo Upload */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
+                      <div className="flex items-center gap-4">
+                        {logoPreview ? (
+                          <div className="relative">
+                            <img src={logoPreview} alt="Logo preview" className="w-16 h-16 object-contain rounded-xl border border-gray-200 bg-white p-1" />
+                            <button
+                              onClick={() => { setLogoPreview(null); setLogoFile(null) }}
+                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="cursor-pointer group">
+                            <input type="file" accept="image/*" onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                setLogoFile(file)
+                                const reader = new FileReader()
+                                reader.onload = (ev) => setLogoPreview(ev.target?.result as string)
+                                reader.readAsDataURL(file)
+                              }
+                            }} className="hidden" />
+                            <div className="w-16 h-16 rounded-xl bg-gray-100 flex flex-col items-center justify-center group-hover:bg-gray-200 transition-colors border-2 border-dashed border-gray-300">
+                              <Upload className="w-5 h-5 text-gray-400" />
+                              <span className="text-[10px] text-gray-400 mt-1">Upload</span>
+                            </div>
+                          </label>
+                        )}
+                        <p className="text-xs text-gray-400">Logo is stored for branding but not rendered on reels/thumbnails.</p>
+                      </div>
+                    </div>
+
+                    {/* Brand Color */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Brand Color</label>
+                      <div className="flex items-center gap-3 mb-3">
+                        <input type="color" value={primaryColor} onChange={(e) => { setPrimaryColor(e.target.value); setUseCustomColors(true); setSelectedPreset(null) }} className="w-10 h-10 rounded cursor-pointer border-0" />
+                        <input type="text" value={primaryColor} onChange={(e) => { setPrimaryColor(e.target.value); setUseCustomColors(true); setSelectedPreset(null) }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-mono w-28" />
+                      </div>
+
+                      {/* Color Presets */}
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                        {colorPresets.map((preset, index) => (
+                          <button
+                            key={preset.name}
+                            onClick={() => applyPreset(index)}
+                            className={`relative p-2 rounded-xl border-2 transition-all ${
+                              selectedPreset === index && !useCustomColors
+                                ? 'border-primary-500 ring-2 ring-primary-200'
+                                : 'border-gray-100 hover:border-gray-200'
+                            }`}
+                            title={preset.name}
+                          >
+                            <div className="flex gap-1 justify-center">
+                              <div className="w-5 h-5 rounded-full" style={{ backgroundColor: preset.primary }} />
+                              <div className="w-5 h-5 rounded-full" style={{ backgroundColor: preset.accent }} />
+                            </div>
+                            <p className="text-[10px] text-gray-500 truncate mt-1 text-center">{preset.name}</p>
+                            {selectedPreset === index && !useCustomColors && (
+                              <Check className="absolute top-0.5 right-0.5 w-3.5 h-3.5 text-primary-500" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Pixel-Accurate Preview */}
+                  <div className="flex-shrink-0">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {/* Thumbnail Preview */}
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">Thumbnail</p>
+                        <div
+                          style={{
+                            width: PREVIEW_W, height: PREVIEW_H, position: 'relative', borderRadius: 8,
+                            overflow: 'hidden', border: '1px solid #e5e7eb',
+                            backgroundColor: previewMode === 'light' ? '#f4f4f4' : undefined,
+                            background: previewMode === 'dark' ? DARK_BG : undefined,
+                          }}
+                        >
+                          {previewMode === 'dark' && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' }} />}
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                            <div style={{ paddingLeft: PX.thumbSideMargin, paddingRight: PX.thumbSideMargin, textAlign: 'center', position: 'relative' }}>
+                              <div style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.thumbTitleFont, lineHeight: `${PX.thumbTitleFont + PX.thumbLineSpacing}px`, color: thumbnailTextColor, textTransform: 'uppercase', wordBreak: 'break-word' }}>
+                                {previewTitle}
+                              </div>
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: PX.thumbBrandGap, fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.thumbBrandFont, color: thumbnailTextColor, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                {displayName || 'BRAND NAME'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content Preview */}
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-1.5">Content</p>
+                        <div
+                          style={{
+                            width: PREVIEW_W, height: PREVIEW_H, position: 'relative', borderRadius: 8,
+                            overflow: 'hidden', border: '1px solid #e5e7eb',
+                            backgroundColor: previewMode === 'light' ? '#f4f4f4' : undefined,
+                            background: previewMode === 'dark' ? DARK_BG : undefined,
+                          }}
+                        >
+                          {previewMode === 'dark' && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)' }} />}
+                          <div style={{ position: 'absolute', top: PX.barStartY, left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1 }}>
+                            {titleLines.map((line, i) => (
+                              <div key={i} style={{ height: PX.barHeight, paddingLeft: PX.hPadding, paddingRight: PX.hPadding, backgroundColor: hexToRgba(contentTitleBgColor, 200 / 255), display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>
+                                <span style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.barTitleFont, color: contentTitleTextColor, textTransform: 'uppercase', lineHeight: 1 }}>{line}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ position: 'absolute', top: contentStartY, left: PX.contentSidePad, right: PX.contentSidePad, zIndex: 1 }}>
+                            {contentLines.map((line, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 3, marginBottom: PX.bulletSpacing, lineHeight: `${PX.contentLineH}px` }}>
+                                <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: PX.contentFont, color: contentTextColor, flexShrink: 0 }}>{i + 1}.</span>
+                                <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: PX.contentFont, color: contentTextColor }}>{line}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ position: 'absolute', bottom: PX.brandBottom, left: 0, right: 0, textAlign: 'center', zIndex: 1 }}>
+                            <span style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.brandFont, color: brandNameColor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                              {displayName || 'BRAND NAME'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ═══ Step 3: General Content DNA ═══ */}
+            {step === 3 && (
+              <motion.div
+                key="step3"
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
@@ -587,10 +820,10 @@ export function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* ═══ Step 3: Reels Configuration ═══ */}
-            {step === 3 && (
+            {/* ═══ Step 4: Reels Configuration ═══ */}
+            {step === 4 && (
               <motion.div
-                key="step3"
+                key="step4"
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
@@ -607,10 +840,10 @@ export function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* ═══ Step 4: Carousel Posts ═══ */}
-            {step === 4 && (
+            {/* ═══ Step 5: Carousel Posts ═══ */}
+            {step === 5 && (
               <motion.div
-                key="step4"
+                key="step5"
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
@@ -627,10 +860,10 @@ export function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* ═══ Step 5: Platform Connections (OAuth) ═══ */}
-            {step === 5 && (
+            {/* ═══ Step 6: Platform Connections (OAuth) ═══ */}
+            {step === 6 && (
               <motion.div
-                key="step5"
+                key="step6"
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
@@ -839,7 +1072,7 @@ export function OnboardingPage() {
       {/* ── Sticky footer ── */}
       <footer className="flex-shrink-0 z-30 bg-white/80 backdrop-blur-md border-t border-gray-200/60">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          {step > 1 ? (
+          {step > 1 && !(step <= 2 && hasBrand) ? (
             <button
               onClick={() => { setError(null); setStep(step - 1) }}
               disabled={aiGenerating}
@@ -872,10 +1105,30 @@ export function OnboardingPage() {
             </button>
           )}
 
-          {step >= 2 && step <= 4 && (
+          {step === 2 && (
+            <button
+              onClick={handleSaveTheme}
+              disabled={savingTheme}
+              className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {savingTheme ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          )}
+
+          {step >= 3 && step <= 5 && (
             <button
               onClick={() => setStep(step + 1)}
-              disabled={aiGenerating || (step === 3 && !ytSectionValid)}
+              disabled={aiGenerating || (step === 4 && !ytSectionValid)}
               className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {aiGenerating ? (
@@ -892,7 +1145,7 @@ export function OnboardingPage() {
             </button>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="flex items-center gap-3">
               <button
                 onClick={handleComplete}

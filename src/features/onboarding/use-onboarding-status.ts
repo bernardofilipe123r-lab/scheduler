@@ -28,7 +28,7 @@ export function useOnboardingStatus() {
   // Existing users (pre-onboarding-tracking) who already have connections are fine.
   const needsOnboarding =
     isAuthenticated && (!hasBrand || (hasBrand && !hasConnection && !onboardingCompleted))
-  const onboardingStep: 1 | 2 = !hasBrand ? 1 : 2
+  const onboardingStep: 1 | 3 = !hasBrand ? 1 : 3
 
   return {
     needsOnboarding,
