@@ -74,6 +74,21 @@ export async function disconnectYouTube(brand: BrandName): Promise<{ success: bo
   return post<{ success: boolean; message: string }>(`/api/youtube/disconnect/${brand}`)
 }
 
+/**
+ * Start Instagram OAuth flow for a brand.
+ * Returns the backend URL that will redirect to Instagram.
+ */
+export function getInstagramConnectUrl(brandId: string): string {
+  return `/api/auth/instagram/connect?brand_id=${encodeURIComponent(brandId)}`
+}
+
+/**
+ * Disconnect Instagram for a brand
+ */
+export async function disconnectInstagram(brandId: string): Promise<{ status: string }> {
+  return post<{ status: string }>('/api/auth/instagram/disconnect', { brand_id: brandId })
+}
+
 // Connection test types
 export interface ConnectionTestResult {
   platform: string

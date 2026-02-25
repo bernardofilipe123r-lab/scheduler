@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { AlertTriangle, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
 import { apiClient } from '@/shared/api/client'
 import { ConnectionsSkeleton } from '@/shared/components'
@@ -8,6 +9,34 @@ import { ConnectionCard } from './ConnectionCard'
 
 export function ConnectionsTab() {
   const { data, isLoading, refetch } = useBrandConnections()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [igNotification, setIgNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  // Handle Instagram OAuth redirect params
+  useEffect(() => {
+    const igConnected = searchParams.get('ig_connected')
+    const igError = searchParams.get('ig_error')
+
+    if (igConnected) {
+      setIgNotification({ type: 'success', message: `Instagram connected successfully for ${igConnected}!` })
+      refetch()
+      // Clean URL params
+      searchParams.delete('ig_connected')
+      setSearchParams(searchParams, { replace: true })
+    } else if (igError) {
+      setIgNotification({ type: 'error', message: `Instagram connection failed: ${igError}` })
+      searchParams.delete('ig_error')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-dismiss notification
+  useEffect(() => {
+    if (igNotification) {
+      const timer = setTimeout(() => setIgNotification(null), 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [igNotification])
 
   // Store logos loaded from backend
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
@@ -52,6 +81,25 @@ export function ConnectionsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Instagram OAuth notification */}
+      {igNotification && (
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+          igNotification.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {igNotification.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+          ) : (
+            <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          )}
+          <span className="text-sm font-medium">{igNotification.message}</span>
+          <button onClick={() => setIgNotification(null)} className="ml-auto text-sm underline opacity-60 hover:opacity-100">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Refresh button */}
       <div className="flex justify-end">
         <button

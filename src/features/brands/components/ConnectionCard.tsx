@@ -19,6 +19,8 @@ import {
   connectYouTube,
   testMetaConnection,
   testYouTubeConnection,
+  getInstagramConnectUrl,
+  disconnectInstagram,
   type BrandConnectionStatus,
   type PlatformConnection,
   type ConnectionTestResult,
@@ -57,6 +59,7 @@ interface ConnectionCardProps {
 
 export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardProps) {
   const [disconnectingYouTube, setDisconnectingYouTube] = useState(false)
+  const [disconnectingInstagram, setDisconnectingInstagram] = useState(false)
   const [connectingYouTube, setConnectingYouTube] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
   const [testResult, setTestResult] = useState<{ meta?: ConnectionTestResult; youtube?: ConnectionTestResult }>({})
@@ -113,8 +116,27 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     }
   }
 
+  const handleInstagramConnect = () => {
+    window.location.href = getInstagramConnectUrl(brand.brand)
+  }
+
+  const handleInstagramDisconnect = async () => {
+    setDisconnectingInstagram(true)
+    try {
+      await disconnectInstagram(brand.brand)
+      setConfirmDisconnect(null)
+      onRefresh()
+    } catch (error) {
+      console.error('Failed to disconnect Instagram:', error)
+    } finally {
+      setDisconnectingInstagram(false)
+    }
+  }
+
   const renderPlatformRow = (platform: Platform, connection: PlatformConnection) => {
     const isYouTube = platform === 'youtube'
+    const isInstagram = platform === 'instagram'
+    const isActionable = isYouTube || isInstagram
     const isRevoked = connection.status === 'revoked'
     const hasError = connection.status === 'error'
 
@@ -151,11 +173,11 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500">Disconnect?</span>
                   <button
-                    onClick={isYouTube ? handleYouTubeDisconnect : undefined}
-                    disabled={disconnectingYouTube || !isYouTube}
+                    onClick={isYouTube ? handleYouTubeDisconnect : isInstagram ? handleInstagramDisconnect : undefined}
+                    disabled={disconnectingYouTube || disconnectingInstagram || !isActionable}
                     className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
                   >
-                    {disconnectingYouTube ? '...' : 'Yes'}
+                    {(disconnectingYouTube || disconnectingInstagram) ? '...' : 'Yes'}
                   </button>
                   <button
                     onClick={() => setConfirmDisconnect(null)}
@@ -168,7 +190,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                 <div className="flex items-center gap-2">
                   {isRevoked ? (
                     <button
-                      onClick={isYouTube ? handleYouTubeConnect : undefined}
+                      onClick={isYouTube ? handleYouTubeConnect : isInstagram ? handleInstagramConnect : undefined}
                       className="px-3 py-1.5 rounded-lg text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-colors"
                     >
                       Reconnect
@@ -198,6 +220,25 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                     </a>
                   )}
 
+                  {isInstagram && (
+                    <>
+                      <button
+                        onClick={handleInstagramConnect}
+                        className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                        title="Reconnect"
+                      >
+                        <RefreshCw className="w-4 h-4 text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDisconnect('instagram')}
+                        className="p-1.5 rounded hover:bg-red-100 transition-colors"
+                        title="Disconnect"
+                      >
+                        <Unlink className="w-4 h-4 text-gray-500 hover:text-red-500" />
+                      </button>
+                    </>
+                  )}
+
                   {isYouTube && (
                     <>
                       <button
@@ -225,6 +266,15 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                 <X className="w-3 h-3" />
                 Not connected
               </span>
+
+              {isInstagram && (
+                <button
+                  onClick={handleInstagramConnect}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white hover:opacity-90 transition-opacity"
+                >
+                  Connect
+                </button>
+              )}
 
               {isYouTube && (
                 <button

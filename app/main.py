@@ -27,6 +27,7 @@ from app.api.system.health_routes import router as health_router
 from app.api.niche_config_routes import router as niche_config_router
 from app.api.toby.routes import router as toby_router
 from app.api.system.legal_routes import router as legal_router
+from app.api.auth.ig_oauth_routes import router as ig_oauth_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -100,6 +101,7 @@ app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(health_router)  # Deep health check at /api/system/health-check
 app.include_router(toby_router)  # Toby autonomous agent endpoints at /api/toby/*
 app.include_router(legal_router)  # Privacy policy, data deletion (Meta App Review)
+app.include_router(ig_oauth_router)  # Instagram Business Login OAuth flow
 
 
 @app.get("/health", tags=["system"])
