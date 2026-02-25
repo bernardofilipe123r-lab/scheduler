@@ -26,6 +26,7 @@ from app.api.content.prompts_routes import router as prompts_router
 from app.api.system.health_routes import router as health_router
 from app.api.niche_config_routes import router as niche_config_router
 from app.api.toby.routes import router as toby_router
+from app.api.system.legal_routes import router as legal_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -98,6 +99,7 @@ app.include_router(auth_router)  # Authentication endpoints
 app.include_router(prompts_router)  # Prompt transparency / testing
 app.include_router(health_router)  # Deep health check at /api/system/health-check
 app.include_router(toby_router)  # Toby autonomous agent endpoints at /api/toby/*
+app.include_router(legal_router)  # Privacy policy, data deletion (Meta App Review)
 
 
 @app.get("/health", tags=["system"])
@@ -123,7 +125,7 @@ if FRONTEND_DIR.exists():
     async def serve_spa(full_path: str):
         """Catch-all: serve React app for any non-API route (SPA client-side routing)."""
         # Never intercept API or health-check paths — let FastAPI return proper 404s
-        if full_path.startswith("api/") or full_path in ("health", "docs", "redoc", "openapi.json"):
+        if full_path.startswith("api/") or full_path in ("health", "docs", "redoc", "openapi.json", "privacy-policy", "data-deletion"):
             raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(FRONTEND_DIR / "index.html")
 else:
