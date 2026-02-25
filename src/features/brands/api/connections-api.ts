@@ -62,8 +62,10 @@ export async function fetchBrandsList(): Promise<BrandsListResponse> {
 /**
  * Start YouTube OAuth flow for a brand (authenticated)
  */
-export async function connectYouTube(brand: BrandName): Promise<string> {
-  const data = await get<{ auth_url: string }>(`/api/youtube/connect?brand=${brand}`)
+export async function connectYouTube(brand: BrandName, returnTo?: string): Promise<string> {
+  const params = new URLSearchParams({ brand })
+  if (returnTo) params.set('return_to', returnTo)
+  const data = await get<{ auth_url: string }>(`/api/youtube/connect?${params}`)
   return data.auth_url
 }
 
@@ -78,8 +80,10 @@ export async function disconnectYouTube(brand: BrandName): Promise<{ success: bo
  * Start Instagram OAuth flow for a brand.
  * Returns the backend URL that will redirect to Instagram.
  */
-export function getInstagramConnectUrl(brandId: string): string {
-  return `/api/auth/instagram/connect?brand_id=${encodeURIComponent(brandId)}`
+export function getInstagramConnectUrl(brandId: string, returnTo?: string): string {
+  const params = new URLSearchParams({ brand_id: brandId })
+  if (returnTo) params.set('return_to', returnTo)
+  return `/api/auth/instagram/connect?${params}`
 }
 
 /**

@@ -36,7 +36,11 @@ youtube_publisher = YouTubePublisher()
 
 
 @router.get("/connect")
-async def youtube_connect(brand: str = Query(..., description="Brand to connect YouTube for"), user: dict = Depends(get_current_user)):
+async def youtube_connect(
+    brand: str = Query(..., description="Brand to connect YouTube for"),
+    return_to: str = Query(None, description="Where to redirect after OAuth (e.g. 'onboarding')"),
+    user: dict = Depends(get_current_user),
+):
     """
     Start the YouTube OAuth flow for a specific brand.
     
@@ -65,9 +69,12 @@ async def youtube_connect(brand: str = Query(..., description="Brand to connect 
             detail="YouTube OAuth not configured. Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET."
         )
     
-    # Encode brand + user_id in state for the callback
+    # Encode brand + user_id + return_to in state for the callback
     user_id = user.get("id", "")
-    state_value = f"{brand}:{user_id}" if user_id else brand
+    state_parts = [brand, user_id or ""]
+    if return_to:
+        state_parts.append(return_to)
+    state_value = ":".join(state_parts)
     auth_url = youtube_publisher.get_authorization_url(state=state_value)
     
     logger.info(f"Starting YouTube OAuth flow for brand: {brand}")
@@ -115,12 +122,14 @@ async def youtube_callback(
         """)
     
     brand = (state or "unknown").lower()
-    # Parse state: may be "brand:user_id" or just "brand" (legacy)
+    # Parse state: may be "brand:user_id:return_to", "brand:user_id", or just "brand" (legacy)
     real_user_id = None
+    return_to = None
     if ":" in brand:
-        parts = brand.split(":", 1)
+        parts = brand.split(":", 2)
         brand = parts[0]
-        real_user_id = parts[1] if parts[1] else None
+        real_user_id = parts[1] if len(parts) > 1 and parts[1] else None
+        return_to = parts[2] if len(parts) > 2 and parts[2] else None
     
     # Exchange authorization code for tokens
     # This gives us both access_token (short-lived) and refresh_token (long-lived)
@@ -269,8 +278,13 @@ async def youtube_callback(
         </html>
         """)
     
-    # Success page
+    # Success — redirect back to onboarding or show HTML success page
     brand_display = brand_resolver.get_brand_display_name(brand)
+
+    if return_to == "onboarding":
+        site_url = os.environ.get("SITE_URL", "https://scheduler-production-29d4.up.railway.app")
+        return RedirectResponse(url=f"{site_url}/onboarding?yt_connected={brand}")
+
     return HTMLResponse(f"""
     <html>
     <head>

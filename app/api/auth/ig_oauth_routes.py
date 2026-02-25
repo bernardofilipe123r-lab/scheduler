@@ -54,6 +54,7 @@ _oauth_states: dict = {}
 @router.get("/connect")
 def instagram_connect(
     brand_id: str = Query(..., description="Brand to connect"),
+    return_to: str = Query(None, description="Where to redirect after OAuth (e.g. 'onboarding')"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -78,6 +79,7 @@ def instagram_connect(
         "brand_id": brand_id,
         "user_id": user["id"],
         "created_at": datetime.now(timezone.utc),
+        "return_to": return_to,
     }
 
     # Clean up old states (older than 10 minutes)
@@ -136,6 +138,7 @@ def instagram_callback(
 
     brand_id = state_data["brand_id"]
     user_id = state_data["user_id"]
+    return_to = state_data.get("return_to")
 
     try:
         token_service = InstagramTokenService()
@@ -175,15 +178,22 @@ def instagram_callback(
             f"Instagram OAuth complete for brand={brand_id}, "
             f"ig_user={ig_user_id}, username=@{username}"
         )
-        return RedirectResponse(
-            url=f"{frontend_base}/brands?tab=connections&ig_connected={brand_id}"
-        )
+
+        # Redirect back to onboarding or brands page depending on flow
+        if return_to == "onboarding":
+            redirect_url = f"{frontend_base}/onboarding?ig_connected={brand_id}"
+        else:
+            redirect_url = f"{frontend_base}/brands?tab=connections&ig_connected={brand_id}"
+
+        return RedirectResponse(url=redirect_url)
 
     except Exception as e:
         logger.exception(f"Instagram OAuth callback failed for brand {brand_id}: {e}")
-        return RedirectResponse(
-            url=f"{frontend_base}/brands?tab=connections&ig_error=failed"
-        )
+        if return_to == "onboarding":
+            redirect_url = f"{frontend_base}/onboarding?ig_error=failed"
+        else:
+            redirect_url = f"{frontend_base}/brands?tab=connections&ig_error=failed"
+        return RedirectResponse(url=redirect_url)
 
 
 # ---------------------------------------------------------------------------

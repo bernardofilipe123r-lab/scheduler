@@ -18,8 +18,10 @@ import {
   Dna,
   PartyPopper,
   Link2,
-  Facebook,
   Instagram,
+  Youtube,
+  ChevronDown,
+  ExternalLink,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -41,6 +43,7 @@ import {
 } from '@/features/brands/constants'
 import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 import { supabase } from '@/shared/api/supabase'
+import { connectYouTube, getInstagramConnectUrl, fetchBrandConnections } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
 const STEP_INFO = [
@@ -48,7 +51,7 @@ const STEP_INFO = [
   { num: 2, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
   { num: 3, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
   { num: 4, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
-  { num: 5, label: 'Connect your platforms', sub: 'Link your Meta accounts so the app can publish content on your behalf.' },
+  { num: 5, label: 'Connect your platforms', sub: 'Link your Instagram and YouTube accounts so the app can publish content for you.' },
 ]
 
 export function OnboardingPage() {
@@ -60,18 +63,28 @@ export function OnboardingPage() {
   const createBrandMutation = useCreateBrand()
   const updateCredentialsMutation = useUpdateBrandCredentials()
 
-  const [step, setStep] = useState<number>(onboardingStep)
+  const [step, setStep] = useState<number>(() => {
+    // If returning from OAuth redirect, jump straight to step 5
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('ig_connected') || params.has('yt_connected') || params.has('ig_error')) {
+      return 5
+    }
+    return onboardingStep
+  })
   const [completing, setCompleting] = useState(false)
-
-  // Sync step if user already has a brand (e.g. returning mid-flow)
-  useEffect(() => {
-    if (hasBrand && step === 1) setStep(2)
-  }, [hasBrand, step])
 
   // ── Step 1 state: Brand Identity + Colors ──
   const [displayName, setDisplayName] = useState('')
   const [brandId, setBrandId] = useState('')
   const [shortName, setShortName] = useState('')
+
+  // Sync step and brandId if user already has a brand (e.g. returning mid-flow or after OAuth)
+  useEffect(() => {
+    if (hasBrand && step === 1) setStep(2)
+    if (hasBrand && existingBrands?.length && !brandId) {
+      setBrandId(existingBrands[0].id)
+    }
+  }, [hasBrand, step, existingBrands, brandId])
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const colorPresets = useMemo(() => getRandomPresets(12), [])
@@ -91,13 +104,61 @@ export function OnboardingPage() {
     }
   }, [colorPresets]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Step 5 state: Platform Credentials ──
+  // ── Step 5 state: Platform Connections (OAuth) ──
+  const [igConnected, setIgConnected] = useState(false)
+  const [igHandle, setIgHandle] = useState<string | null>(null)
+  const [ytConnected, setYtConnected] = useState(false)
+  const [ytChannelName, setYtChannelName] = useState<string | null>(null)
+  const [connectingIg, setConnectingIg] = useState(false)
+  const [connectingYt, setConnectingYt] = useState(false)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [showManualSection, setShowManualSection] = useState(false)
   const [metaAccessToken, setMetaAccessToken] = useState('')
   const [facebookPageId, setFacebookPageId] = useState('')
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
-  const [step3Attempted, setStep3Attempted] = useState(false)
   const [aiGenerating, setAiGenerating] = useState(false)
   const [ytSectionValid, setYtSectionValid] = useState(false)
+
+  // Check connection status when entering step 5 or returning from OAuth
+  useEffect(() => {
+    if (step !== 5 || !brandId) return
+    const params = new URLSearchParams(window.location.search)
+    const igSuccess = params.get('ig_connected')
+    const ytSuccess = params.get('yt_connected')
+    const igError = params.get('ig_error')
+
+    // Clean up URL params
+    if (igSuccess || ytSuccess || igError) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('ig_connected')
+      url.searchParams.delete('yt_connected')
+      url.searchParams.delete('ig_error')
+      window.history.replaceState({}, '', url.pathname)
+    }
+
+    if (igError) {
+      setConnectionError(`Instagram connection failed: ${igError}`)
+    }
+    if (igSuccess) {
+      toast.success('Instagram connected!')
+    }
+    if (ytSuccess) {
+      toast.success('YouTube connected!')
+    }
+
+    // Fetch actual connection status
+    fetchBrandConnections().then((data) => {
+      const brand = data.brands.find(b => b.brand === brandId)
+      if (brand) {
+        setIgConnected(brand.instagram.connected)
+        setIgHandle(brand.instagram.account_name || null)
+        setYtConnected(brand.youtube.connected)
+        setYtChannelName(brand.youtube.account_name || null)
+      }
+    }).catch(() => {
+      // Ignore — non-critical
+    })
+  }, [step, brandId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isStep3Valid =
     metaAccessToken.trim().length > 0 &&
@@ -201,7 +262,6 @@ export function OnboardingPage() {
   }
 
   const handleCompleteWithCredentials = async () => {
-    setStep3Attempted(true)
     if (!isStep3Valid) {
       setError('Meta Access Token is required, plus at least one of Facebook Page ID or Instagram Business Account ID.')
       return
@@ -218,6 +278,25 @@ export function OnboardingPage() {
       handleComplete()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save credentials')
+    }
+  }
+
+  const handleConnectInstagram = () => {
+    setConnectingIg(true)
+    setConnectionError(null)
+    // Redirect to IG OAuth with return_to=onboarding
+    window.location.href = getInstagramConnectUrl(brandId, 'onboarding')
+  }
+
+  const handleConnectYouTube = async () => {
+    setConnectingYt(true)
+    setConnectionError(null)
+    try {
+      const authUrl = await connectYouTube(brandId, 'onboarding')
+      window.location.href = authUrl
+    } catch (err) {
+      setConnectingYt(false)
+      setConnectionError(err instanceof Error ? err.message : 'Failed to start YouTube connection')
     }
   }
 
@@ -543,7 +622,7 @@ export function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* ═══ Step 5: Platform Credentials ═══ */}
+            {/* ═══ Step 5: Platform Connections (OAuth) ═══ */}
             {step === 5 && (
               <motion.div
                 key="step5"
@@ -560,78 +639,189 @@ export function OnboardingPage() {
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
 
-                <div className="max-w-xl mx-auto space-y-6">
+                <div className="max-w-xl mx-auto space-y-4">
                   {/* Error banner */}
-                  {error && (
+                  {(error || connectionError) && (
                     <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
                       <X className="w-4 h-4 text-red-500 flex-shrink-0" />
-                      <p className="text-sm text-red-700">{error}</p>
+                      <p className="text-sm text-red-700">{error || connectionError}</p>
                     </div>
                   )}
 
-                  {/* Meta Section */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-                        <Facebook className="w-4 h-4 text-white" />
+                  {/* ── Instagram Card ── */}
+                  <div className={`border rounded-xl p-5 transition-colors ${igConnected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center">
+                          <Instagram className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Instagram</p>
+                          {igConnected ? (
+                            <p className="text-xs text-green-600 font-medium">{igHandle || 'Connected'}</p>
+                          ) : (
+                            <p className="text-xs text-gray-400">Connect via Instagram Login</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
-                        <Instagram className="w-4 h-4 text-white" />
-                      </div>
-                      <span className="text-sm font-semibold text-gray-800">Meta (Instagram & Facebook)</span>
+                      {igConnected ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium">
+                          <Check className="w-3.5 h-3.5" />
+                          Connected
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleConnectInstagram}
+                          disabled={connectingIg}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                        >
+                          {connectingIg ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          )}
+                          Connect
+                        </button>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-500">
-                      One Meta access token works for both platforms. Provide at least one of Facebook Page ID or Instagram Business Account ID.
+                  </div>
+
+                  {/* ── YouTube Card ── */}
+                  <div className={`border rounded-xl p-5 transition-colors ${ytConnected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center">
+                          <Youtube className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">YouTube</p>
+                          {ytConnected ? (
+                            <p className="text-xs text-green-600 font-medium">{ytChannelName || 'Connected'}</p>
+                          ) : (
+                            <p className="text-xs text-gray-400">Connect via Google OAuth</p>
+                          )}
+                        </div>
+                      </div>
+                      {ytConnected ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium">
+                          <Check className="w-3.5 h-3.5" />
+                          Connected
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleConnectYouTube}
+                          disabled={connectingYt}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                        >
+                          {connectingYt ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          )}
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Connection summary */}
+                  {(igConnected || ytConnected) && (
+                    <p className="text-xs text-green-600 text-center font-medium">
+                      {igConnected && ytConnected
+                        ? 'Both platforms connected — you\'re all set!'
+                        : igConnected
+                          ? 'Instagram connected! You can add YouTube later from Settings.'
+                          : 'YouTube connected! You can add Instagram later from Settings.'}
                     </p>
+                  )}
 
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Meta Access Token <span className="text-red-500">*</span>
-                        <span className="text-gray-400 font-normal"> — long-lived page token</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={metaAccessToken}
-                        onChange={(e) => setMetaAccessToken(e.target.value)}
-                        placeholder="EAAx..."
-                        className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step3Attempted && !metaAccessToken.trim() ? 'border-red-500' : 'border-gray-300'}`}
-                      />
-                    </div>
+                  {!igConnected && !ytConnected && (
+                    <p className="text-xs text-gray-400 text-center">
+                      Connect at least one platform, or skip and do it later from brand settings.
+                    </p>
+                  )}
 
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Facebook Page ID
-                        {!instagramBusinessAccountId.trim() && <span className="text-red-500"> *</span>}
-                        <span className="text-gray-400 font-normal"> — found in Page Settings → Transparency</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={facebookPageId}
-                        onChange={(e) => setFacebookPageId(e.target.value)}
-                        placeholder="e.g., 421725411022067"
-                        className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step3Attempted && !facebookPageId.trim() && !instagramBusinessAccountId.trim() ? 'border-red-500' : 'border-gray-300'}`}
-                      />
-                    </div>
+                  {/* ── Advanced: Manual Credentials ── */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setShowManualSection(!showManualSection)}
+                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mx-auto"
+                    >
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showManualSection ? 'rotate-180' : ''}`} />
+                      Advanced: Enter credentials manually
+                    </button>
 
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Instagram Business Account ID
-                        {!facebookPageId.trim() && <span className="text-red-500"> *</span>}
-                        <span className="text-gray-400 font-normal"> — from Graph API Explorer</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={instagramBusinessAccountId}
-                        onChange={(e) => setInstagramBusinessAccountId(e.target.value)}
-                        placeholder="e.g., 17841468847801005"
-                        className={`w-full px-3 py-2 rounded-lg text-sm font-mono border ${step3Attempted && !instagramBusinessAccountId.trim() && !facebookPageId.trim() ? 'border-red-500' : 'border-gray-300'}`}
-                      />
-                    </div>
+                    {showManualSection && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4"
+                      >
+                        <p className="text-xs text-gray-500">
+                          If you have a Meta Business account with a long-lived page token, enter it here instead.
+                        </p>
 
-                    {step3Attempted && !isStep3Valid && (
-                      <p className="text-xs text-red-600">
-                        Meta Access Token is required, plus at least one of Facebook Page ID or Instagram Business Account ID.
-                      </p>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Meta Access Token
+                            <span className="text-gray-400 font-normal"> — long-lived page token</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={metaAccessToken}
+                            onChange={(e) => setMetaAccessToken(e.target.value)}
+                            placeholder="EAAx..."
+                            className="w-full px-3 py-2 rounded-lg text-sm font-mono border border-gray-300"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Facebook Page ID
+                          </label>
+                          <input
+                            type="text"
+                            value={facebookPageId}
+                            onChange={(e) => setFacebookPageId(e.target.value)}
+                            placeholder="e.g., 421725411022067"
+                            className="w-full px-3 py-2 rounded-lg text-sm font-mono border border-gray-300"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Instagram Business Account ID
+                          </label>
+                          <input
+                            type="text"
+                            value={instagramBusinessAccountId}
+                            onChange={(e) => setInstagramBusinessAccountId(e.target.value)}
+                            placeholder="e.g., 17841468847801005"
+                            className="w-full px-3 py-2 rounded-lg text-sm font-mono border border-gray-300"
+                          />
+                        </div>
+
+                        {isStep3Valid && (
+                          <button
+                            onClick={handleCompleteWithCredentials}
+                            disabled={completing || updateCredentialsMutation.isPending}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          >
+                            {(completing || updateCredentialsMutation.isPending) ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-4 h-4" />
+                                Save Credentials & Complete
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </motion.div>
                     )}
                   </div>
                 </div>
@@ -699,26 +889,28 @@ export function OnboardingPage() {
 
           {step === 5 && (
             <div className="flex items-center gap-3">
+              {!igConnected && !ytConnected && (
+                <button
+                  onClick={handleComplete}
+                  disabled={completing}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Skip for now
+                </button>
+              )}
               <button
                 onClick={handleComplete}
-                disabled={completing || updateCredentialsMutation.isPending}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                Skip for now
-              </button>
-              <button
-                onClick={handleCompleteWithCredentials}
-                disabled={completing || updateCredentialsMutation.isPending || !isStep3Valid}
+                disabled={completing}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
-                  isStep3Valid
+                  igConnected || ytConnected
                     ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'hidden'
                 }`}
               >
-                {(completing || updateCredentialsMutation.isPending) ? (
+                {completing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Saving...
+                    Finishing...
                   </>
                 ) : (
                   <>
