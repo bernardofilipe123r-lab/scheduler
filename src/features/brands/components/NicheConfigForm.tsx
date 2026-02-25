@@ -86,9 +86,11 @@ export interface NicheConfigFormProps {
   section?: 'general' | 'reels' | 'posts'
   /** Called when AI generation starts/stops — parent can block navigation. */
   onGeneratingChange?: (generating: boolean) => void
+  /** Called when YouTube Title Style section validity changes (has titles OR skipped). */
+  onYtValidChange?: (valid: boolean) => void
 }
 
-export function NicheConfigForm({ section, onGeneratingChange }: NicheConfigFormProps = {}) {
+export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }: NicheConfigFormProps = {}) {
   const { data, isLoading } = useNicheConfig()
   const { data: brandsData } = useBrands()
   const updateMutation = useUpdateNicheConfig()
@@ -108,6 +110,14 @@ export function NicheConfigForm({ section, onGeneratingChange }: NicheConfigForm
     thumbnail_base64: string
     content_base64: string
   } | null>(null)
+  const [skipYt, setSkipYt] = useState(false)
+
+  // Report YT section validity to parent (has good titles OR skipped)
+  useEffect(() => {
+    if (section !== 'reels' || !onYtValidChange) return
+    const hasGoodTitles = (values.yt_title_examples || []).some(t => t.trim().length > 0)
+    onYtValidChange(skipYt || hasGoodTitles)
+  }, [skipYt, values.yt_title_examples, section, onYtValidChange])
 
   // Pick a random brand for carousel previews — stable for the whole component lifetime
   const previewBrand = useMemo(() => {
@@ -523,62 +533,82 @@ export function NicheConfigForm({ section, onGeneratingChange }: NicheConfigForm
           <div className="border-t border-gray-100 pt-5">
             <div className="flex items-center justify-between mb-1">
               <h4 className="text-sm font-medium text-gray-700">🎬 YouTube Title Style</h4>
-              <button
-                type="button"
-                onClick={async () => {
-                  await flushSave()
-                  ytSuggestMutation.mutate(undefined, {
-                    onSuccess: (data) => {
-                      if (data.good_titles?.length) {
-                        update('yt_title_examples', data.good_titles)
-                      }
-                      if (data.bad_titles?.length) {
-                        update('yt_title_bad_examples', data.bad_titles)
-                      }
-                      toast.success('AI suggestions applied — review and edit as needed')
-                    },
-                    onError: () => toast.error('Failed to generate suggestions'),
-                  })
-                }}
-                disabled={ytSuggestMutation.isPending || !generalFilled}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {ytSuggestMutation.isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" />
-                )}
-                {ytSuggestMutation.isPending ? 'Suggesting...' : 'Suggest with AI'}
-              </button>
+              {!skipYt && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await flushSave()
+                    ytSuggestMutation.mutate(undefined, {
+                      onSuccess: (data) => {
+                        if (data.good_titles?.length) {
+                          update('yt_title_examples', data.good_titles)
+                        }
+                        if (data.bad_titles?.length) {
+                          update('yt_title_bad_examples', data.bad_titles)
+                        }
+                        toast.success('AI suggestions applied — review and edit as needed')
+                      },
+                      onError: () => toast.error('Failed to generate suggestions'),
+                    })
+                  }}
+                  disabled={ytSuggestMutation.isPending || !generalFilled}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {ytSuggestMutation.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                  {ytSuggestMutation.isPending ? 'Suggesting...' : 'Suggest with AI'}
+                </button>
+              )}
             </div>
-            <p className="text-xs text-gray-400 mb-4">
-              Provide example titles to teach the AI your preferred YouTube title patterns. Use "Suggest with AI" to get recommendations based on your Content DNA.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Good Title Examples</label>
-                <textarea
-                  value={(values.yt_title_examples || []).join('\n')}
-                  onChange={(e) => update('yt_title_examples', e.target.value.split('\n').filter(Boolean))}
-                  placeholder={"One title per line, e.g.:\nThe Sleep Trick That Changed Everything\nWhat Really Happens When You Fast 16 Hours"}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
-                />
-                <p className="text-xs text-gray-400 mt-1">Titles the AI should emulate. One per line.</p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bad Title Examples (avoid these)</label>
-                <textarea
-                  value={(values.yt_title_bad_examples || []).join('\n')}
-                  onChange={(e) => update('yt_title_bad_examples', e.target.value.split('\n').filter(Boolean))}
-                  placeholder={"One title per line, e.g.:\nYOU WON'T BELIEVE THIS HACK!!!\n10 FOODS YOU MUST EAT NOW"}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+            {/* Skip YT checkbox — only shown during onboarding (section mode) */}
+            {section === 'reels' && (
+              <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={skipYt}
+                  onChange={(e) => setSkipYt(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
-                <p className="text-xs text-gray-400 mt-1">Anti-patterns the AI should avoid. One per line.</p>
-              </div>
-            </div>
+                <span className="text-sm text-gray-500">I don't want YouTube for now</span>
+              </label>
+            )}
+
+            {!skipYt && (
+              <>
+                <p className="text-xs text-gray-400 mb-4">
+                  Provide example titles to teach the AI your preferred YouTube title patterns. Use "Suggest with AI" to get recommendations based on your Content DNA.
+                </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Good Title Examples</label>
+                    <textarea
+                      value={(values.yt_title_examples || []).join('\n')}
+                      onChange={(e) => update('yt_title_examples', e.target.value.split('\n').filter(Boolean))}
+                      placeholder={"One title per line, e.g.:\nThe Sleep Trick That Changed Everything\nWhat Really Happens When You Fast 16 Hours"}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Titles the AI should emulate. One per line.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bad Title Examples (avoid these)</label>
+                    <textarea
+                      value={(values.yt_title_bad_examples || []).join('\n')}
+                      onChange={(e) => update('yt_title_bad_examples', e.target.value.split('\n').filter(Boolean))}
+                      placeholder={"One title per line, e.g.:\nYOU WON'T BELIEVE THIS HACK!!!\n10 FOODS YOU MUST EAT NOW"}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Anti-patterns the AI should avoid. One per line.</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>}
       </div>}

@@ -97,6 +97,7 @@ export function OnboardingPage() {
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
   const [step3Attempted, setStep3Attempted] = useState(false)
   const [aiGenerating, setAiGenerating] = useState(false)
+  const [ytSectionValid, setYtSectionValid] = useState(false)
 
   const isStep3Valid =
     metaAccessToken.trim().length > 0 &&
@@ -518,7 +519,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm section="reels" onGeneratingChange={setAiGenerating} />
+                <NicheConfigForm section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} />
               </motion.div>
             )}
 
@@ -679,7 +680,7 @@ export function OnboardingPage() {
           {step >= 2 && step <= 4 && (
             <button
               onClick={() => setStep(step + 1)}
-              disabled={aiGenerating}
+              disabled={aiGenerating || (step === 3 && !ytSectionValid)}
               className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {aiGenerating ? (
