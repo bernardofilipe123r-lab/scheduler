@@ -474,7 +474,7 @@ export function ContentExamplesSection({
       <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
         <p className="text-gray-500 text-sm mb-1">No examples added yet</p>
         <p className="text-gray-400 text-xs mb-4">
-          Examples are the most powerful way to guide the AI. Add 5-10 examples to dramatically improve quality.
+          You need at least <strong className="text-gray-500">10 examples</strong> to continue. Use "Generate 10 reels with AI" for a quick start.
         </p>
         <div className="flex gap-3 justify-center">
           {showReels && (

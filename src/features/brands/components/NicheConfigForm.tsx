@@ -112,12 +112,13 @@ export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }
   } | null>(null)
   const [skipYt, setSkipYt] = useState(false)
 
-  // Report YT section validity to parent (has good titles OR skipped)
+  // Report reels step validity to parent (YT titles valid AND enough reel examples)
   useEffect(() => {
     if (section !== 'reels' || !onYtValidChange) return
     const hasGoodTitles = (values.yt_title_examples || []).some(t => t.trim().length > 0)
-    onYtValidChange(skipYt || hasGoodTitles)
-  }, [skipYt, values.yt_title_examples, section, onYtValidChange])
+    const hasEnoughReels = values.reel_examples.length >= 10
+    onYtValidChange((skipYt || hasGoodTitles) && hasEnoughReels)
+  }, [skipYt, values.yt_title_examples, values.reel_examples.length, section, onYtValidChange])
 
   // Pick a random brand for carousel previews — stable for the whole component lifetime
   const previewBrand = useMemo(() => {
@@ -386,8 +387,8 @@ export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 2: REELS
          ═══════════════════════════════════════════════════════════════════ */}
-      {showReels && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('reels')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${reelsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
+      {showReels && <div className="bg-white rounded-xl border border-gray-200">
+        <button type="button" onClick={() => toggleSection('reels')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors rounded-t-xl ${reelsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
           <div className="text-left flex items-center gap-2">
             <div>
               <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
@@ -408,10 +409,17 @@ export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }
           )}
           {/* Reel Examples */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Reel Examples</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Reel Examples ({values.reel_examples.length}/10 minimum)</h4>
             <p className="text-xs text-gray-400 mb-3">
-              The AI learns directly from your examples. Providing 10+ examples dramatically improves content relevance and quality.
+              You need at least <strong className="text-gray-600">10 reel examples</strong> to continue. The AI learns directly from your examples — more examples means better content.
             </p>
+            {values.reel_examples.length < 10 && values.reel_examples.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                <p className="text-xs text-amber-700">
+                  <strong>{10 - values.reel_examples.length} more</strong> reel example{10 - values.reel_examples.length === 1 ? '' : 's'} needed to continue. Use "Generate 10 reels with AI" for a quick start.
+                </p>
+              </div>
+            )}
             <ContentExamplesSection
               reelExamples={values.reel_examples}
               postExamples={values.post_examples}
