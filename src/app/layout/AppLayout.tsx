@@ -4,10 +4,61 @@ import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
   Bot, Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck,
+  X, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useJobs } from '@/features/jobs'
 import vaLogo from '@/assets/icons/va-logo.svg'
+
+/* ── Railway Status Banner ─────────────────────────────── */
+function RailwayStatusBanner() {
+  const [status, setStatus] = useState<{ message: string; url?: string } | null>(null)
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      try {
+        const res = await fetch('https://status.railway.com/summary.json')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        const pageStatus: string = data?.page?.status ?? 'UP'
+        if (pageStatus !== 'UP') {
+          const incidents = data?.activeIncidents ?? []
+          const name = incidents[0]?.name ?? 'Railway is experiencing issues'
+          const url = incidents[0]?.url ?? 'https://status.railway.com'
+          setStatus({ message: name, url })
+        }
+      } catch {
+        /* silently ignore – don't bother users if status fetch fails */
+      }
+    }
+    check()
+    const id = setInterval(check, 5 * 60_000) // re-check every 5 min
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
+
+  if (!status || dismissed) return null
+
+  return (
+    <div className="bg-red-600 text-white text-sm px-4 py-2.5 flex items-center gap-3">
+      <AlertTriangle className="w-4 h-4 shrink-0" />
+      <p className="flex-1 min-w-0">
+        <span className="font-semibold">Infrastructure issue:</span>{' '}
+        {status.message}. Some features (scheduling, publishing) may be temporarily unavailable.{' '}
+        {status.url && (
+          <a href={status.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-red-100">
+            View status&nbsp;&rarr;
+          </a>
+        )}
+      </p>
+      <button onClick={() => setDismissed(true)} className="shrink-0 p-0.5 hover:bg-red-700 rounded transition-colors" aria-label="Dismiss">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
 
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
@@ -221,6 +272,7 @@ export function AppLayout() {
 
       {/* Main area */}
       <div className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-200 ease-in-out ${expanded ? 'ml-52' : 'ml-16'}`}>
+        <RailwayStatusBanner />
         {/* Page content */}
         <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 min-w-0">
           <Outlet />
