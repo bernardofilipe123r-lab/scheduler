@@ -674,49 +674,69 @@ async def generate_reel_examples_batch(
         lines_text = "\n".join(f"  - {line}" for line in ex["content_lines"])
         seed_block += f"\nTitle: {ex['title']}\nContent lines:\n{lines_text}\n"
 
-    prompt = f"""You are a viral short-form content expert. Generate {request.count} reel content ideas in the format Title + Content Lines for a brand with this identity:
+    def _build_reel_prompt(count: int, brand_ctx: str, seed: str, exclude_titles: list[str] | None = None) -> str:
+        exclusion = ""
+        if exclude_titles:
+            exclusion = "\n\nALREADY GENERATED TITLES (do NOT repeat or rephrase any of these):\n"
+            for t in exclude_titles:
+                exclusion += f"- {t}\n"
+        return f"""You are a viral short-form content expert. Generate {count} reel content ideas in the format Title + Content Lines for a brand with this identity:
 
-{brand_context}
+{brand_ctx}
 
 Here are 10 examples from the Health & Wellness niche to show you the EXACT format and style. Adapt the same format, energy, and structure for the brand's niche described above:
 
-{seed_block}
+{seed}{exclusion}
 
 RULES:
 - Each reel has a Title (ALL CAPS, 6-14 words, attention-grabbing, curiosity-driven) and 5-10 Content Lines (short fragments, facts, cause-effect pairs)
 - Content lines should be punchy, educational, and surprising — each line is ONE idea or fact
 - Do NOT include CTAs like "Follow for more" — those are added automatically
 - Titles must vary in opening patterns: use numbers, questions, warnings, revelations, challenges
-- Every idea must be unique — never repeat a topic across the {request.count} reels
+- Every idea must be unique — never repeat a topic across the {count} reels
 - Adapt the TOPICS to match the brand's niche, but keep the same viral format
 
 OUTPUT FORMAT (JSON only):
-{{
+{{{{
     "reels": [
-        {{
+        {{{{
             "title": "REEL TITLE IN ALL CAPS",
             "content_lines": ["Line 1", "Line 2", "Line 3", "..."]
-        }},
+        }}}},
         ...
     ]
-}}"""
+}}}}"""
 
-    try:
-        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 16384, 180)
-
+    async def _generate_batch(count: int, exclude_titles: list[str] | None = None) -> list[dict]:
+        prompt = _build_reel_prompt(count, brand_context, seed_block, exclude_titles)
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 8192, 120)
         if response.status_code != 200:
             logger.error("DeepSeek reel batch returned %s: %s", response.status_code, response.text[:500])
             raise HTTPException(status_code=502, detail=f"AI service returned {response.status_code}")
-
         result = _parse_deepseek_json(response)
-        reels = result.get("reels", [])
+        return result.get("reels", [])
+
+    try:
+        # Split into 2 batches to stay within DeepSeek's 8K output token limit
+        batch_size = 25
+        first_count = min(batch_size, request.count)
+        first_batch = await _generate_batch(first_count)
+
+        all_reels = first_batch[:first_count]
+
+        remaining = request.count - len(all_reels)
+        if remaining > 0:
+            used_titles = [r.get("title", "") for r in all_reels]
+            second_batch = await _generate_batch(remaining, exclude_titles=used_titles)
+            all_reels.extend(second_batch[:remaining])
+
         return {
             "reels": [
                 {
                     "title": r.get("title", ""),
                     "content_lines": r.get("content_lines", []),
                 }
-                for r in reels[:request.count]
+                for r in all_reels
             ]
         }
     except HTTPException:
