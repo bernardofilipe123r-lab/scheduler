@@ -6,6 +6,7 @@ import {
   TobyGuide,
   TobyPipeline,
   TobyBufferHealth,
+  TobyDiscoveries,
   TobyExperiments,
   TobyInsights,
   TobySettings,
@@ -37,6 +38,9 @@ export function TobyPage() {
               <TobyBufferHealth />
             </div>
           </div>
+
+          {/* Trending Discoveries */}
+          <TobyDiscoveries />
 
           {/* Experiments + Insights */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

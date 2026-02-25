@@ -129,12 +129,27 @@ export interface TobyContentTag {
 
 export interface TobyDiscoveryItem {
   id: number
-  user_id: string
-  platform: string
-  content_type: string
-  title: string
-  url: string
-  engagement_score: number
-  discovered_at: string
-  metadata: Record<string, unknown>
+  ig_media_id: string
+  source_account: string | null
+  caption: string | null
+  media_type: string | null
+  like_count: number
+  comments_count: number
+  discovery_method: string | null
+  used_for_proposal: boolean
+  discovered_at: string | null
+}
+
+export interface TobyDiscoverySource {
+  account: string
+  method: string
+  count: number
+  top_likes: number
+}
+
+export interface TobyDiscoverySummary {
+  total: number
+  by_method: Record<string, number>
+  top_sources: TobyDiscoverySource[]
+  recent_highlights: TobyDiscoveryItem[]
 }

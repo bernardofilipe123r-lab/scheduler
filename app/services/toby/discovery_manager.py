@@ -97,9 +97,12 @@ def run_discovery_tick(db: Session, user_id: str, state: TobyState) -> dict:
             total = sum(v if isinstance(v, int) else 0 for v in scan_result.values()) if isinstance(scan_result, dict) else 0
             # Only log when items are actually discovered to avoid spam
             if total > 0:
+                # Enrich metadata with recently discovered source details
+                enriched = dict(scan_result) if isinstance(scan_result, dict) else {}
+                enriched["sources"] = _get_recent_sources(db, user_id, minutes=2)
                 _log(db, user_id, "discovery_scan",
                      f"Bootstrap scan: discovered {total} new trending items",
-                     level="info", metadata=scan_result)
+                     level="info", metadata=enriched)
             # If 0, it just means all existing items were already scanned — not noteworthy
         else:
             # Normal: scan own accounts
@@ -124,10 +127,13 @@ def run_discovery_tick(db: Session, user_id: str, state: TobyState) -> dict:
                 results["hashtags"] = hashtag.get("total_found", 0)
 
             total = results["own_accounts"] + results["competitors"] + results["hashtags"]
+            # Enrich metadata with source details
+            enriched = dict(results)
+            enriched["sources"] = _get_recent_sources(db, user_id, minutes=2)
             _log(db, user_id, "discovery_scan",
                  f"Discovered {total} trending items (own: {results['own_accounts']}, "
                  f"competitors: {results['competitors']}, hashtags: {results['hashtags']})",
-                 level="info", metadata=results)
+                 level="info", metadata=enriched)
 
             # Phase B: Feed significant discoveries into learning engine
             if total > 0:
@@ -204,6 +210,36 @@ def _scan_with_circuit_breaker(
                  metadata={"source": source_id, "failures": count})
 
         return {"error": str(e), "total_found": 0}
+
+
+def _get_recent_sources(db: Session, user_id: str, minutes: int = 2) -> list[dict]:
+    """Return recently discovered items summarised by source for rich activity metadata."""
+    from app.models.analytics import TrendingContent
+    from sqlalchemy import func
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    rows = (
+        db.query(
+            TrendingContent.source_account,
+            TrendingContent.discovery_method,
+            TrendingContent.discovery_hashtag,
+            func.count(TrendingContent.id).label("count"),
+            func.max(TrendingContent.like_count).label("top_likes"),
+        )
+        .filter(TrendingContent.user_id == user_id, TrendingContent.discovered_at >= cutoff)
+        .group_by(TrendingContent.source_account, TrendingContent.discovery_method, TrendingContent.discovery_hashtag)
+        .all()
+    )
+    return [
+        {
+            "account": r.source_account,
+            "method": r.discovery_method,
+            "hashtag": r.discovery_hashtag,
+            "count": r.count,
+            "top_likes": r.top_likes,
+        }
+        for r in rows
+    ]
 
 
 def _feed_discovery_to_learning(db: Session, user_id: str, results: dict):

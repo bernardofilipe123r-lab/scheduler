@@ -92,7 +92,15 @@ function humanize(item: TobyActivityItem): string {
     }
     case 'discovery_scan': {
       const match = (item.description || '').match(/discovered (\d+)/)
-      return match ? `Found ${match[1]} trending items` : 'Scanned for trends'
+      const count = match ? match[1] : '0'
+      const sources = meta?.sources as Array<{ account?: string; hashtag?: string; count?: number }> | undefined
+      if (sources && sources.length > 0) {
+        const names = sources.slice(0, 3).map(s =>
+          s.hashtag ? `#${s.hashtag}` : `@${s.account}`
+        )
+        return `Found ${count} trending items from ${names.join(', ')}${sources.length > 3 ? ` +${sources.length - 3} more` : ''}`
+      }
+      return match ? `Found ${count} trending items` : 'Scanned for trends'
     }
     case 'discovery_seeded':
       return item.description || 'Auto-discovered competitor accounts & hashtags'

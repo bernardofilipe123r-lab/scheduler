@@ -8,6 +8,7 @@ import type {
   TobyInsights,
   TobyContentTag,
   TobyDiscoveryItem,
+  TobyDiscoverySummary,
 } from '../types'
 
 export const tobyApi = {
@@ -52,6 +53,9 @@ export const tobyApi = {
     const qs = limit ? `?limit=${limit}` : ''
     return get<{ items: TobyDiscoveryItem[] }>(`/api/toby/discovery${qs}`)
   },
+
+  getDiscoverySummary: () =>
+    get<TobyDiscoverySummary>('/api/toby/discovery/summary'),
 
   getBuffer: () =>
     get<TobyBufferStatus>('/api/toby/buffer'),

@@ -5,6 +5,7 @@ export { TobyBufferHealth } from './TobyBufferHealth'
 export { TobyExperiments } from './TobyExperiments'
 export { TobyInsights } from './TobyInsights'
 export { TobySettings } from './TobySettings'
+export { TobyDiscoveries } from './TobyDiscoveries'
 // Legacy exports (kept for backward compat)
 export { TobyStatusBar } from './TobyStatusBar'
 export { TobyLiveStatus } from './TobyLiveStatus'

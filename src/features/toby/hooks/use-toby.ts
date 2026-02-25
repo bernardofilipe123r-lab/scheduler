@@ -10,6 +10,7 @@ export const tobyKeys = {
   experiments: (status?: string) => [...tobyKeys.all, 'experiments', status] as const,
   insights: () => [...tobyKeys.all, 'insights'] as const,
   discovery: () => [...tobyKeys.all, 'discovery'] as const,
+  discoverySummary: () => [...tobyKeys.all, 'discovery-summary'] as const,
   buffer: () => [...tobyKeys.all, 'buffer'] as const,
   config: () => [...tobyKeys.all, 'config'] as const,
 }
@@ -83,6 +84,14 @@ export function useTobyDiscovery() {
   return useQuery({
     queryKey: tobyKeys.discovery(),
     queryFn: () => tobyApi.getDiscovery(),
+    staleTime: 60_000,
+  })
+}
+
+export function useTobyDiscoverySummary() {
+  return useQuery({
+    queryKey: tobyKeys.discoverySummary(),
+    queryFn: tobyApi.getDiscoverySummary,
     staleTime: 60_000,
   })
 }

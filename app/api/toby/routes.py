@@ -312,6 +312,66 @@ def get_discovery(
     return {"items": [t.to_dict() for t in trending]}
 
 
+@router.get("/discovery/summary")
+def get_discovery_summary(
+    target_user_id: str = Query(None, alias="user_id"),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Aggregated discovery stats: total items, breakdown by source, recent highlights."""
+    from app.models.analytics import TrendingContent
+    from sqlalchemy import func
+
+    uid = _resolve_user_id(user, target_user_id)
+
+    total = db.query(func.count(TrendingContent.id)).filter(TrendingContent.user_id == uid).scalar() or 0
+
+    # Breakdown by discovery method
+    method_rows = (
+        db.query(TrendingContent.discovery_method, func.count(TrendingContent.id))
+        .filter(TrendingContent.user_id == uid)
+        .group_by(TrendingContent.discovery_method)
+        .all()
+    )
+    by_method = {m: c for m, c in method_rows}
+
+    # Top source accounts by item count
+    top_sources = (
+        db.query(
+            TrendingContent.source_account,
+            TrendingContent.discovery_method,
+            func.count(TrendingContent.id).label("count"),
+            func.max(TrendingContent.like_count).label("top_likes"),
+        )
+        .filter(TrendingContent.user_id == uid, TrendingContent.source_account.isnot(None))
+        .group_by(TrendingContent.source_account, TrendingContent.discovery_method)
+        .order_by(func.count(TrendingContent.id).desc())
+        .limit(10)
+        .all()
+    )
+
+    # Recent highlights (top liked items from last 24h)
+    from datetime import timedelta
+    cutoff = datetime.now() - timedelta(hours=24)
+    highlights = (
+        db.query(TrendingContent)
+        .filter(TrendingContent.user_id == uid, TrendingContent.discovered_at >= cutoff)
+        .order_by(TrendingContent.like_count.desc())
+        .limit(5)
+        .all()
+    )
+
+    return {
+        "total": total,
+        "by_method": by_method,
+        "top_sources": [
+            {"account": r.source_account, "method": r.discovery_method, "count": r.count, "top_likes": r.top_likes}
+            for r in top_sources
+        ],
+        "recent_highlights": [t.to_dict() for t in highlights],
+    }
+
+
 @router.get("/buffer")
 def get_buffer(
     target_user_id: str = Query(None, alias="user_id"),
