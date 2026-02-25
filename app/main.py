@@ -592,7 +592,13 @@ async def startup_event():
                         
                         # Check for credential errors first
                         if result.get('credential_error'):
-                            error_msg = f"Credential error for brand {result.get('brand', brand)}: Missing Instagram/Facebook IDs"
+                            # Build a specific error message from the platform results
+                            platform_errors = [
+                                v.get('error', '') for k, v in result.items()
+                                if isinstance(v, dict) and not v.get('success') and v.get('error')
+                            ]
+                            error_detail = platform_errors[0] if platform_errors else "Missing platform credentials"
+                            error_msg = f"Credential error for brand {result.get('brand', brand)}: {error_detail}"
                             scheduler_service.mark_as_failed(schedule_id, error_msg)
                             print(f"   ❌ {error_msg}")
                             continue
