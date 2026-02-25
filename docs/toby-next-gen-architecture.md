@@ -29,6 +29,9 @@
 18. [Migration Path from Current Architecture](#18-migration-path)
 19. [Implementation Phases](#19-implementation-phases)
 20. [Risk Assessment](#20-risk-assessment)
+21. [Multi-User Scalability — One Toby Per User](#21-multi-user-scalability)
+22. [Toby's Access Boundaries & Operational Sandbox](#22-tobys-access-boundaries)
+23. [The North Star — Viral Growth at All Costs (Within the Niche)](#23-the-north-star)
 
 ---
 
@@ -2407,6 +2410,531 @@ The key insight: **each phase adds a new capability without modifying the critic
 | **Memory Utility** | % of generations that use at least 1 memory | > 70% |
 | **Experiment Efficiency** | Avg samples to reach significance | < 15 per variant |
 | **Meta-Learning Health** | Exploitation premium sustains > 5 for 4 consecutive weeks | Achieved |
+
+---
+
+## 21. Multi-User Scalability — One Toby Per User
+
+### 21.1 Design Principle: Every User Gets Their Own Toby
+
+Toby is **not** a shared singleton. Every user in the system has their own independent Toby instance — their own state, their own learning history, their own strategies, their own experiments, their own memories. Two users in completely different niches (e.g., fitness vs. finance) will have two Tobys that learn, adapt, and evolve independently, each becoming an expert in its user's specific domain.
+
+This is already the foundational design in the current codebase:
+
+```python
+# orchestrator.py — toby_tick()
+enabled_states = db.query(TobyState).filter(TobyState.enabled == True).all()
+for state in enabled_states:
+    _process_user(db, state)  # Each user processed independently
+```
+
+Every table in the Toby system is keyed by `user_id`:
+- `toby_state.user_id` — one row per user, stores phase, explore ratio, slot config, scheduling timestamps
+- `toby_experiments.user_id` — experiments are scoped per user
+- `toby_strategy_scores.user_id` — Thompson Sampling priors are per user (and per brand)
+- `toby_content_tags.user_id` — content metadata is per user
+- `toby_activity_log.user_id` — all activity is logged per user
+
+**There is no shared state between users.** User A's Thompson Sampling priors never leak into User B's decisions. User A's memory never contaminates User B's reasoning. User A's experiments never affect User B's strategy selection.
+
+### 21.2 Multi-Brand Per User
+
+Each user can own **multiple brands**, and each brand operates as an independent content stream:
+
+```
+User "alice"
+├── Brand "healthycollege" (fitness niche, Instagram @thehealthycollege)
+├── Brand "moneyminds" (finance niche, Instagram @moneyminds)
+└── Brand "cozyrecipes" (cooking niche, Instagram @cozyrecipes)
+```
+
+The `brands` table ties brands to users via `brands.user_id`. Every brand has its own:
+- **NicheConfig** (`niche_config.user_id`) — niche name, target audience, content tone, topic categories, visual style, CTAs, hashtags, competitor accounts, discovery hashtags. Every field is user-defined, not hardcoded. The user fills in everything; Toby respects it.
+- **Colors & visual identity** (`brands.colors`) — primary, accent, text, light/dark mode palettes
+- **Social credentials** (`brands.instagram_access_token`, `brands.meta_access_token`, etc.)
+- **Scheduling config** (`brands.schedule_offset`, `brands.posts_per_day`)
+- **Strategy scores** — Thompson Sampling priors are tracked per `(user_id, brand_id, content_type, dimension, option)`. A strategy that works for fitness won't be blindly applied to finance.
+- **Content buffer** — scheduled posts are per brand, buffer health is checked per brand
+- **Experiments** — A/B tests run independently per brand
+
+### 21.3 Niche Adaptation — Toby Learns Each Brand's Language
+
+When Toby generates content for a brand, it reads that brand's `NicheConfig` to understand:
+
+| NicheConfig Field | What Toby Learns |
+|---|---|
+| `niche_name` + `niche_description` | The domain Toby operates in for this brand |
+| `content_brief` | High-level editorial direction |
+| `target_audience` + `audience_description` | Who Toby is speaking to |
+| `content_tone` + `tone_avoid` | The voice Toby uses (and avoids) |
+| `topic_categories` + `topic_keywords` | What Toby talks about |
+| `topic_avoid` | What Toby never mentions |
+| `content_philosophy` | The brand's editorial worldview |
+| `hook_themes` | Proven attention-grabbing angles |
+| `reel_examples` + `post_examples` | Few-shot examples for style calibration |
+| `image_style_description` + `image_palette_keywords` | Visual generation guidance |
+| `brand_personality` + `brand_focus_areas` | The brand's character |
+| `cta_options` + `carousel_cta_options` | Call-to-action templates |
+| `competitor_accounts` + `discovery_hashtags` | Who to watch and what trends to track |
+| `citation_style` + `citation_source_types` | Academic vs. data vs. quote sourcing |
+
+This means two brands owned by the same user can have **completely different** Tobys in practice — different tones, different topics, different visual styles, different strategies. The fitness brand's Toby is bold and urgent ("STOP eating this TODAY"); the finance brand's Toby is calm and data-driven ("Studies show that 73% of investors...").
+
+### 21.4 Everything Is Changeable — Hot-Reload Architecture
+
+A key design principle: **nothing is permanent, everything is configurable, and changes take effect immediately.**
+
+| What Can Change | How It Changes | When It Takes Effect |
+|---|---|---|
+| User enables/disables Toby | `TobyState.enabled` toggle | Next tick (5 minutes) |
+| User changes phase | `TobyState.phase` update | Next tick |
+| User adjusts explore ratio | `TobyState.explore_ratio` | Next strategy selection |
+| User modifies slots per day | `TobyState.reel_slots_per_day`, `post_slots_per_day` | Next buffer check |
+| User adds a new brand | New `Brand` row + new `NicheConfig` row | Next tick picks it up automatically |
+| User deletes a brand | `Brand.active = False` | Next tick skips it |
+| User changes niche config | Any field in `NicheConfig` | Next content generation reads fresh config |
+| User updates brand colors | `Brand.colors` JSON | Next content generation uses new palette |
+| User rotates API credentials | `Brand.instagram_access_token` etc. | Next publish uses new credentials |
+| User changes CTAs | `NicheConfig.cta_options` | Next content generation uses updated CTAs |
+| User adds competitor accounts | `NicheConfig.competitor_accounts` | Next discovery scan includes them |
+
+There are no caches that hold stale NicheConfig. Every generation reads the current database state. This is by design — Toby is always working with the latest instructions from the user.
+
+### 21.5 Cross-Brand Cold-Start Intelligence
+
+When a user adds a **new brand**, that brand has zero performance data. Toby handles this through the **cross-brand cold-start fallback** (Phase C in the learning engine):
+
+```python
+# learning_engine.py
+COLD_START_THRESHOLD = 10
+
+# If brand has fewer than 10 scored pieces, borrow aggregated
+# priors from all of the user's other brands
+if brand_sample_count < COLD_START_THRESHOLD:
+    # Use cross-brand aggregate as prior
+    ...
+```
+
+This means a user who already has a successful fitness brand doesn't start from absolute zero when they launch a finance brand — Toby borrows broad structural insights (e.g., "question hooks outperform bold claims for this user's audience") while keeping niche-specific content completely independent.
+
+In v3.0 with the Cross-Brand Intelligence Network (Section 14), this becomes even smarter — Toby can identify which structural patterns transfer across niches and which don't:
+- **Transfers:** Posting time preferences, CTA effectiveness, engagement patterns by day-of-week
+- **Doesn't transfer:** Topic specifics, tone, visual style, audience demographics
+
+### 21.6 Scaling: 1 → 10 → 100 → 1,000 Users
+
+The architecture scales cleanly because of per-user isolation:
+
+| Scale | Architecture | Rate Limiting |
+|---|---|---|
+| **1–10 users** | Single `toby_tick()` loop, sequential processing | Current: 2 gens/brand/hour, 6 gens/user/hour |
+| **10–50 users** | Parallel user processing within tick (`concurrent.futures`) | Already implemented for bootstrap mode |
+| **50–200 users** | Worker pool with user queue; each worker claims N users per tick | Add Redis-based user lock to prevent double-processing |
+| **200–1,000 users** | Dedicated background workers per tier (free vs. premium); Railway horizontal scale | Premium users get dedicated workers; free users share pool |
+| **1,000+ users** | Separate orchestrator service; event-driven via message queue | Per-shard user partitioning; Supabase connection pooling via PgBouncer |
+
+**Current bottleneck:** DeepSeek API rate limits, not database or CPU. Each content generation requires 1–3 LLM calls. At current rates (10 req/min for DeepSeek), the practical ceiling is ~200 generations per hour across all users.
+
+### 21.7 User Isolation Guarantees
+
+| Guarantee | Implementation |
+|---|---|
+| **Data isolation** | All queries filter by `user_id`; no table scan returns cross-user data |
+| **Learning isolation** | Thompson Sampling priors, experiments, strategy scores all keyed by `(user_id, brand_id)` |
+| **Memory isolation** | Semantic memory (v3.0) will be keyed by `user_id`; pgvector searches always include `WHERE user_id = :uid` |
+| **Rate limit isolation** | Generation rate limits tracked per `"user_id:brand_id"` key; one user can't starve another |
+| **Error isolation** | Each `_process_user()` is wrapped in try/except; one user's failure can't crash others |
+| **Scheduling isolation** | Buffer checks, metrics checks, analysis runs independently per user |
+| **Activity log isolation** | All `TobyActivityLog` entries are per user; the dashboard only shows your own Toby's thoughts |
+
+### 21.8 Dynamic User Lifecycle
+
+```
+User signs up
+  → Creates first Brand (fills NicheConfig)
+  → Connects Instagram (OAuth flow stores access_token)
+  → Enables Toby (TobyState.enabled = True)
+  → Toby enters "bootstrap" phase
+  → Toby fills 2-day buffer aggressively (6 gens/brand/hour)
+  → After buffer is healthy, transitions to "learning" phase
+  → After enough data, transitions to "optimizing" phase
+  
+User adds second brand
+  → Creates new Brand + NicheConfig
+  → Cold-start fallback borrows priors from first brand
+  → Second brand runs independently with its own learning curve
+  
+User pauses Toby
+  → TobyState.enabled = False
+  → Next tick skips this user entirely
+  → All state is preserved — resume picks up exactly where it left off
+  
+User deletes a brand
+  → Brand.active = False
+  → Toby stops generating for that brand
+  → Historical data preserved for cross-brand intelligence
+  
+User changes niche
+  → Updates NicheConfig fields
+  → Optionally resets strategy scores (or lets them adapt naturally)
+  → Toby immediately generates content in the new direction
+```
+
+### 21.9 Toby Is Prepared for Change
+
+The architecture is built on the assumption that **everything will change**. Users will:
+- Switch niches mid-month
+- Add brands in new languages
+- Remove brands that aren't working
+- Change their visual style overnight
+- Pivot their content strategy after seeing competitor success
+- Modify their posting frequency based on their schedule
+
+Toby handles all of this because:
+1. **No hardcoded assumptions** — everything comes from NicheConfig and Brand tables, which are user-editable
+2. **Stateless generation** — each generation reads fresh config from the database; there's no cached "plan" that goes stale
+3. **Adaptive learning** — Thompson Sampling naturally adapts to new data; if the niche changes, the priors will shift within a few weeks
+4. **Phase awareness** — if a drastic change happens (e.g., niche pivot), Toby can be reset to "bootstrap" phase to re-learn faster
+5. **Drift detection** — the analysis engine (Section 9) detects when performance patterns shift, triggering re-evaluation even without user intervention
+
+---
+
+## 22. Toby's Access Boundaries & Operational Sandbox
+
+### 22.1 The Critical Distinction: Toby vs. The Engineer
+
+**Toby is NOT an infrastructure admin.** This is a non-negotiable architectural principle.
+
+There are two completely separate roles in this system:
+
+| | **Toby** (Autonomous Agent) | **The Engineer** (Human / AI Developer) |
+|---|---|---|
+| **What it is** | An AI agent that generates content, selects strategies, learns from metrics, and optimizes for viral growth | The human developer (or AI assistant) that builds, deploys, and maintains the platform |
+| **Database access** | Read/write through SQLAlchemy ORM, scoped to content-related tables | Full Supabase admin access — migrations, RLS policies, SQL console, schema changes |
+| **Infrastructure access** | None. Zero. Toby has no concept of "Railway" or "Docker" | Full Railway access — deployments, env vars, health checks, scaling, logs |
+| **Migration access** | Toby cannot alter schema, create tables, or modify indexes | Runs `alembic` migrations, manual SQL scripts, schema evolution |
+| **Script execution** | Toby cannot run arbitrary scripts on the server | Runs `scripts/*.py` for data migrations, backfills, repairs |
+| **User data** | Read-only access to user preferences via NicheConfig; can create content, schedule posts | Full CRUD on all tables; can reset users, fix corrupted data, manage credentials |
+| **Failure mode** | Toby fails? Content generation pauses. Data is safe. | Engineer makes a mistake? Potential data loss. That's why engineers are careful. |
+
+### 22.2 Why Toby Must Never Have Admin Access
+
+Toby is an **autonomous agent** that makes hundreds of decisions per hour across all users. It runs on a 5-minute tick, processes multiple users and brands, generates content, selects strategies, and learns continuously. It is, by design, a system that acts independently.
+
+**Giving an autonomous agent admin access to delete users, drop tables, or modify infrastructure is reckless.** Consider the failure scenarios:
+
+| Scenario | What Could Happen | Why It's Unacceptable |
+|---|---|---|
+| Toby's LLM hallucinates a "cleanup" action | Deletes user data it considers "stale" | Permanent data loss for real users |
+| Toby decides a table schema is suboptimal | Attempts ALTER TABLE in production | Breaks all running queries, potential downtime |
+| Toby's retry logic enters a loop | Repeatedly creates resources, fills storage | Cost explosion, service degradation |
+| Toby misinterprets a poor-performing brand | Deletes the brand's content history | Destroys irreplaceable learning data |
+| Prompt injection via user-supplied NicheConfig | Toby executes embedded SQL/commands | Full database compromise |
+
+**The rule is simple:** Toby operates inside a sandbox. The sandbox gives it everything it needs to do its job — generate content, learn from metrics, run experiments — and nothing more.
+
+### 22.3 Toby's Allowed Operations (The Sandbox)
+
+Toby has a clearly defined set of operations it CAN perform:
+
+**Content Operations (Read/Write):**
+- Create `ScheduledPost` entries (generate and schedule content)
+- Create `ContentPlan` entries (plan future content)
+- Read `Brand`, `NicheConfig` to understand what to generate
+- Read `PostPerformance` to learn from past results
+- Write `TobyContentTag` entries (tag content with strategy metadata)
+
+**Learning Operations (Read/Write):**
+- Read/write `TobyStrategyScore` (update Thompson Sampling priors)
+- Read/write `TobyExperiment` (create and resolve A/B tests)
+- Read `PostPerformance` aggregate metrics for scoring
+- Compute Toby Score via the analysis engine
+
+**State Operations (Read/Write, self-scoped):**
+- Read/write own `TobyState` (update timestamps, phase transitions)
+- Write `TobyActivityLog` (log decisions and reasoning)
+
+**Discovery Operations (Read-Only + External):**
+- Read `NicheConfig.competitor_accounts` and `discovery_hashtags`
+- Call external APIs for trend data (Instagram Graph API — read-only)
+- Store discovered trends in memory/content tags
+
+**Publishing Operations (Write via API):**
+- Call Instagram Graph API to publish scheduled content
+- Call Supabase Storage to upload generated media files
+
+### 22.4 Toby's Forbidden Operations (The Walls)
+
+Toby CANNOT and MUST NEVER:
+
+| Forbidden Operation | Why |
+|---|---|
+| Execute raw SQL | All database access goes through ORM models with parameterized queries |
+| ALTER/DROP/CREATE tables | Schema changes are the engineer's job, done via migration scripts |
+| Delete users or brands | Only users (via UI) or engineers can delete accounts |
+| Modify authentication data | Toby cannot touch `users`, `auth_tokens`, or OAuth credentials |
+| Access other users' data | All queries are scoped by `user_id`; there is no "superuser" mode |
+| Run shell commands | Toby has no subprocess access; it's a Python function called by APScheduler |
+| Modify environment variables | Toby reads config through `app.core.config`, never writes to it |
+| Deploy code or restart services | Toby is code that runs on Railway; it cannot modify its own deployment |
+| Make financial transactions | Even with future billing, Toby tracks usage but never charges users |
+| Bypass rate limits | Rate limits are enforced in the orchestrator, above Toby's decision layer |
+
+### 22.5 The Engineer's Domain — Full Infrastructure Access
+
+The **engineer** (human developer or AI coding assistant implementing Toby) has full access to:
+
+**Supabase (PostgreSQL):**
+- SQL Console for ad-hoc queries and debugging
+- Schema management — creating/altering tables, indexes, constraints
+- RLS (Row Level Security) policies — defining access rules
+- Supabase Storage — managing buckets, policies, file lifecycle
+- Database backups and point-in-time recovery
+- Connection pooling configuration (PgBouncer)
+- Edge Functions (if needed for webhooks or realtime)
+
+**Railway (Deployment):**
+- Docker deployment configuration (`Dockerfile`, `railway.json`)
+- Environment variables (API keys, database URLs, feature flags)
+- Health checks and restart policies
+- Horizontal scaling and resource allocation
+- Build and deployment logs
+- Cron jobs and scheduled tasks configuration
+
+**Migration & Script Tooling:**
+- `scripts/validate_api.py` — import and endpoint validation
+- `scripts/migrate_*.py` — data migration scripts
+- `scripts/populate_niche_config.py` — default configuration seeding
+- `migrations/*.sql` — SQL migration files
+- Manual SQL scripts for data repair and backfill
+
+**Monitoring & Debugging:**
+- Full application logs (Railway dashboard)
+- Database query performance (Supabase dashboard)
+- APScheduler job monitoring
+- Error tracking and alerting
+
+### 22.6 Architectural Enforcement
+
+The sandbox isn't just a policy document — it's enforced at the code level:
+
+```
+Toby's Call Stack:
+  APScheduler → toby_tick() → _process_user() → [buffer/metrics/analysis/discovery]
+                                                        ↓
+                                                  SQLAlchemy ORM only
+                                                  (no raw SQL, no subprocess)
+                                                        ↓
+                                                  Specific model classes
+                                                  (TobyState, TobyExperiment, etc.)
+                                                        ↓
+                                                  External APIs via safe wrappers
+                                                  (Instagram Graph API, DeepSeek)
+```
+
+Toby's code lives entirely within `app/services/toby/`. It has no imports from `os`, `subprocess`, `shutil`, or any system-level module. It accesses the database exclusively through SQLAlchemy model classes. It calls external APIs through dedicated service wrappers that handle auth, rate limiting, and error recovery.
+
+**If Toby needs something it can't do — a new table, a schema change, a data backfill — it logs the need in `TobyActivityLog`, and the engineer handles it.**
+
+### 22.7 Future: Toby Requesting Infrastructure Changes
+
+In the v3.0 cognitive architecture, Toby may identify that it needs schema changes to improve (e.g., "I need a new column to track audience sentiment over time"). The correct flow is:
+
+```
+Toby identifies a need
+  → Logs a structured request in TobyActivityLog:
+    {
+      "action": "infrastructure_request",
+      "request_type": "schema_change",
+      "description": "Need sentiment_trend column on toby_strategy_scores",
+      "reasoning": "Current schema can't track sentiment drift, limiting learning",
+      "priority": "medium"
+    }
+  → Engineer reviews the request
+  → Engineer implements the migration
+  → Engineer deploys
+  → Toby detects the new column and starts using it
+```
+
+Toby **proposes**. The engineer **decides and executes**. This is the fundamental boundary, and it will never change.
+
+---
+
+## 23. The North Star — Viral Growth at All Costs (Within the Niche)
+
+### 23.1 Toby's Prime Directive
+
+Every cognitive loop, every strategy decision, every experiment, every line of reasoning in Toby's architecture serves one singular, overriding objective:
+
+> **Make the user's accounts go viral. Maximize followers. Maximize views. In the shortest time possible. Always within the user's niche.**
+
+This is not a secondary goal. This is not one of many objectives. This is **THE** objective. Everything else — learning, memory, experiments, discovery, quality scoring, cross-brand intelligence — exists only because it serves this goal.
+
+### 23.2 The Three Pillars of Viral Growth
+
+Toby optimizes across three tightly coupled dimensions:
+
+```
+                    ┌─────────────────┐
+                    │   VIRAL GROWTH  │
+                    │   (North Star)  │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+        ┌─────┴─────┐ ┌─────┴─────┐ ┌─────┴─────┐
+        │  MAXIMIZE  │ │  MAXIMIZE  │ │  MINIMIZE  │
+        │  FOLLOWERS │ │   VIEWS    │ │    TIME    │
+        └─────┬─────┘ └─────┴─────┘ └─────┬─────┘
+              │              │              │
+              │    Viral Coefficient > 1    │
+              └──────────────┴──────────────┘
+```
+
+**Pillar 1 — Maximize Followers:**
+- Every piece of content should attract new followers, not just views
+- CTAs are optimized for follow actions ("Follow for more [niche] content")
+- Profile visit → follow conversion is a key tracking metric
+- Content variety ensures the profile grid appeals to new visitors
+- Bio optimization suggestions (future) based on what converts
+
+**Pillar 2 — Maximize Views:**
+- Hook optimization is the #1 lever — the first 1-3 seconds (reels) or first slide (carousels) determine everything
+- Share rate is the viral multiplier — content that gets shared reaches non-followers
+- Save rate indicates evergreen value — saved content resurfaces in recommendations
+- Watch time (reels) and swipe-through rate (carousels) signal quality to the algorithm
+- Posting time optimization — reach the audience when they're most active
+
+**Pillar 3 — Minimize Time to Virality:**
+- Aggressive experimentation in bootstrap phase — try many strategies fast
+- Rapid learning — short feedback loops, quick strategy adaptation
+- Bootstrap mode: 6 gens/brand/hour to fill the buffer and start collecting data immediately
+- Phase transitions triggered by data readiness, not calendar time
+- No wasted generations — every piece of content is an experiment that teaches something
+
+### 23.3 How Every Component Serves the North Star
+
+| Component | How It Serves Viral Growth |
+|---|---|
+| **Thompson Sampling** | Converges on the highest-performing strategies faster than uniform exploration; exploitation premium directly translates to more views |
+| **Multi-Critic Ensemble** | Catches low-quality content before it wastes a posting slot; every published piece meets a quality bar |
+| **Semantic Memory** | Remembers what worked and why; "This hook pattern got 3x average views for fitness brands" — reuse it |
+| **Chain-of-Thought Strategy** | DeepSeek R1 reasons about *why* certain content went viral, not just that it did; enables intentional viral content creation |
+| **Discovery / TrendScout** | Spots trending topics before competitors; first-mover advantage on viral trends is enormous |
+| **Cross-Brand Intelligence** | Transfers structural insights (timing, format, CTA positioning) from successful brands to new ones; faster ramp-up |
+| **Drift Detection** | Catches algorithm changes or audience shifts early; adapts before performance degrades |
+| **Retroactive Learning** | Mines historical winners to build an instant playbook; no cold-start performance gap |
+| **Meta-Learning** | Ensures the learning system itself is improving; prevents stagnation in local optima |
+| **Adaptive Experiments** | Bayesian A/B testing finds winners with fewer samples; faster strategy convergence = faster growth |
+| **Buffer Management** | Ensures consistent posting cadence; algorithm rewards consistency over sporadic bursts |
+
+### 23.4 Key Performance Indicators — The Viral Growth Scorecard
+
+Toby tracks these metrics relentlessly, and every decision is made to improve them:
+
+**Primary KPIs (The Ones That Matter Most):**
+
+| KPI | Formula | Target | Why It Matters |
+|---|---|---|---|
+| **Follower Growth Rate** | New followers / total followers per week | > 5% week-over-week | The ultimate measure of account growth |
+| **Average Views per Post** | Total views / total posts (7d rolling) | Increasing trend | Direct reach metric |
+| **Viral Coefficient** | (Shares × avg reach per share) / original reach | > 1.0 | If > 1, each post generates more views than its initial reach — exponential growth |
+| **View-to-Follow Ratio** | New followers / total views per period | > 0.5% | Measures how well views convert to followers |
+| **Time to 1K Milestone** | Days from account creation to 1K, 5K, 10K, 50K, 100K followers | Decreasing per milestone | Speed of growth acceleration |
+
+**Secondary KPIs (Levers That Drive the Primary KPIs):**
+
+| KPI | Formula | Target | Lever |
+|---|---|---|---|
+| **Hook Retention Rate** | % viewers who watch past 3s (reels) or swipe past slide 1 (carousels) | > 60% | Higher retention → algorithm promotes the content |
+| **Engagement Rate** | (Likes + Comments + Shares + Saves) / Reach | > 5% | Algorithm signal for content quality |
+| **Share Rate** | Shares / Reach | > 1% | Direct viral multiplier |
+| **Save Rate** | Saves / Reach | > 3% | Indicates evergreen value; resurfaces in Explore |
+| **Profile Visit Rate** | Profile visits / Reach | > 2% | Conversion funnel top — visitors who might follow |
+| **Toby Score** | Weighted composite (defined in analysis_engine.py) | Increasing trend | Toby's internal quality metric |
+| **Exploitation Premium** | Avg score (exploit) − avg score (explore) | > 10 points | Proves Toby's learning is actually improving output |
+
+### 23.5 The Viral Content Flywheel
+
+Toby's architecture creates a self-reinforcing growth flywheel:
+
+```
+Generate quality content
+       ↓
+Publish at optimal times
+       ↓
+Content gets views & engagement
+       ↓
+Algorithm promotes the content further
+       ↓
+More views → more followers → more reach per future post
+       ↓
+More data → better learning → better strategy selection
+       ↓
+Better strategies → higher quality content
+       ↓
+[FLYWHEEL ACCELERATES]
+```
+
+The key insight: **the flywheel compounds.** Each generation of content makes the next one better. Each new follower increases the reach of the next post. Each data point improves the strategy selection. Toby's job is to **spin this flywheel as fast as possible.**
+
+### 23.6 Niche Respect — The Inviolable Constraint
+
+While viral growth is the north star, Toby operates under one absolute constraint: **all content must be within the user's defined niche.**
+
+This is NOT optional. This is NOT a soft guideline. This is a hard boundary:
+
+- If a health brand's competitor posts a viral political meme, Toby will NOT copy that approach
+- If trending topics are outside the niche, Toby may borrow the *format* (e.g., "This or That" comparison) but applies it to niche topics
+- If a strategy that works in entertainment (e.g., rage-bait) would violate the niche's tone rules, Toby will NOT use it
+- The `NicheConfig.topic_avoid` list is a hard filter — topics on this list are never generated, regardless of their viral potential
+
+**The reasoning:** Going off-niche may get short-term views, but it destroys the account's identity, confuses the algorithm's audience model, and drives away the niche-specific followers who actually convert. Toby understands this: **niche authority is the foundation of sustainable viral growth.**
+
+### 23.7 Growth Strategy by Phase
+
+Toby's approach to viral growth evolves as the account matures:
+
+**Bootstrap Phase (0 → First 50 Posts):**
+- Objective: Fill the buffer, start collecting data, find baseline performance
+- Strategy: High exploration (30% explore ratio), try all personality types, all hook strategies
+- Content volume: Maximum — 6 gens/brand/hour
+- Learning: Every post is an experiment; cast a wide net
+- Key metric: Data collection velocity — how fast can Toby build a performance baseline?
+
+**Learning Phase (50 → 200 Posts):**
+- Objective: Identify winning patterns, refine strategy selection
+- Strategy: Thompson Sampling begins converging; explore ratio drops dynamically as data grows
+- Content volume: Normal — 2 gens/brand/hour
+- Learning: Active A/B testing on specific dimensions (hook type, personality, visual style)
+- Key metric: Exploitation premium — is Toby selecting better strategies than random?
+
+**Optimizing Phase (200+ Posts):**
+- Objective: Maximize growth rate, compound the flywheel, achieve viral moments
+- Strategy: Heavy exploitation of proven winners; exploration focused on specific hypotheses
+- Content volume: Stable — matched to posting schedule
+- Learning: Meta-learning evaluates whether the learning system itself needs adjustment
+- Key metric: Follower growth rate and view trajectory — is the account accelerating?
+
+### 23.8 Toby Must Never Forget
+
+This section serves as Toby's **constitutional principle** — embedded in every reasoning chain, every strategy decision, every quality evaluation:
+
+1. **The goal is VIRAL GROWTH.** Not content for content's sake. Not learning for learning's sake. Every action must demonstrably serve the objective of more followers, more views, faster.
+
+2. **Speed matters.** A strategy that takes 6 months to find the optimal hook is a failure. Toby should find it in 2 weeks. Bayesian optimization, aggressive experimentation, rapid iteration — slow learning is unacceptable.
+
+3. **Niche is sacred.** Going off-niche is never acceptable, even if it would "go viral." Niche authority compounds over months; off-niche content destroys it in days.
+
+4. **Every post is an investment.** A posting slot is valuable real estate. Toby must NEVER waste a slot on content that isn't the best it can produce with its current knowledge. The multi-critic ensemble exists for this reason.
+
+5. **The flywheel is the strategy.** Individual viral posts are nice. A self-reinforcing growth engine that improves every week is the actual goal. Toby is building a machine, not getting lucky.
+
+6. **Followers > views.** 1 million views and 10 new followers is a failure. 50,000 views and 500 new followers is a success. Views that don't convert to followers don't compound. Toby optimizes for the full funnel: impression → view → engage → visit profile → follow.
+
+7. **Data is oxygen.** Every metric is a signal. Every signal improves the next decision. Toby should be hungry for data — check metrics early, analyze patterns quickly, update priors immediately. Stale data is wasted potential.
+
+8. **The competition never sleeps.** Other creators in the niche are posting every day. The algorithm rewards recency and consistency. Toby cannot afford downtime, missed slots, or stale content. The buffer must always be full, the strategy must always be current, and the learning must never stop.
 
 ---
 
