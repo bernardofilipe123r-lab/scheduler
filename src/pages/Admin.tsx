@@ -5,7 +5,7 @@ import {
   Ban, UserCheck, Shield,
   Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2, ExternalLink,
   Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
-  Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings,
+  Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings, Brain,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -54,6 +54,78 @@ interface Brand {
   // Logo
   logo_path: string | null
   // Timestamps
+  created_at: string | null
+  updated_at: string | null
+}
+
+interface NicheConfig {
+  id: string
+  niche_name: string
+  niche_description: string
+  content_brief: string
+  target_audience: string
+  audience_description: string
+  content_tone: string[]
+  tone_avoid: string[]
+  topic_categories: string[]
+  topic_keywords: string[]
+  topic_avoid: string[]
+  content_philosophy: string
+  hook_themes: string[]
+  brand_personality: string | null
+  brand_focus_areas: string[]
+  parent_brand_name: string
+  competitor_accounts: string[]
+  discovery_hashtags: string[]
+  cta_options: string[]
+  hashtags: string[]
+  carousel_cta_options: string[]
+  carousel_cta_topic: string
+  image_style_description: string
+  image_palette_keywords: string[]
+  citation_style: string
+  citation_source_types: string[]
+  carousel_cover_overlay_opacity: number
+  carousel_content_overlay_opacity: number
+  follow_section_text: string
+  save_section_text: string
+  disclaimer_text: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+interface NicheConfig {
+  id: string
+  niche_name: string
+  niche_description: string
+  content_brief: string
+  target_audience: string
+  audience_description: string
+  content_tone: string[]
+  tone_avoid: string[]
+  topic_categories: string[]
+  topic_keywords: string[]
+  topic_avoid: string[]
+  content_philosophy: string
+  hook_themes: string[]
+  brand_personality: string | null
+  brand_focus_areas: string[]
+  parent_brand_name: string
+  competitor_accounts: string[]
+  discovery_hashtags: string[]
+  cta_options: string[]
+  hashtags: string[]
+  carousel_cta_options: string[]
+  carousel_cta_topic: string
+  image_style_description: string
+  image_palette_keywords: string[]
+  citation_style: string
+  citation_source_types: string[]
+  carousel_cover_overlay_opacity: number
+  carousel_content_overlay_opacity: number
+  follow_section_text: string
+  save_section_text: string
+  disclaimer_text: string
   created_at: string | null
   updated_at: string | null
 }
@@ -192,6 +264,13 @@ function UserDetail({
   const brandsQuery = useQuery<{ brands: Brand[] }>({
     queryKey: ['admin-user-brands', user.id],
     queryFn: () => apiClient.get(`/api/admin/users/${user.id}/brands`),
+  })
+
+  // Content DNA (NicheConfig)
+  const nicheConfigQuery = useQuery<{ niche_configs: NicheConfig[] }>({
+    queryKey: ['admin-user-niche-config', user.id],
+    queryFn: () => apiClient.get(`/api/admin/users/${user.id}/niche-config`),
+    enabled: activeTab === 'brands',
   })
 
   // Logs
@@ -560,6 +639,125 @@ function UserDetail({
                               <span><Calendar className="w-3 h-3 inline mr-1" />Created {formatDate(b.created_at)}</span>
                               <span><Clock className="w-3 h-3 inline mr-1" />Updated {formatDate(b.updated_at)}</span>
                             </div>
+
+                            {/* Content DNA */}
+                            {(() => {
+                              const nc = (nicheConfigQuery.data?.niche_configs ?? [])[0]
+                              const isLoading = nicheConfigQuery.isLoading
+                              const hasTopics = nc && nc.topic_categories && nc.topic_categories.length > 0
+                              return (
+                                <div className="pt-2 border-t border-gray-200">
+                                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                    <Brain className="w-3 h-3" /> Content DNA
+                                    {nc && !hasTopics && (
+                                      <span className="ml-auto flex items-center gap-1 text-amber-600 font-semibold">
+                                        <AlertCircle className="w-3 h-3" /> No topic categories — Toby blocked
+                                      </span>
+                                    )}
+                                    {!nc && !isLoading && (
+                                      <span className="ml-auto flex items-center gap-1 text-red-600 font-semibold">
+                                        <AlertCircle className="w-3 h-3" /> No Content DNA row — Toby blocked
+                                      </span>
+                                    )}
+                                  </p>
+                                  {isLoading ? (
+                                    <div className="flex justify-center py-3"><Spinner size={16} className="text-gray-400" /></div>
+                                  ) : !nc ? (
+                                    <p className="text-xs text-red-600 px-3 py-2 bg-red-50 rounded-lg border border-red-200">
+                                      No Content DNA record found. The user needs to open their Brands page to initialise it.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-2 text-xs">
+                                      {/* Identity */}
+                                      <div className="grid grid-cols-2 gap-1.5">
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-0.5">Niche</p>
+                                          <p className="font-medium text-gray-800">{nc.niche_name || '—'}</p>
+                                        </div>
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-0.5">Target Audience</p>
+                                          <p className="font-medium text-gray-800">{nc.target_audience || '—'}</p>
+                                        </div>
+                                      </div>
+
+                                      {/* Topic Categories — the critical field */}
+                                      <div className={`px-3 py-2 rounded-lg border ${hasTopics ? 'bg-white border-gray-200' : 'bg-amber-50 border-amber-300'}`}>
+                                        <p className={`mb-1 font-semibold ${hasTopics ? 'text-gray-400' : 'text-amber-700'}`}>
+                                          Topic Categories ({nc.topic_categories?.length ?? 0})
+                                          {!hasTopics && ' — required for Toby'}
+                                        </p>
+                                        {hasTopics
+                                          ? <div className="flex flex-wrap gap-1">{nc.topic_categories.map((t, i) => <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-medium">{t}</span>)}</div>
+                                          : <p className="text-amber-700 text-[10px]">Empty — user must add at least one topic category in their Content DNA settings.</p>
+                                        }
+                                      </div>
+
+                                      {/* Content Tone */}
+                                      {nc.content_tone && nc.content_tone.length > 0 && (
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-1">Tone</p>
+                                          <div className="flex flex-wrap gap-1">{nc.content_tone.map((t, i) => <span key={i} className="px-2 py-0.5 bg-violet-50 text-violet-700 rounded-full text-[10px]">{t}</span>)}</div>
+                                        </div>
+                                      )}
+
+                                      {/* Topic Keywords */}
+                                      {nc.topic_keywords && nc.topic_keywords.length > 0 && (
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-1">Keywords ({nc.topic_keywords.length})</p>
+                                          <div className="flex flex-wrap gap-1">{nc.topic_keywords.slice(0, 20).map((k, i) => <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[10px]">{k}</span>)}{nc.topic_keywords.length > 20 && <span className="text-gray-400 text-[10px]">+{nc.topic_keywords.length - 20} more</span>}</div>
+                                        </div>
+                                      )}
+
+                                      {/* Discovery */}
+                                      <div className="grid grid-cols-2 gap-1.5">
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-1">Competitor Accounts ({nc.competitor_accounts?.length ?? 0})</p>
+                                          {(nc.competitor_accounts?.length ?? 0) > 0
+                                            ? <div className="flex flex-wrap gap-1">{nc.competitor_accounts.map((a, i) => <span key={i} className="px-1.5 py-0.5 bg-pink-50 text-pink-700 rounded text-[10px] font-mono">{a}</span>)}</div>
+                                            : <p className="text-gray-400">—</p>
+                                          }
+                                        </div>
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-1">Discovery Hashtags ({nc.discovery_hashtags?.length ?? 0})</p>
+                                          {(nc.discovery_hashtags?.length ?? 0) > 0
+                                            ? <div className="flex flex-wrap gap-1">{nc.discovery_hashtags.map((h, i) => <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-mono">{h}</span>)}</div>
+                                            : <p className="text-gray-400">—</p>
+                                          }
+                                        </div>
+                                      </div>
+
+                                      {/* CTAs & Hashtags counts */}
+                                      <div className="grid grid-cols-3 gap-1.5">
+                                        {[
+                                          { label: 'CTAs', value: nc.cta_options?.length ?? 0 },
+                                          { label: 'Hashtags', value: nc.hashtags?.length ?? 0 },
+                                          { label: 'Hook Themes', value: nc.hook_themes?.length ?? 0 },
+                                        ].map(({ label, value }) => (
+                                          <div key={label} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-center">
+                                            <p className="text-lg font-bold text-gray-900">{value}</p>
+                                            <p className="text-gray-400 text-[10px]">{label}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+
+                                      {/* Text fields */}
+                                      {nc.content_brief && (
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-1">Content Brief</p>
+                                          <p className="text-gray-700 whitespace-pre-wrap">{nc.content_brief}</p>
+                                        </div>
+                                      )}
+                                      {nc.brand_personality && (
+                                        <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                                          <p className="text-gray-400 mb-1">Brand Personality</p>
+                                          <p className="text-gray-700 whitespace-pre-wrap">{nc.brand_personality}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
                         )}
                       </div>

@@ -108,6 +108,71 @@ async def update_user_role(
     return {"success": True, "user_id": target_user_id, "role": request.role}
 
 
+# ─── Get User NicheConfig (Content DNA) ──────────────────────────────────────
+
+@router.get("/api/admin/users/{target_user_id}/niche-config", summary="Get Content DNA for a user (super admin only)")
+def get_user_niche_config(
+    target_user_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    _require_super_admin(user)
+
+    from app.models.niche_config import NicheConfig
+    configs = db.query(NicheConfig).filter(NicheConfig.user_id == target_user_id).all()
+
+    def _serialize(c: NicheConfig) -> dict:
+        return {
+            "id": c.id,
+            # Core Identity
+            "niche_name": c.niche_name,
+            "niche_description": c.niche_description,
+            "content_brief": c.content_brief,
+            "target_audience": c.target_audience,
+            "audience_description": c.audience_description,
+            # Tone
+            "content_tone": c.content_tone or [],
+            "tone_avoid": c.tone_avoid or [],
+            # Topics
+            "topic_categories": c.topic_categories or [],
+            "topic_keywords": c.topic_keywords or [],
+            "topic_avoid": c.topic_avoid or [],
+            # Philosophy
+            "content_philosophy": c.content_philosophy,
+            "hook_themes": c.hook_themes or [],
+            # Brand personality
+            "brand_personality": c.brand_personality,
+            "brand_focus_areas": c.brand_focus_areas or [],
+            "parent_brand_name": c.parent_brand_name,
+            # Discovery
+            "competitor_accounts": c.competitor_accounts or [],
+            "discovery_hashtags": c.discovery_hashtags or [],
+            # CTAs & hashtags
+            "cta_options": c.cta_options or [],
+            "hashtags": c.hashtags or [],
+            "carousel_cta_options": c.carousel_cta_options or [],
+            "carousel_cta_topic": c.carousel_cta_topic,
+            # Visual
+            "image_style_description": c.image_style_description,
+            "image_palette_keywords": c.image_palette_keywords or [],
+            # Citation
+            "citation_style": c.citation_style,
+            "citation_source_types": c.citation_source_types or [],
+            # Carousel overlays
+            "carousel_cover_overlay_opacity": c.carousel_cover_overlay_opacity,
+            "carousel_content_overlay_opacity": c.carousel_content_overlay_opacity,
+            # Caption sections
+            "follow_section_text": c.follow_section_text,
+            "save_section_text": c.save_section_text,
+            "disclaimer_text": c.disclaimer_text,
+            # Timestamps
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+        }
+
+    return {"niche_configs": [_serialize(c) for c in configs]}
+
+
 # ─── Get User Brands ──────────────────────────────────────────────────────────
 
 @router.get("/api/admin/users/{target_user_id}/brands", summary="Get brands for a user (super admin only)")

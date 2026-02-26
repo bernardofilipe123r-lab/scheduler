@@ -422,6 +422,37 @@ class DatabaseSchedulerService:
                 # Sync status back to generation_jobs.brand_outputs
                 metadata = scheduled_reel.extra_data or {}
                 self._sync_brand_output_status(db, metadata, "failed")
+
+                # Log failed publish events so users can diagnose what happened.
+                try:
+                    from app.models.toby import TobyActivityLog
+
+                    brand = metadata.get("brand")
+                    variant = metadata.get("variant")
+                    content_kind = "post" if variant == "post" else "reel"
+                    description = (
+                        f"Failed to publish {content_kind}"
+                        f"{f' for {brand}' if brand else ''}: {error}"
+                    )
+
+                    db.add(TobyActivityLog(
+                        user_id=scheduled_reel.user_id,
+                        action_type="publish_failed",
+                        description=description,
+                        level="error",
+                        action_metadata={
+                            "schedule_id": scheduled_reel.schedule_id,
+                            "reel_id": scheduled_reel.reel_id,
+                            "brand": brand,
+                            "content_type": content_kind,
+                            "status": "failed",
+                            "created_by": scheduled_reel.created_by or "user",
+                            "error": error,
+                        },
+                        created_at=datetime.now(timezone.utc),
+                    ))
+                except Exception as log_err:
+                    print(f"⚠️ Failed to write publish failure activity log for {schedule_id}: {log_err}")
                 
                 db.commit()
     

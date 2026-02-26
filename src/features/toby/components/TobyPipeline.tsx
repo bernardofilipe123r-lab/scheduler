@@ -53,7 +53,7 @@ function timeAgo(dateStr: string): string {
 const MEANINGFUL = new Set([
   'content_generated', 'toby_enabled', 'toby_disabled', 'toby_reset',
   'error', 'phase_transition', 'experiment_created', 'experiment_completed',
-  'auto_retry', 'discovery_seeded', 'publish_success', 'publish_partial',
+  'auto_retry', 'discovery_seeded', 'publish_success', 'publish_partial', 'publish_failed',
 ])
 
 function isMeaningful(item: TobyActivityItem): boolean {
@@ -79,6 +79,7 @@ const DISPLAY: Record<string, { icon: typeof Zap; color: string }> = {
   discovery_scan: { icon: Search, color: 'text-amber-500' },
   publish_success: { icon: CalendarCheck, color: 'text-emerald-500' },
   publish_partial: { icon: AlertTriangle, color: 'text-amber-500' },
+  publish_failed: { icon: AlertTriangle, color: 'text-red-500' },
 }
 
 function humanize(item: TobyActivityItem): string {
@@ -121,6 +122,13 @@ function humanize(item: TobyActivityItem): string {
         return `Partially published (${ok?.length || 0} ok, ${failed?.length || 0} failed)`
       }
       return item.description || 'Partial publish: some platforms failed'
+    }
+    case 'publish_failed': {
+      const contentType = meta?.content_type as string | undefined
+      const error = meta?.error as string | undefined
+      return error
+        ? `Failed to publish ${contentType || 'content'}: ${error}`
+        : (item.description || 'Failed to publish content')
     }
     case 'toby_enabled': return 'Toby was enabled'
     case 'toby_disabled': return 'Toby was disabled'
