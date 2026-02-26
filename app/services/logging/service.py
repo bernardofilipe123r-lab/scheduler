@@ -294,13 +294,17 @@ class LoggingService:
                     return
                 
                 try:
+                    details: dict = {'capture_type': 'print'}
+                    current_user_id = get_user_id()
+                    if current_user_id:
+                        details['user_id'] = current_user_id
                     entry = {
                         'timestamp': datetime.utcnow(),
                         'level': self.level,
                         'category': self.category,
                         'source': 'stdout' if self.level == 'INFO' else 'stderr',
                         'message': stripped,
-                        'details': {'capture_type': 'print'},
+                        'details': details,
                         'request_id': get_request_id(),
                         'deployment_id': DEPLOYMENT_ID,
                     }

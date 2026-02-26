@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles } from '../api/use-niche-config'
@@ -116,7 +116,12 @@ export interface NicheConfigFormProps {
   onYtValidChange?: (valid: boolean) => void
 }
 
-export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }: NicheConfigFormProps = {}) {
+export interface NicheConfigFormHandle {
+  /** Flush any pending auto-save immediately. Safe to call even if nothing is dirty. */
+  saveNow: () => Promise<void>
+}
+
+export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigFormProps>(function NicheConfigForm({ section, onGeneratingChange, onYtValidChange } = {}, ref) {
   const { data, isLoading } = useNicheConfig()
   const { data: brandsData } = useBrands()
   const updateMutation = useUpdateNicheConfig()
@@ -307,7 +312,7 @@ export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }
     }
   }
 
-  // Flush any pending auto-save immediately (used before AI generation)
+  // Flush any pending auto-save immediately (used before AI generation and on step advance)
   const flushSave = useCallback(async () => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     if (dirty) {
@@ -316,6 +321,9 @@ export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty])
+
+  // Expose saveNow so parent (e.g. Onboarding) can flush before unmounting this form
+  useImperativeHandle(ref, () => ({ saveNow: flushSave }), [flushSave])
 
   const handleAiUnderstanding = useCallback(async () => {
     // Flush unsaved changes before AI reads from DB
@@ -1094,4 +1102,4 @@ export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }
       </div>}
     </div>
   )
-}
+})

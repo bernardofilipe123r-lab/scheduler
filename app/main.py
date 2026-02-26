@@ -30,7 +30,7 @@ from app.api.system.legal_routes import router as legal_router
 from app.api.auth.ig_oauth_routes import router as ig_oauth_router
 from app.api.auth.fb_oauth_routes import router as fb_oauth_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
-from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
+from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set_user_id as set_logging_user_id, clear_user_id as clear_logging_user_id
 from app.services.logging.middleware import RequestLoggingMiddleware
 from app.db_connection import init_db
 
@@ -429,7 +429,13 @@ async def startup_event():
                         reel_id = schedule['reel_id']
                         caption = schedule.get('caption', 'CHANGE ME')
                         metadata = schedule.get('metadata', {})
-                        
+
+                        # Set user context so all logs (including print captures)
+                        # are attributed to the correct user in the log viewer.
+                        _sched_user_id = schedule.get('user_id', '')
+                        if _sched_user_id:
+                            set_logging_user_id(_sched_user_id)
+
                         print(f"\n   📋 [PUBLISH] Processing schedule: {schedule_id}", flush=True)
                         print(f"   📋 [PUBLISH] Metadata keys: {list(metadata.keys())}", flush=True)
                         
@@ -677,6 +683,10 @@ async def startup_event():
                         error_msg = f"Publishing failed: {str(e)}"
                         scheduler_service.mark_as_failed(schedule_id, error_msg)
                         print(f"   ❌ Failed to publish {reel_id}: {error_msg}")
+                    finally:
+                        # Clear user context after each schedule so it doesn't
+                        # bleed into the next iteration or unrelated log entries.
+                        clear_logging_user_id()
                         
         except Exception as e:
             print(f"❌ Auto-publish check failed: {str(e)}")

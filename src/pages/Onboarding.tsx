@@ -7,7 +7,7 @@
  * Step 5: Carousel Posts
  * Step 6: Connect Platforms (Meta credentials)
  */
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   ArrowRight,
   ArrowLeft,
@@ -44,7 +44,7 @@ import {
   generateModeColors,
   adjustColorBrightness,
 } from '@/features/brands/constants'
-import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
+import { NicheConfigForm, type NicheConfigFormHandle } from '@/features/brands/components/NicheConfigForm'
 import { supabase } from '@/shared/api/supabase'
 import { connectYouTube, connectInstagram, fetchBrandConnections } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
@@ -195,6 +195,7 @@ export function OnboardingPage() {
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [ytSectionValid, setYtSectionValid] = useState(false)
+  const nicheFormRef = useRef<NicheConfigFormHandle>(null)
 
   // Check connection status when entering step 6 or returning from OAuth
   useEffect(() => {
@@ -816,7 +817,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm section="general" />
+                <NicheConfigForm ref={nicheFormRef} section="general" />
               </motion.div>
             )}
 
@@ -836,7 +837,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} />
+                <NicheConfigForm ref={nicheFormRef} section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} />
               </motion.div>
             )}
 
@@ -856,7 +857,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm section="posts" onGeneratingChange={setAiGenerating} />
+                <NicheConfigForm ref={nicheFormRef} section="posts" onGeneratingChange={setAiGenerating} />
               </motion.div>
             )}
 
@@ -979,8 +980,8 @@ export function OnboardingPage() {
                     </p>
                   )}
 
-                  {/* ── Advanced: Manual Credentials ── */}
-                  <div className="pt-2">
+                  {/* ── Advanced: Manual Credentials — hidden once Instagram is connected ── */}
+                  {!igConnected && <div className="pt-2">
                     <button
                       onClick={() => setShowManualSection(!showManualSection)}
                       className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mx-auto"
@@ -1061,7 +1062,7 @@ export function OnboardingPage() {
                         )}
                       </motion.div>
                     )}
-                  </div>
+                  </div>}
                 </div>
               </motion.div>
             )}
@@ -1127,7 +1128,11 @@ export function OnboardingPage() {
 
           {step >= 3 && step <= 5 && (
             <button
-              onClick={() => setStep(step + 1)}
+              onClick={async () => {
+                // Flush any pending auto-save before unmounting the form
+                await nicheFormRef.current?.saveNow()
+                setStep(step + 1)
+              }}
               disabled={aiGenerating || (step === 4 && !ytSectionValid)}
               className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
             >
