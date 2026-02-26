@@ -128,6 +128,7 @@ export function ScheduledPage() {
   const [isCleaningReels, setIsCleaningReels] = useState(false)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   // Post preview: brand logos + layout settings (mirrors PostJobDetail)
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
@@ -448,33 +449,48 @@ export function ScheduledPage() {
   const failedCount = posts.filter(p => p.status === 'failed').length
   const partialCount = posts.filter(p => p.status === 'partial').length
   const disconnectedBrands = dynamicBrands.filter(b => b.active && !b.has_instagram)
+  const hasRealFailures = failedCount > 0
   
   return (
     <div className="space-y-6">
-      {/* Failure warning banner */}
-      {(failedCount > 0 || partialCount > 0) && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+      {/* Failure/warning banner */}
+      {(failedCount > 0 || partialCount > 0) && !bannerDismissed && (
+        <div className={clsx(
+          'rounded-lg p-4 flex items-start gap-3',
+          hasRealFailures ? 'bg-red-50 border border-red-200' : 'bg-amber-50 border border-amber-200'
+        )}>
+          {hasRealFailures 
+            ? <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            : <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          }
           <div className="flex-1">
-            <p className="text-sm font-semibold text-red-800">Publishing failures detected</p>
-            <p className="text-sm text-red-700 mt-1">
+            <p className={clsx('text-sm font-semibold', hasRealFailures ? 'text-red-800' : 'text-amber-800')}>
+              {hasRealFailures ? 'Publishing failures detected' : 'Publishing warnings'}
+            </p>
+            <p className={clsx('text-sm mt-1', hasRealFailures ? 'text-red-700' : 'text-amber-700')}>
               {failedCount > 0 && `${failedCount} post${failedCount !== 1 ? 's' : ''} completely failed`}
               {failedCount > 0 && partialCount > 0 && ', '}
               {partialCount > 0 && `${partialCount} post${partialCount !== 1 ? 's' : ''} partially failed`}
               . Check the posts marked with ❌ or ⚠️ below — click to see details and retry.
             </p>
             {disconnectedBrands.length > 0 && (
-              <p className="text-sm text-red-700 mt-1">
+              <p className={clsx('text-sm mt-1', hasRealFailures ? 'text-red-700' : 'text-amber-700')}>
                 ⚠️ <strong>{disconnectedBrands.map(b => b.label).join(', ')}</strong> {disconnectedBrands.length === 1 ? 'has' : 'have'} no Instagram connected.
                 {' '}<a href="/brands?tab=connections" className="underline font-medium">Reconnect in Brands → Connections</a>
               </p>
             )}
           </div>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className={clsx('flex-shrink-0 p-1 rounded hover:bg-black/5', hasRealFailures ? 'text-red-400 hover:text-red-600' : 'text-amber-400 hover:text-amber-600')}
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
       {/* Disconnected brands warning (when no failures yet) */}
-      {failedCount === 0 && partialCount === 0 && disconnectedBrands.length > 0 && (
+      {failedCount === 0 && partialCount === 0 && disconnectedBrands.length > 0 && !bannerDismissed && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
@@ -485,6 +501,12 @@ export function ScheduledPage() {
               {' '}<a href="/brands?tab=connections" className="underline font-medium">Reconnect in Brands → Connections</a>
             </p>
           </div>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="flex-shrink-0 p-1 rounded text-amber-400 hover:text-amber-600 hover:bg-black/5"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -1528,11 +1550,13 @@ export function ScheduledPage() {
                   {selectedPost.status === 'partial' ? '⚠️ Publish Status (Partial Failure)' : 'Publish Details'}
                 </p>
                 <div className="space-y-2">
-                  {Object.entries(selectedPost.metadata.publish_results as Record<string, {success: boolean; post_id?: string; account_id?: string; brand_used?: string; error?: string}>).map(([platform, result]) => (
+                  {Object.entries(selectedPost.metadata.publish_results as Record<string, {success: boolean; post_id?: string; account_id?: string; brand_used?: string; error?: string}>).map(([platform, result]) => {
+                    const isNotConfigured = !result.success && (result.error || '').toLowerCase().includes('not configured')
+                    return (
                     <div 
                       key={platform}
                       className={`flex items-center justify-between p-3 rounded-lg border ${
-                        result.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                        result.success ? 'bg-green-50 border-green-200' : isNotConfigured ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1540,12 +1564,16 @@ export function ScheduledPage() {
                           <span className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
                             <Check className="w-3 h-3 text-white" />
                           </span>
+                        ) : isNotConfigured ? (
+                          <span className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+                            <AlertCircle className="w-3 h-3 text-white" />
+                          </span>
                         ) : (
                           <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
                             <AlertTriangle className="w-3 h-3 text-white" />
                           </span>
                         )}
-                        <span className={`font-medium capitalize ${result.success ? 'text-green-700' : 'text-red-700'}`}>
+                        <span className={`font-medium capitalize ${result.success ? 'text-green-700' : isNotConfigured ? 'text-amber-700' : 'text-red-700'}`}>
                           {platform}
                         </span>
                         {result.success && (
@@ -1562,6 +1590,10 @@ export function ScheduledPage() {
                           <span className="text-green-600">
                             ✓ Posted (ID: {result.post_id?.slice(-8)}...)
                           </span>
+                        ) : isNotConfigured ? (
+                          <span className="text-amber-600 block text-right">
+                            ⚠ Not connected
+                          </span>
                         ) : (
                           <span className="text-red-600 block text-right">
                             ✗ {result.error || 'Failed'}
@@ -1574,7 +1606,7 @@ export function ScheduledPage() {
                         )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
                 
                 {/* Retry hint for partial failures */}

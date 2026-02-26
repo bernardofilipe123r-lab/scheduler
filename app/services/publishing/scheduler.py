@@ -317,8 +317,12 @@ class DatabaseSchedulerService:
                                 has_successes = True
                                 success_platforms.append(platform)
                             else:
-                                has_failures = True
-                                failed_platforms.append(platform)
+                                error_msg = data.get('error', '')
+                                # "Not configured" is a skip, not a real failure
+                                is_not_configured = 'not configured' in error_msg.lower()
+                                if not is_not_configured:
+                                    has_failures = True
+                                    failed_platforms.append(platform)
                 
                 # Set status based on results
                 if has_failures and has_successes:
@@ -889,9 +893,23 @@ class DatabaseSchedulerService:
         print(f"🎬 Video URL: {video_url}")
         print(f"🖼️  Thumbnail URL: {thumbnail_url}")
         
+        # Pre-filter: skip YouTube if credentials don't exist (not an error)
+        effective_platforms = list(platforms)
+        if "youtube" in effective_platforms:
+            from app.services.youtube.publisher import get_youtube_credentials_for_brand
+            try:
+                with get_db_session() as db:
+                    yt_creds = get_youtube_credentials_for_brand(brand_name, db) if brand_name else None
+                if not yt_creds:
+                    effective_platforms.remove("youtube")
+                    print(f"📺 YouTube not configured for {brand_name or 'unknown'} — skipping (not an error)")
+            except Exception:
+                effective_platforms.remove("youtube")
+                print(f"📺 YouTube credential check failed — skipping")
+        
         results = {}
         
-        if "instagram" in platforms:
+        if "instagram" in effective_platforms:
             print("📸 Publishing to Instagram...")
             results["instagram"] = publisher.publish_instagram_reel(
                 video_url=video_url,
@@ -899,7 +917,7 @@ class DatabaseSchedulerService:
                 thumbnail_url=thumbnail_url
             )
         
-        if "facebook" in platforms:
+        if "facebook" in effective_platforms:
             print("📘 Publishing to Facebook...")
             results["facebook"] = publisher.publish_facebook_reel(
                 video_url=video_url,
@@ -907,7 +925,7 @@ class DatabaseSchedulerService:
                 thumbnail_url=thumbnail_url
             )
         
-        if "youtube" in platforms:
+        if "youtube" in effective_platforms:
             print("📺 Publishing to YouTube...", flush=True)
             
             # Get yt_title from metadata if available
