@@ -91,8 +91,10 @@ class SocialPublisher:
         if brand_config:
             self.ig_business_account_id = brand_config.instagram_business_account_id
             self.fb_page_id = brand_config.facebook_page_id
-            self._system_user_token = brand_config.meta_access_token
+            # Instagram token (from Instagram Business Login via graph.instagram.com)
             self.ig_access_token = brand_config.meta_access_token
+            # Facebook page token (from Facebook Login — a long-lived page token)
+            self._system_user_token = brand_config.facebook_access_token or brand_config.meta_access_token
         else:
             self._system_user_token = None
             self.ig_access_token = None
@@ -105,6 +107,11 @@ class SocialPublisher:
         self.ig_graph_base = "https://graph.instagram.com"
         self.fb_graph_base = "https://graph.facebook.com"
         self._page_access_token_cache = {}  # Cache for page access tokens
+        
+        # If we already have a dedicated Facebook page token, pre-cache it
+        # so _get_page_access_token() skips the network round-trip.
+        if brand_config and brand_config.facebook_access_token and brand_config.facebook_page_id:
+            self._page_access_token_cache[brand_config.facebook_page_id] = brand_config.facebook_access_token
         
         # Store brand name for debugging
         self.brand_name = brand_config.name if brand_config else "default"
@@ -130,6 +137,47 @@ class SocialPublisher:
             "facebook_page_id": self.fb_page_id,
             "has_token": bool(self.ig_access_token)
         }
+
+    def _try_refresh_ig_token(self) -> bool:
+        """
+        Attempt to refresh the Instagram long-lived token and persist
+        the new token back to the DB.  Returns True on success.
+        """
+        if not self.ig_access_token:
+            return False
+
+        try:
+            from app.services.publishing.ig_token_service import InstagramTokenService
+            svc = InstagramTokenService()
+            result = svc.refresh_long_lived_token(self.ig_access_token)
+            new_token = result.get("access_token")
+            if not new_token:
+                print("   ⚠️ Token refresh returned no new token")
+                return False
+
+            # Update in-memory token so the current publish call succeeds
+            self.ig_access_token = new_token
+
+            # Persist to DB
+            from app.db_connection import SessionLocal
+            from app.models.brands import Brand
+            db = SessionLocal()
+            try:
+                brand = db.query(Brand).filter(Brand.id == self.brand_name).first()
+                if brand:
+                    brand.instagram_access_token = new_token
+                    brand.meta_access_token = new_token
+                    db.commit()
+                    print(f"   🔑 Refreshed & stored new IG token for {self.brand_name}")
+                else:
+                    print(f"   ⚠️ Could not find brand {self.brand_name} to persist token")
+            finally:
+                db.close()
+
+            return True
+        except Exception as e:
+            print(f"   ❌ Token refresh failed: {e}")
+            return False
     
     def _get_page_access_token(self, page_id: str) -> Optional[str]:
         """
@@ -272,14 +320,44 @@ class SocialPublisher:
                 error_code = container_data["error"].get("code", "")
                 error_subcode = container_data["error"].get("error_subcode", "")
                 print(f"   ❌ Container error: {error_msg} (code: {error_code}, subcode: {error_subcode})")
-                return {
-                    "success": False,
-                    "error": error_msg,
-                    "platform": "instagram",
-                    "step": "create_container",
-                    "error_code": error_code,
-                    "error_subcode": error_subcode
-                }
+
+                # If token is expired/invalid, try to refresh it once
+                if "access token" in error_msg.lower() or error_code in (190, "190"):
+                    refreshed = self._try_refresh_ig_token()
+                    if refreshed:
+                        container_payload["access_token"] = self.ig_access_token
+                        print(f"   🔄 Retrying image post with refreshed token...")
+                        retry_resp = requests.post(container_url, data=container_payload, timeout=30)
+                        container_data = retry_resp.json()
+                        if "error" not in container_data:
+                            print(f"   ✅ Retry succeeded after token refresh")
+                        else:
+                            retry_err = container_data["error"].get("message", "Unknown")
+                            return {
+                                "success": False,
+                                "error": f"Token refresh succeeded but retry failed: {retry_err}",
+                                "platform": "instagram",
+                                "step": "create_container",
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": error_msg,
+                            "platform": "instagram",
+                            "step": "create_container",
+                            "error_code": error_code,
+                            "error_subcode": error_subcode,
+                            "hint": "Instagram token expired. Please reconnect Instagram in Brands > Connections."
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "platform": "instagram",
+                        "step": "create_container",
+                        "error_code": error_code,
+                        "error_subcode": error_subcode
+                    }
             
             creation_id = container_data.get("id")
             if not creation_id:
@@ -561,13 +639,50 @@ class SocialPublisher:
 
                 if "error" in item_data:
                     error_msg = item_data["error"].get("message", "Unknown error")
+                    error_code = item_data["error"].get("code", "")
                     print(f"   ❌ Carousel item {idx + 1} failed: {error_msg}")
-                    return {
-                        "success": False,
-                        "error": f"Carousel item {idx + 1} failed: {error_msg}",
-                        "platform": "instagram",
-                        "step": "create_item",
-                    }
+
+                    # On first item, try token refresh if it looks like a token error
+                    if idx == 0 and ("access token" in error_msg.lower() or error_code in (190, "190")):
+                        refreshed = self._try_refresh_ig_token()
+                        if refreshed:
+                            print(f"   🔄 Retrying carousel item 1 with refreshed token...")
+                            retry_resp = requests.post(
+                                container_url,
+                                data={
+                                    "image_url": url,
+                                    "is_carousel_item": "true",
+                                    "access_token": self.ig_access_token,
+                                },
+                                timeout=30,
+                            )
+                            item_data = retry_resp.json()
+                            if "error" not in item_data:
+                                print(f"   ✅ Retry succeeded after token refresh")
+                            else:
+                                retry_err = item_data["error"].get("message", "Unknown")
+                                return {
+                                    "success": False,
+                                    "error": f"Token refresh succeeded but retry failed: {retry_err}",
+                                    "platform": "instagram",
+                                    "step": "create_item",
+                                    "hint": "Instagram token expired. Please reconnect Instagram in Brands > Connections."
+                                }
+                        else:
+                            return {
+                                "success": False,
+                                "error": f"Carousel item {idx + 1} failed: {error_msg}",
+                                "platform": "instagram",
+                                "step": "create_item",
+                                "hint": "Instagram token expired. Please reconnect Instagram in Brands > Connections."
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Carousel item {idx + 1} failed: {error_msg}",
+                            "platform": "instagram",
+                            "step": "create_item",
+                        }
 
                 item_id = item_data.get("id")
                 if not item_id:
@@ -935,14 +1050,44 @@ class SocialPublisher:
                 error_code = container_data["error"].get("code", "")
                 error_subcode = container_data["error"].get("error_subcode", "")
                 print(f"   ❌ Container error: {error_msg} (code: {error_code}, subcode: {error_subcode})")
-                return {
-                    "success": False,
-                    "error": error_msg,
-                    "platform": "instagram",
-                    "step": "create_container",
-                    "error_code": error_code,
-                    "error_subcode": error_subcode
-                }
+
+                # If token is expired/invalid, try to refresh it once
+                if "access token" in error_msg.lower() or error_code in (190, "190"):
+                    refreshed = self._try_refresh_ig_token()
+                    if refreshed:
+                        container_payload["access_token"] = self.ig_access_token
+                        print(f"   🔄 Retrying with refreshed token...")
+                        retry_resp = requests.post(container_url, data=container_payload, timeout=30)
+                        container_data = retry_resp.json()
+                        if "error" not in container_data:
+                            print(f"   ✅ Retry succeeded after token refresh")
+                        else:
+                            retry_err = container_data["error"].get("message", "Unknown")
+                            return {
+                                "success": False,
+                                "error": f"Token refresh succeeded but retry failed: {retry_err}",
+                                "platform": "instagram",
+                                "step": "create_container",
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": error_msg,
+                            "platform": "instagram",
+                            "step": "create_container",
+                            "error_code": error_code,
+                            "error_subcode": error_subcode,
+                            "hint": "Instagram token expired. Please reconnect Instagram in Brands > Connections."
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "platform": "instagram",
+                        "step": "create_container",
+                        "error_code": error_code,
+                        "error_subcode": error_subcode
+                    }
             
             creation_id = container_data.get("id")
             upload_uri = container_data.get("uri")

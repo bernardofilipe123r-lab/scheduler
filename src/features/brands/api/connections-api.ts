@@ -28,6 +28,7 @@ export interface BrandConnectionsResponse {
   brands: BrandConnectionStatus[]
   oauth_configured: {
     meta: boolean
+    facebook: boolean
     youtube: boolean
   }
 }
@@ -92,6 +93,47 @@ export async function connectInstagram(brandId: string, returnTo?: string): Prom
  */
 export async function disconnectInstagram(brandId: string): Promise<{ status: string }> {
   return post<{ status: string }>('/api/auth/instagram/disconnect', { brand_id: brandId })
+}
+
+/**
+ * Start Facebook OAuth flow for a brand (authenticated).
+ * Returns the Facebook authorization URL to redirect to.
+ */
+export async function connectFacebook(brandId: string, returnTo?: string): Promise<string> {
+  const params = new URLSearchParams({ brand_id: brandId })
+  if (returnTo) params.set('return_to', returnTo)
+  const data = await get<{ auth_url: string }>(`/api/auth/facebook/connect?${params}`)
+  return data.auth_url
+}
+
+/**
+ * Disconnect Facebook for a brand
+ */
+export async function disconnectFacebook(brandId: string): Promise<{ status: string }> {
+  return post<{ status: string }>('/api/auth/facebook/disconnect', { brand_id: brandId })
+}
+
+/**
+ * Fetch the list of Facebook Pages available after OAuth, before page selection.
+ */
+export interface FacebookPage {
+  id: string
+  name: string
+  category: string
+  fan_count: number | null
+  picture: string | null
+}
+
+export async function fetchFacebookPages(brandId: string): Promise<FacebookPage[]> {
+  const data = await get<{ pages: FacebookPage[] }>(`/api/auth/facebook/pages?brand_id=${encodeURIComponent(brandId)}`)
+  return data.pages
+}
+
+/**
+ * Select a Facebook Page to connect to a brand (after multi-page OAuth flow).
+ */
+export async function selectFacebookPage(brandId: string, pageId: string): Promise<{ status: string; page_name: string }> {
+  return post<{ status: string; page_name: string }>('/api/auth/facebook/select-page', { brand_id: brandId, page_id: pageId })
 }
 
 // Connection test types

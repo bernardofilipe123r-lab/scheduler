@@ -3,7 +3,7 @@ Main FastAPI application for the reels automation service.
 """
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +28,7 @@ from app.api.niche_config_routes import router as niche_config_router
 from app.api.toby.routes import router as toby_router
 from app.api.system.legal_routes import router as legal_router
 from app.api.auth.ig_oauth_routes import router as ig_oauth_router
+from app.api.auth.fb_oauth_routes import router as fb_oauth_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -102,6 +103,7 @@ app.include_router(health_router)  # Deep health check at /api/system/health-che
 app.include_router(toby_router)  # Toby autonomous agent endpoints at /api/toby/*
 app.include_router(legal_router)  # Privacy policy, data deletion (Meta App Review)
 app.include_router(ig_oauth_router)  # Instagram Business Login OAuth flow
+app.include_router(fb_oauth_router)  # Facebook Login OAuth flow
 
 
 @app.get("/health", tags=["system"])
@@ -789,6 +791,58 @@ async def startup_event():
     
     scheduler.add_job(cleanup_old_logs, 'interval', hours=24, id='log_cleanup')
     scheduler.add_job(cleanup_published_jobs, 'interval', hours=6, id='published_cleanup')
+
+    # ── Auto-refresh Instagram tokens (every 12 hours) ──────
+    def refresh_instagram_tokens():
+        """
+        Proactively refresh all Instagram long-lived tokens.
+        IG long-lived tokens last 60 days but can be refreshed any time
+        while still valid.  Running every 12 hours keeps them perpetually fresh.
+        """
+        from app.db_connection import SessionLocal
+        from app.models.brands import Brand
+        from app.services.publishing.ig_token_service import InstagramTokenService
+
+        db = SessionLocal()
+        try:
+            brands = db.query(Brand).filter(
+                Brand.active.is_(True),
+                Brand.instagram_access_token.isnot(None),
+            ).all()
+
+            if not brands:
+                return
+
+            token_service = InstagramTokenService()
+            refreshed = 0
+            failed = 0
+
+            for brand in brands:
+                try:
+                    result = token_service.refresh_long_lived_token(brand.instagram_access_token)
+                    new_token = result.get("access_token")
+                    if new_token:
+                        brand.instagram_access_token = new_token
+                        brand.meta_access_token = new_token
+                        refreshed += 1
+                except Exception as e:
+                    failed += 1
+                    print(f"⚠️ Token refresh failed for {brand.id}: {e}", flush=True)
+
+            if refreshed > 0:
+                db.commit()
+            print(f"🔑 IG token refresh: {refreshed} refreshed, {failed} failed", flush=True)
+        except Exception as e:
+            db.rollback()
+            print(f"❌ IG token refresh job failed: {e}", flush=True)
+        finally:
+            db.close()
+
+    scheduler.add_job(refresh_instagram_tokens, 'interval', hours=12, id='ig_token_refresh')
+    # Also run once on startup (after brief delay so DB is ready)
+    scheduler.add_job(refresh_instagram_tokens, 'date',
+                      run_date=datetime.now() + timedelta(seconds=30),
+                      id='ig_token_refresh_startup')
     
     scheduler.start()
     
@@ -796,6 +850,7 @@ async def startup_event():
     print("✅ Analytics auto-refresh scheduled (every 6 hours)", flush=True)
     print("✅ Log cleanup scheduled (every 24 hours, 7-day retention)", flush=True)
     print("✅ Published content cleanup scheduled (every 6 hours, 1-day retention)", flush=True)
+    print("✅ Instagram token auto-refresh scheduled (every 12 hours)", flush=True)
     
     # Store scheduler for shutdown
     app.state.scheduler = scheduler

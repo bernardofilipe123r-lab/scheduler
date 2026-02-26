@@ -192,6 +192,7 @@ class BrandResolver:
             instagram_business_account_id=brand.instagram_business_account_id,
             facebook_page_id=brand.facebook_page_id,
             meta_access_token=brand.meta_access_token,
+            facebook_access_token=brand.facebook_access_token,
         )
 
     # ── Convenience accessors ─────────────────────────────────

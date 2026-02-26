@@ -21,9 +21,13 @@ import {
   testYouTubeConnection,
   connectInstagram,
   disconnectInstagram,
+  connectFacebook,
+  disconnectFacebook,
+  selectFacebookPage,
   type BrandConnectionStatus,
   type PlatformConnection,
   type ConnectionTestResult,
+  type FacebookPage,
 } from '@/features/brands'
 import type { BrandName } from '@/shared/types'
 
@@ -60,10 +64,15 @@ interface ConnectionCardProps {
 export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardProps) {
   const [disconnectingYouTube, setDisconnectingYouTube] = useState(false)
   const [disconnectingInstagram, setDisconnectingInstagram] = useState(false)
+  const [disconnectingFacebook, setDisconnectingFacebook] = useState(false)
   const [connectingYouTube, setConnectingYouTube] = useState(false)
+  const [connectingFacebook, setConnectingFacebook] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
   const [testResult, setTestResult] = useState<{ meta?: ConnectionTestResult; youtube?: ConnectionTestResult }>({})
   const [testing, setTesting] = useState<{ meta: boolean; youtube: boolean }>({ meta: false, youtube: false })
+  const [fbPages, setFbPages] = useState<FacebookPage[]>([])
+  const [showPageSelector, setShowPageSelector] = useState(false)
+  const [selectingPage, setSelectingPage] = useState(false)
   const disconnectYouTube = useDisconnectYouTube()
 
   const handleTestMeta = async () => {
@@ -138,10 +147,49 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     }
   }
 
+  const handleFacebookConnect = async () => {
+    setConnectingFacebook(true)
+    try {
+      const authUrl = await connectFacebook(brand.brand)
+      window.location.href = authUrl
+    } catch (error) {
+      console.error('Failed to start Facebook connection:', error)
+      setConnectingFacebook(false)
+    }
+  }
+
+  const handleFacebookDisconnect = async () => {
+    setDisconnectingFacebook(true)
+    try {
+      await disconnectFacebook(brand.brand)
+      setConfirmDisconnect(null)
+      onRefresh()
+    } catch (error) {
+      console.error('Failed to disconnect Facebook:', error)
+    } finally {
+      setDisconnectingFacebook(false)
+    }
+  }
+
+  const handleFacebookSelectPage = async (pageId: string) => {
+    setSelectingPage(true)
+    try {
+      await selectFacebookPage(brand.brand, pageId)
+      setShowPageSelector(false)
+      setFbPages([])
+      onRefresh()
+    } catch (error) {
+      console.error('Failed to select Facebook page:', error)
+    } finally {
+      setSelectingPage(false)
+    }
+  }
+
   const renderPlatformRow = (platform: Platform, connection: PlatformConnection) => {
     const isYouTube = platform === 'youtube'
     const isInstagram = platform === 'instagram'
-    const isActionable = isYouTube || isInstagram
+    const isFacebook = platform === 'facebook'
+    const isActionable = isYouTube || isInstagram || isFacebook
     const isRevoked = connection.status === 'revoked'
     const hasError = connection.status === 'error'
 
@@ -178,11 +226,11 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500">Disconnect?</span>
                   <button
-                    onClick={isYouTube ? handleYouTubeDisconnect : isInstagram ? handleInstagramDisconnect : undefined}
-                    disabled={disconnectingYouTube || disconnectingInstagram || !isActionable}
+                    onClick={isYouTube ? handleYouTubeDisconnect : isInstagram ? handleInstagramDisconnect : isFacebook ? handleFacebookDisconnect : undefined}
+                    disabled={disconnectingYouTube || disconnectingInstagram || disconnectingFacebook || !isActionable}
                     className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
                   >
-                    {(disconnectingYouTube || disconnectingInstagram) ? '...' : 'Yes'}
+                    {(disconnectingYouTube || disconnectingInstagram || disconnectingFacebook) ? '...' : 'Yes'}
                   </button>
                   <button
                     onClick={() => setConfirmDisconnect(null)}
@@ -195,7 +243,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                 <div className="flex items-center gap-2">
                   {isRevoked ? (
                     <button
-                      onClick={isYouTube ? handleYouTubeConnect : isInstagram ? handleInstagramConnect : undefined}
+                      onClick={isYouTube ? handleYouTubeConnect : isInstagram ? handleInstagramConnect : isFacebook ? handleFacebookConnect : undefined}
                       className="px-3 py-1.5 rounded-lg text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-colors"
                     >
                       Reconnect
@@ -262,6 +310,25 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                       </button>
                     </>
                   )}
+
+                  {isFacebook && (
+                    <>
+                      <button
+                        onClick={handleFacebookConnect}
+                        className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                        title="Change page"
+                      >
+                        <RefreshCw className="w-4 h-4 text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDisconnect('facebook')}
+                        className="p-1.5 rounded hover:bg-red-100 transition-colors"
+                        title="Disconnect"
+                      >
+                        <Unlink className="w-4 h-4 text-gray-500 hover:text-red-500" />
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </>
@@ -288,6 +355,16 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                   className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
                 >
                   {connectingYouTube ? 'Connecting...' : 'Connect'}
+                </button>
+              )}
+
+              {isFacebook && (
+                <button
+                  onClick={handleFacebookConnect}
+                  disabled={connectingFacebook}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {connectingFacebook ? 'Connecting...' : 'Connect'}
                 </button>
               )}
             </div>
@@ -366,6 +443,42 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
           </span>
         )}
       </div>
+
+      {/* Facebook Page Selector Modal */}
+      {showPageSelector && fbPages.length > 0 && (
+        <div className="px-4 py-3 bg-blue-50 border-t border-blue-200">
+          <p className="text-sm font-medium text-blue-900 mb-2">Select a Facebook Page to connect:</p>
+          <div className="space-y-2">
+            {fbPages.map((page) => (
+              <button
+                key={page.id}
+                onClick={() => handleFacebookSelectPage(page.id)}
+                disabled={selectingPage}
+                className="w-full flex items-center gap-3 p-2 bg-white rounded-lg border border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 text-left"
+              >
+                {page.picture && (
+                  <img src={page.picture} alt="" className="w-8 h-8 rounded-full" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{page.name}</p>
+                  {page.category && (
+                    <p className="text-xs text-gray-500">{page.category}</p>
+                  )}
+                </div>
+                {page.fan_count != null && (
+                  <span className="text-xs text-gray-400">{page.fan_count.toLocaleString()} followers</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => { setShowPageSelector(false); setFbPages([]) }}
+            className="mt-2 text-xs text-gray-500 hover:text-gray-700"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   )
 }

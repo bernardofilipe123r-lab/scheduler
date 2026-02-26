@@ -138,6 +138,8 @@ CRITICAL_MODULES = [
     ("app.api.auth.middleware", "Auth middleware"),
     ("app.api.auth.routes", "Auth routes"),
     ("app.api.auth.user_routes", "User routes"),
+    ("app.api.auth.ig_oauth_routes", "Instagram OAuth routes"),
+    ("app.api.auth.fb_oauth_routes", "Facebook OAuth routes"),
     ("app.api.niche_config_routes", "NicheConfig routes"),
     ("app.api.brands.routes", "Brands routes"),
     ("app.api.brands.connection_test_routes", "Connection test routes"),

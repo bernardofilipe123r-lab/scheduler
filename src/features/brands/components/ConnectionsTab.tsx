@@ -12,12 +12,15 @@ export function ConnectionsTab() {
   const { data, isLoading, refetch } = useBrandConnections()
   const [searchParams, setSearchParams] = useSearchParams()
   const [igNotification, setIgNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [fbNotification, setFbNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [newBrandId, setNewBrandId] = useState<string | null>(null)
 
   // Handle Instagram OAuth redirect params & new brand prompt
   useEffect(() => {
     const igConnected = searchParams.get('ig_connected')
     const igError = searchParams.get('ig_error')
+    const fbConnected = searchParams.get('fb_connected')
+    const fbError = searchParams.get('fb_error')
     const newBrand = searchParams.get('new_brand')
 
     if (igConnected) {
@@ -29,6 +32,23 @@ export function ConnectionsTab() {
     } else if (igError) {
       setIgNotification({ type: 'error', message: `Instagram connection failed: ${igError}` })
       searchParams.delete('ig_error')
+      setSearchParams(searchParams, { replace: true })
+    }
+
+    if (fbConnected) {
+      setFbNotification({ type: 'success', message: `Facebook connected successfully for ${fbConnected}!` })
+      refetch()
+      searchParams.delete('fb_connected')
+      setSearchParams(searchParams, { replace: true })
+    } else if (fbError) {
+      const errorMessages: Record<string, string> = {
+        denied: 'Permission denied',
+        expired: 'Session expired — please try again',
+        no_pages: 'No Facebook Pages found on your account',
+        failed: 'Connection failed — please try again',
+      }
+      setFbNotification({ type: 'error', message: `Facebook: ${errorMessages[fbError] || fbError}` })
+      searchParams.delete('fb_error')
       setSearchParams(searchParams, { replace: true })
     }
 
@@ -46,6 +66,13 @@ export function ConnectionsTab() {
       return () => clearTimeout(timer)
     }
   }, [igNotification])
+
+  useEffect(() => {
+    if (fbNotification) {
+      const timer = setTimeout(() => setFbNotification(null), 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [fbNotification])
 
   // Store logos loaded from backend
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
@@ -143,6 +170,25 @@ export function ConnectionsTab() {
           )}
           <span className="text-sm font-medium">{igNotification.message}</span>
           <button onClick={() => setIgNotification(null)} className="ml-auto text-sm underline opacity-60 hover:opacity-100">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Facebook OAuth notification */}
+      {fbNotification && (
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+          fbNotification.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {fbNotification.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+          ) : (
+            <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          )}
+          <span className="text-sm font-medium">{fbNotification.message}</span>
+          <button onClick={() => setFbNotification(null)} className="ml-auto text-sm underline opacity-60 hover:opacity-100">
             Dismiss
           </button>
         </div>

@@ -38,6 +38,7 @@ class BrandConfig:
     instagram_business_account_id: Optional[str] = None
     facebook_page_id: Optional[str] = None
     meta_access_token: Optional[str] = None
+    facebook_access_token: Optional[str] = None
 
 
 # Default neutral colors used when a brand has no color config in the DB

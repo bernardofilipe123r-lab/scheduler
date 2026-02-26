@@ -288,6 +288,7 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
     # Check which OAuth is configured
     oauth_configured = {
         "meta": bool(os.getenv("INSTAGRAM_APP_ID")) and bool(os.getenv("INSTAGRAM_APP_SECRET")),
+        "facebook": bool(os.getenv("FACEBOOK_APP_ID")) and bool(os.getenv("FACEBOOK_APP_SECRET")),
         "youtube": bool(os.getenv("YOUTUBE_CLIENT_ID")) and bool(os.getenv("YOUTUBE_CLIENT_SECRET"))
     }
     
