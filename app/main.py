@@ -883,14 +883,71 @@ async def startup_event():
     scheduler.add_job(refresh_instagram_tokens, 'date',
                       run_date=datetime.now() + timedelta(seconds=30),
                       id='ig_token_refresh_startup')
-    
+
+    # ── Validate YouTube refresh tokens (every 24 hours) ─────────────────────────
+    def validate_youtube_tokens():
+        """
+        Periodically validate YouTube refresh tokens to catch early revocation.
+        Google refresh tokens don't expire on their own but can be revoked by the user
+        (e.g. via myaccount.google.com). This job catches revocation proactively so the
+        UI shows "Access revoked" before a publish attempt fails.
+        """
+        from app.db_connection import SessionLocal
+        from app.models.youtube import YouTubeChannel
+        from app.services.youtube.publisher import YouTubePublisher
+
+        pub = YouTubePublisher()
+        db = SessionLocal()
+        try:
+            channels = db.query(YouTubeChannel).filter(
+                YouTubeChannel.status.in_(["connected", "error"])
+            ).all()
+
+            if not channels:
+                return
+
+            validated = 0
+            revoked_count = 0
+
+            for channel in channels:
+                try:
+                    success, result = pub.refresh_access_token(channel.refresh_token)
+                    if success and result.get("access_token"):
+                        if channel.status != "connected":
+                            channel.status = "connected"
+                            channel.last_error = None
+                        validated += 1
+                    else:
+                        err = result.get("error", "Token validation failed")
+                        channel.status = "revoked" if ("invalid_grant" in err.lower() or "revoked" in err.lower()) else "error"
+                        channel.last_error = err
+                        revoked_count += 1
+                        print(f"⚠️ YouTube token invalid for {channel.brand}: {err}", flush=True)
+                except Exception as exc:
+                    channel.last_error = str(exc)
+                    revoked_count += 1
+
+            db.commit()
+            print(f"📺 YouTube token check: {validated} valid, {revoked_count} revoked/error", flush=True)
+        except Exception as exc:
+            db.rollback()
+            print(f"❌ YouTube token validation job failed: {exc}", flush=True)
+        finally:
+            db.close()
+
+    scheduler.add_job(validate_youtube_tokens, 'interval', hours=24, id='yt_token_validation')
+    scheduler.add_job(validate_youtube_tokens, 'date',
+                      run_date=datetime.now() + timedelta(seconds=60),
+                      id='yt_token_validation_startup')
+
     scheduler.start()
-    
+
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
     print("✅ Analytics auto-refresh scheduled (every 6 hours)", flush=True)
     print("✅ Log cleanup scheduled (every 24 hours, 7-day retention)", flush=True)
     print("✅ Published content cleanup scheduled (every 6 hours, 1-day retention)", flush=True)
-    print("✅ Instagram token auto-refresh scheduled (every 12 hours)", flush=True)
+    print("✅ Instagram token auto-refresh scheduled (every 6 hours)", flush=True)
+    print("✅ YouTube token validation scheduled (every 24 hours)", flush=True)
     
     # Store scheduler for shutdown
     app.state.scheduler = scheduler

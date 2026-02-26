@@ -258,9 +258,11 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
         }
         
         # Check Facebook
+        # NOTE: We require facebook_access_token specifically. meta_access_token is the
+        # Instagram System User token and should NOT count as a Facebook page connection.
         fb_connected = bool(
-            brand_with_creds.get("facebook_page_id") and 
-            (brand_with_creds.get("facebook_access_token") or brand_with_creds.get("meta_access_token"))
+            brand_with_creds.get("facebook_page_id") and
+            brand_with_creds.get("facebook_access_token")
         )
         
         facebook = {

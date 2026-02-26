@@ -262,6 +262,14 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
       tokenHealthClass = 'text-green-600'
     }
 
+    // YouTube health indicator — refresh tokens don't expire but can be revoked
+    let youtubeHealthLabel: string | null = null
+    let youtubeHealthClass = ''
+    if (isYouTube && connection.connected && !isRevoked) {
+      youtubeHealthLabel = 'Refresh token active'
+      youtubeHealthClass = 'text-green-600'
+    }
+
     return (
       <div
         key={platform}
@@ -284,6 +292,12 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                   <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
                 )}
                 {tokenHealthLabel}
+              </p>
+            )}
+            {youtubeHealthLabel && (
+              <p className={`text-xs flex items-center gap-1 ${youtubeHealthClass}`}>
+                <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                {youtubeHealthLabel}
               </p>
             )}
             {isRevoked && (
