@@ -33,6 +33,22 @@ import type { BrandName } from '@/shared/types'
 
 type Platform = 'instagram' | 'facebook' | 'youtube'
 
+/** Returns true when the Instagram handle plausibly belongs to the brand name. */
+function handleMatchesBrand(handle: string, brandName: string): boolean {
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const slug = normalize(brandName)
+  const h = normalize(handle)
+  const hNoThe = h.replace(/^the/, '')
+  const slugNoThe = slug.replace(/^the/, '')
+  // Accept if either string is a substring of the other (with/without leading "the")
+  return (
+    h.includes(slug) ||
+    slug.includes(h) ||
+    hNoThe.includes(slugNoThe) ||
+    slugNoThe.includes(hNoThe)
+  )
+}
+
 function PlatformIcon({ platform, className = 'w-5 h-5' }: { platform: Platform; className?: string }) {
   switch (platform) {
     case 'instagram':
@@ -74,7 +90,16 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
   const [showPageSelector, setShowPageSelector] = useState(false)
   const [selectingPage, setSelectingPage] = useState(false)
   const [confirmConnect, setConfirmConnect] = useState<Platform | null>(null)
+  // Track which IG handle had its mismatch warning dismissed (resets if handle changes)
+  const [dismissedMismatchFor, setDismissedMismatchFor] = useState<string | null>(null)
   const disconnectYouTube = useDisconnectYouTube()
+
+  const igHandle = brand.instagram.account_name ?? null
+  const igMismatch =
+    igHandle !== null &&
+    brand.instagram.connected &&
+    !handleMatchesBrand(igHandle, brand.display_name) &&
+    dismissedMismatchFor !== igHandle
 
   const handleTestMeta = async () => {
     setTesting(p => ({ ...p, meta: true }))
@@ -502,6 +527,26 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
           >
             Cancel
           </button>
+        </div>
+      )}
+
+      {/* Handle mismatch warning — shown when connected IG handle doesn't match brand name */}
+      {igMismatch && (
+        <div className="px-4 py-3 bg-amber-50 border-t border-amber-200">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="flex-1 text-xs text-amber-800">
+              The connected Instagram account <strong>{igHandle}</strong> doesn&apos;t appear to match{' '}
+              <strong>{brand.display_name}</strong>. Make sure you connected the correct account.
+            </p>
+            <button
+              onClick={() => setDismissedMismatchFor(igHandle)}
+              className="p-0.5 rounded hover:bg-amber-200 transition-colors flex-shrink-0"
+              title="Dismiss warning"
+            >
+              <X className="w-3.5 h-3.5 text-amber-600" />
+            </button>
+          </div>
         </div>
       )}
 
