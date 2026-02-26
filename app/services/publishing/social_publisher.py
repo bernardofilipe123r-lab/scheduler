@@ -994,14 +994,13 @@ class SocialPublisher:
         thumbnail_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Publish a Reel to Instagram using the Resumable Upload process.
-        This is more reliable than the standard video_url method.
+        Publish a Reel to Instagram using the video_url method.
+        Instagram fetches the video from the URL directly — no rupload step.
         
         Steps:
-        1. Create resumable upload session (returns container_id + upload uri)
-        2. Upload video via file_url header to rupload.facebook.com
-        3. Wait for processing
-        4. Publish the container
+        1. Create media container with video_url
+        2. Wait for processing (status_code == FINISHED)
+        3. Publish the container
         
         Args:
             video_url: Public URL to the video file (must be accessible)
@@ -1019,17 +1018,16 @@ class SocialPublisher:
             }
         
         try:
-            # Step 1: Create RESUMABLE upload session (not standard video_url)
+            # Step 1: Create media container (Instagram fetches video from video_url)
             container_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media"
             
             print(f"📤 Video URL for Instagram: {video_url}")
             print(f"   Instagram Account ID: {self.ig_business_account_id}")
-            print(f"   Using RESUMABLE upload method...")
+            print(f"   Using video_url method (Instagram fetches video directly)...")
             
-            # Create resumable session - this returns container ID + upload URI
             container_payload = {
                 "media_type": "REELS",
-                "upload_type": "resumable",  # Key difference: use resumable upload
+                "video_url": video_url,
                 "caption": caption,
                 "access_token": self.ig_access_token
             }
@@ -1090,7 +1088,6 @@ class SocialPublisher:
                     }
             
             creation_id = container_data.get("id")
-            upload_uri = container_data.get("uri")
             
             if not creation_id:
                 return {
@@ -1099,62 +1096,9 @@ class SocialPublisher:
                     "platform": "instagram"
                 }
             
-            if not upload_uri:
-                # Fallback: construct upload URI manually
-                upload_uri = f"https://rupload.facebook.com/ig-api-upload/{self.api_version}/{creation_id}"
-                print(f"   ⚠️ No URI in response, constructed: {upload_uri}")
-            
             print(f"✅ Container created: {creation_id}")
-            print(f"   Upload URI: {upload_uri}")
             
-            # Step 2: Upload video via hosted URL using rupload.facebook.com
-            print(f"📤 Uploading video to Instagram via rupload...")
-            
-            upload_headers = {
-                "Authorization": f"OAuth {self.ig_access_token}",
-                "file_url": video_url
-            }
-            
-            print(f"   Headers: Authorization=OAuth [hidden], file_url={video_url}")
-            
-            upload_response = requests.post(
-                upload_uri,
-                headers=upload_headers,
-                timeout=120
-            )
-            
-            print(f"   Upload response status: {upload_response.status_code}")
-            print(f"   Upload response body: {upload_response.text[:500] if upload_response.text else 'empty'}")
-            
-            # Check upload response
-            try:
-                upload_data = upload_response.json()
-                if "error" in upload_data:
-                    error_msg = upload_data["error"].get("message", "Unknown error")
-                    print(f"   ❌ Upload error: {error_msg}")
-                    return {
-                        "success": False,
-                        "error": f"Upload failed: {error_msg}",
-                        "platform": "instagram",
-                        "step": "upload"
-                    }
-                if upload_data.get("success") == True:
-                    print(f"   ✅ Upload confirmed successful")
-            except Exception as json_err:
-                print(f"   ⚠️ Could not parse upload response as JSON: {json_err}")
-            
-            if upload_response.status_code != 200:
-                print(f"   ❌ Upload failed with status {upload_response.status_code}")
-                return {
-                    "success": False,
-                    "error": f"Upload failed with status {upload_response.status_code}: {upload_response.text[:200]}",
-                    "platform": "instagram",
-                    "step": "upload"
-                }
-            
-            print(f"✅ Video uploaded successfully")
-            
-            # Step 3: Wait for video processing with status checks
+            # Step 2: Wait for video processing with status checks
             status_url = f"{self.ig_graph_base}/{self.api_version}/{creation_id}"
             max_wait_seconds = 180  # Wait up to 3 minutes for processing
             check_interval = 5  # Check every 5 seconds
@@ -1215,7 +1159,7 @@ class SocialPublisher:
                     "creation_id": creation_id
                 }
             
-            # Step 4: Publish the container
+            # Step 3: Publish the container
             publish_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media_publish"
             
             publish_payload = {
