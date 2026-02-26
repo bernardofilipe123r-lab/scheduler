@@ -330,9 +330,9 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
 
     # Execute plans — parallel in aggressive mode, sequential otherwise
     if is_aggressive and len(eligible_plans) > 1:
-        generated = _execute_plans_parallel(eligible_plans, user_id, state)
+        generated, job_details = _execute_plans_parallel(eligible_plans, user_id, state)
     else:
-        generated = _execute_plans_sequential(db, eligible_plans, user_id, state)
+        generated, job_details = _execute_plans_sequential(db, eligible_plans, user_id, state)
 
     if generated > 0:
         db.add(TobyActivityLog(
@@ -340,7 +340,12 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState):
             action_type="content_generated",
             description=f"Toby created {generated} piece{'s' if generated != 1 else ''} of content to fill empty buffer slots",
             level="success",
-            action_metadata={"count": generated, "buffer_health": status["health"], "parallel": is_aggressive and len(eligible_plans) > 1},
+            action_metadata={
+                "count": generated,
+                "buffer_health": status["health"],
+                "parallel": is_aggressive and len(eligible_plans) > 1,
+                "jobs": job_details,
+            },
             created_at=datetime.now(timezone.utc),
         ))
 
@@ -560,7 +565,7 @@ def _execute_content_plan(db: Session, plan):
     # Deduplication: if scheduler detected a duplicate, skip remaining steps
     if sched_result.get("deduplicated"):
         print(f"[TOBY] Skipping duplicate slot for {plan.brand_id} at {plan.scheduled_time}", flush=True)
-        return
+        return None
 
     # ── Step 8: Mark brand as scheduled + Toby-created + record tags ──
     # Update the job's brand_output status so Jobs page shows "scheduled"
@@ -582,6 +587,7 @@ def _execute_content_plan(db: Session, plan):
         record_content_tag(db, plan.user_id, schedule_id, plan)
 
     print(f"[TOBY] Scheduled {reel_id} for {plan.brand_id} at {plan.scheduled_time}", flush=True)
+    return {"job_id": job_id, "brand_id": plan.brand_id, "content_type": plan.content_type, "variant": variant}
 
 
 def _run_metrics_check(db: Session, user_id: str, state: TobyState):
@@ -730,15 +736,18 @@ def _sanitize_error(msg: str) -> str:
     return msg
 
 
-def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: TobyState) -> int:
-    """Execute content plans one at a time (steady-state mode)."""
+def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: TobyState) -> tuple:
+    """Execute content plans one at a time (steady-state mode). Returns (count, job_details)."""
     generated = 0
+    job_details: list[dict] = []
     for plan in plans:
         try:
-            _execute_content_plan(db, plan)
+            result = _execute_content_plan(db, plan)
             generated += 1
             _record_generation(user_id, plan.brand_id)
             _increment_budget(state)
+            if result:
+                job_details.append(result)
         except Exception as e:
             print(f"[TOBY] Content generation failed for {plan.brand_id}: {e}", flush=True)
             clean = _sanitize_error(str(e)[:300])
@@ -749,7 +758,7 @@ def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: Tob
                 level="error",
                 created_at=datetime.now(timezone.utc),
             ))
-    return generated
+    return generated, job_details
 
 
 def _execute_plans_parallel(plans: list, user_id: str, state: TobyState) -> int:
@@ -767,10 +776,10 @@ def _execute_plans_parallel(plans: list, user_id: str, state: TobyState) -> int:
         """Run a single content plan in its own DB session."""
         thread_db = SessionLocal()
         try:
-            _execute_content_plan(thread_db, plan)
+            job_detail = _execute_content_plan(thread_db, plan)
             _record_generation(plan.user_id, plan.brand_id)
             thread_db.commit()
-            return {"success": True, "brand_id": plan.brand_id}
+            return {"success": True, "brand_id": plan.brand_id, "job_detail": job_detail}
         except Exception as e:
             thread_db.rollback()
             print(f"[TOBY] Parallel gen failed for {plan.brand_id}: {e}", flush=True)
@@ -790,6 +799,7 @@ def _execute_plans_parallel(plans: list, user_id: str, state: TobyState) -> int:
         finally:
             thread_db.close()
 
+    job_details: list[dict] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(_run_one, plan): plan for plan in plans}
         for future in concurrent.futures.as_completed(futures):
@@ -798,9 +808,11 @@ def _execute_plans_parallel(plans: list, user_id: str, state: TobyState) -> int:
                 generated += 1
                 _increment_budget(state)
                 print(f"[TOBY] ✓ Parallel gen completed for {result['brand_id']}", flush=True)
+                if result.get("job_detail"):
+                    job_details.append(result["job_detail"])
 
     print(f"[TOBY] Parallel generation done: {generated}/{len(plans)} succeeded", flush=True)
-    return generated
+    return generated, job_details
 
 
 def _cleanup_supabase_on_failure(job_id: str, brand_id: str):

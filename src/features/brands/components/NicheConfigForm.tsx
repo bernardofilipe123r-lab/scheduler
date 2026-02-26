@@ -60,6 +60,32 @@ const DEFAULT_CONFIG: NicheConfig = {
   carousel_content_overlay_opacity: 85,
 }
 
+function inferGeneralFieldsFromBrief(contentBrief: string): { topicCategories: string[]; targetAudience: string } {
+  const brief = contentBrief || ''
+
+  const targetMatch = brief.match(/(?:target\s+audience|audience)\s*:\s*([^\n]+)/i)
+  const targetAudience = targetMatch?.[1]?.trim() || ''
+
+  const topicMatch =
+    brief.match(/(?:daily\s+topics\s+include|topics\s+include|topic\s+categories)\s*:\s*([^\n]+)/i) ||
+    brief.match(/(?:daily\s+topics|topics)\s*:\s*([^\n]+)/i)
+
+  const rawTopics = topicMatch?.[1] || ''
+  const topicCategories = Array.from(
+    new Set(
+      rawTopics
+        .replace(/\([^)]*\)/g, ' ')
+        .split(/,|;|\||\//)
+        .map((s) => s.trim())
+        .map((s) => s.replace(/^[-\d.\s]+/, '').replace(/\s+/g, ' '))
+        .filter((s) => s.length >= 3)
+        .slice(0, 15),
+    ),
+  )
+
+  return { topicCategories, targetAudience }
+}
+
 // Preload fonts needed by Konva canvas components via Google Fonts CSS API
 function useFontPreload() {
   const [loaded, setLoaded] = useState(false)
@@ -194,6 +220,45 @@ export function NicheConfigForm({ section, onGeneratingChange, onYtValidChange }
     setValues((prev) => ({ ...prev, [key]: value }))
     setDirty(true)
   }
+
+  // Onboarding only asks for niche_name + content_brief in General.
+  // Derive Topic Categories / Target Audience from the brief when missing,
+  // so Toby preflight does not fail after a completed onboarding flow.
+  useEffect(() => {
+    const brief = values.content_brief?.trim()
+    if (!brief) return
+
+    const needsTopics = (values.topic_categories?.length ?? 0) === 0
+    const needsAudience = !values.target_audience?.trim()
+    if (!needsTopics && !needsAudience) return
+
+    const inferred = inferGeneralFieldsFromBrief(brief)
+    const canFillTopics = needsTopics && inferred.topicCategories.length > 0
+    const canFillAudience = needsAudience && Boolean(inferred.targetAudience)
+    if (!canFillTopics && !canFillAudience) return
+
+    const next = { ...values }
+    let changed = false
+
+    if (canFillTopics) {
+      next.topic_categories = inferred.topicCategories
+      // Also seed topic keywords if empty to keep the config coherent.
+      if ((values.topic_keywords?.length ?? 0) === 0) {
+        next.topic_keywords = inferred.topicCategories
+      }
+      changed = true
+    }
+
+    if (canFillAudience) {
+      next.target_audience = inferred.targetAudience
+      changed = true
+    }
+
+    if (changed) {
+      setValues(next)
+      setDirty(true)
+    }
+  }, [values.content_brief, values.topic_categories, values.topic_keywords, values.target_audience])
 
   // Auto-save: debounce 1.5s after any change
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
