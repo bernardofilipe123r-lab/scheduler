@@ -305,10 +305,15 @@ class YouTubePublisher:
                 }
             
             token_data = response.json()
-            return True, {
+            result_data = {
                 "access_token": token_data.get("access_token"),
                 "expires_in": token_data.get("expires_in", 3600)
             }
+            # Google may rotate the refresh token — callers MUST persist the new one
+            if token_data.get("refresh_token"):
+                result_data["refresh_token"] = token_data["refresh_token"]
+                print(f"   🔄 [YT TOKEN] Google rotated the refresh token — new token received", flush=True)
+            return True, result_data
             
         except requests.exceptions.Timeout:
             return False, {"error": "Token refresh timed out (Google API slow)", "transient": True}
@@ -348,6 +353,11 @@ class YouTubePublisher:
         
         self.credentials.access_token = result["access_token"]
         self.credentials.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=result["expires_in"])
+        
+        # Google may have rotated the refresh token — save it so callers can persist it
+        if result.get("refresh_token"):
+            self.credentials.refresh_token = result["refresh_token"]
+            print(f"   🔄 [YT TOKEN] Refresh token rotated — updated on credentials object", flush=True)
         
         print(f"   ✅ [YT TOKEN] Token refreshed successfully, expires in {result['expires_in']}s", flush=True)
         return self.credentials.access_token

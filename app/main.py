@@ -936,6 +936,10 @@ async def startup_event():
                         if channel.status != "connected":
                             channel.status = "connected"
                             channel.last_error = None
+                        # Google may have rotated the refresh token — persist it!
+                        if result.get("refresh_token"):
+                            channel.refresh_token = result["refresh_token"]
+                            print(f"🔄 YouTube refresh token rotated for {channel.brand} — saved to DB", flush=True)
                         validated += 1
                     elif result.get("revoked"):
                         # Google definitively said the token is invalid

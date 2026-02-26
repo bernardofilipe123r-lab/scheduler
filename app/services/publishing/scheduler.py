@@ -1130,6 +1130,9 @@ class DatabaseSchedulerService:
                 print(f"      title={title}", flush=True)
                 print(f"      thumbnail_path={tmp_thumb.name}", flush=True)
                 
+                # Save original refresh token so we can detect rotation after upload
+                original_refresh_token = credentials.refresh_token
+                
                 result = yt_publisher.upload_youtube_short(
                     video_path=tmp_video.name,
                     title=title,
@@ -1138,6 +1141,13 @@ class DatabaseSchedulerService:
                 )
             
                 print(f"   📺 [YT PUBLISH] upload_youtube_short result: {result}", flush=True)
+                
+                # Google may have rotated the refresh token during upload — persist it!
+                if credentials.refresh_token != original_refresh_token:
+                    yt_channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand_name.lower()).first()
+                    if yt_channel:
+                        yt_channel.refresh_token = credentials.refresh_token
+                        print(f"   🔄 [YT PUBLISH] Refresh token rotated during upload — saved to DB", flush=True)
                 
                 # Log thumbnail status specifically
                 if result.get("success"):
