@@ -51,6 +51,10 @@ class Brand(Base):
     facebook_page_id = Column(String(100), nullable=True)
     facebook_access_token = Column(Text, nullable=True)
     meta_access_token = Column(Text, nullable=True)
+
+    # Token health tracking
+    instagram_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    instagram_token_last_refreshed_at = Column(DateTime(timezone=True), nullable=True)
     
     # Logo path (relative to assets/logos/)
     logo_path = Column(String(255), nullable=True)

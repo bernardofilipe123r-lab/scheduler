@@ -11,6 +11,8 @@ export interface PlatformConnection {
   account_name: string | null
   status: 'connected' | 'not_configured' | 'not_connected' | 'error' | 'revoked'
   last_error: string | null
+  token_expires_at: string | null        // ISO datetime, only for Instagram
+  token_last_refreshed_at: string | null // ISO datetime, only for Instagram
 }
 
 // Brand connection status

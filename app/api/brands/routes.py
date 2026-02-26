@@ -91,6 +91,8 @@ class PlatformConnection(BaseModel):
     account_name: Optional[str] = None
     status: str = "not_configured"
     last_error: Optional[str] = None
+    token_expires_at: Optional[str] = None
+    token_last_refreshed_at: Optional[str] = None
 
 
 class BrandResponse(BaseModel):
@@ -239,12 +241,20 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
             brand_with_creds.get("instagram_business_account_id") and 
             (brand_with_creds.get("instagram_access_token") or brand_with_creds.get("meta_access_token"))
         )
-        
+
+        # Fetch token health directly from Brand ORM object
+        from app.models.brands import Brand as BrandModel
+        _brand_orm = db.query(BrandModel).filter(BrandModel.id == brand_id).first()
+        _ig_expires = _brand_orm.instagram_token_expires_at.isoformat() if (_brand_orm and _brand_orm.instagram_token_expires_at) else None
+        _ig_refreshed = _brand_orm.instagram_token_last_refreshed_at.isoformat() if (_brand_orm and _brand_orm.instagram_token_last_refreshed_at) else None
+
         instagram = {
             "connected": ig_connected,
             "account_id": brand_with_creds.get("instagram_business_account_id"),
             "account_name": brand.get("instagram_handle"),
-            "status": "connected" if ig_connected else "not_configured"
+            "status": "connected" if ig_connected else "not_configured",
+            "token_expires_at": _ig_expires,
+            "token_last_refreshed_at": _ig_refreshed,
         }
         
         # Check Facebook

@@ -2,7 +2,7 @@
 PostgreSQL-based scheduler service with multi-user support.
 """
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, TYPE_CHECKING
 from sqlalchemy import and_
 from app.models import ScheduledReel, UserProfile
@@ -11,6 +11,73 @@ from app.services.publishing.social_publisher import SocialPublisher
 
 if TYPE_CHECKING:
     from app.core.config import BrandConfig
+
+
+def _proactive_refresh_ig_token(brand_name: str) -> Optional[str]:
+    """
+    Proactively refresh the Instagram token for a brand if it hasn't been
+    refreshed in the last 6 hours or expires within 5 days.
+    Returns the new token if refreshed, None otherwise.
+    Safe to call before every Instagram publish.
+    """
+    from app.db_connection import SessionLocal
+    from app.models.brands import Brand
+    from app.services.publishing.ig_token_service import InstagramTokenService
+
+    try:
+        db = SessionLocal()
+        try:
+            brand = db.query(Brand).filter(Brand.id == brand_name).first()
+            if not brand:
+                return None
+
+            token = brand.instagram_access_token or brand.meta_access_token
+            if not token:
+                return None
+
+            now = datetime.now(timezone.utc)
+
+            # Decide whether a refresh is needed
+            needs_refresh = False
+            last_refreshed = brand.instagram_token_last_refreshed_at
+            if last_refreshed:
+                if last_refreshed.tzinfo is None:
+                    last_refreshed = last_refreshed.replace(tzinfo=timezone.utc)
+                hours_since = (now - last_refreshed).total_seconds() / 3600
+                needs_refresh = hours_since >= 6
+            else:
+                needs_refresh = True  # Never refreshed — do it now
+
+            # Also force refresh if token is expiring within 5 days
+            expires_at = brand.instagram_token_expires_at
+            if expires_at and not needs_refresh:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                days_left = (expires_at - now).days
+                if days_left <= 5:
+                    needs_refresh = True
+
+            if not needs_refresh:
+                return None
+
+            token_service = InstagramTokenService()
+            result = token_service.refresh_long_lived_token(token)
+            new_token = result.get("access_token")
+            expires_in = result.get("expires_in", 5184000)  # default 60 days
+
+            if new_token:
+                brand.instagram_access_token = new_token
+                brand.meta_access_token = new_token
+                brand.instagram_token_expires_at = now + timedelta(seconds=expires_in)
+                brand.instagram_token_last_refreshed_at = now
+                db.commit()
+                print(f"🔑 [PRE-PUBLISH] Refreshed IG token for {brand_name}", flush=True)
+                return new_token
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"⚠️ [PRE-PUBLISH] IG token refresh failed for {brand_name}: {e}", flush=True)
+        return None
 
 
 class DatabaseSchedulerService:
@@ -910,6 +977,11 @@ class DatabaseSchedulerService:
         results = {}
         
         if "instagram" in effective_platforms:
+            # Proactively refresh the token if stale (>6h since last refresh or expiring soon)
+            if brand_name:
+                fresh_token = _proactive_refresh_ig_token(brand_name)
+                if fresh_token and hasattr(publisher, 'ig_access_token'):
+                    publisher.ig_access_token = fresh_token
             print("📸 Publishing to Instagram...")
             results["instagram"] = publisher.publish_instagram_reel(
                 video_url=video_url,

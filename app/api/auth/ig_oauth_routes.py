@@ -168,11 +168,15 @@ def instagram_callback(
         if not brand:
             return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error=brand_not_found")
 
+        now = datetime.now(timezone.utc)
         brand.instagram_access_token = long_token
         brand.instagram_business_account_id = ig_user_id
         brand.instagram_handle = f"@{username}" if username and not username.startswith("@") else username
         # Also store as meta_access_token for compatibility with existing publisher code
         brand.meta_access_token = long_token
+        # Track token lifetime (60 days from now)
+        brand.instagram_token_expires_at = now + timedelta(seconds=expires_in)
+        brand.instagram_token_last_refreshed_at = now
 
         db.commit()
 

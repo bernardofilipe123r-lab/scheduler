@@ -847,13 +847,27 @@ async def startup_event():
                 try:
                     result = token_service.refresh_long_lived_token(current_token)
                     new_token = result.get("access_token")
+                    expires_in = result.get("expires_in", 5184000)  # default 60 days
                     if new_token:
+                        from datetime import timezone
+                        now = datetime.now(timezone.utc)
                         brand.instagram_access_token = new_token
                         brand.meta_access_token = new_token
+                        brand.instagram_token_expires_at = now + timedelta(seconds=expires_in)
+                        brand.instagram_token_last_refreshed_at = now
                         refreshed += 1
                 except Exception as e:
                     failed += 1
-                    print(f"⚠️ Token refresh failed for {brand.id}: {e}", flush=True)
+                    # Check if token is close to expiry so we can log urgently
+                    if brand.instagram_token_expires_at:
+                        from datetime import timezone
+                        days_left = (brand.instagram_token_expires_at - datetime.now(timezone.utc)).days
+                        if days_left <= 7:
+                            print(f"🚨 URGENT: Token for {brand.id} expires in {days_left}d and refresh failed: {e}", flush=True)
+                        else:
+                            print(f"⚠️ Token refresh failed for {brand.id} ({days_left}d left): {e}", flush=True)
+                    else:
+                        print(f"⚠️ Token refresh failed for {brand.id}: {e}", flush=True)
 
             if refreshed > 0 or synced > 0:
                 db.commit()
@@ -864,7 +878,7 @@ async def startup_event():
         finally:
             db.close()
 
-    scheduler.add_job(refresh_instagram_tokens, 'interval', hours=12, id='ig_token_refresh')
+    scheduler.add_job(refresh_instagram_tokens, 'interval', hours=6, id='ig_token_refresh')
     # Also run once on startup (after brief delay so DB is ready)
     scheduler.add_job(refresh_instagram_tokens, 'date',
                       run_date=datetime.now() + timedelta(seconds=30),

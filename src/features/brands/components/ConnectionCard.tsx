@@ -240,6 +240,28 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     const isRevoked = connection.status === 'revoked'
     const hasError = connection.status === 'error'
 
+    // Token health derived values (Instagram only)
+    let tokenDaysLeft: number | null = null
+    let tokenHealthLabel: string | null = null
+    let tokenHealthClass: string = ''
+    if (isInstagram && connection.connected && connection.token_expires_at) {
+      const expiresAt = new Date(connection.token_expires_at)
+      tokenDaysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000)
+      if (tokenDaysLeft <= 0) {
+        tokenHealthLabel = 'Token expired — reconnect required'
+        tokenHealthClass = 'text-red-600'
+      } else if (tokenDaysLeft <= 7) {
+        tokenHealthLabel = `Expiring in ${tokenDaysLeft}d — reconnect soon`
+        tokenHealthClass = 'text-amber-600'
+      } else {
+        tokenHealthLabel = `Auto-renews (${tokenDaysLeft}d left)`
+        tokenHealthClass = 'text-green-600'
+      }
+    } else if (isInstagram && connection.connected && connection.token_last_refreshed_at) {
+      tokenHealthLabel = 'Auto-renews'
+      tokenHealthClass = 'text-green-600'
+    }
+
     return (
       <div
         key={platform}
@@ -253,6 +275,16 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
             <p className="font-medium text-gray-900 capitalize">{platform}</p>
             {connection.connected && connection.account_name && (
               <p className="text-sm text-gray-500 truncate">{connection.account_name}</p>
+            )}
+            {tokenHealthLabel && !isRevoked && (
+              <p className={`text-xs flex items-center gap-1 ${tokenHealthClass}`}>
+                {(tokenDaysLeft !== null && tokenDaysLeft <= 7) ? (
+                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                )}
+                {tokenHealthLabel}
+              </p>
             )}
             {isRevoked && (
               <p className="text-xs text-red-600 flex items-center gap-1">
