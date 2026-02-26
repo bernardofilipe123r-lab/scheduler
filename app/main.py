@@ -614,6 +614,7 @@ async def startup_event():
                         # Check if publishing actually succeeded
                         failed_platforms = []
                         success_platforms = []
+                        not_connected_platforms = []  # Skipped — not an error
                         
                         for platform, platform_result in result.items():
                             # Skip non-platform keys
@@ -625,6 +626,10 @@ async def startup_event():
                             if platform_result.get('success'):
                                 success_platforms.append(platform)
                                 print(f"      ✅ {platform}: {platform_result.get('post_id', 'Published')}")
+                            elif platform_result.get('not_connected'):
+                                # Platform not configured for this brand — graceful skip, not failure
+                                not_connected_platforms.append(platform)
+                                print(f"      ⚠️  {platform}: not configured for this brand — skipped")
                             else:
                                 failed_platforms.append(platform)
                                 error = platform_result.get('error', 'Unknown error')
@@ -658,6 +663,14 @@ async def startup_event():
                                     publish_results[platform] = {
                                         "success": False,
                                         "error": result[platform].get('error', 'Unknown error')
+                                    }
+                            
+                            # Include not-connected platforms (shows amber ⚠ warning in UI)
+                            for platform in not_connected_platforms:
+                                if platform in result:
+                                    publish_results[platform] = {
+                                        "success": False,
+                                        "error": result[platform].get('error', 'Platform not connected')
                                     }
                             
                             # Clear retry tracking since we're updating results

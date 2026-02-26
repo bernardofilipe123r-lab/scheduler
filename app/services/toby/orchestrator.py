@@ -430,6 +430,15 @@ def _execute_content_plan(db: Session, plan):
     job_manager = JobManager(db)
     slide_texts = result.get("slide_texts", result.get("content_lines", []))
 
+    # Determine platforms based on brand’s actual connections
+    from app.services.brands.resolver import brand_resolver as _brand_resolver
+    _brand_conf = _brand_resolver.get_brand_config(plan.brand_id)
+    _toby_platforms = ["instagram", "youtube"]  # always attempt these
+    if _brand_conf and _brand_conf.facebook_page_id:
+        _toby_platforms = ["instagram", "facebook", "youtube"]
+    else:
+        print(f"[TOBY] Facebook not configured for {plan.brand_id} — skipping (not an error)", flush=True)
+
     job = job_manager.create_job(
         user_id=plan.user_id,
         title=result["title"],
@@ -438,7 +447,7 @@ def _execute_content_plan(db: Session, plan):
         variant=variant,
         ai_prompt=result.get("image_prompt"),
         cta_type=None,
-        platforms=["instagram", "facebook", "youtube"],
+        platforms=_toby_platforms,
         fixed_title=True,
         created_by="toby",
     )
@@ -550,7 +559,7 @@ def _execute_content_plan(db: Session, plan):
         scheduled_time=datetime.fromisoformat(plan.scheduled_time),
         caption=brand_data.get("caption", result.get("caption", "")),
         yt_title=brand_data.get("yt_title"),
-        platforms=["instagram", "facebook", "youtube"],
+        platforms=_toby_platforms,
         video_path=brand_data.get("video_path"),
         thumbnail_path=brand_data.get("thumbnail_path"),
         yt_thumbnail_path=brand_data.get("yt_thumbnail_path"),

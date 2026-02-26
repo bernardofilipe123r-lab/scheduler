@@ -7,7 +7,7 @@ import ytIcon from '@/assets/icons/youtube.png'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
-import { useDynamicBrands, useNicheConfig } from '@/features/brands'
+import { useDynamicBrands, useNicheConfig, useBrandConnections } from '@/features/brands'
 import { GeneratorSkeleton } from '@/shared/components'
 import type { BrandName, Variant } from '@/shared/types'
 
@@ -25,6 +25,16 @@ export function GeneratorPage() {
   const navigate = useNavigate()
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: nicheConfig, isLoading: configLoading } = useNicheConfig()
+  const { data: connectionsData } = useBrandConnections()
+
+  // Derive which platforms have at least one connected brand
+  const hasFacebook = connectionsData?.brands.some(b => b.facebook.connected) ?? true
+  const hasYoutube = connectionsData?.brands.some(b => b.youtube.connected) ?? true
+  const availablePlatforms = PLATFORMS.filter(({ id }) => {
+    if (id === 'facebook') return hasFacebook
+    if (id === 'youtube') return hasYoutube
+    return true // always show instagram
+  })
   
   // CTA options from settings (weighted)
   const ctaOptions = (nicheConfig?.cta_options ?? []).filter(o => o.text && o.weight > 0)
@@ -60,6 +70,24 @@ export function GeneratorPage() {
   const [autoCtaType, setAutoCtaType] = useState('auto')
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
   
+  // When connections data loads, remove platforms with no connected brands from defaults
+  useEffect(() => {
+    if (!connectionsData) return
+    const keep = (p: Platform) => {
+      if (p === 'facebook') return connectionsData.brands.some(b => b.facebook.connected)
+      if (p === 'youtube') return connectionsData.brands.some(b => b.youtube.connected)
+      return true
+    }
+    setSelectedPlatforms(prev => {
+      const next = prev.filter(keep)
+      return next.length > 0 ? next : prev // never empty
+    })
+    setAutoPlatforms(prev => {
+      const next = prev.filter(keep)
+      return next.length > 0 ? next : prev
+    })
+  }, [connectionsData])
+  
   // Refs for highlighting
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
@@ -91,7 +119,7 @@ export function GeneratorPage() {
     setAutoCount(brandIds.length)
     setAutoBrands([...brandIds])
     setAutoVariant('dark')
-    setAutoPlatforms(['instagram', 'facebook', 'youtube'])
+    setAutoPlatforms(availablePlatforms.map(p => p.id))
     setAutoCtaType('auto')
     setShowAutoModal(true)
   }
@@ -406,7 +434,7 @@ export function GeneratorPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
                 <div className="flex gap-2">
-                  {PLATFORMS.map(({ id, label, icon }) => {
+                  {availablePlatforms.map(({ id, label, icon }) => {
                     const active = selectedPlatforms.includes(id)
                     return (
                       <button
@@ -640,7 +668,7 @@ export function GeneratorPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
                 <div className="flex gap-2">
-                  {PLATFORMS.map(({ id, label, icon }) => {
+                  {availablePlatforms.map(({ id, label, icon }) => {
                     const active = autoPlatforms.includes(id)
                     return (
                       <button

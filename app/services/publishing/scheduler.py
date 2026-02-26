@@ -881,6 +881,7 @@ class DatabaseSchedulerService:
         
         # Priority: brand_config > brand_name > user_id > default
         publisher = None
+        _skip_facebook = False  # FB not configured → graceful skip, not a credential error
         
         if brand_config:
             # Use brand-specific credentials
@@ -907,13 +908,8 @@ class DatabaseSchedulerService:
                     }
                 
                 if "facebook" in platforms and not resolved_config.facebook_page_id:
-                    error_msg = f"CRITICAL: Brand '{brand_name}' has no Facebook Page ID configured! Cannot publish."
-                    print(f"   ❌ {error_msg}")
-                    return {
-                        "facebook": {"success": False, "error": error_msg, "platform": "facebook"},
-                        "credential_error": True,
-                        "brand": brand_name
-                    }
+                    _skip_facebook = True
+                    print(f"   ⚠️  Facebook not configured for '{brand_name}' — will skip gracefully (not a credential error)")
                 
                 publisher = SocialPublisher(brand_config=resolved_config)
             else:
@@ -960,8 +956,12 @@ class DatabaseSchedulerService:
         print(f"🎬 Video URL: {video_url}")
         print(f"🖼️  Thumbnail URL: {thumbnail_url}")
         
+        # Pre-filter: skip Facebook if page_id not configured (not an error)
         # Pre-filter: skip YouTube if credentials don't exist (not an error)
         effective_platforms = list(platforms)
+        if _skip_facebook and "facebook" in effective_platforms:
+            effective_platforms.remove("facebook")
+            print(f"📘 Facebook not configured for {brand_name} — skipping (not an error)")
         if "youtube" in effective_platforms:
             from app.services.youtube.publisher import get_youtube_credentials_for_brand
             try:
@@ -975,6 +975,15 @@ class DatabaseSchedulerService:
                 print(f"📺 YouTube credential check failed — skipping")
         
         results = {}
+        
+        # Add not_connected result for Facebook so UI can show amber ⚠ warning
+        if _skip_facebook:
+            results["facebook"] = {
+                "success": False,
+                "not_connected": True,
+                "error": "Facebook not configured for this brand",
+                "platform": "facebook",
+            }
         
         if "instagram" in effective_platforms:
             # Proactively refresh the token if stale (>6h since last refresh or expiring soon)
