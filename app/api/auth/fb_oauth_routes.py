@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth/facebook", tags=["facebook-oauth"])
 
 FACEBOOK_APP_ID = os.environ.get("FACEBOOK_APP_ID", "")
-SITE_URL = os.environ.get("SITE_URL", "https://scheduler-production-29d4.up.railway.app")
+SITE_URL = os.environ.get("SITE_URL", "https://viraltoby.com")
 FACEBOOK_REDIRECT_URI = os.environ.get(
     "FACEBOOK_REDIRECT_URI",
     SITE_URL + "/api/auth/facebook/callback",

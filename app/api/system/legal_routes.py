@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["legal"])
 
-SITE_URL = os.environ.get("SITE_URL", "https://scheduler-production-29d4.up.railway.app")
+SITE_URL = os.environ.get("SITE_URL", "https://viraltoby.com")
 META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
 
 

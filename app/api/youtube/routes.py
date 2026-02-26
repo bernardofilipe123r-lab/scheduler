@@ -298,7 +298,7 @@ async def youtube_callback(
     brand_display = brand_resolver.get_brand_display_name(brand)
 
     if return_to == "onboarding":
-        site_url = os.environ.get("SITE_URL", "https://scheduler-production-29d4.up.railway.app")
+        site_url = os.environ.get("SITE_URL", "https://viraltoby.com")
         return RedirectResponse(url=f"{site_url}/onboarding?yt_connected={brand}")
 
     return HTMLResponse(f"""

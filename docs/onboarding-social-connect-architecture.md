@@ -311,13 +311,13 @@ This is identical to how Buffer, Later, Hootsuite, and Sprout Social are categor
 2. Select your app (or create: Type = `Business`)
 3. Add products: **Facebook Login for Business**, **Instagram Graph API**
 4. In **Facebook Login → Settings:**
-   - Valid OAuth Redirect URIs: `https://scheduler-production-29d4.up.railway.app/api/auth/instagram/callback` AND `https://scheduler-production-29d4.up.railway.app/api/auth/facebook/callback`
-   - Deauthorize Callback URL: `https://scheduler-production-29d4.up.railway.app/api/legal/deauthorize`
-   - Data Deletion Request URL: `https://scheduler-production-29d4.up.railway.app/api/legal/data-deletion`
+   - Valid OAuth Redirect URIs: `https://viraltoby.com/api/auth/instagram/callback` AND `https://viraltoby.com/api/auth/facebook/callback`
+   - Deauthorize Callback URL: `https://viraltoby.com/api/legal/deauthorize`
+   - Data Deletion Request URL: `https://viraltoby.com/api/legal/data-deletion`
 5. In **Settings → Basic:**
-   - App Domains: `scheduler-production-29d4.up.railway.app`
-   - Privacy Policy URL: `https://scheduler-production-29d4.up.railway.app/privacy`
-   - Terms of Service URL: `https://scheduler-production-29d4.up.railway.app/terms`
+   - App Domains: `viraltoby.com`
+   - Privacy Policy URL: `https://viraltoby.com/privacy`
+   - Terms of Service URL: `https://viraltoby.com/terms`
    - App Icon: Upload a 1024×1024 icon
    - Category: "Business and Pages"
 
@@ -366,7 +366,7 @@ Current implementation already does this correctly with separate route files (`i
 
 #### What's Already Working
 - OAuth consent screen configured in Google Cloud Console
-- Redirect URI registered: `https://scheduler-production-29d4.up.railway.app/api/youtube/callback`
+- Redirect URI registered: `https://viraltoby.com/api/youtube/callback`
 - Scopes: `youtube.upload`, `youtube.readonly`, `youtube.force-ssl`
 - Refresh token stored permanently, auto-refreshed before each upload
 - Quota monitoring with daily reset
@@ -1001,20 +1001,20 @@ SUPABASE_SERVICE_KEY=eyJ...                # Service role key (backend)
 # Instagram OAuth (Meta)
 INSTAGRAM_APP_ID=264539962542...
 INSTAGRAM_APP_SECRET=c919b803be...
-INSTAGRAM_REDIRECT_URI=https://scheduler-production-29d4.up.railway.app/api/auth/instagram/callback
+INSTAGRAM_REDIRECT_URI=https://viraltoby.com/api/auth/instagram/callback
 
 # Facebook OAuth (Meta — same app, different scopes)
 FACEBOOK_APP_ID=<same as IG or separate>   # ❌ MISSING — ADD THIS
 FACEBOOK_APP_SECRET=<same as IG or sep>    # ❌ MISSING — ADD THIS  
-FACEBOOK_REDIRECT_URI=https://scheduler-production-29d4.up.railway.app/api/auth/facebook/callback
+FACEBOOK_REDIRECT_URI=https://viraltoby.com/api/auth/facebook/callback
 
 # YouTube OAuth (Google)
 YOUTUBE_CLIENT_ID=474229192527-r7pkq...
 YOUTUBE_CLIENT_SECRET=GOCSPX-tCf4dBO...
-YOUTUBE_REDIRECT_URI=https://scheduler-production-29d4.up.railway.app/api/youtube/callback
+YOUTUBE_REDIRECT_URI=https://viraltoby.com/api/youtube/callback
 
 # App
-SITE_URL=https://scheduler-production-29d4.up.railway.app
+SITE_URL=https://viraltoby.com
 DATABASE_URL=postgres://...
 ```
 
@@ -1029,9 +1029,9 @@ TOKEN_ENCRYPTION_KEY=<generated-key>
 
 | Platform | Dashboard | Redirect URI |
 |----------|-----------|-------------|
-| Instagram | developers.facebook.com → Facebook Login Settings | `https://scheduler-production-29d4.up.railway.app/api/auth/instagram/callback` |
-| Facebook | developers.facebook.com → Facebook Login Settings | `https://scheduler-production-29d4.up.railway.app/api/auth/facebook/callback` |
-| YouTube | console.cloud.google.com → OAuth 2.0 Client | `https://scheduler-production-29d4.up.railway.app/api/youtube/callback` |
+| Instagram | developers.facebook.com → Facebook Login Settings | `https://viraltoby.com/api/auth/instagram/callback` |
+| Facebook | developers.facebook.com → Facebook Login Settings | `https://viraltoby.com/api/auth/facebook/callback` |
+| YouTube | console.cloud.google.com → OAuth 2.0 Client | `https://viraltoby.com/api/youtube/callback` |
 
 ---
 

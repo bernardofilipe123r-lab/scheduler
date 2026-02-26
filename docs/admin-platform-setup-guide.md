@@ -29,7 +29,7 @@ Both Instagram and Facebook OAuth use the **same Meta App**. You only create one
 2. Click **My Apps** (top right) → **Create App**
 3. Choose app type: **Business**
 4. Fill in:
-   - **App Name**: `Healveth Content Engine` (or your preferred name)
+   - **App Name**: `ViralToby` (or your preferred name)
    - **App Contact Email**: your business email
    - **Business Portfolio**: select your Meta Business account (create one if needed)
 5. Click **Create App**
@@ -48,15 +48,15 @@ Go to **App Settings** → **Basic**:
 
 1. **App Domains**: Add your production domain:
    ```
-   scheduler-production-29d4.up.railway.app
+   viraltoby.com
    ```
 2. **Privacy Policy URL**: A valid, publicly accessible URL. Example:
    ```
-   https://scheduler-production-29d4.up.railway.app/privacy
+   https://viraltoby.com/privacy
    ```
 3. **Terms of Service URL**: A valid, publicly accessible URL. Example:
    ```
-   https://scheduler-production-29d4.up.railway.app/terms
+   https://viraltoby.com/terms
    ```
 4. **App Icon**: Upload a 1024×1024 app icon
 5. **Category**: Select `Business and Pages`
@@ -69,16 +69,16 @@ Go to **Facebook Login for Business** → **Settings** in the left sidebar:
 
 1. **Valid OAuth Redirect URIs** — add BOTH:
    ```
-   https://scheduler-production-29d4.up.railway.app/api/auth/instagram/callback
-   https://scheduler-production-29d4.up.railway.app/api/auth/facebook/callback
+   https://viraltoby.com/api/auth/instagram/callback
+   https://viraltoby.com/api/auth/facebook/callback
    ```
 2. **Deauthorize Callback URL** (optional):
    ```
-   https://scheduler-production-29d4.up.railway.app/api/auth/deauthorize
+   https://viraltoby.com/api/auth/deauthorize
    ```
 3. **Data Deletion Request URL** (required for App Review):
    ```
-   https://scheduler-production-29d4.up.railway.app/api/auth/data-deletion
+   https://viraltoby.com/api/auth/data-deletion
    ```
 4. Set **Login with the JavaScript SDK** to **No**
 5. Set **Force Web OAuth Reauthentication** to **Yes**
@@ -114,7 +114,7 @@ The app requests these Instagram scopes:
 ```
 INSTAGRAM_APP_ID=<your Meta App ID>
 INSTAGRAM_APP_SECRET=<your Meta App Secret>
-INSTAGRAM_REDIRECT_URI=https://scheduler-production-29d4.up.railway.app/api/auth/instagram/callback
+INSTAGRAM_REDIRECT_URI=https://viraltoby.com/api/auth/instagram/callback
 ```
 
 > **Note**: `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` are the exact same values as the Meta App ID and App Secret from section 1.3. Instagram uses Facebook Login under the hood.
@@ -145,7 +145,7 @@ The app requests these Facebook scopes:
 ```
 FACEBOOK_APP_ID=<your Meta App ID>
 FACEBOOK_APP_SECRET=<your Meta App Secret>
-FACEBOOK_REDIRECT_URI=https://scheduler-production-29d4.up.railway.app/api/auth/facebook/callback
+FACEBOOK_REDIRECT_URI=https://viraltoby.com/api/auth/facebook/callback
 ```
 
 > **Note**: These are typically the **same** App ID and App Secret as Instagram (section 1.3), since both use the same Meta App. However, the code reads them from separate env vars, so set both pairs.
@@ -176,7 +176,7 @@ FB_API_VERSION=v21.0
 
 1. Go to **[Google Cloud Console](https://console.cloud.google.com/)**
 2. Click the project selector (top bar) → **New Project**
-3. Name: `Healveth Content Engine` (or your preferred name)
+3. Name: `ViralToby` (or your preferred name)
 4. Click **Create**
 
 ### 4.2 Enable YouTube Data API v3
@@ -190,13 +190,13 @@ FB_API_VERSION=v21.0
 1. Go to **APIs & Services** → **OAuth consent screen**
 2. Select **External** user type → **Create**
 3. Fill in the required fields:
-   - **App name**: `Healveth Content Engine`
+   - **App name**: `ViralToby`
    - **User support email**: your email
    - **App logo**: upload your app logo (optional but recommended for verified apps)
    - **App domain**: 
-     - **Application home page**: `https://scheduler-production-29d4.up.railway.app`
-     - **Application privacy policy link**: `https://scheduler-production-29d4.up.railway.app/privacy`
-     - **Application terms of service link**: `https://scheduler-production-29d4.up.railway.app/terms`
+     - **Application home page**: `https://viraltoby.com`
+     - **Application privacy policy link**: `https://viraltoby.com/privacy`
+     - **Application terms of service link**: `https://viraltoby.com/terms`
    - **Authorized domains**: Add `up.railway.app`
    - **Developer contact email**: your email
 4. Click **Save and Continue**
@@ -226,10 +226,10 @@ While the app is in **Testing** status (not yet verified):
 1. Go to **APIs & Services** → **Credentials**
 2. Click **Create Credentials** → **OAuth client ID**
 3. Application type: **Web application**
-4. Name: `Healveth Web Client`
+4. Name: `ViralToby`
 5. **Authorized redirect URIs** — add:
    ```
-   https://scheduler-production-29d4.up.railway.app/api/youtube/callback
+   https://viraltoby.com/api/youtube/callback
    ```
 6. Click **Create**
 7. Note down the **Client ID** and **Client Secret**
@@ -239,7 +239,7 @@ While the app is in **Testing** status (not yet verified):
 ```
 YOUTUBE_CLIENT_ID=<your Google OAuth Client ID>
 YOUTUBE_CLIENT_SECRET=<your Google OAuth Client Secret>
-YOUTUBE_REDIRECT_URI=https://scheduler-production-29d4.up.railway.app/api/youtube/callback
+YOUTUBE_REDIRECT_URI=https://viraltoby.com/api/youtube/callback
 ```
 
 ### 4.8 How it Works
@@ -263,10 +263,10 @@ Set all of these in your **Railway** project dashboard under **Variables**:
 |----------|-------|-------|
 | `INSTAGRAM_APP_ID` | `<Meta App ID from 1.3>` | Same as your Meta App ID |
 | `INSTAGRAM_APP_SECRET` | `<Meta App Secret from 1.3>` | Same as your Meta App Secret |
-| `INSTAGRAM_REDIRECT_URI` | `https://scheduler-production-29d4.up.railway.app/api/auth/instagram/callback` | Must match exactly what's in Meta app settings |
+| `INSTAGRAM_REDIRECT_URI` | `https://viraltoby.com/api/auth/instagram/callback` | Must match exactly what's in Meta app settings |
 | `FACEBOOK_APP_ID` | `<Meta App ID from 1.3>` | Same value as INSTAGRAM_APP_ID |
 | `FACEBOOK_APP_SECRET` | `<Meta App Secret from 1.3>` | Same value as INSTAGRAM_APP_SECRET |
-| `FACEBOOK_REDIRECT_URI` | `https://scheduler-production-29d4.up.railway.app/api/auth/facebook/callback` | Must match exactly what's in Meta app settings |
+| `FACEBOOK_REDIRECT_URI` | `https://viraltoby.com/api/auth/facebook/callback` | Must match exactly what's in Meta app settings |
 | `FB_API_VERSION` | `v21.0` | Optional — defaults to v21.0 |
 
 ### YouTube (Google)
@@ -275,13 +275,13 @@ Set all of these in your **Railway** project dashboard under **Variables**:
 |----------|-------|-------|
 | `YOUTUBE_CLIENT_ID` | `<Google OAuth Client ID from 4.6>` | From Google Cloud Console |
 | `YOUTUBE_CLIENT_SECRET` | `<Google OAuth Client Secret from 4.6>` | From Google Cloud Console |
-| `YOUTUBE_REDIRECT_URI` | `https://scheduler-production-29d4.up.railway.app/api/youtube/callback` | Must match exactly what's in Google Cloud Console |
+| `YOUTUBE_REDIRECT_URI` | `https://viraltoby.com/api/youtube/callback` | Must match exactly what's in Google Cloud Console |
 
 ### General
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `SITE_URL` | `https://scheduler-production-29d4.up.railway.app` | Used for OAuth redirect base URL. No trailing slash. |
+| `SITE_URL` | `https://viraltoby.com` | Used for OAuth redirect base URL. No trailing slash. |
 
 ---
 

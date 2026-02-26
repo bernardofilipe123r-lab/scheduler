@@ -1,6 +1,6 @@
 import { Trash2, Mail, LogOut, Instagram, ShieldX } from 'lucide-react'
 
-const APP_NAME = 'Schedule Reels'
+const APP_NAME = 'ViralToby'
 const CONTACT_EMAIL = 'bernardofilipe123r@gmail.com'
 
 export function DataDeletionPage() {
@@ -42,7 +42,7 @@ export function DataDeletionPage() {
         <Option
           number={2}
           icon={<Instagram className="h-5 w-5" />}
-          title="Revoke from Instagram / Facebook"
+          title="Revoke from Instagram / Facebook / YouTube"
         >
           <ol className="list-decimal pl-6 space-y-2">
             <li>
@@ -51,6 +51,18 @@ export function DataDeletionPage() {
             <li>
               Find <strong className="text-white">{APP_NAME}</strong> and click{' '}
               <strong className="text-white">Remove</strong>
+            </li>
+            <li>
+              For YouTube, go to{' '}
+              <a
+                href="https://myaccount.google.com/permissions"
+                className="text-blue-400 hover:underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Google Account Permissions
+              </a>{' '}
+              and revoke access for {APP_NAME}
             </li>
             <li>
               This revokes our access. We will automatically purge your data upon detecting the
@@ -86,6 +98,7 @@ export function DataDeletionPage() {
             <li>Instagram / Facebook access tokens</li>
             <li>Instagram Business Account ID and Facebook Page ID</li>
             <li>Instagram username and Facebook Page name</li>
+            <li>YouTube channel ID, access tokens, and refresh tokens</li>
             <li>Any scheduled or generated content associated with your account</li>
           </ul>
           <p className="mt-4 text-gray-400 text-sm">

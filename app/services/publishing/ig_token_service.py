@@ -24,7 +24,7 @@ INSTAGRAM_APP_ID = os.environ.get("INSTAGRAM_APP_ID", "")
 INSTAGRAM_APP_SECRET = os.environ.get("INSTAGRAM_APP_SECRET", "")
 INSTAGRAM_REDIRECT_URI = os.environ.get(
     "INSTAGRAM_REDIRECT_URI",
-    os.environ.get("SITE_URL", "https://scheduler-production-29d4.up.railway.app")
+    os.environ.get("SITE_URL", "https://viraltoby.com")
     + "/api/auth/instagram/callback",
 )
 

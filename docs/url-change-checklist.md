@@ -1,6 +1,6 @@
 # App URL Change Checklist
 
-> **Current production URL:** `https://scheduler-production-29d4.up.railway.app`
+> **Current production URL:** `https://viraltoby.com`
 >
 > Every time the production URL changes, go through every item in this list. Missing any one of them will cause OAuth flows, emails, or API calls to break.
 
@@ -12,10 +12,10 @@ Update these in the Railway project dashboard (or via `railway variables --set`)
 
 | Variable | Current Value | Purpose |
 |---|---|---|
-| `VITE_APP_URL` | `https://scheduler-production-29d4.up.railway.app` | Email confirmation redirect (React, baked at build time) |
-| `PUBLIC_URL_BASE` | `https://scheduler-production-29d4.up.railway.app` | Used by backend for generating public links |
-| `YOUTUBE_REDIRECT_URI` | `https://scheduler-production-29d4.up.railway.app/api/youtube/callback` | YouTube OAuth callback |
-| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000,https://scheduler-production-29d4.up.railway.app` | CORS allowed origins for the FastAPI backend |
+| `VITE_APP_URL` | `https://viraltoby.com` | Email confirmation redirect (React, baked at build time) |
+| `PUBLIC_URL_BASE` | `https://viraltoby.com` | Used by backend for generating public links |
+| `YOUTUBE_REDIRECT_URI` | `https://viraltoby.com/api/youtube/callback` | YouTube OAuth callback |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000,https://viraltoby.com` | CORS allowed origins for the FastAPI backend |
 
 ```bash
 railway variables --set "VITE_APP_URL=https://NEW_URL"
@@ -71,7 +71,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://NEW_URL
 
 ### 5a. App Settings → Basic
 
-- **App Domains:** Add the new domain (e.g. `scheduler-production-29d4.up.railway.app`)
+- **App Domains:** Add the new domain (e.g. `viraltoby.com`)
 - **Privacy Policy URL:** Update if it includes the old domain
 - **Terms of Service URL:** Update if it includes the old domain
 - **Site URL** (under Website): `https://NEW_URL`
@@ -139,4 +139,4 @@ emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
 
 | Date | Old URL | New URL | Changed By |
 |---|---|---|---|
-| Feb 2026 | (initial) | `https://scheduler-production-29d4.up.railway.app` | Filipe |
+| Feb 2026 | (initial) | `https://viraltoby.com` | Filipe |

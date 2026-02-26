@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth/instagram", tags=["instagram-oauth"])
 
 INSTAGRAM_APP_ID = os.environ.get("INSTAGRAM_APP_ID", "")
-SITE_URL = os.environ.get("SITE_URL", "https://scheduler-production-29d4.up.railway.app")
+SITE_URL = os.environ.get("SITE_URL", "https://viraltoby.com")
 INSTAGRAM_REDIRECT_URI = os.environ.get(
     "INSTAGRAM_REDIRECT_URI",
     SITE_URL + "/api/auth/instagram/callback",

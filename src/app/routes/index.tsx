@@ -21,6 +21,7 @@ import { CreateBrandPage } from '@/pages/CreateBrand'
 import { TobyPage } from '@/pages/Toby'
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicy'
 import { DataDeletionPage } from '@/pages/DataDeletion'
+import { TermsPage } from '@/pages/Terms'
 import { AppLoader } from '@/shared/components'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -94,6 +95,8 @@ export function AppRoutes() {
     <>
       <Routes>
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/data-deletion" element={<DataDeletionPage />} />
         <Route path="/login" element={<LoginGuard />} />
         <Route path="/onboarding" element={<OnboardingPageGuard />} />
