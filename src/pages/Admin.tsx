@@ -1033,7 +1033,8 @@ function UserDetail({
                               <span className="text-gray-400 whitespace-nowrap shrink-0 mt-0.5">{formatTimestamp(a.created_at)}</span>
                               <span className={clsx(
                                 'inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0',
-                                a.action_type.includes('error') ? 'bg-red-50 text-red-600' :
+                                a.action_type.includes('failed') || a.action_type.includes('error') ? 'bg-red-50 text-red-600' :
+                                a.action_type.includes('partial') ? 'bg-amber-50 text-amber-700' :
                                 a.action_type.includes('create') || a.action_type.includes('generate') ? 'bg-violet-50 text-violet-700' :
                                 a.action_type.includes('publish') ? 'bg-green-50 text-green-700' :
                                 a.action_type.includes('experiment') ? 'bg-blue-50 text-blue-700' :
@@ -1041,7 +1042,7 @@ function UserDetail({
                               )}>
                                 {a.action_type.replace(/_/g, ' ')}
                               </span>
-                              <span className="text-gray-600 truncate">{a.description}</span>
+                              <span className="text-gray-600 break-words min-w-0">{a.description}</span>
                             </div>
                           ))}
                         </div>
