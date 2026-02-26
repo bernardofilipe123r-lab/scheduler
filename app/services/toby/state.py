@@ -24,6 +24,7 @@ def get_or_create_state(db: Session, user_id: str) -> TobyState:
             user_id=user_id,
             enabled=False,
             phase="bootstrap",
+            phase_started_at=datetime.now(timezone.utc),
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -70,6 +71,10 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
     state.enabled_at = now
     state.disabled_at = None
 
+    # Ensure phase_started_at is always set
+    if not state.phase_started_at:
+        state.phase_started_at = now
+
     # Validate phase matches reality: if scored posts don't justify the current
     # phase, reset to the correct one (fixes stale phase from prior runs/tests).
     from app.models.toby import TobyContentTag
@@ -78,7 +83,7 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
         .filter(TobyContentTag.user_id == user_id, TobyContentTag.toby_score.isnot(None))
         .count()
     )
-    if state.phase == "optimizing" or state.phase == "learning":
+    if state.phase in ("optimizing", "learning"):
         if scored < BOOTSTRAP_MIN_POSTS:
             state.phase = "bootstrap"
             state.phase_started_at = now
@@ -87,9 +92,6 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
                 f"Phase reset to bootstrap on enable (only {scored} scored posts — need {BOOTSTRAP_MIN_POSTS})",
                 level="warning",
             )
-
-    if not state.phase_started_at:
-        state.phase_started_at = now
     state.updated_at = now
     _log_activity(db, user_id, "toby_enabled", "Toby has been enabled", level="success")
     db.flush()
@@ -134,16 +136,10 @@ def reset_toby(db: Session, user_id: str) -> TobyState:
 
 def check_phase_transition(db: Session, state: TobyState, scored_post_count: int) -> bool:
     """Check if Toby should transition to the next phase. Returns True if transitioned."""
-    if not state.phase_started_at:
-        return False
-
     now = datetime.now(timezone.utc)
-    phase_start = state.phase_started_at
-    if phase_start.tzinfo is None:
-        phase_start = phase_start.replace(tzinfo=timezone.utc)
-    days_in_phase = (now - phase_start).days
 
-    # Safety: if phase is ahead of reality, regress to match scored post count
+    # Safety: if phase is ahead of reality, regress to match scored post count.
+    # This MUST run before the phase_started_at guard so stale phases always self-heal.
     if state.phase in ("learning", "optimizing") and scored_post_count < BOOTSTRAP_MIN_POSTS:
         old_phase = state.phase
         state.phase = "bootstrap"
@@ -155,6 +151,17 @@ def check_phase_transition(db: Session, state: TobyState, scored_post_count: int
             level="warning",
         )
         return True
+
+    # For forward transitions we need phase_started_at to compute days_in_phase
+    if not state.phase_started_at:
+        state.phase_started_at = now
+        state.updated_at = now
+        return False
+
+    phase_start = state.phase_started_at
+    if phase_start.tzinfo is None:
+        phase_start = phase_start.replace(tzinfo=timezone.utc)
+    days_in_phase = (now - phase_start).days
 
     if state.phase == "bootstrap":
         if scored_post_count >= BOOTSTRAP_MIN_POSTS and days_in_phase >= BOOTSTRAP_MIN_DAYS:
