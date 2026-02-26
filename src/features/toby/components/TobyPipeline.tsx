@@ -202,25 +202,65 @@ function ItemDetail({ item, navigate }: { item: TobyActivityItem; navigate: Retu
       )
     }
     case 'discovery_scan': {
-      const own = meta?.own_accounts as number | undefined
-      const competitors = meta?.competitors as number | undefined
-      const hashtags = meta?.hashtags as number | undefined
+      // Backend uses two naming conventions; handle both
+      const own = (meta?.own_accounts ?? meta?.own_account_new) as number | undefined
+      const competitors = (meta?.competitors ?? meta?.competitor_new) as number | undefined
+      const hashtags = (meta?.hashtags ?? meta?.hashtag_new) as number | undefined
+      const sources = meta?.sources as Array<{ account?: string; hashtag?: string; count?: number; new_items?: number }> | undefined
+      const scanned = meta?.scanned_accounts as Array<{ account?: string; hashtag?: string; method?: string; new_items?: number }> | undefined
+
       const total = (own ?? 0) + (competitors ?? 0) + (hashtags ?? 0)
-      if (total === 0 && own == null && competitors == null && hashtags == null) return null
-      const rows = [
-        { label: 'Own accounts', value: own, color: 'text-emerald-600' },
-        { label: 'Competitors', value: competitors, color: 'text-blue-600' },
-        { label: 'Hashtags', value: hashtags, color: 'text-violet-600' },
-      ].filter(r => (r.value ?? 0) > 0)
-      if (rows.length === 0) return null
+      const hasCounts = own != null || competitors != null || hashtags != null
+      if (!hasCounts && !sources?.length && !scanned?.length) return null
+
+      // Build display list — prefer scanned_accounts, fallback to sources, fallback to count rows
+      const displayItems: Array<{ label: string; sublabel?: string; count: number; color: string }> = []
+
+      type ScannedItem = { account?: string; hashtag?: string; method?: string; new_items?: number }
+      const accountList: ScannedItem[] = scanned?.length
+        ? scanned
+        : sources?.length
+          ? sources.map(s => ({ account: s.account, hashtag: s.hashtag, new_items: s.new_items ?? s.count }))
+          : []
+      if (accountList.length > 0) {
+        for (const s of accountList) {
+          const label = s.hashtag ? `#${s.hashtag}` : `@${s.account ?? '?'}`
+          const method = s.method === 'own_account' ? 'Own' : s.method === 'competitor' ? 'Competitor' : s.method === 'hashtag_search' ? 'Hashtag' : ''
+          displayItems.push({
+            label,
+            sublabel: method || undefined,
+            count: s.new_items ?? 0,
+            color: s.method === 'own_account' ? 'text-emerald-600' :
+                   (s.method === 'hashtag_search' || s.hashtag) ? 'text-violet-600' : 'text-blue-600',
+          })
+        }
+      } else {
+        if ((own ?? 0) > 0) displayItems.push({ label: 'Own accounts', count: own!, color: 'text-emerald-600' })
+        if ((competitors ?? 0) > 0) displayItems.push({ label: 'Competitors', count: competitors!, color: 'text-blue-600' })
+        if ((hashtags ?? 0) > 0) displayItems.push({ label: 'Hashtags', count: hashtags!, color: 'text-violet-600' })
+      }
+
+      if (displayItems.length === 0) {
+        // edge case: discovered items but no granular breakdown yet
+        return <p className="text-xs text-gray-400">Trending items were added to the discovery pool.</p>
+      }
+
       return (
-        <div className="flex gap-4">
-          {rows.map((r) => (
-            <div key={r.label} className="flex-1 px-3 py-2 bg-amber-50/60 rounded-lg text-center">
-              <p className={`text-base font-bold ${r.color}`}>{r.value}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">{r.label}</p>
+        <div className="space-y-1.5">
+          {displayItems.map((item, i) => (
+            <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-amber-50/60 rounded-lg">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`text-xs font-medium truncate ${item.color}`}>{item.label}</span>
+                {item.sublabel && <span className="text-[10px] text-gray-400 shrink-0">{item.sublabel}</span>}
+              </div>
+              <span className={`text-xs font-bold shrink-0 ${item.color}`}>
+                {item.count > 0 ? `+${item.count}` : 'scanned'}
+              </span>
             </div>
           ))}
+          {total > 0 && displayItems.length > 1 && (
+            <p className="text-[10px] text-gray-400 pt-0.5">{total} new items total</p>
+          )}
         </div>
       )
     }

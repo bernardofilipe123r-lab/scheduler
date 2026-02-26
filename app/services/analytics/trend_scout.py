@@ -676,6 +676,7 @@ class TrendScout:
                 "competitor_new": 0,
                 "hashtag_new": 0,
                 "api_calls": 0,
+                "scanned_accounts": [],  # which accounts/hashtags were scanned this tick
             }
 
             # ── 1. One own account (deeper pull: limit=25) ──
@@ -757,6 +758,11 @@ class TrendScout:
                     new_count += 1
 
                 results["own_account_new"] = new_count
+                results["scanned_accounts"].append({
+                    "account": target_handle,
+                    "method": "own_account",
+                    "new_items": new_count,
+                })
                 _log("Bootstrap: Own account done",
                          f"@{target_handle} → {new_count} new posts stored",
                          "🪞", "data")
@@ -825,6 +831,11 @@ class TrendScout:
                     new_count += 1
 
                 results["competitor_new"] = new_count
+                results["scanned_accounts"].append({
+                    "account": target_comp,
+                    "method": "competitor",
+                    "new_items": new_count,
+                })
                 _log("Bootstrap: Competitor done",
                          f"@{target_comp} → {new_count} new posts stored",
                          "🔍", "data")
@@ -902,6 +913,11 @@ class TrendScout:
                     new_count += 1
 
                 results["hashtag_new"] = new_count
+                results["scanned_accounts"].append({
+                    "hashtag": target_hashtag,
+                    "method": "hashtag_search",
+                    "new_items": new_count,
+                })
                 _log("Bootstrap: Hashtag done",
                          f"#{target_hashtag} → {new_count} new posts stored",
                          "🏷️", "data")

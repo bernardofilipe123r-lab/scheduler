@@ -94,12 +94,19 @@ def run_discovery_tick(db: Session, user_id: str, state: TobyState) -> dict:
             # Aggressive bootstrap scan
             scan_result = scout.bootstrap_scan_tick()
             results["bootstrap"] = scan_result
-            total = sum(v if isinstance(v, int) else 0 for v in scan_result.values()) if isinstance(scan_result, dict) else 0
+            total = scan_result.get('own_account_new', 0) + scan_result.get('competitor_new', 0) + scan_result.get('hashtag_new', 0)
             # Only log when items are actually discovered to avoid spam
             if total > 0:
                 # Enrich metadata with recently discovered source details
                 enriched = dict(scan_result) if isinstance(scan_result, dict) else {}
-                enriched["sources"] = _get_recent_sources(db, user_id, minutes=2)
+                # Prefer scanned_accounts (set by bootstrap_scan_tick) over DB query
+                if not enriched.get('sources') and enriched.get('scanned_accounts'):
+                    enriched['sources'] = [
+                        {'account': s.get('account'), 'hashtag': s.get('hashtag'), 'count': s.get('new_items', 0)}
+                        for s in enriched.get('scanned_accounts', [])
+                    ]
+                elif not enriched.get('sources'):
+                    enriched['sources'] = _get_recent_sources(db, user_id, minutes=60)
                 _log(db, user_id, "discovery_scan",
                      f"Bootstrap scan: discovered {total} new trending items",
                      level="info", metadata=enriched)
@@ -129,7 +136,8 @@ def run_discovery_tick(db: Session, user_id: str, state: TobyState) -> dict:
             total = results["own_accounts"] + results["competitors"] + results["hashtags"]
             # Enrich metadata with source details
             enriched = dict(results)
-            enriched["sources"] = _get_recent_sources(db, user_id, minutes=2)
+            if not enriched.get('sources'):
+                enriched["sources"] = _get_recent_sources(db, user_id, minutes=60)
             _log(db, user_id, "discovery_scan",
                  f"Discovered {total} trending items (own: {results['own_accounts']}, "
                  f"competitors: {results['competitors']}, hashtags: {results['hashtags']})",
