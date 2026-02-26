@@ -215,6 +215,7 @@ export function ConnectionsTab() {
             brand={brand}
             brandLogo={brandLogos[brand.brand]}
             onRefresh={() => refetch()}
+            oauthConfigured={data.oauth_configured}
           />
         ))}
       </div>
@@ -224,10 +225,13 @@ export function ConnectionsTab() {
         <h3 className="font-semibold text-blue-900 mb-2">About Platform Connections</h3>
         <div className="space-y-2 text-sm text-blue-800">
           <p>
-            <strong>Instagram & Facebook:</strong> Connected via Meta Business Suite. These use long-lived System User tokens that don't expire.
+            <strong>Instagram:</strong> Connected via Meta OAuth. Long-lived tokens (60 days) are refreshed automatically every 6 hours — you should never need to reconnect manually.
           </p>
           <p>
-            <strong>YouTube:</strong> Connected via OAuth. Click "Connect" to authorize your YouTube channel. The connection persists until you revoke access.
+            <strong>Facebook:</strong> Connected via Facebook Login. Stores a Page access token that lets the app post on behalf of your Facebook Page.
+          </p>
+          <p>
+            <strong>YouTube:</strong> Connected via Google OAuth. Stores a permanent refresh token — the connection persists until you revoke access in your Google account settings. Token validity is checked every 24 hours.
           </p>
           <p className="text-blue-600 mt-3">
             💡 Each brand can have different social accounts connected. YouTube channels cannot be shared between brands.
