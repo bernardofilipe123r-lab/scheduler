@@ -15,6 +15,8 @@ export interface DynamicBrandInfo {
   scheduleOffset: number
   active: boolean
   instagram_handle?: string
+  has_instagram?: boolean
+  has_facebook?: boolean
 }
 
 /**
@@ -42,6 +44,8 @@ export function useDynamicBrands() {
           scheduleOffset: b.schedule_offset,
           active: b.active,
           instagram_handle: b.instagram_handle,
+          has_instagram: b.has_instagram,
+          has_facebook: b.has_facebook,
         }))
     }
 

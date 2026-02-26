@@ -443,9 +443,51 @@ export function ScheduledPage() {
   }, [posts, statsFilter, contentTypeFilter])
   
   if (isLoading) return <ScheduledSkeleton />
+
+  // Compute failure/partial stats for the warning banner
+  const failedCount = posts.filter(p => p.status === 'failed').length
+  const partialCount = posts.filter(p => p.status === 'partial').length
+  const disconnectedBrands = dynamicBrands.filter(b => b.active && !b.has_instagram)
   
   return (
     <div className="space-y-6">
+      {/* Failure warning banner */}
+      {(failedCount > 0 || partialCount > 0) && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-red-800">Publishing failures detected</p>
+            <p className="text-sm text-red-700 mt-1">
+              {failedCount > 0 && `${failedCount} post${failedCount !== 1 ? 's' : ''} completely failed`}
+              {failedCount > 0 && partialCount > 0 && ', '}
+              {partialCount > 0 && `${partialCount} post${partialCount !== 1 ? 's' : ''} partially failed`}
+              . Check the posts marked with ❌ or ⚠️ below — click to see details and retry.
+            </p>
+            {disconnectedBrands.length > 0 && (
+              <p className="text-sm text-red-700 mt-1">
+                ⚠️ <strong>{disconnectedBrands.map(b => b.label).join(', ')}</strong> {disconnectedBrands.length === 1 ? 'has' : 'have'} no Instagram connected.
+                {' '}<a href="/brands?tab=connections" className="underline font-medium">Reconnect in Brands → Connections</a>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Disconnected brands warning (when no failures yet) */}
+      {failedCount === 0 && partialCount === 0 && disconnectedBrands.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">Instagram disconnected</p>
+            <p className="text-sm text-amber-700 mt-1">
+              <strong>{disconnectedBrands.map(b => b.label).join(', ')}</strong> {disconnectedBrands.length === 1 ? 'has' : 'have'} no active Instagram connection.
+              Scheduled posts for {disconnectedBrands.length === 1 ? 'this brand' : 'these brands'} will fail to publish.
+              {' '}<a href="/brands?tab=connections" className="underline font-medium">Reconnect in Brands → Connections</a>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -858,10 +900,12 @@ export function ScheduledPage() {
                         key={post.id}
                         className="text-xs px-1.5 py-0.5 rounded truncate flex items-center gap-1"
                         style={{ 
-                          backgroundColor: `${getBrandColor(post.brand)}20`,
-                          color: getBrandColor(post.brand)
+                          backgroundColor: post.status === 'failed' ? '#fef2f2' : post.status === 'partial' ? '#fffbeb' : `${getBrandColor(post.brand)}20`,
+                          color: post.status === 'failed' ? '#b91c1c' : post.status === 'partial' ? '#b45309' : getBrandColor(post.brand)
                         }}
                       >
+                        {post.status === 'failed' && <span title="Failed">❌</span>}
+                        {post.status === 'partial' && <span title="Partial failure">⚠️</span>}
                         {formatTime(post.scheduled_time)}
                         {post.created_by === 'toby' && <span title="Created by Toby">🤖</span>}
                       </div>
@@ -924,12 +968,18 @@ export function ScheduledPage() {
                         }}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="text-sm font-medium min-w-[70px]" style={{ color: getBrandColor(post.brand) }}>
+                          <div className="text-sm font-medium min-w-[70px]" style={{ color: post.status === 'failed' ? '#b91c1c' : post.status === 'partial' ? '#b45309' : getBrandColor(post.brand) }}>
                             {formatTime(post.scheduled_time, '12h')}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
                               <BrandBadge brand={post.brand} size="sm" />
+                              {post.status === 'failed' && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700" title={post.error || 'Publishing failed'}>❌ Failed</span>
+                              )}
+                              {post.status === 'partial' && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title={post.error || 'Partial failure'}>⚠️ Partial</span>
+                              )}
                               <span className={clsx(
                                 'text-xs px-1.5 py-0.5 rounded',
                                 post.metadata?.variant === 'post'
@@ -1127,6 +1177,12 @@ export function ScheduledPage() {
                       <span className="text-sm text-gray-500">
                         {formatTime(post.scheduled_time, '12h')}
                       </span>
+                      {post.status === 'failed' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700" title={post.error || 'Publishing failed'}>❌ Failed</span>
+                      )}
+                      {post.status === 'partial' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title={post.error || 'Partial failure'}>⚠️ Partial</span>
+                      )}
                       <span className={clsx(
                         'text-xs px-1.5 py-0.5 rounded',
                         post.metadata?.variant === 'post'
@@ -1509,6 +1565,11 @@ export function ScheduledPage() {
                         ) : (
                           <span className="text-red-600 block text-right">
                             ✗ {result.error || 'Failed'}
+                            {(result.error || '').toLowerCase().includes('access token') && (
+                              <a href="/brands?tab=connections" className="block mt-1 text-red-700 underline font-medium">
+                                🔑 Reconnect Instagram
+                              </a>
+                            )}
                           </span>
                         )}
                       </div>

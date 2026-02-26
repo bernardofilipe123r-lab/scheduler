@@ -815,9 +815,13 @@ async def startup_event():
 
         db = SessionLocal()
         try:
+            from sqlalchemy import or_
             brands = db.query(Brand).filter(
                 Brand.active.is_(True),
-                Brand.instagram_access_token.isnot(None),
+                or_(
+                    Brand.instagram_access_token.isnot(None),
+                    Brand.meta_access_token.isnot(None),
+                ),
             ).all()
 
             if not brands:
@@ -826,10 +830,22 @@ async def startup_event():
             token_service = InstagramTokenService()
             refreshed = 0
             failed = 0
+            synced = 0
 
             for brand in brands:
+                # Use whichever token is available (prefer instagram_access_token)
+                current_token = brand.instagram_access_token or brand.meta_access_token
+                if not current_token:
+                    continue
+
+                # Sync desync'd columns before refreshing
+                if brand.instagram_access_token != brand.meta_access_token:
+                    brand.instagram_access_token = current_token
+                    brand.meta_access_token = current_token
+                    synced += 1
+
                 try:
-                    result = token_service.refresh_long_lived_token(brand.instagram_access_token)
+                    result = token_service.refresh_long_lived_token(current_token)
                     new_token = result.get("access_token")
                     if new_token:
                         brand.instagram_access_token = new_token
@@ -839,9 +855,9 @@ async def startup_event():
                     failed += 1
                     print(f"⚠️ Token refresh failed for {brand.id}: {e}", flush=True)
 
-            if refreshed > 0:
+            if refreshed > 0 or synced > 0:
                 db.commit()
-            print(f"🔑 IG token refresh: {refreshed} refreshed, {failed} failed", flush=True)
+            print(f"🔑 IG token refresh: {refreshed} refreshed, {failed} failed, {synced} synced", flush=True)
         except Exception as e:
             db.rollback()
             print(f"❌ IG token refresh job failed: {e}", flush=True)

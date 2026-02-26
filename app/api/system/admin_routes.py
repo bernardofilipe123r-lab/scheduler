@@ -206,7 +206,7 @@ async def get_user_brands(
                 # Credentials presence (never expose tokens)
                 "has_instagram": bool(
                     getattr(b, "instagram_business_account_id", None)
-                    and getattr(b, "instagram_access_token", None)
+                    and (getattr(b, "instagram_access_token", None) or getattr(b, "meta_access_token", None))
                 ),
                 "has_facebook": bool(
                     getattr(b, "facebook_page_id", None)

@@ -246,7 +246,7 @@ def instagram_status(
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
 
-    connected = bool(brand.instagram_business_account_id and brand.instagram_access_token)
+    connected = bool(brand.instagram_business_account_id and (brand.instagram_access_token or brand.meta_access_token))
 
     return {
         "connected": connected,
