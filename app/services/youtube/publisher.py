@@ -290,10 +290,19 @@ class YouTubePublisher:
                 "client_secret": self.client_secret,
                 "refresh_token": refresh_token,
                 "grant_type": "refresh_token"
-            })
+            }, timeout=15)
             
             if response.status_code != 200:
-                return False, {"error": f"Token refresh failed: {response.text}"}
+                error_body = response.text
+                # Classify the error so callers can distinguish permanent vs transient
+                is_revoked = any(kw in error_body.lower() for kw in (
+                    "invalid_grant", "token has been expired or revoked",
+                    "token has been revoked",
+                ))
+                return False, {
+                    "error": f"Token refresh failed: {error_body}",
+                    "revoked": is_revoked,
+                }
             
             token_data = response.json()
             return True, {
@@ -301,6 +310,10 @@ class YouTubePublisher:
                 "expires_in": token_data.get("expires_in", 3600)
             }
             
+        except requests.exceptions.Timeout:
+            return False, {"error": "Token refresh timed out (Google API slow)", "transient": True}
+        except requests.exceptions.ConnectionError:
+            return False, {"error": "Connection error during token refresh", "transient": True}
         except Exception as e:
             return False, {"error": str(e)}
     

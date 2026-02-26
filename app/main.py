@@ -903,12 +903,17 @@ async def startup_event():
         """
         Periodically validate YouTube refresh tokens to catch early revocation.
         Google refresh tokens don't expire on their own but can be revoked by the user
-        (e.g. via myaccount.google.com). This job catches revocation proactively so the
+        (e.g. via myaccount.google.com) or expire after 7 days if the Google Cloud
+        project is in "Testing" mode.  This job catches revocation proactively so the
         UI shows "Access revoked" before a publish attempt fails.
+
+        Important: only mark as "revoked" when Google explicitly says so (invalid_grant).
+        Transient errors (timeouts, 5xx) should NOT flip the status.
         """
         from app.db_connection import SessionLocal
         from app.models.youtube import YouTubeChannel
         from app.services.youtube.publisher import YouTubePublisher
+        import time
 
         pub = YouTubePublisher()
         db = SessionLocal()
@@ -927,22 +932,34 @@ async def startup_event():
                 try:
                     success, result = pub.refresh_access_token(channel.refresh_token)
                     if success and result.get("access_token"):
+                        # Token is still valid
                         if channel.status != "connected":
                             channel.status = "connected"
                             channel.last_error = None
                         validated += 1
-                    else:
-                        err = result.get("error", "Token validation failed")
-                        channel.status = "revoked" if ("invalid_grant" in err.lower() or "revoked" in err.lower()) else "error"
-                        channel.last_error = err
+                    elif result.get("revoked"):
+                        # Google definitively said the token is invalid
+                        channel.status = "revoked"
+                        channel.last_error = result.get("error", "Token revoked")
                         revoked_count += 1
-                        print(f"⚠️ YouTube token invalid for {channel.brand}: {err}", flush=True)
+                        print(f"⚠️ YouTube token REVOKED for {channel.brand}: {channel.last_error}", flush=True)
+                    elif result.get("transient"):
+                        # Network hiccup — don't change status at all
+                        print(f"⚠️ YouTube token check transient error for {channel.brand}: {result.get('error')} — keeping current status", flush=True)
+                    else:
+                        # Unknown error — mark as error, NOT revoked
+                        channel.status = "error"
+                        channel.last_error = result.get("error", "Token validation failed")
+                        print(f"⚠️ YouTube token error for {channel.brand}: {channel.last_error}", flush=True)
                 except Exception as exc:
-                    channel.last_error = str(exc)
-                    revoked_count += 1
+                    # Exception during check — don't change status
+                    print(f"⚠️ YouTube token check exception for {channel.brand}: {exc} — keeping current status", flush=True)
+
+                # Small delay between channels to avoid rate-limiting the Google token endpoint
+                time.sleep(1)
 
             db.commit()
-            print(f"📺 YouTube token check: {validated} valid, {revoked_count} revoked/error", flush=True)
+            print(f"📺 YouTube token check: {validated} valid, {revoked_count} revoked", flush=True)
         except Exception as exc:
             db.rollback()
             print(f"❌ YouTube token validation job failed: {exc}", flush=True)

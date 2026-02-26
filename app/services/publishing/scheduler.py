@@ -1156,8 +1156,21 @@ class DatabaseSchedulerService:
                     )
                 else:
                     error_msg = result.get("error", "Unknown error")
-                    # Check if this is a token revocation error
-                    if "401" in str(error_msg) or "403" in str(error_msg) or "invalid_grant" in str(error_msg):
+                    error_lower = error_msg.lower()
+                    # Only mark as revoked for definitive auth failures, NOT quota/rate limits
+                    is_revoked = (
+                        "invalid_grant" in error_lower
+                        or "token has been expired or revoked" in error_lower
+                        or "token has been revoked" in error_lower
+                    )
+                    # 403 with quota keywords is NOT a revocation
+                    is_quota = (
+                        "quota" in error_lower
+                        or "rateLimitExceeded" in error_msg
+                        or "dailyLimitExceeded" in error_msg
+                        or "uploadLimitExceeded" in error_msg
+                    )
+                    if is_revoked and not is_quota:
                         update_youtube_channel_status(
                             brand=brand_name,
                             db=db,
