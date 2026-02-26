@@ -23,11 +23,10 @@ export function useOnboardingStatus() {
   )
 
   // New users without a brand always need onboarding.
-  // Users with a brand but NO platform connected also need onboarding
-  // (they may have created a brand but failed/skipped the OAuth step).
-  // Existing users (pre-onboarding-tracking) who already have connections are fine.
+  // Once a user has completed onboarding (or has DNA configured as a legacy
+  // pre-flag user), disconnecting platforms must NOT send them back.
   const needsOnboarding =
-    isAuthenticated && (!hasBrand || (hasBrand && !hasConnection && !onboardingCompleted))
+    isAuthenticated && !onboardingCompleted && !hasDNA && !hasBrand
   const onboardingStep: 1 | 3 = !hasBrand ? 1 : 3
 
   return {

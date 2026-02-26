@@ -79,13 +79,13 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 }
 
 function OnboardingPageGuard() {
-  const { isAuthenticated, user, isLoading: authLoading } = useAuth()
-  const { isLoading: onboardingLoading, hasConnection } = useOnboardingStatus()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { isLoading: onboardingLoading, needsOnboarding } = useOnboardingStatus()
 
   if (authLoading || onboardingLoading) return <AppLoader />
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  // Only exit onboarding when user has completed it AND has at least one platform connected
-  if (user?.onboardingCompleted && hasConnection) return <Navigate to="/" replace />
+  // If onboarding is not needed, redirect to main app
+  if (!needsOnboarding) return <Navigate to="/" replace />
   return <OnboardingPage />
 }
 
