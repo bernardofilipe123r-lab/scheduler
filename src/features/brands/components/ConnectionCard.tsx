@@ -185,6 +185,17 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     }
   }
 
+  const formatError = (error: string): string => {
+    const match = error.match(/^(\d{3})\s+Client Error:\s+([^\n]+?)(?:\s+for url:.*)?$/i)
+    if (match) {
+      const code = match[1]
+      if (code === '403') return 'Access forbidden — reconnect your account'
+      if (code === '401') return 'Unauthorized — reconnect required'
+      return `${code}: ${match[2].trim()}`
+    }
+    return error.length > 80 ? error.slice(0, 80) + '…' : error
+  }
+
   const renderPlatformRow = (platform: Platform, connection: PlatformConnection) => {
     const isYouTube = platform === 'youtube'
     const isInstagram = platform === 'instagram'
@@ -196,30 +207,33 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     return (
       <div
         key={platform}
-        className="flex items-center justify-between py-3 px-4 hover:bg-gray-50 transition-colors"
+        className="flex items-center justify-between gap-3 py-3 px-4 hover:bg-gray-50 transition-colors"
       >
-        <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${getPlatformBgColor(platform)}`}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white ${getPlatformBgColor(platform)}`}>
             <PlatformIcon platform={platform} className="w-4 h-4" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-medium text-gray-900 capitalize">{platform}</p>
             {connection.connected && connection.account_name && (
-              <p className="text-sm text-gray-500">{connection.account_name}</p>
+              <p className="text-sm text-gray-500 truncate">{connection.account_name}</p>
             )}
             {isRevoked && (
               <p className="text-xs text-red-600 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" />
-                Access revoked - reconnect required
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                Access revoked — reconnect required
               </p>
             )}
             {hasError && connection.last_error && (
-              <p className="text-xs text-orange-600">{connection.last_error}</p>
+              <p className="text-xs text-orange-600 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                {formatError(connection.last_error)}
+              </p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {connection.connected ? (
             <>
               {confirmDisconnect === platform ? (
@@ -334,8 +348,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
             </>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-500 text-sm">
-                <X className="w-3 h-3" />
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-500 text-sm whitespace-nowrap">
+                <X className="w-3 h-3 flex-shrink-0" />
                 Not connected
               </span>
 
