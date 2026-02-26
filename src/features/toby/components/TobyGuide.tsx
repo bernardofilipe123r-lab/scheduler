@@ -84,7 +84,7 @@ export function TobyGuide({ forceOpen, onClose }: TobyGuideProps) {
             icon={Sparkles}
             title="Optimizing"
             color="emerald"
-            duration="Ongoing"
+            duration="After week 4+"
             description="Toby has enough data to know what works. It doubles down on winning strategies, adapts to trends, and continuously improves over time."
             details={[
               'Focuses on proven high-performing strategies',
