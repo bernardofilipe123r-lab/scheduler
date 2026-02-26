@@ -73,6 +73,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showPageSelector, setShowPageSelector] = useState(false)
   const [selectingPage, setSelectingPage] = useState(false)
+  const [confirmConnect, setConfirmConnect] = useState<Platform | null>(null)
   const disconnectYouTube = useDisconnectYouTube()
 
   const handleTestMeta = async () => {
@@ -125,13 +126,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     }
   }
 
-  const handleInstagramConnect = async () => {
-    try {
-      const authUrl = await connectInstagram(brand.brand)
-      window.location.href = authUrl
-    } catch (error) {
-      console.error('Failed to start Instagram connection:', error)
-    }
+  const handleInstagramConnect = () => {
+    setConfirmConnect('instagram')
   }
 
   const handleInstagramDisconnect = async () => {
@@ -147,15 +143,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     }
   }
 
-  const handleFacebookConnect = async () => {
-    setConnectingFacebook(true)
-    try {
-      const authUrl = await connectFacebook(brand.brand)
-      window.location.href = authUrl
-    } catch (error) {
-      console.error('Failed to start Facebook connection:', error)
-      setConnectingFacebook(false)
-    }
+  const handleFacebookConnect = () => {
+    setConfirmConnect('facebook')
   }
 
   const handleFacebookDisconnect = async () => {
@@ -168,6 +157,28 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
       console.error('Failed to disconnect Facebook:', error)
     } finally {
       setDisconnectingFacebook(false)
+    }
+  }
+
+  const proceedConnect = async () => {
+    const platform = confirmConnect
+    setConfirmConnect(null)
+    if (platform === 'instagram') {
+      try {
+        const authUrl = await connectInstagram(brand.brand)
+        window.location.href = authUrl
+      } catch (error) {
+        console.error('Failed to start Instagram connection:', error)
+      }
+    } else if (platform === 'facebook') {
+      setConnectingFacebook(true)
+      try {
+        const authUrl = await connectFacebook(brand.brand)
+        window.location.href = authUrl
+      } catch (error) {
+        console.error('Failed to start Facebook connection:', error)
+        setConnectingFacebook(false)
+      }
     }
   }
 
@@ -491,6 +502,41 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
           >
             Cancel
           </button>
+        </div>
+      )}
+
+      {/* Confirm Connect Dialog — prevents connecting wrong account */}
+      {confirmConnect && (
+        <div className="px-4 py-3 bg-amber-50 border-t border-amber-200">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-800">
+                Connect {confirmConnect === 'instagram' ? 'Instagram' : 'Facebook'} for {brand.display_name}
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                You'll be asked to log in. Make sure you log into the correct {confirmConnect === 'instagram' ? 'Instagram' : 'Facebook'} account for <strong>{brand.display_name}</strong>.
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={proceedConnect}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-colors ${
+                    confirmConnect === 'instagram'
+                      ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:opacity-90'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  Continue
+                </button>
+                <button
+                  onClick={() => setConfirmConnect(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

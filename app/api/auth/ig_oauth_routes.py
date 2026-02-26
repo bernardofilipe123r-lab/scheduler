@@ -95,6 +95,7 @@ def instagram_connect(
         "response_type": "code",
         "scope": REQUIRED_SCOPES,
         "state": state_token,
+        "auth_type": "reauthenticate",
     }
     auth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
 
