@@ -720,6 +720,16 @@ def _log_debounced(db: Session, user_id: str, action_type: str,
         db.rollback()
 
 
+def _sanitize_error(msg: str) -> str:
+    """Strip internal service names and URLs from user-facing error messages."""
+    import re
+    msg = re.sub(r'https?://[^\s)]+', '', msg)          # strip URLs
+    msg = re.sub(r'(?i)\bDEAPI\b', 'AI Image Generation', msg)
+    msg = re.sub(r'(?i)\bDeepSeek\b', 'AI Reasoning Model', msg)
+    msg = re.sub(r'\s{2,}', ' ', msg).strip()            # collapse whitespace
+    return msg
+
+
 def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: TobyState) -> int:
     """Execute content plans one at a time (steady-state mode)."""
     generated = 0
@@ -731,10 +741,11 @@ def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: Tob
             _increment_budget(state)
         except Exception as e:
             print(f"[TOBY] Content generation failed for {plan.brand_id}: {e}", flush=True)
+            clean = _sanitize_error(str(e)[:300])
             db.add(TobyActivityLog(
                 user_id=user_id,
                 action_type="error",
-                description=f"Content generation failed for {plan.brand_id}: {str(e)[:300]}",
+                description=f"Content generation failed for {plan.brand_id}: {clean}",
                 level="error",
                 created_at=datetime.now(timezone.utc),
             ))
@@ -763,10 +774,11 @@ def _execute_plans_parallel(plans: list, user_id: str, state: TobyState) -> int:
         except Exception as e:
             thread_db.rollback()
             print(f"[TOBY] Parallel gen failed for {plan.brand_id}: {e}", flush=True)
+            clean = _sanitize_error(str(e)[:300])
             thread_db.add(TobyActivityLog(
                 user_id=plan.user_id,
                 action_type="error",
-                description=f"Content generation failed for {plan.brand_id}: {str(e)[:300]}",
+                description=f"Content generation failed for {plan.brand_id}: {clean}",
                 level="error",
                 created_at=datetime.now(timezone.utc),
             ))

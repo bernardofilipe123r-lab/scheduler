@@ -575,14 +575,17 @@ class AIBackgroundGenerator:
 
             raise RuntimeError(f"AI Image Generation timed out after {max_polls * 2}s")
 
-        except requests.exceptions.Timeout as e:
-            raise RuntimeError(f"AI Image Generation network timeout: {e}")
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"AI Image Generation network error: {e}")
+        except requests.exceptions.Timeout:
+            raise RuntimeError("AI Image Generation timed out while connecting to the service")
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else "unknown"
+            raise RuntimeError(f"AI Image Generation returned HTTP {status}")
+        except requests.exceptions.RequestException:
+            raise RuntimeError("AI Image Generation is temporarily unavailable")
         except RuntimeError:
             raise
-        except Exception as e:
-            raise RuntimeError(f"AI Image Generation failed: {e}")
+        except Exception:
+            raise RuntimeError("AI Image Generation encountered an unexpected error")
         finally:
             self._release_queue_position()
             print(f"🔓 Released DEAPI queue position", flush=True)

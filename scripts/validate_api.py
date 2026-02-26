@@ -4,15 +4,17 @@ API Validation Script — catches import errors, broken endpoints, and missing
 dependencies BEFORE deploying to production.
 
 Usage:
-    python scripts/validate_api.py              # Run all checks
+    python scripts/validate_api.py              # Run all checks (imports + fields)
     python scripts/validate_api.py --imports    # Import checks only (fast, no server)
     python scripts/validate_api.py --endpoints  # Start server + hit endpoints
+    python scripts/validate_api.py --services   # Test external services (DeepSeek, DEAPI, Supabase, Railway)
 
 Checks performed:
   1. Module import validation (catches missing 'import asyncio', etc.)
   2. FastAPI app boot (catches startup crashes)
   3. Endpoint smoke tests via TestClient (no external network needed)
   4. NicheConfig ↔ PromptContext field alignment
+  5. External service health checks (DeepSeek, DEAPI, Supabase, Railway)
 
 Last updated: auto-generated from 116 real endpoints across 13 routers.
 """
@@ -505,6 +507,169 @@ def check_niche_config_fields():
 
 
 # ═══════════════════════════════════════════════════════════════
+# EXTERNAL SERVICE CHECKS
+# ═══════════════════════════════════════════════════════════════
+
+def check_services():
+    """Test connectivity / health of DeepSeek, DEAPI, Supabase, and Railway."""
+    import os
+    import requests as _req
+
+    # Load .env if not already loaded
+    env_file = ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+    print(f"\n{BOLD}━━━ External Service Checks ━━━{RESET}")
+
+    # ── 1. DeepSeek (AI Reasoning Model) ─────────────────────
+    def _check_deepseek():
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            warn("DEEPSEEK_API_KEY not set — skipping")
+            return
+        try:
+            r = _req.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": "Say OK"}],
+                    "max_tokens": 5,
+                },
+                timeout=15,
+            )
+            if r.status_code == 200:
+                ok("DeepSeek (AI Reasoning Model) — API responding")
+            elif r.status_code == 401:
+                fail("DeepSeek (AI Reasoning Model)", "Invalid API key (401)")
+            elif r.status_code == 402:
+                fail("DeepSeek (AI Reasoning Model)", "Insufficient credits (402)")
+            elif r.status_code == 429:
+                warn("DeepSeek (AI Reasoning Model) — Rate limited (429)")
+            else:
+                fail("DeepSeek (AI Reasoning Model)", f"HTTP {r.status_code}: {r.text[:200]}")
+        except _req.exceptions.Timeout:
+            fail("DeepSeek (AI Reasoning Model)", "Connection timed out")
+        except _req.exceptions.RequestException as e:
+            fail("DeepSeek (AI Reasoning Model)", f"Connection error: {type(e).__name__}")
+
+    # ── 2. DEAPI (AI Image Generation) ───────────────────────
+    def _check_deapi():
+        api_key = os.getenv("DEAPI_API_KEY")
+        if not api_key:
+            warn("DEAPI_API_KEY not set — skipping")
+            return
+        try:
+            # Use a minimal txt2img request with a cheap/fast model
+            r = _req.post(
+                "https://api.deapi.ai/api/v1/client/txt2img",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json={
+                    "prompt": "a simple red circle on white background",
+                    "model": "Flux1schnell",
+                    "width": 256,
+                    "height": 256,
+                    "steps": 1,
+                    "guidance": 0,
+                    "seed": 42,
+                },
+                timeout=20,
+            )
+            data = r.json() if r.status_code < 500 else {}
+            request_id = data.get("request_id") or data.get("data", {}).get("request_id")
+            if r.status_code == 200 and request_id:
+                ok(f"DEAPI (AI Image Generation) — API responding (request_id: {request_id})")
+            elif r.status_code == 401:
+                fail("DEAPI (AI Image Generation)", "Invalid API key (401)")
+            elif r.status_code == 422:
+                fail("DEAPI (AI Image Generation)", f"Unprocessable Entity (422): {r.text[:200]}")
+            elif r.status_code == 429:
+                warn("DEAPI (AI Image Generation) — Rate limited (429)")
+            else:
+                fail("DEAPI (AI Image Generation)", f"HTTP {r.status_code}: {r.text[:200]}")
+        except _req.exceptions.Timeout:
+            fail("DEAPI (AI Image Generation)", "Connection timed out")
+        except _req.exceptions.RequestException as e:
+            fail("DEAPI (AI Image Generation)", f"Connection error: {type(e).__name__}")
+
+    # ── 3. Supabase (Database & Auth) ────────────────────────
+    def _check_supabase():
+        url = os.getenv("SUPABASE_URL")
+        key = (os.getenv("SUPABASE_SERVICE_KEY")
+               or os.getenv("SUPABASE_KEY")
+               or os.getenv("SUPABASE_ANON_KEY")
+               or os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+        if not url:
+            warn("SUPABASE_URL not set — skipping")
+            return
+        try:
+            # Health check via REST API
+            r = _req.get(
+                f"{url}/rest/v1/",
+                headers={
+                    "apikey": key or "",
+                    "Authorization": f"Bearer {key}" if key else "",
+                },
+                timeout=10,
+            )
+            if r.status_code in (200, 204):
+                ok("Supabase — REST API responding")
+            elif r.status_code == 401:
+                warn("Supabase — API key may be invalid (401)")
+            else:
+                fail("Supabase", f"HTTP {r.status_code}")
+
+            # Also check auth JWKS endpoint (publicly accessible)
+            r2 = _req.get(f"{url}/auth/v1/.well-known/jwks.json", timeout=10)
+            if r2.status_code == 200:
+                ok("Supabase Auth — JWKS endpoint healthy")
+            else:
+                warn(f"Supabase Auth — HTTP {r2.status_code}")
+        except _req.exceptions.Timeout:
+            fail("Supabase", "Connection timed out")
+        except _req.exceptions.RequestException as e:
+            fail("Supabase", f"Connection error: {type(e).__name__}")
+
+    # ── 4. Railway (Infrastructure) ──────────────────────────
+    def _check_railway():
+        try:
+            r = _req.get("https://status.railway.com/summary.json", timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                page_status = data.get("page", {}).get("status", "UNKNOWN")
+                incidents = data.get("activeIncidents", [])
+                if page_status == "UP" and not incidents:
+                    ok("Railway — All systems operational")
+                else:
+                    names = [i.get("name", "Unknown") for i in incidents[:3]]
+                    warn(f"Railway — {page_status}: {'; '.join(names)}")
+            else:
+                warn(f"Railway status page — HTTP {r.status_code}")
+        except _req.exceptions.Timeout:
+            warn("Railway status page — timed out (may still be fine)")
+        except _req.exceptions.RequestException as e:
+            warn(f"Railway status page — {type(e).__name__}")
+
+    _check_deepseek()
+    _check_deapi()
+    _check_supabase()
+    _check_railway()
+
+
+# ═══════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════
 
@@ -512,9 +677,10 @@ def main():
     parser = argparse.ArgumentParser(description="Validate API before deploy")
     parser.add_argument("--imports", action="store_true", help="Import checks only")
     parser.add_argument("--endpoints", action="store_true", help="Endpoint tests only")
+    parser.add_argument("--services", action="store_true", help="Test external services (DeepSeek, DEAPI, Supabase, Railway)")
     args = parser.parse_args()
 
-    run_all = not args.imports and not args.endpoints
+    run_all = not args.imports and not args.endpoints and not args.services
 
     print(f"\n{BOLD}{'='*60}")
     print(f"  REELS AUTOMATION — API VALIDATION")
@@ -529,6 +695,9 @@ def main():
 
     if run_all or args.endpoints:
         check_endpoints()
+
+    if args.services:
+        check_services()
 
     elapsed = time.time() - t0
 
