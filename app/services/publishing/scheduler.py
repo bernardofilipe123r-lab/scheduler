@@ -3,11 +3,14 @@ PostgreSQL-based scheduler service with multi-user support.
 """
 import os
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from sqlalchemy import and_
 from app.models import ScheduledReel, UserProfile
 from app.db_connection import get_db_session
 from app.services.publishing.social_publisher import SocialPublisher
+
+if TYPE_CHECKING:
+    from app.core.config import BrandConfig
 
 
 class DatabaseSchedulerService:
