@@ -146,15 +146,20 @@ const EXPANDABLE = new Set([
   'content_generated', 'discovery_scan', 'publish_success', 'publish_partial', 'publish_failed', 'error',
 ])
 
-function PlatformBadge({ name, success }: { name: string; success: boolean }) {
-  return (
+function PlatformBadge({ name, success, url }: { name: string; success: boolean; url?: string | null }) {
+  const badge = (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
       success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-    }`}>
+    } ${success && url ? 'hover:bg-emerald-100 transition-colors' : ''}`}>
       {success ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
       {name}
+      {success && url && <ExternalLink className="w-2.5 h-2.5 opacity-60" />}
     </span>
   )
+  if (success && url) {
+    return <a href={url} target="_blank" rel="noopener noreferrer">{badge}</a>
+  }
+  return badge
 }
 
 function ItemDetail({ item, navigate }: { item: TobyActivityItem; navigate: ReturnType<typeof useNavigate> }) {
@@ -268,6 +273,7 @@ function ItemDetail({ item, navigate }: { item: TobyActivityItem; navigate: Retu
       const platforms = meta?.success_platforms as string[] | undefined
       const brand = meta?.brand as string | undefined
       const contentType = meta?.content_type as string | undefined
+      const publishResults = meta?.publish_results as Record<string, { url?: string; success?: boolean }> | undefined
       return (
         <div className="space-y-2">
           {brand && (
@@ -278,7 +284,9 @@ function ItemDetail({ item, navigate }: { item: TobyActivityItem; navigate: Retu
           )}
           {platforms && platforms.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {platforms.map(p => <PlatformBadge key={p} name={p} success={true} />)}
+              {platforms.map(p => (
+                <PlatformBadge key={p} name={p} success={true} url={publishResults?.[p]?.url} />
+              ))}
             </div>
           )}
         </div>
@@ -288,11 +296,12 @@ function ItemDetail({ item, navigate }: { item: TobyActivityItem; navigate: Retu
       const ok = meta?.success_platforms as string[] | undefined
       const failed = meta?.failed_platforms as string[] | undefined
       const brand = meta?.brand as string | undefined
+      const publishResults = meta?.publish_results as Record<string, { url?: string; success?: boolean }> | undefined
       return (
         <div className="space-y-2">
           {brand && <p className="text-xs text-gray-500">{brand}</p>}
           <div className="flex flex-wrap gap-1.5">
-            {ok?.map(p => <PlatformBadge key={p} name={p} success={true} />)}
+            {ok?.map(p => <PlatformBadge key={p} name={p} success={true} url={publishResults?.[p]?.url} />)}
             {failed?.map(p => <PlatformBadge key={p} name={p} success={false} />)}
           </div>
         </div>

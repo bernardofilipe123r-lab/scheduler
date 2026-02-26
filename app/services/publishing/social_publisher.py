@@ -266,6 +266,21 @@ class SocialPublisher:
             print(f"   ❌ Exception in /me/accounts: {e}")
             return None
     
+    def _get_instagram_permalink(self, media_id: str) -> Optional[str]:
+        """Fetch the permalink for an Instagram media post via the Graph API."""
+        if not media_id or not self.ig_access_token:
+            return None
+        try:
+            resp = requests.get(
+                f"{self.ig_graph_base}/{self.api_version}/{media_id}",
+                params={"fields": "permalink", "access_token": self.ig_access_token},
+                timeout=10,
+            )
+            data = resp.json()
+            return data.get("permalink")
+        except Exception:
+            return None
+
     # ==================== IMAGE POST PUBLISHING ====================
 
     def publish_instagram_image_post(
@@ -443,11 +458,13 @@ class SocialPublisher:
             instagram_post_id = publish_data.get("id")
             print(f"🎉 Instagram image post published! Post ID: {instagram_post_id}")
             
+            permalink = self._get_instagram_permalink(instagram_post_id)
             return {
                 "success": True,
                 "platform": "instagram",
                 "post_id": instagram_post_id,
-                "creation_id": creation_id
+                "creation_id": creation_id,
+                "url": permalink,
             }
             
         except requests.exceptions.Timeout:
@@ -542,7 +559,8 @@ class SocialPublisher:
                 "platform": "facebook",
                 "post_id": photo_id,
                 "page_id": self.fb_page_id,
-                "brand_used": self.brand_name
+                "brand_used": self.brand_name,
+                "url": f"https://www.facebook.com/{photo_id}" if photo_id else None,
             }
             
         except requests.exceptions.Timeout:
@@ -823,12 +841,14 @@ class SocialPublisher:
             post_id = publish_data.get("id")
             print(f"   🎉 Instagram carousel published! Post ID: {post_id}")
 
+            permalink = self._get_instagram_permalink(post_id)
             return {
                 "success": True,
                 "platform": "instagram",
                 "post_id": post_id,
                 "creation_id": carousel_id,
                 "carousel_items": len(children_ids),
+                "url": permalink,
             }
 
         except requests.exceptions.Timeout:
@@ -969,6 +989,7 @@ class SocialPublisher:
                 "page_id": self.fb_page_id,
                 "brand_used": self.brand_name,
                 "carousel_items": len(photo_ids),
+                "url": f"https://www.facebook.com/{post_id}" if post_id else None,
             }
 
         except requests.exceptions.Timeout:
@@ -1184,11 +1205,13 @@ class SocialPublisher:
             
             print(f"🎉 Instagram Reel published! Post ID: {instagram_post_id}")
             
+            permalink = self._get_instagram_permalink(instagram_post_id)
             return {
                 "success": True,
                 "platform": "instagram",
                 "post_id": instagram_post_id,
-                "creation_id": creation_id
+                "creation_id": creation_id,
+                "url": permalink,
             }
             
         except requests.exceptions.Timeout:
@@ -1448,7 +1471,8 @@ class SocialPublisher:
                 "post_id": video_id,
                 "video_id": video_id,
                 "page_id": self.fb_page_id,
-                "brand_used": self.brand_name
+                "brand_used": self.brand_name,
+                "url": f"https://www.facebook.com/reel/{video_id}" if video_id else None,
             }
             
         except requests.exceptions.Timeout:

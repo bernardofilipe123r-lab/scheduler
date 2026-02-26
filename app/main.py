@@ -654,6 +654,7 @@ async def startup_event():
                                     "post_id": str(platform_data.get('post_id') or platform_data.get('video_id', '')),
                                     "account_id": platform_data.get('account_id') or platform_data.get('page_id', ''),
                                     "brand_used": platform_data.get('brand_used', 'unknown'),
+                                    "url": platform_data.get('url'),
                                     "success": True
                                 }
                             
