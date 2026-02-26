@@ -1383,6 +1383,13 @@ export function ScheduledPage() {
           const isPost = selectedPost.metadata?.variant === 'post' || selectedPost.metadata?.variant === 'carousel'
           const totalSlides = allCarouselPaths.length
           const bgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
+          
+          // Detect when the ONLY failure is "FB not connected" — retrying is pointless
+          const _pubResults = selectedPost.metadata?.publish_results as Record<string, {success: boolean; error?: string}> | undefined
+          const _hasRealFailure = _pubResults
+            ? Object.values(_pubResults).some(r => !r.success && !(r.error || '').toLowerCase().includes('not configured'))
+            : false
+          const fbOnlyNotConnected = selectedPost.status === 'partial' && !!_pubResults && !_hasRealFailure
 
           return (
           <div className="space-y-4">
@@ -1416,7 +1423,7 @@ export function ScheduledPage() {
               {selectedPost.status === 'partial' && (
                 <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  Partial Failure
+                  {fbOnlyNotConnected ? 'FB Not Connected' : 'Partial Failure'}
                 </span>
               )}
             </div>
@@ -1547,7 +1554,9 @@ export function ScheduledPage() {
             {(selectedPost.status === 'published' || selectedPost.status === 'partial' || selectedPost.status === 'failed') && selectedPost.metadata?.publish_results && (
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-sm font-medium text-gray-700 mb-3">
-                  {selectedPost.status === 'partial' ? '⚠️ Publish Status (Partial Failure)' : 'Publish Details'}
+                  {selectedPost.status === 'partial'
+                    ? fbOnlyNotConnected ? '✅ Published (Facebook not connected)' : '⚠️ Publish Status (Partial Failure)'
+                    : 'Publish Details'}
                 </p>
                 <div className="space-y-2">
                   {Object.entries(selectedPost.metadata.publish_results as Record<string, {success: boolean; post_id?: string; account_id?: string; brand_used?: string; error?: string}>).map(([platform, result]) => {
@@ -1609,8 +1618,17 @@ export function ScheduledPage() {
                   )})}
                 </div>
                 
-                {/* Retry hint for partial failures */}
-                {selectedPost.status === 'partial' && (
+                {/* Retry hint / FB-not-connected banner */}
+                {selectedPost.status === 'partial' && fbOnlyNotConnected && (
+                  <div className="mt-3 bg-yellow-50 border border-yellow-300 rounded-lg p-3 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-yellow-800">
+                      <strong>Facebook is not connected for this brand.</strong> This reel was published to the connected platforms only.
+                      {' '}To publish to Facebook in the future, <a href="/brands?tab=connections" className="underline font-semibold">connect a Facebook account</a>.
+                    </p>
+                  </div>
+                )}
+                {selectedPost.status === 'partial' && !fbOnlyNotConnected && (
                   <p className="text-xs text-amber-600 mt-3 bg-amber-50 p-2 rounded border border-amber-200">
                     💡 Click <strong>Retry</strong> below to re-attempt only the failed platform(s). Successfully posted platforms will not be duplicated.
                   </p>
@@ -1664,8 +1682,8 @@ export function ScheduledPage() {
                   </button>
                 )}
                 
-                {/* Retry button - for failed/partial/publishing */}
-                {(selectedPost.status === 'failed' || selectedPost.status === 'partial' || selectedPost.status === 'publishing') && (
+                {/* Retry button — hidden when the only "failure" is FB not configured */}
+                {(selectedPost.status === 'failed' || selectedPost.status === 'partial' || selectedPost.status === 'publishing') && !fbOnlyNotConnected && (
                   <button
                     onClick={() => handleRetry(selectedPost)}
                     disabled={retryFailed.isPending}
