@@ -385,8 +385,13 @@ class DatabaseSchedulerService:
                                 success_platforms.append(platform)
                             else:
                                 error_msg = data.get('error', '')
-                                # "Not configured" is a skip, not a real failure
-                                is_not_configured = 'not configured' in error_msg.lower()
+                                # "Not configured" / FB credential errors are skips, not real failures
+                                error_lower = error_msg.lower()
+                                is_not_configured = (
+                                    'not configured' in error_lower
+                                    or 'page access token' in error_lower
+                                    or 'credentials not configured' in error_lower
+                                )
                                 if not is_not_configured:
                                     has_failures = True
                                     failed_platforms.append(platform)

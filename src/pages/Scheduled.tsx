@@ -93,9 +93,20 @@ function formatDateTime(iso: string): string {
   return format(parseISO(iso), 'MMMM d, yyyy h:mm a')
 }
 
+/** Detect FB errors that are really "not connected" rather than real failures */
+function isFbConnectionError(error: string): boolean {
+  const lower = (error || '').toLowerCase()
+  return lower.includes('not configured') || lower.includes('page access token') || lower.includes('credentials not configured')
+}
+
 export function ScheduledPage() {
   const navigate = useNavigate()
-  const { data: posts = [], isLoading } = useScheduledPosts()
+  // Poll faster (5s) while any post is in 'publishing' state so it auto-updates
+  const [fastPoll, setFastPoll] = useState(false)
+  const { data: posts = [], isLoading } = useScheduledPosts(fastPoll ? 5000 : undefined)
+  useEffect(() => {
+    setFastPoll(posts.some(p => p.status === 'publishing'))
+  }, [posts])
   const deleteScheduled = useDeleteScheduled()
   const deleteScheduledForDay = useDeleteScheduledForDay()
   const retryFailed = useRetryFailed()
@@ -448,12 +459,12 @@ export function ScheduledPage() {
   // Compute failure/partial stats for the warning banner
   const failedCount = posts.filter(p => p.status === 'failed').length
   const allPartials = posts.filter(p => p.status === 'partial')
-  // Separate partials that only have "not configured" errors (e.g. FB not connected) from real failures
+  // Separate partials that only have "not configured" / FB connection errors from real failures
   const isOnlyNotConfigured = (post: ScheduledPost) => {
     const pr = post.metadata?.publish_results as Record<string, {success: boolean; error?: string}> | undefined
-    if (pr) return !Object.values(pr).some(r => !r.success && !(r.error || '').toLowerCase().includes('not configured'))
+    if (pr) return !Object.values(pr).some(r => !r.success && !isFbConnectionError(r.error || ''))
     const parts = (post.error || '').split('; ').filter(Boolean)
-    return parts.length > 0 && parts.every(p => p.toLowerCase().includes('not configured'))
+    return parts.length > 0 && parts.every(p => isFbConnectionError(p))
   }
   const realPartialCount = allPartials.filter(p => !isOnlyNotConfigured(p)).length
   const notConfiguredOnlyCount = allPartials.length - realPartialCount
@@ -1398,11 +1409,11 @@ export function ScheduledPage() {
           // Detect when the ONLY failure is "not connected / not configured" — retrying is pointless
           const _pubResults = selectedPost.metadata?.publish_results as Record<string, {success: boolean; error?: string}> | undefined
           const _hasRealFailure = _pubResults
-            ? Object.values(_pubResults).some(r => !r.success && !(r.error || '').toLowerCase().includes('not configured'))
+            ? Object.values(_pubResults).some(r => !r.success && !isFbConnectionError(r.error || ''))
             : false
           // Also check error string when publish_results is missing
           const _errorParts = (selectedPost.error || '').split('; ').filter(Boolean)
-          const _allErrorsAreNotConfigured = _errorParts.length > 0 && _errorParts.every(p => p.toLowerCase().includes('not configured'))
+          const _allErrorsAreNotConfigured = _errorParts.length > 0 && _errorParts.every(p => isFbConnectionError(p))
           const fbOnlyNotConnected = selectedPost.status === 'partial' && (
             (!!_pubResults && !_hasRealFailure) ||
             (!_pubResults && _allErrorsAreNotConfigured)
@@ -1577,7 +1588,7 @@ export function ScheduledPage() {
                 </p>
                 <div className="space-y-2">
                   {Object.entries(selectedPost.metadata.publish_results as Record<string, {success: boolean; post_id?: string; account_id?: string; brand_used?: string; error?: string}>).map(([platform, result]) => {
-                    const isNotConfigured = !result.success && (result.error || '').toLowerCase().includes('not configured')
+                    const isNotConfigured = !result.success && isFbConnectionError(result.error || '')
                     return (
                     <div 
                       key={platform}
@@ -1661,8 +1672,8 @@ export function ScheduledPage() {
                 if (idx > 0) return { platform: part.slice(0, idx).trim(), error: part.slice(idx + 2).trim() }
                 return { platform: 'unknown', error: part }
               })
-              const notConfigured = parsed.filter(e => e.error.toLowerCase().includes('not configured'))
-              const realErrors = parsed.filter(e => !e.error.toLowerCase().includes('not configured'))
+              const notConfigured = parsed.filter(e => isFbConnectionError(e.error))
+              const realErrors = parsed.filter(e => !isFbConnectionError(e.error))
 
               return (
                 <div className="space-y-3">

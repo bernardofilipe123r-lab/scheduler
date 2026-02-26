@@ -46,12 +46,12 @@ export function useAutoScheduleReel() {
   })
 }
 
-export function useScheduledPosts() {
+export function useScheduledPosts(refetchIntervalOverride?: number) {
   return useQuery({
     queryKey: schedulingKeys.scheduled(),
     queryFn: schedulingApi.getScheduled,
-    // Realtime subscription handles instant updates; poll as safety fallback
-    refetchInterval: 60000,
+    // Poll faster while publishing; default to 60s as safety fallback
+    refetchInterval: refetchIntervalOverride ?? 60000,
     refetchOnMount: 'always',
     staleTime: 5000,
   })
