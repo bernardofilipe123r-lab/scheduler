@@ -43,7 +43,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
     }
     try {
       const data = await response.json()
-      error.message = data.detail || data.message || error.message
+      error.message = data.detail || data.message || data.guidance || error.message
     } catch {
       // Ignore JSON parse errors
     }

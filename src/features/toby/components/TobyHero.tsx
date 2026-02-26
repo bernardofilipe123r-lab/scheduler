@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import {
   Bot, Play, Power, Loader2, Sparkles, Shield, Zap,
-  BarChart3, FlaskConical, Calendar, Check, HelpCircle,
+  BarChart3, FlaskConical, Calendar, Check, HelpCircle, AlertCircle,
 } from 'lucide-react'
 import { useTobyStatus, useTobyEnable, useTobyDisable } from '../hooks'
 import type { TobyPhase } from '../types'
@@ -139,6 +139,14 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
               label="Experiments" value={status.active_experiments || 0}
               icon={FlaskConical} bg="bg-indigo-50" iconColor="text-indigo-500" valueColor="text-indigo-700"
             />
+          </div>
+        )}
+
+        {/* Preflight failure error */}
+        {enableMut.isError && (
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-red-50 border border-red-200">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700">{(enableMut.error as { message?: string })?.message || 'Could not enable Toby. Please check that you have an active brand with Instagram connected and Content DNA configured.'}</p>
           </div>
         )}
 

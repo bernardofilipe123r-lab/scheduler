@@ -59,9 +59,11 @@ const LABELS: Record<string, string> = {
 export function PageLoader({ page = 'default' }: PageLoaderProps) {
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <Spinner size={40} />
-        <p className="text-sm text-gray-400 font-medium tracking-wide">{LABELS[page]}</p>
+      <div className="flex flex-col items-center gap-5">
+        <Spinner size={36} />
+        <p className="text-sm text-gray-400 font-medium tracking-wide animate-pulse">
+          {LABELS[page]}
+        </p>
       </div>
     </div>
   )
@@ -70,14 +72,22 @@ export function PageLoader({ page = 'default' }: PageLoaderProps) {
 // ── Full-screen app-level loader (for auth guards) ──────────
 export function AppLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="flex flex-col items-center gap-5">
-        {/* Logo mark */}
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className="text-primary-500 opacity-90">
-          <rect width="48" height="48" rx="12" fill="currentColor" fillOpacity="0.1" />
-          <path d="M14 24 L22 32 L34 16" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        <Spinner size={32} />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-950 via-stone-900 to-stone-800">
+      <div className="flex flex-col items-center gap-6">
+        {/* Brand logo with breathing animation */}
+        <div className="animate-pulse-slow">
+          <svg width="56" height="56" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8" y="8" width="112" height="112" rx="28" fill="#F5EDD8"/>
+            <path d="M29 34L48 94H61L42 34H29Z" fill="#1A1A1A"/>
+            <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="#1A1A1A"/>
+            <circle cx="99" cy="29" r="7" fill="#1A1A1A" fillOpacity="0.25"/>
+            <circle cx="107" cy="40" r="3" fill="#1A1A1A" fillOpacity="0.18"/>
+          </svg>
+        </div>
+        {/* Slim progress bar */}
+        <div className="w-36 h-[3px] rounded-full bg-white/[0.08] overflow-hidden">
+          <div className="h-full w-2/5 rounded-full bg-primary-500 app-loader-bar" />
+        </div>
       </div>
     </div>
   )

@@ -593,6 +593,14 @@ function UserDetail({
                       </button>
                     </div>
 
+                    {/* Preflight error */}
+                    {tobyEnableMut.isError && (
+                      <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-red-700">{(tobyEnableMut.error as { message?: string })?.message || 'Could not enable Toby. Ensure the user has an active brand with Instagram connected and Content DNA configured.'}</p>
+                      </div>
+                    )}
+
                     {/* Buffer health */}
                     {ts.buffer && (
                       <div className="space-y-2">

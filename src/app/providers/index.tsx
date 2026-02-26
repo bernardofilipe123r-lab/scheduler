@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { QueryProvider } from './QueryProvider'
 import { RouterProvider } from './RouterProvider'
 import { useRealtimeSync } from '@/shared/hooks/use-realtime-sync'
@@ -7,7 +8,8 @@ function RealtimeSync({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-export function AppProviders() {
+export function AppProviders({ onReady }: { onReady?: () => void }) {
+  useEffect(() => { onReady?.() }, [onReady])
   return (
     <QueryProvider>
       <RealtimeSync>

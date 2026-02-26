@@ -304,25 +304,29 @@ class DatabaseSchedulerService:
                 # Check if this is a partial success (some platforms failed)
                 has_failures = False
                 has_successes = False
+                success_platforms = []
+                failed_platforms = []
                 
                 if publish_results:
                     for platform, data in publish_results.items():
                         if isinstance(data, dict):
                             if data.get('success'):
                                 has_successes = True
+                                success_platforms.append(platform)
                             else:
                                 has_failures = True
+                                failed_platforms.append(platform)
                 
                 # Set status based on results
                 if has_failures and has_successes:
                     scheduled_reel.status = "partial"
                     # Extract failed platform errors
-                    failed_platforms = []
+                    failed_platform_errors = []
                     for platform, data in publish_results.items():
                         if isinstance(data, dict) and not data.get('success'):
                             error = data.get('error', 'Unknown error')
-                            failed_platforms.append(f"{platform}: {error}")
-                    scheduled_reel.publish_error = "; ".join(failed_platforms)
+                            failed_platform_errors.append(f"{platform}: {error}")
+                    scheduled_reel.publish_error = "; ".join(failed_platform_errors)
                 else:
                     scheduled_reel.status = "published"
                     scheduled_reel.publish_error = None
@@ -350,6 +354,54 @@ class DatabaseSchedulerService:
                 self._sync_brand_output_status(
                     db, metadata, scheduled_reel.status
                 )
+
+                # Log successful publish events so Toby "Recent" includes real outcomes.
+                try:
+                    from app.models.toby import TobyActivityLog
+
+                    brand = metadata.get('brand')
+                    variant = metadata.get('variant')
+                    content_kind = "post" if variant == "post" else "reel"
+
+                    if scheduled_reel.status == "published":
+                        description = (
+                            f"Published {content_kind}"
+                            f"{f' for {brand}' if brand else ''}"
+                            f" to {', '.join(success_platforms) if success_platforms else 'configured platforms'}"
+                        )
+                        action_type = "publish_success"
+                    elif scheduled_reel.status == "partial":
+                        description = (
+                            f"Partially published {content_kind}"
+                            f"{f' for {brand}' if brand else ''}"
+                            f" (success: {', '.join(success_platforms) if success_platforms else 'none'}, "
+                            f"failed: {', '.join(failed_platforms) if failed_platforms else 'none'})"
+                        )
+                        action_type = "publish_partial"
+                    else:
+                        description = f"Publish status updated to {scheduled_reel.status}"
+                        action_type = "publish_update"
+
+                    db.add(TobyActivityLog(
+                        user_id=scheduled_reel.user_id,
+                        action_type=action_type,
+                        description=description,
+                        level="success" if scheduled_reel.status == "published" else "info",
+                        action_metadata={
+                            "schedule_id": scheduled_reel.schedule_id,
+                            "reel_id": scheduled_reel.reel_id,
+                            "brand": brand,
+                            "content_type": content_kind,
+                            "status": scheduled_reel.status,
+                            "created_by": scheduled_reel.created_by or "user",
+                            "success_platforms": success_platforms,
+                            "failed_platforms": failed_platforms,
+                            "publish_results": publish_results or {},
+                        },
+                        created_at=datetime.now(timezone.utc),
+                    ))
+                except Exception as log_err:
+                    print(f"⚠️ Failed to write publish activity log for {schedule_id}: {log_err}")
                 
                 db.commit()
     

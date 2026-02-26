@@ -4,9 +4,18 @@ import { Toaster } from 'react-hot-toast'
 import { AppProviders } from '@/app/providers'
 import '@/index.css'
 
+// Fade out the pre-React loading screen once the app mounts
+function dismissPreloader() {
+  const el = document.getElementById('preloader')
+  if (el) {
+    el.classList.add('hidden')
+    el.addEventListener('transitionend', () => el.remove(), { once: true })
+  }
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AppProviders />
+    <AppProviders onReady={dismissPreloader} />
     <Toaster 
       position="top-right"
       toastOptions={{
