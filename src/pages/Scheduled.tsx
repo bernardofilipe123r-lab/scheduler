@@ -447,14 +447,23 @@ export function ScheduledPage() {
 
   // Compute failure/partial stats for the warning banner
   const failedCount = posts.filter(p => p.status === 'failed').length
-  const partialCount = posts.filter(p => p.status === 'partial').length
+  const allPartials = posts.filter(p => p.status === 'partial')
+  // Separate partials that only have "not configured" errors (e.g. FB not connected) from real failures
+  const isOnlyNotConfigured = (post: ScheduledPost) => {
+    const pr = post.metadata?.publish_results as Record<string, {success: boolean; error?: string}> | undefined
+    if (pr) return !Object.values(pr).some(r => !r.success && !(r.error || '').toLowerCase().includes('not configured'))
+    const parts = (post.error || '').split('; ').filter(Boolean)
+    return parts.length > 0 && parts.every(p => p.toLowerCase().includes('not configured'))
+  }
+  const realPartialCount = allPartials.filter(p => !isOnlyNotConfigured(p)).length
+  const notConfiguredOnlyCount = allPartials.length - realPartialCount
   const disconnectedBrands = dynamicBrands.filter(b => b.active && !b.has_instagram)
-  const hasRealFailures = failedCount > 0
+  const hasRealFailures = failedCount > 0 || realPartialCount > 0
   
   return (
     <div className="space-y-6">
       {/* Failure/warning banner */}
-      {(failedCount > 0 || partialCount > 0) && !bannerDismissed && (
+      {(failedCount > 0 || realPartialCount > 0 || notConfiguredOnlyCount > 0) && !bannerDismissed && (
         <div className={clsx(
           'rounded-lg p-4 flex items-start gap-3',
           hasRealFailures ? 'bg-red-50 border border-red-200' : 'bg-amber-50 border border-amber-200'
@@ -469,9 +478,11 @@ export function ScheduledPage() {
             </p>
             <p className={clsx('text-sm mt-1', hasRealFailures ? 'text-red-700' : 'text-amber-700')}>
               {failedCount > 0 && `${failedCount} post${failedCount !== 1 ? 's' : ''} completely failed`}
-              {failedCount > 0 && partialCount > 0 && ', '}
-              {partialCount > 0 && `${partialCount} post${partialCount !== 1 ? 's' : ''} partially failed`}
-              . Check the posts marked with ❌ or ⚠️ below — click to see details and retry.
+              {failedCount > 0 && realPartialCount > 0 && ', '}
+              {realPartialCount > 0 && `${realPartialCount} post${realPartialCount !== 1 ? 's' : ''} partially failed`}
+              {(failedCount > 0 || realPartialCount > 0) && '. Check the posts marked with ❌ or ⚠️ below — click to see details and retry.'}
+              {notConfiguredOnlyCount > 0 && (failedCount > 0 || realPartialCount > 0) && ' '}
+              {notConfiguredOnlyCount > 0 && `${notConfiguredOnlyCount} post${notConfiguredOnlyCount !== 1 ? 's' : ''} skipped Facebook (not connected).`}
             </p>
             {disconnectedBrands.length > 0 && (
               <p className={clsx('text-sm mt-1', hasRealFailures ? 'text-red-700' : 'text-amber-700')}>
@@ -490,7 +501,7 @@ export function ScheduledPage() {
       )}
 
       {/* Disconnected brands warning (when no failures yet) */}
-      {failedCount === 0 && partialCount === 0 && disconnectedBrands.length > 0 && !bannerDismissed && (
+      {failedCount === 0 && realPartialCount === 0 && notConfiguredOnlyCount === 0 && disconnectedBrands.length > 0 && !bannerDismissed && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
@@ -1384,12 +1395,18 @@ export function ScheduledPage() {
           const totalSlides = allCarouselPaths.length
           const bgUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path || null
           
-          // Detect when the ONLY failure is "FB not connected" — retrying is pointless
+          // Detect when the ONLY failure is "not connected / not configured" — retrying is pointless
           const _pubResults = selectedPost.metadata?.publish_results as Record<string, {success: boolean; error?: string}> | undefined
           const _hasRealFailure = _pubResults
             ? Object.values(_pubResults).some(r => !r.success && !(r.error || '').toLowerCase().includes('not configured'))
             : false
-          const fbOnlyNotConnected = selectedPost.status === 'partial' && !!_pubResults && !_hasRealFailure
+          // Also check error string when publish_results is missing
+          const _errorParts = (selectedPost.error || '').split('; ').filter(Boolean)
+          const _allErrorsAreNotConfigured = _errorParts.length > 0 && _errorParts.every(p => p.toLowerCase().includes('not configured'))
+          const fbOnlyNotConnected = selectedPost.status === 'partial' && (
+            (!!_pubResults && !_hasRealFailure) ||
+            (!_pubResults && _allErrorsAreNotConfigured)
+          )
 
           return (
           <div className="space-y-4">
@@ -1637,20 +1654,57 @@ export function ScheduledPage() {
             )}
             
             {/* Show error message for failed/partial posts without detailed results */}
-            {(selectedPost.status === 'failed' || selectedPost.status === 'partial') && selectedPost.error && !selectedPost.metadata?.publish_results && (
-              <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                <p className="text-sm font-medium text-red-700 mb-2 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  {selectedPost.status === 'partial' ? 'Partial Failure Details' : 'Error Details'}
-                </p>
-                <p className="text-sm text-red-600 whitespace-pre-line">{selectedPost.error}</p>
-                {selectedPost.status === 'partial' && (
-                  <p className="text-xs text-amber-600 mt-3 bg-amber-50 p-2 rounded">
-                    💡 Click <strong>Retry</strong> to attempt publishing again for the failed platform(s).
-                  </p>
-                )}
-              </div>
-            )}
+            {(selectedPost.status === 'failed' || selectedPost.status === 'partial') && selectedPost.error && !selectedPost.metadata?.publish_results && (() => {
+              const errorParts = (selectedPost.error || '').split('; ').filter(Boolean)
+              const parsed = errorParts.map(part => {
+                const idx = part.indexOf(': ')
+                if (idx > 0) return { platform: part.slice(0, idx).trim(), error: part.slice(idx + 2).trim() }
+                return { platform: 'unknown', error: part }
+              })
+              const notConfigured = parsed.filter(e => e.error.toLowerCase().includes('not configured'))
+              const realErrors = parsed.filter(e => !e.error.toLowerCase().includes('not configured'))
+
+              return (
+                <div className="space-y-3">
+                  {realErrors.length > 0 && (
+                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                      <p className="text-sm font-medium text-red-700 mb-2 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        {selectedPost.status === 'partial' ? 'Failed Platforms' : 'Error Details'}
+                      </p>
+                      <div className="space-y-1">
+                        {realErrors.map((e, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 bg-red-100/50 rounded">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
+                                <AlertTriangle className="w-3 h-3 text-white" />
+                              </span>
+                              <span className="text-sm font-medium text-red-700 capitalize">{e.platform}</span>
+                            </div>
+                            <span className="text-xs text-red-600 text-right max-w-[200px]">{e.error}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {selectedPost.status === 'partial' && (
+                        <p className="text-xs text-amber-600 mt-3 bg-amber-50 p-2 rounded border border-amber-200">
+                          💡 Click <strong>Retry</strong> to re-attempt only the failed platform(s).
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {notConfigured.length > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-yellow-800">
+                        <strong>{notConfigured.map(e => e.platform.charAt(0).toUpperCase() + e.platform.slice(1)).join(', ')} {notConfigured.length === 1 ? 'is' : 'are'} not connected for this brand.</strong>
+                        {' '}To publish to {notConfigured.map(e => e.platform.charAt(0).toUpperCase() + e.platform.slice(1)).join(' and ')} in the future,{' '}
+                        <a href="/brands?tab=connections" className="underline font-semibold">connect your accounts</a>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             
             {/* Action buttons for scheduled/failed posts */}
             {selectedPost.status !== 'published' && (
@@ -1682,8 +1736,8 @@ export function ScheduledPage() {
                   </button>
                 )}
                 
-                {/* Retry button — hidden when the only "failure" is FB not configured */}
-                {(selectedPost.status === 'failed' || selectedPost.status === 'partial' || selectedPost.status === 'publishing') && !fbOnlyNotConnected && (
+                {/* Retry button — hidden when publishing or when the only "failure" is not-configured */}
+                {(selectedPost.status === 'failed' || selectedPost.status === 'partial') && !fbOnlyNotConnected && (
                   <button
                     onClick={() => handleRetry(selectedPost)}
                     disabled={retryFailed.isPending}
