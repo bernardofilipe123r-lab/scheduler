@@ -60,6 +60,48 @@ function RailwayStatusBanner() {
   )
 }
 
+/* ── AI Service Health Banner ──────────────────────────── */
+interface AIService { name: string; status: string; detail: string }
+
+function AIServiceBanner() {
+  const [services, setServices] = useState<AIService[]>([])
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      try {
+        const res = await fetch('/api/system/ai-health')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setServices(data.services ?? [])
+      } catch {
+        /* silently ignore */
+      }
+    }
+    check()
+    const id = setInterval(check, 5 * 60_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
+
+  if (services.length === 0 || dismissed) return null
+
+  return (
+    <div className="bg-amber-500 text-white text-sm px-4 py-2.5 flex items-center gap-3">
+      <AlertTriangle className="w-4 h-4 shrink-0" />
+      <p className="flex-1 min-w-0">
+        <span className="font-semibold">Service degradation:</span>{' '}
+        {services.map(s => s.detail).join(' ')}
+        {' '}Content will resume automatically once services recover.
+      </p>
+      <button onClick={() => setDismissed(true)} className="shrink-0 p-0.5 hover:bg-amber-600 rounded transition-colors" aria-label="Dismiss">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
+
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/reels', icon: Film, label: 'Videos', end: false },
@@ -273,6 +315,7 @@ export function AppLayout() {
       {/* Main area */}
       <div className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-200 ease-in-out ${expanded ? 'ml-52' : 'ml-16'}`}>
         <RailwayStatusBanner />
+        <AIServiceBanner />
         {/* Page content */}
         <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 min-w-0">
           <Outlet />

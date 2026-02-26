@@ -134,13 +134,12 @@ class AIBackgroundGenerator:
                     
                     if rate_limit_type == 'daily' or daily_remaining == '0':
                         hours_until_reset = int(retry_after) / 3600 if retry_after.isdigit() else 12
-                        error_msg = (
-                            f"DEAPI daily limit reached (200 requests/day on free tier). "
+                        print(f"❌ DAILY LIMIT HIT — resets in ~{hours_until_reset:.1f}h", flush=True)
+                        raise RuntimeError(
+                            f"AI Image Generation daily limit reached. "
                             f"Resets in ~{hours_until_reset:.1f} hours. "
-                            f"To remove daily caps, make any payment on deapi.ai to upgrade to Premium."
+                            f"Image generation will resume automatically."
                         )
-                        print(f"❌ DAILY LIMIT HIT: {error_msg}", flush=True)
-                        raise RuntimeError(error_msg)
                     
                     if attempt < MAX_RETRIES:
                         # Use exponential backoff, ignore Retry-After header (often unreliable)
@@ -153,7 +152,7 @@ class AIBackgroundGenerator:
                         retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
                         continue
                     else:
-                        raise RuntimeError(f"Rate limited after {MAX_RETRIES} retries. DEAPI is overloaded. Try again later.")
+                        raise RuntimeError(f"AI Image Generation is temporarily overloaded. Will retry automatically.")
                 
                 # For other errors, log full body and raise
                 if response.status_code >= 400:
@@ -174,7 +173,7 @@ class AIBackgroundGenerator:
                             continue
                 raise
         
-        raise RuntimeError(f"Request failed after {MAX_RETRIES} retries")
+        raise RuntimeError(f"AI Image Generation request failed after {MAX_RETRIES} retries")
 
     def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None, model_override: str = None, ctx=None) -> Image.Image:
         """
@@ -512,7 +511,7 @@ class AIBackgroundGenerator:
             result = response.json()
             request_id = result.get("request_id") or result.get("data", {}).get("request_id")
             if not request_id:
-                raise RuntimeError(f"No request_id in response: {result}")
+                raise RuntimeError(f"AI Image Generation returned an unexpected response")
 
             print(f"✅ Queued — request_id: {request_id}", flush=True)
 
@@ -536,7 +535,7 @@ class AIBackgroundGenerator:
                 if st == "done":
                     result_url = data.get("result_url")
                     if not result_url:
-                        raise RuntimeError(f"No result_url: {data}")
+                        raise RuntimeError(f"AI Image Generation completed but returned no image")
 
                     api_dur = time.time() - api_start
                     if progress_callback:
@@ -562,7 +561,7 @@ class AIBackgroundGenerator:
                     return image
 
                 elif st == "failed":
-                    raise RuntimeError(f"Generation failed: {data.get('error', 'Unknown')}")
+                    raise RuntimeError(f"AI Image Generation failed: {data.get('error', 'Unknown')}")
 
                 elif st in ("pending", "processing"):
                     if progress_callback:
@@ -572,16 +571,18 @@ class AIBackgroundGenerator:
                         )
                     continue
                 else:
-                    raise RuntimeError(f"Unknown status: {st}")
+                    raise RuntimeError(f"AI Image Generation returned unexpected status: {st}")
 
-            raise RuntimeError(f"Generation timed out after {max_polls * 2}s")
+            raise RuntimeError(f"AI Image Generation timed out after {max_polls * 2}s")
 
         except requests.exceptions.Timeout as e:
-            raise RuntimeError(f"Network timeout: {e}")
+            raise RuntimeError(f"AI Image Generation network timeout: {e}")
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Network error: {e}")
+            raise RuntimeError(f"AI Image Generation network error: {e}")
+        except RuntimeError:
+            raise
         except Exception as e:
-            raise RuntimeError(f"Failed to generate background: {e}")
+            raise RuntimeError(f"AI Image Generation failed: {e}")
         finally:
             self._release_queue_position()
             print(f"🔓 Released DEAPI queue position", flush=True)

@@ -108,7 +108,7 @@ function humanize(item: TobyActivityItem): string {
     case 'toby_disabled': return 'Toby was disabled'
     case 'toby_reset': return 'All learnings were reset'
     case 'phase_transition': return item.description || 'Advanced to new phase'
-    case 'error': return `Error: ${(item.description || '').slice(0, 80)}`
+    case 'error': return item.description || 'Something went wrong'
     default:
       return item.description || item.action_type
   }
@@ -190,11 +190,12 @@ export function TobyPipeline() {
             {items.map((item) => {
               const d = DISPLAY[item.action_type] || { icon: Clock, color: 'text-gray-400' }
               const Icon = d.icon
+              const isError = item.action_type === 'error'
               return (
-                <div key={item.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50">
-                  <Icon className={`w-4 h-4 ${d.color} shrink-0`} />
-                  <span className="text-sm text-gray-600 flex-1 truncate">{humanize(item)}</span>
-                  <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">{timeAgo(item.created_at)}</span>
+                <div key={item.id} className={`flex items-start gap-3 px-3 py-2 rounded-lg ${isError ? 'bg-red-50/50' : 'hover:bg-gray-50'}`}>
+                  <Icon className={`w-4 h-4 ${d.color} shrink-0 mt-0.5`} />
+                  <span className={`text-sm flex-1 ${isError ? 'text-red-700' : 'text-gray-600 truncate'}`}>{humanize(item)}</span>
+                  <span className="text-[11px] text-gray-400 shrink-0 tabular-nums mt-0.5">{timeAgo(item.created_at)}</span>
                 </div>
               )
             })}
