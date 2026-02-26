@@ -60,8 +60,21 @@ export function PageLoader({ page = 'default' }: PageLoaderProps) {
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
       <div className="flex flex-col items-center gap-5">
-        <Spinner size={36} />
-        <p className="text-sm text-gray-400 font-medium tracking-wide animate-pulse">
+        {/* Brand logo — breathing pulse */}
+        <div className="animate-pulse-slow">
+          <svg width="40" height="40" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8" y="8" width="112" height="112" rx="28" fill="#F5EDD8"/>
+            <path d="M29 34L48 94H61L42 34H29Z" fill="#1A1A1A"/>
+            <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="#1A1A1A"/>
+            <circle cx="99" cy="29" r="7" fill="#1A1A1A" fillOpacity="0.25"/>
+            <circle cx="107" cy="40" r="3" fill="#1A1A1A" fillOpacity="0.18"/>
+          </svg>
+        </div>
+        {/* Slim sliding bar */}
+        <div className="w-28 h-[2px] rounded-full bg-gray-200 overflow-hidden">
+          <div className="h-full w-2/5 rounded-full bg-primary-500 app-loader-bar" />
+        </div>
+        <p className="text-xs text-gray-400 font-medium tracking-wider uppercase">
           {LABELS[page]}
         </p>
       </div>
