@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck, Users, Search, RefreshCw, AlertCircle,
   Ban, UserCheck, Shield,
   Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2, ExternalLink,
   Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
+  Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -29,9 +30,32 @@ interface Brand {
   id: string
   display_name: string
   short_name: string
+  active: boolean
+  // Social
   instagram_handle: string | null
   facebook_page_name: string | null
   youtube_channel_name: string | null
+  // Scheduling
+  posts_per_day: number | null
+  schedule_offset: number | null
+  baseline_for_content: boolean
+  // Colors
+  colors: {
+    primary?: string
+    accent?: string
+    text?: string
+    color_name?: string
+  }
+  // Credentials status
+  has_instagram: boolean
+  has_facebook: boolean
+  instagram_business_account_id: string | null
+  facebook_page_id: string | null
+  // Logo
+  logo_path: string | null
+  // Timestamps
+  created_at: string | null
+  updated_at: string | null
 }
 
 interface LogEntry {
@@ -126,6 +150,22 @@ function statusColorClass(s: number) {
   return 'bg-green-50 text-green-700'
 }
 
+// ─── DetailRow helper ─────────────────────────────────────────────────────────
+
+function DetailRow({
+  icon, label, value, mono = false,
+}: { icon: React.ReactNode; label: string; value: string | null | undefined; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-gray-200">
+      <span className="flex items-center gap-2 text-gray-600">{icon} {label}</span>
+      {value
+        ? <span className={`text-gray-800 font-medium truncate max-w-[55%] ${mono ? 'font-mono text-[10px]' : ''}`}>{value}</span>
+        : <span className="text-gray-400">—</span>
+      }
+    </div>
+  )
+}
+
 // ─── User Detail Panel ───────────────────────────────────────────────────────
 
 function UserDetail({
@@ -146,6 +186,7 @@ function UserDetail({
   const [logPage, setLogPage] = useState(1)
   const [logOrder, setLogOrder] = useState<'desc' | 'asc'>('desc')
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null)
+  const [expandedBrandId, setExpandedBrandId] = useState<string | null>(null)
 
   // Brands
   const brandsQuery = useQuery<{ brands: Brand[] }>({
@@ -386,30 +427,144 @@ function UserDetail({
                   <p className="text-sm">No brands found for this user</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {(brandsQuery.data?.brands ?? []).map(b => (
-                    <div key={b.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="w-9 h-9 rounded-lg bg-stone-800 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                        {b.short_name || b.id.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-sm">{b.display_name}</p>
-                        <p className="text-xs text-gray-400">{b.id}</p>
-                        <div className="text-xs text-gray-400 mt-0.5 space-y-0.5">
-                          {b.instagram_handle && <p>IG: {b.instagram_handle}</p>}
-                          {b.facebook_page_name && <p>FB: {b.facebook_page_name}</p>}
+                <div className="space-y-3">
+                  {(brandsQuery.data?.brands ?? []).map(b => {
+                    const isExpanded = expandedBrandId === b.id
+                    const primaryColor = b.colors?.primary
+                    const accentColor = b.colors?.accent
+                    return (
+                      <div key={b.id} className="rounded-xl border border-gray-200 overflow-hidden">
+                        {/* Brand header row — click to expand */}
+                        <div
+                          className="flex items-center gap-4 p-4 bg-white cursor-pointer hover:bg-gray-50 transition-colors select-none"
+                          onClick={() => setExpandedBrandId(isExpanded ? null : b.id)}
+                        >
+                          {/* Logo / initials with brand primary color */}
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-sm"
+                            style={{ backgroundColor: primaryColor || '#292524' }}
+                          >
+                            {b.short_name || b.id.slice(0, 3).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-gray-900 text-sm">{b.display_name}</p>
+                              {b.baseline_for_content && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-violet-100 text-violet-700">Baseline</span>
+                              )}
+                              {b.has_instagram && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-pink-100 text-pink-700 flex items-center gap-0.5">
+                                  <Instagram className="w-2.5 h-2.5" /> IG
+                                </span>
+                              )}
+                              {b.has_facebook && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700 flex items-center gap-0.5">
+                                  <Facebook className="w-2.5 h-2.5" /> FB
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5 font-mono">{b.id}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              disabled={deleteBrandMutation.isPending}
+                              onClick={e => { e.stopPropagation(); confirmDeleteBrand(b) }}
+                              title="Delete brand"
+                              className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            {isExpanded
+                              ? <ChevronUp className="w-4 h-4 text-gray-400" />
+                              : <ChevronDown className="w-4 h-4 text-gray-400" />
+                            }
+                          </div>
                         </div>
+
+                        {/* Expanded detail panel */}
+                        {isExpanded && (
+                          <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4 text-xs">
+
+                            {/* Social handles */}
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Social Handles</p>
+                              <div className="grid grid-cols-1 gap-1.5">
+                                <DetailRow icon={<Instagram className="w-3.5 h-3.5 text-pink-500" />} label="Instagram" value={b.instagram_handle} />
+                                <DetailRow icon={<Facebook className="w-3.5 h-3.5 text-blue-500" />} label="Facebook" value={b.facebook_page_name} />
+                                <DetailRow icon={<Youtube className="w-3.5 h-3.5 text-red-500" />} label="YouTube" value={b.youtube_channel_name} />
+                              </div>
+                            </div>
+
+                            {/* Credentials */}
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Credentials</p>
+                              <div className="grid grid-cols-1 gap-1.5">
+                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-gray-200">
+                                  <span className="flex items-center gap-2 text-gray-600"><Instagram className="w-3.5 h-3.5 text-pink-500" /> Instagram API</span>
+                                  {b.has_instagram
+                                    ? <span className="flex items-center gap-1 text-emerald-600 font-medium"><Check className="w-3 h-3" /> Connected</span>
+                                    : <span className="text-gray-400">Not connected</span>
+                                  }
+                                </div>
+                                {b.instagram_business_account_id && (
+                                  <DetailRow icon={<Link className="w-3.5 h-3.5 text-gray-400" />} label="IG Business ID" value={b.instagram_business_account_id} mono />
+                                )}
+                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-gray-200">
+                                  <span className="flex items-center gap-2 text-gray-600"><Facebook className="w-3.5 h-3.5 text-blue-500" /> Facebook API</span>
+                                  {b.has_facebook
+                                    ? <span className="flex items-center gap-1 text-emerald-600 font-medium"><Check className="w-3 h-3" /> Connected</span>
+                                    : <span className="text-gray-400">Not connected</span>
+                                  }
+                                </div>
+                                {b.facebook_page_id && (
+                                  <DetailRow icon={<Link className="w-3.5 h-3.5 text-gray-400" />} label="FB Page ID" value={b.facebook_page_id} mono />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Scheduling */}
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Scheduling</p>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <DetailRow icon={<Settings className="w-3.5 h-3.5 text-gray-400" />} label="Posts / day" value={b.posts_per_day != null ? String(b.posts_per_day) : null} />
+                                <DetailRow icon={<Clock className="w-3.5 h-3.5 text-gray-400" />} label="Schedule offset" value={b.schedule_offset != null ? `${b.schedule_offset}h` : null} />
+                              </div>
+                            </div>
+
+                            {/* Colors */}
+                            {(primaryColor || accentColor || b.colors?.color_name) && (
+                              <div>
+                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Brand Colors</p>
+                                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200">
+                                  {primaryColor && (
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-5 h-5 rounded-md border border-black/10 shadow-sm" style={{ backgroundColor: primaryColor }} />
+                                      <span className="text-gray-500 font-mono">{primaryColor}</span>
+                                    </div>
+                                  )}
+                                  {accentColor && (
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-5 h-5 rounded-md border border-black/10 shadow-sm" style={{ backgroundColor: accentColor }} />
+                                      <span className="text-gray-500 font-mono">{accentColor}</span>
+                                    </div>
+                                  )}
+                                  {b.colors?.color_name && (
+                                    <span className="text-gray-400 italic ml-auto">{b.colors.color_name}</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Timestamps */}
+                            <div className="flex gap-4 text-gray-400 pt-1 border-t border-gray-200">
+                              <span><Calendar className="w-3 h-3 inline mr-1" />Created {formatDate(b.created_at)}</span>
+                              <span><Clock className="w-3 h-3 inline mr-1" />Updated {formatDate(b.updated_at)}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <button
-                        disabled={deleteBrandMutation.isPending}
-                        onClick={() => confirmDeleteBrand(b)}
-                        title="Delete brand"
-                        className="p-2 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

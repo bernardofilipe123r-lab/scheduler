@@ -127,9 +127,33 @@ async def get_user_brands(
                 "id": b.id,
                 "display_name": b.display_name,
                 "short_name": b.short_name,
+                "active": b.active,
+                # Social handles
                 "instagram_handle": b.instagram_handle,
                 "facebook_page_name": getattr(b, "facebook_page_name", None),
                 "youtube_channel_name": getattr(b, "youtube_channel_name", None),
+                # Scheduling
+                "posts_per_day": getattr(b, "posts_per_day", None),
+                "schedule_offset": getattr(b, "schedule_offset", None),
+                "baseline_for_content": getattr(b, "baseline_for_content", False),
+                # Colors
+                "colors": b.colors if b.colors else {},
+                # Credentials presence (never expose tokens)
+                "has_instagram": bool(
+                    getattr(b, "instagram_business_account_id", None)
+                    and getattr(b, "instagram_access_token", None)
+                ),
+                "has_facebook": bool(
+                    getattr(b, "facebook_page_id", None)
+                    and getattr(b, "facebook_access_token", None)
+                ),
+                "instagram_business_account_id": getattr(b, "instagram_business_account_id", None),
+                "facebook_page_id": getattr(b, "facebook_page_id", None),
+                # Logo
+                "logo_path": getattr(b, "logo_path", None),
+                # Timestamps
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+                "updated_at": b.updated_at.isoformat() if b.updated_at else None,
             }
             for b in brands
         ]
