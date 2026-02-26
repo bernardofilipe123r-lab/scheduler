@@ -17,6 +17,7 @@ from app.models.youtube import YouTubeChannel
 from app.models.logs import LogEntry
 from app.models.config import AppSettings
 from app.models.niche_config import NicheConfig
+from app.models.oauth_state import OAuthState
 from app.models.toby import (
     TobyState,
     TobyExperiment,
@@ -56,6 +57,7 @@ __all__ = [
     "TobyStrategyScore",
     "TobyActivityLog",
     "TobyContentTag",
+    "OAuthState",
     "TobyEpisodicMemory",
     "TobySemanticMemory",
     "TobyProceduralMemory",

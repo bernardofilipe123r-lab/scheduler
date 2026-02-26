@@ -20,6 +20,7 @@ export function useBrandConnections() {
     queryFn: fetchBrandConnections,
     refetchInterval: 30000, // Refetch every 30 seconds
     staleTime: 10000, // Consider data stale after 10 seconds
+    refetchOnWindowFocus: true, // Refetch when user returns from OAuth tab
   })
 }
 

@@ -8,7 +8,6 @@ Handles the brand-level OAuth flow:
   GET  /api/auth/instagram/status?brand_id=...     → check connection status
 """
 import os
-import secrets
 import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -22,6 +21,7 @@ from app.db_connection import get_db
 from app.models.brands import Brand
 from app.api.auth.middleware import get_current_user
 from app.services.publishing.ig_token_service import InstagramTokenService
+from app.services.oauth import OAuthStateStore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth/instagram", tags=["instagram-oauth"])
@@ -41,10 +41,6 @@ REQUIRED_SCOPES = ",".join([
     "instagram_business_manage_messages",
     "instagram_business_manage_comments",
 ])
-
-# In-memory state store (maps state_token → {brand_id, user_id, created_at})
-# In production with multiple instances, use Redis or DB instead.
-_oauth_states: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -73,20 +69,14 @@ def instagram_connect(
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
 
-    # Generate CSRF state token
-    state_token = secrets.token_urlsafe(32)
-    _oauth_states[state_token] = {
-        "brand_id": brand_id,
-        "user_id": user["id"],
-        "created_at": datetime.now(timezone.utc),
-        "return_to": return_to,
-    }
-
-    # Clean up old states (older than 10 minutes)
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
-    expired = [k for k, v in _oauth_states.items() if v["created_at"] < cutoff]
-    for k in expired:
-        _oauth_states.pop(k, None)
+    # Generate CSRF state token (persisted in DB)
+    state_token = OAuthStateStore.create(
+        db=db,
+        platform="instagram",
+        brand_id=brand_id,
+        user_id=user["id"],
+        return_to=return_to,
+    )
 
     # Build Instagram authorization URL
     params = {
@@ -132,8 +122,8 @@ def instagram_callback(
     if not code or not state:
         return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error=invalid")
 
-    # Validate state token
-    state_data = _oauth_states.pop(state, None)
+    # Validate state token (DB-backed, single-use)
+    state_data = OAuthStateStore.validate(db, state, "instagram")
     if not state_data:
         logger.warning("Instagram OAuth callback: invalid or expired state token")
         return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error=expired")

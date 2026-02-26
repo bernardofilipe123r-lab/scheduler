@@ -24,6 +24,7 @@ from app.models import YouTubeChannel, Brand
 from app.services.youtube.publisher import YouTubePublisher, YouTubeCredentials
 from app.services.brands.resolver import brand_resolver
 from app.api.auth.middleware import get_current_user
+from app.services.oauth import OAuthStateStore
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ async def youtube_connect(
     brand: str = Query(..., description="Brand to connect YouTube for"),
     return_to: str = Query(None, description="Where to redirect after OAuth (e.g. 'onboarding')"),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Start the YouTube OAuth flow for a specific brand.
@@ -69,13 +71,15 @@ async def youtube_connect(
             detail="YouTube OAuth not configured. Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET."
         )
     
-    # Encode brand + user_id + return_to in state for the callback
-    user_id = user.get("id", "")
-    state_parts = [brand, user_id or ""]
-    if return_to:
-        state_parts.append(return_to)
-    state_value = ":".join(state_parts)
-    auth_url = youtube_publisher.get_authorization_url(state=state_value)
+    # Generate DB-persisted state token
+    state_token = OAuthStateStore.create(
+        db=db,
+        platform="youtube",
+        brand_id=brand,
+        user_id=user.get("id", ""),
+        return_to=return_to,
+    )
+    auth_url = youtube_publisher.get_authorization_url(state=state_token)
     
     logger.info(f"Starting YouTube OAuth flow for brand: {brand}")
     return {"auth_url": auth_url, "brand": brand}
@@ -121,15 +125,27 @@ async def youtube_callback(
         </html>
         """)
     
-    brand = (state or "unknown").lower()
-    # Parse state: may be "brand:user_id:return_to", "brand:user_id", or just "brand" (legacy)
+    brand = "unknown"
     real_user_id = None
     return_to = None
-    if ":" in brand:
-        parts = brand.split(":", 2)
-        brand = parts[0]
-        real_user_id = parts[1] if len(parts) > 1 and parts[1] else None
-        return_to = parts[2] if len(parts) > 2 and parts[2] else None
+
+    # Validate state token via DB store
+    if state:
+        state_data = OAuthStateStore.validate(db, state, "youtube")
+        if state_data:
+            brand = state_data["brand_id"]
+            real_user_id = state_data["user_id"]
+            return_to = state_data.get("return_to")
+        else:
+            # Backward-compat: try parsing legacy "brand:user_id:return_to" format
+            raw = state.lower()
+            if ":" in raw:
+                parts = raw.split(":", 2)
+                brand = parts[0]
+                real_user_id = parts[1] if len(parts) > 1 and parts[1] else None
+                return_to = parts[2] if len(parts) > 2 and parts[2] else None
+            else:
+                brand = raw
     
     # Exchange authorization code for tokens
     # This gives us both access_token (short-lived) and refresh_token (long-lived)

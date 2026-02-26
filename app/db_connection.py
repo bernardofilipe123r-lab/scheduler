@@ -127,6 +127,20 @@ def run_migrations():
         for sql in v3_exp_cols:
             conn.execute(text(sql))
 
+        # OAuth state store table (persistent CSRF tokens for OAuth flows)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS oauth_states (
+                state_token VARCHAR(64) PRIMARY KEY,
+                platform VARCHAR(20) NOT NULL,
+                brand_id VARCHAR(100) NOT NULL,
+                user_id VARCHAR(100) NOT NULL,
+                return_to VARCHAR(50),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                used_at TIMESTAMPTZ
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at)"))
+
         conn.commit()
 
 

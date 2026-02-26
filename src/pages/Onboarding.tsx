@@ -21,6 +21,7 @@ import {
   PartyPopper,
   Link2,
   Instagram,
+  Facebook,
   Youtube,
   ChevronDown,
   ExternalLink,
@@ -46,7 +47,7 @@ import {
 } from '@/features/brands/constants'
 import { NicheConfigForm, type NicheConfigFormHandle } from '@/features/brands/components/NicheConfigForm'
 import { supabase } from '@/shared/api/supabase'
-import { connectYouTube, connectInstagram, fetchBrandConnections } from '@/features/brands/api/connections-api'
+import { connectYouTube, connectInstagram, connectFacebook, fetchFacebookPages, selectFacebookPage, fetchBrandConnections, type FacebookPage } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
 /* ── Proportional scale: 1080px canvas → 200px preview ────────── */
@@ -100,7 +101,7 @@ const STEP_INFO = [
   { num: 3, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
   { num: 4, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
   { num: 5, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
-  { num: 6, label: 'Connect your platforms', sub: 'Link your Instagram and YouTube accounts so the app can publish content for you.' },
+  { num: 6, label: 'Connect your platforms', sub: 'Link your Instagram, Facebook, and YouTube accounts so the app can publish content for you.' },
 ]
 
 export function OnboardingPage() {
@@ -115,7 +116,8 @@ export function OnboardingPage() {
   const [step, setStep] = useState<number>(() => {
     // If returning from OAuth redirect, jump straight to step 6
     const params = new URLSearchParams(window.location.search)
-    if (params.has('ig_connected') || params.has('yt_connected') || params.has('ig_error')) {
+    if (params.has('ig_connected') || params.has('yt_connected') || params.has('ig_error') ||
+        params.has('fb_connected') || params.has('fb_error') || params.has('fb_select_page')) {
       return 6
     }
     return onboardingStep
@@ -186,9 +188,15 @@ export function OnboardingPage() {
   const [igHandle, setIgHandle] = useState<string | null>(null)
   const [ytConnected, setYtConnected] = useState(false)
   const [ytChannelName, setYtChannelName] = useState<string | null>(null)
+  const [fbConnected, setFbConnected] = useState(false)
+  const [fbPageName, setFbPageName] = useState<string | null>(null)
   const [connectingIg, setConnectingIg] = useState(false)
   const [connectingYt, setConnectingYt] = useState(false)
+  const [connectingFb, setConnectingFb] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [fbPages, setFbPages] = useState<FacebookPage[]>([])
+  const [showFbPageSelector, setShowFbPageSelector] = useState(false)
+  const [selectingFbPage, setSelectingFbPage] = useState(false)
   const [showManualSection, setShowManualSection] = useState(false)
   const [metaAccessToken, setMetaAccessToken] = useState('')
   const [facebookPageId, setFacebookPageId] = useState('')
@@ -203,25 +211,54 @@ export function OnboardingPage() {
     const params = new URLSearchParams(window.location.search)
     const igSuccess = params.get('ig_connected')
     const ytSuccess = params.get('yt_connected')
+    const fbSuccess = params.get('fb_connected')
     const igError = params.get('ig_error')
+    const fbError = params.get('fb_error')
+    const fbSelectPage = params.get('fb_select_page')
 
     // Clean up URL params
-    if (igSuccess || ytSuccess || igError) {
+    if (igSuccess || ytSuccess || fbSuccess || igError || fbError || fbSelectPage) {
       const url = new URL(window.location.href)
       url.searchParams.delete('ig_connected')
       url.searchParams.delete('yt_connected')
+      url.searchParams.delete('fb_connected')
       url.searchParams.delete('ig_error')
+      url.searchParams.delete('fb_error')
+      url.searchParams.delete('fb_select_page')
       window.history.replaceState({}, '', url.pathname)
     }
 
     if (igError) {
       setConnectionError(`Instagram connection failed: ${igError}`)
     }
+    if (fbError) {
+      const errorMessages: Record<string, string> = {
+        denied: 'Permission denied',
+        expired: 'Session expired — please try again',
+        no_pages: 'No Facebook Pages found on your account',
+        failed: 'Connection failed — please try again',
+      }
+      setConnectionError(`Facebook: ${errorMessages[fbError] || fbError}`)
+    }
     if (igSuccess) {
       toast.success('Instagram connected!')
     }
     if (ytSuccess) {
       toast.success('YouTube connected!')
+    }
+    if (fbSuccess) {
+      toast.success('Facebook connected!')
+    }
+
+    // Handle Facebook page selection flow (multiple pages found)
+    if (fbSelectPage) {
+      setShowFbPageSelector(true)
+      fetchFacebookPages(fbSelectPage).then((pages) => {
+        setFbPages(pages)
+      }).catch(() => {
+        setConnectionError('Failed to load Facebook pages. Please try connecting again.')
+        setShowFbPageSelector(false)
+      })
     }
 
     // Fetch actual connection status
@@ -232,6 +269,8 @@ export function OnboardingPage() {
         setIgHandle(brand.instagram.account_name || null)
         setYtConnected(brand.youtube.connected)
         setYtChannelName(brand.youtube.account_name || null)
+        setFbConnected(brand.facebook.connected)
+        setFbPageName(brand.facebook.account_name || null)
       }
     }).catch(() => {
       // Ignore — non-critical
@@ -410,6 +449,40 @@ export function OnboardingPage() {
     } catch (err) {
       setConnectingYt(false)
       setConnectionError(err instanceof Error ? err.message : 'Failed to start YouTube connection')
+    }
+  }
+
+  const handleConnectFacebook = async () => {
+    setConnectingFb(true)
+    setConnectionError(null)
+    try {
+      const authUrl = await connectFacebook(brandId, 'onboarding')
+      window.location.href = authUrl
+    } catch (err) {
+      setConnectingFb(false)
+      setConnectionError(err instanceof Error ? err.message : 'Failed to start Facebook connection')
+    }
+  }
+
+  const handleSelectFbPage = async (pageId: string) => {
+    setSelectingFbPage(true)
+    try {
+      await selectFacebookPage(brandId, pageId)
+      setShowFbPageSelector(false)
+      setFbPages([])
+      setFbConnected(true)
+      toast.success('Facebook page connected!')
+      // Refresh connection status
+      fetchBrandConnections().then((data) => {
+        const b = data.brands.find(br => br.brand === brandId)
+        if (b) {
+          setFbPageName(b.facebook.account_name || null)
+        }
+      }).catch(() => {})
+    } catch (err) {
+      setConnectionError(err instanceof Error ? err.message : 'Failed to select Facebook page')
+    } finally {
+      setSelectingFbPage(false)
     }
   }
 
@@ -925,6 +998,88 @@ export function OnboardingPage() {
                     </div>
                   </div>
 
+                  {/* ── Facebook Card ── */}
+                  <div className={`border rounded-xl p-5 transition-colors ${fbConnected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
+                          <Facebook className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Facebook</p>
+                          {fbConnected ? (
+                            <p className="text-xs text-green-600 font-medium">{fbPageName || 'Connected'}</p>
+                          ) : (
+                            <p className="text-xs text-gray-400">Connect via Facebook Login</p>
+                          )}
+                        </div>
+                      </div>
+                      {fbConnected ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium">
+                          <Check className="w-3.5 h-3.5" />
+                          Connected
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleConnectFacebook}
+                          disabled={connectingFb}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                          {connectingFb ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          )}
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── Facebook Page Selector (multi-page flow) ── */}
+                  {showFbPageSelector && (
+                    <div className="border border-blue-200 rounded-xl p-5 bg-blue-50">
+                      <p className="text-sm font-semibold text-blue-900 mb-3">Select a Facebook Page</p>
+                      <p className="text-xs text-blue-700 mb-3">Choose which page to connect for publishing:</p>
+                      {fbPages.length === 0 ? (
+                        <div className="flex items-center gap-2 py-3">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                          <span className="text-sm text-blue-700">Loading pages...</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {fbPages.map((page) => (
+                            <button
+                              key={page.id}
+                              onClick={() => handleSelectFbPage(page.id)}
+                              disabled={selectingFbPage}
+                              className="w-full flex items-center gap-3 p-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 text-left"
+                            >
+                              {page.picture && (
+                                <img src={page.picture} alt="" className="w-8 h-8 rounded-full" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{page.name}</p>
+                                {page.category && (
+                                  <p className="text-xs text-gray-500">{page.category}</p>
+                                )}
+                              </div>
+                              {page.fan_count != null && (
+                                <span className="text-xs text-gray-400">{page.fan_count.toLocaleString()} followers</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => { setShowFbPageSelector(false); setFbPages([]) }}
+                        className="mt-3 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+
                   {/* ── YouTube Card ── */}
                   <div className={`border rounded-xl p-5 transition-colors ${ytConnected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
                     <div className="flex items-center justify-between">
@@ -964,24 +1119,21 @@ export function OnboardingPage() {
                   </div>
 
                   {/* Connection summary */}
-                  {(igConnected || ytConnected) && (
+                  {(igConnected || ytConnected || fbConnected) && (
                     <p className="text-xs text-green-600 text-center font-medium">
-                      {igConnected && ytConnected
-                        ? 'Both platforms connected — you\'re all set!'
-                        : igConnected
-                          ? 'Instagram connected! You can add YouTube later from Settings.'
-                          : 'YouTube connected! You can add Instagram later from Settings.'}
+                      {[igConnected && 'Instagram', fbConnected && 'Facebook', ytConnected && 'YouTube'].filter(Boolean).join(' + ')} connected
+                      {(igConnected && fbConnected && ytConnected) ? ' — you\'re all set!' : ' — you can add more later from Settings.'}
                     </p>
                   )}
 
-                  {!igConnected && !ytConnected && (
+                  {!igConnected && !ytConnected && !fbConnected && (
                     <p className="text-xs text-gray-400 text-center">
                       Connect at least one platform, or skip and do it later from brand settings.
                     </p>
                   )}
 
-                  {/* ── Advanced: Manual Credentials — hidden once Instagram is connected ── */}
-                  {!igConnected && <div className="pt-2">
+                  {/* ── Advanced: Manual Credentials — hidden once any platform is connected ── */}
+                  {!igConnected && !fbConnected && <div className="pt-2">
                     <button
                       onClick={() => setShowManualSection(!showManualSection)}
                       className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mx-auto"
@@ -1154,9 +1306,9 @@ export function OnboardingPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleComplete}
-                disabled={completing || (!igConnected && !ytConnected)}
+                disabled={completing || (!igConnected && !ytConnected && !fbConnected)}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
-                  igConnected || ytConnected
+                  igConnected || ytConnected || fbConnected
                     ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}

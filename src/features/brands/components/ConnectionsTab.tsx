@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, RefreshCw, CheckCircle2, XCircle, Instagram } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
-import { connectInstagram } from '@/features/brands'
+import { connectInstagram, fetchFacebookPages, selectFacebookPage, type FacebookPage } from '@/features/brands'
 import { apiClient } from '@/shared/api/client'
 import { ConnectionsSkeleton } from '@/shared/components'
 import { ConnectionSummaryBar } from './ConnectionSummaryBar'
@@ -14,6 +14,10 @@ export function ConnectionsTab() {
   const [igNotification, setIgNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [fbNotification, setFbNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [newBrandId, setNewBrandId] = useState<string | null>(null)
+  const [fbSelectPageBrand, setFbSelectPageBrand] = useState<string | null>(null)
+  const [fbPages, setFbPages] = useState<FacebookPage[]>([])
+  const [fbPagesLoading, setFbPagesLoading] = useState(false)
+  const [selectingFbPage, setSelectingFbPage] = useState(false)
 
   // Handle Instagram OAuth redirect params & new brand prompt
   useEffect(() => {
@@ -21,6 +25,7 @@ export function ConnectionsTab() {
     const igError = searchParams.get('ig_error')
     const fbConnected = searchParams.get('fb_connected')
     const fbError = searchParams.get('fb_error')
+    const fbSelectPage = searchParams.get('fb_select_page')
     const newBrand = searchParams.get('new_brand')
 
     if (igConnected) {
@@ -52,6 +57,22 @@ export function ConnectionsTab() {
       setSearchParams(searchParams, { replace: true })
     }
 
+    // Handle multi-page selection redirect from backend
+    if (fbSelectPage) {
+      setFbSelectPageBrand(fbSelectPage)
+      setFbPagesLoading(true)
+      searchParams.delete('fb_select_page')
+      setSearchParams(searchParams, { replace: true })
+      fetchFacebookPages(fbSelectPage).then((pages) => {
+        setFbPages(pages)
+      }).catch(() => {
+        setFbNotification({ type: 'error', message: 'Failed to load Facebook pages. Please try connecting again.' })
+        setFbSelectPageBrand(null)
+      }).finally(() => {
+        setFbPagesLoading(false)
+      })
+    }
+
     if (newBrand) {
       setNewBrandId(newBrand)
       searchParams.delete('new_brand')
@@ -77,6 +98,21 @@ export function ConnectionsTab() {
   // Store logos loaded from backend
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
 
+  const handleSelectFbPage = async (pageId: string) => {
+    if (!fbSelectPageBrand) return
+    setSelectingFbPage(true)
+    try {
+      await selectFacebookPage(fbSelectPageBrand, pageId)
+      setFbSelectPageBrand(null)
+      setFbPages([])
+      setFbNotification({ type: 'success', message: 'Facebook page connected!' })
+      refetch()
+    } catch {
+      setFbNotification({ type: 'error', message: 'Failed to select Facebook page. Please try again.' })
+    } finally {
+      setSelectingFbPage(false)
+    }
+  }
   useEffect(() => {
     const fetchBrandLogos = async () => {
       if (!data?.brands) return
@@ -190,6 +226,54 @@ export function ConnectionsTab() {
           <span className="text-sm font-medium">{fbNotification.message}</span>
           <button onClick={() => setFbNotification(null)} className="ml-auto text-sm underline opacity-60 hover:opacity-100">
             Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Facebook Page Selector (multi-page flow) */}
+      {fbSelectPageBrand && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+          <h3 className="font-semibold text-blue-900 mb-2">Select a Facebook Page</h3>
+          <p className="text-sm text-blue-700 mb-4">
+            Choose which Facebook Page to connect for <strong>{fbSelectPageBrand}</strong>:
+          </p>
+          {fbPagesLoading ? (
+            <div className="flex items-center gap-2 py-4 justify-center">
+              <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+              <span className="text-sm text-blue-700">Loading pages...</span>
+            </div>
+          ) : fbPages.length > 0 ? (
+            <div className="space-y-2">
+              {fbPages.map((page) => (
+                <button
+                  key={page.id}
+                  onClick={() => handleSelectFbPage(page.id)}
+                  disabled={selectingFbPage}
+                  className="w-full flex items-center gap-3 p-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 text-left"
+                >
+                  {page.picture && (
+                    <img src={page.picture} alt="" className="w-8 h-8 rounded-full" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{page.name}</p>
+                    {page.category && (
+                      <p className="text-xs text-gray-500">{page.category}</p>
+                    )}
+                  </div>
+                  {page.fan_count != null && (
+                    <span className="text-xs text-gray-400">{page.fan_count.toLocaleString()} followers</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 py-2">No pages found.</p>
+          )}
+          <button
+            onClick={() => { setFbSelectPageBrand(null); setFbPages([]) }}
+            className="mt-3 text-sm text-gray-500 hover:text-gray-700 underline"
+          >
+            Cancel
           </button>
         </div>
       )}
