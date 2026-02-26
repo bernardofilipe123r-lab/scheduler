@@ -5,6 +5,7 @@ import asyncio
 import base64
 import tempfile
 import json
+import re
 import logging
 import requests as http_requests
 from pathlib import Path
@@ -193,6 +194,36 @@ def _cfg_to_dict(cfg: NicheConfig) -> dict:
     }
 
 
+def _infer_from_content_brief(content_brief: str) -> tuple[list[str], str]:
+    """Best-effort extraction of topics and audience from free-text content brief."""
+    brief = content_brief or ""
+
+    target_match = re.search(r"(?:target\s+audience|audience)\s*:\s*([^\n]+)", brief, flags=re.IGNORECASE)
+    target_audience = target_match.group(1).strip() if target_match else ""
+
+    topic_match = (
+        re.search(r"(?:daily\s+topics\s+include|topics\s+include|topic\s+categories)\s*:\s*([^\n]+)", brief, flags=re.IGNORECASE)
+        or re.search(r"(?:daily\s+topics|topics)\s*:\s*([^\n]+)", brief, flags=re.IGNORECASE)
+    )
+
+    raw_topics = topic_match.group(1) if topic_match else ""
+    topic_candidates = re.sub(r"\([^)]*\)", " ", raw_topics).split(",")
+
+    topics: list[str] = []
+    seen: set[str] = set()
+    for candidate in topic_candidates:
+        cleaned = re.sub(r"\s+", " ", re.sub(r"^[-\d.\s]+", "", candidate.strip()))
+        if len(cleaned) < 3:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        topics.append(cleaned)
+
+    return topics[:15], target_audience
+
+
 # --- Routes ---
 
 @router.get("")
@@ -285,6 +316,24 @@ async def update_niche_config(
 
     # Update fields that were provided (non-None)
     update_data = request.model_dump(exclude_unset=True)
+
+    # Backward-compatible fallback:
+    # if clients only send content_brief (older onboarding flow), infer
+    # topic_categories / target_audience so Toby preflight is not blocked.
+    if update_data.get("content_brief"):
+        inferred_topics, inferred_audience = _infer_from_content_brief(update_data["content_brief"])
+
+        incoming_topics = update_data.get("topic_categories")
+        if inferred_topics and (incoming_topics is None or len(incoming_topics) == 0):
+            update_data["topic_categories"] = inferred_topics
+            # Keep topic_keywords coherent when client does not send them.
+            if "topic_keywords" not in update_data or not update_data.get("topic_keywords"):
+                update_data["topic_keywords"] = inferred_topics
+
+        incoming_audience = update_data.get("target_audience")
+        if inferred_audience and (incoming_audience is None or not str(incoming_audience).strip()):
+            update_data["target_audience"] = inferred_audience
+
     for field_name, value in update_data.items():
         if value is not None:
             setattr(cfg, field_name, value)
