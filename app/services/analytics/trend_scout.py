@@ -39,7 +39,7 @@ class TrendScout:
     """
 
     GRAPH_API_VERSION = "v21.0"
-    BASE_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+    BASE_URL = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
 
     # Discovery hashtags — loaded from NicheConfig per user
     DEFAULT_HASHTAGS: List[str] = []

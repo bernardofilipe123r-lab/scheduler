@@ -23,12 +23,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/brands", tags=["connection-tests"])
 
-META_API_VERSION = "v19.0"
+META_API_VERSION = "v21.0"
 META_REQUIRED_SCOPES = {
-    "instagram_basic",
-    "instagram_content_publish",
-    "pages_show_list",
-    "pages_read_engagement",
+    "instagram_business_basic",
+    "instagram_business_content_publish",
 }
 
 
@@ -102,7 +100,7 @@ async def test_meta_connection(
     if ig_account_id:
         try:
             resp = requests.get(
-                f"https://graph.facebook.com/{META_API_VERSION}/{ig_account_id}",
+                f"https://graph.instagram.com/{META_API_VERSION}/{ig_account_id}",
                 params={"fields": "id,username,name", "access_token": access_token},
                 timeout=10,
             )

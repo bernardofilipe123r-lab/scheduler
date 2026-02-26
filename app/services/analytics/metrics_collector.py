@@ -49,7 +49,7 @@ class MetricsCollector:
     """
 
     GRAPH_API_VERSION = "v21.0"
-    BASE_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+    BASE_URL = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
 
     def __init__(self):
         self._brand_tokens: Dict[str, Dict] = {}

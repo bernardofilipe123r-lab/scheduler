@@ -258,7 +258,7 @@ export function CreateBrandPage() {
       if (data.data?.is_valid) {
         // Also verify IG account access
         const igRes = await fetch(
-          `https://graph.facebook.com/v19.0/${encodeURIComponent(instagramBusinessAccountId)}?fields=username&access_token=${encodeURIComponent(metaAccessToken)}`
+          `https://graph.instagram.com/v21.0/${encodeURIComponent(instagramBusinessAccountId)}?fields=username&access_token=${encodeURIComponent(metaAccessToken)}`
         )
         const igData = await igRes.json()
         if (igData.error) {

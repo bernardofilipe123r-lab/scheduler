@@ -99,7 +99,11 @@ class SocialPublisher:
             self.ig_business_account_id = None
             self.fb_page_id = None
         
-        self.api_version = "v19.0"
+        self.api_version = "v21.0"
+        # Instagram Business Login tokens must use graph.instagram.com;
+        # Facebook page operations keep using graph.facebook.com.
+        self.ig_graph_base = "https://graph.instagram.com"
+        self.fb_graph_base = "https://graph.facebook.com"
         self._page_access_token_cache = {}  # Cache for page access tokens
         
         # Store brand name for debugging
@@ -245,7 +249,7 @@ class SocialPublisher:
         
         try:
             # Step 1: Create media container for image post
-            container_url = f"https://graph.facebook.com/{self.api_version}/{self.ig_business_account_id}/media"
+            container_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media"
             
             print(f"📤 Image URL for Instagram post: {image_url}")
             print(f"   Instagram Account ID: {self.ig_business_account_id}")
@@ -288,7 +292,7 @@ class SocialPublisher:
             print(f"✅ Container created: {creation_id}")
             
             # Step 2: Wait for processing
-            status_url = f"https://graph.facebook.com/{self.api_version}/{creation_id}"
+            status_url = f"{self.ig_graph_base}/{self.api_version}/{creation_id}"
             max_wait_seconds = 60
             check_interval = 3
             waited = 0
@@ -339,7 +343,7 @@ class SocialPublisher:
                 }
             
             # Step 3: Publish the container
-            publish_url = f"https://graph.facebook.com/{self.api_version}/{self.ig_business_account_id}/media_publish"
+            publish_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media_publish"
             publish_payload = {
                 "creation_id": creation_id,
                 "access_token": self.ig_access_token
@@ -535,7 +539,7 @@ class SocialPublisher:
 
         try:
             container_url = (
-                f"https://graph.facebook.com/{self.api_version}"
+                f"{self.ig_graph_base}/{self.api_version}"
                 f"/{self.ig_business_account_id}/media"
             )
 
@@ -579,7 +583,7 @@ class SocialPublisher:
             # Step 2: Wait for all items to finish processing
             print(f"   ⏳ Waiting for {len(children_ids)} carousel items to process...")
             for item_id in children_ids:
-                status_url = f"https://graph.facebook.com/{self.api_version}/{item_id}"
+                status_url = f"{self.ig_graph_base}/{self.api_version}/{item_id}"
                 max_wait = 60
                 waited = 0
                 while waited < max_wait:
@@ -651,7 +655,7 @@ class SocialPublisher:
             print(f"   ✅ Carousel container created: {carousel_id}")
 
             # Wait for carousel container to finish processing
-            status_url = f"https://graph.facebook.com/{self.api_version}/{carousel_id}"
+            status_url = f"{self.ig_graph_base}/{self.api_version}/{carousel_id}"
             max_wait = 60
             waited = 0
             while waited < max_wait:
@@ -678,7 +682,7 @@ class SocialPublisher:
 
             # Step 4: Publish
             publish_url = (
-                f"https://graph.facebook.com/{self.api_version}"
+                f"{self.ig_graph_base}/{self.api_version}"
                 f"/{self.ig_business_account_id}/media_publish"
             )
             print("   🚀 Publishing Instagram carousel...")
@@ -901,7 +905,7 @@ class SocialPublisher:
         
         try:
             # Step 1: Create RESUMABLE upload session (not standard video_url)
-            container_url = f"https://graph.facebook.com/{self.api_version}/{self.ig_business_account_id}/media"
+            container_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media"
             
             print(f"📤 Video URL for Instagram: {video_url}")
             print(f"   Instagram Account ID: {self.ig_business_account_id}")
@@ -1006,7 +1010,7 @@ class SocialPublisher:
             print(f"✅ Video uploaded successfully")
             
             # Step 3: Wait for video processing with status checks
-            status_url = f"https://graph.facebook.com/{self.api_version}/{creation_id}"
+            status_url = f"{self.ig_graph_base}/{self.api_version}/{creation_id}"
             max_wait_seconds = 180  # Wait up to 3 minutes for processing
             check_interval = 5  # Check every 5 seconds
             waited = 0
@@ -1067,7 +1071,7 @@ class SocialPublisher:
                 }
             
             # Step 4: Publish the container
-            publish_url = f"https://graph.facebook.com/{self.api_version}/{self.ig_business_account_id}/media_publish"
+            publish_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media_publish"
             
             publish_payload = {
                 "creation_id": creation_id,

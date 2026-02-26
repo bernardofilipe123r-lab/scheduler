@@ -37,7 +37,7 @@ _REFRESH_TIMEOUT_SECONDS = 300  # 5 minutes
 class AnalyticsService:
     """Service for fetching and managing brand analytics."""
     
-    META_API_BASE = "https://graph.facebook.com/v21.0"
+    META_API_BASE = "https://graph.instagram.com/v21.0"
     YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
     
     def __init__(self, db: Session):

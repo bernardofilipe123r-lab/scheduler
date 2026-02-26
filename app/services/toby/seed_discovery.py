@@ -300,7 +300,7 @@ def _validate_ig_accounts(usernames: List[str]) -> List[str]:
     for username in usernames:
         try:
             resp = requests.get(
-                f"https://graph.facebook.com/v21.0/{ig_user_id}",
+                f"https://graph.instagram.com/v21.0/{ig_user_id}",
                 params={
                     "fields": f"business_discovery.fields(username,followers_count).username({username})",
                     "access_token": access_token,
