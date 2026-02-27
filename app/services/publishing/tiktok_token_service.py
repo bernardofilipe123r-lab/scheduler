@@ -45,9 +45,20 @@ class TikTokTokenService:
         )
         resp.raise_for_status()
         data = resp.json()
-        if data.get("error", {}).get("code") != "ok":
+        # TikTok can return either:
+        # 1) Wrapped payload: {"error": {"code": "ok"}, "data": {...}}
+        # 2) Direct payload: {"access_token": ..., "refresh_token": ...}
+        if isinstance(data, dict) and "access_token" in data:
+            return data
+
+        error_block = data.get("error", {}) if isinstance(data, dict) else {}
+        if error_block.get("code") not in (None, "ok"):
             raise ValueError(f"TikTok token exchange failed: {data}")
-        return data["data"]
+
+        if isinstance(data, dict) and isinstance(data.get("data"), dict):
+            return data["data"]
+
+        raise ValueError(f"TikTok token exchange returned unexpected format: {data}")
 
     def refresh_access_token(self, refresh_token: str) -> dict:
         """Refresh access token using refresh token. Called before every publish."""
@@ -64,9 +75,17 @@ class TikTokTokenService:
         )
         resp.raise_for_status()
         data = resp.json()
-        if data.get("error", {}).get("code") != "ok":
+        if isinstance(data, dict) and "access_token" in data:
+            return data
+
+        error_block = data.get("error", {}) if isinstance(data, dict) else {}
+        if error_block.get("code") not in (None, "ok"):
             raise ValueError(f"TikTok token refresh failed: {data}")
-        return data["data"]
+
+        if isinstance(data, dict) and isinstance(data.get("data"), dict):
+            return data["data"]
+
+        raise ValueError(f"TikTok token refresh returned unexpected format: {data}")
 
     def get_user_info(self, access_token: str) -> dict:
         """Get TikTok user info to store username."""
