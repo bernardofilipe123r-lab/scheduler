@@ -39,7 +39,8 @@ REQUIRED_SCOPES = ",".join([
 
 def _get_threads_config():
     """Read env vars at request time (not import time) to avoid load-order issues."""
-    app_id = os.environ.get("META_APP_ID") or os.environ.get("INSTAGRAM_APP_ID", "")
+    # Threads has its own app ID separate from Facebook/Instagram
+    app_id = os.environ.get("THREADS_APP_ID") or os.environ.get("META_APP_ID") or os.environ.get("INSTAGRAM_APP_ID", "")
     site_url = os.environ.get("SITE_URL", "https://viraltoby.com")
     redirect_uri = os.environ.get("THREADS_REDIRECT_URI", site_url + "/api/auth/threads/callback")
     return app_id, site_url, redirect_uri

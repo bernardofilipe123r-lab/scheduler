@@ -16,8 +16,9 @@ API_VERSION = "v21.0"
 
 class ThreadsTokenService:
     def __init__(self):
-        self.app_id = os.environ.get("META_APP_ID") or os.environ.get("INSTAGRAM_APP_ID", "")
-        self.app_secret = os.environ.get("META_APP_SECRET") or os.environ.get("INSTAGRAM_APP_SECRET", "")
+        # Threads has its own app ID/secret separate from Facebook/Instagram
+        self.app_id = os.environ.get("THREADS_APP_ID") or os.environ.get("META_APP_ID") or os.environ.get("INSTAGRAM_APP_ID", "")
+        self.app_secret = os.environ.get("THREADS_APP_SECRET") or os.environ.get("META_APP_SECRET") or os.environ.get("INSTAGRAM_APP_SECRET", "")
         site_url = os.environ.get("SITE_URL", "https://viraltoby.com")
         self.redirect_uri = os.environ.get(
             "THREADS_REDIRECT_URI",
