@@ -72,6 +72,32 @@ railway redeploy
 
 **Important:** Setting a variable via `railway variables set` triggers an automatic redeploy. The service is `scheduler` in project `responsible-mindfulness` (production environment).
 
+## What is ViralToby / Toby
+
+**ViralToby** (`viraltoby.com`) is a social media content scheduling and publishing platform that lets users connect any brand across Instagram, Facebook, YouTube, Threads, and TikTok, then have content created, scheduled, and published on their behalf.
+
+The core differentiator is **Toby** — an autonomous AI agent that runs in the background, removing the need for manual content work. Toby is not niche-specific; it adapts to **any brand's Content DNA** (niche, tone, target audience, topic categories, visual style) configured by the user via the NicheConfig system.
+
+**What Toby does autonomously:**
+- Selects viral content archetypes from 59 trained patterns (`app/core/viral_patterns.py`)
+- Generates content via DeepSeek AI, shaped entirely by the brand's Content DNA (`app/core/prompt_context.py`, `app/core/prompt_templates.py`)
+- Scores content quality across 5 dimensions (min 80 to publish)
+- Deduplicates against a 3-day fingerprint window per brand
+- Produces rendered image frames (Pillow) and MP4 videos (FFmpeg/MoviePy)
+- Schedules and publishes across all connected platforms
+- Tracks performance metrics and feeds them back into strategy decisions
+
+**Toby's tick loop** runs every 5 minutes via APScheduler (`app/services/toby/orchestrator.py`). Each tick checks: buffer fill → metric scoring → strategy analysis → trend discovery → phase advancement. All state persists in PostgreSQL — survives deploys and restarts.
+
+**Content DNA** is the user-defined brand identity stored in `NicheConfig` (per-brand, per-user). It drives every prompt, every visual, every tone decision. Toby never deviates from it.
+
+**Key source locations:**
+- Agent tick loop: `app/services/toby/orchestrator.py`
+- Specialized agents: `app/services/toby/agents/` (analyst, creator, critic, scout, strategist, publisher, …)
+- Memory subsystem: `app/services/toby/memory/` (episodic, semantic, procedural, world_model)
+- Content DNA schema: `app/core/prompt_context.py`, `app/models/niche_config.py`
+- Brand config: `app/core/config.py` (`BrandConfig` dataclass)
+
 ## Legal Pages
 
 Public legal pages live in `src/pages/` and are served at these URLs:
