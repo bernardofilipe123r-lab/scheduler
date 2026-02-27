@@ -5,10 +5,11 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -81,6 +82,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Add request logging middleware (captures ALL HTTP requests/responses with full detail)
 app.add_middleware(RequestLoggingMiddleware)
