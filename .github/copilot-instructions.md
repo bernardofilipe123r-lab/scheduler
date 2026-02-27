@@ -42,7 +42,7 @@ After any change that affects API routes, imports, models, services, or any majo
 
 ## Railway CLI (Production Infrastructure)
 
-Railway CLI is installed and authenticated. **Use it directly** to manage production env vars, check deployments, and view logs.
+Railway CLI is installed and authenticated. **ALWAYS run Railway commands directly using run_in_terminal — NEVER ask the user to run them manually.**
 
 ```bash
 # Check current project/service context
@@ -69,6 +69,8 @@ railway redeploy
 - Checking if an env var is set before code depends on it
 - Viewing production logs for debugging
 - Triggering redeployments after config changes
+
+**CRITICAL:** When Railway commands are needed (setting env vars, checking logs, etc.), execute them immediately using `run_in_terminal`. Do NOT provide instructions for the user to run manually. The Railway CLI is available and authenticated in the workspace — use it directly.
 
 **Important:** Setting a variable via `railway variables set` triggers an automatic redeploy. The service is `scheduler` in project `responsible-mindfulness` (production environment).
 
