@@ -236,9 +236,19 @@ class JobManager:
                 continue
             # Collect all URL fields that might contain Supabase URLs
             url_keys = ["video_url", "thumbnail_url", "yt_thumbnail_url",
-                        "video_path", "thumbnail_path", "yt_thumbnail_path"]
+                        "video_path", "thumbnail_path", "yt_thumbnail_path",
+                        "reel_path"]
             for key in url_keys:
                 url = output.get(key)
+                parsed = _parse_supabase_url(url)
+                if parsed:
+                    bucket, path = parsed
+                    try:
+                        delete_file(bucket, path)
+                    except Exception:
+                        pass
+            # Clean up carousel slide images
+            for url in (output.get("carousel_paths") or []):
                 parsed = _parse_supabase_url(url)
                 if parsed:
                     bucket, path = parsed

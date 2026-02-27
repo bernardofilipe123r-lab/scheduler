@@ -1,5 +1,25 @@
 # Copilot Instructions
 
+## Database Migrations
+
+The Supabase database is accessible directly via `psql` using the `DATABASE_URL` from `.env`. **All migrations must be run directly** — there is no Alembic or auto-migration system.
+
+```bash
+# Run a migration SQL file against Supabase
+source .env 2>/dev/null; psql "$DATABASE_URL" -f migrations/<migration_file>.sql
+
+# Verify columns exist after migration
+source .env 2>/dev/null; psql "$DATABASE_URL" -c "SELECT column_name FROM information_schema.columns WHERE table_name = '<table>' ORDER BY column_name;"
+```
+
+**CRITICAL:** When adding or modifying SQLAlchemy model columns (`app/models/`), you MUST:
+1. Write the migration SQL in `migrations/`
+2. Run it immediately against Supabase using `psql "$DATABASE_URL"` — do NOT defer
+3. Verify the columns exist before committing
+4. Run `python scripts/validate_api.py --imports` to validate
+
+If model columns exist in Python but not in the database, **every query on that table will 500 in production**. SQLAlchemy includes all mapped columns in SELECT statements — missing columns crash the entire endpoint.
+
 ## API Validation
 
 After any change that affects API routes, imports, models, services, or any major refactor:

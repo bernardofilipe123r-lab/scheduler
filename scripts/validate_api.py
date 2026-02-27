@@ -511,6 +511,117 @@ def check_niche_config_fields():
 
 
 # ═══════════════════════════════════════════════════════════════
+# 5. MODEL ↔ DATABASE COLUMN ALIGNMENT
+# ═══════════════════════════════════════════════════════════════
+
+def check_db_columns():
+    """Verify every SQLAlchemy model column actually exists in the live database.
+
+    This prevents the exact class of 500 errors where Python models define
+    columns that haven't been migrated yet — SQLAlchemy includes ALL mapped
+    columns in SELECT statements, so missing columns crash every query.
+    """
+    import os
+
+    print(f"\n{BOLD}━━━ Model ↔ Database Column Alignment ━━━{RESET}")
+
+    # Load .env if needed
+    env_file = ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        warn("DATABASE_URL not set — skipping DB column check")
+        return
+
+    try:
+        from sqlalchemy import create_engine, text
+        engine = create_engine(db_url, connect_args={"connect_timeout": 10})
+    except Exception as e:
+        warn(f"Cannot create DB engine — {type(e).__name__}: {e}")
+        return
+
+    # Import all model modules so Base.metadata is fully populated
+    MODEL_MODULES = [
+        "app.models.brands",
+        "app.models.jobs",
+        "app.models.scheduling",
+        "app.models.analytics",
+        "app.models.auth",
+        "app.models.config",
+        "app.models.logs",
+        "app.models.niche_config",
+        "app.models.youtube",
+        "app.models.toby",
+        "app.models.toby_cognitive",
+        "app.models.oauth_state",
+    ]
+    for mod_path in MODEL_MODULES:
+        try:
+            importlib.import_module(mod_path)
+        except Exception:
+            pass  # already reported in import checks
+
+    try:
+        from app.models.base import Base
+        tables = Base.metadata.tables
+    except Exception as e:
+        fail("Could not load SQLAlchemy metadata", str(e))
+        return
+
+    # Fetch all columns from the live database in one query
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(
+                "SELECT table_name, column_name "
+                "FROM information_schema.columns "
+                "WHERE table_schema = 'public' "
+                "ORDER BY table_name, column_name"
+            ))
+            db_columns: dict[str, set[str]] = {}
+            for row in result:
+                db_columns.setdefault(row[0], set()).add(row[1])
+        engine.dispose()
+    except Exception as e:
+        warn(f"Cannot query database schema — {type(e).__name__}: {e}")
+        return
+
+    # Compare model columns vs actual DB columns
+    tables_checked = 0
+    for table_name, table in sorted(tables.items()):
+        model_cols = {c.name for c in table.columns}
+        db_cols = db_columns.get(table_name)
+
+        if db_cols is None:
+            fail(f"Table '{table_name}' defined in models but NOT in database")
+            continue
+
+        missing = model_cols - db_cols
+        tables_checked += 1
+
+        if missing:
+            for col in sorted(missing):
+                fail(
+                    f"{table_name}.{col}",
+                    "column in model but MISSING in DB — run migration!"
+                )
+        else:
+            ok(f"{table_name}", f"all {len(model_cols)} columns present")
+
+    if tables_checked:
+        ok(f"Checked {tables_checked} tables against live database")
+
+
+# ═══════════════════════════════════════════════════════════════
 # EXTERNAL SERVICE CHECKS
 # ═══════════════════════════════════════════════════════════════
 
@@ -682,9 +793,10 @@ def main():
     parser.add_argument("--imports", action="store_true", help="Import checks only")
     parser.add_argument("--endpoints", action="store_true", help="Endpoint tests only")
     parser.add_argument("--services", action="store_true", help="Test external services (DeepSeek, DEAPI, Supabase, Railway)")
+    parser.add_argument("--db", action="store_true", help="Check model columns exist in live database")
     args = parser.parse_args()
 
-    run_all = not args.imports and not args.endpoints and not args.services
+    run_all = not args.imports and not args.endpoints and not args.services and not args.db
 
     print(f"\n{BOLD}{'='*60}")
     print(f"  REELS AUTOMATION — API VALIDATION")
@@ -696,6 +808,9 @@ def main():
         check_imports()
         check_symbols()
         check_niche_config_fields()
+
+    if run_all or args.imports or args.db:
+        check_db_columns()
 
     if run_all or args.endpoints:
         check_endpoints()
