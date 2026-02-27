@@ -40,6 +40,38 @@ After any change that affects API routes, imports, models, services, or any majo
 - After adding new endpoints → add to the appropriate endpoint test section
 - After changing auth requirements on endpoints → move between no-auth/auth sections
 
+## Railway CLI (Production Infrastructure)
+
+Railway CLI is installed and authenticated. **Use it directly** to manage production env vars, check deployments, and view logs.
+
+```bash
+# Check current project/service context
+railway status
+
+# List all env vars
+railway variables
+
+# Set an env var (triggers redeploy)
+railway variables set KEY=value
+
+# Delete an env var
+railway variables delete KEY
+
+# View recent deployment logs
+railway logs
+
+# Redeploy the service
+railway redeploy
+```
+
+**When to use Railway CLI:**
+- Adding or updating environment variables (API keys, secrets, OAuth credentials)
+- Checking if an env var is set before code depends on it
+- Viewing production logs for debugging
+- Triggering redeployments after config changes
+
+**Important:** Setting a variable via `railway variables set` triggers an automatic redeploy. The service is `scheduler` in project `responsible-mindfulness` (production environment).
+
 ## Git Workflow
 
 After making any changes to the codebase, always:
