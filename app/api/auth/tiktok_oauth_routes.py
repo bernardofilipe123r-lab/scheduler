@@ -197,6 +197,9 @@ def tiktok_callback(
         return RedirectResponse(url=redirect_url)
 
     except Exception as e:
+        import traceback
+        print(f"[TIKTOK_OAUTH_ERROR] brand={brand_id} error={e}")
+        print(traceback.format_exc())
         logger.exception(f"TikTok OAuth callback failed for brand {brand_id}: {e}")
         if return_to == "onboarding":
             redirect_url = f"{frontend_base}/onboarding?tiktok_error=failed"
