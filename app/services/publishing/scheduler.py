@@ -326,7 +326,7 @@ class DatabaseSchedulerService:
             if user_id:
                 query = query.filter(ScheduledReel.user_id == user_id)
             
-            schedules = query.order_by(ScheduledReel.scheduled_time.desc()).all()
+            schedules = query.order_by(ScheduledReel.scheduled_time.desc()).limit(500).all()
             return [reel.to_dict() for reel in schedules]
     
     def delete_scheduled(self, schedule_id: str, user_id: Optional[str] = None) -> bool:

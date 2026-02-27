@@ -110,7 +110,6 @@ CRITICAL_MODULES = [
     ("app.core.brand_colors", "Brand colors"),
     ("app.core.quality_scorer", "Quality scorer"),
     ("app.core.viral_ideas", "Viral ideas"),
-    ("app.core.platform_formatters", "Platform formatters"),
     # ── Models ──
     ("app.models.niche_config", "NicheConfig model"),
     ("app.models.jobs", "Jobs model"),

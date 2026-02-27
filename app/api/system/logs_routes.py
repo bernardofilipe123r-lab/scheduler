@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Query, Depends, HTTPException, Cookie, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import desc, func, or_, and_, cast, String
 
 from app.db_connection import get_db
@@ -83,6 +83,9 @@ def get_logs(
         pass
     
     query = db.query(LogEntry)
+    # Defer the heavy details JSON blob unless a search filter needs it
+    if not search:
+        query = query.options(defer(LogEntry.details))
     query = _apply_user_scope(query, user.get("id", ""))
     
     # Apply filters
@@ -154,14 +157,35 @@ def get_logs(
     offset = (page - 1) * page_size
     logs = query.offset(offset).limit(page_size).all()
     
+    # Serialize — omit the heavy details blob in list view
+    def _log_summary(log):
+        d = log.to_dict()
+        if not search:
+            d["details"] = None
+        return d
+    
     return {
         "total": total,
         "page": page,
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size if page_size > 0 else 0,
         "deployment_id": DEPLOYMENT_ID,
-        "logs": [log.to_dict() for log in logs],
+        "logs": [_log_summary(log) for log in logs],
     }
+
+
+@router.get("/api/logs/{log_id}", summary="Get single log entry with full details")
+def get_log_detail(
+    log_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Get a single log entry including the full details JSON."""
+    _require_admin(user)
+    log = db.query(LogEntry).filter(LogEntry.id == log_id).first()
+    if not log:
+        raise HTTPException(404, "Log entry not found")
+    return log.to_dict()
 
 
 @router.get("/api/logs/stats", summary="Get log statistics")

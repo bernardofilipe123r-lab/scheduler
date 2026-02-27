@@ -7,7 +7,7 @@ that provide Toby with situational awareness.
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from app.models.toby_cognitive import TobyWorldModel
 from app.services.toby.memory.embeddings import generate_embedding
 
@@ -50,7 +50,7 @@ def get_active_signals(
 ) -> list[TobyWorldModel]:
     """Get active (non-expired) world model signals."""
     now = datetime.now(timezone.utc)
-    q = db.query(TobyWorldModel).filter(
+    q = db.query(TobyWorldModel).options(defer(TobyWorldModel.embedding)).filter(
         TobyWorldModel.user_id == user_id,
         (TobyWorldModel.expires_at > now) | (TobyWorldModel.expires_at.is_(None)),
     )

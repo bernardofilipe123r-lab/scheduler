@@ -7,7 +7,7 @@ that Toby has learned from repeated experiences.
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from app.models.toby_cognitive import TobySemanticMemory
 from app.services.toby.memory.embeddings import generate_embedding
 
@@ -52,6 +52,7 @@ def retrieve_semantic_memories(
     if query_embedding is None:
         return (
             db.query(TobySemanticMemory)
+            .options(defer(TobySemanticMemory.embedding))
             .filter(TobySemanticMemory.user_id == user_id)
             .order_by(TobySemanticMemory.confidence.desc())
             .limit(k)

@@ -50,10 +50,11 @@ export function useScheduledPosts(refetchIntervalOverride?: number) {
   return useQuery({
     queryKey: schedulingKeys.scheduled(),
     queryFn: schedulingApi.getScheduled,
-    // Poll faster while publishing; default to 60s as safety fallback
-    refetchInterval: refetchIntervalOverride ?? 60000,
+    // Poll faster while publishing; default to 120s as safety fallback
+    refetchInterval: refetchIntervalOverride ?? 120_000,
     refetchOnMount: 'always',
-    staleTime: 5000,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
   })
 }
 

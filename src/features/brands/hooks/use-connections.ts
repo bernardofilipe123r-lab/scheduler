@@ -18,9 +18,9 @@ export function useBrandConnections() {
   return useQuery<BrandConnectionsResponse>({
     queryKey: ['brand-connections'],
     queryFn: fetchBrandConnections,
-    refetchInterval: 30000, // Refetch every 30 seconds
-    staleTime: 10000, // Consider data stale after 10 seconds
-    refetchOnWindowFocus: true, // Refetch when user returns from OAuth tab
+    refetchInterval: 120_000,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true, // Keep true — needed to detect returning from OAuth tab
   })
 }
 

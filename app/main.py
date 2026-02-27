@@ -742,8 +742,8 @@ async def startup_event():
         except Exception as e:
             print(f"❌ Auto-refresh analytics failed: {str(e)}")
     
-    # Run check every 60 seconds
-    scheduler.add_job(check_and_publish, 'interval', seconds=60, id='auto_publish')
+    # Run check every 5 minutes (300s is fine for social media publishing)
+    scheduler.add_job(check_and_publish, 'interval', seconds=300, id='auto_publish')
     
     # Run analytics refresh every 6 hours
     scheduler.add_job(refresh_analytics, 'interval', hours=6, id='analytics_refresh')

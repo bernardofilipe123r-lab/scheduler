@@ -7,7 +7,7 @@ Procedural Memory — concrete action rules.
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from app.models.toby_cognitive import TobyProceduralMemory
 from app.services.toby.memory.embeddings import generate_embedding
 
@@ -87,6 +87,7 @@ def retrieve_procedural_rules(
     # Fallback: return highest-confidence active rules
     return (
         db.query(TobyProceduralMemory)
+        .options(defer(TobyProceduralMemory.embedding))
         .filter(*base_filter)
         .order_by(TobyProceduralMemory.confidence.desc())
         .limit(k)

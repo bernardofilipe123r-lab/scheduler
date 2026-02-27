@@ -56,9 +56,10 @@ export function useJobs() {
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
     // Realtime subscription handles instant updates; poll as safety fallback
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
     refetchOnMount: 'always',
-    staleTime: 2000,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
   })
 }
 
@@ -68,7 +69,8 @@ export function useJob(id: string) {
     queryFn: () => jobsApi.get(id),
     enabled: !!id,
     // Realtime subscription handles instant updates; poll as safety fallback
-    refetchInterval: 30000,
+    refetchInterval: 120_000,
+    refetchOnWindowFocus: false,
   })
 }
 

@@ -298,7 +298,8 @@ function UserDetail({
     queryKey: ['admin-toby-status', user.id],
     queryFn: () => apiClient.get(`/api/toby/status?user_id=${user.id}`),
     enabled: activeTab === 'toby',
-    refetchInterval: activeTab === 'toby' ? 15_000 : false,
+    refetchInterval: activeTab === 'toby' ? 60_000 : false,
+    refetchOnWindowFocus: false,
   })
 
   // Toby activity

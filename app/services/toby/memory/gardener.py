@@ -5,7 +5,7 @@ Runs in the weekly meta-cognitive loop (Loop 4) to keep
 the memory system healthy and efficient.
 """
 from datetime import datetime, timedelta, timezone
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import func
 from app.models.toby_cognitive import (
     TobyEpisodicMemory,
@@ -39,11 +39,13 @@ def prune_memories(
     # Prune old episodic memories with low retrieval count
     old_episodic = (
         db.query(TobyEpisodicMemory)
+        .options(defer(TobyEpisodicMemory.embedding))
         .filter(
             TobyEpisodicMemory.user_id == user_id,
             TobyEpisodicMemory.created_at < cutoff,
             TobyEpisodicMemory.retrieval_count < min_retrievals,
         )
+        .limit(500)
         .all()
     )
     for mem in old_episodic:
@@ -70,6 +72,7 @@ def prune_memories(
             excess = count - MAX_EPISODIC_PER_BRAND
             oldest = (
                 db.query(TobyEpisodicMemory)
+                .options(defer(TobyEpisodicMemory.embedding))
                 .filter(
                     TobyEpisodicMemory.user_id == user_id,
                     TobyEpisodicMemory.brand_id == brand_id,
@@ -104,6 +107,7 @@ def consolidate_memories(db: Session, user_id: str) -> int:
         db.query(TobySemanticMemory)
         .filter(TobySemanticMemory.user_id == user_id)
         .order_by(TobySemanticMemory.confidence.desc())
+        .limit(MAX_SEMANTIC_PER_USER + 50)
         .all()
     )
 
