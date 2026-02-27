@@ -86,7 +86,7 @@ export function TobyTickMonitor() {
   const isWorking = live?.current_action?.status === 'due'
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
       <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -168,13 +168,13 @@ export function TobyTickMonitor() {
       {ticks.length > 0 && (
         <>
           <div className="mx-5 border-t border-gray-100" />
-          <div className="px-5 pt-3 pb-1">
+          <div className="px-5 pt-3 pb-1 shrink-0">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Recent Operations</h3>
               <span className="text-[10px] text-gray-400">{ticks.length} events</span>
             </div>
           </div>
-          <div className="px-4 pb-3 max-h-[240px] overflow-y-auto">
+          <div className="px-4 pb-3 flex-1 min-h-0 overflow-y-auto">
             {ticks.slice(0, 12).map((tick, i) => {
               const cfg = TICK_DISPLAY[tick.action_type] || { icon: Timer, color: 'text-gray-400', label: tick.action_type }
               const Icon = cfg.icon
