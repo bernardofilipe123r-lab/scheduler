@@ -1,5 +1,7 @@
 export { TobyHero } from './TobyHero'
 export { TobyGuide } from './TobyGuide'
+export { TobyPhaseTimeline } from './TobyPhaseTimeline'
+export { TobyTickMonitor } from './TobyTickMonitor'
 export { TobyPipeline } from './TobyPipeline'
 export { TobyBufferHealth } from './TobyBufferHealth'
 export { TobyExperiments } from './TobyExperiments'

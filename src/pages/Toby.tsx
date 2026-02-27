@@ -4,6 +4,8 @@ import { useTobyStatus } from '@/features/toby'
 import {
   TobyHero,
   TobyGuide,
+  TobyPhaseTimeline,
+  TobyTickMonitor,
   TobyPipeline,
   TobyBufferHealth,
   TobyDiscoveries,
@@ -21,7 +23,7 @@ export function TobyPage() {
 
   return (
     <div className="space-y-6">
-      {/* Hero — status, phase journey, metrics */}
+      {/* Hero — status, metrics */}
       <TobyHero onLearnMore={showGuide} />
 
       {/* Onboarding guide — shown on first visit, re-openable via Learn more */}
@@ -29,18 +31,24 @@ export function TobyPage() {
 
       {status?.enabled && (
         <>
-          {/* Pipeline + Buffer */}
+          {/* Phase Timeline — shows progression, requirements, estimated transitions */}
+          <TobyPhaseTimeline />
+
+          {/* Operations Monitor + Pipeline Activity side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <TobyTickMonitor />
+            <TobyPipeline />
+          </div>
+
+          {/* Buffer Health + Trending Discoveries */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-3">
-              <TobyPipeline />
-            </div>
             <div className="lg:col-span-2">
               <TobyBufferHealth />
             </div>
+            <div className="lg:col-span-3">
+              <TobyDiscoveries />
+            </div>
           </div>
-
-          {/* Trending Discoveries */}
-          <TobyDiscoveries />
 
           {/* Experiments + Insights */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

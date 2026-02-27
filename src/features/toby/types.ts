@@ -61,6 +61,35 @@ export interface TobyStats {
   total_scored: number
 }
 
+export interface TobyPhaseRequirements {
+  scored_posts_needed?: number
+  scored_posts_current?: number
+  scored_posts_progress?: number
+  min_days?: number
+  days_elapsed?: number
+  days_progress?: number
+}
+
+export interface TobyPhaseProgress {
+  current_phase: TobyPhase
+  days_in_phase: number
+  uptime_hours: number
+  scored_posts: number
+  requirements: TobyPhaseRequirements
+  overall_progress: number
+  next_phase: TobyPhase | null
+  estimated_days_remaining: number
+}
+
+export interface TobyRecentTick {
+  id: number
+  user_id: string
+  action_type: string
+  description: string
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
 export interface TobyStatus {
   enabled: boolean
   phase: TobyPhase
@@ -72,6 +101,8 @@ export interface TobyStatus {
   live: TobyLiveInfo
   timestamps: TobyTimestamps
   stats: TobyStats
+  phase_progress: TobyPhaseProgress | null
+  recent_ticks: TobyRecentTick[]
 }
 
 export interface TobyActivityItem {

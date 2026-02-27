@@ -9,11 +9,16 @@ import {
   RefreshCw,
   Unlink,
   AlertTriangle,
+  Zap,
+  Loader2,
   CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import {
   useDisconnectYouTube,
   connectYouTube,
+  testMetaConnection,
+  testYouTubeConnection,
   connectInstagram,
   disconnectInstagram,
   connectFacebook,
@@ -21,27 +26,12 @@ import {
   selectFacebookPage,
   type BrandConnectionStatus,
   type PlatformConnection,
+  type ConnectionTestResult,
   type FacebookPage,
 } from '@/features/brands'
 import type { BrandName } from '@/shared/types'
 
 type Platform = 'instagram' | 'facebook' | 'youtube'
-
-/** Returns true when the Instagram handle plausibly belongs to the brand name. */
-function handleMatchesBrand(handle: string, brandName: string): boolean {
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const slug = normalize(brandName)
-  const h = normalize(handle)
-  const hNoThe = h.replace(/^the/, '')
-  const slugNoThe = slug.replace(/^the/, '')
-  // Accept if either string is a substring of the other (with/without leading "the")
-  return (
-    h.includes(slug) ||
-    slug.includes(h) ||
-    hNoThe.includes(slugNoThe) ||
-    slugNoThe.includes(hNoThe)
-  )
-}
 
 function PlatformIcon({ platform, className = 'w-5 h-5' }: { platform: Platform; className?: string }) {
   switch (platform) {
@@ -69,30 +59,48 @@ interface ConnectionCardProps {
   brand: BrandConnectionStatus
   brandLogo?: string
   onRefresh: () => void
-  oauthConfigured?: { meta?: boolean; facebook?: boolean; youtube?: boolean }
 }
 
-export function ConnectionCard({ brand, brandLogo, onRefresh, oauthConfigured }: ConnectionCardProps) {
+export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardProps) {
   const [disconnectingYouTube, setDisconnectingYouTube] = useState(false)
   const [disconnectingInstagram, setDisconnectingInstagram] = useState(false)
   const [disconnectingFacebook, setDisconnectingFacebook] = useState(false)
   const [connectingYouTube, setConnectingYouTube] = useState(false)
   const [connectingFacebook, setConnectingFacebook] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
+  const [testResult, setTestResult] = useState<{ meta?: ConnectionTestResult; youtube?: ConnectionTestResult }>({})
+  const [testing, setTesting] = useState<{ meta: boolean; youtube: boolean }>({ meta: false, youtube: false })
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showPageSelector, setShowPageSelector] = useState(false)
   const [selectingPage, setSelectingPage] = useState(false)
   const [confirmConnect, setConfirmConnect] = useState<Platform | null>(null)
-  // Track which IG handle had its mismatch warning dismissed (resets if handle changes)
-  const [dismissedMismatchFor, setDismissedMismatchFor] = useState<string | null>(null)
   const disconnectYouTube = useDisconnectYouTube()
 
-  const igHandle = brand.instagram.account_name ?? null
-  const igMismatch =
-    igHandle !== null &&
-    brand.instagram.connected &&
-    !handleMatchesBrand(igHandle, brand.display_name) &&
-    dismissedMismatchFor !== igHandle
+  const handleTestMeta = async () => {
+    setTesting(p => ({ ...p, meta: true }))
+    setTestResult(p => ({ ...p, meta: undefined }))
+    try {
+      const result = await testMetaConnection(brand.brand)
+      setTestResult(p => ({ ...p, meta: result }))
+    } catch (err) {
+      setTestResult(p => ({ ...p, meta: { platform: 'meta', status: 'error', message: err instanceof Error ? err.message : 'Test failed' } }))
+    } finally {
+      setTesting(p => ({ ...p, meta: false }))
+    }
+  }
+
+  const handleTestYouTube = async () => {
+    setTesting(p => ({ ...p, youtube: true }))
+    setTestResult(p => ({ ...p, youtube: undefined }))
+    try {
+      const result = await testYouTubeConnection(brand.brand)
+      setTestResult(p => ({ ...p, youtube: result }))
+    } catch (err) {
+      setTestResult(p => ({ ...p, youtube: { platform: 'youtube', status: 'error', message: err instanceof Error ? err.message : 'Test failed' } }))
+    } finally {
+      setTesting(p => ({ ...p, youtube: false }))
+    }
+  }
 
   const handleYouTubeConnect = async () => {
     setConnectingYouTube(true)
@@ -136,7 +144,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, oauthConfigured }:
   }
 
   const handleFacebookConnect = () => {
-    if (oauthConfigured && oauthConfigured.facebook === false) return
     setConfirmConnect('facebook')
   }
 
@@ -208,36 +215,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, oauthConfigured }:
     const isRevoked = connection.status === 'revoked'
     const hasError = connection.status === 'error'
 
-    // Token health derived values (Instagram only)
-    let tokenDaysLeft: number | null = null
-    let tokenHealthLabel: string | null = null
-    let tokenHealthClass: string = ''
-    if (isInstagram && connection.connected && connection.token_expires_at) {
-      const expiresAt = new Date(connection.token_expires_at)
-      tokenDaysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000)
-      if (tokenDaysLeft <= 0) {
-        tokenHealthLabel = 'Token expired — reconnect required'
-        tokenHealthClass = 'text-red-600'
-      } else if (tokenDaysLeft <= 7) {
-        tokenHealthLabel = `Expiring in ${tokenDaysLeft}d — reconnect soon`
-        tokenHealthClass = 'text-amber-600'
-      } else {
-        tokenHealthLabel = `Auto-renews (${tokenDaysLeft}d left)`
-        tokenHealthClass = 'text-green-600'
-      }
-    } else if (isInstagram && connection.connected && connection.token_last_refreshed_at) {
-      tokenHealthLabel = 'Auto-renews'
-      tokenHealthClass = 'text-green-600'
-    }
-
-    // YouTube health indicator — refresh tokens don't expire but can be revoked
-    let youtubeHealthLabel: string | null = null
-    let youtubeHealthClass = ''
-    if (isYouTube && connection.connected && !isRevoked) {
-      youtubeHealthLabel = 'Refresh token active'
-      youtubeHealthClass = 'text-green-600'
-    }
-
     return (
       <div
         key={platform}
@@ -251,22 +228,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, oauthConfigured }:
             <p className="font-medium text-gray-900 capitalize">{platform}</p>
             {connection.connected && connection.account_name && (
               <p className="text-sm text-gray-500 truncate">{connection.account_name}</p>
-            )}
-            {tokenHealthLabel && !isRevoked && (
-              <p className={`text-xs flex items-center gap-1 ${tokenHealthClass}`}>
-                {(tokenDaysLeft !== null && tokenDaysLeft <= 7) ? (
-                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                ) : (
-                  <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                )}
-                {tokenHealthLabel}
-              </p>
-            )}
-            {youtubeHealthLabel && (
-              <p className={`text-xs flex items-center gap-1 ${youtubeHealthClass}`}>
-                <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                {youtubeHealthLabel}
-              </p>
             )}
             {isRevoked && (
               <p className="text-xs text-red-600 flex items-center gap-1">
@@ -423,22 +384,13 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, oauthConfigured }:
               )}
 
               {isFacebook && (
-                oauthConfigured && oauthConfigured.facebook === false ? (
-                  <span
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed"
-                    title="Facebook OAuth is not configured on the server"
-                  >
-                    Not available
-                  </span>
-                ) : (
-                  <button
-                    onClick={handleFacebookConnect}
-                    disabled={connectingFacebook}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {connectingFacebook ? 'Connecting...' : 'Connect'}
-                  </button>
-                )
+                <button
+                  onClick={handleFacebookConnect}
+                  disabled={connectingFacebook}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {connectingFacebook ? 'Connecting...' : 'Connect'}
+                </button>
               )}
             </div>
           )}
@@ -481,6 +433,42 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, oauthConfigured }:
         {renderPlatformRow('youtube', brand.youtube)}
       </div>
 
+      {/* Test Connection Buttons */}
+      <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center gap-2">
+        {(brand.instagram.connected || brand.facebook.connected) && (
+          <button
+            onClick={handleTestMeta}
+            disabled={testing.meta}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
+          >
+            {testing.meta ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+            Test Meta
+          </button>
+        )}
+        {brand.youtube.connected && (
+          <button
+            onClick={handleTestYouTube}
+            disabled={testing.youtube}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+          >
+            {testing.youtube ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+            Test YouTube
+          </button>
+        )}
+        {testResult.meta && (
+          <span className={`flex items-center gap-1 text-xs ${testResult.meta.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+            {testResult.meta.status === 'success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+            {testResult.meta.message}
+          </span>
+        )}
+        {testResult.youtube && (
+          <span className={`flex items-center gap-1 text-xs ${testResult.youtube.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+            {testResult.youtube.status === 'success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+            {testResult.youtube.message}
+          </span>
+        )}
+      </div>
+
       {/* Facebook Page Selector Modal */}
       {showPageSelector && fbPages.length > 0 && (
         <div className="px-4 py-3 bg-blue-50 border-t border-blue-200">
@@ -514,26 +502,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, oauthConfigured }:
           >
             Cancel
           </button>
-        </div>
-      )}
-
-      {/* Handle mismatch warning — shown when connected IG handle doesn't match brand name */}
-      {igMismatch && (
-        <div className="px-4 py-3 bg-amber-50 border-t border-amber-200">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="flex-1 text-xs text-amber-800">
-              The connected Instagram account <strong>{igHandle}</strong> doesn&apos;t appear to match{' '}
-              <strong>{brand.display_name}</strong>. Make sure you connected the correct account.
-            </p>
-            <button
-              onClick={() => setDismissedMismatchFor(igHandle)}
-              className="p-0.5 rounded hover:bg-amber-200 transition-colors flex-shrink-0"
-              title="Dismiss warning"
-            >
-              <X className="w-3.5 h-3.5 text-amber-600" />
-            </button>
-          </div>
         </div>
       )}
 

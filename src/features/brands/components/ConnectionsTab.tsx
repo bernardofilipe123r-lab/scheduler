@@ -299,7 +299,6 @@ export function ConnectionsTab() {
             brand={brand}
             brandLogo={brandLogos[brand.brand]}
             onRefresh={() => refetch()}
-            oauthConfigured={data.oauth_configured}
           />
         ))}
       </div>

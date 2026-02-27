@@ -1,16 +1,24 @@
-import { Fragment } from 'react'
 import {
-  Bot, Play, Power, Loader2, Sparkles, Shield, Zap,
-  BarChart3, FlaskConical, Calendar, Check, HelpCircle, AlertCircle,
+  Bot, Play, Power, Loader2, Sparkles,
+  BarChart3, FlaskConical, Calendar, HelpCircle, AlertCircle,
+  Clock, Activity,
 } from 'lucide-react'
 import { useTobyStatus, useTobyEnable, useTobyDisable } from '../hooks'
 import type { TobyPhase } from '../types'
 
-const PHASES: Array<{ id: TobyPhase; label: string; hint: string; icon: typeof Shield }> = [
-  { id: 'bootstrap', label: 'Bootstrap', hint: 'Building content library', icon: Shield },
-  { id: 'learning', label: 'Learning', hint: 'Testing what performs', icon: Zap },
-  { id: 'optimizing', label: 'Optimizing', hint: 'Running proven strategies', icon: Sparkles },
-]
+const PHASE_COLORS: Record<TobyPhase, { bg: string; text: string; ring: string }> = {
+  bootstrap: { bg: 'bg-violet-50', text: 'text-violet-700', ring: 'ring-violet-600/20' },
+  learning: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20' },
+  optimizing: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/20' },
+}
+
+function formatUptime(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)}m`
+  if (hours < 24) return `${Math.round(hours)}h`
+  const days = Math.floor(hours / 24)
+  const h = Math.round(hours % 24)
+  return h > 0 ? `${days}d ${h}h` : `${days}d`
+}
 
 export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
   const { data: status, isLoading } = useTobyStatus()
@@ -21,7 +29,9 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
   if (isLoading) return <HeroSkeleton />
   if (!status) return null
 
-  const phaseIdx = PHASES.findIndex(p => p.id === status.phase)
+  const progress = status.phase_progress
+  const phaseColor = PHASE_COLORS[status.phase] || PHASE_COLORS.bootstrap
+  const isWorking = status.live?.current_action?.status === 'due'
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -30,7 +40,7 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
 
       <div className="p-6">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-4">
             <div className="relative">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
@@ -57,65 +67,66 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
                 }`}>
                   {status.enabled ? 'Running' : 'Off'}
                 </span>
+                {status.enabled && (
+                  <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ring-1 ${phaseColor.bg} ${phaseColor.text} ${phaseColor.ring}`}>
+                    {status.phase.charAt(0).toUpperCase() + status.phase.slice(1)}
+                  </span>
+                )}
               </div>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {status.enabled
-                  ? `Autonomously managing ${status.buffer?.brand_count || 0} brand${(status.buffer?.brand_count || 0) !== 1 ? 's' : ''}`
-                  : 'Your AI content agent — handles creation, testing & optimization'}
-              </p>
+              <div className="flex items-center gap-3 mt-0.5">
+                <p className="text-sm text-gray-500">
+                  {status.enabled
+                    ? `Managing ${status.buffer?.brand_count || 0} brand${(status.buffer?.brand_count || 0) !== 1 ? 's' : ''}`
+                    : 'Your AI content agent — handles creation, testing & optimization'}
+                </p>
+                {status.enabled && progress && progress.uptime_hours > 0 && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span className="flex items-center gap-1 text-xs text-gray-400">
+                      <Clock className="w-3 h-3" />
+                      {formatUptime(progress.uptime_hours)} uptime
+                    </span>
+                  </>
+                )}
+                {status.enabled && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span className={`flex items-center gap-1 text-xs ${isWorking ? 'text-blue-500' : 'text-gray-400'}`}>
+                      <Activity className={`w-3 h-3 ${isWorking ? 'animate-pulse' : ''}`} />
+                      {isWorking
+                        ? status.live.current_action?.label || 'Working'
+                        : 'Idle'
+                      }
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
-          <button
-            onClick={() => status.enabled ? disableMut.mutate() : enableMut.mutate()}
-            disabled={toggling}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              status.enabled
-                ? 'bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600'
-                : 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl'
-            } disabled:opacity-50`}
-          >
-            {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : status.enabled ? <Power className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            {status.enabled ? 'Turn Off' : 'Enable Toby'}
-          </button>
-        </div>
-
-        {/* Phase Journey */}
-        {status.enabled && (
-          <div className="flex items-center gap-2 mb-6">
-            {PHASES.map((phase, i) => {
-              const isActive = phase.id === status.phase
-              const isPast = i < phaseIdx
-              const Icon = phase.icon
-              return (
-                <Fragment key={phase.id}>
-                  <div className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
-                    isActive
-                      ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20'
-                      : isPast
-                        ? 'bg-emerald-50 text-emerald-600'
-                        : 'bg-gray-50 text-gray-400'
-                  }`}>
-                    {isPast ? <Check className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
-                    <span className="text-xs font-semibold">{phase.label}</span>
-                  </div>
-                  {i < PHASES.length - 1 && (
-                    <div className={`h-0.5 w-8 rounded-full ${isPast ? 'bg-emerald-300' : 'bg-gray-200'}`} />
-                  )}
-                </Fragment>
-              )
-            })}
-            {onLearnMore && (
+          <div className="flex items-center gap-2">
+            {onLearnMore && status.enabled && (
               <button
                 onClick={onLearnMore}
-                className="flex items-center gap-1 px-3 py-2 rounded-full bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors ml-1"
+                className="flex items-center gap-1 px-3 py-2.5 rounded-xl text-sm text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Learn more</span>
+                <HelpCircle className="w-4 h-4" />
               </button>
             )}
+            <button
+              onClick={() => status.enabled ? disableMut.mutate() : enableMut.mutate()}
+              disabled={toggling}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                status.enabled
+                  ? 'bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600'
+                  : 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl'
+              } disabled:opacity-50`}
+            >
+              {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : status.enabled ? <Power className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              {status.enabled ? 'Turn Off' : 'Enable Toby'}
+            </button>
           </div>
-        )}
+        </div>
 
         {/* Metric Cards */}
         {status.enabled && (
@@ -144,7 +155,7 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
 
         {/* Preflight failure error */}
         {enableMut.isError && (
-          <div className="flex items-start gap-3 p-3 rounded-xl bg-red-50 border border-red-200">
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-red-50 border border-red-200 mt-4">
             <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
             <p className="text-sm text-red-700">{(enableMut.error as { message?: string })?.message || 'Could not enable Toby. Please check that you have an active brand with Instagram connected and Content DNA configured.'}</p>
           </div>

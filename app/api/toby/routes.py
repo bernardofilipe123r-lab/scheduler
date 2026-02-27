@@ -89,6 +89,24 @@ def get_status(
         .count()
     )
 
+    # Phase progression data
+    phase_progress = _compute_phase_progress(state, total_scored)
+
+    # Recent tick history from activity log
+    recent_ticks = (
+        db.query(TobyActivityLog)
+        .filter(
+            TobyActivityLog.user_id == uid,
+            TobyActivityLog.action_type.in_(["tick_start", "tick_complete", "buffer_check_complete",
+                                              "content_generated", "metrics_collected", "analysis_completed",
+                                              "discovery_scan", "discovery_seeded", "publish_success",
+                                              "publish_partial", "publish_failed"]),
+        )
+        .order_by(TobyActivityLog.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
     return {
         "enabled": state.enabled,
         "phase": state.phase,
@@ -117,6 +135,8 @@ def get_status(
             "total_created": total_created,
             "total_scored": total_scored,
         },
+        "phase_progress": phase_progress,
+        "recent_ticks": [t.to_dict() for t in recent_ticks],
     }
 
 
@@ -626,3 +646,74 @@ def _compute_live_actions(state):
         }
 
     return current, upcoming
+
+
+# Phase transition thresholds — keep in sync with state.py
+_BOOTSTRAP_MIN_POSTS = 10
+_BOOTSTRAP_MIN_DAYS = 7
+_LEARNING_MIN_DAYS = 30
+
+
+def _compute_phase_progress(state, scored_post_count: int) -> dict:
+    """Return phase-progression metrics for the frontend phase timeline."""
+    now = datetime.now(timezone.utc)
+
+    phase_start = state.phase_started_at
+    if phase_start:
+        if phase_start.tzinfo is None:
+            phase_start = phase_start.replace(tzinfo=timezone.utc)
+        days_in_phase = max(0, (now - phase_start).total_seconds() / 86400)
+    else:
+        days_in_phase = 0
+
+    enabled_at = state.enabled_at
+    if enabled_at:
+        if enabled_at.tzinfo is None:
+            enabled_at = enabled_at.replace(tzinfo=timezone.utc)
+        uptime_hours = max(0, (now - enabled_at).total_seconds() / 3600)
+    else:
+        uptime_hours = 0
+
+    result = {
+        "current_phase": state.phase,
+        "days_in_phase": round(days_in_phase, 1),
+        "uptime_hours": round(uptime_hours, 1),
+        "scored_posts": scored_post_count,
+    }
+
+    if state.phase == "bootstrap":
+        posts_progress = min(1.0, scored_post_count / _BOOTSTRAP_MIN_POSTS)
+        days_progress = min(1.0, days_in_phase / _BOOTSTRAP_MIN_DAYS)
+        overall = min(posts_progress, days_progress)
+        result["requirements"] = {
+            "scored_posts_needed": _BOOTSTRAP_MIN_POSTS,
+            "scored_posts_current": scored_post_count,
+            "scored_posts_progress": round(posts_progress, 2),
+            "min_days": _BOOTSTRAP_MIN_DAYS,
+            "days_elapsed": round(days_in_phase, 1),
+            "days_progress": round(days_progress, 2),
+        }
+        result["overall_progress"] = round(overall, 2)
+        result["next_phase"] = "learning"
+        days_remaining = max(0, _BOOTSTRAP_MIN_DAYS - days_in_phase)
+        result["estimated_days_remaining"] = round(days_remaining, 1)
+
+    elif state.phase == "learning":
+        days_progress = min(1.0, days_in_phase / _LEARNING_MIN_DAYS)
+        result["requirements"] = {
+            "min_days": _LEARNING_MIN_DAYS,
+            "days_elapsed": round(days_in_phase, 1),
+            "days_progress": round(days_progress, 2),
+        }
+        result["overall_progress"] = round(days_progress, 2)
+        result["next_phase"] = "optimizing"
+        days_remaining = max(0, _LEARNING_MIN_DAYS - days_in_phase)
+        result["estimated_days_remaining"] = round(days_remaining, 1)
+
+    else:  # optimizing
+        result["overall_progress"] = 1.0
+        result["next_phase"] = None
+        result["estimated_days_remaining"] = 0
+        result["requirements"] = {}
+
+    return result
