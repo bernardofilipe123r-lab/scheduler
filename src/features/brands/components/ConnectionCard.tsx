@@ -464,6 +464,13 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                       </button>
                       <button
                         onClick={() => setConfirmDisconnect('threads')}
+                        className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+                        title="Disconnect"
+                      >
+                        Disconnect
+                      </button>
+                      <button
+                        onClick={() => setConfirmDisconnect('threads')}
                         className="p-1.5 rounded hover:bg-red-100 transition-colors"
                         title="Disconnect"
                       >
@@ -480,6 +487,13 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
                         title="Reconnect"
                       >
                         <RefreshCw className="w-4 h-4 text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDisconnect('tiktok')}
+                        className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+                        title="Disconnect"
+                      >
+                        Disconnect
                       </button>
                       <button
                         onClick={() => setConfirmDisconnect('tiktok')}
