@@ -294,14 +294,32 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
             "color": brand["colors"].get("primary", "#000000"),
             "instagram": instagram,
             "facebook": facebook,
-            "youtube": youtube
+            "youtube": youtube,
+            "threads": {
+                "connected": bool(_brand_orm and _brand_orm.threads_access_token),
+                "account_id": _brand_orm.threads_user_id if _brand_orm else None,
+                "account_name": f"@{_brand_orm.threads_username}" if (_brand_orm and _brand_orm.threads_username) else None,
+                "status": "connected" if (_brand_orm and _brand_orm.threads_access_token) else "not_configured",
+                "token_expires_at": _brand_orm.threads_token_expires_at.isoformat() if (_brand_orm and _brand_orm.threads_token_expires_at) else None,
+                "token_last_refreshed_at": _brand_orm.threads_token_last_refreshed_at.isoformat() if (_brand_orm and _brand_orm.threads_token_last_refreshed_at) else None,
+            },
+            "tiktok": {
+                "connected": bool(_brand_orm and _brand_orm.tiktok_access_token and _brand_orm.tiktok_refresh_token),
+                "account_id": _brand_orm.tiktok_open_id if _brand_orm else None,
+                "account_name": _brand_orm.tiktok_username if _brand_orm else None,
+                "status": "connected" if (_brand_orm and _brand_orm.tiktok_access_token and _brand_orm.tiktok_refresh_token) else "not_configured",
+                "access_token_expires_at": _brand_orm.tiktok_access_token_expires_at.isoformat() if (_brand_orm and _brand_orm.tiktok_access_token_expires_at) else None,
+                "refresh_token_expires_at": _brand_orm.tiktok_refresh_token_expires_at.isoformat() if (_brand_orm and _brand_orm.tiktok_refresh_token_expires_at) else None,
+            },
         })
     
     # Check which OAuth is configured
     oauth_configured = {
         "meta": bool(os.getenv("INSTAGRAM_APP_ID")) and bool(os.getenv("INSTAGRAM_APP_SECRET")),
         "facebook": bool(os.getenv("FACEBOOK_APP_ID")) and bool(os.getenv("FACEBOOK_APP_SECRET")),
-        "youtube": bool(os.getenv("YOUTUBE_CLIENT_ID")) and bool(os.getenv("YOUTUBE_CLIENT_SECRET"))
+        "youtube": bool(os.getenv("YOUTUBE_CLIENT_ID")) and bool(os.getenv("YOUTUBE_CLIENT_SECRET")),
+        "threads": bool(os.getenv("META_APP_ID") or os.getenv("INSTAGRAM_APP_ID")),
+        "tiktok": bool(os.getenv("TIKTOK_CLIENT_KEY")),
     }
     
     return {

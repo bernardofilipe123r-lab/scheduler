@@ -55,6 +55,22 @@ class Brand(Base):
     # Token health tracking
     instagram_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     instagram_token_last_refreshed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Threads (Meta) credentials
+    threads_access_token = Column(Text, nullable=True)
+    threads_user_id = Column(String(64), nullable=True)
+    threads_username = Column(String(64), nullable=True)
+    threads_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    threads_token_last_refreshed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # TikTok credentials
+    tiktok_access_token = Column(Text, nullable=True)
+    tiktok_refresh_token = Column(Text, nullable=True)
+    tiktok_user_id = Column(String(64), nullable=True)
+    tiktok_username = Column(String(128), nullable=True)
+    tiktok_open_id = Column(String(128), nullable=True)
+    tiktok_access_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    tiktok_refresh_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     
     # Logo path (relative to assets/logos/)
     logo_path = Column(String(255), nullable=True)
@@ -86,6 +102,8 @@ class Brand(Base):
             # Indicate if credentials are configured (without exposing them)
             "has_instagram": bool(self.instagram_business_account_id and (self.instagram_access_token or self.meta_access_token)),
             "has_facebook": bool(self.facebook_page_id and self.facebook_access_token),
+            "has_threads": bool(self.threads_access_token and self.threads_user_id),
+            "has_tiktok": bool(self.tiktok_access_token and self.tiktok_refresh_token),
         }
         
         if include_credentials:

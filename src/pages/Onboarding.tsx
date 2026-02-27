@@ -47,7 +47,7 @@ import {
 } from '@/features/brands/constants'
 import { NicheConfigForm, type NicheConfigFormHandle } from '@/features/brands/components/NicheConfigForm'
 import { supabase } from '@/shared/api/supabase'
-import { connectYouTube, connectInstagram, connectFacebook, fetchFacebookPages, selectFacebookPage, fetchBrandConnections, type FacebookPage } from '@/features/brands/api/connections-api'
+import { connectYouTube, connectInstagram, connectFacebook, connectThreads, connectTikTok, fetchFacebookPages, selectFacebookPage, fetchBrandConnections, type FacebookPage } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
 /* ── Proportional scale: 1080px canvas → 200px preview ────────── */
@@ -101,7 +101,7 @@ const STEP_INFO = [
   { num: 3, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
   { num: 4, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
   { num: 5, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
-  { num: 6, label: 'Connect your platforms', sub: 'Link your Instagram, Facebook, and YouTube accounts so the app can publish content for you.' },
+  { num: 6, label: 'Connect your platforms', sub: 'Link your Instagram, Facebook, YouTube, Threads, and TikTok accounts so the app can publish content for you.' },
 ]
 
 export function OnboardingPage() {
@@ -117,7 +117,9 @@ export function OnboardingPage() {
     // If returning from OAuth redirect, jump straight to step 6
     const params = new URLSearchParams(window.location.search)
     if (params.has('ig_connected') || params.has('yt_connected') || params.has('ig_error') ||
-        params.has('fb_connected') || params.has('fb_error') || params.has('fb_select_page')) {
+        params.has('fb_connected') || params.has('fb_error') || params.has('fb_select_page') ||
+        params.has('threads_connected') || params.has('threads_error') ||
+        params.has('tiktok_connected') || params.has('tiktok_error')) {
       return 6
     }
     return onboardingStep
@@ -193,6 +195,8 @@ export function OnboardingPage() {
   const [connectingIg, setConnectingIg] = useState(false)
   const [connectingYt, setConnectingYt] = useState(false)
   const [connectingFb, setConnectingFb] = useState(false)
+  const [connectingThreads, setConnectingThreads] = useState(false)
+  const [connectingTikTok, setConnectingTikTok] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showFbPageSelector, setShowFbPageSelector] = useState(false)
@@ -203,6 +207,10 @@ export function OnboardingPage() {
   const [instagramBusinessAccountId, setInstagramBusinessAccountId] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [ytSectionValid, setYtSectionValid] = useState(false)
+  const [threadsConnected, setThreadsConnected] = useState(false)
+  const [threadsUsername, setThreadsUsername] = useState<string | null>(null)
+  const [tiktokConnected, setTiktokConnected] = useState(false)
+  const [tiktokUsername, setTiktokUsername] = useState<string | null>(null)
   const nicheFormRef = useRef<NicheConfigFormHandle>(null)
 
   // Check connection status when entering step 6 or returning from OAuth
@@ -215,9 +223,13 @@ export function OnboardingPage() {
     const igError = params.get('ig_error')
     const fbError = params.get('fb_error')
     const fbSelectPage = params.get('fb_select_page')
+    const threadsSuccess = params.get('threads_connected')
+    const threadsError = params.get('threads_error')
+    const tiktokSuccess = params.get('tiktok_connected')
+    const tiktokError = params.get('tiktok_error')
 
     // Clean up URL params
-    if (igSuccess || ytSuccess || fbSuccess || igError || fbError || fbSelectPage) {
+    if (igSuccess || ytSuccess || fbSuccess || igError || fbError || fbSelectPage || threadsSuccess || threadsError || tiktokSuccess || tiktokError) {
       const url = new URL(window.location.href)
       url.searchParams.delete('ig_connected')
       url.searchParams.delete('yt_connected')
@@ -225,6 +237,10 @@ export function OnboardingPage() {
       url.searchParams.delete('ig_error')
       url.searchParams.delete('fb_error')
       url.searchParams.delete('fb_select_page')
+      url.searchParams.delete('threads_connected')
+      url.searchParams.delete('threads_error')
+      url.searchParams.delete('tiktok_connected')
+      url.searchParams.delete('tiktok_error')
       window.history.replaceState({}, '', url.pathname)
     }
 
@@ -249,6 +265,29 @@ export function OnboardingPage() {
     if (fbSuccess) {
       toast.success('Facebook connected!')
     }
+    if (threadsSuccess) {
+      toast.success('Threads connected!')
+    }
+    if (tiktokSuccess) {
+      toast.success('TikTok connected!')
+    }
+    if (threadsError) {
+      const errorMessages: Record<string, string> = {
+        denied: 'Permission denied',
+        expired: 'Session expired — please try again',
+        failed: 'Connection failed — please try again',
+      }
+      setConnectionError(`Threads: ${errorMessages[threadsError] || threadsError}`)
+    }
+    if (tiktokError) {
+      const errorMessages: Record<string, string> = {
+        denied: 'Permission denied',
+        expired: 'Session expired — please try again',
+        pkce_error: 'PKCE verification failed — please try again',
+        failed: 'Connection failed — please try again',
+      }
+      setConnectionError(`TikTok: ${errorMessages[tiktokError] || tiktokError}`)
+    }
 
     // Handle Facebook page selection flow (multiple pages found)
     if (fbSelectPage) {
@@ -271,6 +310,10 @@ export function OnboardingPage() {
         setYtChannelName(brand.youtube.account_name || null)
         setFbConnected(brand.facebook.connected)
         setFbPageName(brand.facebook.account_name || null)
+        setThreadsConnected(brand.threads?.connected || false)
+        setThreadsUsername(brand.threads?.account_name || null)
+        setTiktokConnected(brand.tiktok?.connected || false)
+        setTiktokUsername(brand.tiktok?.account_name || null)
       }
     }).catch(() => {
       // Ignore — non-critical
@@ -461,6 +504,30 @@ export function OnboardingPage() {
     } catch (err) {
       setConnectingFb(false)
       setConnectionError(err instanceof Error ? err.message : 'Failed to start Facebook connection')
+    }
+  }
+
+  const handleConnectThreads = async () => {
+    setConnectingThreads(true)
+    setConnectionError(null)
+    try {
+      const authUrl = await connectThreads(brandId, 'onboarding')
+      window.location.href = authUrl
+    } catch (err) {
+      setConnectingThreads(false)
+      setConnectionError(err instanceof Error ? err.message : 'Failed to start Threads connection')
+    }
+  }
+
+  const handleConnectTikTok = async () => {
+    setConnectingTikTok(true)
+    setConnectionError(null)
+    try {
+      const authUrl = await connectTikTok(brandId, 'onboarding')
+      window.location.href = authUrl
+    } catch (err) {
+      setConnectingTikTok(false)
+      setConnectionError(err instanceof Error ? err.message : 'Failed to start TikTok connection')
     }
   }
 
@@ -1118,15 +1185,95 @@ export function OnboardingPage() {
                     </div>
                   </div>
 
+                  {/* ── Threads Card ── */}
+                  <div className={`border rounded-xl p-5 transition-colors ${threadsConnected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center">
+                          <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.29 3.276-.866 1.074-2.063 1.678-3.559 1.795-1.12.088-2.198-.154-3.04-.682-1.003-.63-1.607-1.593-1.7-2.716-.154-1.836 1.201-3.454 3.742-3.652.97-.076 1.867-.034 2.687.097-.065-.666-.217-1.195-.463-1.582-.396-.623-1.078-.948-2.022-.966-1.32.012-2.085.437-2.344.696l-1.386-1.57C7.57 6.573 9.003 5.88 11.068 5.862c1.47.013 2.65.497 3.508 1.44.78.857 1.234 2.017 1.35 3.453.478.18.916.404 1.31.675 1.191.818 2.065 2.03 2.52 3.502.628 2.028.478 4.537-1.36 6.336C16.65 22.97 14.59 23.975 12.186 24zm-1.638-7.283c-.078.003-.155.008-.232.015-1.26.098-1.905.701-1.862 1.22.02.233.156.567.589.838.49.308 1.14.446 1.833.388 1.116-.087 2.472-.633 2.716-3.136-.741-.142-1.544-.2-2.41-.2-.216 0-.43.006-.634.017v-.142z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Threads</p>
+                          {threadsConnected ? (
+                            <p className="text-xs text-green-600 font-medium">{threadsUsername || 'Connected'}</p>
+                          ) : (
+                            <p className="text-xs text-gray-400">Text + video posts</p>
+                          )}
+                        </div>
+                      </div>
+                      {threadsConnected ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium">
+                          <Check className="w-3.5 h-3.5" />
+                          Connected
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleConnectThreads}
+                          disabled={connectingThreads}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+                        >
+                          {connectingThreads ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          )}
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── TikTok Card ── */}
+                  <div className={`border rounded-xl p-5 transition-colors ${tiktokConnected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center">
+                          <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 0 0-.79-.05A6.34 6.34 0 0 0 3.15 15.2a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.79a8.18 8.18 0 0 0 4.76 1.52V6.87a4.84 4.84 0 0 1-1-.18z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">TikTok</p>
+                          {tiktokConnected ? (
+                            <p className="text-xs text-green-600 font-medium">{tiktokUsername || 'Connected'}</p>
+                          ) : (
+                            <p className="text-xs text-gray-400">Short-form video</p>
+                          )}
+                        </div>
+                      </div>
+                      {tiktokConnected ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium">
+                          <Check className="w-3.5 h-3.5" />
+                          Connected
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleConnectTikTok}
+                          disabled={connectingTikTok}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+                        >
+                          {connectingTikTok ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          )}
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Connection summary */}
-                  {(igConnected || ytConnected || fbConnected) && (
+                  {(igConnected || ytConnected || fbConnected || threadsConnected || tiktokConnected) && (
                     <p className="text-xs text-green-600 text-center font-medium">
-                      {[igConnected && 'Instagram', fbConnected && 'Facebook', ytConnected && 'YouTube'].filter(Boolean).join(' + ')} connected
-                      {(igConnected && fbConnected && ytConnected) ? ' — you\'re all set!' : ' — you can add more later from Settings.'}
+                      {[igConnected && 'Instagram', fbConnected && 'Facebook', ytConnected && 'YouTube', threadsConnected && 'Threads', tiktokConnected && 'TikTok'].filter(Boolean).join(' + ')} connected
+                      {(igConnected && fbConnected && ytConnected && threadsConnected && tiktokConnected) ? ' — you\'re all set!' : ' — you can add more later from Settings.'}
                     </p>
                   )}
 
-                  {!igConnected && !ytConnected && !fbConnected && (
+                  {!igConnected && !ytConnected && !fbConnected && !threadsConnected && !tiktokConnected && (
                     <p className="text-xs text-gray-400 text-center">
                       Connect at least one platform, or skip and do it later from brand settings.
                     </p>

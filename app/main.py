@@ -30,6 +30,8 @@ from app.api.toby.routes import router as toby_router
 from app.api.system.legal_routes import router as legal_router
 from app.api.auth.ig_oauth_routes import router as ig_oauth_router
 from app.api.auth.fb_oauth_routes import router as fb_oauth_router
+from app.api.auth.threads_oauth_routes import router as threads_oauth_router
+from app.api.auth.tiktok_oauth_routes import router as tiktok_oauth_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set_user_id as set_logging_user_id, clear_user_id as clear_logging_user_id
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -117,6 +119,8 @@ app.include_router(toby_router)  # Toby autonomous agent endpoints at /api/toby/
 app.include_router(legal_router)  # Privacy policy, data deletion (Meta App Review)
 app.include_router(ig_oauth_router)  # Instagram Business Login OAuth flow
 app.include_router(fb_oauth_router)  # Facebook Login OAuth flow
+app.include_router(threads_oauth_router)  # Threads OAuth flow
+app.include_router(tiktok_oauth_router)  # TikTok OAuth flow
 
 
 @app.get("/health", tags=["system"])

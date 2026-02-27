@@ -15,6 +15,12 @@ export interface PlatformConnection {
   token_last_refreshed_at: string | null // ISO datetime, only for Instagram
 }
 
+// TikTok has separate expiry fields for access/refresh tokens
+export interface TikTokConnection extends PlatformConnection {
+  access_token_expires_at: string | null
+  refresh_token_expires_at: string | null
+}
+
 // Brand connection status
 export interface BrandConnectionStatus {
   brand: BrandName
@@ -23,6 +29,8 @@ export interface BrandConnectionStatus {
   instagram: PlatformConnection
   facebook: PlatformConnection
   youtube: PlatformConnection
+  threads: PlatformConnection
+  tiktok: TikTokConnection
 }
 
 // Response from /api/brands/connections
@@ -32,6 +40,8 @@ export interface BrandConnectionsResponse {
     meta: boolean
     facebook: boolean
     youtube: boolean
+    threads: boolean
+    tiktok: boolean
   }
 }
 
@@ -113,6 +123,49 @@ export async function connectFacebook(brandId: string, returnTo?: string): Promi
  */
 export async function disconnectFacebook(brandId: string): Promise<{ status: string }> {
   return post<{ status: string }>('/api/auth/facebook/disconnect', { brand_id: brandId })
+}
+
+/**
+ * Start Threads OAuth flow for a brand (authenticated).
+ * Returns the Threads authorization URL to redirect to.
+ */
+export async function connectThreads(brandId: string, returnTo?: string): Promise<string> {
+  const params = new URLSearchParams({ brand_id: brandId })
+  if (returnTo) params.set('return_to', returnTo)
+  const data = await get<{ auth_url: string }>(`/api/auth/threads/connect?${params}`)
+  return data.auth_url
+}
+
+/**
+ * Disconnect Threads for a brand
+ */
+export async function disconnectThreads(brandId: string): Promise<{ status: string }> {
+  return post<{ status: string }>('/api/auth/threads/disconnect', { brand_id: brandId })
+}
+
+/**
+ * Refresh Threads long-lived token
+ */
+export async function refreshThreadsToken(brandId: string): Promise<{ status: string }> {
+  return post<{ status: string }>('/api/auth/threads/refresh', { brand_id: brandId })
+}
+
+/**
+ * Start TikTok OAuth flow for a brand (authenticated).
+ * Returns the TikTok authorization URL to redirect to.
+ */
+export async function connectTikTok(brandId: string, returnTo?: string): Promise<string> {
+  const params = new URLSearchParams({ brand_id: brandId })
+  if (returnTo) params.set('return_to', returnTo)
+  const data = await get<{ auth_url: string }>(`/api/auth/tiktok/connect?${params}`)
+  return data.auth_url
+}
+
+/**
+ * Disconnect TikTok for a brand
+ */
+export async function disconnectTikTok(brandId: string): Promise<{ status: string }> {
+  return post<{ status: string }>('/api/auth/tiktok/disconnect', { brand_id: brandId })
 }
 
 /**

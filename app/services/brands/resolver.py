@@ -193,6 +193,14 @@ class BrandResolver:
             facebook_page_id=brand.facebook_page_id,
             meta_access_token=brand.instagram_access_token or brand.meta_access_token,
             facebook_access_token=brand.facebook_access_token,
+            threads_access_token=brand.threads_access_token,
+            threads_user_id=brand.threads_user_id,
+            threads_username=brand.threads_username,
+            tiktok_access_token=brand.tiktok_access_token,
+            tiktok_refresh_token=brand.tiktok_refresh_token,
+            tiktok_user_id=brand.tiktok_user_id,
+            tiktok_username=brand.tiktok_username,
+            tiktok_open_id=brand.tiktok_open_id,
         )
 
     # ── Convenience accessors ─────────────────────────────────

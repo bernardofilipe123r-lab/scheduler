@@ -39,6 +39,16 @@ class BrandConfig:
     facebook_page_id: Optional[str] = None
     meta_access_token: Optional[str] = None
     facebook_access_token: Optional[str] = None
+    # Threads
+    threads_access_token: Optional[str] = None
+    threads_user_id: Optional[str] = None
+    threads_username: Optional[str] = None
+    # TikTok
+    tiktok_access_token: Optional[str] = None
+    tiktok_refresh_token: Optional[str] = None
+    tiktok_user_id: Optional[str] = None
+    tiktok_username: Optional[str] = None
+    tiktok_open_id: Optional[str] = None
 
 
 # Default neutral colors used when a brand has no color config in the DB

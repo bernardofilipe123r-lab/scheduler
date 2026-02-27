@@ -19,7 +19,7 @@ class OAuthStateStore:
     """DB-backed store for OAuth CSRF state tokens."""
 
     @staticmethod
-    def create(db: Session, platform: str, brand_id: str, user_id: str, return_to: Optional[str] = None) -> str:
+    def create(db: Session, platform: str, brand_id: str, user_id: str, return_to: Optional[str] = None, code_verifier: Optional[str] = None) -> str:
         """Generate a cryptographic state token, persist it, and return the token string."""
         token = secrets.token_urlsafe(32)
         state = OAuthState(
@@ -28,6 +28,7 @@ class OAuthStateStore:
             brand_id=brand_id,
             user_id=user_id,
             return_to=return_to,
+            code_verifier=code_verifier,
         )
         db.add(state)
         db.commit()
@@ -69,4 +70,5 @@ class OAuthStateStore:
             "brand_id": state.brand_id,
             "user_id": state.user_id,
             "return_to": state.return_to,
+            "code_verifier": state.code_verifier,
         }

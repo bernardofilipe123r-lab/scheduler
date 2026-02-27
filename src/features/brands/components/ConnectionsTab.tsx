@@ -13,6 +13,8 @@ export function ConnectionsTab() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [igNotification, setIgNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [fbNotification, setFbNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [threadsNotification, setThreadsNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [tiktokNotification, setTiktokNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [newBrandId, setNewBrandId] = useState<string | null>(null)
   const [fbSelectPageBrand, setFbSelectPageBrand] = useState<string | null>(null)
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
@@ -78,6 +80,45 @@ export function ConnectionsTab() {
       searchParams.delete('new_brand')
       setSearchParams(searchParams, { replace: true })
     }
+
+    // Handle Threads OAuth redirect params
+    const threadsConnected = searchParams.get('threads_connected')
+    const threadsError = searchParams.get('threads_error')
+    if (threadsConnected) {
+      setThreadsNotification({ type: 'success', message: `Threads connected successfully for ${threadsConnected}!` })
+      refetch()
+      searchParams.delete('threads_connected')
+      setSearchParams(searchParams, { replace: true })
+    } else if (threadsError) {
+      const errorMessages: Record<string, string> = {
+        denied: 'Permission denied',
+        expired: 'Session expired — please try again',
+        failed: 'Connection failed — please try again',
+      }
+      setThreadsNotification({ type: 'error', message: `Threads: ${errorMessages[threadsError] || threadsError}` })
+      searchParams.delete('threads_error')
+      setSearchParams(searchParams, { replace: true })
+    }
+
+    // Handle TikTok OAuth redirect params
+    const tiktokConnected = searchParams.get('tiktok_connected')
+    const tiktokError = searchParams.get('tiktok_error')
+    if (tiktokConnected) {
+      setTiktokNotification({ type: 'success', message: `TikTok connected successfully for ${tiktokConnected}!` })
+      refetch()
+      searchParams.delete('tiktok_connected')
+      setSearchParams(searchParams, { replace: true })
+    } else if (tiktokError) {
+      const errorMessages: Record<string, string> = {
+        denied: 'Permission denied',
+        expired: 'Session expired — please try again',
+        pkce_error: 'PKCE verification failed — please try again',
+        failed: 'Connection failed — please try again',
+      }
+      setTiktokNotification({ type: 'error', message: `TikTok: ${errorMessages[tiktokError] || tiktokError}` })
+      searchParams.delete('tiktok_error')
+      setSearchParams(searchParams, { replace: true })
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-dismiss notification
@@ -94,6 +135,20 @@ export function ConnectionsTab() {
       return () => clearTimeout(timer)
     }
   }, [fbNotification])
+
+  useEffect(() => {
+    if (threadsNotification) {
+      const timer = setTimeout(() => setThreadsNotification(null), 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [threadsNotification])
+
+  useEffect(() => {
+    if (tiktokNotification) {
+      const timer = setTimeout(() => setTiktokNotification(null), 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [tiktokNotification])
 
   // Store logos loaded from backend
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
@@ -225,6 +280,44 @@ export function ConnectionsTab() {
           )}
           <span className="text-sm font-medium">{fbNotification.message}</span>
           <button onClick={() => setFbNotification(null)} className="ml-auto text-sm underline opacity-60 hover:opacity-100">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Threads OAuth notification */}
+      {threadsNotification && (
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+          threadsNotification.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {threadsNotification.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+          ) : (
+            <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          )}
+          <span className="text-sm font-medium">{threadsNotification.message}</span>
+          <button onClick={() => setThreadsNotification(null)} className="ml-auto text-sm underline opacity-60 hover:opacity-100">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* TikTok OAuth notification */}
+      {tiktokNotification && (
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+          tiktokNotification.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {tiktokNotification.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+          ) : (
+            <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          )}
+          <span className="text-sm font-medium">{tiktokNotification.message}</span>
+          <button onClick={() => setTiktokNotification(null)} className="ml-auto text-sm underline opacity-60 hover:opacity-100">
             Dismiss
           </button>
         </div>

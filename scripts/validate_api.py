@@ -110,6 +110,7 @@ CRITICAL_MODULES = [
     ("app.core.brand_colors", "Brand colors"),
     ("app.core.quality_scorer", "Quality scorer"),
     ("app.core.viral_ideas", "Viral ideas"),
+    ("app.core.platform_formatters", "Platform formatters"),
     # ── Models ──
     ("app.models.niche_config", "NicheConfig model"),
     ("app.models.jobs", "Jobs model"),
@@ -129,6 +130,8 @@ CRITICAL_MODULES = [
     ("app.services.media.caption_generator", "Caption generator"),
     ("app.services.brands.manager", "Brand manager"),
     ("app.services.analytics.trend_scout", "TrendScout"),
+    ("app.services.publishing.threads_token_service", "Threads token service"),
+    ("app.services.publishing.tiktok_token_service", "TikTok token service"),
     # ── API Routes (all 13 routers from main.py) ──
     ("app.api.content.routes", "Content routes"),
     ("app.api.content.reel_routes", "Reel routes"),
@@ -142,6 +145,8 @@ CRITICAL_MODULES = [
     ("app.api.auth.user_routes", "User routes"),
     ("app.api.auth.ig_oauth_routes", "Instagram OAuth routes"),
     ("app.api.auth.fb_oauth_routes", "Facebook OAuth routes"),
+    ("app.api.auth.threads_oauth_routes", "Threads OAuth routes"),
+    ("app.api.auth.tiktok_oauth_routes", "TikTok OAuth routes"),
     ("app.api.niche_config_routes", "NicheConfig routes"),
     ("app.api.brands.routes", "Brands routes"),
     ("app.api.brands.connection_test_routes", "Connection test routes"),
