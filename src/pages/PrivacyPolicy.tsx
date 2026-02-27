@@ -2,7 +2,7 @@ import { Shield, Mail, Trash2, Database, Eye, RefreshCw, Server } from 'lucide-r
 
 const APP_NAME = 'ViralToby'
 const COMPANY_NAME = 'HealthyCollege'
-const CONTACT_EMAIL = 'bernardofilipe123r@gmail.com'
+const CONTACT_EMAIL = 'viraltobyapp@gmail.com'
 const DOMAIN = 'viraltoby.com'
 
 export function PrivacyPolicyPage() {
@@ -14,7 +14,7 @@ export function PrivacyPolicyPage() {
           <Shield className="h-7 w-7 text-blue-400" />
           <h1 className="text-3xl font-bold text-white">Privacy Policy</h1>
         </div>
-        <p className="text-sm text-gray-500 mb-10">Last updated: June 2025</p>
+        <p className="text-sm text-gray-500 mb-10">Last updated: February 27, 2026</p>
 
         <p className="mb-8">
           <strong className="text-white">{APP_NAME}</strong> (
@@ -23,7 +23,7 @@ export function PrivacyPolicyPage() {
           </a>
           ), operated by <strong className="text-white">{COMPANY_NAME}</strong> ("we", "our", "the
           app"), is a social media scheduling tool that helps users create and publish content to
-          Instagram, Facebook, and YouTube.
+          Instagram, Facebook, YouTube, Threads, and TikTok.
         </p>
 
         {/* 1 */}
@@ -59,6 +59,32 @@ export function PrivacyPolicyPage() {
               <strong className="text-white">Channel name</strong> — used for display purposes only.
             </li>
           </ul>
+          <p className="font-semibold text-white mt-4 mb-2">Threads (Meta)</p>
+          <ul className="list-disc pl-6 space-y-1.5">
+            <li>
+              <strong className="text-white">Account identifiers</strong> — your Threads user ID.
+            </li>
+            <li>
+              <strong className="text-white">Access tokens</strong> — OAuth tokens issued by Meta that
+              allow us to publish content on your behalf.
+            </li>
+            <li>
+              <strong className="text-white">Profile info</strong> — your Threads username, used for display purposes only.
+            </li>
+          </ul>
+          <p className="font-semibold text-white mt-4 mb-2">TikTok</p>
+          <ul className="list-disc pl-6 space-y-1.5">
+            <li>
+              <strong className="text-white">Account identifiers</strong> — your TikTok open ID.
+            </li>
+            <li>
+              <strong className="text-white">Access &amp; refresh tokens</strong> — OAuth tokens
+              issued by TikTok that allow us to publish content on your behalf.
+            </li>
+            <li>
+              <strong className="text-white">Basic profile info</strong> — your TikTok display name, used for display purposes only.
+            </li>
+          </ul>
           <p className="mt-3">
             We also collect your <strong className="text-white">email address</strong> when you sign
             up, used solely for authentication and account recovery.
@@ -70,7 +96,7 @@ export function PrivacyPolicyPage() {
           <ul className="list-disc pl-6 space-y-1.5">
             <li>
               <strong className="text-white">Publishing content</strong> — to schedule and publish
-              Reels, posts, carousels, and YouTube Shorts to your connected accounts.
+              Reels, posts, carousels, YouTube Shorts, Threads posts, and TikTok videos to your connected accounts.
             </li>
             <li>
               <strong className="text-white">Analytics</strong> — to fetch and display insights about
@@ -110,8 +136,8 @@ export function PrivacyPolicyPage() {
           <p className="mb-3">You can at any time:</p>
           <ul className="list-disc pl-6 space-y-1.5">
             <li>
-              <strong className="text-white">Disconnect</strong> your Instagram, Facebook, or YouTube
-              account from the app settings, which deletes all stored tokens.
+              <strong className="text-white">Disconnect</strong> your Instagram, Facebook, YouTube,
+              Threads, or TikTok account from the app settings, which deletes all stored tokens.
             </li>
             <li>
               <strong className="text-white">Request deletion</strong> of all your data by contacting
@@ -127,7 +153,7 @@ export function PrivacyPolicyPage() {
             </li>
             <li>
               <strong className="text-white">Revoke access</strong> directly from Instagram (Settings
-              → Apps and Websites), Facebook (Settings → Business Integrations), or Google (
+              → Apps and Websites), Facebook (Settings → Business Integrations), Google (
               <a
                 href="https://myaccount.google.com/permissions"
                 className="text-blue-400 hover:underline"
@@ -136,7 +162,7 @@ export function PrivacyPolicyPage() {
               >
                 myaccount.google.com/permissions
               </a>
-              ).
+              ), Threads (Settings → Apps), or TikTok (Settings → Manage App Permissions).
             </li>
           </ul>
         </Section>
@@ -164,11 +190,15 @@ export function PrivacyPolicyPage() {
           <ul className="list-disc pl-6 space-y-1.5">
             <li>
               <strong className="text-white">Meta Platform</strong> (Instagram Graph API, Facebook
-              Graph API) — for publishing and analytics.
+              Graph API, Threads API) — for publishing and analytics.
             </li>
             <li>
               <strong className="text-white">Google / YouTube</strong> (YouTube Data API v3) — for
               publishing YouTube Shorts.
+            </li>
+            <li>
+              <strong className="text-white">TikTok</strong> (TikTok Content Posting API) — for
+              publishing TikTok videos.
             </li>
             <li>
               <strong className="text-white">Supabase</strong> — for authentication and database

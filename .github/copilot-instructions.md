@@ -72,6 +72,24 @@ railway redeploy
 
 **Important:** Setting a variable via `railway variables set` triggers an automatic redeploy. The service is `scheduler` in project `responsible-mindfulness` (production environment).
 
+## Legal Pages
+
+Public legal pages live in `src/pages/` and are served at these URLs:
+
+| URL | File | Purpose |
+|---|---|---|
+| `https://viraltoby.com/terms` | `src/pages/Terms.tsx` | Terms of Service |
+| `https://viraltoby.com/privacy` | `src/pages/PrivacyPolicy.tsx` | Privacy Policy |
+| `https://viraltoby.com/data-deletion` | `src/pages/DataDeletion.tsx` | Data Deletion Instructions |
+
+**CRITICAL:** When adding or removing a social platform integration (OAuth, publishing), you MUST update all three legal pages to:
+1. List the new platform in service description / data collection / third-party services sections
+2. Describe what data is collected from the new platform (tokens, IDs, profile info)
+3. Include the platform in "Your Rights" / "Revoke access" instructions
+4. Include the platform's tokens/IDs in the "What Gets Deleted" list (DataDeletion.tsx)
+
+These URLs are referenced in the TikTok Developer Portal, Meta App Dashboard, and Google API Console — they must stay accurate.
+
 ## Git Workflow
 
 After making any changes to the codebase, always:

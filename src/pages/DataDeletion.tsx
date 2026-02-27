@@ -1,7 +1,7 @@
 import { Trash2, Mail, LogOut, Instagram, ShieldX } from 'lucide-react'
 
 const APP_NAME = 'ViralToby'
-const CONTACT_EMAIL = 'bernardofilipe123r@gmail.com'
+const CONTACT_EMAIL = 'viraltobyapp@gmail.com'
 
 export function DataDeletionPage() {
   return (
@@ -31,8 +31,8 @@ export function DataDeletionPage() {
               Go to <strong className="text-white">Settings → Brand Settings</strong>
             </li>
             <li>
-              Click <strong className="text-white">"Disconnect"</strong> next to your Instagram or
-              Facebook account
+              Click <strong className="text-white">"Disconnect"</strong> next to your Instagram,
+              Facebook, Threads, TikTok, or YouTube account
             </li>
             <li>This immediately deletes all stored tokens and account identifiers</li>
           </ol>
@@ -42,7 +42,7 @@ export function DataDeletionPage() {
         <Option
           number={2}
           icon={<Instagram className="h-5 w-5" />}
-          title="Revoke from Instagram / Facebook / YouTube"
+          title="Revoke from Instagram / Facebook / YouTube / Threads / TikTok"
         >
           <ol className="list-decimal pl-6 space-y-2">
             <li>
@@ -63,6 +63,12 @@ export function DataDeletionPage() {
                 Google Account Permissions
               </a>{' '}
               and revoke access for {APP_NAME}
+            </li>
+            <li>
+              For Threads, go to <strong className="text-white">Settings → Apps</strong> and remove {APP_NAME}
+            </li>
+            <li>
+              For TikTok, go to <strong className="text-white">Settings → Manage App Permissions</strong> and revoke access for {APP_NAME}
             </li>
             <li>
               This revokes our access. We will automatically purge your data upon detecting the
@@ -99,6 +105,8 @@ export function DataDeletionPage() {
             <li>Instagram Business Account ID and Facebook Page ID</li>
             <li>Instagram username and Facebook Page name</li>
             <li>YouTube channel ID, access tokens, and refresh tokens</li>
+            <li>Threads user ID and access tokens</li>
+            <li>TikTok open ID, access tokens, and refresh tokens</li>
             <li>Any scheduled or generated content associated with your account</li>
           </ul>
           <p className="mt-4 text-gray-400 text-sm">

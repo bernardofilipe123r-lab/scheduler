@@ -31,6 +31,9 @@ router = APIRouter(prefix="/api/auth/tiktok", tags=["tiktok-oauth"])
 
 REQUIRED_SCOPES = ",".join([
     "user.info.basic",
+    "user.info.profile",
+    "user.info.stats",
+    "video.list",
     "video.publish",
     "video.upload",
 ])

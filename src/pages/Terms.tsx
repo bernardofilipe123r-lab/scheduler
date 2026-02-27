@@ -2,7 +2,7 @@ import { FileText, Shield, AlertTriangle, Scale, Ban, RefreshCw, Mail } from 'lu
 
 const APP_NAME = 'ViralToby'
 const COMPANY_NAME = 'HealthyCollege'
-const CONTACT_EMAIL = 'bernardofilipe123r@gmail.com'
+const CONTACT_EMAIL = 'viraltobyapp@gmail.com'
 const DOMAIN = 'viraltoby.com'
 
 export function TermsPage() {
@@ -14,7 +14,7 @@ export function TermsPage() {
           <FileText className="h-7 w-7 text-blue-400" />
           <h1 className="text-3xl font-bold text-white">Terms of Service</h1>
         </div>
-        <p className="text-sm text-gray-500 mb-10">Last updated: June 2025</p>
+        <p className="text-sm text-gray-500 mb-10">Last updated: February 27, 2026</p>
 
         <p className="mb-8">
           Welcome to <strong className="text-white">{APP_NAME}</strong> (
@@ -30,7 +30,7 @@ export function TermsPage() {
           <p>
             {APP_NAME} is a social media content scheduling and publishing platform. We help users
             create, schedule, and publish short-form video content (Reels, Shorts) to Instagram,
-            Facebook, and YouTube through their respective APIs.
+            Facebook, YouTube, Threads, and TikTok through their respective APIs.
           </p>
         </Section>
 
@@ -67,7 +67,7 @@ export function TermsPage() {
               Use the service in a way that could damage, disable, or impair our infrastructure.
             </li>
             <li>
-              Violate any platform-specific terms of Instagram, Facebook, or YouTube when publishing
+              Violate any platform-specific terms of Instagram, Facebook, YouTube, Threads, or TikTok when publishing
               through {APP_NAME}.
             </li>
           </ul>
@@ -94,8 +94,8 @@ export function TermsPage() {
         {/* 5 */}
         <Section icon={<Shield className="h-5 w-5" />} title="5. Third-Party Platforms">
           <p className="mb-3">
-            {APP_NAME} integrates with third-party platforms including Meta (Instagram, Facebook) and
-            Google (YouTube). By connecting these accounts:
+            {APP_NAME} integrates with third-party platforms including Meta (Instagram, Facebook, Threads),
+            Google (YouTube), and TikTok. By connecting these accounts:
           </p>
           <ul className="list-disc pl-6 space-y-1.5">
             <li>
