@@ -27,17 +27,18 @@ from app.services.oauth import OAuthStateStore
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth/threads", tags=["threads-oauth"])
 
-META_APP_ID = os.environ.get("META_APP_ID") or os.environ.get("INSTAGRAM_APP_ID", "")
-SITE_URL = os.environ.get("SITE_URL", "https://viraltoby.com")
-THREADS_REDIRECT_URI = os.environ.get(
-    "THREADS_REDIRECT_URI",
-    SITE_URL + "/api/auth/threads/callback",
-)
-
 REQUIRED_SCOPES = ",".join([
     "threads_basic",
     "threads_content_publish",
 ])
+
+
+def _get_threads_config():
+    """Read env vars at request time (not import time) to avoid load-order issues."""
+    app_id = os.environ.get("META_APP_ID") or os.environ.get("INSTAGRAM_APP_ID", "")
+    site_url = os.environ.get("SITE_URL", "https://viraltoby.com")
+    redirect_uri = os.environ.get("THREADS_REDIRECT_URI", site_url + "/api/auth/threads/callback")
+    return app_id, site_url, redirect_uri
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +53,13 @@ def threads_connect(
     db: Session = Depends(get_db),
 ):
     """Start the Threads OAuth flow."""
-    if not META_APP_ID or not THREADS_REDIRECT_URI:
-        raise HTTPException(status_code=503, detail="Threads OAuth not configured")
+    app_id, site_url, redirect_uri = _get_threads_config()
+
+    if not app_id:
+        logger.error(f"Threads OAuth: META_APP_ID and INSTAGRAM_APP_ID both empty. Set one in Railway env vars.")
+        raise HTTPException(status_code=503, detail="Threads OAuth not configured — META_APP_ID or INSTAGRAM_APP_ID required")
+    if not redirect_uri:
+        raise HTTPException(status_code=503, detail="Threads OAuth not configured — redirect URI missing")
 
     brand = db.query(Brand).filter(
         Brand.id == brand_id,
@@ -71,15 +77,15 @@ def threads_connect(
     )
 
     params = {
-        "client_id": META_APP_ID,
-        "redirect_uri": THREADS_REDIRECT_URI,
+        "client_id": app_id,
+        "redirect_uri": redirect_uri,
         "scope": REQUIRED_SCOPES,
         "response_type": "code",
         "state": state_token,
     }
     auth_url = f"https://threads.net/oauth/authorize?{urlencode(params)}"
 
-    logger.info(f"Threads OAuth redirect_uri: {THREADS_REDIRECT_URI}")
+    logger.info(f"Threads OAuth: client_id={app_id[:6]}..., redirect_uri={redirect_uri}")
     return {"auth_url": auth_url, "brand_id": brand_id}
 
 
@@ -100,7 +106,8 @@ def threads_callback(
     Handle the OAuth redirect from Threads.
     No auth header — security via state parameter.
     """
-    frontend_base = SITE_URL
+    _, site_url, _ = _get_threads_config()
+    frontend_base = site_url
 
     if error:
         logger.warning(f"Threads OAuth denied: {error} — {error_description}")

@@ -29,18 +29,19 @@ from app.services.oauth import OAuthStateStore
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth/tiktok", tags=["tiktok-oauth"])
 
-TIKTOK_CLIENT_KEY = os.environ.get("TIKTOK_CLIENT_KEY", "")
-SITE_URL = os.environ.get("SITE_URL", "https://viraltoby.com")
-TIKTOK_REDIRECT_URI = os.environ.get(
-    "TIKTOK_REDIRECT_URI",
-    SITE_URL + "/api/auth/tiktok/callback",
-)
-
 REQUIRED_SCOPES = ",".join([
     "user.info.basic",
     "video.publish",
     "video.upload",
 ])
+
+
+def _get_tiktok_config():
+    """Read env vars at request time (not import time) to avoid load-order issues."""
+    client_key = os.environ.get("TIKTOK_CLIENT_KEY", "")
+    site_url = os.environ.get("SITE_URL", "https://viraltoby.com")
+    redirect_uri = os.environ.get("TIKTOK_REDIRECT_URI", site_url + "/api/auth/tiktok/callback")
+    return client_key, site_url, redirect_uri
 
 
 def _generate_pkce_pair() -> tuple[str, str]:
@@ -63,8 +64,13 @@ def tiktok_connect(
     db: Session = Depends(get_db),
 ):
     """Start the TikTok OAuth flow with PKCE."""
-    if not TIKTOK_CLIENT_KEY or not TIKTOK_REDIRECT_URI:
-        raise HTTPException(status_code=503, detail="TikTok OAuth not configured")
+    client_key, site_url, redirect_uri = _get_tiktok_config()
+
+    if not client_key:
+        logger.error("TikTok OAuth: TIKTOK_CLIENT_KEY not set. Configure it in Railway env vars.")
+        raise HTTPException(status_code=503, detail="TikTok OAuth not configured — TIKTOK_CLIENT_KEY required")
+    if not redirect_uri:
+        raise HTTPException(status_code=503, detail="TikTok OAuth not configured — redirect URI missing")
 
     brand = db.query(Brand).filter(
         Brand.id == brand_id,
@@ -87,17 +93,17 @@ def tiktok_connect(
     )
 
     params = {
-        "client_key": TIKTOK_CLIENT_KEY,
+        "client_key": client_key,
         "scope": REQUIRED_SCOPES,
         "response_type": "code",
-        "redirect_uri": TIKTOK_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "state": state_token,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
     auth_url = f"https://www.tiktok.com/v2/auth/authorize/?{urlencode(params)}"
 
-    logger.info(f"TikTok OAuth redirect_uri: {TIKTOK_REDIRECT_URI}")
+    logger.info(f"TikTok OAuth: client_key={client_key[:6]}..., redirect_uri={redirect_uri}")
     return {"auth_url": auth_url, "brand_id": brand_id}
 
 
@@ -117,7 +123,8 @@ def tiktok_callback(
     Handle the OAuth redirect from TikTok.
     No auth header — security via state parameter + PKCE.
     """
-    frontend_base = SITE_URL
+    _, site_url, _ = _get_tiktok_config()
+    frontend_base = site_url
 
     if error:
         logger.warning(f"TikTok OAuth denied: {error} — {error_description}")

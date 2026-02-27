@@ -197,8 +197,12 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     try {
       const authUrl = await connectThreads(brand.brand)
       window.location.href = authUrl
-    } catch (error) {
-      console.error('Failed to start Threads connection:', error)
+    } catch (error: any) {
+      const msg = error?.status === 503
+        ? (error.message || 'Threads OAuth not configured — check environment variables')
+        : 'Failed to start Threads connection'
+      alert(msg)
+      console.error('Threads connection error:', error)
       setConnectingThreads(false)
     }
   }
@@ -221,8 +225,12 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
     try {
       const authUrl = await connectTikTok(brand.brand)
       window.location.href = authUrl
-    } catch (error) {
-      console.error('Failed to start TikTok connection:', error)
+    } catch (error: any) {
+      const msg = error?.status === 503
+        ? (error.message || 'TikTok OAuth not configured — check environment variables')
+        : 'Failed to start TikTok connection'
+      alert(msg)
+      console.error('TikTok connection error:', error)
       setConnectingTikTok(false)
     }
   }
