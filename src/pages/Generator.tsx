@@ -11,12 +11,13 @@ import { useDynamicBrands, useNicheConfig, useBrandConnections } from '@/feature
 import { GeneratorSkeleton } from '@/shared/components'
 import type { BrandName, Variant } from '@/shared/types'
 
-type Platform = 'instagram' | 'facebook' | 'youtube'
+type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok'
 
 const PLATFORMS = [
   { id: 'instagram' as Platform, label: 'Instagram', icon: igIcon },
   { id: 'facebook' as Platform, label: 'Facebook', icon: fbIcon },
   { id: 'youtube' as Platform, label: 'YouTube', icon: ytIcon },
+  { id: 'tiktok' as Platform, label: 'TikTok', icon: '🎵' as any },
 ]
 
 export function GeneratorPage() {
@@ -30,9 +31,11 @@ export function GeneratorPage() {
   // Derive which platforms have at least one connected brand
   const hasFacebook = connectionsData?.brands.some(b => b.facebook.connected) ?? true
   const hasYoutube = connectionsData?.brands.some(b => b.youtube.connected) ?? true
+  const hasTikTok = connectionsData?.brands.some(b => b.tiktok?.connected) ?? true
   const availablePlatforms = PLATFORMS.filter(({ id }) => {
     if (id === 'facebook') return hasFacebook
     if (id === 'youtube') return hasYoutube
+    if (id === 'tiktok') return hasTikTok
     return true // always show instagram
   })
   
@@ -55,7 +58,7 @@ export function GeneratorPage() {
   }, [brandIds, brandsInitialized])
   const [aiPrompt, setAiPrompt] = useState('')
   const [ctaType, setCtaType] = useState('auto')
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube', 'tiktok'])
   
   // Loading states
   const [isAutoGenerating, setIsAutoGenerating] = useState(false)
@@ -66,7 +69,7 @@ export function GeneratorPage() {
   const [autoCount, setAutoCount] = useState(0)
   const [autoBrands, setAutoBrands] = useState<BrandName[]>([])
   const [autoVariant, setAutoVariant] = useState<Variant>('dark')
-  const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube'])
+  const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube', 'tiktok'])
   const [autoCtaType, setAutoCtaType] = useState('auto')
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
   
@@ -76,6 +79,7 @@ export function GeneratorPage() {
     const keep = (p: Platform) => {
       if (p === 'facebook') return connectionsData.brands.some(b => b.facebook.connected)
       if (p === 'youtube') return connectionsData.brands.some(b => b.youtube.connected)
+      if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
       return true
     }
     setSelectedPlatforms(prev => {
@@ -447,7 +451,11 @@ export function GeneratorPage() {
                             : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
-                        <img src={icon} alt={label} className="h-5 w-auto" />
+                        {typeof icon === 'string' && icon.length === 1 ? (
+                          <span className="text-lg">{icon}</span>
+                        ) : (
+                          <img src={icon} alt={label} className="h-5 w-auto" />
+                        )}
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
                     )
@@ -681,7 +689,11 @@ export function GeneratorPage() {
                             : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
-                        <img src={icon} alt={label} className="h-5 w-auto" />
+                        {typeof icon === 'string' && icon.length === 1 ? (
+                          <span className="text-lg">{icon}</span>
+                        ) : (
+                          <img src={icon} alt={label} className="h-5 w-auto" />
+                        )}
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
                     )

@@ -18,7 +18,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useCreateJob } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
-import { useDynamicBrands } from '@/features/brands'
+import { useDynamicBrands, useBrandConnections } from '@/features/brands'
 import { PostsSkeleton } from '@/shared/components'
 import {
   DEFAULT_GENERAL_SETTINGS,
@@ -33,6 +33,14 @@ import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanv
 import { useLayoutSettings, useUpdateLayoutSettings } from '@/shared/api/use-layout-settings'
 import type { BrandName } from '@/shared/types'
 
+type PostPlatform = 'instagram' | 'threads' | 'tiktok'
+
+const POST_PLATFORMS = [
+  { id: 'instagram' as PostPlatform, label: 'Instagram', icon: '📷' },
+  { id: 'threads' as PostPlatform, label: 'Threads', icon: '🧵' },
+  { id: 'tiktok' as PostPlatform, label: 'TikTok', icon: '🎵' },
+]
+
 const POSTS_PREVIEW_SCALE = 0.2
 
 export function PostsPage() {
@@ -41,6 +49,7 @@ export function PostsPage() {
   const navigate = useNavigate()
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: dbSettings, isLoading: settingsLoading } = useLayoutSettings()
+  const { data: connectionsData } = useBrandConnections()
   const updateDbSettings = useUpdateLayoutSettings()
   const brandMap = useMemo(() => {
     const map: Record<string, { name: string; color: string }> = {}
@@ -48,12 +57,23 @@ export function PostsPage() {
     return map
   }, [dynamicBrands])
 
+  // Derive which platforms have at least one connected brand
+  const hasThreads = connectionsData?.brands.some(b => b.threads?.connected) ?? true
+  const hasTikTok = connectionsData?.brands.some(b => b.tiktok?.connected) ?? true
+  const availablePostPlatforms = POST_PLATFORMS.filter(({ id }) => {
+    if (id === 'threads') return hasThreads
+    if (id === 'tiktok') return hasTikTok
+    return true // always show instagram
+  })
+
   // Form state
   const [title, setTitle] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [settings, setSettings] = useState<GeneralSettings>(loadGeneralSettings)
   const [showSettings, setShowSettings] = useState(false)
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>(['instagram', 'threads', 'tiktok'])
+  const [autoPlatforms, setAutoPlatforms] = useState<PostPlatform[]>(['instagram', 'threads', 'tiktok'])
 
   // Loading state
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
@@ -62,6 +82,24 @@ export function PostsPage() {
   const [autoCount, setAutoCount] = useState(0)
   const [autoBrands, setAutoBrands] = useState<BrandName[]>([])
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
+
+  // When connections data loads, filter unavailable platforms
+  useEffect(() => {
+    if (!connectionsData) return
+    const keep = (p: PostPlatform) => {
+      if (p === 'threads') return connectionsData.brands.some(b => b.threads?.connected)
+      if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
+      return true
+    }
+    setSelectedPlatforms(prev => {
+      const next = prev.filter(keep)
+      return next.length > 0 ? next : prev
+    })
+    setAutoPlatforms(prev => {
+      const next = prev.filter(keep)
+      return next.length > 0 ? next : prev
+    })
+  }, [connectionsData])
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -91,6 +129,30 @@ export function PostsPage() {
       setSelectedBrands([brandIds[0]])
     }
   }, [brandIds])
+
+  const togglePlatform = (platform: PostPlatform) => {
+    setSelectedPlatforms(prev => 
+      prev.includes(platform)
+        ? prev.filter(p => p !== platform)
+        : [...prev, platform]
+    )
+  }
+
+  const toggleAutoPlatform = (platform: PostPlatform) => {
+    setAutoPlatforms(prev => 
+      prev.includes(platform)
+        ? prev.filter(p => p !== platform)
+        : [...prev, platform]
+    )
+  }
+
+  const toggleAutoBrand = (brand: BrandName) => {
+    setAutoBrands((prev) => {
+      const next = prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
+      setAutoCount(next.length)
+      return next
+    })
+  }
 
   const selectBrand = (brand: BrandName) => {
     setSelectedBrands([brand])
@@ -132,14 +194,6 @@ export function PostsPage() {
   const handleAutoCountChange = (count: number) => {
     setAutoCount(count)
     setAutoBrands(brandIds.slice(0, count))
-  }
-
-  const toggleAutoBrand = (brand: BrandName) => {
-    setAutoBrands((prev) => {
-      const next = prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
-      setAutoCount(next.length)
-      return next
-    })
   }
 
   const handleAutoSubmit = async () => {
@@ -510,6 +564,29 @@ export function PostsPage() {
 
             <div className="border-t border-gray-100" />
 
+            {/* Platforms */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
+              <div className="flex gap-2">
+                {availablePostPlatforms.map(({ id, label, icon }) => {
+                  const active = selectedPlatforms.includes(id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => togglePlatform(id)}
+                      className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${active ? 'border-green-300 bg-green-50' : 'border-gray-200 hover:bg-gray-50 opacity-40'}`}
+                    >
+                      <span className="text-lg">{icon}</span>
+                      <span className="text-[10px] font-medium text-gray-700">{label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100" />
+
             {/* AI Image Model */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Image Model</label>
@@ -641,6 +718,27 @@ export function PostsPage() {
                           {config?.name || brand}
                         </span>
                       </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Platforms */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
+                <div className="flex gap-2">
+                  {availablePostPlatforms.map(({ id, label, icon }) => {
+                    const active = autoPlatforms.includes(id)
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleAutoPlatform(id)}
+                        className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${active ? 'border-green-300 bg-green-50' : 'border-gray-200 hover:bg-gray-50 opacity-40'}`}
+                      >
+                        <span className="text-lg">{icon}</span>
+                        <span className="text-[10px] font-medium text-gray-700">{label}</span>
+                      </button>
                     )
                   })}
                 </div>
