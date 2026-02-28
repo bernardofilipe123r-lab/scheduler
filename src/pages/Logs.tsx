@@ -300,8 +300,7 @@ export function LogsPage() {
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value)}
                 placeholder="Search messages..."
-                style={{ paddingLeft: '2.25rem' }}
-                className="w-full pr-3 py-1.5 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 focus:border-stone-400"
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 focus:border-stone-400"
               />
             </div>
           </div>
