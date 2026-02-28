@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
+  ArrowLeft,
   Plus,
   Upload,
   X,
@@ -9,6 +10,8 @@ import {
   Loader2,
   Calendar as CalendarIcon,
   Clock,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
@@ -40,6 +43,7 @@ function Calendar() {
   const [uploadLoading, setUploadLoading] = useState(false)
   const [brandPlatforms, setBrandPlatforms] = useState<BrandPlatforms[]>([])
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
+  const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
 
   // Upload form state
   const [selectedBrand, setSelectedBrand] = useState<string>(brands[0]?.id || '')
@@ -337,80 +341,219 @@ function Calendar() {
 
       {/* Day Detail Modal */}
       {selectedDay && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedDay(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setSelectedDay(null); setSelectedPost(null) }}>
           <div className="max-w-lg w-full bg-white rounded-xl border border-gray-200 overflow-hidden max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
-              <h2 className="text-lg font-bold text-gray-900">
-                {format(selectedDay, 'EEEE, MMMM d, yyyy')}
-              </h2>
-              <button onClick={() => setSelectedDay(null)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
-                <X className="h-5 w-5 text-gray-600" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
-              {getContentForDate(selectedDay).length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No content scheduled for this day.</div>
-              ) : (
-                getContentForDate(selectedDay)
-                  .sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time))
-                  .map(post => (
-                    <div key={post.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className={clsx(
-                            'inline-block w-2 h-2 rounded-full',
-                            post.status === 'published' ? 'bg-green-500' :
-                            post.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'
-                          )} />
-                          <span className="font-semibold text-gray-900 text-sm">
-                            {format(parseISO(post.scheduled_time), 'HH:mm')}
+
+            {/* Post Detail View */}
+            {selectedPost ? (
+              <>
+                <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3 bg-gray-50">
+                  <button onClick={() => setSelectedPost(null)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
+                    <ArrowLeft className="h-5 w-5 text-gray-600" />
+                  </button>
+                  <h2 className="text-lg font-bold text-gray-900 flex-1 min-w-0">Post Details</h2>
+                  <button onClick={() => { setSelectedDay(null); setSelectedPost(null) }} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
+                    <X className="h-5 w-5 text-gray-600" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1 p-6 space-y-5">
+                  {/* Status + Time */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className={clsx(
+                      'text-sm font-semibold px-3 py-1 rounded-full',
+                      selectedPost.status === 'published' ? 'bg-green-100 text-green-700' :
+                      selectedPost.status === 'failed' ? 'bg-red-100 text-red-700' :
+                      selectedPost.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    )}>
+                      {selectedPost.status}
+                    </span>
+                    <span className="text-sm text-gray-500 flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {format(parseISO(selectedPost.scheduled_time), 'HH:mm · MMM d, yyyy')}
+                    </span>
+                  </div>
+
+                  {/* Brand */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Brand</label>
+                    <p className="text-sm text-gray-900 mt-0.5">{getBrandName(selectedPost.brand)}</p>
+                  </div>
+
+                  {/* Title */}
+                  {selectedPost.title && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Title</label>
+                      <p className="text-sm text-gray-900 mt-0.5 font-medium">{selectedPost.title}</p>
+                    </div>
+                  )}
+
+                  {/* Caption */}
+                  {selectedPost.caption && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Caption</label>
+                      <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{selectedPost.caption}</p>
+                    </div>
+                  )}
+
+                  {/* Created by */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created by</label>
+                    <p className="text-sm mt-0.5">
+                      <span className={clsx(
+                        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium',
+                        selectedPost.created_by === 'user' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                      )}>
+                        {selectedPost.created_by === 'user' ? 'Manual upload' : 'Toby (AI)'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Platforms */}
+                  {selectedPost.metadata?.platforms && selectedPost.metadata.platforms.length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Platforms</label>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {selectedPost.metadata.platforms.map(p => (
+                          <span key={p} className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full font-medium">
+                            {getPlatformLabel(p)}
                           </span>
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                            {getBrandName(post.brand)}
-                          </span>
-                        </div>
-                        <span className={clsx(
-                          'text-xs font-medium px-2 py-0.5 rounded-full',
-                          post.status === 'published' ? 'bg-green-100 text-green-700' :
-                          post.status === 'failed' ? 'bg-red-100 text-red-700' :
-                          post.status === 'partial' ? 'bg-orange-100 text-orange-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        )}>
-                          {post.status}
-                        </span>
-                      </div>
-                      {post.title && (
-                        <p className="text-sm text-gray-700 truncate">{post.title}</p>
-                      )}
-                      {post.caption && !post.title && (
-                        <p className="text-sm text-gray-500 truncate">{post.caption}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-1">
-                        {post.metadata?.platforms && post.metadata.platforms.length > 0 && (
-                          <div className="flex gap-1">
-                            {post.metadata.platforms.map(p => (
-                              <span key={p} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
-                                {getPlatformLabel(p)}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {post.created_by && (
-                          <span className={clsx(
-                            'text-[10px] px-1.5 py-0.5 rounded',
-                            post.created_by === 'user' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
-                          )}>
-                            {post.created_by === 'user' ? 'Manual' : 'Toby'}
-                          </span>
-                        )}
+                        ))}
                       </div>
                     </div>
-                  ))
-              )}
-            </div>
-            <div className="border-t border-gray-200 px-6 py-3 bg-gray-50 text-sm text-gray-500 text-center">
-              {getContentForDate(selectedDay).length} item{getContentForDate(selectedDay).length !== 1 ? 's' : ''} scheduled
-            </div>
+                  )}
+
+                  {/* Publish Results (per-platform) */}
+                  {selectedPost.metadata?.publish_results && Object.keys(selectedPost.metadata.publish_results).length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Publish Results</label>
+                      <div className="mt-1 space-y-2">
+                        {Object.entries(selectedPost.metadata.publish_results).map(([platform, result]) => (
+                          <div key={platform} className={clsx(
+                            'flex items-start gap-2 p-3 rounded-lg text-sm',
+                            result.success ? 'bg-green-50' : 'bg-red-50'
+                          )}>
+                            {result.success ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <span className="font-medium text-gray-900">{getPlatformLabel(platform)}</span>
+                              {result.success && result.post_id && (
+                                <p className="text-xs text-gray-500 mt-0.5">Post ID: {result.post_id}</p>
+                              )}
+                              {!result.success && result.error && (
+                                <p className="text-xs text-red-600 mt-0.5">{result.error}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error (top-level) */}
+                  {selectedPost.error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <label className="text-xs font-semibold text-red-700 uppercase tracking-wide">Error</label>
+                      </div>
+                      <p className="text-sm text-red-700">{selectedPost.error}</p>
+                    </div>
+                  )}
+
+                  {/* Misc metadata */}
+                  <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 space-y-0.5">
+                    {selectedPost.job_id && <p>Job: {selectedPost.job_id}</p>}
+                    {selectedPost.reel_id && <p>Reel: {selectedPost.reel_id}</p>}
+                    {selectedPost.published_at && <p>Published: {format(parseISO(selectedPost.published_at), 'HH:mm · MMM d, yyyy')}</p>}
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Day List View */
+              <>
+                <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
+                  <h2 className="text-lg font-bold text-gray-900">
+                    {format(selectedDay, 'EEEE, MMMM d, yyyy')}
+                  </h2>
+                  <button onClick={() => setSelectedDay(null)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
+                    <X className="h-5 w-5 text-gray-600" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+                  {getContentForDate(selectedDay).length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">No content scheduled for this day.</div>
+                  ) : (
+                    getContentForDate(selectedDay)
+                      .sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time))
+                      .map(post => (
+                        <button
+                          key={post.id}
+                          onClick={() => setSelectedPost(post)}
+                          className="w-full text-left px-5 py-3 hover:bg-gray-50 transition-colors group"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={clsx(
+                                'inline-block w-2 h-2 rounded-full flex-shrink-0',
+                                post.status === 'published' ? 'bg-green-500' :
+                                post.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'
+                              )} />
+                              <span className="font-semibold text-gray-900 text-sm">
+                                {format(parseISO(post.scheduled_time), 'HH:mm')}
+                              </span>
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                                {getBrandName(post.brand)}
+                              </span>
+                              <span className={clsx(
+                                'text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0',
+                                post.status === 'published' ? 'bg-green-100 text-green-700' :
+                                post.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                post.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              )}>
+                                {post.status}
+                              </span>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600 flex-shrink-0" />
+                          </div>
+                          {post.title && (
+                            <p className="text-sm text-gray-700 line-clamp-2">{post.title}</p>
+                          )}
+                          {post.caption && !post.title && (
+                            <p className="text-sm text-gray-500 line-clamp-2">{post.caption}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            {post.metadata?.platforms && post.metadata.platforms.length > 0 && (
+                              <div className="flex gap-1">
+                                {post.metadata.platforms.map(p => (
+                                  <span key={p} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                    {getPlatformLabel(p)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {post.created_by && (
+                              <span className={clsx(
+                                'text-[10px] px-1.5 py-0.5 rounded',
+                                post.created_by === 'user' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
+                              )}>
+                                {post.created_by === 'user' ? 'Manual' : 'Toby'}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                  )}
+                </div>
+                <div className="border-t border-gray-200 px-6 py-3 bg-gray-50 text-sm text-gray-500 text-center">
+                  {getContentForDate(selectedDay).length} item{getContentForDate(selectedDay).length !== 1 ? 's' : ''} scheduled
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
