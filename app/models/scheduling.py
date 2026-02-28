@@ -43,8 +43,10 @@ class ScheduledReel(Base):
     # Extra data (platforms, video_path, thumbnail_path, etc.)
     extra_data = Column(JSON, nullable=True)
     
-    # Who created this: 'user' (manual) or 'toby' (autonomous)
-    created_by = Column(String(20), default="user", nullable=True)
+    # Who created this: 'user' (manual upload via calendar) or 'toby' (autonomous agent)
+    # DEFAULT is "toby" because all existing content was Toby-generated before manual feature
+    # Only new manual uploads explicitly set created_by="user"
+    created_by = Column(String(20), default="toby", nullable=False)
     
     def to_dict(self):
         """Convert to dictionary for API responses."""
@@ -59,6 +61,6 @@ class ScheduledReel(Base):
             "status": self.status,
             "published_at": self.published_at.isoformat() if self.published_at else None,
             "publish_error": self.publish_error,
-            "created_by": self.created_by or "user",
+            "created_by": self.created_by or "toby",  # Default to toby for legacy entries
             "metadata": self.extra_data or {}  # Return as "metadata" for API compatibility
         }

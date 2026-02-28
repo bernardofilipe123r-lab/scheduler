@@ -57,6 +57,8 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     # duplicate content generation for slots that already have content.
     # "partial" = published to some platforms but not all (still counts as filled)
     # "published" = fully published (definitely counts as filled)
+    # Note: We do NOT filter by created_by here because we want both Toby-created
+    # and user-created content to fill slots (prevents duplicates)
     scheduled = (
         db.query(ScheduledReel)
         .filter(

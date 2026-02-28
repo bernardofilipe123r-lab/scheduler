@@ -10,6 +10,7 @@ import { GeneratorPage } from '@/pages/Generator'
 import { HistoryPage } from '@/pages/History'
 import { JobDetailPage } from '@/pages/JobDetail'
 import { ScheduledPage } from '@/pages/Scheduled'
+import { CalendarPage } from '@/pages/Calendar'
 // Connected page merged into Brands page tabs
 import { BrandsPage } from '@/pages/Brands'
 import { PostsPage } from '@/pages/Posts'
@@ -106,8 +107,8 @@ export function AppRoutes() {
         <Route path="jobs" element={<HistoryPage />} />
         <Route path="history" element={<Navigate to="/jobs" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />
-        <Route path="calendar" element={<ScheduledPage />} />
-        <Route path="scheduled" element={<Navigate to="/calendar" replace />} />
+        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="scheduled" element={<ScheduledPage />} />
         <Route path="connected" element={<Navigate to="/brands?tab=connections" replace />} />
         <Route path="brands" element={<BrandsPage />} />
         <Route path="brands/new" element={<CreateBrandPage />} />

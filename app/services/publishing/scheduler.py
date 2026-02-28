@@ -112,6 +112,7 @@ class DatabaseSchedulerService:
         slide_texts: Optional[list] = None,
         carousel_paths: Optional[list] = None,
         job_id: Optional[str] = None,
+        created_by: str = "toby",  # "toby" for autonomous content, "user" for manual uploads
     ) -> Dict[str, Any]:
         """
         Schedule a reel for future publishing.
@@ -128,7 +129,8 @@ class DatabaseSchedulerService:
             yt_thumbnail_path: Clean AI image for YouTube (no text)
             user_name: Display name for the user
             brand: Brand name ("gymcollege" or "healthycollege")
-            variant: Variant type ("light" or "dark")
+            variant: Variant type ("light", "dark", or "post")
+            created_by: "toby" for autonomous content, "user" for manual uploads (default: "toby")
             
         Returns:
             Schedule details with schedule_id
@@ -206,6 +208,7 @@ class DatabaseSchedulerService:
                     caption=caption,
                     scheduled_time=scheduled_time,
                     status="scheduled",
+                    created_by=created_by,  # Mark as toby-created or user-created
                     extra_data=metadata  # Store in extra_data column
                 )
                 print("   ✅ ScheduledReel object created")
