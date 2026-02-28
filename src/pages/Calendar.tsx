@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,6 +15,8 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInte
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
 import { useDynamicBrands } from '@/features/brands'
+import { useScheduledPosts } from '@/features/scheduling'
+import type { ScheduledPost } from '@/shared/types'
 
 interface ConnectedPlatform {
   name: string
@@ -28,27 +30,14 @@ interface BrandPlatforms {
   platforms: ConnectedPlatform[]
 }
 
-interface ManualScheduledContent {
-  schedule_id: string
-  caption: string
-  brand_id: string
-  platforms: string[]
-  scheduled_time: string
-  status: 'scheduled' | 'published' | 'failed'
-  content_type: 'reel' | 'carousel'
-  file_url: string
-  social_media?: string
-}
-
 function Calendar() {
   const { brands } = useDynamicBrands()
+  const { data: scheduledPosts = [], isLoading: postsLoading } = useScheduledPosts()
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [view, setView] = useState<'month' | 'week'>('month')
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadLoading, setUploadLoading] = useState(false)
-  const [scheduled, setScheduled] = useState<ManualScheduledContent[]>([])
-  const [loading, setLoading] = useState(true)
   const [brandPlatforms, setBrandPlatforms] = useState<BrandPlatforms[]>([])
 
   // Upload form state
@@ -61,37 +50,18 @@ function Calendar() {
   const [scheduledTime, setScheduledTime] = useState<string>('')
   const [socialMedia, setSocialMedia] = useState('')
 
-  // Load scheduled content and connected platforms
+  // Load connected platforms for upload modal
   useEffect(() => {
-    const loadData = async () => {
+    const loadPlatforms = async () => {
       try {
-        setLoading(true)
-        
-        // Fetch scheduled content
-        try {
-          const schedRes = await apiClient.get('/reels/manual')
-          setScheduled((schedRes as any).data?.schedules || [])
-        } catch (schedError: any) {
-          console.warn('Manual schedules endpoint not available yet:', schedError.message)
-          setScheduled([])
-        }
-
-        // Fetch connected platforms
-        try {
-          const platRes = await apiClient.get('/reels/manual/connected-platforms')
-          setBrandPlatforms((platRes as any).data || [])
-        } catch (platError: any) {
-          console.warn('Connected platforms endpoint not available yet:', platError.message)
-          setBrandPlatforms([])
-        }
-      } catch (error: any) {
-        console.error('Failed to load calendar data:', error)
-      } finally {
-        setLoading(false)
+        const platRes = await apiClient.get('/reels/manual/connected-platforms')
+        setBrandPlatforms((platRes as any).data || [])
+      } catch {
+        // Manual routes may not be deployed yet — platforms will be empty in modal
+        setBrandPlatforms([])
       }
     }
-
-    loadData()
+    loadPlatforms()
   }, [])
 
   // Auto-detect content type when file is selected
@@ -148,9 +118,7 @@ function Calendar() {
       setSocialMedia('')
       setShowUploadModal(false)
 
-      // Refresh scheduled content
-      const schedRes = await apiClient.get('/reels/manual')
-      setScheduled((schedRes as any).data?.schedules || [])
+      // Data auto-refreshes via useScheduledPosts hook
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to schedule content')
     } finally {
@@ -158,23 +126,41 @@ function Calendar() {
     }
   }
 
-  // Get scheduled content for a specific date
-  const getContentForDate = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd')
-    return scheduled.filter(s => s.scheduled_time.startsWith(dateStr))
+  // Index posts by date for fast calendar lookup
+  const postsByDate = useMemo(() => {
+    const map: Record<string, ScheduledPost[]> = {}
+    for (const post of scheduledPosts) {
+      if (!post.scheduled_time) continue
+      const dateKey = post.scheduled_time.slice(0, 10) // 'yyyy-MM-dd'
+      if (!map[dateKey]) map[dateKey] = []
+      map[dateKey].push(post)
+    }
+    return map
+  }, [scheduledPosts])
+
+  const getContentForDate = (date: Date): ScheduledPost[] => {
+    return postsByDate[format(date, 'yyyy-MM-dd')] || []
   }
 
-  // Get pending badge count
-  const getPendingCount = () => {
-    return scheduled.filter(s => s.status === 'scheduled').length
+  const pendingCount = useMemo(
+    () => scheduledPosts.filter(s => s.status === 'scheduled').length,
+    [scheduledPosts]
+  )
+  const publishedCount = useMemo(
+    () => scheduledPosts.filter(s => s.status === 'published').length,
+    [scheduledPosts]
+  )
+
+  const getPlatformLabel = (platform: string) =>
+    platform.charAt(0).toUpperCase() + platform.slice(1)
+
+  // Brand name helper
+  const getBrandName = (brandId: string) => {
+    const brand = brands.find(b => b.id === brandId)
+    return brand?.shortName || brand?.label || brandId
   }
 
-  // Format platform name for display
-  const getPlatformLabel = (platform: string) => {
-    return platform.charAt(0).toUpperCase() + platform.slice(1)
-  }
-
-  if (loading) {
+  if (postsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -198,7 +184,7 @@ function Calendar() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
                 <p className="text-sm text-gray-600">
-                  {getPendingCount()} scheduled, {scheduled.filter(s => s.status === 'published').length} published
+                  {pendingCount} scheduled, {publishedCount} published
                 </p>
               </div>
             </div>
@@ -320,20 +306,26 @@ function Calendar() {
                 <div className="space-y-1 text-xs">
                   {dayContent.slice(0, 3).map(content => (
                     <div
-                      key={content.schedule_id}
-                      className="flex items-center gap-1 p-1 bg-gray-100 rounded truncate hover:bg-gray-200 transition-colors"
+                      key={content.id}
+                      className={clsx(
+                        'flex items-center gap-1 p-1 rounded truncate transition-colors',
+                        content.created_by === 'user'
+                          ? 'bg-blue-50 hover:bg-blue-100'
+                          : 'bg-gray-100 hover:bg-gray-200'
+                      )}
                     >
                       <span className={clsx(
-                        'inline-block w-1.5 h-1.5 rounded-full',
-                        content.status === 'published' ? 'bg-green-500' : 'bg-yellow-500'
+                        'inline-block w-1.5 h-1.5 rounded-full flex-shrink-0',
+                        content.status === 'published' ? 'bg-green-500' :
+                        content.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'
                       )} />
                       <span className="truncate text-gray-700">
-                        {format(parseISO(content.scheduled_time), 'HH:mm')} - {content.brand_id}
+                        {format(parseISO(content.scheduled_time), 'HH:mm')} {getBrandName(content.brand)}
                       </span>
                     </div>
                   ))}
                   {dayContent.length > 3 && (
-                    <p className="text-gray-600">+{dayContent.length - 3} more</p>
+                    <p className="text-gray-500">+{dayContent.length - 3} more</p>
                   )}
                 </div>
               </div>
