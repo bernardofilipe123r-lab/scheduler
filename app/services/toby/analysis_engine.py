@@ -13,7 +13,7 @@ Features:
 import math
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from app.models.toby import TobyContentTag, TobyActivityLog
 from app.models.analytics import PostPerformance
 
@@ -162,33 +162,26 @@ def score_pending_posts(db: Session, user_id: str, phase: str = "48h") -> int:
     hours = 48 if phase == "48h" else 168  # 7 days
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-    # Find toby content tags that need scoring for this phase
-    tags = (
-        db.query(TobyContentTag)
+    # JOIN tags with their performance data in a single query (avoids N+1)
+    # NULL != 'x' is NULL in SQL (excluded by WHERE), so explicitly handle NULL
+    results = (
+        db.query(TobyContentTag, PostPerformance)
+        .join(PostPerformance, PostPerformance.schedule_id == TobyContentTag.schedule_id)
         .filter(
             TobyContentTag.user_id == user_id,
-            TobyContentTag.score_phase != phase,
+            or_(TobyContentTag.score_phase.is_(None), TobyContentTag.score_phase != phase),
+            PostPerformance.published_at <= cutoff,
         )
         .all()
     )
 
     scored = 0
     unreliable_count = 0
-    for tag in tags:
-        # Find matching post_performance by schedule_id
-        perf = (
-            db.query(PostPerformance)
-            .filter(
-                PostPerformance.schedule_id == tag.schedule_id,
-                PostPerformance.published_at <= cutoff,
-            )
-            .first()
-        )
-        if not perf:
-            continue
-
-        # Get brand baseline
-        baseline = get_brand_baseline(db, perf.brand)
+    brand_baselines = {}  # Cache baselines per brand
+    for tag, perf in results:
+        # Get brand baseline (cached)
+        if perf.brand not in brand_baselines:
+            brand_baselines[perf.brand] = get_brand_baseline(db, perf.brand)
 
         metrics = {
             "views": perf.views,
@@ -201,7 +194,7 @@ def score_pending_posts(db: Session, user_id: str, phase: str = "48h") -> int:
 
         # E5/C5: Content-type-aware scoring with reliability flag
         score, unreliable = compute_toby_score(
-            metrics, baseline, content_type=tag.content_type
+            metrics, brand_baselines[perf.brand], content_type=tag.content_type
         )
         tag.toby_score = score
         tag.scored_at = datetime.now(timezone.utc)
