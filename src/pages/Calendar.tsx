@@ -44,6 +44,7 @@ function Calendar() {
   const [brandPlatforms, setBrandPlatforms] = useState<BrandPlatforms[]>([])
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
+  const [detailSlideIndex, setDetailSlideIndex] = useState(0)
 
   // Upload form state
   const [selectedBrand, setSelectedBrand] = useState<string>(brands[0]?.id || '')
@@ -374,6 +375,87 @@ function Calendar() {
                     </span>
                   </div>
 
+                  {/* Media Preview */}
+                  {(() => {
+                    const carouselPaths: string[] = selectedPost.metadata?.carousel_paths?.filter(Boolean) ?? []
+                    const videoUrl = selectedPost.video_path || selectedPost.metadata?.video_path
+                    const thumbUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path
+                    const totalSlides = carouselPaths.length
+
+                    if (totalSlides > 0) {
+                      return (
+                        <div className="flex flex-col items-center">
+                          <div className="relative w-full max-w-[200px]">
+                            <div className="rounded-lg overflow-hidden bg-gray-100 aspect-[9/16]">
+                              <img
+                                key={carouselPaths[detailSlideIndex]}
+                                src={carouselPaths[detailSlideIndex]}
+                                alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
+                                className="w-full h-full object-contain"
+                                draggable={false}
+                              />
+                            </div>
+                            {totalSlides > 1 && (
+                              <>
+                                <button
+                                  onClick={() => setDetailSlideIndex(i => Math.max(0, i - 1))}
+                                  disabled={detailSlideIndex === 0}
+                                  className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 transition-colors"
+                                >
+                                  <ChevronLeft className="w-4 h-4 text-white" />
+                                </button>
+                                <button
+                                  onClick={() => setDetailSlideIndex(i => Math.min(totalSlides - 1, i + 1))}
+                                  disabled={detailSlideIndex >= totalSlides - 1}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 transition-colors"
+                                >
+                                  <ChevronRight className="w-4 h-4 text-white" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                          {totalSlides > 1 && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className="flex gap-1">
+                                {carouselPaths.map((_, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => setDetailSlideIndex(i)}
+                                    className={clsx(
+                                      'w-1.5 h-1.5 rounded-full transition-all',
+                                      i === detailSlideIndex ? 'bg-emerald-500 scale-125' : 'bg-gray-300 hover:bg-gray-400'
+                                    )}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-xs text-gray-400">
+                                {detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex} of ${totalSlides - 1}`}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    if (videoUrl) {
+                      return (
+                        <div className="w-full max-w-[200px] mx-auto aspect-[9/16] bg-gray-900 rounded-lg overflow-hidden">
+                          <video src={videoUrl} className="w-full h-full object-cover" controls />
+                        </div>
+                      )
+                    }
+
+                    if (thumbUrl) {
+                      return (
+                        <div className="w-full max-w-[200px] mx-auto aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
+                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover object-top" />
+                        </div>
+                      )
+                    }
+
+                    return null
+                  })()}
+
                   {/* Brand */}
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Brand</label>
@@ -492,7 +574,7 @@ function Calendar() {
                       .map(post => (
                         <button
                           key={post.id}
-                          onClick={() => setSelectedPost(post)}
+                          onClick={() => { setDetailSlideIndex(0); setSelectedPost(post) }}
                           className="w-full text-left px-5 py-3 hover:bg-gray-50 transition-colors group"
                         >
                           <div className="flex items-center justify-between mb-1">
