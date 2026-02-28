@@ -142,7 +142,7 @@ The script must exit with code 0 before committing. Keep `scripts/validate_api.p
 ```bash
 npm run dev      # Vite dev server at localhost:5173 (proxies API to production Railway)
 npm run build    # TypeScript check + Vite production build → dist/
-npm run lint     # ESLint with 0 max-warnings (must pass before commit)
+npm run lint     # ESLint — must have 0 errors (rules-of-hooks) before commit
 npm run preview  # Preview production build locally
 ```
  
@@ -283,6 +283,7 @@ git push -u origin <branch>
 ```
  
 - Never commit `.env`, `output/`, `*.log`, `ed25519_key`, `youtube_quota.json`
-- Run `python scripts/validate_api.py --imports` before any commit touching `app/`
-- Run `npm run lint` before any commit touching `src/`
+- Run `python scripts/validate_api.py --imports` before any commit touching `app/` (also checks React hooks)
+- Run `npm run lint` before any commit touching `src/` — 0 errors required
+- **NEVER place React hooks after an early return** — this causes React error #310 in production. The validate script and ESLint both catch this.
 - Commit messages use conventional format: `feat:`, `fix:`, `refactor:`, `UX:`, `UI:`

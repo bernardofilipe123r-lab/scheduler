@@ -206,17 +206,6 @@ function Calendar() {
     return brand?.shortName || brand?.label || brandId
   }
 
-  if (postsLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mx-auto mb-4" />
-          <p className="text-gray-700">Loading calendar...</p>
-        </div>
-      </div>
-    )
-  }
-
   const currentBrandPlatforms = useMemo(() => {
     const brandConn = connectionsData?.brands.find(b => b.brand === selectedBrand)
     if (!brandConn) return []
@@ -228,6 +217,17 @@ function Calendar() {
     if (brandConn.tiktok?.connected) platforms.push({ name: 'tiktok', handle: brandConn.tiktok.account_name || '', connected: true })
     return platforms
   }, [connectionsData, selectedBrand])
+
+  if (postsLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mx-auto mb-4" />
+          <p className="text-gray-700">Loading calendar...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

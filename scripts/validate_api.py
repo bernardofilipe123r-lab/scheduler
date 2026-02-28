@@ -785,6 +785,47 @@ def check_services():
 
 
 # ═══════════════════════════════════════════════════════════════
+# 7. REACT HOOKS LINT CHECK
+# ═══════════════════════════════════════════════════════════════
+
+def check_react_hooks():
+    """Run ESLint react-hooks/rules-of-hooks on src/ to catch
+    hooks called after early returns (React error #310) and other
+    Rules of Hooks violations."""
+    import subprocess
+
+    print(f"\n{BOLD}━━━ React Hooks Rules Check ━━━{RESET}")
+
+    # Only check if eslint is available (frontend dev environment)
+    eslint_bin = ROOT / "node_modules" / ".bin" / "eslint"
+    if not eslint_bin.exists():
+        warn("React hooks check", "ESLint not installed — skipping (run npm install)")
+        return
+
+    try:
+        result = subprocess.run(
+            [str(eslint_bin), "src/", "--no-error-on-unmatched-pattern",
+             "--rule", "react-hooks/rules-of-hooks: error",
+             "--format", "compact"],
+            capture_output=True, text=True, timeout=60, cwd=str(ROOT),
+        )
+        # Count only errors (not warnings)
+        error_lines = [l for l in result.stdout.strip().splitlines()
+                       if " Error - " in l and "rules-of-hooks" in l]
+        if error_lines:
+            for line in error_lines[:5]:  # Show max 5
+                fail("React hooks", line.strip())
+        else:
+            ok("React hooks", "No Rules of Hooks violations found")
+    except FileNotFoundError:
+        warn("React hooks check", "ESLint binary not found — skipping")
+    except subprocess.TimeoutExpired:
+        warn("React hooks check", "ESLint timed out after 60s — skipping")
+    except Exception as e:
+        warn("React hooks check", f"Unexpected error: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════
 
@@ -808,6 +849,7 @@ def main():
         check_imports()
         check_symbols()
         check_niche_config_fields()
+        check_react_hooks()
 
     if run_all or args.imports or args.db:
         check_db_columns()

@@ -40,6 +40,35 @@ After any change that affects API routes, imports, models, services, or any majo
 - After adding new endpoints → add to the appropriate endpoint test section
 - After changing auth requirements on endpoints → move between no-auth/auth sections
 
+## React Rules of Hooks — CRITICAL
+
+**NEVER place React hooks (`useState`, `useEffect`, `useMemo`, `useCallback`, `useQuery`, custom `use*` hooks) after an early return statement.** This violates React's Rules of Hooks and causes **React error #310** ("Rendered more hooks than during the previous render") which crashes the entire page in production.
+
+**Before committing any React component change:**
+1. Visually verify ALL hooks are called BEFORE any `if (...) return` early-return statement
+2. Run `npx eslint src/ --rule 'react-hooks/rules-of-hooks: error'` to machine-check
+3. The `python scripts/validate_api.py --imports` script also runs this check automatically
+
+**Common mistake pattern (BAD):**
+```tsx
+function MyPage() {
+  const { data, isLoading } = useQuery(...)  // ✅ hook before return
+  if (isLoading) return <Spinner />           // early return
+  const computed = useMemo(...)               // ❌ CRASH — hook after early return
+  return <div>{computed}</div>
+}
+```
+
+**Correct pattern (GOOD):**
+```tsx
+function MyPage() {
+  const { data, isLoading } = useQuery(...)
+  const computed = useMemo(...)               // ✅ ALL hooks before any return
+  if (isLoading) return <Spinner />
+  return <div>{computed}</div>
+}
+```
+
 ## Railway CLI (Production Infrastructure)
 
 Railway CLI is installed and authenticated. **ALWAYS run Railway commands directly using run_in_terminal — NEVER ask the user to run them manually.**

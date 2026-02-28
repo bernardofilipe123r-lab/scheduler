@@ -210,32 +210,46 @@ body {
   margin-top: 6px;
 }
 
-/* Input Fields */
-.input-textarea,
-input[type="text"],
-textarea {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--gray-300);
-  border-radius: var(--radius);
-  font-size: 15px;
-  font-family: inherit;
-  transition: all var(--transition-fast);
-  background: white;
-}
+/* Input Fields — inside @layer base so Tailwind utility classes (pl-*, rounded-*, text-*, etc.) always win */
+@layer base {
+  .input-textarea,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-family: inherit;
+    transition: all var(--transition-fast);
+    background: white;
+  }
 
-.input-textarea:hover,
-input[type="text"]:hover,
-textarea:hover {
-  border-color: var(--gray-400);
-}
+  .input-textarea:hover,
+  input[type="text"]:hover,
+  input[type="email"]:hover,
+  input[type="password"]:hover,
+  input[type="search"]:hover,
+  input[type="number"]:hover,
+  textarea:hover {
+    border-color: var(--gray-400);
+  }
 
-.input-textarea:focus,
-input[type="text"]:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(0, 67, 92, 0.1);
+  .input-textarea:focus,
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  input[type="search"]:focus,
+  input[type="number"]:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 67, 92, 0.1);
+  }
 }
 
 .content-textarea {
