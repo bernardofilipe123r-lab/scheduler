@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import {
   ShieldCheck, Users, Search, RefreshCw, AlertCircle,
   Ban, UserCheck, Shield,
@@ -252,6 +253,7 @@ function UserDetail({
   onUserDeleted: () => void
 }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { user: currentUser } = useAuth()
   const isSelf = currentUser?.id === user.id
   const [activeTab, setActiveTab] = useState<'brands' | 'logs' | 'toby'>('brands')
@@ -378,6 +380,13 @@ function UserDetail({
             <p className="text-sm text-gray-500">{user.email}</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/calendar?user_id=${user.id}&user_name=${encodeURIComponent(user.name || user.email)}`)}
+              title="View user's calendar"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+            >
+              <Calendar className="w-3.5 h-3.5" /> View Calendar
+            </button>
             {!isSelf && (
               <button
                 disabled={deleteUserMutation.isPending}

@@ -13,10 +13,13 @@ import {
   CheckCircle2,
   XCircle,
   SlidersHorizontal,
+  ShieldCheck,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
 import { clsx } from 'clsx'
+import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 import { useDynamicBrands, useBrandConnections } from '@/features/brands'
 import { useScheduledPosts } from '@/features/scheduling'
@@ -27,9 +30,45 @@ type ContentTypeFilter = 'all' | 'reels' | 'posts'
 type StatusFilter = 'all' | 'scheduled' | 'published' | 'partial' | 'failed'
 
 function Calendar() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const adminUserId = searchParams.get('user_id')
+  const adminUserName = searchParams.get('user_name')
+  const isAdminView = !!adminUserId
+
   const { brands } = useDynamicBrands()
-  const { data: scheduledPosts = [], isLoading: postsLoading } = useScheduledPosts()
+  const { data: ownScheduledPosts = [], isLoading: ownPostsLoading } = useScheduledPosts()
   const { data: connectionsData } = useBrandConnections()
+
+  // Admin view: fetch target user's scheduled posts
+  const { data: adminScheduledPosts = [], isLoading: adminPostsLoading } = useQuery<ScheduledPost[]>({
+    queryKey: ['admin-user-scheduled', adminUserId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ schedules: Array<any> }>(`/api/admin/users/${adminUserId}/scheduled`)
+      return res.schedules.map((s: any) => ({
+        id: s.schedule_id,
+        brand: (s.metadata?.brand || s.brand) as string,
+        job_id: s.metadata?.job_id || s.reel_id?.split('_').slice(0, -1).join('_') || s.reel_id,
+        reel_id: s.reel_id,
+        title: s.metadata?.title || s.caption?.split('\n')[0]?.slice(0, 80) || 'Scheduled Post',
+        scheduled_time: s.scheduled_time,
+        caption: s.caption,
+        status: s.status as ScheduledPost['status'],
+        error: s.publish_error,
+        published_at: s.published_at,
+        thumbnail_path: s.metadata?.thumbnail_path,
+        video_path: s.metadata?.video_path,
+        metadata: s.metadata,
+        created_by: (s.created_by || 'user') as 'user' | 'toby',
+      }))
+    },
+    enabled: isAdminView,
+    refetchInterval: 120_000,
+    staleTime: 10_000,
+  })
+
+  const scheduledPosts = isAdminView ? adminScheduledPosts : ownScheduledPosts
+  const postsLoading = isAdminView ? adminPostsLoading : ownPostsLoading
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [view, setView] = useState<'month' | 'week'>('month')
@@ -192,6 +231,27 @@ function Calendar() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Admin viewing banner */}
+      {isAdminView && (
+        <div className="bg-purple-50 border-b border-purple-200">
+          <div className="max-w-7xl mx-auto px-4 py-2.5 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <ShieldCheck className="w-4 h-4" />
+              <span className="font-medium">Admin View</span>
+              <span className="text-purple-500">—</span>
+              <span>Viewing calendar for <strong>{adminUserName || adminUserId}</strong></span>
+            </div>
+            <button
+              onClick={() => navigate('/admin')}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to Admin
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b border-gray-200 bg-white/80 backdrop-blur-lg sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
@@ -205,13 +265,15 @@ function Calendar() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg transition-colors shadow-sm"
-            >
-              <Plus className="h-5 w-5" />
-              Add Content
-            </button>
+            {!isAdminView && (
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg transition-colors shadow-sm"
+              >
+                <Plus className="h-5 w-5" />
+                Add Content
+              </button>
+            )}
           </div>
         </div>
       </div>

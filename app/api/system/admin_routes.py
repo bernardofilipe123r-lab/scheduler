@@ -5,6 +5,7 @@ Endpoints:
 - GET  /api/admin/users                          List all users
 - PUT  /api/admin/users/{id}/role                Update user role (super_admin/admin/user/blocked)
 - GET  /api/admin/users/{id}/brands              Get brands owned by a user
+- GET  /api/admin/users/{id}/scheduled           Get all scheduled posts for a user
 - GET  /api/admin/users/{id}/logs                Get system logs for a specific user
 """
 
@@ -222,6 +223,61 @@ async def get_user_brands(
             }
             for b in brands
         ]
+    }
+
+
+# ─── Get User Scheduled Posts ─────────────────────────────────────────────────
+
+@router.get("/api/admin/users/{target_user_id}/scheduled", summary="Get scheduled posts for a user (super admin only)")
+def get_user_scheduled(
+    target_user_id: str,
+    user: dict = Depends(get_current_user),
+):
+    _require_super_admin(user)
+
+    from app.services.publishing.scheduler import DatabaseSchedulerService
+    scheduler_service = DatabaseSchedulerService()
+    schedules = scheduler_service.get_all_scheduled(user_id=target_user_id)
+
+    formatted_schedules = []
+    for schedule in schedules:
+        metadata = schedule.get("metadata", {})
+        thumb_url = metadata.get("thumbnail_path")
+        video_url = metadata.get("video_path")
+        carousel_urls = metadata.get("carousel_paths") or []
+
+        formatted_schedules.append({
+            "schedule_id": schedule.get("schedule_id"),
+            "reel_id": schedule.get("reel_id"),
+            "scheduled_time": schedule.get("scheduled_time"),
+            "status": schedule.get("status"),
+            "platforms": metadata.get("platforms", []),
+            "brand": metadata.get("brand", ""),
+            "variant": metadata.get("variant", "light"),
+            "caption": schedule.get("caption"),
+            "created_at": schedule.get("created_at"),
+            "published_at": schedule.get("published_at"),
+            "publish_error": schedule.get("publish_error"),
+            "created_by": schedule.get("created_by", "user"),
+            "metadata": {
+                "brand": metadata.get("brand"),
+                "variant": metadata.get("variant"),
+                "platforms": metadata.get("platforms"),
+                "video_path": video_url,
+                "thumbnail_path": thumb_url,
+                "carousel_paths": carousel_urls,
+                "carousel_image_paths": carousel_urls,
+                "title": metadata.get("title"),
+                "slide_texts": metadata.get("slide_texts"),
+                "job_id": metadata.get("job_id"),
+                "post_ids": metadata.get("post_ids"),
+                "publish_results": metadata.get("publish_results"),
+            }
+        })
+
+    return {
+        "total": len(formatted_schedules),
+        "schedules": formatted_schedules
     }
 
 
