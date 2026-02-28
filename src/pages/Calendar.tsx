@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,21 +18,9 @@ import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
-import { useDynamicBrands } from '@/features/brands'
+import { useDynamicBrands, useBrandConnections } from '@/features/brands'
 import { useScheduledPosts } from '@/features/scheduling'
 import type { ScheduledPost } from '@/shared/types'
-
-interface ConnectedPlatform {
-  name: string
-  handle: string
-  connected: boolean
-}
-
-interface BrandPlatforms {
-  brand_id: string
-  display_name: string
-  platforms: ConnectedPlatform[]
-}
 
 type CreatorFilter = 'all' | 'user' | 'toby'
 type ContentTypeFilter = 'all' | 'reels' | 'posts'
@@ -41,12 +29,12 @@ type StatusFilter = 'all' | 'scheduled' | 'published' | 'partial' | 'failed'
 function Calendar() {
   const { brands } = useDynamicBrands()
   const { data: scheduledPosts = [], isLoading: postsLoading } = useScheduledPosts()
+  const { data: connectionsData } = useBrandConnections()
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [view, setView] = useState<'month' | 'week'>('month')
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadLoading, setUploadLoading] = useState(false)
-  const [brandPlatforms, setBrandPlatforms] = useState<BrandPlatforms[]>([])
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
@@ -67,20 +55,6 @@ function Calendar() {
   const [contentType, setContentType] = useState<'reel' | 'carousel' | null>(null)
   const [scheduledTime, setScheduledTime] = useState<string>('')
   const [socialMedia, setSocialMedia] = useState('')
-
-  // Load connected platforms for upload modal
-  useEffect(() => {
-    const loadPlatforms = async () => {
-      try {
-        const platRes = await apiClient.get('/reels/manual/connected-platforms')
-        setBrandPlatforms((platRes as any).data || [])
-      } catch {
-        // Manual routes may not be deployed yet — platforms will be empty in modal
-        setBrandPlatforms([])
-      }
-    }
-    loadPlatforms()
-  }, [])
 
   // Auto-detect content type when file is selected
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -204,7 +178,17 @@ function Calendar() {
     )
   }
 
-  const currentBrandPlatforms = brandPlatforms.find(bp => bp.brand_id === selectedBrand)?.platforms || []
+  const currentBrandPlatforms = useMemo(() => {
+    const brandConn = connectionsData?.brands.find(b => b.brand === selectedBrand)
+    if (!brandConn) return []
+    const platforms: { name: string; handle: string; connected: boolean }[] = []
+    if (brandConn.instagram?.connected) platforms.push({ name: 'instagram', handle: brandConn.instagram.account_name || '', connected: true })
+    if (brandConn.facebook?.connected) platforms.push({ name: 'facebook', handle: brandConn.facebook.account_name || '', connected: true })
+    if (brandConn.youtube?.connected) platforms.push({ name: 'youtube', handle: brandConn.youtube.account_name || '', connected: true })
+    if (brandConn.threads?.connected) platforms.push({ name: 'threads', handle: brandConn.threads.account_name || '', connected: true })
+    if (brandConn.tiktok?.connected) platforms.push({ name: 'tiktok', handle: brandConn.tiktok.account_name || '', connected: true })
+    return platforms
+  }, [connectionsData, selectedBrand])
 
   return (
     <div className="min-h-screen bg-gray-50">
