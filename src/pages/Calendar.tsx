@@ -568,11 +568,13 @@ function Calendar() {
                     const thumbUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path
                     const totalSlides = carouselPaths.length
 
+                    const isPost = selectedPost.metadata?.variant === 'post'
+
                     if (totalSlides > 0) {
                       return (
                         <div className="flex flex-col items-center">
-                          <div className="relative w-full max-w-[200px]">
-                            <div className="rounded-lg overflow-hidden bg-gray-100 aspect-[9/16]">
+                          <div className={clsx('relative w-full', isPost ? 'max-w-[220px]' : 'max-w-[180px]')}>
+                            <div className={clsx('rounded-lg overflow-hidden bg-gray-100', isPost ? 'aspect-[4/5]' : 'aspect-[9/16]')}>
                               <img
                                 key={carouselPaths[detailSlideIndex]}
                                 src={carouselPaths[detailSlideIndex]}

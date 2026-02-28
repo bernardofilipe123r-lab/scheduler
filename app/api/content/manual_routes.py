@@ -20,6 +20,7 @@ from app.api.auth.middleware import get_current_user
 from app.db_connection import get_db
 from app.models.scheduling import ScheduledReel
 from app.models.brands import Brand
+from app.models.youtube import YouTubeChannel
 from app.services.storage.supabase_storage import (
     upload_bytes, storage_path, StorageError,
 )
@@ -77,12 +78,16 @@ def _get_user_brands(db: Session, user_id: str) -> List[Brand]:
     ).all()
 
 
-def _get_connected_platforms(brand: Brand) -> List[dict]:
+def _get_connected_platforms(brand: Brand, db: Optional[Session] = None) -> List[dict]:
     """Get list of connected platforms for a brand."""
     platforms = []
     
-    # Instagram
-    if brand.instagram_access_token:
+    # Instagram — accept either instagram_access_token OR meta_access_token
+    ig_connected = bool(
+        brand.instagram_business_account_id and
+        (brand.instagram_access_token or brand.meta_access_token)
+    )
+    if ig_connected:
         platforms.append({
             "name": "instagram",
             "handle": brand.instagram_handle or "Not set",
@@ -90,20 +95,25 @@ def _get_connected_platforms(brand: Brand) -> List[dict]:
         })
     
     # Facebook
-    if brand.facebook_access_token:
+    if brand.facebook_page_id and brand.facebook_access_token:
         platforms.append({
             "name": "facebook",
             "handle": brand.facebook_page_name or "Not set",
             "connected": True,
         })
     
-    # YouTube
-    if hasattr(brand, 'youtube_access_token') and brand.youtube_access_token:
-        platforms.append({
-            "name": "youtube",
-            "handle": brand.youtube_channel_name or "Not set",
-            "connected": True,
-        })
+    # YouTube — stored in a separate YouTubeChannel table
+    if db is not None:
+        yt_channel = db.query(YouTubeChannel).filter(
+            YouTubeChannel.brand == brand.id,
+            YouTubeChannel.status == "connected",
+        ).first()
+        if yt_channel:
+            platforms.append({
+                "name": "youtube",
+                "handle": yt_channel.channel_name or "Not set",
+                "connected": True,
+            })
     
     # Threads
     if brand.threads_access_token:
@@ -190,7 +200,7 @@ async def get_connected_platforms(
         
         result = []
         for brand in brands:
-            platforms = _get_connected_platforms(brand)
+            platforms = _get_connected_platforms(brand, db)
             result.append(GetConnectedPlatformsResponse(
                 brand_id=brand.id,
                 display_name=brand.display_name,
