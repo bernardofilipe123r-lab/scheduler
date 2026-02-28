@@ -441,14 +441,19 @@ export function OnboardingPage() {
 
   const handleComplete = async () => {
     setCompleting(true)
+    // Dismiss all toasts BEFORE the guard can unmount this page —
+    // lingering toast portals cause a removeChild crash when the
+    // OnboardingPageGuard swaps <OnboardingPage /> for <Navigate />.
+    toast.dismiss()
     // Mark onboarding as completed in Supabase user metadata
     await supabase.auth.updateUser({ data: { onboarding_completed: true } })
-    await refreshUser()
-    await queryClient.invalidateQueries()
-    // Brief success moment
-    setTimeout(() => {
-      navigate('/', { replace: true })
-    }, 1500)
+    // Navigate immediately — do NOT await refreshUser/invalidateQueries
+    // before navigating, because those trigger re-renders that make the
+    // route guard unmount this component while it still has live portals.
+    navigate('/', { replace: true })
+    // Refresh auth + queries in background after navigation
+    refreshUser()
+    queryClient.invalidateQueries()
   }
 
   const handleCompleteWithCredentials = async () => {
