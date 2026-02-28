@@ -68,15 +68,24 @@ function Calendar() {
         setLoading(true)
         
         // Fetch scheduled content
-        const schedRes = await apiClient.get('/reels/manual')
-        setScheduled((schedRes as any).data?.schedules || [])
+        try {
+          const schedRes = await apiClient.get('/reels/manual')
+          setScheduled((schedRes as any).data?.schedules || [])
+        } catch (schedError: any) {
+          console.warn('Manual schedules endpoint not available yet:', schedError.message)
+          setScheduled([])
+        }
 
         // Fetch connected platforms
-        const platRes = await apiClient.get('/reels/manual/connected-platforms')
-        setBrandPlatforms((platRes as any).data || [])
+        try {
+          const platRes = await apiClient.get('/reels/manual/connected-platforms')
+          setBrandPlatforms((platRes as any).data || [])
+        } catch (platError: any) {
+          console.warn('Connected platforms endpoint not available yet:', platError.message)
+          setBrandPlatforms([])
+        }
       } catch (error: any) {
         console.error('Failed to load calendar data:', error)
-        toast.error('Failed to load calendar data')
       } finally {
         setLoading(false)
       }
@@ -167,10 +176,10 @@ function Calendar() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500 mx-auto mb-4" />
-          <p className="text-white">Loading calendar...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mx-auto mb-4" />
+          <p className="text-gray-700">Loading calendar...</p>
         </div>
       </div>
     )
@@ -179,23 +188,23 @@ function Calendar() {
   const currentBrandPlatforms = brandPlatforms.find(bp => bp.brand_id === selectedBrand)?.platforms || []
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-lg sticky top-0 z-10">
+      <div className="border-b border-gray-200 bg-white/80 backdrop-blur-lg sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <CalendarIcon className="h-8 w-8 text-emerald-500" />
+              <CalendarIcon className="h-8 w-8 text-emerald-600" />
               <div>
-                <h1 className="text-2xl font-bold text-white">Calendar</h1>
-                <p className="text-sm text-zinc-400">
+                <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+                <p className="text-sm text-gray-600">
                   {getPendingCount()} scheduled, {scheduled.filter(s => s.status === 'published').length} published
                 </p>
               </div>
             </div>
             <button
               onClick={() => setShowUploadModal(true)}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg transition-colors shadow-sm"
             >
               <Plus className="h-5 w-5" />
               Add Content
@@ -205,24 +214,24 @@ function Calendar() {
       </div>
 
       {/* Calendar View Controls */}
-      <div className="border-b border-zinc-800 bg-zinc-900/30">
+      <div className="border-b border-gray-200 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <ChevronLeft className="h-5 w-5 text-zinc-400" />
+                <ChevronLeft className="h-5 w-5 text-gray-700" />
               </button>
-              <h2 className="text-lg font-semibold text-white min-w-[200px]">
+              <h2 className="text-lg font-semibold text-gray-900 px-4">
                 {format(currentMonth, 'MMMM yyyy')}
               </h2>
               <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <ChevronRight className="h-5 w-5 text-zinc-400" />
+                <ChevronRight className="h-5 w-5 text-gray-700" />
               </button>
             </div>
 
@@ -230,10 +239,10 @@ function Calendar() {
               <button
                 onClick={() => setView('month')}
                 className={clsx(
-                  'px-3 py-2 rounded-lg transition-colors',
+                  'px-3 py-2 rounded-lg font-medium transition-colors',
                   view === 'month'
                     ? 'bg-emerald-600 text-white'
-                    : 'text-zinc-400 hover:bg-zinc-800'
+                    : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
                 )}
               >
                 Month
@@ -241,10 +250,10 @@ function Calendar() {
               <button
                 onClick={() => setView('week')}
                 className={clsx(
-                  'px-3 py-2 rounded-lg transition-colors',
+                  'px-3 py-2 rounded-lg font-medium transition-colors',
                   view === 'week'
                     ? 'bg-emerald-600 text-white'
-                    : 'text-zinc-400 hover:bg-zinc-800'
+                    : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
                 )}
               >
                 Week
@@ -259,7 +268,7 @@ function Calendar() {
         {/* Weekday Headers */}
         <div className="grid grid-cols-7 gap-2 mb-2">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="text-center text-sm font-semibold text-zinc-400 py-2">
+            <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
               {day}
             </div>
           ))}
@@ -286,17 +295,17 @@ function Calendar() {
                 key={day.toString()}
                 onClick={() => setShowUploadModal(true)}
                 className={clsx(
-                  'min-h-32 rounded-lg border-2 p-2 cursor-pointer transition-colors',
+                  'min-h-32 rounded-lg border-2 p-2 cursor-pointer transition-all shadow-sm',
                   isCurrentDay
-                    ? 'border-emerald-500 bg-emerald-950/20'
-                    : 'border-zinc-700 hover:border-zinc-600',
-                  !isCurrentMonth && 'bg-zinc-900/30 opacity-50'
+                    ? 'border-emerald-500 bg-emerald-50'
+                    : 'border-gray-200 hover:border-gray-300 hover:shadow-md bg-white',
+                  !isCurrentMonth && 'bg-gray-50 opacity-60'
                 )}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className={clsx(
                     'text-sm font-semibold',
-                    isCurrentDay ? 'text-emerald-400' : 'text-zinc-300'
+                    isCurrentDay ? 'text-emerald-600' : 'text-gray-700'
                   )}>
                     {format(day, 'd')}
                   </span>
@@ -312,19 +321,19 @@ function Calendar() {
                   {dayContent.slice(0, 3).map(content => (
                     <div
                       key={content.schedule_id}
-                      className="flex items-center gap-1 p-1 bg-zinc-800 rounded truncate hover:bg-zinc-700 transition-colors"
+                      className="flex items-center gap-1 p-1 bg-gray-100 rounded truncate hover:bg-gray-200 transition-colors"
                     >
                       <span className={clsx(
                         'inline-block w-1.5 h-1.5 rounded-full',
                         content.status === 'published' ? 'bg-green-500' : 'bg-yellow-500'
                       )} />
-                      <span className="truncate text-zinc-300">
+                      <span className="truncate text-gray-700">
                         {format(parseISO(content.scheduled_time), 'HH:mm')} - {content.brand_id}
                       </span>
                     </div>
                   ))}
                   {dayContent.length > 3 && (
-                    <p className="text-zinc-500">+{dayContent.length - 3} more</p>
+                    <p className="text-gray-600">+{dayContent.length - 3} more</p>
                   )}
                 </div>
               </div>
@@ -336,18 +345,18 @@ function Calendar() {
       {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="max-w-2xl w-full bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="max-w-2xl w-full bg-white rounded-xl border border-gray-200 overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
             {/* Header */}
-            <div className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between bg-zinc-800/50">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Upload className="h-5 w-5 text-emerald-500" />
+            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Upload className="h-5 w-5 text-emerald-600" />
                 Upload & Schedule Content
               </h2>
               <button
                 onClick={() => setShowUploadModal(false)}
-                className="p-1 hover:bg-zinc-700 rounded-lg transition-colors"
+                className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
               >
-                <X className="h-5 w-5 text-zinc-400" />
+                <X className="h-5 w-5 text-gray-600" />
               </button>
             </div>
 
@@ -355,7 +364,7 @@ function Calendar() {
             <div className="p-6 space-y-6 overflow-y-auto flex-1">
               {/* Brand Selection */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Brand <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -364,7 +373,7 @@ function Calendar() {
                     setSelectedBrand(e.target.value)
                     setSelectedPlatforms(['instagram'])
                   }}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
                 >
                   {brands.map(brand => (
                     <option key={brand.id} value={brand.id}>
@@ -376,11 +385,11 @@ function Calendar() {
 
               {/* File Upload */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Upload File ({contentType ? contentType.toUpperCase() : 'Video or Image'})
                   <span className="text-red-500"> *</span>
                 </label>
-                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-4 text-center hover:border-zinc-600 transition-colors cursor-pointer">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-emerald-400 transition-colors cursor-pointer bg-gray-50">
                   <input
                     type="file"
                     accept={contentType ? (contentType === 'reel' ? 'video/*' : 'image/*') : 'video/*,image/*'}
@@ -391,13 +400,14 @@ function Calendar() {
                   <label htmlFor="file-upload" className="cursor-pointer block">
                     {uploadedFileName ? (
                       <div className="flex items-center justify-center gap-2">
-                        <span className="text-emerald-400">✓</span>
-                        <span className="text-white">{uploadedFileName}</span>
+                        <span className="text-emerald-600">✓</span>
+                        <span className="text-gray-900 font-medium">{uploadedFileName}</span>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-8 w-8 text-zinc-500 mx-auto" />
-                        <span className="text-zinc-400">Click to upload or drag and drop</span>
+                        <Upload className="h-8 w-8 text-gray-400 mx-auto" />
+                        <span className="text-gray-600">Click to upload or drag and drop</span>
+                        <span className="text-xs text-gray-500">Video or Images</span>
                       </div>
                     )}
                   </label>
@@ -406,7 +416,7 @@ function Calendar() {
 
               {/* Platform Selection */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Platforms <span className="text-red-500">*</span>
                 </label>
                 <div className="space-y-2">
@@ -423,15 +433,15 @@ function Calendar() {
                               setSelectedPlatforms(selectedPlatforms.filter(p => p !== platform.name))
                             }
                           }}
-                          className="w-4 h-4 rounded bg-zinc-700 border-zinc-600 text-emerald-600 focus:ring-emerald-500"
+                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                         />
-                        <span className="text-white">
+                        <span className="text-gray-900">
                           {getPlatformLabel(platform.name)} ({platform.handle})
                         </span>
                       </label>
                     ))
                   ) : (
-                    <div className="flex items-center gap-2 text-yellow-500 bg-yellow-950/30 p-2 rounded-lg">
+                    <div className="flex items-center gap-2 text-yellow-700 bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
                       <span className="text-sm">No platforms connected for this brand. Connect platforms in Brands settings.</span>
                     </div>
@@ -441,7 +451,7 @@ function Calendar() {
 
               {/* Schedule Time */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
                   <Clock className="h-4 w-4" />
                   Schedule Time <span className="text-red-500">*</span>
                 </label>
@@ -449,13 +459,13 @@ function Calendar() {
                   type="datetime-local"
                   value={scheduledTime}
                   onChange={(e) => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
                 />
               </div>
 
               {/* Caption */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Caption <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -463,13 +473,13 @@ function Calendar() {
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Enter caption for your content..."
                   rows={3}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
                 />
               </div>
 
               {/* Social Media Account (Optional) */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Specific Account (Optional)
                 </label>
                 <input
@@ -477,17 +487,17 @@ function Calendar() {
                   value={socialMedia}
                   onChange={(e) => setSocialMedia(e.target.value)}
                   placeholder="Leave empty to use default"
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
                 />
               </div>
             </div>
 
             {/* Footer */}
-            <div className="border-t border-zinc-800 px-6 py-4 flex items-center justify-end gap-3 bg-zinc-800/50">
+            <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3 bg-gray-50">
               <button
                 onClick={() => setShowUploadModal(false)}
                 disabled={uploadLoading}
-                className="px-4 py-2 text-white hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
