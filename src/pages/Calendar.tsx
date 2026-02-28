@@ -39,6 +39,7 @@ function Calendar() {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadLoading, setUploadLoading] = useState(false)
   const [brandPlatforms, setBrandPlatforms] = useState<BrandPlatforms[]>([])
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
 
   // Upload form state
   const [selectedBrand, setSelectedBrand] = useState<string>(brands[0]?.id || '')
@@ -279,7 +280,7 @@ function Calendar() {
             return (
               <div
                 key={day.toString()}
-                onClick={() => setShowUploadModal(true)}
+                onClick={() => { if (getContentForDate(day).length > 0) setSelectedDay(day) }}
                 className={clsx(
                   'min-h-32 rounded-lg border-2 p-2 cursor-pointer transition-all shadow-sm',
                   isCurrentDay
@@ -333,6 +334,86 @@ function Calendar() {
           })}
         </div>
       </div>
+
+      {/* Day Detail Modal */}
+      {selectedDay && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedDay(null)}>
+          <div className="max-w-lg w-full bg-white rounded-xl border border-gray-200 overflow-hidden max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-900">
+                {format(selectedDay, 'EEEE, MMMM d, yyyy')}
+              </h2>
+              <button onClick={() => setSelectedDay(null)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
+                <X className="h-5 w-5 text-gray-600" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {getContentForDate(selectedDay).length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No content scheduled for this day.</div>
+              ) : (
+                getContentForDate(selectedDay)
+                  .sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time))
+                  .map(post => (
+                    <div key={post.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className={clsx(
+                            'inline-block w-2 h-2 rounded-full',
+                            post.status === 'published' ? 'bg-green-500' :
+                            post.status === 'failed' ? 'bg-red-500' : 'bg-yellow-500'
+                          )} />
+                          <span className="font-semibold text-gray-900 text-sm">
+                            {format(parseISO(post.scheduled_time), 'HH:mm')}
+                          </span>
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                            {getBrandName(post.brand)}
+                          </span>
+                        </div>
+                        <span className={clsx(
+                          'text-xs font-medium px-2 py-0.5 rounded-full',
+                          post.status === 'published' ? 'bg-green-100 text-green-700' :
+                          post.status === 'failed' ? 'bg-red-100 text-red-700' :
+                          post.status === 'partial' ? 'bg-orange-100 text-orange-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        )}>
+                          {post.status}
+                        </span>
+                      </div>
+                      {post.title && (
+                        <p className="text-sm text-gray-700 truncate">{post.title}</p>
+                      )}
+                      {post.caption && !post.title && (
+                        <p className="text-sm text-gray-500 truncate">{post.caption}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1">
+                        {post.metadata?.platforms && post.metadata.platforms.length > 0 && (
+                          <div className="flex gap-1">
+                            {post.metadata.platforms.map(p => (
+                              <span key={p} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                {getPlatformLabel(p)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {post.created_by && (
+                          <span className={clsx(
+                            'text-[10px] px-1.5 py-0.5 rounded',
+                            post.created_by === 'user' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
+                          )}>
+                            {post.created_by === 'user' ? 'Manual' : 'Toby'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+            <div className="border-t border-gray-200 px-6 py-3 bg-gray-50 text-sm text-gray-500 text-center">
+              {getContentForDate(selectedDay).length} item{getContentForDate(selectedDay).length !== 1 ? 's' : ''} scheduled
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload Modal */}
       {showUploadModal && (
