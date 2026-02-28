@@ -450,13 +450,15 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
-                    "https://api.deapi.ai/v1/account/balance",
+                    "https://api.deapi.ai/api/v1/client/balance",
                     headers={"Authorization": f"Bearer {deapi_key}"},
                 )
             if resp.status_code == 200:
                 results["deapi"] = resp.json()
             else:
-                results["deapi"] = {"error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+                # Truncate to avoid huge HTML 404 pages swamping the response
+                body = resp.text[:120].replace('\n', ' ')
+                results["deapi"] = {"error": f"HTTP {resp.status_code}", "detail": body}
         except Exception as exc:
             results["deapi"] = {"error": str(exc)}
     else:
