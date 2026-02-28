@@ -76,13 +76,10 @@ def create_plans_for_empty_slots(
 
     plans = []
     for slot in interleaved:
-        strategy = choose_strategy(
-            db=db,
-            user_id=user_id,
-            brand_id=slot["brand_id"],
-            content_type=slot["content_type"],
-            explore_ratio=state.explore_ratio or 0.30,
-            available_topics=available_topics,
+        # Phase 3: Try combo-based selection first, fallback to per-dimension
+        strategy = _select_strategy_with_combos(
+            db, user_id, slot["brand_id"], slot["content_type"],
+            state.explore_ratio or 0.30, available_topics,
         )
 
         personality_prompt = get_personality_prompt(slot["content_type"], strategy.personality)
@@ -106,6 +103,83 @@ def create_plans_for_empty_slots(
     return plans
 
 
+def _select_strategy_with_combos(
+    db: Session,
+    user_id: str,
+    brand_id: str,
+    content_type: str,
+    explore_ratio: float,
+    available_topics: list[str],
+) -> StrategyChoice:
+    """Phase 3: Try combo-based selection, fall back to per-dimension.
+
+    If we have >=5 combos with >=3 samples each, use Thompson Sampling
+    on the full combo (personality|topic|hook). Otherwise, use the
+    standard per-dimension strategy selection.
+    """
+    import random
+
+    try:
+        from app.models.toby_cognitive import TobyStrategyCombos
+
+        MIN_COMBOS = 5
+        MIN_COMBO_SAMPLES = 3
+
+        top_combos = (
+            db.query(TobyStrategyCombos)
+            .filter(
+                TobyStrategyCombos.user_id == user_id,
+                TobyStrategyCombos.brand_id == brand_id,
+                TobyStrategyCombos.content_type == content_type,
+                TobyStrategyCombos.sample_count >= MIN_COMBO_SAMPLES,
+            )
+            .order_by(TobyStrategyCombos.avg_toby_score.desc())
+            .limit(20)
+            .all()
+        )
+
+        # Only use combo selection when we have enough data
+        if len(top_combos) >= MIN_COMBOS and random.random() > explore_ratio:
+            # Thompson Sampling on combos
+            samples = {}
+            for combo in top_combos:
+                p = max(0.01, min(0.99, (combo.avg_toby_score or 50) / 100.0))
+                n = min(combo.sample_count, 50)
+                alpha = max(1.0, n * p)
+                beta = max(1.0, n * (1 - p))
+                samples[combo.id] = (random.betavariate(alpha, beta), combo)
+
+            best_id = max(samples, key=lambda k: samples[k][0])
+            _, best_combo = samples[best_id]
+
+            dims = best_combo.dimensions if isinstance(best_combo.dimensions, dict) else {}
+            personality = dims.get("personality", "edu_calm")
+            topic = dims.get("topic", random.choice(available_topics) if available_topics else "general")
+            hook = dims.get("hook", "question")
+            title_fmt = dims.get("title_format", "how_x_does_y")
+            visual = dims.get("visual_style", "dark_cinematic")
+
+            return StrategyChoice(
+                personality=personality,
+                topic_bucket=topic,
+                hook_strategy=hook,
+                title_format=title_fmt,
+                visual_style=visual,
+            )
+    except Exception:
+        pass  # Non-critical — fall through to per-dimension selection
+
+    # Fallback: standard per-dimension selection
+    return choose_strategy(
+        db=db,
+        user_id=user_id,
+        brand_id=brand_id,
+        content_type=content_type,
+        explore_ratio=explore_ratio,
+        available_topics=available_topics,
+    )
+
+
 def record_content_tag(
     db: Session,
     user_id: str,
@@ -116,6 +190,7 @@ def record_content_tag(
     tag = TobyContentTag(
         id=str(uuid.uuid4()),
         user_id=user_id,
+        brand_id=plan.brand_id,
         schedule_id=schedule_id,
         content_type=plan.content_type,
         personality=plan.personality_id,

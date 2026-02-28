@@ -14,6 +14,7 @@ export { TobyExperiments } from './TobyExperiments'
 export { TobyInsights } from './TobyInsights'
 export { TobySettings } from './TobySettings'
 export { TobyDiscoveries } from './TobyDiscoveries'
+export { TobyDNASuggestions } from './TobyDNASuggestions'
 // Legacy exports (kept for backward compat)
 export { TobyStatusBar } from './TobyStatusBar'
 export { TobyLiveStatus } from './TobyLiveStatus'

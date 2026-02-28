@@ -197,12 +197,25 @@ export function TobyKnowledgeMeter() {
           </div>
           <div className="flex flex-wrap gap-2">
             {topTwo.length > 0 ? topTwo.map((s) => (
-              <div key={s.dimension} className="flex items-center gap-1.5 bg-white/80 rounded-lg px-2.5 py-1 border border-white shadow-sm">
+              <div key={s.dimension} className="group relative flex items-center gap-1.5 bg-white/80 rounded-lg px-2.5 py-1 border border-white shadow-sm">
                 <span className="text-[10px] text-gray-400 capitalize">{s.dimension}:</span>
                 <span className={`text-[11px] font-semibold ${meta.color} capitalize`}>
                   {s.value.replace(/_/g, ' ')}
                 </span>
                 <span className="text-[10px] text-gray-400">({s.avg_score.toFixed(0)} avg)</span>
+                {s.sample_count > 0 && (
+                  <span className="text-[9px] text-gray-300 ml-0.5">n={s.sample_count}</span>
+                )}
+                {/* Confidence tooltip */}
+                {s.sample_count >= 3 && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10">
+                    <div className="bg-gray-900 text-white text-[10px] rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                      <div className="font-medium mb-0.5">Bayesian confidence</div>
+                      <div>Score range: {Math.round(s.avg_score * 0.8)}–{Math.round(s.avg_score * 1.15)}</div>
+                      <div>{s.sample_count} samples · {s.sample_count >= 10 ? 'High' : s.sample_count >= 5 ? 'Medium' : 'Low'} confidence</div>
+                    </div>
+                  </div>
+                )}
               </div>
             )) : (
               <p className="text-[11px] text-gray-400">

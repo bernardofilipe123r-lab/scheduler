@@ -202,13 +202,16 @@ class TobyStrategyCombos(Base):
     content_type = Column(String(10), nullable=True)
 
     combo_key = Column(String(500), nullable=False)
+    dimensions = Column(JSON, default=dict)  # {personality, topic, hook, title_format, visual_style}
 
     sample_count = Column(Integer, default=0)
+    total_score = Column(Float, default=0)
     avg_quality = Column(Float, default=0)
     avg_toby_score = Column(Float, default=0)
     score_variance = Column(Float, default=0)
 
     recent_scores = Column(JSON, default=list)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)
@@ -307,4 +310,41 @@ class TobyReasoningTrace(Base):
             "confidence": self.confidence,
             "thompson_override": self.thompson_override,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ContentDNARecommendation(Base):
+    """Phase 3: Toby-generated suggestions for Content DNA refinements."""
+    __tablename__ = "content_dna_recommendations"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    brand_id = Column(String(50), nullable=True)
+
+    recommendation_type = Column(String(50), nullable=False)  # topic_priority, tone_shift, audience_expansion
+    dimension = Column(String(30), nullable=True)  # personality, topic, hook, etc.
+    current_value = Column(Text, nullable=True)
+    suggested_value = Column(Text, nullable=True)
+    evidence = Column(JSON, default=dict)  # Supporting data (scores, samples, rationale)
+    confidence = Column(Float, default=0)
+
+    status = Column(String(20), default="pending")  # pending, accepted, dismissed
+    created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "brand_id": self.brand_id,
+            "recommendation_type": self.recommendation_type,
+            "dimension": self.dimension,
+            "current_value": self.current_value,
+            "suggested_value": self.suggested_value,
+            "evidence": self.evidence,
+            "confidence": self.confidence,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
         }

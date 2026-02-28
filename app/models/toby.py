@@ -143,6 +143,12 @@ class TobyStrategyScore(Base):
     best_score = Column(Float, default=0)
     worst_score = Column(Float, default=100)
 
+    # Phase 2: Bayesian weighted scoring
+    weighted_total = Column(Float, default=0)
+    weight_sum = Column(Float, default=0)
+    alpha = Column(Float, default=1.0)       # Beta distribution success param
+    beta_param = Column(Float, default=1.0)  # Beta distribution failure param
+
     recent_scores = Column(JSON, default=list)
 
     updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)
@@ -205,6 +211,7 @@ class TobyContentTag(Base):
 
     id = Column(String(36), primary_key=True)
     user_id = Column(String(100), nullable=False, index=True)
+    brand_id = Column(String(50), nullable=True, index=True)
     schedule_id = Column(String(36), nullable=False, index=True)
 
     content_type = Column(String(10), nullable=False)
@@ -227,9 +234,14 @@ class TobyContentTag(Base):
 
     created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
 
+    # Phase 2: Track preliminary scores for 48h->7d correction
+    preliminary_score = Column(Float, nullable=True)
+    preliminary_scored_at = Column(DateTime(timezone=True), nullable=True)
+
     def to_dict(self):
         return {
             "id": self.id,
+            "brand_id": self.brand_id,
             "schedule_id": self.schedule_id,
             "content_type": self.content_type,
             "personality": self.personality,

@@ -761,3 +761,41 @@ def _get_top_strategies(db, user_id: str) -> list[dict]:
             })
 
     return results
+
+
+# ── Phase 3: Content DNA Suggestion Endpoints ──
+
+@router.get("/content-dna-suggestions")
+def get_content_dna_suggestions(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get pending Content DNA improvement suggestions from Toby."""
+    uid = user.id if hasattr(user, "id") else user.get("id")
+    if not uid:
+        raise HTTPException(400, "No user ID")
+
+    from app.services.toby.content_dna_advisor import get_pending_suggestions
+    suggestions = get_pending_suggestions(db, uid)
+    return {"suggestions": suggestions, "count": len(suggestions)}
+
+
+class DNASuggestionAction(BaseModel):
+    action: str = Field(..., pattern="^(accepted|dismissed)$")
+
+
+@router.post("/content-dna-suggestions/{suggestion_id}")
+def resolve_content_dna_suggestion(
+    suggestion_id: str,
+    body: DNASuggestionAction,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Accept or dismiss a Content DNA suggestion."""
+    uid = user.id if hasattr(user, "id") else user.get("id")
+    if not uid:
+        raise HTTPException(400, "No user ID")
+
+    from app.services.toby.content_dna_advisor import resolve_suggestion
+    ok = resolve_suggestion(db, uid, suggestion_id, body.action)
+    if not ok:
+        raise HTTPException(404, "Suggestion not found")
+    db.commit()
+    return {"status": body.action}

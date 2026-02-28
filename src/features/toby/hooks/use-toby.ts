@@ -13,6 +13,7 @@ export const tobyKeys = {
   discoverySummary: () => [...tobyKeys.all, 'discovery-summary'] as const,
   buffer: () => [...tobyKeys.all, 'buffer'] as const,
   config: () => [...tobyKeys.all, 'config'] as const,
+  dnaSuggestions: () => [...tobyKeys.all, 'dna-suggestions'] as const,
 }
 
 export function useTobyStatus() {
@@ -120,6 +121,25 @@ export function useUpdateTobyConfig() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: tobyKeys.config() })
       qc.invalidateQueries({ queryKey: tobyKeys.status() })
+    },
+  })
+}
+
+export function useTobyDNASuggestions() {
+  return useQuery({
+    queryKey: tobyKeys.dnaSuggestions(),
+    queryFn: tobyApi.getDNASuggestions,
+    staleTime: 60_000,
+  })
+}
+
+export function useResolveDNASuggestion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'accepted' | 'dismissed' }) =>
+      tobyApi.resolveDNASuggestion(id, action),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tobyKeys.dnaSuggestions() })
     },
   })
 }

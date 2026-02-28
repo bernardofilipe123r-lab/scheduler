@@ -321,7 +321,7 @@ class MetricsCollector:
     # COLLECT METRICS FOR ALL PUBLISHED POSTS
     # ──────────────────────────────────────────────────────────
 
-    def collect_for_brand(self, brand: str, days_back: int = 14) -> Dict:
+    def collect_for_brand(self, brand: str, days_back: int = 14, user_id: str = None) -> Dict:
         """
         Fetch metrics for all published posts of a brand from the last N days.
 
@@ -340,17 +340,29 @@ class MetricsCollector:
         try:
             _log("Metrics: Brand", f"Collecting metrics for {brand} (last {days_back} days)", "📊", "detail")
 
+            # Resolve the owner user_id from the Brand table if not provided
+            owner_user_id = user_id
+            if not owner_user_id:
+                from app.models.brands import Brand as BrandModel
+                brand_row = db.query(BrandModel).filter(BrandModel.id == brand).first()
+                if brand_row:
+                    owner_user_id = brand_row.user_id
+                else:
+                    return {"error": f"Brand {brand} not found in database", "updated": 0}
+
             cutoff = datetime.utcnow() - timedelta(days=days_back)
-            published = (
+            all_published = (
                 db.query(ScheduledReel)
                 .filter(
-                    ScheduledReel.user_id == brand,
+                    ScheduledReel.user_id == owner_user_id,
                     ScheduledReel.status.in_(["published", "partial"]),
                     ScheduledReel.published_at >= cutoff,
                 )
                 .all()
             )
-            _log("Data: Published posts", f"{len(published)} published posts found for {brand}", "📊", "data")
+            # Filter to only this brand's posts (brand stored in extra_data JSON)
+            published = [s for s in all_published if (s.extra_data or {}).get("brand") == brand]
+            _log("Data: Published posts", f"{len(published)} published posts found for {brand} (from {len(all_published)} total)", "📊", "data")
 
             updated = 0
             errors = 0

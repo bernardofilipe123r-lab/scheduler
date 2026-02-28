@@ -185,8 +185,14 @@ def update_strategy_score(
     dimension: str,
     option_value: str,
     score: float,
+    weight: float = 1.0,
 ):
-    """Update running aggregates for a strategy option after scoring."""
+    """Update running aggregates for a strategy option after scoring.
+
+    Phase 2: Supports weighted Bayesian updates.
+    weight=0.6 for 48h preliminary scores (less reliable)
+    weight=1.0 for 7d final scores (full confidence)
+    """
     existing = (
         db.query(TobyStrategyScore)
         .filter(
@@ -214,6 +220,19 @@ def update_strategy_score(
     existing.total_score += score
     existing.avg_score = existing.total_score / existing.sample_count
 
+    # Phase 2: Weighted Bayesian update
+    existing.weighted_total = (existing.weighted_total or 0) + score * weight
+    existing.weight_sum = (existing.weight_sum or 0) + weight
+    # Weighted average is more accurate than simple average when weights differ
+    if existing.weight_sum > 0:
+        existing.avg_score = existing.weighted_total / existing.weight_sum
+
+    # Phase 2: Update Beta distribution parameters for Thompson Sampling
+    # Normalize score to [0, 1] range (scores range ~40-100)
+    normalized = max(0.0, min(1.0, (score - 40) / 60.0))
+    existing.alpha = (existing.alpha or 1.0) + normalized * weight
+    existing.beta_param = (existing.beta_param or 1.0) + (1 - normalized) * weight
+
     if score > existing.best_score:
         existing.best_score = score
     if score < existing.worst_score:
@@ -232,6 +251,67 @@ def update_strategy_score(
     recent.append(score)
     existing.recent_scores = recent[-10:]
     existing.updated_at = datetime.now(timezone.utc)
+
+
+def correct_preliminary_score(
+    db: Session,
+    user_id: str,
+    brand_id: str,
+    content_type: str,
+    tag,
+    final_score: float,
+):
+    """Phase 2: Correct strategy scores when 7d final score replaces 48h preliminary.
+
+    Subtracts the preliminary weight (0.6) and adds the final weight (1.0).
+    """
+    if not tag.preliminary_score:
+        return  # No preliminary to correct
+
+    preliminary = tag.preliminary_score
+    PRELIMINARY_WEIGHT = 0.6
+    FINAL_WEIGHT = 1.0
+
+    for dim, val in [
+        ("personality", tag.personality),
+        ("topic", tag.topic_bucket),
+        ("hook", tag.hook_strategy),
+        ("title_format", tag.title_format),
+        ("visual_style", tag.visual_style),
+    ]:
+        if not val:
+            continue
+
+        existing = (
+            db.query(TobyStrategyScore)
+            .filter(
+                TobyStrategyScore.user_id == user_id,
+                TobyStrategyScore.brand_id == brand_id,
+                TobyStrategyScore.content_type == content_type,
+                TobyStrategyScore.dimension == dim,
+                TobyStrategyScore.option_value == val,
+            )
+            .first()
+        )
+        if not existing:
+            continue
+
+        # Undo preliminary contribution
+        existing.weighted_total = (existing.weighted_total or 0) - preliminary * PRELIMINARY_WEIGHT
+        existing.weight_sum = (existing.weight_sum or 0) - PRELIMINARY_WEIGHT
+
+        # Add final contribution
+        existing.weighted_total += final_score * FINAL_WEIGHT
+        existing.weight_sum += FINAL_WEIGHT
+
+        if existing.weight_sum > 0:
+            existing.avg_score = existing.weighted_total / existing.weight_sum
+
+        # Correct Beta distribution params
+        old_norm = max(0.0, min(1.0, (preliminary - 40) / 60.0))
+        new_norm = max(0.0, min(1.0, (final_score - 40) / 60.0))
+        existing.alpha = max(1.0, (existing.alpha or 1.0) - old_norm * PRELIMINARY_WEIGHT + new_norm * FINAL_WEIGHT)
+        existing.beta_param = max(1.0, (existing.beta_param or 1.0) - (1 - old_norm) * PRELIMINARY_WEIGHT + (1 - new_norm) * FINAL_WEIGHT)
 
 
 def update_experiment_results(
@@ -383,8 +463,15 @@ def create_experiment(
     return exp
 
 
+# Phase 3: Temporal decay halflife
+DECAY_HALFLIFE_DAYS = 30
+
+
 def get_insights(db: Session, user_id: str) -> dict:
-    """Get aggregated insights: best topics, hooks, personalities per content type."""
+    """Get aggregated insights: best topics, hooks, personalities per content type.
+
+    Phase 2: Includes Bayesian confidence intervals from Beta distribution.
+    """
     scores = (
         db.query(TobyStrategyScore)
         .filter(TobyStrategyScore.user_id == user_id, TobyStrategyScore.sample_count > 0)
@@ -399,12 +486,28 @@ def get_insights(db: Session, user_id: str) -> dict:
         dim = s.dimension
         if dim not in insights[ct]:
             insights[ct][dim] = []
+
+        # Phase 2: Bayesian confidence interval from Beta distribution
+        alpha = getattr(s, 'alpha', None) or 1.0
+        beta_p = getattr(s, 'beta_param', None) or 1.0
+        # Beta mean = alpha / (alpha + beta)
+        beta_mean = alpha / (alpha + beta_p) if (alpha + beta_p) > 0 else 0.5
+        # Beta standard deviation for confidence interval
+        total_ab = alpha + beta_p
+        beta_std = (alpha * beta_p / (total_ab * total_ab * (total_ab + 1))) ** 0.5 if total_ab > 1 else 0.25
+        # 95% confidence interval (approx 2*std)
+        ci_low = max(0, beta_mean - 2 * beta_std)
+        ci_high = min(1, beta_mean + 2 * beta_std)
+
         insights[ct][dim].append({
             "option": s.option_value,
             "avg_score": round(s.avg_score, 1),
             "sample_count": s.sample_count,
             "best_score": round(s.best_score, 1),
             "recent_trend": s.recent_scores,
+            "confidence_low": round(ci_low * 100, 1),
+            "confidence_high": round(ci_high * 100, 1),
+            "beta_mean": round(beta_mean * 100, 1),
         })
 
     # Sort each dimension by avg_score descending
@@ -415,29 +518,30 @@ def get_insights(db: Session, user_id: str) -> dict:
     return insights
 
 
-def _thompson_sample(avg_score: float, sample_count: int) -> float:
+def _thompson_sample(avg_score: float, sample_count: int, alpha: float = None, beta_param: float = None) -> float:
     """Phase A1 / v3: Sample from a Beta distribution for Thompson Sampling.
 
-    Converts the avg_score (0-100) and sample_count into Beta distribution
-    parameters (alpha, beta) and draws a sample. Options with fewer samples
-    have wider distributions, naturally encouraging exploration.
-
-    v3: Uses numpy for proper Beta sampling and caps effective_n at 50
-    to prevent posterior from collapsing too tight.
+    Phase 2: Uses stored alpha/beta_param when available for proper Bayesian
+    posterior sampling. Falls back to derived params from avg_score/sample_count.
     """
     try:
         import numpy as np
+        # Phase 2: Use stored Beta params if available
+        if alpha is not None and beta_param is not None and alpha > 0 and beta_param > 0:
+            return float(np.random.beta(alpha, beta_param))
+        # Fallback: derive from avg_score and sample_count
         p = max(0.01, min(0.99, avg_score / 100.0))
-        effective_n = min(sample_count, 50)  # v3: cap to prevent collapse
-        alpha = max(1.0, effective_n * p)
-        beta_param = max(1.0, effective_n * (1 - p))
-        return float(np.random.beta(alpha, beta_param))
+        effective_n = min(sample_count, 50)
+        a = max(1.0, effective_n * p)
+        b = max(1.0, effective_n * (1 - p))
+        return float(np.random.beta(a, b))
     except ImportError:
-        # Fallback to stdlib if numpy unavailable
+        if alpha is not None and beta_param is not None and alpha > 0 and beta_param > 0:
+            return random.betavariate(alpha, beta_param)
         p = max(0.01, min(0.99, avg_score / 100.0))
-        alpha = max(1.0, min(sample_count, 50) * p)
-        beta = max(1.0, min(sample_count, 50) * (1 - p))
-        return random.betavariate(alpha, beta)
+        a = max(1.0, min(sample_count, 50) * p)
+        b = max(1.0, min(sample_count, 50) * (1 - p))
+        return random.betavariate(a, b)
 
 
 def _pick_dimension(
@@ -503,7 +607,11 @@ def _pick_dimension(
         for opt in options:
             if opt in score_map:
                 rec = score_map[opt]
-                samples[opt] = _thompson_sample(rec.avg_score, rec.sample_count)
+                samples[opt] = _thompson_sample(
+                    rec.avg_score, rec.sample_count,
+                    alpha=getattr(rec, 'alpha', None),
+                    beta_param=getattr(rec, 'beta_param', None),
+                )
             else:
                 # Uninformed prior: uniform Beta(1,1)
                 samples[opt] = random.betavariate(1.0, 1.0)

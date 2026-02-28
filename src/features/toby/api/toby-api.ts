@@ -9,6 +9,7 @@ import type {
   TobyContentTag,
   TobyDiscoveryItem,
   TobyDiscoverySummary,
+  TobyDNASuggestion,
 } from '../types'
 
 export const tobyApi = {
@@ -65,4 +66,10 @@ export const tobyApi = {
 
   updateConfig: (data: Partial<TobyConfig>) =>
     patch<{ status: string; config: TobyConfig }>('/api/toby/config', data),
+
+  getDNASuggestions: () =>
+    get<{ suggestions: TobyDNASuggestion[]; count: number }>('/api/toby/content-dna-suggestions'),
+
+  resolveDNASuggestion: (id: string, action: 'accepted' | 'dismissed') =>
+    post<{ status: string }>(`/api/toby/content-dna-suggestions/${encodeURIComponent(id)}`, { action }),
 }

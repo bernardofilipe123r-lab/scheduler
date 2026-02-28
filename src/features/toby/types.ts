@@ -154,6 +154,9 @@ export interface TobyInsight {
   strategy: string
   mean_score: number
   sample_count: number
+  confidence_low?: number
+  confidence_high?: number
+  beta_mean?: number
 }
 
 export interface TobyInsights {
@@ -193,6 +196,21 @@ export interface TobyDiscoverySource {
   method: string
   count: number
   top_likes: number
+}
+
+export interface TobyDNASuggestion {
+  id: string
+  user_id: string
+  brand_id: string | null
+  recommendation_type: string
+  dimension: string | null
+  current_value: string | null
+  suggested_value: string | null
+  evidence: Record<string, unknown>
+  confidence: number
+  status: string
+  created_at: string | null
+  resolved_at: string | null
 }
 
 export interface TobyDiscoverySummary {
