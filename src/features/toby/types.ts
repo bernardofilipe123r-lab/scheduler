@@ -113,6 +113,12 @@ export interface TobyStatus {
   config: TobyConfig
   live: TobyLiveInfo
   timestamps: TobyTimestamps
+  intervals?: {
+    buffer: number
+    metrics: number
+    analysis: number
+    discovery: number
+  }
   stats: TobyStats
   phase_progress: TobyPhaseProgress | null
   recent_ticks: TobyRecentTick[]

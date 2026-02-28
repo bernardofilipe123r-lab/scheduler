@@ -64,6 +64,7 @@ export function TobyTickMonitor() {
   const checks = useMemo(() => {
     if (!status?.timestamps) return []
     const ts: TobyTimestamps = status.timestamps
+    const serverIntervals = status.intervals
     return [
       { key: 'buffer', lastAt: ts.last_buffer_check_at },
       { key: 'metrics', lastAt: ts.last_metrics_check_at },
@@ -71,11 +72,12 @@ export function TobyTickMonitor() {
       { key: 'discovery', lastAt: ts.last_discovery_at },
     ].map(c => {
       const cfg = CHECK_INTERVALS[c.key]
-      const minsLeft = minutesUntilNext(c.lastAt, cfg.intervalMin)
+      const intervalMin = serverIntervals?.[c.key as keyof typeof serverIntervals] ?? cfg.intervalMin
+      const minsLeft = minutesUntilNext(c.lastAt, intervalMin)
       const isDue = minsLeft === 0
-      return { ...c, ...cfg, minsLeft, isDue }
+      return { ...c, ...cfg, intervalMin, minsLeft, isDue }
     })
-  }, [status?.timestamps])
+  }, [status?.timestamps, status?.intervals])
 
   const ticks: TobyRecentTick[] = status?.recent_ticks ?? []
 

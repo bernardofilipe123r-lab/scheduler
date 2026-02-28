@@ -138,6 +138,12 @@ def get_status(
             "last_analysis_at": state.last_analysis_at.isoformat() if state.last_analysis_at else None,
             "last_discovery_at": state.last_discovery_at.isoformat() if state.last_discovery_at else None,
         },
+        "intervals": {
+            "buffer": _BUFFER_INTERVAL,
+            "metrics": _METRICS_INTERVAL,
+            "analysis": _ANALYSIS_INTERVAL,
+            "discovery": _DISCOVERY_INTERVAL_BOOTSTRAP if state.phase == "bootstrap" else _DISCOVERY_INTERVAL_NORMAL,
+        },
         "stats": {
             "total_created": total_created,
             "total_scored": total_scored,
@@ -599,7 +605,8 @@ def _format_buffer(raw: dict | None) -> dict | None:
 _BUFFER_INTERVAL = 5       # minutes
 _METRICS_INTERVAL = 360    # 6 hours
 _ANALYSIS_INTERVAL = 360   # 6 hours
-_DISCOVERY_INTERVAL = 720  # 12 hours (approx)
+_DISCOVERY_INTERVAL_NORMAL = 360     # 6 hours (normal mode)
+_DISCOVERY_INTERVAL_BOOTSTRAP = 20   # 20 minutes (bootstrap mode)
 
 
 def _minutes_until(last_at, interval_minutes: int) -> int | None:
@@ -620,6 +627,8 @@ def _compute_live_actions(state):
     actions_due = []
     upcoming = []
 
+    discovery_interval = _DISCOVERY_INTERVAL_BOOTSTRAP if state.phase == "bootstrap" else _DISCOVERY_INTERVAL_NORMAL
+
     checks = [
         ("buffer_check", state.last_buffer_check_at, _BUFFER_INTERVAL,
          "Checking content buffer", "Checking if your content calendar has empty slots and filling them"),
@@ -627,7 +636,7 @@ def _compute_live_actions(state):
          "Collecting performance metrics", "Gathering views, likes, and engagement data from published posts"),
         ("analysis_check", state.last_analysis_at, _ANALYSIS_INTERVAL,
          "Analyzing content performance", "Scoring posts and updating strategy knowledge to find what works best"),
-        ("discovery_check", state.last_discovery_at, _DISCOVERY_INTERVAL,
+        ("discovery_check", state.last_discovery_at, discovery_interval,
          "Scanning trends", "Looking for trending topics and competitor content for inspiration"),
     ]
 
