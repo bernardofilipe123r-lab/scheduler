@@ -648,6 +648,13 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
     # Score 48h posts
     scored_48h = score_pending_posts(db, user_id, phase="48h")
 
+    # v3.0: Generate per-post learning events at 48h so users see Toby learning quickly
+    if scored_48h > 0:
+        try:
+            _generate_48h_learning_events(db, user_id, scored_48h)
+        except Exception as e:
+            print(f"[TOBY] Learning event generation failed for {user_id}: {e}", flush=True)
+
     # Score 7d posts
     scored_7d = score_pending_posts(db, user_id, phase="7d")
 
@@ -926,6 +933,93 @@ def _increment_budget(state: TobyState, cost_cents: int = 5):
     state.spent_today_cents = (state.spent_today_cents or 0) + cost_cents
     if not state.budget_reset_at:
         state.budget_reset_at = datetime.now(timezone.utc)
+
+
+def _generate_48h_learning_events(db: Session, user_id: str, count: int):
+    """Generate human-readable learning event logs for newly 48h-scored posts.
+
+    v3.0: These fire within 48h of publishing so users see Toby actively learning,
+    rather than waiting 7 days for strategy updates.
+    """
+    from sqlalchemy import func
+
+    # Get per-brand average scores for comparison
+    brand_avg_results = (
+        db.query(TobyContentTag.brand_id, func.avg(TobyContentTag.toby_score))
+        .filter(
+            TobyContentTag.user_id == user_id,
+            TobyContentTag.toby_score.isnot(None),
+        )
+        .group_by(TobyContentTag.brand_id)
+        .all()
+    )
+    brand_avgs = {bid: float(avg) for bid, avg in brand_avg_results if avg}
+
+    # Fetch the recently 48h-scored tags (in order of scoring time)
+    recently_scored = (
+        db.query(TobyContentTag)
+        .filter(
+            TobyContentTag.user_id == user_id,
+            TobyContentTag.score_phase == "48h",
+            TobyContentTag.toby_score.isnot(None),
+            TobyContentTag.metrics_unreliable != True,
+        )
+        .order_by(TobyContentTag.scored_at.desc())
+        .limit(count)
+        .all()
+    )
+
+    for tag in recently_scored:
+        lesson = _generate_learning_lesson(tag, brand_avgs.get(tag.brand_id, 50.0))
+        if lesson:
+            db.add(TobyActivityLog(
+                user_id=user_id,
+                action_type="learning_event",
+                description=lesson,
+                level="info",
+                action_metadata={
+                    "schedule_id": tag.schedule_id,
+                    "brand_id": tag.brand_id,
+                    "score": round(tag.toby_score, 1) if tag.toby_score else None,
+                    "personality": tag.personality,
+                    "hook": tag.hook_strategy,
+                    "topic": tag.topic_bucket,
+                    "score_phase": "48h",
+                },
+                created_at=datetime.now(timezone.utc),
+            ))
+    db.flush()
+
+
+def _generate_learning_lesson(tag, brand_avg: float) -> str:
+    """Generate a human-readable lesson from a scored post (rule-based, no LLM cost)."""
+    if not tag.toby_score:
+        return ""
+
+    score = tag.toby_score
+    ratio = score / brand_avg if brand_avg > 0 else 1.0
+
+    parts = []
+    if tag.personality:
+        parts.append(tag.personality.replace("_", " "))
+    if tag.hook_strategy:
+        parts.append(f"{tag.hook_strategy.replace('_', ' ')} hook")
+    if tag.topic_bucket:
+        parts.append(tag.topic_bucket.replace("_", " "))
+
+    strategy = " + ".join(parts) if parts else "this strategy"
+
+    if ratio >= 1.3:
+        pct = round((ratio - 1) * 100)
+        return f"Strong signal: {strategy} outperformed brand average by {pct}% — boosting this pattern"
+    elif ratio >= 1.1:
+        pct = round((ratio - 1) * 100)
+        return f"Positive signal: {strategy} beat average by {pct}% — adding to winning patterns"
+    elif ratio <= 0.7:
+        pct = round((1 - ratio) * 100)
+        return f"Weak signal: {strategy} underperformed by {pct}% — Toby will deprioritize this"
+    else:
+        return f"Neutral result: {strategy} performed close to average (score: {round(score, 1)})"
 
 
 def _record_strategy_combo(db: Session, user_id: str, tag):

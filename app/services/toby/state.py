@@ -9,10 +9,44 @@ from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyActivityLog
 
 
-# Phase transition thresholds
-BOOTSTRAP_MIN_POSTS = 10       # Need at least 10 scored posts to leave bootstrap
-BOOTSTRAP_MIN_DAYS = 7         # Minimum 7 days in bootstrap
-LEARNING_MIN_DAYS = 30         # Minimum 30 days in learning before optimizing
+# Phase transition thresholds (v3.0 — data-confidence-gated, not time-gated)
+BOOTSTRAP_MIN_POSTS = 15       # Need at least 15 scored posts to leave bootstrap
+BOOTSTRAP_MIN_DAYS = 3         # Soft minimum (avoid flipping on viral day 1)
+BOOTSTRAP_MIN_DIVERSE_STRATEGIES = 3  # At least 3 distinct strategies tried
+LEARNING_MIN_DAYS = 7          # Soft minimum in learning before optimizing
+LEARNING_TARGET_CONFIDENCE = 0.60  # 60% strategy confidence → Precision Mode
+STRATEGY_TARGET_SAMPLES = 15   # Target samples per strategy for full confidence
+
+
+def compute_learning_confidence(db: Session, user_id: str) -> float:
+    """Return 0.0–1.0 confidence score based on strategy data quality.
+
+    Confidence reaches 1.0 when the top strategies per dimension each have
+    STRATEGY_TARGET_SAMPLES samples. This replaces arbitrary time gates.
+    """
+    from app.models.toby import TobyStrategyScore
+
+    dimensions = ["personality", "topic", "hook", "title_format", "visual_style"]
+    total = 0.0
+    count = 0
+
+    for dim in dimensions:
+        top = (
+            db.query(TobyStrategyScore)
+            .filter(
+                TobyStrategyScore.user_id == user_id,
+                TobyStrategyScore.dimension == dim,
+                TobyStrategyScore.sample_count > 0,
+            )
+            .order_by(TobyStrategyScore.avg_score.desc())
+            .limit(3)
+            .all()
+        )
+        for s in top:
+            total += min(1.0, s.sample_count / STRATEGY_TARGET_SAMPLES)
+            count += 1
+
+    return round(total / count, 3) if count > 0 else 0.0
 
 
 def get_or_create_state(db: Session, user_id: str) -> TobyState:
@@ -89,7 +123,7 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
             state.phase_started_at = now
             _log_activity(
                 db, user_id, "phase_correction",
-                f"Phase reset to bootstrap on enable (only {scored} scored posts — need {BOOTSTRAP_MIN_POSTS})",
+                f"Phase reset to Knowledge Base Building on enable (only {scored} scored posts — need {BOOTSTRAP_MIN_POSTS})",
                 level="warning",
             )
     state.updated_at = now
@@ -165,27 +199,43 @@ def check_phase_transition(db: Session, state: TobyState, scored_post_count: int
 
     if state.phase == "bootstrap":
         if scored_post_count >= BOOTSTRAP_MIN_POSTS and days_in_phase >= BOOTSTRAP_MIN_DAYS:
-            state.phase = "learning"
-            state.phase_started_at = now
-            state.updated_at = now
-            _log_activity(
-                db, state.user_id, "phase_transition",
-                f"Toby transitioned from bootstrap to learning (after {days_in_phase} days, {scored_post_count} scored posts)",
-                level="success",
+            # Also require at least some strategy diversity (v3.0: data-gated)
+            from app.models.toby import TobyStrategyScore
+            diverse_count = (
+                db.query(TobyStrategyScore)
+                .filter(
+                    TobyStrategyScore.user_id == state.user_id,
+                    TobyStrategyScore.sample_count >= 3,
+                )
+                .count()
             )
-            return True
+            if diverse_count >= BOOTSTRAP_MIN_DIVERSE_STRATEGIES:
+                state.phase = "learning"
+                state.phase_started_at = now
+                state.updated_at = now
+                _log_activity(
+                    db, state.user_id, "phase_transition",
+                    f"Toby entered Pattern Recognition mode ({scored_post_count} posts scored, "
+                    f"{diverse_count} distinct strategies tried, {round(days_in_phase, 1)} days)",
+                    level="success",
+                )
+                return True
 
     elif state.phase == "learning":
         if days_in_phase >= LEARNING_MIN_DAYS:
-            state.phase = "optimizing"
-            state.phase_started_at = now
-            state.updated_at = now
-            _log_activity(
-                db, state.user_id, "phase_transition",
-                f"Toby transitioned from learning to optimizing (after {days_in_phase} days)",
-                level="success",
-            )
-            return True
+            # v3.0: Gate on statistical confidence, not calendar time
+            confidence = compute_learning_confidence(db, state.user_id)
+            if confidence >= LEARNING_TARGET_CONFIDENCE:
+                state.phase = "optimizing"
+                state.phase_started_at = now
+                state.updated_at = now
+                _log_activity(
+                    db, state.user_id, "phase_transition",
+                    f"Toby entered Precision Mode (strategy confidence: {round(confidence * 100, 1)}%, "
+                    f"{round(days_in_phase, 1)} days in pattern recognition)",
+                    level="success",
+                )
+                return True
 
     return False
 

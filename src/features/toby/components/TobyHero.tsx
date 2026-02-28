@@ -4,13 +4,11 @@ import {
   Clock, Activity,
 } from 'lucide-react'
 import { useTobyStatus, useTobyEnable, useTobyDisable } from '../hooks'
-import type { TobyPhase } from '../types'
-
-const PHASE_COLORS: Record<TobyPhase, { bg: string; text: string; ring: string }> = {
+const PHASE_COLORS = {
   bootstrap: { bg: 'bg-violet-50', text: 'text-violet-700', ring: 'ring-violet-600/20' },
   learning: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20' },
   optimizing: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/20' },
-}
+} as const
 
 function formatUptime(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}m`
@@ -73,32 +71,41 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-0.5">
-                <p className="text-sm text-gray-500">
-                  {status.enabled
-                    ? `Managing ${status.buffer?.brand_count || 0} brand${(status.buffer?.brand_count || 0) !== 1 ? 's' : ''}`
-                    : 'Your AI content agent — handles creation, testing & optimization'}
-                </p>
-                {status.enabled && progress && progress.uptime_hours > 0 && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                {status.enabled ? (
                   <>
+                    <p className="text-sm text-gray-500">
+                      {`Managing ${status.buffer?.brand_count || 0} brand${(status.buffer?.brand_count || 0) !== 1 ? 's' : ''}`}
+                    </p>
                     <span className="text-gray-300">·</span>
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
-                      <Clock className="w-3 h-3" />
-                      {formatUptime(progress.uptime_hours)} uptime
+                    <span className="text-xs text-gray-500">
+                      Learned from <strong className="text-gray-700">{status.posts_learned_from ?? 0}</strong> posts
                     </span>
-                  </>
-                )}
-                {status.enabled && (
-                  <>
+                    {(status.active_experiments ?? 0) > 0 && (
+                      <>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-xs text-gray-500">
+                          <strong className="text-gray-700">{status.active_experiments}</strong> experiment{status.active_experiments !== 1 ? 's' : ''} active
+                        </span>
+                      </>
+                    )}
+                    {progress && progress.uptime_hours > 0 && (
+                      <>
+                        <span className="text-gray-300">·</span>
+                        <span className="flex items-center gap-1 text-xs text-gray-400">
+                          <Clock className="w-3 h-3" />
+                          {formatUptime(progress.uptime_hours)} uptime
+                        </span>
+                      </>
+                    )}
                     <span className="text-gray-300">·</span>
                     <span className={`flex items-center gap-1 text-xs ${isWorking ? 'text-blue-500' : 'text-gray-400'}`}>
                       <Activity className={`w-3 h-3 ${isWorking ? 'animate-pulse' : ''}`} />
-                      {isWorking
-                        ? status.live.current_action?.label || 'Working'
-                        : 'Idle'
-                      }
+                      {isWorking ? status.live.current_action?.label || 'Working' : 'Idle'}
                     </span>
                   </>
+                ) : (
+                  <p className="text-sm text-gray-500">Your AI content agent — handles creation, testing & optimization</p>
                 )}
               </div>
             </div>

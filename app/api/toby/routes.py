@@ -89,8 +89,15 @@ def get_status(
         .count()
     )
 
+    # v3.0: Learning confidence (replaces time-based phase progress)
+    from app.services.toby.state import compute_learning_confidence
+    learning_confidence = compute_learning_confidence(db, uid) if state.enabled else 0.0
+
+    # v3.0: Current top strategies per dimension (what Toby is betting on)
+    current_top_strategies = _get_top_strategies(db, uid)
+
     # Phase progression data
-    phase_progress = _compute_phase_progress(state, total_scored)
+    phase_progress = _compute_phase_progress(state, total_scored, learning_confidence)
 
     # Recent tick history from activity log
     recent_ticks = (
@@ -137,6 +144,9 @@ def get_status(
         },
         "phase_progress": phase_progress,
         "recent_ticks": [t.to_dict() for t in recent_ticks],
+        "learning_confidence": learning_confidence,
+        "posts_learned_from": total_scored,
+        "current_top_strategies": current_top_strategies,
     }
 
 
@@ -648,14 +658,15 @@ def _compute_live_actions(state):
     return current, upcoming
 
 
-# Phase transition thresholds — keep in sync with state.py
-_BOOTSTRAP_MIN_POSTS = 10
-_BOOTSTRAP_MIN_DAYS = 7
-_LEARNING_MIN_DAYS = 30
+# Phase transition thresholds — keep in sync with state.py (v3.0 data-gated)
+_BOOTSTRAP_MIN_POSTS = 15
+_BOOTSTRAP_MIN_DAYS = 3
+_LEARNING_MIN_DAYS = 7
+_LEARNING_TARGET_CONFIDENCE = 0.60
 
 
-def _compute_phase_progress(state, scored_post_count: int) -> dict:
-    """Return phase-progression metrics for the frontend phase timeline."""
+def _compute_phase_progress(state, scored_post_count: int, learning_confidence: float = 0.0) -> dict:
+    """Return phase-progression metrics for the frontend knowledge meter."""
     now = datetime.now(timezone.utc)
 
     phase_start = state.phase_started_at
@@ -679,41 +690,74 @@ def _compute_phase_progress(state, scored_post_count: int) -> dict:
         "days_in_phase": round(days_in_phase, 1),
         "uptime_hours": round(uptime_hours, 1),
         "scored_posts": scored_post_count,
+        "learning_confidence": round(learning_confidence, 3),
     }
 
     if state.phase == "bootstrap":
         posts_progress = min(1.0, scored_post_count / _BOOTSTRAP_MIN_POSTS)
-        days_progress = min(1.0, days_in_phase / _BOOTSTRAP_MIN_DAYS)
-        overall = min(posts_progress, days_progress)
+        overall = posts_progress  # v3.0: progress = posts scored, not days waited
         result["requirements"] = {
             "scored_posts_needed": _BOOTSTRAP_MIN_POSTS,
             "scored_posts_current": scored_post_count,
             "scored_posts_progress": round(posts_progress, 2),
             "min_days": _BOOTSTRAP_MIN_DAYS,
             "days_elapsed": round(days_in_phase, 1),
-            "days_progress": round(days_progress, 2),
         }
         result["overall_progress"] = round(overall, 2)
         result["next_phase"] = "learning"
-        days_remaining = max(0, _BOOTSTRAP_MIN_DAYS - days_in_phase)
-        result["estimated_days_remaining"] = round(days_remaining, 1)
+        posts_remaining = max(0, _BOOTSTRAP_MIN_POSTS - scored_post_count)
+        result["estimated_posts_remaining"] = posts_remaining
+        result["estimated_days_remaining"] = 0  # not days-based anymore
 
     elif state.phase == "learning":
-        days_progress = min(1.0, days_in_phase / _LEARNING_MIN_DAYS)
+        # v3.0: progress = confidence, not days
+        overall = min(1.0, learning_confidence / _LEARNING_TARGET_CONFIDENCE)
         result["requirements"] = {
+            "confidence_target": _LEARNING_TARGET_CONFIDENCE,
+            "confidence_current": round(learning_confidence, 3),
+            "confidence_progress": round(overall, 2),
             "min_days": _LEARNING_MIN_DAYS,
             "days_elapsed": round(days_in_phase, 1),
-            "days_progress": round(days_progress, 2),
         }
-        result["overall_progress"] = round(days_progress, 2)
+        result["overall_progress"] = round(overall, 2)
         result["next_phase"] = "optimizing"
-        days_remaining = max(0, _LEARNING_MIN_DAYS - days_in_phase)
-        result["estimated_days_remaining"] = round(days_remaining, 1)
+        result["estimated_posts_remaining"] = 0
+        result["estimated_days_remaining"] = 0  # not days-based anymore
 
     else:  # optimizing
         result["overall_progress"] = 1.0
         result["next_phase"] = None
         result["estimated_days_remaining"] = 0
+        result["estimated_posts_remaining"] = 0
         result["requirements"] = {}
 
     return result
+
+
+def _get_top_strategies(db, user_id: str) -> list[dict]:
+    """Return top strategy per dimension (highest avg_score with min 3 samples)."""
+    from app.models.toby import TobyStrategyScore
+
+    dimensions = ["personality", "topic", "hook", "title_format", "visual_style"]
+    results = []
+
+    for dim in dimensions:
+        top = (
+            db.query(TobyStrategyScore)
+            .filter(
+                TobyStrategyScore.user_id == user_id,
+                TobyStrategyScore.dimension == dim,
+                TobyStrategyScore.sample_count >= 3,
+            )
+            .order_by(TobyStrategyScore.avg_score.desc())
+            .first()
+        )
+        if top:
+            results.append({
+                "dimension": dim,
+                "value": top.option_value,
+                "avg_score": round(float(top.avg_score), 1) if top.avg_score else 0.0,
+                "sample_count": top.sample_count,
+            })
+
+    return results

@@ -1,73 +1,71 @@
-import { useState, useCallback } from 'react'
-import { Settings, ChevronDown } from 'lucide-react'
+import { useState } from 'react'
+import { LayoutDashboard, Brain, Compass, Activity, Settings } from 'lucide-react'
 import { useTobyStatus } from '@/features/toby'
 import {
   TobyHero,
   TobyGuide,
-  TobyPhaseTimeline,
-  TobyTickMonitor,
-  TobyPipeline,
-  TobyBufferHealth,
-  TobyDiscoveries,
-  TobyExperiments,
-  TobyInsights,
+  TobyOverviewTab,
+  TobyBrainTab,
+  TobyScoutTab,
+  TobyOperationsTab,
   TobySettings,
 } from '@/features/toby'
 
+type Tab = 'overview' | 'brain' | 'scout' | 'operations' | 'settings'
+
+const TABS: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> = [
+  { id: 'overview',    label: 'Overview',    icon: LayoutDashboard },
+  { id: 'brain',       label: 'Brain',       icon: Brain           },
+  { id: 'scout',       label: 'Scout',       icon: Compass         },
+  { id: 'operations',  label: 'Operations',  icon: Activity        },
+  { id: 'settings',    label: 'Settings',    icon: Settings        },
+]
+
 export function TobyPage() {
   const { data: status } = useTobyStatus()
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [guideOpen, setGuideOpen] = useState(false)
-  const showGuide = useCallback(() => setGuideOpen(true), [])
-  const hideGuide = useCallback(() => setGuideOpen(false), [])
 
   return (
-    <div className="space-y-6">
-      {/* Hero — status, metrics */}
-      <TobyHero onLearnMore={showGuide} />
+    <div className="space-y-5">
+      {/* Hero — always visible, no matter what tab */}
+      <TobyHero onLearnMore={() => setGuideOpen(true)} />
 
-      {/* Onboarding guide — shown on first visit, re-openable via Learn more */}
-      <TobyGuide forceOpen={guideOpen} onClose={hideGuide} />
+      {/* Onboarding guide — slides in when triggered */}
+      <TobyGuide forceOpen={guideOpen} onClose={() => setGuideOpen(false)} />
 
       {status?.enabled && (
         <>
-          {/* Phase Timeline — shows progression, requirements, estimated transitions */}
-          <TobyPhaseTimeline />
-
-          {/* Operations Monitor + Pipeline Activity side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TobyTickMonitor />
-            <TobyPipeline />
-          </div>
-
-          {/* Buffer Health + Trending Discoveries */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-2">
-              <TobyBufferHealth />
+          {/* Tab Navigation */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
+            <div className="flex overflow-x-auto">
+              {TABS.map((tab) => {
+                const Icon = tab.icon
+                const isActive = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 first:rounded-tl-2xl last:rounded-tr-2xl ${
+                      isActive
+                        ? 'border-violet-500 text-violet-700 bg-violet-50/50'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-violet-500' : ''}`} />
+                    {tab.label}
+                  </button>
+                )
+              })}
             </div>
-            <div className="lg:col-span-3">
-              <TobyDiscoveries />
-            </div>
           </div>
 
-          {/* Experiments + Insights */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TobyExperiments />
-            <TobyInsights />
-          </div>
-
-          {/* Collapsible Settings */}
-          <div>
-            <button
-              onClick={() => setSettingsOpen(!settingsOpen)}
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-3"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="font-medium">{settingsOpen ? 'Hide settings' : 'Show settings'}</span>
-              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {settingsOpen && <TobySettings />}
-          </div>
+          {/* Tab Content */}
+          {activeTab === 'overview'   && <TobyOverviewTab />}
+          {activeTab === 'brain'      && <TobyBrainTab />}
+          {activeTab === 'scout'      && <TobyScoutTab />}
+          {activeTab === 'operations' && <TobyOperationsTab />}
+          {activeTab === 'settings'   && <TobySettings />}
         </>
       )}
     </div>

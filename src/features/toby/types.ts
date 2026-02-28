@@ -62,12 +62,23 @@ export interface TobyStats {
 }
 
 export interface TobyPhaseRequirements {
+  // Bootstrap requirements
   scored_posts_needed?: number
   scored_posts_current?: number
   scored_posts_progress?: number
   min_days?: number
   days_elapsed?: number
-  days_progress?: number
+  // Learning requirements (v3.0 confidence-gated)
+  confidence_target?: number
+  confidence_current?: number
+  confidence_progress?: number
+}
+
+export interface TobyTopStrategy {
+  dimension: string
+  value: string
+  avg_score: number
+  sample_count: number
 }
 
 export interface TobyPhaseProgress {
@@ -75,10 +86,12 @@ export interface TobyPhaseProgress {
   days_in_phase: number
   uptime_hours: number
   scored_posts: number
+  learning_confidence: number
   requirements: TobyPhaseRequirements
   overall_progress: number
   next_phase: TobyPhase | null
   estimated_days_remaining: number
+  estimated_posts_remaining?: number
 }
 
 export interface TobyRecentTick {
@@ -103,6 +116,10 @@ export interface TobyStatus {
   stats: TobyStats
   phase_progress: TobyPhaseProgress | null
   recent_ticks: TobyRecentTick[]
+  // v3.0 continuous learning fields
+  learning_confidence: number
+  posts_learned_from: number
+  current_top_strategies: TobyTopStrategy[]
 }
 
 export interface TobyActivityItem {
