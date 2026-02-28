@@ -450,7 +450,7 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
-                    "https://api.deapi.ai/api/v1/client/credits",
+                    "https://api.deapi.ai/v1/account/balance",
                     headers={"Authorization": f"Bearer {deapi_key}"},
                 )
             if resp.status_code == 200:
