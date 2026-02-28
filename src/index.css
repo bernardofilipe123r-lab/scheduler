@@ -210,14 +210,10 @@ body {
   margin-top: 6px;
 }
 
-/* Input Fields — inside @layer base so Tailwind utility classes (pl-*, rounded-*, text-*, etc.) always win */
+/* Input Fields — bare `input` selector (specificity 0,0,1) so any Tailwind utility class (0,1,0) always wins */
 @layer base {
   .input-textarea,
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="search"],
-  input[type="number"],
+  input,
   textarea {
     width: 100%;
     padding: 12px 14px;
@@ -229,22 +225,20 @@ body {
     background: white;
   }
 
+  /* Exclude checkbox/radio from the input defaults above */
+  input[type="checkbox"],
+  input[type="radio"] {
+    all: revert;
+  }
+
   .input-textarea:hover,
-  input[type="text"]:hover,
-  input[type="email"]:hover,
-  input[type="password"]:hover,
-  input[type="search"]:hover,
-  input[type="number"]:hover,
+  input:not([type="checkbox"]):not([type="radio"]):hover,
   textarea:hover {
     border-color: var(--gray-400);
   }
 
   .input-textarea:focus,
-  input[type="text"]:focus,
-  input[type="email"]:focus,
-  input[type="password"]:focus,
-  input[type="search"]:focus,
-  input[type="number"]:focus,
+  input:not([type="checkbox"]):not([type="radio"]):focus,
   textarea:focus {
     outline: none;
     border-color: var(--primary);

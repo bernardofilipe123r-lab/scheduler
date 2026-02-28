@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 import { useDynamicBrands, useBrandConnections } from '@/features/brands'
 import { useScheduledPosts } from '@/features/scheduling'
+import { useAuth } from '@/features/auth'
 import type { ScheduledPost } from '@/shared/types'
 
 type CreatorFilter = 'all' | 'user' | 'toby'
@@ -32,8 +33,9 @@ type StatusFilter = 'all' | 'scheduled' | 'published' | 'partial' | 'failed'
 function Calendar() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const adminUserId = searchParams.get('user_id')
-  const adminUserName = searchParams.get('user_name')
+  const { user: currentUser } = useAuth()
+  const adminUserId = currentUser?.isSuperAdmin ? searchParams.get('user_id') : null
+  const adminUserName = currentUser?.isSuperAdmin ? searchParams.get('user_name') : null
   const isAdminView = !!adminUserId
 
   const { brands } = useDynamicBrands()
