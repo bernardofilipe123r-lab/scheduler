@@ -12,6 +12,7 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  SlidersHorizontal,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
@@ -33,6 +34,10 @@ interface BrandPlatforms {
   platforms: ConnectedPlatform[]
 }
 
+type CreatorFilter = 'all' | 'user' | 'toby'
+type ContentTypeFilter = 'all' | 'reels' | 'posts'
+type StatusFilter = 'all' | 'scheduled' | 'published' | 'partial' | 'failed'
+
 function Calendar() {
   const { brands } = useDynamicBrands()
   const { data: scheduledPosts = [], isLoading: postsLoading } = useScheduledPosts()
@@ -45,6 +50,13 @@ function Calendar() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
+
+  // Filters
+  const [showFilters, setShowFilters] = useState(false)
+  const [filterBrand, setFilterBrand] = useState<string | null>(null)
+  const [filterCreator, setFilterCreator] = useState<CreatorFilter>('all')
+  const [filterContentType, setFilterContentType] = useState<ContentTypeFilter>('all')
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all')
 
   // Upload form state
   const [selectedBrand, setSelectedBrand] = useState<string>(brands[0]?.id || '')
@@ -137,12 +149,27 @@ function Calendar() {
     const map: Record<string, ScheduledPost[]> = {}
     for (const post of scheduledPosts) {
       if (!post.scheduled_time) continue
-      const dateKey = post.scheduled_time.slice(0, 10) // 'yyyy-MM-dd'
+
+      // Apply filters
+      if (filterBrand && post.brand !== filterBrand) continue
+      if (filterCreator !== 'all') {
+        const creator = post.created_by || 'toby'
+        if (creator !== filterCreator) continue
+      }
+      if (filterContentType !== 'all') {
+        const variant = post.metadata?.variant || 'light'
+        const isPost = variant === 'post'
+        if (filterContentType === 'posts' && !isPost) continue
+        if (filterContentType === 'reels' && isPost) continue
+      }
+      if (filterStatus !== 'all' && post.status !== filterStatus) continue
+
+      const dateKey = post.scheduled_time.slice(0, 10)
       if (!map[dateKey]) map[dateKey] = []
       map[dateKey].push(post)
     }
     return map
-  }, [scheduledPosts])
+  }, [scheduledPosts, filterBrand, filterCreator, filterContentType, filterStatus])
 
   const getContentForDate = (date: Date): ScheduledPost[] => {
     return postsByDate[format(date, 'yyyy-MM-dd')] || []
@@ -252,6 +279,165 @@ function Calendar() {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="border-b border-gray-200 bg-white">
+        <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Filters toggle */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                showFilters ? 'bg-gray-200 text-gray-900' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filters
+              {((filterBrand ? 1 : 0) + (filterCreator !== 'all' ? 1 : 0) + (filterContentType !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0)) > 0 && (
+                <span className="bg-emerald-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                  {(filterBrand ? 1 : 0) + (filterCreator !== 'all' ? 1 : 0) + (filterContentType !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0)}
+                </span>
+              )}
+            </button>
+
+            {/* Active filter chips */}
+            {filterBrand && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded-full">
+                {brands.find(b => b.id === filterBrand)?.shortName || filterBrand}
+                <button onClick={() => setFilterBrand(null)} className="ml-0.5 hover:text-orange-900"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {filterCreator !== 'all' && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-violet-50 text-violet-700 rounded-full">
+                {filterCreator === 'toby' ? '🤖 Toby' : '👤 Manual'}
+                <button onClick={() => setFilterCreator('all')} className="ml-0.5 hover:text-violet-900"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {filterContentType !== 'all' && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">
+                {filterContentType === 'reels' ? '🎬 Reels' : '🖼️ Posts'}
+                <button onClick={() => setFilterContentType('all')} className="ml-0.5 hover:text-blue-900"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {filterStatus !== 'all' && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full capitalize">
+                {filterStatus}
+                <button onClick={() => setFilterStatus('all')} className="ml-0.5 hover:text-gray-900"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {(filterBrand || filterCreator !== 'all' || filterContentType !== 'all' || filterStatus !== 'all') && (
+              <button
+                onClick={() => { setFilterBrand(null); setFilterCreator('all'); setFilterContentType('all'); setFilterStatus('all') }}
+                className="text-xs text-gray-500 hover:text-gray-800 underline"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {/* Filter Popover */}
+          {showFilters && (
+            <div className="mt-2 mb-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 space-y-4">
+              {/* Brand */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Brand</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setFilterBrand(null)}
+                    className={clsx(
+                      'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                      !filterBrand ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    All brands
+                  </button>
+                  {brands.map(brand => (
+                    <button
+                      key={brand.id}
+                      onClick={() => setFilterBrand(filterBrand === brand.id ? null : brand.id)}
+                      className={clsx(
+                        'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                        filterBrand === brand.id ? 'ring-2 ring-offset-1' : 'opacity-60 hover:opacity-100'
+                      )}
+                      style={{ backgroundColor: `${brand.color}20`, color: brand.color }}
+                    >
+                      {brand.shortName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Creator */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Creator</p>
+                <div className="flex gap-1.5">
+                  {(['all', 'toby', 'user'] as const).map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setFilterCreator(c)}
+                      className={clsx(
+                        'px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                        filterCreator === c
+                          ? c === 'toby' ? 'bg-violet-600 text-white' : c === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'
+                          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                      )}
+                    >
+                      {c === 'all' ? 'All' : c === 'toby' ? '🤖 Toby' : '👤 Manual'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Content Type */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Content type</p>
+                <div className="flex gap-1.5">
+                  {(['all', 'reels', 'posts'] as const).map(ct => (
+                    <button
+                      key={ct}
+                      onClick={() => setFilterContentType(ct)}
+                      className={clsx(
+                        'px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                        filterContentType === ct
+                          ? ct === 'reels' ? 'bg-indigo-600 text-white' : ct === 'posts' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-white'
+                          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                      )}
+                    >
+                      {ct === 'all' ? 'All' : ct === 'reels' ? '🎬 Reels' : '🖼️ Posts'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Status</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {(['all', 'scheduled', 'published', 'partial', 'failed'] as const).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setFilterStatus(s)}
+                      className={clsx(
+                        'px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize',
+                        filterStatus === s
+                          ? s === 'published' ? 'bg-green-600 text-white'
+                            : s === 'failed' ? 'bg-red-600 text-white'
+                            : s === 'partial' ? 'bg-orange-500 text-white'
+                            : s === 'scheduled' ? 'bg-yellow-500 text-white'
+                            : 'bg-gray-800 text-white'
+                          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                      )}
+                    >
+                      {s === 'all' ? 'All' : s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
