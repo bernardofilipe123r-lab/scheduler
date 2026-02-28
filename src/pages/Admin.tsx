@@ -1088,12 +1088,14 @@ interface CreditsResponse {
     error?: string
   }
   deapi?: {
+    data?: { balance?: number }
     balance_usd?: number
     currency?: string
     credits?: number
     remaining?: number
     balance?: number
     error?: string
+    detail?: string
     [key: string]: unknown
   }
 }
@@ -1230,22 +1232,13 @@ export function AdminPage() {
                 ) : creditsQuery.data?.deapi ? (
                   (() => {
                     const d = creditsQuery.data.deapi
-                    const val = d.balance_usd ?? d.remaining ?? d.credits ?? d.balance
-                    const currency = d.currency ?? (d.balance_usd != null ? 'USD' : undefined)
+                    const val = d.data?.balance ?? d.balance_usd ?? d.remaining ?? d.credits ?? d.balance
                     return (
-                      <div className="space-y-0.5">
-                        {val != null ? (
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-lg font-bold text-purple-900">
-                              {typeof val === 'number' ? val.toFixed(2) : String(val)}
-                            </span>
-                            {currency && <span className="text-xs text-purple-600">{currency}</span>}
-                          </div>
-                        ) : (
-                          <pre className="text-[10px] text-purple-800 whitespace-pre-wrap break-all max-w-full overflow-hidden">
-                            {JSON.stringify(d, null, 2).slice(0, 200)}
-                          </pre>
-                        )}
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-bold text-purple-900">
+                          {typeof val === 'number' ? val.toFixed(2) : '—'}
+                        </span>
+                        <span className="text-xs text-purple-600">USD</span>
                       </div>
                     )
                   })()
