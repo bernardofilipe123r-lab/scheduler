@@ -624,7 +624,7 @@ def _run_metrics_check(db: Session, user_id: str, state: TobyState):
                 if isinstance(result, dict) and result.get("token_expired"):
                     expired_brands.append(brand.id)
                     continue
-                total_collected += result.get("new_metrics", 0) if isinstance(result, dict) else 0
+                total_collected += result.get("updated", 0) if isinstance(result, dict) else 0
             except Exception as e:
                 print(f"[TOBY] Metrics collection failed for {brand.id}: {e}", flush=True)
 

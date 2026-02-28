@@ -22,12 +22,16 @@ export function useOnboardingStatus() {
     )
   )
 
-  // New users need onboarding until they finish the full wizard (sets
-  // onboardingCompleted = true in Supabase user metadata).  Legacy users
-  // who predated the flag are grandfathered when they have BOTH a brand
-  // AND good DNA — neither alone is enough to skip.
-  const needsOnboarding =
-    isAuthenticated && !onboardingCompleted && !(hasBrand && hasDNA)
+  // needsOnboarding depends ONLY on the explicit onboarding_completed flag
+  // in Supabase user metadata (set at the final wizard step).
+  //
+  // DO NOT add hasBrand, hasDNA, or any other calculated state here.
+  // Those values change mid-wizard (brand creation, DNA auto-save) and
+  // would cause the route guard to kick the user out before finishing.
+  //
+  // Legacy users (pre-flag) are handled by the backfill script
+  // (scripts/backfill_onboarding_flag.py) which sets the flag to true.
+  const needsOnboarding = isAuthenticated && !onboardingCompleted
   const onboardingStep: 1 | 3 = !hasBrand ? 1 : 3
 
   return {

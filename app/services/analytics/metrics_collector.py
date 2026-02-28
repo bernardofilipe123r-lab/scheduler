@@ -203,57 +203,54 @@ class MetricsCollector:
                 _log("API Error: Media", f"HTTP {basic_resp.status_code} for media {ig_media_id}", "❌", "api")
                 return None
 
-            # 2. Insights (plays, reach, saved, shares)
+            # 2. Insights — fetch reach, saved, shares (works for all media types)
+            #    then try views/plays separately (plays unsupported for carousels/images)
             insights_url = f"{self.BASE_URL}/{ig_media_id}/insights"
-            _log("API: IG Insights", f"GET /{ig_media_id}/insights?metric=plays,reach,saved,shares", "🌐", "api")
             insights_resp = requests.get(insights_url, params={
-                "metric": "plays,reach,saved,shares",
+                "metric": "reach,saved,shares",
                 "access_token": access_token,
             }, timeout=15)
 
             if insights_resp.status_code == 200:
-                insights_data = insights_resp.json().get("data", [])
-                for item in insights_data:
+                for item in insights_resp.json().get("data", []):
                     name = item.get("name", "")
-                    # Values can be nested in different formats
                     values = item.get("values", [{}])
                     value = values[0].get("value", 0) if values else 0
-
-                    if name == "plays":
-                        metrics["views"] = value
-                    elif name == "reach":
+                    if name == "reach":
                         metrics["reach"] = value
                     elif name == "saved":
                         metrics["saves"] = value
                     elif name == "shares":
                         metrics["shares"] = value
-                _log("API Response: Insights", f"HTTP 200 — {metrics['views']} views, {metrics['reach']} reach, {metrics['saves']} saves, {metrics['shares']} shares", "✅", "api")
             else:
-                _log("API Fallback: Insights", f"HTTP {insights_resp.status_code} for full insights — trying individual metrics", "⚠️", "api")
-                # Fallback: try plays only (some media types don't support all metrics)
-                fallback_resp = requests.get(insights_url, params={
-                    "metric": "plays",
-                    "access_token": access_token,
-                }, timeout=15)
-                if fallback_resp.status_code == 200:
-                    fb_data = fallback_resp.json().get("data", [])
-                    for item in fb_data:
-                        if item.get("name") == "plays":
+                # Fallback: try each metric individually
+                for metric_name, key in [("reach", "reach"), ("saved", "saves"), ("shares", "shares")]:
+                    try:
+                        r = requests.get(insights_url, params={"metric": metric_name, "access_token": access_token}, timeout=15)
+                        if r.status_code == 200:
+                            for item in r.json().get("data", []):
+                                if item.get("name") == metric_name:
+                                    values = item.get("values", [{}])
+                                    metrics[key] = values[0].get("value", 0) if values else 0
+                    except Exception:
+                        pass
+
+            # 3. Try views count (plays for reels, views for newer API)
+            for view_metric in ["plays", "views"]:
+                try:
+                    vr = requests.get(insights_url, params={"metric": view_metric, "access_token": access_token}, timeout=15)
+                    if vr.status_code == 200:
+                        for item in vr.json().get("data", []):
                             values = item.get("values", [{}])
                             metrics["views"] = values[0].get("value", 0) if values else 0
+                            if metrics["views"] > 0:
+                                break
+                        if metrics["views"] > 0:
+                            break
+                except Exception:
+                    pass
 
-                # Try reach separately
-                reach_resp = requests.get(insights_url, params={
-                    "metric": "reach",
-                    "access_token": access_token,
-                }, timeout=15)
-                if reach_resp.status_code == 200:
-                    r_data = reach_resp.json().get("data", [])
-                    for item in r_data:
-                        if item.get("name") == "reach":
-                            values = item.get("values", [{}])
-                            metrics["reach"] = values[0].get("value", 0) if values else 0
-                _log("API Fallback Result", f"Partial metrics: {metrics['views']} views, {metrics['reach']} reach", "📊", "api")
+            _log("Insights", f"{metrics['views']} views, {metrics['reach']} reach, {metrics['saves']} saves, {metrics['shares']} shares", "📊", "api")
 
             return metrics
 
@@ -434,15 +431,13 @@ class MetricsCollector:
                         if age >= timedelta(days=7) and not existing.metrics_7d_at:
                             existing.metrics_7d_at = now
                 else:
-                    # Get title metadata from the scheduled reel
+                    # Get title metadata from extra_data (ScheduledReel has no title column)
                     title = ""
-                    caption = ""
+                    caption = sched.caption or ""
                     topic_bucket = None
                     if extra.get("brand_data") and isinstance(extra["brand_data"], dict):
-                        title = extra["brand_data"].get("title", sched.title or "")
-                        caption = extra["brand_data"].get("caption", "")
-                    else:
-                        title = sched.title or ""
+                        title = extra["brand_data"].get("title", "")
+                        caption = extra["brand_data"].get("caption", caption)
 
                     if title:
                         topic_bucket = ContentHistory.classify_topic_bucket(title)

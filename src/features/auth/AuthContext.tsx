@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
-        data: { name },
+        data: { name, onboarding_completed: false },
         emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
       },
     })
