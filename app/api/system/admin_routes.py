@@ -294,38 +294,70 @@ async def delete_user(
     if target_user_id == user.get("id"):
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
 
+    # ── Step 1: Delete from Supabase Auth FIRST ──
+    # If this fails, we don't touch app data — the user can still log in
+    # and their data remains consistent.
+    supabase = get_supabase_client()
+    try:
+        await asyncio.to_thread(
+            lambda: supabase.auth.admin.delete_user(target_user_id)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete user from auth provider: {str(e)}",
+        )
+
+    # ── Step 2: Clean up all app data (auth user is already gone) ──
     from app.models import (
         Brand, GenerationJob, ScheduledReel, NicheConfig, UserProfile,
         BrandAnalytics, AnalyticsRefreshLog, AnalyticsSnapshot, ContentHistory,
         PostPerformance, TrendingContent, YouTubeChannel,
         TobyState, TobyExperiment, TobyStrategyScore, TobyActivityLog, TobyContentTag,
+        TobyEpisodicMemory, TobySemanticMemory, TobyProceduralMemory, TobyWorldModel,
+        TobyStrategyCombos, TobyRawSignal, TobyMetaReport, TobyReasoningTrace,
     )
+    from app.models.oauth_state import OAuthState
 
-    # Delete all user data from application tables (order matters for FK safety)
-    db.query(TobyContentTag).filter(TobyContentTag.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(TobyActivityLog).filter(TobyActivityLog.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(TobyStrategyScore).filter(TobyStrategyScore.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(TobyExperiment).filter(TobyExperiment.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(TobyState).filter(TobyState.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(TrendingContent).filter(TrendingContent.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(PostPerformance).filter(PostPerformance.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(ContentHistory).filter(ContentHistory.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(AnalyticsSnapshot).filter(AnalyticsSnapshot.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(AnalyticsRefreshLog).filter(AnalyticsRefreshLog.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(BrandAnalytics).filter(BrandAnalytics.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(YouTubeChannel).filter(YouTubeChannel.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(ScheduledReel).filter(ScheduledReel.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(GenerationJob).filter(GenerationJob.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(NicheConfig).filter(NicheConfig.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(Brand).filter(Brand.user_id == target_user_id).delete(synchronize_session=False)
-    db.query(UserProfile).filter(UserProfile.user_id == target_user_id).delete(synchronize_session=False)
-    db.commit()
-
-    # Finally, remove from Supabase Auth so they can no longer sign in
-    supabase = get_supabase_client()
-    await asyncio.to_thread(
-        lambda: supabase.auth.admin.delete_user(target_user_id)
-    )
+    try:
+        # Cognitive memory tables
+        db.query(TobyReasoningTrace).filter(TobyReasoningTrace.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyMetaReport).filter(TobyMetaReport.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyRawSignal).filter(TobyRawSignal.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyStrategyCombos).filter(TobyStrategyCombos.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyWorldModel).filter(TobyWorldModel.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyProceduralMemory).filter(TobyProceduralMemory.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobySemanticMemory).filter(TobySemanticMemory.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyEpisodicMemory).filter(TobyEpisodicMemory.user_id == target_user_id).delete(synchronize_session=False)
+        # Core Toby tables
+        db.query(TobyContentTag).filter(TobyContentTag.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyActivityLog).filter(TobyActivityLog.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyStrategyScore).filter(TobyStrategyScore.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyExperiment).filter(TobyExperiment.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(TobyState).filter(TobyState.user_id == target_user_id).delete(synchronize_session=False)
+        # Analytics
+        db.query(TrendingContent).filter(TrendingContent.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(PostPerformance).filter(PostPerformance.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(ContentHistory).filter(ContentHistory.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(AnalyticsSnapshot).filter(AnalyticsSnapshot.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(AnalyticsRefreshLog).filter(AnalyticsRefreshLog.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(BrandAnalytics).filter(BrandAnalytics.user_id == target_user_id).delete(synchronize_session=False)
+        # Content & scheduling
+        db.query(YouTubeChannel).filter(YouTubeChannel.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(ScheduledReel).filter(ScheduledReel.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(GenerationJob).filter(GenerationJob.user_id == target_user_id).delete(synchronize_session=False)
+        # OAuth states
+        db.query(OAuthState).filter(OAuthState.user_id == target_user_id).delete(synchronize_session=False)
+        # Config & identity
+        db.query(NicheConfig).filter(NicheConfig.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(Brand).filter(Brand.user_id == target_user_id).delete(synchronize_session=False)
+        db.query(UserProfile).filter(UserProfile.user_id == target_user_id).delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Auth user is already deleted — app data is orphaned but harmless.
+        # The user cannot log in, and get_or_create_user will handle
+        # any email collisions on re-signup.
 
     return {"success": True, "user_id": target_user_id}
 

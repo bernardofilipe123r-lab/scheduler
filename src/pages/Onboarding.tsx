@@ -131,13 +131,22 @@ export function OnboardingPage() {
   const [brandId, setBrandId] = useState('')
   const [shortName, setShortName] = useState('')
 
-  // Sync step and brandId if user already has a brand (e.g. returning mid-flow or after OAuth)
+  // Sync brandId if user already has a brand (e.g. returning mid-flow or after OAuth).
+  // Only auto-advance past step 1 when brands are actually loaded — avoids a
+  // race where onboardingStep starts at 1 (brands not yet fetched) then jumps
+  // to 3 mid-render, skipping user input.
   useEffect(() => {
-    if (hasBrand && step === 1) setStep(3)
-    if (hasBrand && existingBrands?.length && !brandId) {
+    if (!hasBrand || !existingBrands?.length) return
+    // Populate brandId from the existing brand so steps 2-6 have it
+    if (!brandId) {
       setBrandId(existingBrands[0].id)
+      setDisplayName(existingBrands[0].display_name || '')
+      setShortName(existingBrands[0].short_name || '')
     }
-  }, [hasBrand, step, existingBrands, brandId])
+    // If user already has a brand and somehow landed on step 1, advance to 3
+    // (brand creation is done — skip to Content DNA)
+    if (step === 1) setStep(3)
+  }, [hasBrand, existingBrands]) // eslint-disable-line react-hooks/exhaustive-deps
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const colorPresets = useMemo(() => getRandomPresets(12), [])
@@ -441,18 +450,15 @@ export function OnboardingPage() {
 
   const handleComplete = async () => {
     setCompleting(true)
-    // Dismiss all toasts BEFORE the guard can unmount this page —
-    // lingering toast portals cause a removeChild crash when the
-    // OnboardingPageGuard swaps <OnboardingPage /> for <Navigate />.
+    // Dismiss all toasts BEFORE any state change that could unmount this
+    // component — lingering toast portals cause removeChild crashes.
     toast.dismiss()
     // Mark onboarding as completed in Supabase user metadata
     await supabase.auth.updateUser({ data: { onboarding_completed: true } })
-    // Navigate immediately — do NOT await refreshUser/invalidateQueries
-    // before navigating, because those trigger re-renders that make the
-    // route guard unmount this component while it still has live portals.
+    // Refresh local auth state so the route guard sees the updated flag
+    await refreshUser()
+    // Now navigate — the guard already knows onboarding is complete
     navigate('/', { replace: true })
-    // Refresh auth + queries in background after navigation
-    refreshUser()
     queryClient.invalidateQueries()
   }
 

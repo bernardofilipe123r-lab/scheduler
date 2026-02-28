@@ -85,7 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user_id: u.id,
           email: u.email ?? '',
           user_name: u.user_metadata?.name ?? '',
-        }).catch(() => {})
+        }).catch((err) => {
+          console.error('[AuthContext] Failed to sync user profile:', err)
+        })
       }
     })
 
