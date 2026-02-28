@@ -33,7 +33,9 @@ INSTAGRAM_REDIRECT_URI = os.environ.get(
     SITE_URL + "/api/auth/instagram/callback",
 )
 
-# These are the scopes from the Meta dashboard embed URL
+# Scopes must match what is approved in the Meta App Dashboard under
+# Permissions and features. If OAuth fails with scope errors, verify
+# these are all added and approved in the app console.
 REQUIRED_SCOPES = ",".join([
     "instagram_business_basic",
     "instagram_business_content_publish",

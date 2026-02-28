@@ -416,7 +416,10 @@ class DatabaseSchedulerService:
                 scheduled_reel.published_at = datetime.now(timezone.utc)
                 
                 # Store detailed publish results in metadata
-                metadata = scheduled_reel.extra_data or {}
+                # CRITICAL: copy first — mutating the original dict also mutates
+                # SQLAlchemy's committed-state snapshot, so change detection
+                # silently sees old == new and skips the UPDATE.
+                metadata = dict(scheduled_reel.extra_data or {})
                 
                 if publish_results:
                     metadata['publish_results'] = publish_results
@@ -429,8 +432,9 @@ class DatabaseSchedulerService:
                 elif post_ids:
                     metadata['post_ids'] = post_ids
                 
-                # CRITICAL: Force SQLAlchemy to detect the change
-                scheduled_reel.extra_data = dict(metadata)
+                scheduled_reel.extra_data = metadata
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(scheduled_reel, 'extra_data')
                 
                 # Sync status back to generation_jobs.brand_outputs
                 self._sync_brand_output_status(
