@@ -324,6 +324,8 @@ def get_insights(
 @router.get("/discovery")
 def get_discovery(
     limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    method: str = Query(None),
     target_user_id: str = Query(None, alias="user_id"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -332,14 +334,12 @@ def get_discovery(
     from app.models.analytics import TrendingContent
 
     uid = _resolve_user_id(user, target_user_id)
-    trending = (
-        db.query(TrendingContent)
-        .filter(TrendingContent.user_id == uid)
-        .order_by(TrendingContent.discovered_at.desc())
-        .limit(limit)
-        .all()
-    )
-    return {"items": [t.to_dict() for t in trending]}
+    q = db.query(TrendingContent).filter(TrendingContent.user_id == uid)
+    if method:
+        q = q.filter(TrendingContent.discovery_method == method)
+    total = q.count()
+    items = q.order_by(TrendingContent.like_count.desc()).offset(offset).limit(limit).all()
+    return {"total": total, "items": [t.to_dict() for t in items]}
 
 
 @router.get("/discovery/summary")
@@ -380,16 +380,25 @@ def get_discovery_summary(
         .all()
     )
 
-    # Recent highlights (top liked items from last 24h)
+    # Recent highlights (top liked items from last 7d, excluding own_account)
     from datetime import timedelta
-    cutoff = datetime.now() - timedelta(hours=24)
+    cutoff = datetime.now() - timedelta(days=7)
     highlights = (
         db.query(TrendingContent)
-        .filter(TrendingContent.user_id == uid, TrendingContent.discovered_at >= cutoff)
+        .filter(
+            TrendingContent.user_id == uid,
+            TrendingContent.discovered_at >= cutoff,
+            TrendingContent.discovery_method != "own_account",
+        )
         .order_by(TrendingContent.like_count.desc())
         .limit(5)
         .all()
     )
+
+    # Last scan timestamp
+    from app.services.toby.state import get_or_create_state
+    state = get_or_create_state(db, uid)
+    last_scan_at = state.last_discovery_at.isoformat() if state.last_discovery_at else None
 
     return {
         "total": total,
@@ -399,6 +408,7 @@ def get_discovery_summary(
             for r in top_sources
         ],
         "recent_highlights": [t.to_dict() for t in highlights],
+        "last_scan_at": last_scan_at,
     }
 
 

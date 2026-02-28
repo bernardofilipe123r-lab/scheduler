@@ -59,6 +59,8 @@ class TrendScout:
         # Use the first available brand token for API calls
         self._access_token = None
         self._ig_user_id = None
+        self._fb_access_token = None
+        self._fb_page_id = None
         self._load_credentials()
 
         # Load discovery config from NicheConfig if user_id provided
@@ -114,8 +116,26 @@ class TrendScout:
         print(f"✅ TrendScout initialized (reel competitors={len(self.competitors)}, post competitors={len(self.post_competitors)}, hashtags={total_hash})", flush=True)
 
     def _load_credentials(self):
-        """Load an IG access token to use for API calls from any available brand."""
-        # Try all brands from DB first
+        """Load an IG access token scoped to the user's brands."""
+        # Try user's brands from DB first
+        try:
+            from app.services.brands.resolver import brand_resolver
+            brand_ids = brand_resolver.get_all_brand_ids(user_id=self._user_id)
+            for brand_id in brand_ids:
+                brand = brand_resolver.get_brand(brand_id, user_id=self._user_id)
+                if brand and brand.instagram_business_account_id:
+                    token = brand.meta_access_token or brand.instagram_access_token
+                    if token:
+                        self._access_token = token
+                        self._ig_user_id = brand.instagram_business_account_id
+                        # Store FB token for hashtag search (needs graph.facebook.com)
+                        self._fb_access_token = getattr(brand, 'facebook_access_token', None)
+                        self._fb_page_id = getattr(brand, 'facebook_page_id', None)
+                        return
+        except Exception:
+            pass
+
+        # Fallback: try all brands (no user filter)
         try:
             from app.services.brands.resolver import brand_resolver
             brand_ids = brand_resolver.get_all_brand_ids()
@@ -126,27 +146,17 @@ class TrendScout:
                     if token:
                         self._access_token = token
                         self._ig_user_id = brand.instagram_business_account_id
+                        self._fb_access_token = getattr(brand, 'facebook_access_token', None)
+                        self._fb_page_id = getattr(brand, 'facebook_page_id', None)
                         return
         except Exception:
             pass
 
-        # Fallback to env vars — try all brand-prefixed tokens dynamically
-        try:
-            from app.services.brands.resolver import brand_resolver
-            for brand_id in brand_resolver.get_all_brand_ids():
-                env_key = brand_id.upper()
-                token = os.getenv(f"{env_key}_INSTAGRAM_ACCESS_TOKEN") or os.getenv(f"{env_key}_META_ACCESS_TOKEN")
-                account_id = os.getenv(f"{env_key}_INSTAGRAM_BUSINESS_ACCOUNT_ID")
-                if token and account_id:
-                    self._access_token = token
-                    self._ig_user_id = account_id
-                    return
-        except Exception:
-            pass
-
-        # Final fallback to shared
+        # Final fallback to shared env vars
         self._access_token = os.getenv("META_ACCESS_TOKEN")
         self._ig_user_id = os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID")
+        self._fb_access_token = None
+        self._fb_page_id = None
 
     # ──────────────────────────────────────────────────────────
     # HASHTAG SEARCH
@@ -156,22 +166,41 @@ class TrendScout:
         """
         Search for top media under a hashtag.
 
+        ig_hashtag_search requires graph.facebook.com with a Facebook Page token
+        (IGAF tokens on graph.instagram.com don't support this endpoint).
+
         Steps:
         1. GET /{ig_user_id}/ig_hashtag_search?q={hashtag} → get hashtag_id
         2. GET /{hashtag_id}/top_media?user_id={ig_user_id}&fields=...
         """
-        if not self._access_token or not self._ig_user_id:
+        if not self._ig_user_id:
             print("⚠️ TrendScout: No IG credentials available", flush=True)
+            return []
+
+        # Determine which token/host to use for hashtag search
+        # IGAF tokens (prefix IGA) only work on graph.instagram.com and don't support
+        # ig_hashtag_search. Use FB page token on graph.facebook.com when available.
+        token = self._access_token
+        base_url = self.BASE_URL
+        if self._fb_access_token:
+            token = self._fb_access_token
+            base_url = f"https://graph.facebook.com/{self.GRAPH_API_VERSION}"
+            _log("Hashtag Search", "Using Facebook page token on graph.facebook.com", "🔑", "detail")
+        elif token and token.startswith("IGA"):
+            _log("Hashtag Search", "Skipping — IGAF tokens don't support ig_hashtag_search (needs FB page token)", "⚠️", "detail")
+            return []
+
+        if not token:
             return []
 
         try:
             # Step 1: Get hashtag ID
             _log("API: IG Hashtag Search", f"GET /{self._ig_user_id}/ig_hashtag_search?q={hashtag}", "🌐", "api")
             search_resp = requests.get(
-                f"{self.BASE_URL}/{self._ig_user_id}/ig_hashtag_search",
+                f"{base_url}/{self._ig_user_id}/ig_hashtag_search",
                 params={
                     "q": hashtag,
-                    "access_token": self._access_token,
+                    "access_token": token,
                 },
                 timeout=15,
             )
@@ -191,12 +220,12 @@ class TrendScout:
             # Step 2: Get top media
             _log("API: IG Top Media", f"GET /{hashtag_id}/top_media?user_id=...&limit={limit}", "🌐", "api")
             media_resp = requests.get(
-                f"{self.BASE_URL}/{hashtag_id}/top_media",
+                f"{base_url}/{hashtag_id}/top_media",
                 params={
                     "user_id": self._ig_user_id,
                     "fields": "id,caption,like_count,comments_count,timestamp,media_type,permalink",
                     "limit": limit,
-                    "access_token": self._access_token,
+                    "access_token": token,
                 },
                 timeout=15,
             )
@@ -655,8 +684,8 @@ class TrendScout:
         One safe bootstrap tick — called every 20 minutes during cold-start.
 
         Rate-limit strategy (Meta API friendly):
-          - 1 own account (limit=25 posts)  → 1 API call
-          - 1 competitor (limit=8 posts)    → 1 API call
+          - 1 own account (limit=10 posts)  → 1 API call
+          - 1 competitor (limit=25 posts)   → 1 API call
           - 1 hashtag (limit=10 posts)      → 2 API calls (search + top_media)
           Total: ~4 API calls per tick = ~12/hour = well under Meta's 200/hour limit
 
@@ -712,10 +741,10 @@ class TrendScout:
                 # Pick the least-scanned account
                 target_handle = min(handle_counts, key=handle_counts.get)
                 _log("Bootstrap: Own account",
-                         f"Scanning @{target_handle} (has {handle_counts[target_handle]} entries, limit=25)",
+                         f"Scanning @{target_handle} (has {handle_counts[target_handle]} entries, limit=10)",
                          "🪞", "detail")
 
-                items = self.discover_competitor(target_handle, limit=25)
+                items = self.discover_competitor(target_handle, limit=10)
                 results["api_calls"] += 1
                 time.sleep(2)  # Respectful pause
 
@@ -785,10 +814,10 @@ class TrendScout:
 
                 target_comp = min(comp_counts, key=comp_counts.get)
                 _log("Bootstrap: Competitor",
-                         f"Scanning @{target_comp} (has {comp_counts[target_comp]} entries, limit=8)",
+                         f"Scanning @{target_comp} (has {comp_counts[target_comp]} entries, limit=25)",
                          "🔍", "detail")
 
-                items = self.discover_competitor(target_comp, limit=8)
+                items = self.discover_competitor(target_comp, limit=25)
                 results["api_calls"] += 1
                 time.sleep(2)  # Respectful pause
 

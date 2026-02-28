@@ -1,5 +1,6 @@
-import { Search, TrendingUp, Hash, User, Heart, MessageCircle, Eye } from 'lucide-react'
-import { useTobyDiscoverySummary } from '../hooks'
+import { useState } from 'react'
+import { Search, TrendingUp, Hash, User, Heart, MessageCircle, Eye, Clock, Filter } from 'lucide-react'
+import { useTobyDiscoverySummary, useTobyDiscovery } from '../hooks'
 import type { TobyDiscoveryItem, TobyDiscoverySource } from '../types'
 
 function formatNumber(n: number): string {
@@ -18,20 +19,23 @@ function timeAgo(dateStr: string | null): string {
 }
 
 const METHOD_LABELS: Record<string, string> = {
-  hashtag_search: 'Hashtag Search',
-  business_discovery: 'Account Scanning',
+  hashtag_search: 'Hashtag',
+  business_discovery: 'Competitors',
   own_account: 'Own Account',
 }
 
+const METHOD_COLORS: Record<string, string> = {
+  hashtag_search: 'bg-purple-50 text-purple-700',
+  business_discovery: 'bg-blue-50 text-blue-700',
+  own_account: 'bg-gray-50 text-gray-600',
+}
+
 function MethodBadge({ method }: { method: string }) {
-  const isHashtag = method === 'hashtag_search'
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full ${
-      isHashtag
-        ? 'bg-purple-50 text-purple-700'
-        : 'bg-blue-50 text-blue-700'
+      METHOD_COLORS[method] || 'bg-gray-50 text-gray-600'
     }`}>
-      {isHashtag ? <Hash className="w-3 h-3" /> : <User className="w-3 h-3" />}
+      {method === 'hashtag_search' ? <Hash className="w-3 h-3" /> : <User className="w-3 h-3" />}
       {METHOD_LABELS[method] || method}
     </span>
   )
@@ -55,17 +59,18 @@ function SourceRow({ source }: { source: TobyDiscoverySource }) {
   )
 }
 
-function HighlightCard({ item }: { item: TobyDiscoveryItem }) {
+function DiscoveryCard({ item }: { item: TobyDiscoveryItem }) {
   return (
     <div className="bg-gray-50 rounded-xl p-3 space-y-2">
       <div className="flex items-center gap-2">
         {item.source_account && (
           <span className="text-xs font-medium text-gray-700">@{item.source_account}</span>
         )}
+        {item.discovery_method && <MethodBadge method={item.discovery_method} />}
         <span className="text-[10px] text-gray-400 ml-auto">{timeAgo(item.discovered_at)}</span>
       </div>
       {item.caption && (
-        <p className="text-xs text-gray-600 line-clamp-2">{item.caption}</p>
+        <p className="text-xs text-gray-600 line-clamp-3">{item.caption}</p>
       )}
       <div className="flex items-center gap-3 text-[11px] text-gray-500">
         {item.media_type && (
@@ -82,14 +87,19 @@ function HighlightCard({ item }: { item: TobyDiscoveryItem }) {
           <MessageCircle className="w-3 h-3" />
           {formatNumber(item.comments_count)}
         </span>
-        {item.discovery_method && <MethodBadge method={item.discovery_method} />}
       </div>
     </div>
   )
 }
 
+type FilterTab = 'all' | 'business_discovery' | 'own_account' | 'hashtag_search'
+
 export function TobyDiscoveries() {
-  const { data: summary, isLoading } = useTobyDiscoverySummary()
+  const [activeTab, setActiveTab] = useState<FilterTab>('all')
+  const { data: summary, isLoading: summaryLoading } = useTobyDiscoverySummary()
+  const { data: discoveryData, isLoading: itemsLoading } = useTobyDiscovery()
+
+  const isLoading = summaryLoading || itemsLoading
 
   if (isLoading) {
     return (
@@ -120,65 +130,116 @@ export function TobyDiscoveries() {
   }
 
   const methodEntries = Object.entries(summary.by_method)
+  const items = discoveryData?.items ?? []
+  const filteredItems = activeTab === 'all' ? items : items.filter(i => i.discovery_method === activeTab)
+
+  // Separate external sources (competitors/hashtags) from own account
+  const externalSources = summary.top_sources.filter(s => s.method !== 'own_account')
+
+  const tabs: { key: FilterTab; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: summary.total },
+    { key: 'business_discovery', label: 'Competitors', count: summary.by_method['business_discovery'] || 0 },
+    { key: 'own_account', label: 'Own Account', count: summary.by_method['own_account'] || 0 },
+    ...(summary.by_method['hashtag_search'] ? [{ key: 'hashtag_search' as FilterTab, label: 'Hashtags', count: summary.by_method['hashtag_search'] || 0 }] : []),
+  ]
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <Search className="w-4 h-4 text-amber-500" />
-          Trending Discoveries
-        </h2>
-        <span className="text-[11px] font-medium text-gray-400">{formatNumber(summary.total)} total</span>
+      {/* Header with last scan time */}
+      <div className="px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <Search className="w-4 h-4 text-amber-500" />
+            Trending Discoveries
+          </h2>
+          <span className="text-[11px] font-medium text-gray-400">{formatNumber(summary.total)} total</span>
+        </div>
+        {summary.last_scan_at && (
+          <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-400">
+            <Clock className="w-3 h-3" />
+            Last scan {timeAgo(summary.last_scan_at)}
+          </div>
+        )}
       </div>
 
-      {/* Discovery method breakdown */}
-      {methodEntries.length > 0 && (
-        <div className="px-5 py-3 flex gap-3">
-          {methodEntries.map(([method, count]) => (
-            <div key={method} className="flex-1 bg-gray-50 rounded-xl p-3 text-center">
-              <div className="text-lg font-bold text-gray-900">{formatNumber(count)}</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">{METHOD_LABELS[method] || method}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Stats row */}
+      <div className="px-5 py-3 flex gap-3">
+        {methodEntries.map(([method, count]) => (
+          <div key={method} className="flex-1 bg-gray-50 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-gray-900">{formatNumber(count)}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">{METHOD_LABELS[method] || method}</div>
+          </div>
+        ))}
+      </div>
 
-      {/* Top sources */}
-      {summary.top_sources.length > 0 && (
+      {/* External top sources (competitors only) */}
+      {externalSources.length > 0 && (
         <>
           <div className="mx-5 border-t border-gray-100" />
           <div className="px-5 pt-3 pb-1">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
               <TrendingUp className="w-3 h-3" />
-              Top Sources
+              Top External Sources
             </h3>
           </div>
           <div className="px-5 pb-3 divide-y divide-gray-50">
-            {summary.top_sources.slice(0, 5).map((source) => (
+            {externalSources.slice(0, 5).map((source) => (
               <SourceRow key={`${source.account}-${source.method}`} source={source} />
             ))}
           </div>
         </>
       )}
 
-      {/* Recent highlights */}
+      {/* Top performing highlights */}
       {summary.recent_highlights.length > 0 && (
         <>
           <div className="mx-5 border-t border-gray-100" />
           <div className="px-5 pt-3 pb-1">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
               <Heart className="w-3 h-3" />
-              Top Performing (24h)
+              Top Performing
             </h3>
           </div>
           <div className="px-5 pb-4 space-y-2">
             {summary.recent_highlights.map((item) => (
-              <HighlightCard key={item.id} item={item} />
+              <DiscoveryCard key={item.id} item={item} />
             ))}
           </div>
         </>
       )}
+
+      {/* Filter tabs + Discovery feed */}
+      <div className="mx-5 border-t border-gray-100" />
+      <div className="px-5 pt-3 pb-1">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+          <Filter className="w-3 h-3" />
+          Discovery Feed
+        </h3>
+        <div className="flex gap-1.5 overflow-x-auto pb-2">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-3 py-1.5 text-[11px] font-medium rounded-full whitespace-nowrap transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {tab.label} ({tab.count})
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="px-5 pb-4 space-y-2 max-h-[400px] overflow-y-auto">
+        {filteredItems.length > 0 ? (
+          filteredItems.map((item) => (
+            <DiscoveryCard key={item.id} item={item} />
+          ))
+        ) : (
+          <p className="text-xs text-gray-400 text-center py-4">No items found for this filter</p>
+        )}
+      </div>
     </div>
   )
 }

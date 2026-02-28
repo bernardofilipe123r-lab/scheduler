@@ -85,7 +85,7 @@ export function useTobyInsights() {
 export function useTobyDiscovery() {
   return useQuery({
     queryKey: tobyKeys.discovery(),
-    queryFn: () => tobyApi.getDiscovery(),
+    queryFn: () => tobyApi.getDiscovery(50),
     staleTime: 60_000,
   })
 }

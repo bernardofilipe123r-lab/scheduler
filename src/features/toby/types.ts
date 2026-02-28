@@ -218,4 +218,5 @@ export interface TobyDiscoverySummary {
   by_method: Record<string, number>
   top_sources: TobyDiscoverySource[]
   recent_highlights: TobyDiscoveryItem[]
+  last_scan_at: string | null
 }
