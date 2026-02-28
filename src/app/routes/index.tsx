@@ -23,7 +23,7 @@ import { TobyPage } from '@/pages/Toby'
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicy'
 import { DataDeletionPage } from '@/pages/DataDeletion'
 import { TermsPage } from '@/pages/Terms'
-import { AppLoader } from '@/shared/components'
+import { AppLoader, ErrorBoundary } from '@/shared/components'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -93,7 +93,7 @@ function OnboardingPageGuard() {
 
 export function AppRoutes() {
   return (
-    <>
+    <ErrorBoundary>
       <Routes>
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
@@ -122,6 +122,6 @@ export function AppRoutes() {
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>
-    </>
+    </ErrorBoundary>
   )
 }

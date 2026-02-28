@@ -1241,6 +1241,19 @@ class DatabaseSchedulerService:
             ).first()
             
             if not user:
+                # Check if an orphaned row with this email exists
+                # (happens when a user is deleted from Supabase Auth
+                # but the user_profiles row persists).
+                if email:
+                    orphan = db.query(UserProfile).filter(
+                        UserProfile.email == email
+                    ).first()
+                    if orphan:
+                        # Re-key the orphaned row to the new Supabase user ID
+                        orphan.user_id = user_id
+                        orphan.user_name = user_name
+                        db.commit()
+                        return orphan.to_dict()
                 user = UserProfile(
                     user_id=user_id,
                     user_name=user_name,

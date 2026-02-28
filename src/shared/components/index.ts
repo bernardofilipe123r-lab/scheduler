@@ -1,4 +1,5 @@
 // Re-export all shared components
+export { ErrorBoundary } from './ErrorBoundary'
 export { Modal } from './Modal'
 export { PageLoader } from './PageLoader'
 export { StatusBadge } from './StatusBadge'

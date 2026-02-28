@@ -561,6 +561,15 @@ async def create_brand(
         if not short_name:
             short_name = request.id[:3].upper()
     
+    # Check if brand ID already exists (across all users)
+    from app.models.brands import Brand as BrandModel
+    existing = db.query(BrandModel).filter(BrandModel.id == request.id.lower()).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A brand with ID '{request.id}' already exists. Choose a different ID."
+        )
+
     try:
         colors = request.colors.dict() if request.colors else {}
         # Auto-populate flat rendering keys from nested light_mode/dark_mode
