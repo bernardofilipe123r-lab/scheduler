@@ -63,7 +63,7 @@ function MyPage() {
 ```tsx
 function MyPage() {
   const { data, isLoading } = useQuery(...)
-  const computed = useMemo(...)               // ✅ ALL hooks before any return
+  const computed = useMemo(...)            
   if (isLoading) return <Spinner />
   return <div>{computed}</div>
 }
