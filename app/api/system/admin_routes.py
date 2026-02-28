@@ -408,3 +408,58 @@ def get_user_logs(
         "total_pages": (total + page_size - 1) // page_size if page_size > 0 else 0,
         "logs": [log.to_dict() for log in logs],
     }
+
+
+# ─── AI Service Credits ───────────────────────────────────────────────────────
+
+@router.get("/api/admin/credits", summary="Fetch AI service credit balances (super admin only)")
+async def get_ai_credits(user: dict = Depends(get_current_user)):
+    """Return remaining credits / balance for DeepSeek and DeAPI."""
+    _require_super_admin(user)
+
+    import os
+    import httpx
+
+    results: dict = {}
+
+    # ── DeepSeek balance ─────────────────────────────────────────────
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+    if deepseek_key:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.deepseek.com/user/balance",
+                    headers={"Authorization": f"Bearer {deepseek_key}"},
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                results["deepseek"] = {
+                    "available": data.get("is_available", False),
+                    "balance_infos": data.get("balance_infos", []),
+                }
+            else:
+                results["deepseek"] = {"error": f"HTTP {resp.status_code}"}
+        except Exception as exc:
+            results["deepseek"] = {"error": str(exc)}
+    else:
+        results["deepseek"] = {"error": "API key not configured"}
+
+    # ── DeAPI credits ────────────────────────────────────────────────
+    deapi_key = os.getenv("DEAPI_API_KEY")
+    if deapi_key:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.deapi.ai/api/v1/client/credits",
+                    headers={"Authorization": f"Bearer {deapi_key}"},
+                )
+            if resp.status_code == 200:
+                results["deapi"] = resp.json()
+            else:
+                results["deapi"] = {"error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+        except Exception as exc:
+            results["deapi"] = {"error": str(exc)}
+    else:
+        results["deapi"] = {"error": "API key not configured"}
+
+    return results

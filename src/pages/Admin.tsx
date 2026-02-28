@@ -7,6 +7,7 @@ import {
   Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2, ExternalLink,
   Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
   Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings, Brain,
+  Cpu, Image,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -1071,9 +1072,40 @@ function UserDetail({
 
 // ─── Main Admin Page ─────────────────────────────────────────────────────────
 
+// ─── Credits types ──────────────────────────────────────────────────────────
+
+interface DeepSeekBalanceInfo {
+  currency: string
+  total_balance: string
+  granted_balance: string
+  topped_up_balance: string
+}
+
+interface CreditsResponse {
+  deepseek?: {
+    available?: boolean
+    balance_infos?: DeepSeekBalanceInfo[]
+    error?: string
+  }
+  deapi?: {
+    credits?: number
+    remaining?: number
+    balance?: number
+    error?: string
+    [key: string]: unknown
+  }
+}
+
 export function AdminPage() {
   const [search, setSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+
+  const creditsQuery = useQuery<CreditsResponse>({
+    queryKey: ['admin-credits'],
+    queryFn: () => apiClient.get('/api/admin/credits'),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  })
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<{ users: AdminUser[] }>({
     queryKey: ['admin-users'],
@@ -1131,6 +1163,98 @@ export function AdminPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* AI Credits */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-500" />
+            AI Service Credits
+          </h2>
+          <button
+            onClick={() => creditsQuery.refetch()}
+            disabled={creditsQuery.isFetching}
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-200 bg-white disabled:opacity-50"
+            title="Refresh credits"
+          >
+            <RefreshCw className={clsx('w-3.5 h-3.5', creditsQuery.isFetching && 'animate-spin')} />
+          </button>
+        </div>
+        {creditsQuery.isLoading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-400 py-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading credits…
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* DeepSeek */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+              <Cpu className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-blue-700 mb-1">DeepSeek</p>
+                {creditsQuery.data?.deepseek?.error ? (
+                  <p className="text-xs text-red-600">{creditsQuery.data.deepseek.error}</p>
+                ) : creditsQuery.data?.deepseek ? (
+                  <div className="space-y-0.5">
+                    {(creditsQuery.data.deepseek.balance_infos ?? []).map((b, i) => (
+                      <div key={i} className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-bold text-blue-900">{b.total_balance}</span>
+                        <span className="text-xs text-blue-600">{b.currency}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-1 mt-1">
+                      {creditsQuery.data.deepseek.available ? (
+                        <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+                          <Check className="w-3 h-3" /> Available
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-red-600 font-medium">Unavailable</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400">—</p>
+                )}
+              </div>
+            </div>
+
+            {/* DeAPI */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-purple-50 border border-purple-100">
+              <Image className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-purple-700 mb-1">DeAPI (Image Gen)</p>
+                {creditsQuery.data?.deapi?.error ? (
+                  <p className="text-xs text-red-600">{creditsQuery.data.deapi.error}</p>
+                ) : creditsQuery.data?.deapi ? (
+                  (() => {
+                    const d = creditsQuery.data.deapi
+                    const val = d.remaining ?? d.credits ?? d.balance
+                    return (
+                      <div className="flex items-baseline gap-1.5">
+                        {val != null ? (
+                          <>
+                            <span className="text-lg font-bold text-purple-900">
+                              {typeof val === 'number' && val >= 1000
+                                ? `${(val / 1000).toFixed(1)}K`
+                                : String(val)}
+                            </span>
+                            <span className="text-xs text-purple-600">credits</span>
+                          </>
+                        ) : (
+                          <pre className="text-[10px] text-purple-800 whitespace-pre-wrap break-all max-w-full overflow-hidden">
+                            {JSON.stringify(d, null, 2).slice(0, 200)}
+                          </pre>
+                        )}
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <p className="text-xs text-gray-400">—</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Search */}
