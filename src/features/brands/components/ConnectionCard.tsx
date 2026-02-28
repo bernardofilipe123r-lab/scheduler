@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Instagram,
   Facebook,
@@ -13,7 +13,9 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  HelpCircle,
 } from 'lucide-react'
+import { Modal } from '@/shared/components/Modal'
 import {
   useDisconnectYouTube,
   connectYouTube,
@@ -105,8 +107,47 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showPageSelector, setShowPageSelector] = useState(false)
   const [selectingPage, setSelectingPage] = useState(false)
-  const [confirmConnect, setConfirmConnect] = useState<Platform | null>(null)
+  const [showConnectionHelp, setShowConnectionHelp] = useState(false)
   const disconnectYouTube = useDisconnectYouTube()
+
+  const HELP_DISMISSED_KEY = 'viraltoby_connection_help_dismissed'
+
+  const hasSeenHelp = useCallback(() => {
+    try { return localStorage.getItem(HELP_DISMISSED_KEY) === '1' } catch { return false }
+  }, [])
+
+  const dismissHelp = useCallback(() => {
+    try { localStorage.setItem(HELP_DISMISSED_KEY, '1') } catch { /* noop */ }
+    setShowConnectionHelp(false)
+  }, [])
+
+  const startConnect = useCallback(async (platform: Platform) => {
+    try {
+      let authUrl: string
+      if (platform === 'instagram') {
+        authUrl = await connectInstagram(brand.brand)
+      } else if (platform === 'facebook') {
+        authUrl = await connectFacebook(brand.brand)
+      } else if (platform === 'threads') {
+        authUrl = await connectThreads(brand.brand)
+      } else if (platform === 'tiktok') {
+        authUrl = await connectTikTok(brand.brand)
+      } else if (platform === 'youtube') {
+        authUrl = await connectYouTube(brand.brand as BrandName)
+      } else {
+        return
+      }
+      window.location.href = authUrl
+    } catch (error: any) {
+      if (platform === 'threads' || platform === 'tiktok') {
+        const msg = error?.status === 503
+          ? (error.message || `${platform} OAuth not configured — check environment variables`)
+          : `Failed to start ${platform} connection`
+        alert(msg)
+      }
+      console.error(`Failed to start ${platform} connection:`, error)
+    }
+  }, [brand.brand])
 
   const handleTestMeta = async () => {
     setTesting(p => ({ ...p, meta: true }))
@@ -159,7 +200,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
   }
 
   const handleInstagramConnect = () => {
-    setConfirmConnect('instagram')
+    startConnect('instagram')
   }
 
   const handleInstagramDisconnect = async () => {
@@ -176,7 +217,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
   }
 
   const handleFacebookConnect = () => {
-    setConfirmConnect('facebook')
+    setConnectingFacebook(true)
+    startConnect('facebook').finally(() => setConnectingFacebook(false))
   }
 
   const handleFacebookDisconnect = async () => {
@@ -194,17 +236,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
 
   const handleThreadsConnect = async () => {
     setConnectingThreads(true)
-    try {
-      const authUrl = await connectThreads(brand.brand)
-      window.location.href = authUrl
-    } catch (error: any) {
-      const msg = error?.status === 503
-        ? (error.message || 'Threads OAuth not configured — check environment variables')
-        : 'Failed to start Threads connection'
-      alert(msg)
-      console.error('Threads connection error:', error)
-      setConnectingThreads(false)
-    }
+    startConnect('threads').finally(() => setConnectingThreads(false))
   }
 
   const handleThreadsDisconnect = async () => {
@@ -222,17 +254,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
 
   const handleTikTokConnect = async () => {
     setConnectingTikTok(true)
-    try {
-      const authUrl = await connectTikTok(brand.brand)
-      window.location.href = authUrl
-    } catch (error: any) {
-      const msg = error?.status === 503
-        ? (error.message || 'TikTok OAuth not configured — check environment variables')
-        : 'Failed to start TikTok connection'
-      alert(msg)
-      console.error('TikTok connection error:', error)
-      setConnectingTikTok(false)
-    }
+    startConnect('tiktok').finally(() => setConnectingTikTok(false))
   }
 
   const handleTikTokDisconnect = async () => {
@@ -245,32 +267,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
       console.error('Failed to disconnect TikTok:', error)
     } finally {
       setDisconnectingTikTok(false)
-    }
-  }
-
-  const proceedConnect = async () => {
-    const platform = confirmConnect
-    setConfirmConnect(null)
-    if (platform === 'instagram') {
-      try {
-        const authUrl = await connectInstagram(brand.brand)
-        window.location.href = authUrl
-      } catch (error) {
-        console.error('Failed to start Instagram connection:', error)
-      }
-    } else if (platform === 'facebook') {
-      setConnectingFacebook(true)
-      try {
-        const authUrl = await connectFacebook(brand.brand)
-        window.location.href = authUrl
-      } catch (error) {
-        console.error('Failed to start Facebook connection:', error)
-        setConnectingFacebook(false)
-      }
-    } else if (platform === 'threads') {
-      await handleThreadsConnect()
-    } else if (platform === 'tiktok') {
-      await handleTikTokConnect()
     }
   }
 
@@ -594,6 +590,13 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
             </p>
           </div>
         </div>
+        <button
+          onClick={() => setShowConnectionHelp(true)}
+          className="p-1.5 rounded-lg hover:bg-white/50 transition-colors"
+          title="Help with connections"
+        >
+          <HelpCircle className="w-5 h-5 text-gray-400" />
+        </button>
       </div>
 
       {/* Platform connections */}
@@ -677,40 +680,30 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
         </div>
       )}
 
-      {/* Confirm Connect Dialog — prevents connecting wrong account */}
-      {confirmConnect && (
-        <div className="px-4 py-3 bg-amber-50 border-t border-amber-200">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">
-                Connect {confirmConnect === 'instagram' ? 'Instagram' : 'Facebook'} for {brand.display_name}
-              </p>
-              <p className="text-xs text-amber-700 mt-1">
-                You'll be asked to log in. Make sure you log into the correct {confirmConnect === 'instagram' ? 'Instagram' : 'Facebook'} account for <strong>{brand.display_name}</strong>.
-              </p>
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  onClick={proceedConnect}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-colors ${
-                    confirmConnect === 'instagram'
-                      ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:opacity-90'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
-                >
-                  Continue
-                </button>
-                <button
-                  onClick={() => setConfirmConnect(null)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* Connection Help Modal */}
+      <Modal isOpen={showConnectionHelp} onClose={() => setShowConnectionHelp(false)} title="About Connecting Accounts" size="sm">
+        <div className="space-y-3 text-sm text-gray-700">
+          <p>
+            When you click <strong>Connect</strong>, you'll be redirected to log in on that platform.
+          </p>
+          <p>
+            <strong>Make sure you log into the correct account</strong> for this brand. Each social account can only be connected to one brand at a time.
+          </p>
+          <p className="text-gray-500">
+            If an account is already connected to another brand, you'll need to disconnect it there first.
+          </p>
         </div>
-      )}
+        <div className="flex justify-end mt-4">
+          {!hasSeenHelp() && (
+            <button
+              onClick={dismissHelp}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+            >
+              Got it, don't show again
+            </button>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

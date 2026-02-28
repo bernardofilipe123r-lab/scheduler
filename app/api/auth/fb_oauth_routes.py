@@ -153,6 +153,23 @@ def facebook_callback(
         # If only one page, auto-select it
         if len(pages) == 1:
             page = pages[0]
+
+            # Check if this FB page is already connected to another brand
+            fb_existing = db.query(Brand).filter(
+                Brand.facebook_page_id == page["id"],
+                Brand.id != brand_id,
+            ).first()
+            if fb_existing:
+                page_name = page.get("name", page["id"])
+                logger.warning(
+                    f"Facebook page {page_name} already connected to brand={fb_existing.id}, "
+                    f"rejected for brand={brand_id}"
+                )
+                error_msg = f"duplicate&fb_duplicate_account={page_name}&fb_duplicate_brand={fb_existing.display_name or fb_existing.id}"
+                if return_to == "onboarding":
+                    return RedirectResponse(url=f"{frontend_base}/onboarding?fb_error={error_msg}")
+                return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&fb_error={error_msg}")
+
             brand = db.query(Brand).filter(
                 Brand.id == brand_id,
                 Brand.user_id == user_id,
@@ -292,6 +309,22 @@ def facebook_select_page(
         selected = next((p for p in pages if p["id"] == body.page_id), None)
         if not selected:
             raise HTTPException(status_code=400, detail="Selected page not found")
+
+        # Check if this FB page is already connected to another brand
+        fb_existing = db.query(Brand).filter(
+            Brand.facebook_page_id == selected["id"],
+            Brand.id != body.brand_id,
+        ).first()
+        if fb_existing:
+            page_name = selected.get("name", selected["id"])
+            logger.warning(
+                f"Facebook page {page_name} already connected to brand={fb_existing.id}, "
+                f"rejected for brand={body.brand_id}"
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=f"This Facebook page is already connected to {fb_existing.display_name or fb_existing.id}. Disconnect it there first."
+            )
 
         brand = db.query(Brand).filter(
             Brand.id == body.brand_id,

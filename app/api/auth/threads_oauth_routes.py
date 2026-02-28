@@ -147,7 +147,23 @@ def threads_callback(
         threads_user_id = str(profile.get("id", ""))
         threads_username = profile.get("username", "")
 
-        # 4. Store credentials in Brand record
+        # 4. Check if this Threads account is already connected to another brand
+        existing = db.query(Brand).filter(
+            Brand.threads_user_id == threads_user_id,
+            Brand.id != brand_id,
+        ).first()
+        if existing:
+            handle = f"@{threads_username}" if threads_username else threads_user_id
+            logger.warning(
+                f"Threads account {handle} already connected to brand={existing.id}, "
+                f"rejected for brand={brand_id}"
+            )
+            error_msg = f"duplicate&threads_duplicate_account={handle}&threads_duplicate_brand={existing.display_name or existing.id}"
+            if return_to == "onboarding":
+                return RedirectResponse(url=f"{frontend_base}/onboarding?threads_error={error_msg}")
+            return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&threads_error={error_msg}")
+
+        # 5. Store credentials in Brand record
         brand = db.query(Brand).filter(
             Brand.id == brand_id,
             Brand.user_id == user_id,

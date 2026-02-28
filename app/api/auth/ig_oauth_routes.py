@@ -152,7 +152,23 @@ def instagram_callback(
         username = profile.get("username", "")
         ig_user_id = str(profile.get("user_id", ig_user_id))
 
-        # 4. Store credentials in Brand record
+        # 4. Check if this IG account is already connected to another brand
+        existing = db.query(Brand).filter(
+            Brand.instagram_business_account_id == ig_user_id,
+            Brand.id != brand_id,
+        ).first()
+        if existing:
+            handle = f"@{username}" if username else ig_user_id
+            logger.warning(
+                f"Instagram account {handle} already connected to brand={existing.id}, "
+                f"rejected for brand={brand_id}"
+            )
+            error_msg = f"duplicate&ig_duplicate_account={handle}&ig_duplicate_brand={existing.display_name or existing.id}"
+            if return_to == "onboarding":
+                return RedirectResponse(url=f"{frontend_base}/onboarding?ig_error={error_msg}")
+            return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error={error_msg}")
+
+        # 5. Store credentials in Brand record
         brand = db.query(Brand).filter(
             Brand.id == brand_id,
             Brand.user_id == user_id,

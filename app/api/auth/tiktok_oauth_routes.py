@@ -166,7 +166,23 @@ def tiktok_callback(
         display_name = user_info.get("display_name", "")
         username = user_info.get("username", display_name)
 
-        # 3. Store credentials in Brand record
+        # 3. Check if this TikTok account is already connected to another brand
+        existing = db.query(Brand).filter(
+            Brand.tiktok_open_id == open_id,
+            Brand.id != brand_id,
+        ).first()
+        if existing:
+            handle = f"@{username}" if username else open_id
+            logger.warning(
+                f"TikTok account {handle} already connected to brand={existing.id}, "
+                f"rejected for brand={brand_id}"
+            )
+            error_msg = f"duplicate&tiktok_duplicate_account={handle}&tiktok_duplicate_brand={existing.display_name or existing.id}"
+            if return_to == "onboarding":
+                return RedirectResponse(url=f"{frontend_base}/onboarding?tiktok_error={error_msg}")
+            return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&tiktok_error={error_msg}")
+
+        # 4. Store credentials in Brand record
         brand = db.query(Brand).filter(
             Brand.id == brand_id,
             Brand.user_id == user_id,

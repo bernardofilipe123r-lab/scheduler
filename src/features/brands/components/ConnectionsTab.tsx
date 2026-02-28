@@ -37,8 +37,15 @@ export function ConnectionsTab() {
       searchParams.delete('ig_connected')
       setSearchParams(searchParams, { replace: true })
     } else if (igError) {
-      setIgNotification({ type: 'error', message: `Instagram connection failed: ${igError}` })
+      const dupAccount = searchParams.get('ig_duplicate_account')
+      const dupBrand = searchParams.get('ig_duplicate_brand')
+      const msg = igError.startsWith('duplicate') && dupAccount
+        ? `Instagram account ${dupAccount} is already connected to "${dupBrand}". Disconnect it there first.`
+        : { denied: 'Permission denied', expired: 'Session expired — please try again', failed: 'Connection failed — please try again' }[igError] || igError
+      setIgNotification({ type: 'error', message: `Instagram: ${msg}` })
       searchParams.delete('ig_error')
+      searchParams.delete('ig_duplicate_account')
+      searchParams.delete('ig_duplicate_brand')
       setSearchParams(searchParams, { replace: true })
     }
 
@@ -48,14 +55,24 @@ export function ConnectionsTab() {
       searchParams.delete('fb_connected')
       setSearchParams(searchParams, { replace: true })
     } else if (fbError) {
-      const errorMessages: Record<string, string> = {
-        denied: 'Permission denied',
-        expired: 'Session expired — please try again',
-        no_pages: 'No Facebook Pages found on your account',
-        failed: 'Connection failed — please try again',
+      const dupAccount = searchParams.get('fb_duplicate_account')
+      const dupBrand = searchParams.get('fb_duplicate_brand')
+      let msg: string
+      if (fbError.startsWith('duplicate') && dupAccount) {
+        msg = `Facebook page "${dupAccount}" is already connected to "${dupBrand}". Disconnect it there first.`
+      } else {
+        const errorMessages: Record<string, string> = {
+          denied: 'Permission denied',
+          expired: 'Session expired — please try again',
+          no_pages: 'No Facebook Pages found on your account',
+          failed: 'Connection failed — please try again',
+        }
+        msg = errorMessages[fbError] || fbError
       }
-      setFbNotification({ type: 'error', message: `Facebook: ${errorMessages[fbError] || fbError}` })
+      setFbNotification({ type: 'error', message: `Facebook: ${msg}` })
       searchParams.delete('fb_error')
+      searchParams.delete('fb_duplicate_account')
+      searchParams.delete('fb_duplicate_brand')
       setSearchParams(searchParams, { replace: true })
     }
 
@@ -90,13 +107,23 @@ export function ConnectionsTab() {
       searchParams.delete('threads_connected')
       setSearchParams(searchParams, { replace: true })
     } else if (threadsError) {
-      const errorMessages: Record<string, string> = {
-        denied: 'Permission denied',
-        expired: 'Session expired — please try again',
-        failed: 'Connection failed — please try again',
+      const dupAccount = searchParams.get('threads_duplicate_account')
+      const dupBrand = searchParams.get('threads_duplicate_brand')
+      let msg: string
+      if (threadsError.startsWith('duplicate') && dupAccount) {
+        msg = `Threads account ${dupAccount} is already connected to "${dupBrand}". Disconnect it there first.`
+      } else {
+        const errorMessages: Record<string, string> = {
+          denied: 'Permission denied',
+          expired: 'Session expired — please try again',
+          failed: 'Connection failed — please try again',
+        }
+        msg = errorMessages[threadsError] || threadsError
       }
-      setThreadsNotification({ type: 'error', message: `Threads: ${errorMessages[threadsError] || threadsError}` })
+      setThreadsNotification({ type: 'error', message: `Threads: ${msg}` })
       searchParams.delete('threads_error')
+      searchParams.delete('threads_duplicate_account')
+      searchParams.delete('threads_duplicate_brand')
       setSearchParams(searchParams, { replace: true })
     }
 
@@ -109,14 +136,24 @@ export function ConnectionsTab() {
       searchParams.delete('tiktok_connected')
       setSearchParams(searchParams, { replace: true })
     } else if (tiktokError) {
-      const errorMessages: Record<string, string> = {
-        denied: 'Permission denied',
-        expired: 'Session expired — please try again',
-        pkce_error: 'PKCE verification failed — please try again',
-        failed: 'Connection failed — please try again',
+      const dupAccount = searchParams.get('tiktok_duplicate_account')
+      const dupBrand = searchParams.get('tiktok_duplicate_brand')
+      let msg: string
+      if (tiktokError.startsWith('duplicate') && dupAccount) {
+        msg = `TikTok account ${dupAccount} is already connected to "${dupBrand}". Disconnect it there first.`
+      } else {
+        const errorMessages: Record<string, string> = {
+          denied: 'Permission denied',
+          expired: 'Session expired — please try again',
+          pkce_error: 'PKCE verification failed — please try again',
+          failed: 'Connection failed — please try again',
+        }
+        msg = errorMessages[tiktokError] || tiktokError
       }
-      setTiktokNotification({ type: 'error', message: `TikTok: ${errorMessages[tiktokError] || tiktokError}` })
+      setTiktokNotification({ type: 'error', message: `TikTok: ${msg}` })
       searchParams.delete('tiktok_error')
+      searchParams.delete('tiktok_duplicate_account')
+      searchParams.delete('tiktok_duplicate_brand')
       setSearchParams(searchParams, { replace: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -410,7 +447,7 @@ export function ConnectionsTab() {
             <strong>YouTube:</strong> Connected via Google OAuth. Stores a permanent refresh token — the connection persists until you revoke access in your Google account settings. Token validity is checked every 24 hours.
           </p>
           <p className="text-blue-600 mt-3">
-            💡 Each brand can have different social accounts connected. YouTube channels cannot be shared between brands.
+            💡 Each brand can have different social accounts connected. No account can be shared between brands — if you try to connect an account that's already linked elsewhere, you'll see an error.
           </p>
         </div>
       </div>
