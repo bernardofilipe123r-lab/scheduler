@@ -22,11 +22,12 @@ export function useOnboardingStatus() {
     )
   )
 
-  // New users without a brand always need onboarding.
-  // Once a user has completed onboarding (or has DNA configured as a legacy
-  // pre-flag user), disconnecting platforms must NOT send them back.
+  // New users need onboarding until they finish the full wizard (sets
+  // onboardingCompleted = true in Supabase user metadata).  Legacy users
+  // who predated the flag are grandfathered when they have BOTH a brand
+  // AND good DNA — neither alone is enough to skip.
   const needsOnboarding =
-    isAuthenticated && !onboardingCompleted && !hasDNA && !hasBrand
+    isAuthenticated && !onboardingCompleted && !(hasBrand && hasDNA)
   const onboardingStep: 1 | 3 = !hasBrand ? 1 : 3
 
   return {
