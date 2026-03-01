@@ -4,6 +4,7 @@ import { Loader2, X } from 'lucide-react'
 import igIcon from '@/assets/icons/instagram.png'
 import fbIcon from '@/assets/icons/facebook.png'
 import ytIcon from '@/assets/icons/youtube.png'
+import ttIcon from '@/assets/icons/tiktok.png'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
@@ -17,7 +18,7 @@ const PLATFORMS = [
   { id: 'instagram' as Platform, label: 'Instagram', icon: igIcon },
   { id: 'facebook' as Platform, label: 'Facebook', icon: fbIcon },
   { id: 'youtube' as Platform, label: 'YouTube', icon: ytIcon },
-  { id: 'tiktok' as Platform, label: 'TikTok', icon: '🎵' as any },
+  { id: 'tiktok' as Platform, label: 'TikTok', icon: ttIcon },
 ]
 
 export function GeneratorPage() {
