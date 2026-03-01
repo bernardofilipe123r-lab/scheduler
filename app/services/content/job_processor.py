@@ -247,7 +247,17 @@ class JobProcessor:
                 "progress_percent": 55
             })
             video_gen = VideoGenerator()
-            video_gen.generate_reel_video(reel_path, video_path)
+
+            # Pick a random user-uploaded music track (if any)
+            from app.services.media.music_picker import get_random_user_music_url
+            from app.db_connection import SessionLocal
+            _music_db = SessionLocal()
+            try:
+                _music_url = get_random_user_music_url(_music_db, user_id)
+            finally:
+                _music_db.close()
+
+            video_gen.generate_reel_video(reel_path, video_path, music_url=_music_url)
             print(f"   ✓ Video saved: {video_path}", flush=True)
             sys.stdout.flush()
             self._manager.update_brand_output(job_id, brand, {

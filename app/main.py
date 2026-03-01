@@ -32,6 +32,7 @@ from app.api.auth.ig_oauth_routes import router as ig_oauth_router
 from app.api.auth.fb_oauth_routes import router as fb_oauth_router
 from app.api.auth.threads_oauth_routes import router as threads_oauth_router
 from app.api.auth.tiktok_oauth_routes import router as tiktok_oauth_router
+from app.api.content.music_routes import router as music_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set_user_id as set_logging_user_id, clear_user_id as clear_logging_user_id
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -121,6 +122,7 @@ app.include_router(ig_oauth_router)  # Instagram Business Login OAuth flow
 app.include_router(fb_oauth_router)  # Facebook Login OAuth flow
 app.include_router(threads_oauth_router)  # Threads OAuth flow
 app.include_router(tiktok_oauth_router)  # TikTok OAuth flow
+app.include_router(music_router)  # User music upload/management
 
 
 @app.get("/health", tags=["system"])

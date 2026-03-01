@@ -17,6 +17,7 @@ import {
   formatHour,
 } from '@/features/brands/constants'
 import { type BrandConnectionStatus } from '@/features/brands'
+import { MusicManager } from './MusicManager'
 
 export interface BrandSettingsModalProps {
   brand: BrandInfo
@@ -237,6 +238,9 @@ export function BrandSettingsModal({ brand, connections, allBrands, onClose }: B
           </div>
         </div>
       </div>
+
+      {/* Background Music (per-user, shared across brands) */}
+      <MusicManager />
 
       {/* Actions */}
       <div className="flex gap-3">

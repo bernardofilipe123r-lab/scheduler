@@ -189,6 +189,18 @@ def get_audio_duration(audio_path: Path) -> Optional[float]:
         return None
 
 
+def get_audio_duration_from_bytes(data: bytes, ext: str = ".mp3") -> Optional[float]:
+    """Probe duration of in-memory audio bytes via a temp file."""
+    import tempfile, os
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+    try:
+        tmp.write(data)
+        tmp.close()
+        return get_audio_duration(Path(tmp.name))
+    finally:
+        os.unlink(tmp.name)
+
+
 def trim_or_loop_audio(
     input_path: Path,
     output_path: Path,

@@ -115,10 +115,19 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
         # Step 3: Generate video
         try:
             video_generator = VideoGenerator()
+            # Pick user-uploaded music if available
+            from app.services.media.music_picker import get_random_user_music_url
+            from app.db_connection import SessionLocal
+            _mdb = SessionLocal()
+            try:
+                _music_url = get_random_user_music_url(_mdb, user_id)
+            finally:
+                _mdb.close()
             video_generator.generate_reel_video(
                 reel_image_path=reel_image_path,
                 output_path=video_path,
-                music_id=request.music_id
+                music_id=request.music_id,
+                music_url=_music_url,
             )
         except RuntimeError as e:
             # FFmpeg-specific errors
@@ -288,9 +297,13 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
         job.progress_percent = 75
         db.commit()
         video_generator = VideoGenerator()
+        # Pick user-uploaded music if available
+        from app.services.media.music_picker import get_random_user_music_url
+        _music_url = get_random_user_music_url(db, user_id)
         video_generator.generate_reel_video(
             reel_image_path=reel_image_path,
-            output_path=video_path
+            output_path=video_path,
+            music_url=_music_url,
         )
         
         # Generate caption
