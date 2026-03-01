@@ -204,13 +204,13 @@ export function TobyTickMonitor() {
 
 function MonitorSkeleton() {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden animate-pulse">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100">
-        <div className="h-4 bg-gray-100 rounded w-36" />
+        <div className="h-4 skeleton rounded w-36" />
       </div>
       <div className="p-4 grid grid-cols-2 gap-2">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-28 bg-gray-50 rounded-xl" />
+          <div key={i} className="h-28 skeleton rounded-xl" />
         ))}
       </div>
     </div>

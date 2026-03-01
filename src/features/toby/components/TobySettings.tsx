@@ -12,11 +12,11 @@ export function TobySettings() {
 
   if (isLoading || !config) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 animate-pulse">
-        <div className="h-5 bg-gray-100 rounded w-28 mb-4" />
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        <div className="h-5 skeleton rounded w-28 mb-4" />
         <div className="space-y-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-12 bg-gray-50 rounded-lg" />
+            <div key={i} className="h-12 skeleton rounded-lg" />
           ))}
         </div>
       </div>

@@ -67,10 +67,10 @@ export function TobyExperiments() {
   if (isLoading) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-        <div className="h-5 bg-gray-100 rounded w-36 mb-4 animate-pulse" />
+        <div className="h-5 skeleton rounded w-36 mb-4" />
         <div className="grid grid-cols-2 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-36 bg-gray-50 rounded-lg animate-pulse" />
+            <div key={i} className="h-36 skeleton rounded-lg" />
           ))}
         </div>
       </div>

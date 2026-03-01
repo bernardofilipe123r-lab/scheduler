@@ -218,13 +218,13 @@ export function TobyActivityFeed() {
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="h-5 bg-gray-100 rounded w-32 mb-4" />
+        <div className="h-5 skeleton rounded w-32 mb-4" />
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex gap-3 mb-3 animate-pulse">
-            <div className="w-8 h-8 bg-gray-100 rounded-lg shrink-0" />
+          <div key={i} className="flex gap-3 mb-3">
+            <div className="w-8 h-8 skeleton rounded-lg shrink-0" />
             <div className="flex-1">
-              <div className="h-4 bg-gray-100 rounded w-3/4 mb-1" />
-              <div className="h-3 bg-gray-100 rounded w-20" />
+              <div className="h-4 skeleton rounded w-3/4 mb-1" />
+              <div className="h-3 skeleton rounded w-20" />
             </div>
           </div>
         ))}

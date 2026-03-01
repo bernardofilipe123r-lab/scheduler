@@ -104,9 +104,9 @@ export function TobyDiscoveries() {
   if (isLoading) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-        <div className="animate-pulse space-y-3">
-          <div className="h-4 bg-gray-100 rounded w-1/3" />
-          <div className="h-20 bg-gray-100 rounded" />
+        <div className="space-y-3">
+          <div className="h-4 skeleton rounded w-1/3" />
+          <div className="h-20 skeleton rounded" />
         </div>
       </div>
     )

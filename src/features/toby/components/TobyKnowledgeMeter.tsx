@@ -232,19 +232,19 @@ export function TobyKnowledgeMeter() {
 function KnowledgeMeterSkeleton() {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="h-1.5 bg-gray-100" />
-      <div className="p-5 animate-pulse">
+      <div className="h-1.5 skeleton" />
+      <div className="p-5">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-9 h-9 bg-gray-100 rounded-xl" />
+          <div className="w-9 h-9 skeleton rounded-xl" />
           <div>
-            <div className="h-4 bg-gray-100 rounded w-40 mb-1.5" />
-            <div className="h-3 bg-gray-50 rounded w-56" />
+            <div className="h-4 skeleton rounded w-40 mb-1.5" />
+            <div className="h-3 skeleton rounded w-56" />
           </div>
         </div>
         <div className="flex gap-2 mb-5">
-          {[...Array(3)].map((_, i) => <div key={i} className="flex-1 h-20 bg-gray-50 rounded-xl" />)}
+          {[...Array(3)].map((_, i) => <div key={i} className="flex-1 h-20 skeleton rounded-xl" />)}
         </div>
-        <div className="h-14 bg-gray-50 rounded-xl" />
+        <div className="h-14 skeleton rounded-xl" />
       </div>
     </div>
   )

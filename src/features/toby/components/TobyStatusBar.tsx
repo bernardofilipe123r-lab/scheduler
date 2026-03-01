@@ -42,9 +42,9 @@ export function TobyStatusBar() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
-        <div className="h-6 bg-gray-100 rounded w-48 mb-3" />
-        <div className="h-4 bg-gray-100 rounded w-72" />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="h-6 skeleton rounded w-48 mb-3" />
+        <div className="h-4 skeleton rounded w-72" />
       </div>
     )
   }

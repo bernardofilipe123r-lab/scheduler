@@ -79,14 +79,14 @@ export function TobyBufferHealth() {
 
 function BufferSkeleton() {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 animate-pulse">
-      <div className="h-5 bg-gray-100 rounded w-32 mb-4" />
-      <div className="h-2.5 bg-gray-100 rounded-full w-full mb-5" />
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+      <div className="h-5 skeleton rounded w-32 mb-4" />
+      <div className="h-2.5 skeleton rounded-full w-full mb-5" />
       <div className="space-y-4">
         {[...Array(4)].map((_, i) => (
           <div key={i}>
-            <div className="h-4 bg-gray-100 rounded w-28 mb-1.5" />
-            <div className="h-1.5 bg-gray-100 rounded-full" />
+            <div className="h-4 skeleton rounded w-28 mb-1.5" />
+            <div className="h-1.5 skeleton rounded-full" />
           </div>
         ))}
       </div>

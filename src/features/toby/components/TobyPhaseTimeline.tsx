@@ -279,12 +279,12 @@ function RequirementRow({ icon: Icon, label, current, target, color }: {
 function TimelineSkeleton() {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="h-1.5 bg-gray-100" />
-      <div className="p-5 animate-pulse">
-        <div className="h-4 bg-gray-100 rounded w-36 mb-5" />
+      <div className="h-1.5 skeleton" />
+      <div className="p-5">
+        <div className="h-4 skeleton rounded w-36 mb-5" />
         <div className="flex gap-2">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="flex-1 h-32 bg-gray-50 rounded-xl" />
+            <div key={i} className="flex-1 h-32 skeleton rounded-xl" />
           ))}
         </div>
       </div>

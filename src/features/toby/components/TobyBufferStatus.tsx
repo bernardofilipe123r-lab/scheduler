@@ -45,9 +45,9 @@ export function TobyBufferStatus() {
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="h-5 bg-gray-100 rounded w-32 mb-4 animate-pulse" />
-        <div className="h-4 bg-gray-100 rounded-full w-full mb-3 animate-pulse" />
-        <div className="h-3 bg-gray-100 rounded w-48 animate-pulse" />
+        <div className="h-5 skeleton rounded w-32 mb-4" />
+        <div className="h-4 skeleton rounded-full w-full mb-3" />
+        <div className="h-3 skeleton rounded w-48" />
       </div>
     )
   }

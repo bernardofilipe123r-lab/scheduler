@@ -211,17 +211,17 @@ function FeatureItem({ icon: Icon, title, desc }: { icon: typeof Calendar; title
 function HeroSkeleton() {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="h-1 bg-gray-100" />
-      <div className="p-6 animate-pulse">
+      <div className="h-1 skeleton" />
+      <div className="p-6">
         <div className="flex items-center gap-4 mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gray-100" />
+          <div className="w-14 h-14 rounded-2xl skeleton" />
           <div>
-            <div className="h-5 bg-gray-100 rounded w-16 mb-2" />
-            <div className="h-4 bg-gray-100 rounded w-48" />
+            <div className="h-5 skeleton rounded w-16 mb-2" />
+            <div className="h-4 skeleton rounded w-48" />
           </div>
         </div>
         <div className="grid grid-cols-4 gap-3">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-gray-50 rounded-xl" />)}
+          {[...Array(4)].map((_, i) => <div key={i} className="h-20 skeleton rounded-xl" />)}
         </div>
       </div>
     </div>
