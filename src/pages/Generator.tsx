@@ -5,6 +5,11 @@ import igIcon from '@/assets/icons/instagram.png'
 import fbIcon from '@/assets/icons/facebook.png'
 import ytIcon from '@/assets/icons/youtube.png'
 import ttIcon from '@/assets/icons/tiktok.png'
+
+// Preload platform icons at module scope so the browser caches them before
+// the component renders — prevents blank/flickering images on first load.
+;[igIcon, fbIcon, ytIcon, ttIcon].forEach(src => { const i = new Image(); i.src = src })
+
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
@@ -455,7 +460,7 @@ export function GeneratorPage() {
                         {typeof icon === 'string' && icon.length === 1 ? (
                           <span className="text-lg">{icon}</span>
                         ) : (
-                          <img src={icon} alt={label} className="h-5 w-auto" />
+                          <img src={icon} alt={label} loading="eager" className="h-5 w-auto" />
                         )}
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
@@ -693,7 +698,7 @@ export function GeneratorPage() {
                         {typeof icon === 'string' && icon.length === 1 ? (
                           <span className="text-lg">{icon}</span>
                         ) : (
-                          <img src={icon} alt={label} className="h-5 w-auto" />
+                          <img src={icon} alt={label} loading="eager" className="h-5 w-auto" />
                         )}
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>
                       </button>
