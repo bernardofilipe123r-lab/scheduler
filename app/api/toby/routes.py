@@ -323,8 +323,36 @@ def get_insights(
 ):
     """Aggregated insights — best topics, hooks, personalities."""
     from app.services.toby.learning_engine import get_insights as _get_insights
+    from app.models.toby import TobyContentTag
     uid = _resolve_user_id(user, target_user_id)
-    return _get_insights(db, uid)
+    raw = _get_insights(db, uid)
+
+    # Transform backend shape {reel: {dim: [{option, avg_score, ...}]}}
+    # into frontend shape {top_strategies: {dim: [{strategy, mean_score, ...}]}, total_scored_posts}
+    merged: dict[str, list] = {}
+    for _ct, dims in raw.items():
+        for dim, items in dims.items():
+            if dim not in merged:
+                merged[dim] = []
+            for item in items:
+                merged[dim].append({
+                    "dimension": dim,
+                    "strategy": item["option"],
+                    "mean_score": item["avg_score"],
+                    "sample_count": item["sample_count"],
+                    "confidence_low": item.get("confidence_low"),
+                    "confidence_high": item.get("confidence_high"),
+                    "beta_mean": item.get("beta_mean"),
+                })
+    for dim in merged:
+        merged[dim].sort(key=lambda x: x["mean_score"], reverse=True)
+
+    total_scored = (
+        db.query(TobyContentTag)
+        .filter(TobyContentTag.user_id == uid, TobyContentTag.toby_score.isnot(None))
+        .count()
+    )
+    return {"top_strategies": merged, "total_scored_posts": total_scored}
 
 
 @router.get("/discovery")
@@ -754,29 +782,39 @@ def _compute_phase_progress(state, scored_post_count: int, learning_confidence: 
 
 
 def _get_top_strategies(db, user_id: str) -> list[dict]:
-    """Return top strategy per dimension (highest avg_score with min 3 samples)."""
+    """Return top strategy per dimension (highest avg_score).
+
+    Uses sample_count >= 1 so early learning data is visible during bootstrap.
+    """
     from app.models.toby import TobyStrategyScore
+    from sqlalchemy import func as sa_func
 
     dimensions = ["personality", "topic", "hook", "title_format", "visual_style"]
     results = []
 
     for dim in dimensions:
+        # Aggregate across brands: highest total sample count per option value
         top = (
-            db.query(TobyStrategyScore)
+            db.query(
+                TobyStrategyScore.option_value,
+                sa_func.sum(TobyStrategyScore.sample_count).label("total_samples"),
+                sa_func.avg(TobyStrategyScore.avg_score).label("mean_score"),
+            )
             .filter(
                 TobyStrategyScore.user_id == user_id,
                 TobyStrategyScore.dimension == dim,
-                TobyStrategyScore.sample_count >= 3,
+                TobyStrategyScore.sample_count >= 1,
             )
-            .order_by(TobyStrategyScore.avg_score.desc())
+            .group_by(TobyStrategyScore.option_value)
+            .order_by(sa_func.avg(TobyStrategyScore.avg_score).desc())
             .first()
         )
         if top:
             results.append({
                 "dimension": dim,
                 "value": top.option_value,
-                "avg_score": round(float(top.avg_score), 1) if top.avg_score else 0.0,
-                "sample_count": top.sample_count,
+                "avg_score": round(float(top.mean_score), 1) if top.mean_score else 0.0,
+                "sample_count": int(top.total_samples),
             })
 
     return results

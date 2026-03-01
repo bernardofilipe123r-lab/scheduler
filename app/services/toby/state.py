@@ -199,16 +199,21 @@ def check_phase_transition(db: Session, state: TobyState, scored_post_count: int
 
     if state.phase == "bootstrap":
         if scored_post_count >= BOOTSTRAP_MIN_POSTS and days_in_phase >= BOOTSTRAP_MIN_DAYS:
-            # Also require at least some strategy diversity (v3.0: data-gated)
+            # Require strategy diversity: count distinct dimension/option combos
+            # that have been tried (sample_count >= 1). With per-brand scores,
+            # requiring >= 3 per row is impractical with limited data.
             from app.models.toby import TobyStrategyScore
+            from sqlalchemy import func as sa_func
             diverse_count = (
-                db.query(TobyStrategyScore)
+                db.query(sa_func.count(sa_func.distinct(
+                    TobyStrategyScore.dimension + '/' + TobyStrategyScore.option_value
+                )))
                 .filter(
                     TobyStrategyScore.user_id == state.user_id,
-                    TobyStrategyScore.sample_count >= 3,
+                    TobyStrategyScore.sample_count >= 1,
                 )
-                .count()
-            )
+                .scalar()
+            ) or 0
             if diverse_count >= BOOTSTRAP_MIN_DIVERSE_STRATEGIES:
                 state.phase = "learning"
                 state.phase_started_at = now

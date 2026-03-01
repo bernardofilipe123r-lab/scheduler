@@ -650,52 +650,79 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
     """Score posts and update learning engine."""
     from app.services.toby.analysis_engine import score_pending_posts
     from app.services.toby.learning_engine import update_strategy_score, update_experiment_results, correct_preliminary_score
+    from sqlalchemy import func as sa_func
 
     # Score 48h posts
     scored_48h = score_pending_posts(db, user_id, phase="48h")
 
-    # v3.0: Generate per-post learning events at 48h so users see Toby learning quickly
-    if scored_48h > 0:
-        try:
-            _generate_48h_learning_events(db, user_id, scored_48h)
-        except Exception as e:
-            print(f"[TOBY] Learning event generation failed for {user_id}: {e}", flush=True)
+    # Phase 2: Update strategy scores at 48h with weight=0.6 (preliminary)
+    # Decoupled from scored_48h count — always process orphaned tags that have
+    # scores but haven't been fed to the learning engine yet.
+    tags_48h = (
+        db.query(TobyContentTag)
+        .filter(
+            TobyContentTag.user_id == user_id,
+            TobyContentTag.score_phase == "48h",
+            TobyContentTag.toby_score.isnot(None),
+            TobyContentTag.metrics_unreliable != True,
+            TobyContentTag.human_modified != True,
+            TobyContentTag.preliminary_score.is_(None),
+        )
+        .order_by(TobyContentTag.scored_at.desc())
+        .limit(100)
+        .all()
+    )
 
-        # Phase 2: Update strategy scores at 48h with weight=0.6 (preliminary)
-        try:
-            tags_48h = (
-                db.query(TobyContentTag)
-                .filter(
-                    TobyContentTag.user_id == user_id,
-                    TobyContentTag.score_phase == "48h",
-                    TobyContentTag.toby_score.isnot(None),
-                    TobyContentTag.metrics_unreliable != True,
-                    TobyContentTag.human_modified != True,
-                    TobyContentTag.preliminary_score.is_(None),  # Not yet recorded as preliminary
-                )
-                .order_by(TobyContentTag.scored_at.desc())
-                .limit(scored_48h)
-                .all()
-            )
-            for tag in tags_48h:
-                # Store preliminary score for later correction
-                tag.preliminary_score = tag.toby_score
-                tag.preliminary_scored_at = datetime.now(timezone.utc)
+    if tags_48h:
+        # Compute brand averages once for learning event generation
+        brand_avg_results = (
+            db.query(TobyContentTag.brand_id, sa_func.avg(TobyContentTag.toby_score))
+            .filter(TobyContentTag.user_id == user_id, TobyContentTag.toby_score.isnot(None))
+            .group_by(TobyContentTag.brand_id)
+            .all()
+        )
+        brand_avgs = {bid: float(avg) for bid, avg in brand_avg_results if avg}
 
-                for dim, val in [
-                    ("personality", tag.personality),
-                    ("topic", tag.topic_bucket),
-                    ("hook", tag.hook_strategy),
-                    ("title_format", tag.title_format),
-                    ("visual_style", tag.visual_style),
-                ]:
-                    if val:
-                        update_strategy_score(
-                            db, user_id, tag.brand_id, tag.content_type,
-                            dim, val, tag.toby_score, weight=0.6,
-                        )
+    for tag in tags_48h:
+        try:
+            # Generate learning event for this tag
+            lesson = _generate_learning_lesson(tag, brand_avgs.get(tag.brand_id, 50.0))
+            if lesson:
+                db.add(TobyActivityLog(
+                    user_id=user_id,
+                    action_type="learning_event",
+                    description=lesson,
+                    level="info",
+                    action_metadata={
+                        "schedule_id": tag.schedule_id,
+                        "brand_id": tag.brand_id,
+                        "score": round(tag.toby_score, 1) if tag.toby_score else None,
+                        "personality": tag.personality,
+                        "hook": tag.hook_strategy,
+                        "topic": tag.topic_bucket,
+                        "score_phase": "48h",
+                    },
+                    created_at=datetime.now(timezone.utc),
+                ))
+
+            # Update strategy scores
+            tag.preliminary_score = tag.toby_score
+            tag.preliminary_scored_at = datetime.now(timezone.utc)
+
+            for dim, val in [
+                ("personality", tag.personality),
+                ("topic", tag.topic_bucket),
+                ("hook", tag.hook_strategy),
+                ("title_format", tag.title_format),
+                ("visual_style", tag.visual_style),
+            ]:
+                if val:
+                    update_strategy_score(
+                        db, user_id, tag.brand_id, tag.content_type,
+                        dim, val, tag.toby_score, weight=0.6,
+                    )
         except Exception as e:
-            print(f"[TOBY] 48h strategy score update failed for {user_id}: {e}", flush=True)
+            print(f"[TOBY] 48h strategy update failed for tag {tag.id}: {e}", flush=True)
 
     # Score 7d posts
     scored_7d = score_pending_posts(db, user_id, phase="7d")
@@ -718,6 +745,7 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
         )
 
         for tag in tags:
+          try:
             # Phase 2: Correct preliminary 48h score before adding final 7d score
             if tag.preliminary_score is not None:
                 correct_preliminary_score(
@@ -760,6 +788,8 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
                     _record_strategy_combo(db, user_id, tag)
             except Exception:
                 pass  # Non-critical — don't break scoring
+          except Exception as e:
+            print(f"[TOBY] 7d strategy update failed for tag {tag.id}: {e}", flush=True)
 
 
 def start_toby_scheduler(scheduler):
