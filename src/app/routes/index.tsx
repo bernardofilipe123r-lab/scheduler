@@ -115,7 +115,7 @@ export function AppRoutes() {
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="toby" element={<TobyPage />} />
-        <Route path="settings" element={<Navigate to="/brands?tab=settings" replace />} />
+        <Route path="settings" element={<Navigate to="/brands?tab=connections" replace />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="logs" element={<AdminGuard><LogsPage /></AdminGuard>} />
         <Route path="admin" element={<SuperAdminGuard><AdminPage /></SuperAdminGuard>} />

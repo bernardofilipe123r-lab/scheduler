@@ -16,8 +16,6 @@ export {
   ScheduledSkeleton,
   BrandsSkeleton,
   ConnectionsSkeleton,
-  SettingsSkeleton,
-  SettingsBrandIdsSkeleton,
   NicheConfigSkeleton,
   BrandThemeSkeleton,
 } from './Skeleton'
