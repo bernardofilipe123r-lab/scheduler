@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, Check } from 'lucide-react'
+import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, Check, Instagram, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles } from '../api/use-niche-config'
+import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles, useImportFromInstagram } from '../api/use-niche-config'
 import { useBrands } from '../api/use-brands'
 import { apiClient } from '@/shared/api/client'
 import { ConfigStrengthMeter } from './ConfigStrengthMeter'
@@ -128,6 +128,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   const aiMutation = useAiUnderstanding()
   const reelPreviewMutation = useReelPreview()
   const ytSuggestMutation = useSuggestYtTitles()
+  const importIgMutation = useImportFromInstagram()
   const fontsReady = useFontPreload()
 
   const [values, setValues] = useState<NicheConfig>(DEFAULT_CONFIG)
@@ -302,6 +303,30 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   )
   const aiComplete = Boolean(aiResult)
 
+  // Find first brand with Instagram connected (for "Import from Instagram" feature)
+  const igBrand = useMemo(
+    () => brandsData?.find(b => b.has_instagram),
+    [brandsData],
+  )
+
+  const handleImportFromInstagram = useCallback(async () => {
+    if (!igBrand) return
+    try {
+      const result = await importIgMutation.mutateAsync({ brand_id: igBrand.id })
+      if (result.niche_name) {
+        update('niche_name', result.niche_name)
+      }
+      if (result.content_brief) {
+        update('content_brief', result.content_brief)
+      }
+      toast.success(`Analysed ${result.posts_analysed} posts — niche & brief imported!`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Import failed'
+      toast.error(msg)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [igBrand])
+
   const handleSave = async () => {
     try {
       await updateMutation.mutateAsync({ ...values })
@@ -427,6 +452,39 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.general ? '-rotate-90' : ''}`} />
         </button>
         {!collapsed.general && <div className="px-6 py-5 space-y-5">
+          {/* Import from Instagram */}
+          {igBrand && (
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Instagram className="w-4 h-4 text-purple-600" />
+                  <div>
+                    <p className="text-sm font-medium text-purple-900">Import from Instagram</p>
+                    <p className="text-xs text-purple-600">Auto-fill your niche and content brief by analysing your recent posts.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleImportFromInstagram}
+                  disabled={importIgMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+                >
+                  {importIgMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Analysing…
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      Import
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Niche Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Niche Name</label>

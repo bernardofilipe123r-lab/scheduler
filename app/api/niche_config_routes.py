@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from app.db_connection import get_db
 from app.api.auth.middleware import get_current_user
 from app.models.niche_config import NicheConfig
+from app.models.brands import Brand
 from app.services.content.niche_config_service import get_niche_config_service
 
 logger = logging.getLogger(__name__)
@@ -346,6 +347,150 @@ async def update_niche_config(
     service.invalidate_cache(user_id=user_id)
 
     return _cfg_to_dict(cfg)
+
+
+# --- Import from Instagram endpoint ---
+
+IG_GRAPH_BASE = "https://graph.instagram.com"
+
+
+class ImportFromInstagramRequest(BaseModel):
+    brand_id: str = Field(..., min_length=1, max_length=50)
+
+
+def _fetch_ig_posts(ig_account_id: str, access_token: str, limit: int = 25) -> list[dict]:
+    """Fetch recent Instagram posts with captions via Graph API."""
+    resp = http_requests.get(
+        f"{IG_GRAPH_BASE}/v21.0/{ig_account_id}/media",
+        params={
+            "fields": "id,caption,media_type,media_product_type,timestamp",
+            "limit": limit,
+            "access_token": access_token,
+        },
+        timeout=20,
+    )
+    if resp.status_code != 200:
+        logger.error("IG media fetch failed (%s): %s", resp.status_code, resp.text[:500])
+        return []
+    return resp.json().get("data", [])
+
+
+@router.post("/import-from-instagram")
+async def import_from_instagram(
+    request: ImportFromInstagramRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Scrape recent Instagram posts and use AI to extract niche/topic/description for Content DNA.
+
+    Fetches the last ~25 posts from the brand's connected IG account,
+    sends captions to DeepSeek for structured analysis, and returns
+    suggested niche_name and content_brief fields.
+    """
+    user_id = user["id"]
+
+    # Find brand & verify ownership
+    brand = db.query(Brand).filter(
+        Brand.id == request.brand_id,
+        Brand.user_id == user_id,
+    ).first()
+    if not brand:
+        raise HTTPException(status_code=404, detail="Brand not found")
+
+    ig_account_id = brand.instagram_business_account_id
+    access_token = brand.instagram_access_token or brand.meta_access_token
+    if not ig_account_id or not access_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Instagram is not connected for this brand. Connect Instagram first, then try importing.",
+        )
+
+    # Fetch posts in a thread to avoid blocking the event loop
+    posts = await asyncio.to_thread(_fetch_ig_posts, ig_account_id, access_token, 25)
+    if not posts:
+        raise HTTPException(
+            status_code=400,
+            detail="No posts found on this Instagram account. You need at least a few posts to import content style.",
+        )
+
+    # Build caption corpus (filter empty captions)
+    captions = []
+    for p in posts:
+        cap = (p.get("caption") or "").strip()
+        if cap:
+            captions.append(cap)
+
+    if len(captions) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only {len(captions)} post(s) have captions. Need at least 3 posts with captions to analyse your content style.",
+        )
+
+    # Truncate to avoid overly long prompts — keep first ~15 captions, max 500 chars each
+    caption_samples = [c[:500] for c in captions[:15]]
+    caption_block = "\n---\n".join(f"Post {i+1}:\n{c}" for i, c in enumerate(caption_samples))
+
+    ig_handle = brand.instagram_handle or ""
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    prompt = f"""Analyse the following {len(caption_samples)} Instagram post captions from the account {ig_handle} and extract a structured content profile.
+
+CAPTIONS:
+{caption_block}
+
+Based on these posts, determine:
+1. **niche_name** — A short label (2-5 words) describing the content niche (e.g. "Health & Wellness", "Personal Finance", "Fitness & Nutrition")
+2. **content_brief** — A detailed paragraph (150-300 words) describing:
+   - What type of content this account creates
+   - The main topics covered (list them with specifics from the captions)
+   - The tone and style (educational, casual, motivational, scientific, etc.)
+   - The target audience (age, gender, interests — infer from the content)
+   - Any recurring themes, formats, or patterns you notice
+   - Content philosophy (what makes this account unique)
+
+Write the content_brief in the same format as this example:
+"Viral short-form health content for women 35+ on Instagram and TikTok.
+
+Topics include: foods that fight inflammation vs. foods that secretly cause it, superfoods and their specific benefits (e.g. magnesium for sleep, omega-3 for joints), surprising facts about everyday habits (sleep position, hydration timing, meal order), hormonal health after 35, gut-brain connection, metabolism myths, longevity habits backed by science, skin health from the inside out.
+
+Tone: educational, empowering, calm authority. Avoid: clinical jargon, fear-mongering, salesy language. 60% validating, 40% surprising.
+
+Target audience: U.S. women aged 35+, interested in healthy aging, energy, hormones, and longevity."
+
+OUTPUT FORMAT (JSON only, no markdown fences):
+{{
+    "niche_name": "...",
+    "content_brief": "..."
+}}"""
+
+    try:
+        response = await asyncio.to_thread(
+            _deepseek_call, api_key, prompt, 0.5, 1000, 45
+        )
+
+        if response.status_code != 200:
+            logger.error(
+                "DeepSeek import-from-instagram returned %s: %s",
+                response.status_code,
+                response.text[:500],
+            )
+            raise HTTPException(status_code=500, detail="AI analysis failed — please try again")
+
+        result = _parse_deepseek_json(response)
+        return {
+            "niche_name": result.get("niche_name", ""),
+            "content_brief": result.get("content_brief", ""),
+            "posts_analysed": len(caption_samples),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Import from Instagram failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to analyse Instagram content")
 
 
 @router.post("/ai-understanding")

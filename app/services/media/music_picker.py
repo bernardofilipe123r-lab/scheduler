@@ -1,5 +1,5 @@
 """
-Helper to pick a random user-uploaded music track for video generation.
+Helper to pick a weighted-random user-uploaded music track for video generation.
 """
 import random
 import logging
@@ -13,12 +13,18 @@ logger = logging.getLogger(__name__)
 
 
 def get_random_user_music_url(db: Session, user_id: str) -> Optional[str]:
-    """Return the storage URL of a random music track for the given user, or None."""
+    """Return the storage URL of a weighted-random music track, or None.
+
+    Tracks with weight=0 are excluded. Selection probability is proportional
+    to each track's weight (e.g. weight 200 is twice as likely as weight 100).
+    """
     tracks = (
-        db.query(UserMusic.storage_url)
-        .filter(UserMusic.user_id == user_id)
+        db.query(UserMusic.storage_url, UserMusic.weight)
+        .filter(UserMusic.user_id == user_id, UserMusic.weight > 0)
         .all()
     )
     if not tracks:
         return None
-    return random.choice(tracks)[0]
+    urls = [t[0] for t in tracks]
+    weights = [t[1] for t in tracks]
+    return random.choices(urls, weights=weights, k=1)[0]

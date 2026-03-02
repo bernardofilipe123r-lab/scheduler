@@ -11,6 +11,7 @@ export interface MusicTrack {
   filename: string
   storage_url: string
   duration_seconds: number | null
+  weight: number
   created_at: string
 }
 
@@ -66,6 +67,18 @@ export function useDeleteMusic() {
   return useMutation({
     mutationFn: (trackId: string) =>
       apiClient.delete<{ success: boolean }>(`/api/music/${trackId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: musicKeys.all })
+    },
+  })
+}
+
+export function useUpdateMusicWeight() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ trackId, weight }: { trackId: string; weight: number }) =>
+      apiClient.patch<{ track: MusicTrack }>(`/api/music/${trackId}/weight`, { weight }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: musicKeys.all })
     },

@@ -132,3 +132,21 @@ export function useSuggestYtTitles() {
     mutationFn: fetchSuggestYtTitles,
   })
 }
+
+// Import Content DNA from Instagram
+
+interface ImportFromInstagramResult {
+  niche_name: string
+  content_brief: string
+  posts_analysed: number
+}
+
+async function fetchImportFromInstagram(data: { brand_id: string }): Promise<ImportFromInstagramResult> {
+  return apiClient.post<ImportFromInstagramResult>('/api/v2/brands/niche-config/import-from-instagram', data, { timeout: 60_000 })
+}
+
+export function useImportFromInstagram() {
+  return useMutation({
+    mutationFn: fetchImportFromInstagram,
+  })
+}

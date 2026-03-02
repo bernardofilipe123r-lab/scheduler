@@ -1,12 +1,12 @@
 """
 Music management API — upload, list, delete per-user background music tracks.
-Max 5 tracks per user. Used randomly during reel video generation.
+Max 20 tracks per user. Weighted random selection during reel video generation.
 """
 import uuid
 import logging
 from typing import Dict, Any, List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.auth.middleware import get_current_user
@@ -21,7 +21,7 @@ from app.utils.ffmpeg import get_audio_duration_from_bytes
 
 logger = logging.getLogger(__name__)
 
-MAX_MUSIC_PER_USER = 5
+MAX_MUSIC_PER_USER = 20
 ALLOWED_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aac", ".ogg"}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
@@ -53,7 +53,7 @@ async def upload_music(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Upload a new music track (max 5 per user, max 20 MB)."""
+    """Upload a new music track (max 20 per user, max 20 MB)."""
     user_id: str = user["id"]
 
     # Check limit
@@ -138,3 +138,24 @@ async def delete_music(
     db.commit()
 
     return {"success": True, "message": "Track deleted"}
+
+
+@router.patch("/{track_id}/weight", response_model=None)
+async def update_weight(
+    track_id: str,
+    weight: int = Body(..., ge=0, le=100, embed=True),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Update the selection weight (0–100) for a music track."""
+    track = (
+        db.query(UserMusic)
+        .filter(UserMusic.id == track_id, UserMusic.user_id == user["id"])
+        .first()
+    )
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    track.weight = weight
+    db.commit()
+    db.refresh(track)
+    return {"track": track.to_dict()}

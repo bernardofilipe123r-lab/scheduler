@@ -5,6 +5,7 @@ import { BrandsTabBar, type BrandsTab } from '@/features/brands/components/Brand
 import { MyBrandsTab } from '@/features/brands/components/MyBrandsTab'
 import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 import { ConnectionsTab } from '@/features/brands/components/ConnectionsTab'
+import { MusicManager } from '@/features/brands/components/MusicManager'
 
 export function BrandsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -54,6 +55,11 @@ export function BrandsPage() {
       {activeTab === 'brands' && <MyBrandsTab />}
       {activeTab === 'prompts' && <NicheConfigForm />}
       {activeTab === 'connections' && <ConnectionsTab />}
+      {activeTab === 'settings' && (
+        <div className="max-w-2xl">
+          <MusicManager />
+        </div>
+      )}
     </div>
   )
 }
