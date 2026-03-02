@@ -76,15 +76,19 @@ def mine_historical_content(
     """
     from app.models.toby import TobyContentTag
     from app.models.analytics import PostPerformance
+    from app.models.scheduling import ScheduledReel
 
     result = {"posts_analyzed": 0, "insights": 0, "rules": 0}
 
-    # Get scored posts from the analytics table
+    # Get scored posts — only Toby-created content so manual user
+    # uploads don't pollute Toby's bootstrapped memory.
     scored_posts = (
         db.query(PostPerformance)
+        .join(ScheduledReel, ScheduledReel.schedule_id == PostPerformance.schedule_id)
         .filter(
             PostPerformance.brand == brand_id,
             PostPerformance.performance_score.isnot(None),
+            ScheduledReel.created_by == "toby",
         )
         .order_by(PostPerformance.performance_score.desc())
         .limit(max_posts)

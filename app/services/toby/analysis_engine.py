@@ -112,14 +112,21 @@ def compute_toby_score(
 
 
 def get_brand_baseline(db: Session, brand: str, days: int = 14) -> dict:
-    """Compute rolling baseline stats for a brand over the last N days."""
+    """Compute rolling baseline stats for a brand over the last N days.
+    
+    Only includes Toby-created content so manual user uploads don't
+    skew the baseline that Toby scores its own content against.
+    """
+    from app.models.scheduling import ScheduledReel
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (
         db.query(PostPerformance)
+        .join(ScheduledReel, ScheduledReel.schedule_id == PostPerformance.schedule_id)
         .filter(
             PostPerformance.brand == brand,
             PostPerformance.published_at >= cutoff,
             PostPerformance.views > 0,
+            ScheduledReel.created_by == "toby",
         )
         .all()
     )
