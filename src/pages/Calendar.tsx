@@ -19,10 +19,10 @@ import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
 import { clsx } from 'clsx'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 import { useDynamicBrands, useBrandConnections } from '@/features/brands'
-import { useScheduledPosts } from '@/features/scheduling'
+import { useScheduledPosts, schedulingKeys } from '@/features/scheduling'
 import { useAuth } from '@/features/auth'
 import type { ScheduledPost } from '@/shared/types'
 
@@ -38,6 +38,7 @@ function Calendar() {
   const adminUserName = currentUser?.isSuperAdmin ? searchParams.get('user_name') : null
   const isAdminView = !!adminUserId
 
+  const queryClient = useQueryClient()
   const { brands } = useDynamicBrands()
   const { data: ownScheduledPosts = [], isLoading: ownPostsLoading } = useScheduledPosts()
   const { data: connectionsData } = useBrandConnections()
@@ -149,7 +150,8 @@ function Calendar() {
       setSocialMedia('')
       setShowUploadModal(false)
 
-      // Data auto-refreshes via useScheduledPosts hook
+      // Refresh calendar data
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.scheduled() })
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to schedule content')
     } finally {
