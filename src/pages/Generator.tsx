@@ -14,6 +14,7 @@ import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
 import { useDynamicBrands, useNicheConfig, useBrandConnections } from '@/features/brands'
+import { useUserMusic } from '@/features/brands/api/use-music'
 import { GeneratorSkeleton } from '@/shared/components'
 import type { BrandName, Variant } from '@/shared/types'
 
@@ -33,6 +34,8 @@ export function GeneratorPage() {
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: nicheConfig, isLoading: configLoading } = useNicheConfig()
   const { data: connectionsData } = useBrandConnections()
+  const { data: musicData } = useUserMusic()
+  const musicTracks = musicData?.tracks ?? []
 
   // Derive which platforms have at least one connected brand
   const hasFacebook = connectionsData?.brands.some(b => b.facebook.connected) ?? true
@@ -78,6 +81,7 @@ export function GeneratorPage() {
   const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube', 'tiktok'])
   const [autoCtaType, setAutoCtaType] = useState('auto')
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
+  const [selectedMusic, setSelectedMusic] = useState<string>('auto')
   
   // When connections data loads, remove platforms with no connected brands from defaults
   useEffect(() => {
@@ -174,6 +178,7 @@ export function GeneratorPage() {
         cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
         platforms: autoPlatforms,
         image_model: imageModel,
+        music_track_id: selectedMusic === 'auto' ? undefined : selectedMusic,
       })
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -257,6 +262,7 @@ export function GeneratorPage() {
         platforms: selectedPlatforms,
         image_model: imageModel,
         fixed_title: true,
+        music_track_id: selectedMusic === 'auto' ? undefined : selectedMusic,
       })
       
       setTitle('')
@@ -469,6 +475,24 @@ export function GeneratorPage() {
                 </div>
               </div>
             </div>
+
+            {/* Card: Music */}
+            {musicTracks.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🎵 Background Music</label>
+                <select
+                  value={selectedMusic}
+                  onChange={(e) => setSelectedMusic(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
+                >
+                  <option value="auto">🎲 Auto (weighted random)</option>
+                  {musicTracks.map((t) => (
+                    <option key={t.id} value={t.id}>{t.filename}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">A random segment of the track will be used</p>
+              </div>
+            )}
 
             {/* Card: Brands — 2-column grid */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -707,6 +731,23 @@ export function GeneratorPage() {
                 </div>
               </div>
             </div>
+
+            {/* Music selector in auto modal */}
+            {musicTracks.length > 0 && (
+              <div className="mt-4">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🎵 Background Music</label>
+                <select
+                  value={selectedMusic}
+                  onChange={(e) => setSelectedMusic(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                >
+                  <option value="auto">🎲 Auto (weighted random)</option>
+                  {musicTracks.map((t) => (
+                    <option key={t.id} value={t.id}>{t.filename}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Modal actions */}
             <div className="flex gap-3 mt-5">

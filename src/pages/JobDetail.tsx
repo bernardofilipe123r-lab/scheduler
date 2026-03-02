@@ -646,7 +646,7 @@ export function JobDetailPage() {
       )}
       
       {/* Music Section */}
-      {!isGenerating && (
+      {musicTracks.length > 0 && !isGenerating && (
         <div className="card p-4 bg-gray-50 border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
