@@ -66,28 +66,30 @@ export async function get<T>(endpoint: string, options?: RequestOptions): Promis
 
 export async function post<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
+  const isFormData = data instanceof FormData
   const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...auth,
       ...options?.headers,
     },
-    body: data ? JSON.stringify(data) : undefined,
+    body: isFormData ? data : data ? JSON.stringify(data) : undefined,
   }, options?.timeout)
   return handleResponse<T>(response)
 }
 
 export async function put<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
+  const isFormData = data instanceof FormData
   const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'PUT',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...auth,
       ...options?.headers,
     },
-    body: data ? JSON.stringify(data) : undefined,
+    body: isFormData ? data : data ? JSON.stringify(data) : undefined,
   })
   return handleResponse<T>(response)
 }
@@ -103,14 +105,15 @@ export async function del<T>(endpoint: string, options?: RequestOptions): Promis
 
 export async function patch<T>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
   const auth = await authHeaders()
+  const isFormData = data instanceof FormData
   const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'PATCH',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...auth,
       ...options?.headers,
     },
-    body: data ? JSON.stringify(data) : undefined,
+    body: isFormData ? data : data ? JSON.stringify(data) : undefined,
   })
   return handleResponse<T>(response)
 }
