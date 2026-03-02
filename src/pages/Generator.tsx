@@ -561,82 +561,85 @@ export function GeneratorPage() {
 
       {/* Auto Generate Modal */}
       {showAutoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 mt-0">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900">🤖 Auto-Generate Viral Reel</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm mt-0">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 border border-gray-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-bold text-gray-900">🤖 Auto-Generate Viral Reel</h2>
               <button
                 onClick={() => setShowAutoModal(false)}
-                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              {/* Variant + Image Model row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Variant</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setAutoVariant('light')}
-                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
-                        autoVariant === 'light'
-                          ? 'border-stone-800 bg-stone-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      ☀️ Light
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAutoVariant('dark')}
-                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
-                        autoVariant === 'dark'
-                          ? 'border-stone-800 bg-stone-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      🌙 Dark
-                    </button>
+            {/* Body — two-column layout */}
+            <div className="grid grid-cols-[1fr_1fr] divide-x divide-gray-100">
+              {/* Left column — settings */}
+              <div className="p-6 space-y-5">
+                {/* Variant + Image Model */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Variant</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setAutoVariant('light')}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                          autoVariant === 'light'
+                            ? 'border-stone-800 bg-stone-900 text-white'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        ☀️ Light
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAutoVariant('dark')}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                          autoVariant === 'dark'
+                            ? 'border-stone-800 bg-stone-900 text-white'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        🌙 Dark
+                      </button>
+                    </div>
+                  </div>
+                  <div className={autoVariant === 'light' && !autoPlatforms.includes('youtube') ? 'opacity-40 pointer-events-none' : ''}>
+                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Image Model</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setImageModel('ZImageTurbo_INT8')}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                          imageModel === 'ZImageTurbo_INT8'
+                            ? 'border-stone-800 bg-stone-900 text-white'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        ✨ Quality
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImageModel('Flux1schnell')}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                          imageModel === 'Flux1schnell'
+                            ? 'border-stone-800 bg-stone-900 text-white'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        ⚡ Fast
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className={autoVariant === 'light' && !autoPlatforms.includes('youtube') ? 'opacity-40 pointer-events-none' : ''}>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Image Model</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setImageModel('ZImageTurbo_INT8')}
-                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
-                        imageModel === 'ZImageTurbo_INT8'
-                          ? 'border-stone-800 bg-stone-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      ✨ Quality
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImageModel('Flux1schnell')}
-                      className={`p-2 rounded-lg border text-xs font-medium transition-all ${
-                        imageModel === 'Flux1schnell'
-                          ? 'border-stone-800 bg-stone-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      ⚡ Fast
-                    </button>
-                  </div>
-                </div>
-              </div>
 
-              {/* Brand count + CTA row */}
-              <div className="grid grid-cols-2 gap-4">
+                {/* Brand count */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">How many brands?</label>
-                  <div className="flex gap-2">
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">How many brands?</label>
+                  <div className="flex gap-1.5">
                     {brandIds.map((_, i) => {
                       const count = i + 1
                       return (
@@ -656,105 +659,111 @@ export function GeneratorPage() {
                     })}
                   </div>
                 </div>
+
+                {/* CTA */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Call-to-Action</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Call-to-Action</label>
                   <select
                     value={autoCtaType}
                     onChange={(e) => setAutoCtaType(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                   >
-                    <option value="auto">🎲 Auto</option>
+                    <option value="auto">🎲 Auto (weighted random)</option>
                     {ctaOptions.map((cta, i) => (
                       <option key={i} value={cta.text}>{cta.text}</option>
                     ))}
                   </select>
                 </div>
+
+                {/* Music */}
+                {musicTracks.length > 0 && (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">🎵 Background Music</label>
+                    <select
+                      value={selectedMusic}
+                      onChange={(e) => setSelectedMusic(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                    >
+                      <option value="auto">🎲 Auto (weighted random)</option>
+                      {musicTracks.map((t) => (
+                        <option key={t.id} value={t.id}>{t.filename}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              {/* Brands */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Select brands</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {dynamicBrands.map((brand) => {
-                    const checked = autoBrands.includes(brand.id)
-                    return (
-                      <label
-                        key={brand.id}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
-                          checked
-                            ? 'border-stone-300 bg-stone-50'
-                            : 'border-gray-100 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleAutoBrand(brand.id)}
-                        />
-                        <div
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: brand.color || '#999' }}
-                        />
-                        <span className="text-sm font-medium text-gray-700">{brand.label}</span>
-                      </label>
-                    )
-                  })}
+              {/* Right column — brands + platforms */}
+              <div className="p-6 space-y-5">
+                {/* Brands */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Select brands</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {dynamicBrands.map((brand) => {
+                      const checked = autoBrands.includes(brand.id)
+                      return (
+                        <label
+                          key={brand.id}
+                          className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all border ${
+                            checked
+                              ? 'border-stone-300 bg-stone-50'
+                              : 'border-gray-100 hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleAutoBrand(brand.id)}
+                            className="accent-stone-800"
+                          />
+                          <div
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: brand.color || '#999' }}
+                          />
+                          <span className="text-xs font-medium text-gray-700 truncate">{brand.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* Platforms — icon buttons */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
-                <div className="flex gap-2">
-                  {availablePlatforms.map(({ id, label, icon }) => {
-                    const active = autoPlatforms.includes(id)
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => toggleAutoPlatform(id)}
-                        className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${
-                          active
-                            ? 'border-green-300 bg-green-50'
-                            : 'border-gray-200 hover:bg-gray-50 opacity-40'
-                        }`}
-                      >
-                        {typeof icon === 'string' && icon.length === 1 ? (
-                          <span className="text-lg">{icon}</span>
-                        ) : (
-                          <img src={icon} alt={label} loading="eager" className="h-5 w-auto" />
-                        )}
-                        <span className="text-[10px] font-medium text-gray-700">{label}</span>
-                      </button>
-                    )
-                  })}
+                {/* Platforms */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Publish To</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {availablePlatforms.map(({ id, label, icon }) => {
+                      const active = autoPlatforms.includes(id)
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => toggleAutoPlatform(id)}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all ${
+                            active
+                              ? 'border-green-300 bg-green-50'
+                              : 'border-gray-200 hover:bg-gray-50 opacity-40'
+                          }`}
+                        >
+                          {typeof icon === 'string' && icon.length === 1 ? (
+                            <span className="text-base">{icon}</span>
+                          ) : (
+                            <img src={icon} alt={label} loading="eager" className="h-4 w-auto" />
+                          )}
+                          <span className="text-xs font-medium text-gray-700">{label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Music selector in auto modal */}
-            {musicTracks.length > 0 && (
-              <div className="mt-4">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🎵 Background Music</label>
-                <select
-                  value={selectedMusic}
-                  onChange={(e) => setSelectedMusic(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
-                >
-                  <option value="auto">🎲 Auto (weighted random)</option>
-                  {musicTracks.map((t) => (
-                    <option key={t.id} value={t.id}>{t.filename}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Modal actions */}
-            <div className="flex gap-3 mt-5">
+            {/* Footer actions */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-xl">
               <button
                 type="button"
                 onClick={() => setShowAutoModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-sm"
+                className="px-5 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-100 font-medium text-sm transition-colors"
               >
                 Cancel
               </button>
@@ -762,7 +771,7 @@ export function GeneratorPage() {
                 type="button"
                 onClick={handleAutoSubmit}
                 disabled={autoBrands.length === 0}
-                className="flex-1 px-4 py-2.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-medium text-sm disabled:opacity-50"
+                className="px-6 py-2 bg-stone-900 text-white rounded-lg hover:bg-stone-800 font-medium text-sm disabled:opacity-50 transition-colors"
               >
                 Generate
               </button>
