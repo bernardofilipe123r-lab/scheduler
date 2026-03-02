@@ -100,7 +100,7 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
                     )}
                     <span className="text-gray-300">·</span>
                     <span className={`flex items-center gap-1 text-xs ${isWorking ? 'text-blue-500' : 'text-gray-400'}`}>
-                      <Activity className={`w-3 h-3 ${isWorking ? 'animate-pulse' : ''}`} />
+                      <Activity className="w-3 h-3" />
                       {isWorking ? status.live.current_action?.label || 'Working' : 'Idle'}
                     </span>
                   </>

@@ -206,15 +206,57 @@ def update_strategy_score(
     )
 
     if not existing:
-        existing = TobyStrategyScore(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            brand_id=brand_id,
-            content_type=content_type,
-            dimension=dimension,
-            option_value=option_value,
-        )
-        db.add(existing)
+        try:
+            nested = db.begin_nested()
+            existing = TobyStrategyScore(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                brand_id=brand_id,
+                content_type=content_type,
+                dimension=dimension,
+                option_value=option_value,
+                sample_count=0,
+                total_score=0,
+                avg_score=0,
+                score_variance=0,
+                best_score=0,
+                worst_score=100,
+                weighted_total=0,
+                weight_sum=0,
+                alpha=1.0,
+                beta_param=1.0,
+                recent_scores=[],
+            )
+            db.add(existing)
+            db.flush()
+        except Exception:
+            nested.rollback()
+            # Row already exists (unique constraint) — re-fetch
+            existing = (
+                db.query(TobyStrategyScore)
+                .filter(
+                    TobyStrategyScore.user_id == user_id,
+                    TobyStrategyScore.brand_id == brand_id,
+                    TobyStrategyScore.content_type == content_type,
+                    TobyStrategyScore.dimension == dimension,
+                    TobyStrategyScore.option_value == option_value,
+                )
+                .first()
+            )
+            if not existing:
+                return
+
+    # Ensure fields aren't NULL (fix corrupt pre-existing rows)
+    if existing.sample_count is None:
+        existing.sample_count = 0
+    if existing.total_score is None:
+        existing.total_score = 0
+    if existing.best_score is None:
+        existing.best_score = 0
+    if existing.worst_score is None:
+        existing.worst_score = 100
+    if existing.score_variance is None:
+        existing.score_variance = 0
 
     existing.sample_count += 1
     existing.total_score += score
