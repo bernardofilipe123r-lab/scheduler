@@ -561,7 +561,7 @@ export function GeneratorPage() {
 
       {/* Auto Generate Modal */}
       {showAutoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 mt-0">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-gray-900">🤖 Auto-Generate Viral Reel</h2>

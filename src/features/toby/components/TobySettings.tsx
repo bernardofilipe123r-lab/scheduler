@@ -37,8 +37,16 @@ export function TobySettings() {
   const getBrandVal = (brandId: string, key: string, fallback: number | boolean) =>
     brandForms[brandId]?.[key] ?? fallback
 
-  const hasGlobalChanges = Object.keys(form).length > 0
-  const hasBrandChanges = Object.values(brandForms).some(f => Object.keys(f).length > 0)
+  const hasGlobalChanges = Object.entries(form).some(
+    ([key, val]) => val !== (config as unknown as Record<string, number | boolean>)[key],
+  )
+  const hasBrandChanges = brandConfigs.some((bc) => {
+    const bf = brandForms[bc.brand_id]
+    if (!bf) return false
+    return Object.entries(bf).some(
+      ([key, val]) => val !== (bc as unknown as Record<string, number | boolean>)[key],
+    )
+  })
   const hasChanges = hasGlobalChanges || hasBrandChanges
 
   const reelsEnabled = getVal('reels_enabled', config.reels_enabled) as boolean
@@ -47,7 +55,9 @@ export function TobySettings() {
   const handleSaveGlobal = () => {
     const updates: Record<string, number | boolean> = {}
     for (const [key, val] of Object.entries(form)) {
-      updates[key] = val
+      if (val !== (config as unknown as Record<string, number | boolean>)[key]) {
+        updates[key] = val
+      }
     }
     if (Object.keys(updates).length > 0) {
       updateMut.mutate(updates as any, { onSuccess: () => setForm({}) })
@@ -56,11 +66,15 @@ export function TobySettings() {
 
   const handleSaveBrand = (brandId: string) => {
     const brandForm = brandForms[brandId]
-    if (!brandForm || Object.keys(brandForm).length === 0) return
+    if (!brandForm) return
+    const bc = brandConfigs.find(b => b.brand_id === brandId)
     const data: Record<string, number | boolean> = {}
     for (const [key, val] of Object.entries(brandForm)) {
-      data[key] = val
+      if (!bc || val !== (bc as unknown as Record<string, number | boolean>)[key]) {
+        data[key] = val
+      }
     }
+    if (Object.keys(data).length === 0) return
     updateBrandMut.mutate(
       { brandId, data: data as any },
       {
@@ -83,16 +97,41 @@ export function TobySettings() {
     }
   }
 
+  const setGlobalField = (key: string, val: number | boolean) => {
+    const original = (config as unknown as Record<string, number | boolean>)[key]
+    if (val === original) {
+      setForm(prev => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    } else {
+      setForm(prev => ({ ...prev, [key]: val }))
+    }
+  }
+
   const toggleGlobal = (key: 'reels_enabled' | 'posts_enabled') => {
     const current = getVal(key, config[key]) as boolean
-    setForm({ ...form, [key]: !current })
+    setGlobalField(key, !current)
   }
 
   const setBrandField = (brandId: string, key: string, val: number | boolean) => {
-    setBrandForms(prev => ({
-      ...prev,
-      [brandId]: { ...(prev[brandId] || {}), [key]: val },
-    }))
+    const bc = brandConfigs.find(b => b.brand_id === brandId)
+    const original = bc ? (bc as unknown as Record<string, number | boolean>)[key] : undefined
+    setBrandForms(prev => {
+      const brandForm = { ...(prev[brandId] || {}) }
+      if (val === original) {
+        delete brandForm[key]
+      } else {
+        brandForm[key] = val
+      }
+      if (Object.keys(brandForm).length === 0) {
+        const next = { ...prev }
+        delete next[brandId]
+        return next
+      }
+      return { ...prev, [brandId]: brandForm }
+    })
   }
 
   return (
@@ -130,7 +169,7 @@ export function TobySettings() {
             label="Buffer Days"
             desc="How many days ahead to keep the content buffer filled"
             value={getVal('buffer_days', config.buffer_days) as number}
-            onChange={(v) => setForm({ ...form, buffer_days: v })}
+            onChange={(v) => setGlobalField('buffer_days', v)}
             min={1}
             max={7}
             step={1}
@@ -139,7 +178,7 @@ export function TobySettings() {
             label="Explore Ratio"
             desc="Percentage of content that tries new strategies vs. proven winners"
             value={getVal('explore_ratio', config.explore_ratio) as number}
-            onChange={(v) => setForm({ ...form, explore_ratio: v })}
+            onChange={(v) => setGlobalField('explore_ratio', v)}
             min={0}
             max={1}
             step={0.05}
