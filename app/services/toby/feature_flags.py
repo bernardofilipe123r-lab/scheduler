@@ -22,7 +22,7 @@ TOBY_FEATURES = {
     "cognitive_strategist": False,   # v3: DeepSeek R1 chain-of-thought strategy reasoning
     "multi_critic": False,           # v3: Multi-critic ensemble (rule + semantic + audience)
     "memory_system": False,          # v3: Episodic / semantic / procedural memory subsystem
-    "deliberation_loop": False,      # v3: Loop 3 — daily pattern analysis via R1
+    "deliberation_loop": True,       # v3: Loop 3 — daily pattern analysis via R1
     "meta_learning": False,          # v3: Loop 4 — weekly meta-cognitive self-tuning
     "intelligence_pipeline": False,  # v3: Raw signal processing + competitor analysis
     "historical_mining": False,      # v3: Retroactive learning from historical content

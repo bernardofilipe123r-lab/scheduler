@@ -74,8 +74,8 @@ export function TobyKnowledgeMeter() {
   const postsLearned = status.posts_learned_from ?? 0
   const topStrategies = status.current_top_strategies ?? []
 
-  // Top 2 strategies for the "Toby is betting on" summary
-  const topTwo = topStrategies.slice(0, 2)
+  // Show all strategies Toby is betting on (up to 5 dimensions)
+  const topBets = topStrategies.slice(0, 5)
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -196,7 +196,7 @@ export function TobyKnowledgeMeter() {
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {topTwo.length > 0 ? topTwo.map((s) => (
+            {topBets.length > 0 ? topBets.map((s) => (
               <div key={s.dimension} className="group relative flex items-center gap-1.5 bg-white/80 rounded-lg px-2.5 py-1 border border-white shadow-sm">
                 <span className="text-[10px] text-gray-400 capitalize">{s.dimension}:</span>
                 <span className={`text-[11px] font-semibold ${meta.color} capitalize`}>

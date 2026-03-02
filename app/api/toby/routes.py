@@ -88,6 +88,16 @@ def get_status(
         .filter(TobyContentTag.user_id == uid, TobyContentTag.toby_score.isnot(None))
         .count()
     )
+    from app.models.scheduling import ScheduledReel
+    total_published = (
+        db.query(TobyContentTag)
+        .join(ScheduledReel, ScheduledReel.schedule_id == TobyContentTag.schedule_id)
+        .filter(
+            TobyContentTag.user_id == uid,
+            ScheduledReel.status.in_(["published", "partial"]),
+        )
+        .count()
+    )
 
     # v3.0: Learning confidence (replaces time-based phase progress)
     from app.services.toby.state import compute_learning_confidence
@@ -147,6 +157,7 @@ def get_status(
         "stats": {
             "total_created": total_created,
             "total_scored": total_scored,
+            "total_published": total_published,
         },
         "phase_progress": phase_progress,
         "recent_ticks": [t.to_dict() for t in recent_ticks],

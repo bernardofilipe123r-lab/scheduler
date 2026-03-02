@@ -59,6 +59,7 @@ export interface TobyTimestamps {
 export interface TobyStats {
   total_created: number
   total_scored: number
+  total_published: number
 }
 
 export interface TobyPhaseRequirements {

@@ -188,9 +188,15 @@ def _process_user(db: Session, state: TobyState):
         if is_enabled("deliberation_loop") and _should_check(state.last_deliberation_at, 1440):  # 24h
             from app.services.toby.agents.pattern_analyzer import pattern_analysis_loop
             from app.services.toby.agents.experiment_designer import design_experiment
+            from app.models.brands import Brand
             pattern_analysis_loop(db, user_id)
-            # After pattern analysis, check if we should design new experiments
-            design_experiment(db, user_id)
+            # After pattern analysis, design experiments per brand
+            user_brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
+            for brand in user_brands:
+                try:
+                    design_experiment(db, user_id, brand.id, "reel")
+                except Exception as exp_err:
+                    print(f"[TOBY] Experiment design failed for {brand.id}: {exp_err}", flush=True)
             state.last_deliberation_at = now
             state.updated_at = now
             db.commit()
@@ -688,6 +694,8 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
             # Generate learning event for this tag
             lesson = _generate_learning_lesson(tag, brand_avgs.get(tag.brand_id, 50.0))
             if lesson:
+                # Use the tag's scored_at timestamp so learning feed shows realistic times
+                event_time = tag.scored_at or datetime.now(timezone.utc)
                 db.add(TobyActivityLog(
                     user_id=user_id,
                     action_type="learning_event",
@@ -702,7 +710,7 @@ def _run_analysis_check(db: Session, user_id: str, state: TobyState):
                         "topic": tag.topic_bucket,
                         "score_phase": "48h",
                     },
-                    created_at=datetime.now(timezone.utc),
+                    created_at=event_time,
                 ))
 
             # Update strategy scores
@@ -1059,6 +1067,7 @@ def _generate_48h_learning_events(db: Session, user_id: str, count: int):
     for tag in recently_scored:
         lesson = _generate_learning_lesson(tag, brand_avgs.get(tag.brand_id, 50.0))
         if lesson:
+            event_time = tag.scored_at or datetime.now(timezone.utc)
             db.add(TobyActivityLog(
                 user_id=user_id,
                 action_type="learning_event",
@@ -1073,7 +1082,7 @@ def _generate_48h_learning_events(db: Session, user_id: str, count: int):
                     "topic": tag.topic_bucket,
                     "score_phase": "48h",
                 },
-                created_at=datetime.now(timezone.utc),
+                created_at=event_time,
             ))
     db.flush()
 

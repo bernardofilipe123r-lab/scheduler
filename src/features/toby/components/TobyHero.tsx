@@ -139,7 +139,7 @@ export function TobyHero({ onLearnMore }: { onLearnMore?: () => void }) {
         {status.enabled && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <MetricCard
-              label="Created" value={status.stats?.total_created || 0}
+              label="Published" value={status.stats?.total_published || 0}
               icon={Sparkles} bg="bg-violet-50" iconColor="text-violet-500" valueColor="text-violet-700"
             />
             <MetricCard

@@ -189,7 +189,7 @@ export function TobyLiveStatus({ status }: { status: TobyStatus }) {
         <div className="px-5 py-2.5 border-t border-gray-100 flex items-center gap-6">
           <div className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-xs text-gray-500"><span className="font-semibold text-gray-700">{status.stats.total_created}</span> created</span>
+            <span className="text-xs text-gray-500"><span className="font-semibold text-gray-700">{status.stats.total_published || status.stats.total_created}</span> published</span>
           </div>
           <div className="flex items-center gap-1.5">
             <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
