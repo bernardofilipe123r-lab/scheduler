@@ -1,6 +1,8 @@
 """
 Social media publisher for Instagram and Facebook Reels.
 """
+import io
+import tempfile
 import time
 import re
 import requests
@@ -178,7 +180,57 @@ class SocialPublisher:
         except Exception as e:
             print(f"   ❌ Token refresh failed: {e}")
             return False
-    
+
+    def _ensure_jpeg_urls(self, image_urls: list[str]) -> list[str]:
+        """Convert any PNG image URLs to JPEG for Instagram compatibility.
+
+        Instagram's Content Publishing API requires JPEG format for carousel
+        items.  If a URL ends with ``.png``, the image is downloaded, converted
+        to RGB JPEG, re-uploaded to Supabase, and the new URL returned.
+        URLs that already point to JPEG files are left untouched.
+        """
+        result = []
+        for url in image_urls:
+            if not url.lower().endswith(".png"):
+                result.append(url)
+                continue
+
+            try:
+                from PIL import Image as _PILImage
+                from app.services.storage.supabase_storage import upload_file
+
+                print(f"   🔄 Converting PNG→JPEG: {url.split('/')[-1]}")
+                resp = requests.get(url, timeout=60)
+                resp.raise_for_status()
+
+                img = _PILImage.open(io.BytesIO(resp.content))
+                if img.mode == "RGBA":
+                    bg = _PILImage.new("RGB", img.size, (255, 255, 255))
+                    bg.paste(img, mask=img.split()[3])
+                    img = bg
+                elif img.mode != "RGB":
+                    img = img.convert("RGB")
+
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=92, optimize=True)
+                jpeg_bytes = buf.getvalue()
+
+                # Derive remote path from the original Supabase URL
+                # URL pattern: .../storage/v1/object/public/media/<remote_path>.png
+                parts = url.split("/storage/v1/object/public/media/", 1)
+                if len(parts) == 2:
+                    remote_path = parts[1].rsplit(".", 1)[0] + ".jpg"
+                    jpeg_url = upload_file("media", remote_path, jpeg_bytes, content_type="image/jpeg")
+                    print(f"   ✅ Converted: {remote_path}")
+                    result.append(jpeg_url)
+                else:
+                    print(f"   ⚠️ Could not parse Supabase path from URL, using original PNG")
+                    result.append(url)
+            except Exception as exc:
+                print(f"   ⚠️ PNG→JPEG conversion failed ({exc}), using original PNG")
+                result.append(url)
+        return result
+
     def _get_page_access_token(self, page_id: str) -> Optional[str]:
         """
         Get a Page Access Token from the System User Token.
@@ -632,6 +684,10 @@ class SocialPublisher:
 
         if len(image_urls) > 10:
             image_urls = image_urls[:10]  # Instagram max 10 carousel items
+
+        # Instagram carousel API requires JPEG format. Convert any PNG URLs
+        # to JPEG on-the-fly (covers existing scheduled posts with PNG images).
+        image_urls = self._ensure_jpeg_urls(image_urls)
 
         try:
             container_url = (

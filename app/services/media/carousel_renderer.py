@@ -141,22 +141,40 @@ def render_carousel_images(
             print(f"[RENDER] Error: {output.get('error')}", flush=True)
             return None
 
-        # Upload rendered images to Supabase
+        # Convert PNGs to JPEG (Instagram carousel API requires JPEG format)
+        # and upload rendered images to Supabase
         try:
+            from PIL import Image as _PILImage
             from app.services.storage.supabase_storage import upload_from_path, storage_path
+
+            def _convert_png_to_jpeg(png_path: str) -> str:
+                """Convert a PNG image to JPEG (RGB, no alpha). Returns the JPEG path."""
+                jpg_path = png_path.rsplit(".", 1)[0] + ".jpg"
+                img = _PILImage.open(png_path)
+                if img.mode == "RGBA":
+                    # Flatten alpha onto white background
+                    bg = _PILImage.new("RGB", img.size, (255, 255, 255))
+                    bg.paste(img, mask=img.split()[3])
+                    img = bg
+                elif img.mode != "RGB":
+                    img = img.convert("RGB")
+                img.save(jpg_path, format="JPEG", quality=92, optimize=True)
+                return jpg_path
 
             cover_path = output.get("coverPath", "")
             if cover_path and Path(cover_path).exists():
-                cover_name = Path(cover_path).name
+                cover_jpg = _convert_png_to_jpeg(cover_path)
+                cover_name = Path(cover_jpg).name
                 cover_remote = storage_path(user_id, brand, "posts", cover_name)
-                output["coverUrl"] = upload_from_path("media", cover_remote, cover_path)
+                output["coverUrl"] = upload_from_path("media", cover_remote, cover_jpg)
 
             slide_urls = []
             for sp in output.get("slidePaths", []):
                 if sp and Path(sp).exists():
-                    slide_name = Path(sp).name
+                    slide_jpg = _convert_png_to_jpeg(sp)
+                    slide_name = Path(slide_jpg).name
                     slide_remote = storage_path(user_id, brand, "posts", slide_name)
-                    slide_urls.append(upload_from_path("media", slide_remote, sp))
+                    slide_urls.append(upload_from_path("media", slide_remote, slide_jpg))
             output["slideUrls"] = slide_urls
         except Exception as upload_err:
             print(f"[RENDER] Supabase upload warning: {upload_err}", flush=True)
