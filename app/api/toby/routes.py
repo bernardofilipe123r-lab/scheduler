@@ -329,22 +329,32 @@ def get_insights(
 
     # Transform backend shape {reel: {dim: [{option, avg_score, ...}]}}
     # into frontend shape {top_strategies: {dim: [{strategy, mean_score, ...}]}, total_scored_posts}
-    merged: dict[str, list] = {}
+    # Aggregate by (dimension, option_value) across brands/content_types using weighted average
+    agg: dict[str, dict[str, dict]] = {}  # dim -> option -> {total_score, total_count}
     for _ct, dims in raw.items():
         for dim, items in dims.items():
-            if dim not in merged:
-                merged[dim] = []
+            if dim not in agg:
+                agg[dim] = {}
             for item in items:
-                merged[dim].append({
-                    "dimension": dim,
-                    "strategy": item["option"],
-                    "mean_score": item["avg_score"],
-                    "sample_count": item["sample_count"],
-                    "confidence_low": item.get("confidence_low"),
-                    "confidence_high": item.get("confidence_high"),
-                    "beta_mean": item.get("beta_mean"),
-                })
-    for dim in merged:
+                opt = item["option"]
+                if opt not in agg[dim]:
+                    agg[dim][opt] = {"total_score": 0.0, "total_count": 0}
+                n = item["sample_count"] or 1
+                agg[dim][opt]["total_score"] += item["avg_score"] * n
+                agg[dim][opt]["total_count"] += n
+
+    merged: dict[str, list] = {}
+    for dim, options in agg.items():
+        merged[dim] = []
+        for opt, vals in options.items():
+            count = vals["total_count"]
+            mean = vals["total_score"] / count if count else 0
+            merged[dim].append({
+                "dimension": dim,
+                "strategy": opt,
+                "mean_score": round(mean, 1),
+                "sample_count": count,
+            })
         merged[dim].sort(key=lambda x: x["mean_score"], reverse=True)
 
     total_scored = (
