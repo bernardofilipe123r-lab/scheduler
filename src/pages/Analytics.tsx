@@ -159,15 +159,15 @@ function FilterDropdown({
   )
 }
 
-function PlatformRow({ platform, metrics }: { platform: string; metrics: PlatformMetrics }) {
+function PlatformRow({ platform, metrics, connected = true }: { platform: string; metrics: PlatformMetrics; connected?: boolean }) {
   return (
-    <div className="flex items-center gap-4 px-5 py-3 border-t border-gray-50 hover:bg-gray-50 transition-colors">
+    <div className={`flex items-center gap-4 px-5 py-3 border-t border-gray-50 hover:bg-gray-50 transition-colors ${!connected ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-2 w-28">
         <PlatformIcon platform={platform} className="w-4 h-4 text-gray-500" />
         <span className="text-sm font-medium text-gray-700 capitalize">{platform}</span>
       </div>
       <div className="text-xs text-gray-400 flex-shrink-0">
-        Updated {formatTimeAgo(metrics.last_fetched_at)}
+        {connected ? `Updated ${formatTimeAgo(metrics.last_fetched_at)}` : 'Not connected'}
       </div>
       <div className="flex-1" />
       <div className="text-right w-20">
@@ -188,10 +188,15 @@ function PlatformRow({ platform, metrics }: { platform: string; metrics: Platfor
 
 function BrandCard({ brand, platformFilter }: { brand: BrandMetrics; platformFilter?: string }) {
   const allPlatforms = Object.entries(brand.platforms)
-  const platforms = platformFilter
+  const connectedPlatforms = platformFilter
     ? allPlatforms.filter(([p]) => p === platformFilter)
     : allPlatforms
-  const hasPlatforms = platforms.length > 0
+  const isConnected = connectedPlatforms.length > 0
+
+  // When filtering a platform not connected, show a "not connected" row with 0s
+  const platforms: [string, PlatformMetrics][] = platformFilter && !isConnected
+    ? [[platformFilter, { platform: platformFilter, followers_count: 0, views_last_7_days: 0, likes_last_7_days: 0, last_fetched_at: null }]]
+    : connectedPlatforms
 
   // Compute totals based on filtered platforms
   const cardTotals = platformFilter
@@ -204,6 +209,10 @@ function BrandCard({ brand, platformFilter }: { brand: BrandMetrics; platformFil
         { followers: 0, views_7d: 0, likes_7d: 0 }
       )
     : brand.totals
+
+  const connectedCount = platformFilter
+    ? (brand.platforms[platformFilter] ? 1 : 0)
+    : allPlatforms.length
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -220,46 +229,39 @@ function BrandCard({ brand, platformFilter }: { brand: BrandMetrics; platformFil
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900">{brand.display_name}</h3>
           <p className="text-sm text-gray-500">
-            {hasPlatforms
-              ? `${platforms.length} platform${platforms.length > 1 ? 's' : ''} connected`
-              : 'No platforms connected'}
+            {connectedCount > 0
+              ? `${connectedCount} platform${connectedCount > 1 ? 's' : ''} connected`
+              : platformFilter
+                ? `${platformFilter} not connected`
+                : 'No platforms connected'}
           </p>
         </div>
-        {hasPlatforms && (
-          <div className="flex gap-6 text-right">
-            <div>
-              <p className="text-xs text-gray-500">Followers</p>
-              <p className="font-bold text-lg" style={{ color: brand.color }}>
-                {formatNumber(cardTotals.followers)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Views (7d)</p>
-              <p className="font-bold text-lg text-gray-700">
-                {formatNumber(cardTotals.views_7d)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Likes (7d)</p>
-              <p className="font-bold text-lg text-pink-500">
-                {formatNumber(cardTotals.likes_7d)}
-              </p>
-            </div>
+        <div className="flex gap-6 text-right">
+          <div>
+            <p className="text-xs text-gray-500">Followers</p>
+            <p className="font-bold text-lg" style={{ color: brand.color }}>
+              {formatNumber(cardTotals.followers)}
+            </p>
           </div>
-        )}
+          <div>
+            <p className="text-xs text-gray-500">Views (7d)</p>
+            <p className="font-bold text-lg text-gray-700">
+              {formatNumber(cardTotals.views_7d)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Likes (7d)</p>
+            <p className="font-bold text-lg text-pink-500">
+              {formatNumber(cardTotals.likes_7d)}
+            </p>
+          </div>
+        </div>
       </div>
-      {hasPlatforms ? (
-        <div className="border-t border-gray-100">
-          {platforms.map(([p, m]) => (
-            <PlatformRow key={p} platform={p} metrics={m} />
-          ))}
-        </div>
-      ) : (
-        <div className="px-5 py-8 text-center text-gray-400 border-t border-gray-100">
-          <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p>No analytics data yet.</p>
-        </div>
-      )}
+      <div className="border-t border-gray-100">
+        {platforms.map(([p, m]) => (
+          <PlatformRow key={p} platform={p} metrics={m} connected={!!brand.platforms[p]} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -437,14 +439,8 @@ export function AnalyticsPage() {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
   const [timeRange, setTimeRange] = useState<number>(30)
 
-  // Dynamically detect all available platforms from analytics data
-  const availablePlatforms = useMemo(() => {
-    const platformSet = new Set<string>()
-    for (const b of data?.brands || []) {
-      for (const p of Object.keys(b.platforms)) platformSet.add(p)
-    }
-    return [...platformSet].sort()
-  }, [data?.brands])
+  // All supported platforms — always shown in filter even if not connected
+  const ALL_PLATFORMS = ['facebook', 'instagram', 'threads', 'tiktok', 'youtube']
 
   // Fetch snapshots (backend now deduplicates per day)
   const { data: snapshotsData } = useSnapshots({ days: timeRange })
@@ -539,10 +535,7 @@ export function AnalyticsPage() {
   const filteredBrands = useMemo(() => {
     let brands = data?.brands || []
     if (selectedBrand !== 'all') brands = brands.filter((b) => b.brand === selectedBrand)
-    if (selectedPlatform !== 'all') {
-      // Only include brands that have the selected platform
-      brands = brands.filter((b) => b.platforms[selectedPlatform])
-    }
+    // Don't filter brands out when platform has no data — show them with 0s
     return brands
   }, [data?.brands, selectedBrand, selectedPlatform])
 
@@ -571,7 +564,7 @@ export function AnalyticsPage() {
   ]
   const platformOptions = [
     { value: 'all', label: 'All Platforms' },
-    ...availablePlatforms.map((p) => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) })),
+    ...ALL_PLATFORMS.map((p) => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) })),
   ]
   const timeOptions = [
     { value: '7', label: 'Last 7 days' },
