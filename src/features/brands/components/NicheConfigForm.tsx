@@ -41,7 +41,11 @@ const DEFAULT_CONFIG: NicheConfig = {
   brand_personality: null,
   brand_focus_areas: [],
   parent_brand_name: '',
-  cta_options: [],
+  cta_options: [
+    { text: 'Follow for more content that actually matters', weight: 34 },
+    { text: 'Save this for later — you\'ll thank yourself', weight: 33 },
+    { text: 'Share this with someone who needs to see it', weight: 33 },
+  ],
   carousel_cta_options: [
     { text: 'Follow @{brandhandle} to learn more about {cta_topic}', weight: 34 },
     { text: 'If you want to learn more about {cta_topic}, follow our page!', weight: 33 },
@@ -114,6 +118,10 @@ export interface NicheConfigFormProps {
   onGeneratingChange?: (generating: boolean) => void
   /** Called when YouTube Title Style section validity changes (has titles OR skipped). */
   onYtValidChange?: (valid: boolean) => void
+  /** Whether the user has YouTube connected — hides YT section during onboarding when false. */
+  ytConnected?: boolean
+  /** Called when niche_name field changes — reports whether it has content. */
+  onNicheNameChange?: (filled: boolean) => void
 }
 
 export interface NicheConfigFormHandle {
@@ -121,7 +129,7 @@ export interface NicheConfigFormHandle {
   saveNow: () => Promise<void>
 }
 
-export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigFormProps>(function NicheConfigForm({ section, onGeneratingChange, onYtValidChange } = {}, ref) {
+export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigFormProps>(function NicheConfigForm({ section, onGeneratingChange, onYtValidChange, ytConnected, onNicheNameChange } = {}, ref) {
   const { data, isLoading } = useNicheConfig()
   const { data: brandsData } = useBrands()
   const updateMutation = useUpdateNicheConfig()
@@ -143,14 +151,27 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
     content_base64: string
   } | null>(null)
   const [skipYt, setSkipYt] = useState(false)
+  const [importAttempts, setImportAttempts] = useState(0)
+  const [importCooldownUntil, setImportCooldownUntil] = useState<number>(0)
+
+  // Report niche_name state to parent (e.g. Onboarding step 4 validation)
+  useEffect(() => {
+    if (onNicheNameChange) onNicheNameChange(Boolean(values.niche_name?.trim()))
+  }, [values.niche_name, onNicheNameChange])
+
+  // Auto-skip YouTube section during onboarding when YT is not connected
+  useEffect(() => {
+    if (section === 'reels' && ytConnected === false) setSkipYt(true)
+  }, [section, ytConnected])
 
   // Report reels step validity to parent (YT titles valid AND enough reel examples)
   useEffect(() => {
     if (section !== 'reels' || !onYtValidChange) return
+    const ytHidden = section === 'reels' && ytConnected === false
     const hasGoodTitles = (values.yt_title_examples || []).some(t => t.trim().length > 0)
     const hasEnoughReels = values.reel_examples.length >= 10
-    onYtValidChange((skipYt || hasGoodTitles) && hasEnoughReels)
-  }, [skipYt, values.yt_title_examples, values.reel_examples.length, section, onYtValidChange])
+    onYtValidChange((ytHidden || skipYt || hasGoodTitles) && hasEnoughReels)
+  }, [skipYt, values.yt_title_examples, values.reel_examples.length, section, onYtValidChange, ytConnected])
 
   // Pick a random brand for carousel previews — stable for the whole component lifetime
   const previewBrand = useMemo(() => {
@@ -190,6 +211,11 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
       const ctaOpts = data.carousel_cta_options
       if (!ctaOpts || ctaOpts.length === 0 || ctaOpts.every((o: { text?: string }) => !o.text?.trim())) {
         merged.carousel_cta_options = DEFAULT_CONFIG.carousel_cta_options
+      }
+      // Keep defaults for reel cta_options when the API returns empty or all-blank entries
+      const reelCtaOpts = data.cta_options
+      if (!reelCtaOpts || reelCtaOpts.length === 0 || reelCtaOpts.every((o: { text?: string }) => !o.text?.trim())) {
+        merged.cta_options = DEFAULT_CONFIG.cta_options
       }
       setValues(merged)
       setDirty(false)
@@ -311,6 +337,12 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
   const handleImportFromInstagram = useCallback(async () => {
     if (!igBrand) return
+    // Cooldown check: disable after 2 failed attempts for 1 hour
+    if (importCooldownUntil > Date.now()) {
+      const minsLeft = Math.ceil((importCooldownUntil - Date.now()) / 60_000)
+      toast.error(`Import is on cooldown. Try again in ${minsLeft} minute${minsLeft === 1 ? '' : 's'}.`)
+      return
+    }
     try {
       const result = await importIgMutation.mutateAsync({ brand_id: igBrand.id })
       if (result.niche_name) {
@@ -319,13 +351,21 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
       if (result.content_brief) {
         update('content_brief', result.content_brief)
       }
+      setImportAttempts(0)
       toast.success(`Analysed ${result.posts_analysed} posts — niche & brief imported!`)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Import failed'
-      toast.error(msg)
+      const msg = err && typeof err === 'object' && 'message' in err ? String((err as { message: string }).message) : 'Import failed'
+      const newAttempts = importAttempts + 1
+      setImportAttempts(newAttempts)
+      if (newAttempts >= 2) {
+        setImportCooldownUntil(Date.now() + 60 * 60 * 1000)
+        toast.error(`${msg}. Import disabled for 1 hour to avoid API rate limits.`)
+      } else {
+        toast.error(msg === 'Import failed' ? msg : `${msg} — you can fill in the fields manually.`)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [igBrand])
+  }, [igBrand, importAttempts, importCooldownUntil])
 
   const handleSave = async () => {
     try {
@@ -466,7 +506,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
                 <button
                   type="button"
                   onClick={handleImportFromInstagram}
-                  disabled={importIgMutation.isPending}
+                  disabled={importIgMutation.isPending || importCooldownUntil > Date.now()}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition-colors"
                 >
                   {importIgMutation.isPending ? (
@@ -668,7 +708,8 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             </div>
           </div>
 
-          {/* YouTube Title Style */}
+          {/* YouTube Title Style — hidden during onboarding when YT not connected */}
+          {!(section === 'reels' && ytConnected === false) && (
           <div className="border-t border-gray-100 pt-5">
             <div className="flex items-center justify-between mb-1">
               <h4 className="text-sm font-medium text-gray-700">🎬 YouTube Title Style</h4>
@@ -749,6 +790,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
               </>
             )}
           </div>
+          )}
         </div>}
       </div>}
 

@@ -136,9 +136,7 @@ function Calendar() {
       }
       formData.append('file', uploadedFile)
 
-      await apiClient.post('/reels/manual/upload-and-schedule', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      await apiClient.post('/reels/manual/upload-and-schedule', formData)
 
       toast.success(`${contentType === 'reel' ? 'Reel' : 'Carousel'} scheduled successfully!`)
       

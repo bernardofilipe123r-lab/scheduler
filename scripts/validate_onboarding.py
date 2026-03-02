@@ -316,6 +316,108 @@ def check_frontend():
     else:
         fail("handleComplete function missing")
 
+    # ── 14. Step 4 blocked when niche name empty ──
+    print(f"\n  {BOLD}Step 4 validation:{RESET}")
+    if "nicheNameFilled" in src:
+        ok("nicheNameFilled state exists")
+        # Check the Continue button for step 4 is gated on nicheNameFilled
+        footer_idx = src.find("Sticky footer")
+        if footer_idx > 0:
+            footer_src = src[footer_idx:]
+            if "nicheNameFilled" in footer_src:
+                ok("Step 4 Continue gated on nicheNameFilled")
+            else:
+                fail("Step 4 Continue not gated on nicheNameFilled")
+        else:
+            warn("Could not find footer section for step 4 validation")
+    else:
+        fail("nicheNameFilled state missing", "Continue at step 4 allows empty niche name")
+
+    if "onNicheNameChange" in src:
+        ok("onNicheNameChange callback passed to NicheConfigForm")
+    else:
+        fail("onNicheNameChange missing", "Step 4 can't track niche name state")
+
+    # ── 15. Error message grammar ──
+    print(f"\n  {BOLD}Error message quality:{RESET}")
+    # Check for the bad pattern: ". —" (period followed by dash)
+    # The fixed pattern should be conditional
+    if re.search(r"'\.\s+—", src):
+        fail("Grammar: period-dash pattern", "Found '. —' in error message — use conditional append")
+    else:
+        ok("No period-dash grammar issue in error messages")
+
+    # ── 16. ytConnected passed to NicheConfigForm ──
+    print(f"\n  {BOLD}YouTube connection awareness:{RESET}")
+    if "ytConnected={ytConnected}" in src or "ytConnected={" in src:
+        ok("ytConnected passed to NicheConfigForm")
+    else:
+        fail("ytConnected not passed to NicheConfigForm", "YT section always shows")
+
+    # ── NicheConfigForm checks ──
+    print(f"\n{BOLD}── Frontend: NicheConfigForm.tsx ──{RESET}")
+    ncform_file = ROOT / "src" / "features" / "brands" / "components" / "NicheConfigForm.tsx"
+    if not ncform_file.exists():
+        fail("NicheConfigForm.tsx exists")
+        return
+
+    ncsrc = ncform_file.read_text()
+
+    # Default reel CTAs
+    print(f"\n  {BOLD}Default reel CTAs:{RESET}")
+    if re.search(r"cta_options:\s*\[", ncsrc):
+        # Check it's not just an empty array
+        cta_match = re.search(r"cta_options:\s*\[(.*?)\]", ncsrc, re.DOTALL)
+        if cta_match and "text:" in cta_match.group(1):
+            ok("Default reel CTAs configured in DEFAULT_CONFIG")
+        else:
+            fail("Default reel CTAs empty", "cta_options should have default entries")
+    else:
+        fail("cta_options not found in DEFAULT_CONFIG")
+
+    # Default reel CTA fallback on load
+    if re.search(r"reelCtaOpts|reel.*cta.*options", ncsrc, re.IGNORECASE) or "merged.cta_options = DEFAULT_CONFIG.cta_options" in ncsrc:
+        ok("Reel CTA fallback on empty API data")
+    else:
+        fail("Reel CTA fallback missing", "Empty reel CTAs won't get defaults")
+
+    # Import cooldown
+    print(f"\n  {BOLD}Import rate limiting:{RESET}")
+    if "importAttempts" in ncsrc or "importCooldown" in ncsrc:
+        ok("Import attempt tracking exists")
+    else:
+        fail("Import rate limiting missing", "No cooldown after repeated failures")
+
+    if "importCooldownUntil" in ncsrc:
+        ok("Import cooldown timer exists")
+    else:
+        fail("Import cooldown timer missing")
+
+    # YouTube section hidden when not connected
+    print(f"\n  {BOLD}YouTube section visibility:{RESET}")
+    if "ytConnected" in ncsrc:
+        ok("ytConnected prop exists in NicheConfigForm")
+        if re.search(r"ytConnected\s*===\s*false", ncsrc):
+            ok("YouTube section hidden when ytConnected=false")
+        else:
+            fail("YouTube section not conditionally hidden")
+    else:
+        fail("ytConnected prop missing from NicheConfigForm")
+
+    # onNicheNameChange callback
+    print(f"\n  {BOLD}Niche name validation:{RESET}")
+    if "onNicheNameChange" in ncsrc:
+        ok("onNicheNameChange callback in NicheConfigForm")
+    else:
+        fail("onNicheNameChange missing from NicheConfigForm")
+
+    # Error handling in handleImportFromInstagram
+    print(f"\n  {BOLD}Import error handling:{RESET}")
+    if "instanceof Error" in ncsrc:
+        fail("NicheConfigForm uses instanceof Error", "Should handle plain objects")
+    else:
+        ok("No bare instanceof Error in NicheConfigForm")
+
 
 # ═══════════════════════════════════════════════════════════════
 # BACKEND CHECKS

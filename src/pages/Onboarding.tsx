@@ -230,6 +230,7 @@ export function OnboardingPage() {
   const [dnaImporting, setDnaImporting] = useState(false)
   const [dnaImported, setDnaImported] = useState(false)
   const importIgMutation = useImportFromInstagram()
+  const [nicheNameFilled, setNicheNameFilled] = useState(false)
 
   // Check connection status when entering step 3 or returning from OAuth
   useEffect(() => {
@@ -609,7 +610,7 @@ export function OnboardingPage() {
     } catch (err: unknown) {
       // AI import failed — fall through to manual with a warning
       const msg = getErrorMsg(err, 'Import failed')
-      toast.error(msg + ' — you can fill in the fields manually.')
+      toast.error(msg === 'Import failed' ? msg : `${msg} — you can fill in the fields manually.`)
       setDnaImported(false)
     } finally {
       setDnaImporting(false)
@@ -1456,7 +1457,7 @@ export function OnboardingPage() {
                         </div>
                       </div>
                     )}
-                    <NicheConfigForm ref={nicheFormRef} section="general" />
+                    <NicheConfigForm ref={nicheFormRef} section="general" onNicheNameChange={(filled) => setNicheNameFilled(filled)} />
                   </>
                 )}
               </motion.div>
@@ -1478,7 +1479,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm ref={nicheFormRef} section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} />
+                <NicheConfigForm ref={nicheFormRef} section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} ytConnected={ytConnected} />
               </motion.div>
             )}
 
@@ -1588,7 +1589,7 @@ export function OnboardingPage() {
                     await nicheFormRef.current?.saveNow()
                     setStep(5)
                   }}
-                  disabled={aiGenerating}
+                  disabled={aiGenerating || !nicheNameFilled}
                   className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {aiGenerating ? (
