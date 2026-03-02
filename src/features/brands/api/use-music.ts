@@ -38,22 +38,44 @@ export function useUploadMusic() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, onProgress }: { file: File; onProgress?: (pct: number) => void }) => {
       const { data } = await supabase.auth.getSession()
       const token = data.session?.access_token
       const formData = new FormData()
       formData.append('file', file)
 
-      const res = await fetch('/api/music', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
+      return new Promise<{ track: MusicTrack }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', '/api/music')
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable && onProgress) {
+            onProgress(Math.round((e.loaded / e.total) * 100))
+          }
+        })
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText))
+            } catch {
+              reject(new Error('Invalid response'))
+            }
+          } else {
+            try {
+              const err = JSON.parse(xhr.responseText)
+              reject(new Error(err.detail || 'Upload failed'))
+            } catch {
+              reject(new Error('Upload failed'))
+            }
+          }
+        })
+
+        xhr.addEventListener('error', () => reject(new Error('Upload failed')))
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')))
+        xhr.send(formData)
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Upload failed' }))
-        throw new Error(err.detail || 'Upload failed')
-      }
-      return res.json() as Promise<{ track: MusicTrack }>
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: musicKeys.all })
@@ -79,6 +101,23 @@ export function useUpdateMusicWeight() {
   return useMutation({
     mutationFn: ({ trackId, weight }: { trackId: string; weight: number }) =>
       apiClient.patch<{ track: MusicTrack }>(`/api/music/${trackId}/weight`, { weight }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: musicKeys.all })
+    },
+  })
+}
+
+export function useSaveMusicWeights() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (updates: { trackId: string; weight: number }[]) => {
+      await Promise.all(
+        updates.map(({ trackId, weight }) =>
+          apiClient.patch<{ track: MusicTrack }>(`/api/music/${trackId}/weight`, { weight })
+        )
+      )
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: musicKeys.all })
     },

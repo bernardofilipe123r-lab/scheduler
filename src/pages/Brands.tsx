@@ -14,13 +14,26 @@ export function BrandsPage() {
 
   const handleTabChange = useCallback(
     (tab: BrandsTab) => {
-      if (tab === 'brands') {
-        setSearchParams({})
-      } else {
-        setSearchParams({ tab })
+      if (tab === activeTab) return
+
+      const doNavigate = () => {
+        if (tab === 'brands') {
+          setSearchParams({})
+        } else {
+          setSearchParams({ tab })
+        }
       }
+
+      // If leaving music tab, fire custom event so MusicManager can intercept
+      if (activeTab === 'settings') {
+        const event = new CustomEvent('music-tab-leave', { detail: { navigate: doNavigate }, cancelable: true })
+        const allowed = window.dispatchEvent(event)
+        if (!allowed) return // MusicManager prevented navigation
+      }
+
+      doNavigate()
     },
-    [setSearchParams],
+    [activeTab, setSearchParams],
   )
 
   return (

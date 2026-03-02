@@ -291,6 +291,7 @@ export function GeneratorPage() {
   if (brandsLoading || configLoading) return <GeneratorSkeleton />
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div>
@@ -558,10 +559,11 @@ export function GeneratorPage() {
           </div>
         </div>
       </form>
+    </div>
 
       {/* Auto Generate Modal */}
       {showAutoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm mt-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 border border-gray-200">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -744,11 +746,7 @@ export function GeneratorPage() {
                               : 'border-gray-200 hover:bg-gray-50 opacity-40'
                           }`}
                         >
-                          {typeof icon === 'string' && icon.length === 1 ? (
-                            <span className="text-base">{icon}</span>
-                          ) : (
-                            <img src={icon} alt={label} loading="eager" className="h-4 w-auto" />
-                          )}
+                          <img src={icon} alt={label} loading="eager" className="h-5 w-5 object-contain" />
                           <span className="text-xs font-medium text-gray-700">{label}</span>
                         </button>
                       )
@@ -779,6 +777,6 @@ export function GeneratorPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

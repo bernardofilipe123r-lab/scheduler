@@ -37,9 +37,11 @@ import {
   useBrands,
   useCreateBrand,
   useUpdateBrandCredentials,
+  type Brand,
   type CreateBrandInput,
   type BrandColors,
 } from '@/features/brands/api/use-brands'
+import { apiClient } from '@/shared/api/client'
 import {
   getRandomPresets,
   generateModeColors,
@@ -110,7 +112,7 @@ export function OnboardingPage() {
   const queryClient = useQueryClient()
   const { onboardingStep, hasBrand } = useOnboardingStatus()
   const { refreshUser } = useAuth()
-  const { data: existingBrands } = useBrands()
+  const { data: existingBrands, isLoading: brandsLoading } = useBrands()
   const createBrandMutation = useCreateBrand()
   const updateCredentialsMutation = useUpdateBrandCredentials()
 
@@ -364,11 +366,19 @@ export function OnboardingPage() {
     setUseCustomColors(false)
   }
 
+  // Helper to extract error message from Error or ApiError plain objects
+  const getErrorMsg = (err: unknown, fallback: string) => {
+    if (err instanceof Error) return err.message
+    if (err && typeof err === 'object' && 'message' in err) return String((err as { message: string }).message)
+    return fallback
+  }
+
   const isStep1Valid =
     displayName.trim().length > 0 &&
     brandId.trim().length >= 3 &&
     /^[a-z0-9]+$/.test(brandId) &&
     shortName.trim().length > 0 &&
+    !brandsLoading &&
     !existingBrands?.some(b => b.id === brandId)
 
   const handleCreateBrand = async () => {
@@ -398,8 +408,21 @@ export function OnboardingPage() {
       await createBrandMutation.mutateAsync(input)
       toast.success('Brand created!')
       setStep(2)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create brand')
+    } catch (err: unknown) {
+      const status = err && typeof err === 'object' && 'status' in err ? (err as { status: number }).status : 0
+      if (status === 409) {
+        // Brand already exists — refresh the list and auto-advance
+        await queryClient.invalidateQueries({ queryKey: ['brands'] })
+        const refreshed = await queryClient.fetchQuery({ queryKey: ['brands', 'list'], queryFn: () => apiClient.get<{ brands: Brand[]; count: number }>('/api/v2/brands').then(r => r.brands) })
+        const match = refreshed?.find((b: Brand) => b.id === brandId)
+        if (match) {
+          setBrandId(match.id)
+          toast.success('Brand already exists — continuing setup.')
+          setStep(2)
+          return
+        }
+      }
+      setError(getErrorMsg(err, 'Failed to create brand'))
     }
   }
 
@@ -449,7 +472,7 @@ export function OnboardingPage() {
       toast.success('Theme saved!')
       setStep(3)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save theme')
+      setError(getErrorMsg(err, 'Failed to save theme'))
     } finally {
       setSavingTheme(false)
     }
@@ -486,7 +509,7 @@ export function OnboardingPage() {
       // Credentials saved — advance to Content DNA step
       setStep(4)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save credentials')
+      setError(getErrorMsg(err, 'Failed to save credentials'))
     }
   }
 
@@ -498,7 +521,7 @@ export function OnboardingPage() {
       window.location.href = authUrl
     } catch (err) {
       setConnectingIg(false)
-      setConnectionError(err instanceof Error ? err.message : 'Failed to start Instagram connection')
+      setConnectionError(getErrorMsg(err, 'Failed to start Instagram connection'))
     }
   }
 
@@ -510,7 +533,7 @@ export function OnboardingPage() {
       window.location.href = authUrl
     } catch (err) {
       setConnectingYt(false)
-      setConnectionError(err instanceof Error ? err.message : 'Failed to start YouTube connection')
+      setConnectionError(getErrorMsg(err, 'Failed to start YouTube connection'))
     }
   }
 
@@ -522,7 +545,7 @@ export function OnboardingPage() {
       window.location.href = authUrl
     } catch (err) {
       setConnectingFb(false)
-      setConnectionError(err instanceof Error ? err.message : 'Failed to start Facebook connection')
+      setConnectionError(getErrorMsg(err, 'Failed to start Facebook connection'))
     }
   }
 
@@ -534,7 +557,7 @@ export function OnboardingPage() {
       window.location.href = authUrl
     } catch (err) {
       setConnectingThreads(false)
-      setConnectionError(err instanceof Error ? err.message : 'Failed to start Threads connection')
+      setConnectionError(getErrorMsg(err, 'Failed to start Threads connection'))
     }
   }
 
@@ -546,7 +569,7 @@ export function OnboardingPage() {
       window.location.href = authUrl
     } catch (err) {
       setConnectingTikTok(false)
-      setConnectionError(err instanceof Error ? err.message : 'Failed to start TikTok connection')
+      setConnectionError(getErrorMsg(err, 'Failed to start TikTok connection'))
     }
   }
 
@@ -566,7 +589,7 @@ export function OnboardingPage() {
         }
       }).catch(() => {})
     } catch (err) {
-      setConnectionError(err instanceof Error ? err.message : 'Failed to select Facebook page')
+      setConnectionError(getErrorMsg(err, 'Failed to select Facebook page'))
     } finally {
       setSelectingFbPage(false)
     }
@@ -585,7 +608,7 @@ export function OnboardingPage() {
       toast.success(`Analysed ${result.posts_analysed} posts — niche & brief imported!`)
     } catch (err: unknown) {
       // AI import failed — fall through to manual with a warning
-      const msg = err instanceof Error ? err.message : 'Import failed'
+      const msg = getErrorMsg(err, 'Import failed')
       toast.error(msg + ' — you can fill in the fields manually.')
       setDnaImported(false)
     } finally {
