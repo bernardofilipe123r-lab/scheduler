@@ -35,12 +35,13 @@ export function MusicManager() {
 
   // Sync local weights when server data changes
   useEffect(() => {
-    if (tracks.length > 0 && !hasUnsavedChanges) {
+    const serverTracks = data?.tracks
+    if (serverTracks && serverTracks.length > 0 && !hasUnsavedChanges) {
       const serverWeights: Record<string, number> = {}
-      tracks.forEach(t => { serverWeights[t.id] = t.weight })
+      serverTracks.forEach(t => { serverWeights[t.id] = t.weight })
       setLocalWeights(serverWeights)
     }
-  }, [tracks, hasUnsavedChanges])
+  }, [data?.tracks, hasUnsavedChanges])
 
   // Browser beforeunload warning
   useEffect(() => {
