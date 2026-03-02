@@ -78,11 +78,29 @@ function formatDateKey(dateString: string): string {
 
 // ─── Small components ───────────────────────────────────────────────
 
+function ThreadsIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.29 3.276-.866 1.074-2.063 1.678-3.559 1.795-1.12.088-2.198-.154-3.04-.682-1.003-.63-1.607-1.593-1.7-2.716-.154-1.836 1.201-3.454 3.742-3.652.97-.076 1.867-.034 2.687.097-.065-.666-.217-1.195-.463-1.582-.396-.623-1.078-.948-2.022-.966-1.32.012-2.085.437-2.344.696l-1.386-1.57C7.57 6.573 9.003 5.88 11.068 5.862c1.47.013 2.65.497 3.508 1.44.78.857 1.234 2.017 1.35 3.453.478.18.916.404 1.31.675 1.191.818 2.065 2.03 2.52 3.502.628 2.028.478 4.537-1.36 6.336C16.65 22.97 14.59 23.975 12.186 24zm-1.638-7.283c-.078.003-.155.008-.232.015-1.26.098-1.905.701-1.862 1.22.02.233.156.567.589.838.49.308 1.14.446 1.833.388 1.116-.087 2.472-.633 2.716-3.136-.741-.142-1.544-.2-2.41-.2-.216 0-.43.006-.634.017v-.142z" />
+    </svg>
+  )
+}
+
+function TikTokIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 0 0-.79-.05A6.34 6.34 0 0 0 3.15 15.2a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.79a8.18 8.18 0 0 0 4.76 1.52V6.87a4.84 4.84 0 0 1-1-.18z" />
+    </svg>
+  )
+}
+
 function PlatformIcon({ platform, className = 'w-4 h-4' }: { platform: string; className?: string }) {
   switch (platform) {
     case 'instagram': return <Instagram className={className} />
     case 'facebook':  return <Facebook className={className} />
     case 'youtube':   return <Youtube className={className} />
+    case 'threads':   return <ThreadsIcon className={className} />
+    case 'tiktok':    return <TikTokIcon className={className} />
     default:          return null
   }
 }
@@ -168,9 +186,24 @@ function PlatformRow({ platform, metrics }: { platform: string; metrics: Platfor
   )
 }
 
-function BrandCard({ brand }: { brand: BrandMetrics }) {
-  const platforms = Object.entries(brand.platforms)
+function BrandCard({ brand, platformFilter }: { brand: BrandMetrics; platformFilter?: string }) {
+  const allPlatforms = Object.entries(brand.platforms)
+  const platforms = platformFilter
+    ? allPlatforms.filter(([p]) => p === platformFilter)
+    : allPlatforms
   const hasPlatforms = platforms.length > 0
+
+  // Compute totals based on filtered platforms
+  const cardTotals = platformFilter
+    ? platforms.reduce(
+        (acc, [, m]) => ({
+          followers: acc.followers + m.followers_count,
+          views_7d: acc.views_7d + m.views_last_7_days,
+          likes_7d: acc.likes_7d + m.likes_last_7_days,
+        }),
+        { followers: 0, views_7d: 0, likes_7d: 0 }
+      )
+    : brand.totals
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -197,19 +230,19 @@ function BrandCard({ brand }: { brand: BrandMetrics }) {
             <div>
               <p className="text-xs text-gray-500">Followers</p>
               <p className="font-bold text-lg" style={{ color: brand.color }}>
-                {formatNumber(brand.totals.followers)}
+                {formatNumber(cardTotals.followers)}
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Views (7d)</p>
               <p className="font-bold text-lg text-gray-700">
-                {formatNumber(brand.totals.views_7d)}
+                {formatNumber(cardTotals.views_7d)}
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Likes (7d)</p>
               <p className="font-bold text-lg text-pink-500">
-                {formatNumber(brand.totals.likes_7d)}
+                {formatNumber(cardTotals.likes_7d)}
               </p>
             </div>
           </div>
@@ -242,10 +275,12 @@ function buildCumulativeData(
   snapshots: AnalyticsSnapshot[],
   metric: 'followers_count' | 'views_last_7_days' | 'likes_last_7_days',
   filterBrand?: string,
+  filterPlatform?: string,
 ) {
   // 1. Deduplicate: latest per (brand, platform, dateKey)
   const latest = new Map<string, AnalyticsSnapshot>()
   for (const s of snapshots) {
+    if (filterPlatform && s.platform !== filterPlatform) continue
     const dk = formatDateKey(s.snapshot_at)
     const key = `${s.brand}|${s.platform}|${dk}`
     const existing = latest.get(key)
@@ -290,8 +325,9 @@ function buildDailyGainData(
   snapshots: AnalyticsSnapshot[],
   metric: 'followers_count' | 'views_last_7_days' | 'likes_last_7_days',
   filterBrand?: string,
+  filterPlatform?: string,
 ): { data: Record<string, number | string>[]; average: number } {
-  const cum = buildCumulativeData(snapshots, metric, filterBrand)
+  const cum = buildCumulativeData(snapshots, metric, filterBrand, filterPlatform)
   if (cum.length < 2) return { data: [], average: 0 }
 
   const brands = Object.keys(cum[0]).filter((k) => k !== 'date' && k !== 'dateKey')
@@ -398,7 +434,17 @@ export function AnalyticsPage() {
 
   // Filters
   const [selectedBrand, setSelectedBrand] = useState<string>('all')
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
   const [timeRange, setTimeRange] = useState<number>(30)
+
+  // Dynamically detect all available platforms from analytics data
+  const availablePlatforms = useMemo(() => {
+    const platformSet = new Set<string>()
+    for (const b of data?.brands || []) {
+      for (const p of Object.keys(b.platforms)) platformSet.add(p)
+    }
+    return [...platformSet].sort()
+  }, [data?.brands])
 
   // Fetch snapshots (backend now deduplicates per day)
   const { data: snapshotsData } = useSnapshots({ days: timeRange })
@@ -434,7 +480,23 @@ export function AnalyticsPage() {
 
   const totals = useMemo(() => {
     const brands = data?.brands || []
-    return brands.reduce(
+    const filtered = selectedBrand !== 'all' ? brands.filter(b => b.brand === selectedBrand) : brands
+    if (selectedPlatform !== 'all') {
+      // Sum only the selected platform across brands
+      return filtered.reduce(
+        (acc, b) => {
+          const pm = b.platforms[selectedPlatform]
+          if (!pm) return acc
+          return {
+            followers: acc.followers + pm.followers_count,
+            views: acc.views + pm.views_last_7_days,
+            likes: acc.likes + pm.likes_last_7_days,
+          }
+        },
+        { followers: 0, views: 0, likes: 0 }
+      )
+    }
+    return filtered.reduce(
       (acc, b) => ({
         followers: acc.followers + b.totals.followers,
         views: acc.views + b.totals.views_7d,
@@ -442,26 +504,29 @@ export function AnalyticsPage() {
       }),
       { followers: 0, views: 0, likes: 0 }
     )
-  }, [data?.brands])
+  }, [data?.brands, selectedBrand, selectedPlatform])
 
   const snapshots = snapshotsData?.snapshots || []
 
+  const brandFilter = selectedBrand !== 'all' ? selectedBrand : undefined
+  const platformFilter = selectedPlatform !== 'all' ? selectedPlatform : undefined
+
   // Cumulative followers over time
   const followerTrendData = useMemo(
-    () => buildCumulativeData(snapshots, 'followers_count', selectedBrand !== 'all' ? selectedBrand : undefined),
-    [snapshots, selectedBrand]
+    () => buildCumulativeData(snapshots, 'followers_count', brandFilter, platformFilter),
+    [snapshots, brandFilter, platformFilter]
   )
 
   // Daily follower growth
   const followerGain = useMemo(
-    () => buildDailyGainData(snapshots, 'followers_count', selectedBrand !== 'all' ? selectedBrand : undefined),
-    [snapshots, selectedBrand]
+    () => buildDailyGainData(snapshots, 'followers_count', brandFilter, platformFilter),
+    [snapshots, brandFilter, platformFilter]
   )
 
   // Daily views
   const viewsGain = useMemo(
-    () => buildDailyGainData(snapshots, 'views_last_7_days', selectedBrand !== 'all' ? selectedBrand : undefined),
-    [snapshots, selectedBrand]
+    () => buildDailyGainData(snapshots, 'views_last_7_days', brandFilter, platformFilter),
+    [snapshots, brandFilter, platformFilter]
   )
 
   // Brands to render in charts
@@ -472,10 +537,14 @@ export function AnalyticsPage() {
 
   // Filter brand cards
   const filteredBrands = useMemo(() => {
-    const brands = data?.brands || []
-    if (selectedBrand !== 'all') return brands.filter((b) => b.brand === selectedBrand)
+    let brands = data?.brands || []
+    if (selectedBrand !== 'all') brands = brands.filter((b) => b.brand === selectedBrand)
+    if (selectedPlatform !== 'all') {
+      // Only include brands that have the selected platform
+      brands = brands.filter((b) => b.platforms[selectedPlatform])
+    }
     return brands
-  }, [data?.brands, selectedBrand])
+  }, [data?.brands, selectedBrand, selectedPlatform])
 
   // ── Render ──
 
@@ -499,6 +568,10 @@ export function AnalyticsPage() {
   const brandOptions = [
     { value: 'all', label: 'All Brands' },
     ...brands.map((b) => ({ value: b.brand, label: b.display_name })),
+  ]
+  const platformOptions = [
+    { value: 'all', label: 'All Platforms' },
+    ...availablePlatforms.map((p) => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) })),
   ]
   const timeOptions = [
     { value: '7', label: 'Last 7 days' },
@@ -581,6 +654,7 @@ export function AnalyticsPage() {
             <span className="text-sm font-medium">Filters:</span>
           </div>
           <FilterDropdown label="Brand" value={selectedBrand} options={brandOptions} onChange={setSelectedBrand} />
+          <FilterDropdown label="Platform" value={selectedPlatform} options={platformOptions} onChange={setSelectedPlatform} />
           <FilterDropdown
             label="Time Range"
             value={timeRange.toString()}
@@ -602,7 +676,7 @@ export function AnalyticsPage() {
             <TrendingUp className="w-5 h-5 text-blue-500" />
             <h3 className="font-semibold text-gray-900">Followers Over Time</h3>
           </div>
-          <p className="text-xs text-gray-400 mb-4">Cumulative follower count per brand (all platforms combined)</p>
+          <p className="text-xs text-gray-400 mb-4">Cumulative follower count per brand{platformFilter ? ` (${platformFilter} only)` : ' (all platforms combined)'}</p>
 
           {followerTrendData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
@@ -738,7 +812,7 @@ export function AnalyticsPage() {
         {filteredBrands.length > 0 ? (
           <div className="space-y-4">
             {filteredBrands.map((b) => (
-              <BrandCard key={b.brand} brand={b} />
+              <BrandCard key={b.brand} brand={b} platformFilter={platformFilter} />
             ))}
           </div>
         ) : (
