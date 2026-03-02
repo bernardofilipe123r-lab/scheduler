@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.db_connection import get_db
 from app.api.auth.middleware import get_current_user, is_super_admin_user
-from app.api.toby.schemas import TobyConfigUpdate
+from app.api.toby.schemas import TobyConfigUpdate, TobyBrandConfigUpdate
 
 router = APIRouter(prefix="/api/toby", tags=["toby"])
 
@@ -498,6 +498,8 @@ def get_config(
         "explore_ratio": state.explore_ratio,
         "reel_slots_per_day": state.reel_slots_per_day,
         "post_slots_per_day": state.post_slots_per_day,
+        "reels_enabled": state.reels_enabled if state.reels_enabled is not None else True,
+        "posts_enabled": state.posts_enabled if state.posts_enabled is not None else True,
         "daily_budget_cents": state.daily_budget_cents,
     }
 
@@ -523,6 +525,10 @@ def update_config(
         state.reel_slots_per_day = body.reel_slots_per_day
     if body.post_slots_per_day is not None:
         state.post_slots_per_day = body.post_slots_per_day
+    if body.reels_enabled is not None:
+        state.reels_enabled = body.reels_enabled
+    if body.posts_enabled is not None:
+        state.posts_enabled = body.posts_enabled
 
     state.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -532,7 +538,120 @@ def update_config(
         "explore_ratio": state.explore_ratio,
         "reel_slots_per_day": state.reel_slots_per_day,
         "post_slots_per_day": state.post_slots_per_day,
+        "reels_enabled": state.reels_enabled if state.reels_enabled is not None else True,
+        "posts_enabled": state.posts_enabled if state.posts_enabled is not None else True,
     }}
+
+
+# ---------------------------------------------------------------------------
+#  Per-Brand Configuration
+# ---------------------------------------------------------------------------
+
+
+@router.get("/brand-config")
+def get_brand_configs(
+    target_user_id: str = Query(None, alias="user_id"),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get per-brand Toby configuration for all brands."""
+    import uuid
+    from app.models.toby import TobyBrandConfig
+    from app.models.brands import Brand
+
+    uid = _resolve_user_id(user, target_user_id)
+
+    # Get all active brands for this user
+    brands = db.query(Brand).filter(Brand.user_id == uid, Brand.active == True).all()
+
+    # Get existing brand configs
+    configs = db.query(TobyBrandConfig).filter(TobyBrandConfig.user_id == uid).all()
+    config_map = {c.brand_id: c for c in configs}
+
+    # Auto-create configs for brands that don't have one yet
+    result = []
+    for brand in brands:
+        if brand.id not in config_map:
+            cfg = TobyBrandConfig(
+                id=str(uuid.uuid4()),
+                user_id=uid,
+                brand_id=brand.id,
+                enabled=True,
+                reel_slots_per_day=6,
+                post_slots_per_day=2,
+            )
+            db.add(cfg)
+            config_map[brand.id] = cfg
+
+        c = config_map[brand.id]
+        result.append({
+            "brand_id": c.brand_id,
+            "display_name": brand.display_name or brand.id,
+            "enabled": c.enabled,
+            "reel_slots_per_day": c.reel_slots_per_day,
+            "post_slots_per_day": c.post_slots_per_day,
+        })
+
+    db.commit()
+    return {"brands": result}
+
+
+@router.patch("/brand-config/{brand_id}")
+def update_brand_config(
+    brand_id: str,
+    body: TobyBrandConfigUpdate,
+    target_user_id: str = Query(None, alias="user_id"),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update per-brand Toby configuration."""
+    import uuid
+    from app.models.toby import TobyBrandConfig
+    from app.models.brands import Brand
+
+    uid = _resolve_user_id(user, target_user_id)
+
+    # Verify brand belongs to user
+    brand = db.query(Brand).filter(Brand.id == brand_id, Brand.user_id == uid).first()
+    if not brand:
+        raise HTTPException(status_code=404, detail="Brand not found")
+
+    cfg = db.query(TobyBrandConfig).filter(
+        TobyBrandConfig.user_id == uid,
+        TobyBrandConfig.brand_id == brand_id,
+    ).first()
+
+    if not cfg:
+        cfg = TobyBrandConfig(
+            id=str(uuid.uuid4()),
+            user_id=uid,
+            brand_id=brand_id,
+            enabled=True,
+            reel_slots_per_day=6,
+            post_slots_per_day=2,
+        )
+        db.add(cfg)
+
+    if body.enabled is not None:
+        cfg.enabled = body.enabled
+    if body.reel_slots_per_day is not None:
+        cfg.reel_slots_per_day = body.reel_slots_per_day
+    if body.post_slots_per_day is not None:
+        cfg.post_slots_per_day = body.post_slots_per_day
+
+    cfg.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {
+        "status": "updated",
+        "brand_config": {
+            "brand_id": cfg.brand_id,
+            "display_name": brand.display_name or brand.id,
+            "enabled": cfg.enabled,
+            "reel_slots_per_day": cfg.reel_slots_per_day,
+            "post_slots_per_day": cfg.post_slots_per_day,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

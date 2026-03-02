@@ -2,6 +2,7 @@ import { get, post, patch } from '@/shared/api'
 import type {
   TobyStatus,
   TobyConfig,
+  TobyBrandConfig,
   TobyBufferStatus,
   TobyActivityItem,
   TobyExperiment,
@@ -66,6 +67,12 @@ export const tobyApi = {
 
   updateConfig: (data: Partial<TobyConfig>) =>
     patch<{ status: string; config: TobyConfig }>('/api/toby/config', data),
+
+  getBrandConfigs: () =>
+    get<{ brands: TobyBrandConfig[] }>('/api/toby/brand-config'),
+
+  updateBrandConfig: (brandId: string, data: Partial<Omit<TobyBrandConfig, 'brand_id' | 'display_name'>>) =>
+    patch<{ status: string; brand_config: TobyBrandConfig }>(`/api/toby/brand-config/${encodeURIComponent(brandId)}`, data),
 
   getDNASuggestions: () =>
     get<{ suggestions: TobyDNASuggestion[]; count: number }>('/api/toby/content-dna-suggestions'),

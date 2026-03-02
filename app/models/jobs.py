@@ -29,6 +29,9 @@ class GenerationJob(Base):
     fixed_title = Column(Boolean, default=False, nullable=False, server_default="false")
     image_model = Column(String(50), nullable=True)  # AI image model override (e.g. "Flux1schnell", "ZImageTurbo_INT8")
     
+    # Music track selection (NULL = auto weighted-random)
+    music_track_id = Column(Text, nullable=True)
+    
     # Generated outputs per brand
     # Format: {"gymcollege": {"reel_id": "...", "thumbnail": "...", "video": "...", "status": "completed"}, ...}
     brand_outputs = Column(JSON, default=dict)
@@ -81,4 +84,5 @@ class GenerationJob(Base):
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error_message": self.error_message,
             "created_by": getattr(self, 'created_by', None) or "user",
+            "music_track_id": getattr(self, 'music_track_id', None),
         }

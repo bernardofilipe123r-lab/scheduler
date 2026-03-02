@@ -12,7 +12,7 @@ Features:
 """
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from app.models.toby import TobyState, TobyActivityLog
+from app.models.toby import TobyState, TobyActivityLog, TobyBrandConfig
 from app.models.scheduling import ScheduledReel
 from app.models.brands import Brand
 
@@ -98,17 +98,41 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]   # 6 reels/day, 4h apart
     BASE_POST_HOURS = [8, 14]                   # 2 posts/day
 
+    # Global content-type toggles
+    reels_enabled = state.reels_enabled if state.reels_enabled is not None else True
+    posts_enabled = state.posts_enabled if state.posts_enabled is not None else True
+
+    # Load per-brand config overrides
+    brand_configs = db.query(TobyBrandConfig).filter(
+        TobyBrandConfig.user_id == user_id,
+    ).all()
+    brand_config_map = {bc.brand_id: bc for bc in brand_configs}
+
     # Calculate expected slots per brand
     all_slots = []
     for brand in brands:
         offset_hours = brand.schedule_offset or 0
 
+        # Per-brand overrides (default to global if no per-brand config)
+        bc = brand_config_map.get(brand.id)
+        if bc and not bc.enabled:
+            continue  # Skip brands that are disabled in Toby
+
+        brand_reel_slots = bc.reel_slots_per_day if bc else (state.reel_slots_per_day or 6)
+        brand_post_slots = bc.post_slots_per_day if bc else (state.post_slots_per_day or 2)
+
+        # Respect global toggles
+        if not reels_enabled:
+            brand_reel_slots = 0
+        if not posts_enabled:
+            brand_post_slots = 0
+
         # Generate expected slot times for this brand
         for day_offset in range(state.buffer_days or 2):
             day = now.date() + timedelta(days=day_offset)
 
-            # Reel slots: base hours + brand offset
-            for base_hour in BASE_REEL_HOURS:
+            # Reel slots: use per-brand count, pick first N from base hours
+            for base_hour in BASE_REEL_HOURS[:brand_reel_slots]:
                 hour = (base_hour + offset_hours) % 24
                 slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
                 if slot_time <= now:
@@ -120,8 +144,8 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                     "filled": _slot_is_filled(brand.id, slot_time),
                 })
 
-            # Post slots: base hours + brand offset
-            for base_hour in BASE_POST_HOURS:
+            # Post slots: use per-brand count, pick first N from base hours
+            for base_hour in BASE_POST_HOURS[:brand_post_slots]:
                 hour = (base_hour + offset_hours) % 24
                 slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
                 if slot_time <= now:

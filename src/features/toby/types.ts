@@ -5,7 +5,17 @@ export interface TobyConfig {
   explore_ratio: number
   reel_slots_per_day: number
   post_slots_per_day: number
+  reels_enabled: boolean
+  posts_enabled: boolean
   daily_budget_cents?: number
+}
+
+export interface TobyBrandConfig {
+  brand_id: string
+  display_name: string
+  enabled: boolean
+  reel_slots_per_day: number
+  post_slots_per_day: number
 }
 
 export interface TobyBufferBrand {

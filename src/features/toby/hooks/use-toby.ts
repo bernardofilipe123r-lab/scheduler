@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tobyApi } from '../api'
-import type { TobyConfig } from '../types'
+import type { TobyConfig, TobyBrandConfig } from '../types'
 
 export const tobyKeys = {
   all: ['toby'] as const,
@@ -13,6 +13,7 @@ export const tobyKeys = {
   discoverySummary: () => [...tobyKeys.all, 'discovery-summary'] as const,
   buffer: () => [...tobyKeys.all, 'buffer'] as const,
   config: () => [...tobyKeys.all, 'config'] as const,
+  brandConfig: () => [...tobyKeys.all, 'brand-config'] as const,
   dnaSuggestions: () => [...tobyKeys.all, 'dna-suggestions'] as const,
 }
 
@@ -120,6 +121,28 @@ export function useUpdateTobyConfig() {
     mutationFn: (data: Partial<TobyConfig>) => tobyApi.updateConfig(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: tobyKeys.config() })
+      qc.invalidateQueries({ queryKey: tobyKeys.status() })
+      qc.invalidateQueries({ queryKey: tobyKeys.buffer() })
+    },
+  })
+}
+
+export function useTobyBrandConfigs() {
+  return useQuery({
+    queryKey: tobyKeys.brandConfig(),
+    queryFn: tobyApi.getBrandConfigs,
+    staleTime: 60_000,
+  })
+}
+
+export function useUpdateTobyBrandConfig() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ brandId, data }: { brandId: string; data: Partial<Omit<TobyBrandConfig, 'brand_id' | 'display_name'>> }) =>
+      tobyApi.updateBrandConfig(brandId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: tobyKeys.brandConfig() })
+      qc.invalidateQueries({ queryKey: tobyKeys.buffer() })
       qc.invalidateQueries({ queryKey: tobyKeys.status() })
     },
   })

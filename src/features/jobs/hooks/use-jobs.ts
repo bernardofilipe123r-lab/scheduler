@@ -400,3 +400,16 @@ export function useRetryJob() {
     },
   })
 }
+
+export function useChangeJobMusic() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, musicTrackId }: { id: string; musicTrackId: string | null }) =>
+      jobsApi.changeMusic(id, musicTrackId),
+    onSettled: (_, __, { id }) => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
+    },
+  })
+}

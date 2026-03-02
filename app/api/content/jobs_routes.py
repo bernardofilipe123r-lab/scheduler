@@ -33,6 +33,7 @@ class JobCreateRequest(BaseModel):
     platforms: Optional[List[str]] = None  # ["instagram", "facebook", "youtube"] - defaults to all if None
     fixed_title: bool = False  # If True, use title as-is (no AI generation)
     image_model: Optional[str] = None  # AI image model override ("Flux1schnell" or "ZImageTurbo_INT8")
+    music_track_id: Optional[str] = None  # Specific music track ID; None = auto weighted-random
 
 
 class JobUpdateRequest(BaseModel):
@@ -139,7 +140,8 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
                 cta_type=request.cta_type,
                 platforms=request.platforms,
                 fixed_title=request.fixed_title,
-                image_model=request.image_model
+                image_model=request.image_model,
+                music_track_id=request.music_track_id,
             )
             
             job_id = job.job_id
@@ -1020,6 +1022,78 @@ async def regenerate_brand_image(
             regen_async()
             return {"status": "completed", "job_id": job_id, "brand": brand}
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Music change endpoint ────────────────────────────────────────────
+
+class ChangeMusicRequest(BaseModel):
+    """Change the music track for a job and regenerate videos."""
+    music_track_id: Optional[str] = None  # None = re-roll random
+
+
+@router.patch(
+    "/{job_id}/music",
+    summary="Change music track and regenerate videos",
+    description="Update the music track for a job. Pass music_track_id=null to pick a new random track. Regenerates all brand videos.",
+)
+async def change_job_music(
+    job_id: str,
+    request: ChangeMusicRequest,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+):
+    """Change the music track on a job and re-render all brand videos."""
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+            job = manager.get_job(job_id, user_id=user["id"])
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+            # Update the music_track_id on the job
+            job.music_track_id = request.music_track_id
+            db.commit()
+
+            # Mark all completed brands as queued for regeneration
+            brands_to_regen = []
+            for brand in job.brands:
+                output = (job.brand_outputs or {}).get(brand, {})
+                if output.get("status") in ("completed", "scheduled"):
+                    manager.update_brand_output(job_id, brand, {"status": "queued"})
+                    brands_to_regen.append(brand)
+
+        if not brands_to_regen:
+            return {
+                "status": "updated",
+                "job_id": job_id,
+                "music_track_id": request.music_track_id,
+                "message": "Music updated but no brands need regeneration",
+            }
+
+        def regen_async():
+            with get_db_session() as db2:
+                processor = JobProcessor(db2)
+                for brand in brands_to_regen:
+                    try:
+                        if job.variant == "post":
+                            processor.process_post_brand(job_id, brand)
+                        else:
+                            processor.regenerate_brand(job_id, brand)
+                    except Exception as e:
+                        print(f"[music-change] Failed to regenerate {brand}: {e}", flush=True)
+
+        background_tasks.add_task(regen_async)
+        return {
+            "status": "queued",
+            "job_id": job_id,
+            "music_track_id": request.music_track_id,
+            "brands_regenerating": brands_to_regen,
+            "message": "Music updated, regenerating videos",
+        }
     except HTTPException:
         raise
     except Exception as e:

@@ -32,6 +32,8 @@ class TobyState(Base):
     explore_ratio = Column(Float, default=0.30)
     reel_slots_per_day = Column(Integer, default=6)
     post_slots_per_day = Column(Integer, default=2)
+    reels_enabled = Column(Boolean, nullable=False, default=True)
+    posts_enabled = Column(Boolean, nullable=False, default=True)
 
     # Scheduling state
     last_buffer_check_at = Column(DateTime(timezone=True), nullable=True)
@@ -260,3 +262,21 @@ class TobyContentTag(Base):
             "used_fallback": self.used_fallback,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class TobyBrandConfig(Base):
+    """Per-brand Toby configuration — controls which brands Toby posts for and how many slots."""
+    __tablename__ = "toby_brand_config"
+    __table_args__ = (
+        Index("idx_toby_brand_config_user_id", "user_id"),
+        {"extend_existing": True},
+    )
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(100), nullable=False)
+    brand_id = Column(String(50), nullable=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    reel_slots_per_day = Column(Integer, nullable=False, default=6)
+    post_slots_per_day = Column(Integer, nullable=False, default=2)
+    created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)

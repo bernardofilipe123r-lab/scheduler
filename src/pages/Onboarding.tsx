@@ -2,10 +2,10 @@
  * Onboarding Page — fullscreen wizard for new users.
  * Step 1: Create first brand (Identity)
  * Step 2: Brand Theme (colors + pixel-accurate preview)
- * Step 3: General Content DNA
- * Step 4: Reels Configuration
- * Step 5: Carousel Posts
- * Step 6: Connect Platforms (Meta credentials)
+ * Step 3: Connect Platforms (OAuth)
+ * Step 4: General Content DNA (with AI import or manual choice)
+ * Step 5: Reels Configuration
+ * Step 6: Carousel Posts
  */
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
@@ -46,6 +46,7 @@ import {
   adjustColorBrightness,
 } from '@/features/brands/constants'
 import { NicheConfigForm, type NicheConfigFormHandle } from '@/features/brands/components/NicheConfigForm'
+import { useImportFromInstagram } from '@/features/brands/api/use-niche-config'
 import { supabase } from '@/shared/api/supabase'
 import { connectYouTube, connectInstagram, connectFacebook, connectThreads, connectTikTok, fetchFacebookPages, selectFacebookPage, fetchBrandConnections, type FacebookPage } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
@@ -98,10 +99,10 @@ function hexToRgba(hex: string, opacity: number): string {
 const STEP_INFO = [
   { num: 1, label: 'Create your first brand', sub: 'A brand is an account associated with one or more social media platforms. Every user needs at least one.' },
   { num: 2, label: 'Brand Theme', sub: 'Choose your brand colors and preview how your content will look.' },
-  { num: 3, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
-  { num: 4, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
-  { num: 5, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
-  { num: 6, label: 'Connect your platforms', sub: 'Link your Instagram, Facebook, YouTube, Threads, and TikTok accounts so the app can publish content for you.' },
+  { num: 3, label: 'Connect your platforms', sub: 'Link your social accounts so we can publish content and optionally import your content style.' },
+  { num: 4, label: 'General Content DNA', sub: 'Define your niche, audience, and content style so the AI understands your brand.' },
+  { num: 5, label: 'Reels Configuration', sub: 'Set up your reel hooks, examples, and CTA style for short-form video content.' },
+  { num: 6, label: 'Carousel Posts', sub: 'Configure your carousel post examples, CTAs, and citation style.' },
 ]
 
 export function OnboardingPage() {
@@ -114,13 +115,13 @@ export function OnboardingPage() {
   const updateCredentialsMutation = useUpdateBrandCredentials()
 
   const [step, setStep] = useState<number>(() => {
-    // If returning from OAuth redirect, jump straight to step 6
+    // If returning from OAuth redirect, jump straight to step 3 (Connect Platforms)
     const params = new URLSearchParams(window.location.search)
     if (params.has('ig_connected') || params.has('yt_connected') || params.has('ig_error') ||
         params.has('fb_connected') || params.has('fb_error') || params.has('fb_select_page') ||
         params.has('threads_connected') || params.has('threads_error') ||
         params.has('tiktok_connected') || params.has('tiktok_error')) {
-      return 6
+      return 3
     }
     return onboardingStep
   })
@@ -144,7 +145,7 @@ export function OnboardingPage() {
       setShortName(existingBrands[0].short_name || '')
     }
     // If user already has a brand and somehow landed on step 1, advance to 3
-    // (brand creation is done — skip to Content DNA)
+    // (brand creation is done — skip to Connect Platforms)
     if (step === 1) setStep(3)
   }, [hasBrand, existingBrands]) // eslint-disable-line react-hooks/exhaustive-deps
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -194,7 +195,7 @@ export function OnboardingPage() {
   const brandNameColor = previewMode === 'light' ? primaryColor : '#ffffff'
   const contentStartY = PX.barStartY + titleLines.length * PX.barHeight + PX.titleContentGap
 
-  // ── Step 6 state: Platform Connections (OAuth) ──
+  // ── Step 3 state: Platform Connections (OAuth) ──
   const [igConnected, setIgConnected] = useState(false)
   const [igHandle, setIgHandle] = useState<string | null>(null)
   const [ytConnected, setYtConnected] = useState(false)
@@ -222,9 +223,15 @@ export function OnboardingPage() {
   const [tiktokUsername, setTiktokUsername] = useState<string | null>(null)
   const nicheFormRef = useRef<NicheConfigFormHandle>(null)
 
-  // Check connection status when entering step 6 or returning from OAuth
+  // ── Step 4 state: Content DNA method choice (used by AI DNA import) ──
+  const [dnaMethod, setDnaMethod] = useState<'ai' | 'manual' | null>(null)
+  const [dnaImporting, setDnaImporting] = useState(false)
+  const [dnaImported, setDnaImported] = useState(false)
+  const importIgMutation = useImportFromInstagram()
+
+  // Check connection status when entering step 3 or returning from OAuth
   useEffect(() => {
-    if (step !== 6 || !brandId) return
+    if (step !== 3 || !brandId) return
     const params = new URLSearchParams(window.location.search)
     const igSuccess = params.get('ig_connected')
     const ytSuccess = params.get('yt_connected')
@@ -476,7 +483,8 @@ export function OnboardingPage() {
         ...(facebookPageId.trim() && { facebook_page_id: facebookPageId.trim() }),
         ...(instagramBusinessAccountId.trim() && { instagram_business_account_id: instagramBusinessAccountId.trim() }),
       })
-      handleComplete()
+      // Credentials saved — advance to Content DNA step
+      setStep(4)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save credentials')
     }
@@ -561,6 +569,27 @@ export function OnboardingPage() {
       setConnectionError(err instanceof Error ? err.message : 'Failed to select Facebook page')
     } finally {
       setSelectingFbPage(false)
+    }
+  }
+
+  // Handle "Create with AI" — scrape IG posts and pre-fill DNA
+  const handleDnaMethodAi = async () => {
+    if (!brandId) return
+    setDnaImporting(true)
+    setDnaMethod('ai')
+    try {
+      const result = await importIgMutation.mutateAsync({ brand_id: brandId })
+      // Invalidate the niche config cache so the form picks up the new values
+      queryClient.invalidateQueries({ queryKey: ['niche-config'] })
+      setDnaImported(true)
+      toast.success(`Analysed ${result.posts_analysed} posts — niche & brief imported!`)
+    } catch (err: unknown) {
+      // AI import failed — fall through to manual with a warning
+      const msg = err instanceof Error ? err.message : 'Import failed'
+      toast.error(msg + ' — you can fill in the fields manually.')
+      setDnaImported(false)
+    } finally {
+      setDnaImporting(false)
     }
   }
 
@@ -952,70 +981,10 @@ export function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* ═══ Step 3: General Content DNA ═══ */}
+            {/* ═══ Step 3: Connect Platforms (OAuth) ═══ */}
             {step === 3 && (
               <motion.div
                 key="step3"
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -30 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="text-center mb-6">
-                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
-                    <Dna className="w-7 h-7 text-primary-500" />
-                  </div>
-                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
-                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
-                </div>
-                <NicheConfigForm ref={nicheFormRef} section="general" />
-              </motion.div>
-            )}
-
-            {/* ═══ Step 4: Reels Configuration ═══ */}
-            {step === 4 && (
-              <motion.div
-                key="step4"
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -30 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="text-center mb-6">
-                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
-                    <Dna className="w-7 h-7 text-primary-500" />
-                  </div>
-                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
-                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
-                </div>
-                <NicheConfigForm ref={nicheFormRef} section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} />
-              </motion.div>
-            )}
-
-            {/* ═══ Step 5: Carousel Posts ═══ */}
-            {step === 5 && (
-              <motion.div
-                key="step5"
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -30 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="text-center mb-6">
-                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
-                    <Dna className="w-7 h-7 text-primary-500" />
-                  </div>
-                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
-                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
-                </div>
-                <NicheConfigForm ref={nicheFormRef} section="posts" onGeneratingChange={setAiGenerating} />
-              </motion.div>
-            )}
-
-            {/* ═══ Step 6: Platform Connections (OAuth) ═══ */}
-            {step === 6 && (
-              <motion.div
-                key="step6"
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
@@ -1290,7 +1259,7 @@ export function OnboardingPage() {
                     </p>
                   )}
 
-                  {/* ── Advanced: Manual Credentials — hidden once any platform is connected ── */}
+                  {/* ── Advanced: Manual Credentials ── */}
                   {!igConnected && !fbConnected && <div className="pt-2">
                     <button
                       onClick={() => setShowManualSection(!showManualSection)}
@@ -1365,7 +1334,7 @@ export function OnboardingPage() {
                             ) : (
                               <>
                                 <Check className="w-4 h-4" />
-                                Save Credentials & Complete
+                                Save Credentials & Continue
                               </>
                             )}
                           </button>
@@ -1374,6 +1343,139 @@ export function OnboardingPage() {
                     )}
                   </div>}
                 </div>
+              </motion.div>
+            )}
+
+            {/* ═══ Step 4: Content DNA (AI import or Manual) ═══ */}
+            {step === 4 && (
+              <motion.div
+                key="step4"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Dna className="w-7 h-7 text-primary-500" />
+                  </div>
+                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
+                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
+                </div>
+
+                {/* Choice screen — AI vs Manual */}
+                {!dnaMethod && !dnaImporting && (
+                  <div className="max-w-lg mx-auto space-y-4">
+                    <p className="text-sm text-gray-500 text-center mb-2">How would you like to set up your Content DNA?</p>
+
+                    {/* AI option */}
+                    <button
+                      onClick={handleDnaMethodAi}
+                      disabled={!igConnected}
+                      className={`w-full text-left border rounded-xl p-5 transition-all ${
+                        igConnected
+                          ? 'border-primary-200 bg-primary-50/50 hover:border-primary-400 hover:shadow-md cursor-pointer'
+                          : 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                          <Sparkles className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Create with AI</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {igConnected
+                              ? 'Toby will analyse your recent Instagram posts and pre-fill your niche & content brief. You can edit everything afterwards.'
+                              : 'Connect Instagram in the previous step to unlock this option.'}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Manual option */}
+                    <button
+                      onClick={() => setDnaMethod('manual')}
+                      className="w-full text-left border border-gray-200 bg-white rounded-xl p-5 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <Type className="w-5 h-5 text-gray-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Start from scratch</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Manually define your niche, content brief, tone and topics.</p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Loading state — AI importing */}
+                {dnaImporting && (
+                  <div className="max-w-lg mx-auto flex flex-col items-center justify-center py-12 space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">Analysing your Instagram content...</p>
+                    <p className="text-xs text-gray-400">This usually takes 10–20 seconds</p>
+                  </div>
+                )}
+
+                {/* Form — shown after AI finishes or manual is chosen */}
+                {dnaMethod && !dnaImporting && (
+                  <>
+                    {dnaMethod === 'ai' && dnaImported && (
+                      <div className="max-w-lg mx-auto mb-4">
+                        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                          <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
+                          <p className="text-xs text-green-700">AI pre-filled your niche and content brief from Instagram. Review and tweak below.</p>
+                        </div>
+                      </div>
+                    )}
+                    <NicheConfigForm ref={nicheFormRef} section="general" />
+                  </>
+                )}
+              </motion.div>
+            )}
+
+            {/* ═══ Step 5: Reels Configuration ═══ */}
+            {step === 5 && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Dna className="w-7 h-7 text-primary-500" />
+                  </div>
+                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
+                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
+                </div>
+                <NicheConfigForm ref={nicheFormRef} section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} />
+              </motion.div>
+            )}
+
+            {/* ═══ Step 6: Carousel Posts ═══ */}
+            {step === 6 && (
+              <motion.div
+                key="step6"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Dna className="w-7 h-7 text-primary-500" />
+                  </div>
+                  <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
+                  <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
+                </div>
+                <NicheConfigForm ref={nicheFormRef} section="posts" onGeneratingChange={setAiGenerating} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -1385,8 +1487,13 @@ export function OnboardingPage() {
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           {step > 1 && !(step <= 2 && hasBrand) ? (
             <button
-              onClick={() => { setError(null); setStep(step - 1) }}
-              disabled={aiGenerating}
+              onClick={() => {
+                setError(null)
+                // Reset DNA method choice when going back from step 4
+                if (step === 4) { setDnaMethod(null); setDnaImported(false) }
+                setStep(step - 1)
+              }}
+              disabled={aiGenerating || dnaImporting}
               className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -1436,54 +1543,96 @@ export function OnboardingPage() {
             </button>
           )}
 
-          {step >= 3 && step <= 5 && (
+          {step >= 3 && step <= 5 && (() => {
+            // Step 3: Platform connections — simple continue
+            if (step === 3) {
+              return (
+                <button
+                  onClick={() => setStep(4)}
+                  className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium"
+                >
+                  Continue
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )
+            }
+            // Step 4: Content DNA — only show continue once method is chosen and not importing
+            if (step === 4) {
+              if (!dnaMethod || dnaImporting) return <div />
+              return (
+                <button
+                  onClick={async () => {
+                    await nicheFormRef.current?.saveNow()
+                    setStep(5)
+                  }}
+                  disabled={aiGenerating}
+                  className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {aiGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Please wait...
+                    </>
+                  ) : (
+                    <>
+                      Continue
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )
+            }
+            // Step 5: Reels — continue with save
+            return (
+              <button
+                onClick={async () => {
+                  await nicheFormRef.current?.saveNow()
+                  setStep(6)
+                }}
+                disabled={aiGenerating || !ytSectionValid}
+                className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {aiGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Please wait...
+                  </>
+                ) : (
+                  <>
+                    Continue
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            )
+          })()}
+
+          {step === 6 && (
             <button
               onClick={async () => {
-                // Flush any pending auto-save before unmounting the form
                 await nicheFormRef.current?.saveNow()
-                setStep(step + 1)
+                handleComplete()
               }}
-              disabled={aiGenerating || (step === 4 && !ytSectionValid)}
-              className="login-btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={completing || aiGenerating}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all bg-green-500 hover:bg-green-600 text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {aiGenerating ? (
+              {completing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Finishing...
+                </>
+              ) : aiGenerating ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Please wait...
                 </>
               ) : (
                 <>
-                  Continue
-                  <ArrowRight className="w-4 h-4" />
+                  <Check className="w-4 h-4" />
+                  Complete Setup
                 </>
               )}
             </button>
-          )}
-
-          {step === 6 && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleComplete}
-                disabled={completing || (!igConnected && !ytConnected && !fbConnected)}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
-                  igConnected || ytConnected || fbConnected
-                    ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {completing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Finishing...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Complete Setup
-                  </>
-                )}
-              </button>
-            </div>
           )}
         </div>
       </footer>
