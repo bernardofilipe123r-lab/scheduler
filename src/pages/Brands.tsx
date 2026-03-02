@@ -25,7 +25,7 @@ export function BrandsPage() {
       }
 
       // If leaving music tab, fire custom event so MusicManager can intercept
-      if (activeTab === 'settings') {
+      if (activeTab === 'music') {
         const event = new CustomEvent('music-tab-leave', { detail: { navigate: doNavigate }, cancelable: true })
         const allowed = window.dispatchEvent(event)
         if (!allowed) return // MusicManager prevented navigation
@@ -68,7 +68,7 @@ export function BrandsPage() {
       {activeTab === 'brands' && <MyBrandsTab />}
       {activeTab === 'prompts' && <NicheConfigForm />}
       {activeTab === 'connections' && <ConnectionsTab />}
-      {activeTab === 'settings' && (
+      {activeTab === 'music' && (
         <div className="max-w-2xl">
           <MusicManager />
         </div>

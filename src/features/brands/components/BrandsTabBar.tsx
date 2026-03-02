@@ -4,7 +4,7 @@ const TABS = [
   { key: 'brands', label: 'My Brands', icon: Layers },
   { key: 'prompts', label: 'Content DNA', icon: Dna },
   { key: 'connections', label: 'Connections', icon: Link2 },
-  { key: 'settings', label: 'Music', icon: Music },
+  { key: 'music', label: 'Music', icon: Music },
 ] as const
 
 export type BrandsTab = (typeof TABS)[number]['key']

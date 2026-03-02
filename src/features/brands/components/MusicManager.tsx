@@ -23,25 +23,31 @@ export function MusicManager() {
   const [error, setError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
+  const [playbackProgress, setPlaybackProgress] = useState(0)
 
-  // Local weight state for deferred save
-  const [localWeights, setLocalWeights] = useState<Record<string, number>>({})
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  // Local weight state for deferred save — initialized lazily from server
+  const [localWeights, setLocalWeights] = useState<Record<string, number> | null>(null)
   const [showUnsavedModal, setShowUnsavedModal] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
 
   const tracks = data?.tracks ?? []
   const maxTracks = data?.max ?? 20
 
-  // Sync local weights when server data changes
+  // Sync local weights from server (only when no local edits exist)
   useEffect(() => {
     const serverTracks = data?.tracks
-    if (serverTracks && serverTracks.length > 0 && !hasUnsavedChanges) {
-      const serverWeights: Record<string, number> = {}
-      serverTracks.forEach(t => { serverWeights[t.id] = t.weight })
-      setLocalWeights(serverWeights)
+    if (serverTracks && serverTracks.length > 0 && localWeights === null) {
+      const w: Record<string, number> = {}
+      serverTracks.forEach(t => { w[t.id] = t.weight })
+      setLocalWeights(w)
     }
-  }, [data?.tracks, hasUnsavedChanges])
+  }, [data?.tracks, localWeights])
+
+  // Derive unsaved state by comparing local weights to server weights
+  const hasUnsavedChanges = (() => {
+    if (!localWeights || !data?.tracks) return false
+    return data.tracks.some(t => (localWeights[t.id] ?? t.weight) !== t.weight)
+  })()
 
   // Browser beforeunload warning
   useEffect(() => {
@@ -55,36 +61,32 @@ export function MusicManager() {
   }, [hasUnsavedChanges])
 
   const getWeight = (trackId: string, fallback: number) =>
-    localWeights[trackId] ?? fallback
+    localWeights?.[trackId] ?? fallback
 
   const totalWeight = tracks.reduce((sum, t) => sum + getWeight(t.id, t.weight), 0)
 
   const handleWeightChange = (trackId: string, weight: number) => {
     setLocalWeights(prev => ({ ...prev, [trackId]: weight }))
-    setHasUnsavedChanges(true)
   }
 
   const handleSave = async () => {
+    if (!localWeights) return
     const updates = tracks
-      .filter(t => getWeight(t.id, t.weight) !== t.weight)
-      .map(t => ({ trackId: t.id, weight: getWeight(t.id, t.weight) }))
-    if (updates.length === 0) {
-      setHasUnsavedChanges(false)
-      return
-    }
+      .filter(t => (localWeights[t.id] ?? t.weight) !== t.weight)
+      .map(t => ({ trackId: t.id, weight: localWeights[t.id] ?? t.weight }))
+    if (updates.length === 0) return
     try {
       await saveMutation.mutateAsync(updates)
-      setHasUnsavedChanges(false)
+      // Reset local weights so next server sync picks up
+      setLocalWeights(null)
     } catch {
       setError('Failed to save weights')
     }
   }
 
   const handleDiscard = () => {
-    const serverWeights: Record<string, number> = {}
-    tracks.forEach(t => { serverWeights[t.id] = t.weight })
-    setLocalWeights(serverWeights)
-    setHasUnsavedChanges(false)
+    // Reset to server values
+    setLocalWeights(null)
     if (pendingNavigation) {
       pendingNavigation()
       setPendingNavigation(null)
@@ -146,6 +148,7 @@ export function MusicManager() {
     if (playingTrackId === trackId) {
       audioRef.current?.pause()
       setPlayingTrackId(null)
+      setPlaybackProgress(0)
       return
     }
 
@@ -154,10 +157,19 @@ export function MusicManager() {
     }
 
     const audio = new Audio(url)
-    audio.addEventListener('ended', () => setPlayingTrackId(null))
+    audio.addEventListener('ended', () => {
+      setPlayingTrackId(null)
+      setPlaybackProgress(0)
+    })
+    audio.addEventListener('timeupdate', () => {
+      if (audio.duration > 0) {
+        setPlaybackProgress(Math.round((audio.currentTime / audio.duration) * 100))
+      }
+    })
     audio.play()
     audioRef.current = audio
     setPlayingTrackId(trackId)
+    setPlaybackProgress(0)
   }, [playingTrackId])
 
   // Cleanup audio on unmount
@@ -232,22 +244,34 @@ export function MusicManager() {
                         </span>
                       </div>
 
-                      {/* Weight slider */}
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          value={weight}
-                          onChange={(e) => handleWeightChange(t.id, Number(e.target.value))}
-                          className="flex-1 h-1.5 accent-primary-500 cursor-pointer"
-                        />
-                        <span className={`text-xs font-semibold tabular-nums w-10 text-right ${
-                          pct >= 50 ? 'text-primary-600' : 'text-gray-500'
-                        }`}>
-                          {pct}%
-                        </span>
-                      </div>
+                      {/* Playback progress bar */}
+                      {isPlaying && (
+                        <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-primary-500 h-full rounded-full transition-[width] duration-200 ease-linear"
+                            style={{ width: `${playbackProgress}%` }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Weight slider (hide during playback for cleaner look) */}
+                      {!isPlaying && (
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={weight}
+                            onChange={(e) => handleWeightChange(t.id, Number(e.target.value))}
+                            className="flex-1 h-1.5 accent-primary-500 cursor-pointer"
+                          />
+                          <span className={`text-xs font-semibold tabular-nums w-10 text-right ${
+                            pct >= 50 ? 'text-primary-600' : 'text-gray-500'
+                          }`}>
+                            {pct}%
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Delete */}
