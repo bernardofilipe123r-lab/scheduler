@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
-  Bot, Layers, User, LogOut, MessageSquare,
+  Bot, Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck,
   X, AlertTriangle,
 } from 'lucide-react'
@@ -153,7 +153,6 @@ const NAV_ITEMS = [
   { to: '/jobs', icon: Briefcase, label: 'Jobs', end: false },
   { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', end: false },
-  { to: '/community', icon: MessageSquare, label: 'Community', end: false },
   { to: '/toby', icon: Bot, label: 'Toby', end: false },
 ]
 

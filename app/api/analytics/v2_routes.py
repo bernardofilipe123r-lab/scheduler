@@ -80,7 +80,7 @@ async def analytics_overview(
 
     def pct_change(curr, prev):
         if prev == 0:
-            return 100.0 if curr > 0 else 0.0
+            return 0.0  # No comparison data available
         return round((curr - prev) / prev * 100, 1)
 
     # Daily chart data (latest snapshot per brand/platform/day)

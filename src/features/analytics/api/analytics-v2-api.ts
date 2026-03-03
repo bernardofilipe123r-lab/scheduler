@@ -77,6 +77,7 @@ export interface PostItem {
   brand: string
   content_type: string
   title: string | null
+  caption: string | null
   topic_bucket: string | null
   views: number
   likes: number

@@ -304,6 +304,10 @@ class PostPerformance(Base):
     # FK to content_history if available
     content_history_id = Column(Integer, nullable=True)
 
+    # Extracted from published_at for grouping queries
+    published_day_of_week = Column(Integer, nullable=True)  # 0=Sun, 6=Sat
+    published_hour = Column(Integer, nullable=True)          # 0-23
+
     # ── Metrics ──
     views = Column(Integer, default=0)       # plays/impressions
     likes = Column(Integer, default=0)
@@ -342,6 +346,7 @@ class PostPerformance(Base):
             "brand": self.brand,
             "content_type": self.content_type,
             "title": self.title,
+            "caption": self.caption,
             "topic_bucket": self.topic_bucket,
             "views": self.views,
             "likes": self.likes,

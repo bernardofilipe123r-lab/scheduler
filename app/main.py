@@ -790,7 +790,140 @@ async def startup_event():
     
     # Also run analytics refresh once on startup (after a short delay)
     scheduler.add_job(refresh_analytics, 'date', run_date=datetime.now(), id='analytics_startup')
-    
+
+    # Auto-refresh audience demographics every 12 hours
+    def refresh_audience_demographics():
+        """Fetch audience demographics from Instagram for all users."""
+        try:
+            from app.db_connection import get_db_session
+            from app.models.brands import Brand
+            from app.models.analytics import AudienceDemographics
+
+            print(f"\n👥 Auto-refresh audience demographics at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+            with get_db_session() as db:
+                # Get all active brands with IG business accounts
+                brands = db.query(Brand).filter(
+                    Brand.active == True,
+                    Brand.instagram_business_account_id.isnot(None),
+                ).all()
+
+                updated = 0
+                for b in brands:
+                    try:
+                        token = b.meta_access_token or b.instagram_access_token
+                        ig_id = b.instagram_business_account_id
+                        if not token or not ig_id:
+                            continue
+
+                        import requests as http_requests
+                        url = f"https://graph.facebook.com/v21.0/{ig_id}/insights"
+                        params = {
+                            "metric": "follower_demographics",
+                            "period": "lifetime",
+                            "metric_type": "total_value",
+                            "access_token": token,
+                        }
+                        resp = http_requests.get(url, params=params, timeout=15)
+                        if resp.status_code != 200:
+                            continue
+
+                        data = resp.json().get("data", [])
+                        gender_age = {}
+                        top_cities = {}
+                        top_countries = {}
+
+                        for metric in data:
+                            name = metric.get("name", "")
+                            total_value = metric.get("total_value", {}).get("breakdowns", [])
+                            if not total_value:
+                                continue
+                            results = total_value[0].get("results", [])
+                            for result in results:
+                                dims = result.get("dimension_values", [])
+                                val = result.get("value", 0)
+                                if name == "follower_demographics" and len(dims) >= 2:
+                                    gender_age[f"{dims[0]}.{dims[1]}"] = val
+
+                        for breakdown_type in ["city", "country"]:
+                            params2 = {**params, "breakdown": breakdown_type}
+                            resp2 = http_requests.get(url, params=params2, timeout=15)
+                            if resp2.status_code == 200:
+                                for metric in resp2.json().get("data", []):
+                                    tv = metric.get("total_value", {}).get("breakdowns", [])
+                                    if not tv:
+                                        continue
+                                    for result in tv[0].get("results", []):
+                                        dims = result.get("dimension_values", [])
+                                        val = result.get("value", 0)
+                                        if dims:
+                                            if breakdown_type == "city":
+                                                top_cities[dims[0]] = val
+                                            else:
+                                                top_countries[dims[0]] = val
+
+                        if not gender_age:
+                            continue
+
+                        total_audience = sum(gender_age.values())
+                        gender_totals = {}
+                        age_totals = {}
+                        for k, v in gender_age.items():
+                            g = k.split(".")[0] if "." in k else k
+                            gender_totals[g] = gender_totals.get(g, 0) + v
+                            parts = k.split(".")
+                            age = parts[1] if len(parts) > 1 else parts[0]
+                            age_totals[age] = age_totals.get(age, 0) + v
+
+                        gender_map = {"M": "Male", "F": "Female", "U": "Undisclosed"}
+                        top_g = max(gender_totals, key=gender_totals.get) if gender_totals else None
+                        top_gender = gender_map.get(top_g, top_g)
+                        top_age = max(age_totals, key=age_totals.get) if age_totals else None
+                        top_city_name = max(top_cities, key=top_cities.get) if top_cities else None
+
+                        existing = db.query(AudienceDemographics).filter(
+                            AudienceDemographics.user_id == b.user_id,
+                            AudienceDemographics.brand == b.id,
+                            AudienceDemographics.platform == "instagram",
+                        ).first()
+
+                        if existing:
+                            existing.gender_age = gender_age
+                            existing.top_cities = top_cities
+                            existing.top_countries = top_countries
+                            existing.top_gender = top_gender
+                            existing.top_age_range = top_age
+                            existing.top_city = top_city_name
+                            existing.total_audience = total_audience
+                            existing.fetched_at = datetime.now()
+                        else:
+                            db.add(AudienceDemographics(
+                                user_id=b.user_id,
+                                brand=b.id,
+                                platform="instagram",
+                                gender_age=gender_age,
+                                top_cities=top_cities,
+                                top_countries=top_countries,
+                                top_gender=top_gender,
+                                top_age_range=top_age,
+                                top_city=top_city_name,
+                                total_audience=total_audience,
+                                fetched_at=datetime.now(),
+                            ))
+                        db.commit()
+                        updated += 1
+                    except Exception as e:
+                        print(f"⚠️ Audience refresh error for brand {b.id}: {e}")
+                        db.rollback()
+
+                print(f"   ✅ Audience demographics refreshed for {updated} brands")
+
+        except Exception as e:
+            print(f"❌ Auto-refresh audience demographics failed: {str(e)}")
+
+    scheduler.add_job(refresh_audience_demographics, 'interval', hours=12, id='audience_refresh')
+    scheduler.add_job(refresh_audience_demographics, 'date', run_date=datetime.now() + timedelta(seconds=60), id='audience_startup')
+
     # Auto-cleanup old logs every 24 hours (keep 7 days of logs)
     def cleanup_old_logs():
         """Cleanup logs older than 7 days to prevent unbounded DB growth."""
