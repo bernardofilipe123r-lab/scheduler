@@ -1,5 +1,47 @@
 # Copilot Instructions
 
+## 100% Dynamic Architecture — MANDATORY
+
+ViralToby is a **multi-tenant SaaS platform**. Every user can have any number of brands, each with any combination of connected social platforms, each with its own colors, fonts, topics, tone, and audience. **Nothing about users, brands, or their configuration is hardcoded — ever.**
+
+### The Rule
+
+> **All user-facing data — brand count, brand names, brand colors, platform connections, niche settings, content preferences — MUST be loaded dynamically from the database or API. Zero exceptions.**
+
+### What MUST be dynamic (loaded from DB/API at runtime):
+- **Brand count** — a user can have 1 brand or 50. Never assume a fixed number.
+- **Brand names & labels** — from `brands.name` in DB
+- **Brand colors** — from `brands.colors` JSON column (`{ primary, accent, text, ... }`)
+- **Connected platforms per brand** — any subset of Instagram, Facebook, YouTube, Threads, TikTok
+- **Content DNA / NicheConfig** — topics, tone, target audience, visual style — all per-brand, user-defined
+- **Scheduling, publishing, analytics** — all scoped to whatever brands and platforms the user has configured
+
+### What IS acceptable as static constants:
+- **Platform identity** — `PLATFORM_COLORS` (Instagram gradient, YouTube red, Facebook blue), platform icon mappings. These represent the platforms themselves, not user data.
+- **UI layout** — breakpoints, spacing, grid sizes. Not user-specific.
+- **System defaults** — quality score threshold (80), tick interval (5 min), dedup window (3 days). Operational constants, not user content.
+
+### What is NEVER acceptable:
+- Hardcoded brand name arrays, color palettes tied to brand index, or brand ID lists
+- Any array/map whose length assumes a specific number of brands or platforms
+- Fallback lists that assume specific brands exist (e.g., "Healveth", "brand-1")
+- Static color assignments like `BRAND_PALETTE[i % length]` — use the brand's actual `colors.primary` from DB
+- Conditional logic that checks for specific brand IDs or names
+
+### Frontend source of truth:
+- `useDynamicBrands()` hook → returns `DynamicBrandInfo[]` with `{ id, label, color, shortName, active, ... }`
+- Each brand's `color` comes from `b.colors?.primary` in the database
+- **Always iterate over dynamic data** — never hardcode assumptions about what brands or platforms exist
+
+### Backend source of truth:
+- `Brand` model (`app/models/brands.py`) → `colors = Column(JSON)`
+- `get_brand_config(brand_id)` in `app/core/config.py` → returns `BrandConfig` dataclass
+- `NicheConfig` model (`app/models/niche_config.py`) → per-brand content identity
+
+**If you are about to write a constant array of brand names, colors, or IDs — STOP. Load it from the database instead.**
+
+---
+
 ## Database Migrations
 
 The Supabase database is accessible directly via `psql` using the `DATABASE_URL` from `.env`. **All migrations must be run directly** — there is no Alembic or auto-migration system.
