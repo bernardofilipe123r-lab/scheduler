@@ -157,31 +157,6 @@ function FilterBar({
   )
 }
 
-// ─── Summary stat card ──────────────────────────────────
-
-function StatCard({
-  label, value, change, icon, color,
-}: {
-  label: string
-  value: number
-  change?: number
-  icon: React.ReactNode
-  color: string
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <div className={`p-2 rounded-lg ${color}`}>
-          {icon}
-        </div>
-        {change !== undefined && <PctBadge value={change} />}
-      </div>
-      <p className="text-2xl font-bold text-gray-900">{fmt(value)}</p>
-      <p className="text-sm text-gray-500 mt-0.5">{label}</p>
-    </div>
-  )
-}
-
 // ─── Empty state ────────────────────────────────────────
 
 function EmptyState({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
@@ -208,11 +183,26 @@ const BAR_COLORS = [CHART_BLUE, CHART_GREEN, CHART_PURPLE, CHART_PINK, CHART_AMB
 //  TAB 1: OVERVIEW
 // ════════════════════════════════════════════════════════
 
+const PLATFORM_COLORS: Record<string, string> = {
+  instagram: '#E1306C',
+  youtube: '#FF0000',
+  facebook: '#1877F2',
+  threads: '#000000',
+  tiktok: '#010101',
+}
+
+const BRAND_PALETTE = [
+  '#6366f1', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899',
+  '#14b8a6', '#3b82f6', '#f97316', '#06b6d4', '#84cc16',
+]
+
 function OverviewTab({
   brand, platform, days,
 }: {
   brand?: string; platform?: string; days: number
 }) {
+  const [metricView, setMetricView] = useState<'views' | 'followers' | 'likes'>('views')
+  const [expandedBrand, setExpandedBrand] = useState<string | null>(null)
   const { data, isLoading } = useOverview({
     brand: brand !== 'all' ? brand : undefined,
     platform: platform !== 'all' ? platform : undefined,
@@ -226,125 +216,323 @@ function OverviewTab({
     return map
   }, [dynamicBrands])
 
+  // Assign stable colors to brands
+  const brandColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    const allBrands = [...new Set(data?.channels.map(c => c.brand) ?? [])]
+    allBrands.forEach((b, i) => { map[b] = BRAND_PALETTE[i % BRAND_PALETTE.length] })
+    return map
+  }, [data?.channels])
+
+  // Group channels by brand, sorted by total views desc
+  const brandGroups = useMemo(() => {
+    if (!data?.channels.length) return []
+    const grouped: Record<string, typeof data.channels> = {}
+    for (const ch of data.channels) {
+      if (!grouped[ch.brand]) grouped[ch.brand] = []
+      grouped[ch.brand].push(ch)
+    }
+    return Object.entries(grouped).sort((a, b) => {
+      const aViews = a[1].reduce((s, c) => s + c.views, 0)
+      const bViews = b[1].reduce((s, c) => s + c.views, 0)
+      return bViews - aViews
+    })
+  }, [data?.channels])
+
+  // Platform totals for side panel
+  const platformTotals = useMemo(() => {
+    if (!data?.channels.length) return []
+    const map: Record<string, { platform: string; views: number; likes: number; followers: number }> = {}
+    for (const ch of data.channels) {
+      if (!map[ch.platform]) map[ch.platform] = { platform: ch.platform, views: 0, likes: 0, followers: 0 }
+      map[ch.platform].views += ch.views
+      map[ch.platform].likes += ch.likes
+      map[ch.platform].followers += ch.followers
+    }
+    return Object.values(map).sort((a, b) => b.views - a.views)
+  }, [data?.channels])
+
   if (isLoading) return <AnalyticsSkeleton />
   if (!data) return <EmptyState icon={<BarChart3 className="w-12 h-12" />} title="No data yet" description="Connect your accounts and refresh to see analytics." />
 
+  const engRate = data.current.views > 0
+    ? ((data.current.likes / data.current.views) * 100).toFixed(2)
+    : '0.00'
+
+  const metricColors: Record<string, string> = {
+    views: CHART_GREEN,
+    followers: CHART_BLUE,
+    likes: CHART_PINK,
+  }
+
   return (
     <div className="space-y-6">
-      {/* Summary cards with period comparison */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          label="Total Followers"
-          value={data.current.followers}
-          change={data.changes.followers_pct}
-          icon={<Users className="w-5 h-5 text-blue-600" />}
-          color="bg-blue-50"
-        />
-        <StatCard
-          label={`Views (${days}d)`}
-          value={data.current.views}
-          change={data.changes.views_pct}
-          icon={<Eye className="w-5 h-5 text-green-600" />}
-          color="bg-green-50"
-        />
-        <StatCard
-          label={`Likes (${days}d)`}
-          value={data.current.likes}
-          change={data.changes.likes_pct}
-          icon={<Heart className="w-5 h-5 text-pink-500" />}
-          color="bg-pink-50"
-        />
+      {/* 4 Stat cards with colored top accent */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Followers', value: data.current.followers, change: data.changes.followers_pct, color: '#3B82F6', icon: <Users className="w-4 h-4" />, sub: 'across all brands' },
+          { label: `Views (${days}d)`, value: data.current.views, change: data.changes.views_pct, color: '#10B981', icon: <Eye className="w-4 h-4" />, sub: 'total reach' },
+          { label: `Likes (${days}d)`, value: data.current.likes, change: data.changes.likes_pct, color: '#EC4899', icon: <Heart className="w-4 h-4" />, sub: 'total engagement' },
+          { label: 'Eng. Rate', value: null, color: '#F59E0B', icon: <Zap className="w-4 h-4" />, sub: 'likes / views' },
+        ].map((card, i) => (
+          <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: card.color, opacity: 0.7 }} />
+            <div className="flex items-center gap-2 mb-2.5" style={{ color: card.color }}>
+              <span className="opacity-80">{card.icon}</span>
+              <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{card.label}</span>
+            </div>
+            <div className="flex items-end gap-2">
+              <p className="text-2xl font-extrabold text-gray-900 leading-none tracking-tight">
+                {card.value !== null ? fmt(card.value) : engRate + '%'}
+              </p>
+              {card.change !== undefined && <PctBadge value={card.change} />}
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">{card.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Performance chart */}
-      {data.daily.length > 1 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-gray-900 mb-1">Average Performance</h3>
-          <p className="text-xs text-gray-400 mb-4">Daily followers, views &amp; likes over the selected period</p>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={data.daily}>
-              <defs>
-                <linearGradient id="gFollowers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={CHART_BLUE} stopOpacity={0.15} />
-                  <stop offset="95%" stopColor={CHART_BLUE} stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gViews" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={CHART_GREEN} stopOpacity={0.15} />
-                  <stop offset="95%" stopColor={CHART_GREEN} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#ccc" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#ccc" tickFormatter={fmt} />
-              <Tooltip
-                formatter={(v: number | undefined, name?: string) => [fmt(v ?? 0), name ?? '']}
-                contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-              />
-              <Legend />
-              <Area type="monotone" dataKey="followers" stroke={CHART_BLUE} fill="url(#gFollowers)" strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="views" stroke={CHART_GREEN} fill="url(#gViews)" strokeWidth={2} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {/* Trend chart + Platform breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+        {/* Trend chart with metric switcher */}
+        {data.daily.length > 1 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-gray-900">Trend</h3>
+              <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                {(['views', 'followers', 'likes'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMetricView(m)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      metricView === m
+                        ? 'bg-gray-900 text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {m.charAt(0).toUpperCase() + m.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={data.daily} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gTrendOverview" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={metricColors[metricView]} stopOpacity={0.2} />
+                    <stop offset="100%" stopColor={metricColors[metricView]} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={fmt} width={45} />
+                <Tooltip
+                  formatter={(v: number | undefined) => [fmt(v ?? 0), metricView]}
+                  contentStyle={{ background: '#fff', border: '1px solid #e8ecf1', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 12 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey={metricView}
+                  stroke={metricColors[metricView]}
+                  strokeWidth={2}
+                  fill="url(#gTrendOverview)"
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
-      {/* Social Channels — grouped by brand */}
-      {data.channels.length > 0 && (() => {
-        const grouped: Record<string, typeof data.channels> = {}
-        for (const ch of data.channels) {
-          if (!grouped[ch.brand]) grouped[ch.brand] = []
-          grouped[ch.brand].push(ch)
-        }
-        // Sort brands alphabetically by display name
-        const sortedBrands = Object.keys(grouped).sort((a, b) =>
-          (brandLabels[a] || a).localeCompare(brandLabels[b] || b)
-        )
-        return (
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-3">Channels by Brand</h3>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {sortedBrands.map((brandId) => {
-                const channels = grouped[brandId]
-                const totalFollowers = channels.reduce((s, c) => s + c.followers, 0)
+        {/* Platform breakdown panel */}
+        {platformTotals.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-900 mb-4">By Platform</h3>
+            <div className="space-y-4">
+              {platformTotals.map((p) => {
+                const pct = data.current.views > 0 ? (p.views / data.current.views) * 100 : 0
+                const pColor = PLATFORM_COLORS[p.platform] || '#6B7280'
                 return (
-                  <div key={brandId} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-gray-900">{brandLabels[brandId] || brandId}</h4>
-                      <span className="text-xs text-gray-400">{fmt(totalFollowers)} total followers</span>
+                  <div key={p.platform}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span style={{ color: pColor }}>
+                          <PlatformIcon platform={p.platform} className="w-3.5 h-3.5" />
+                        </span>
+                        <span className="text-xs font-semibold text-gray-700 capitalize">{p.platform}</span>
+                      </div>
+                      <span className="text-xs font-bold text-gray-900">{fmt(p.views)}</span>
                     </div>
-                    <div className="divide-y divide-gray-100">
-                      {channels.map((ch, i) => (
-                        <div key={i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center">
-                              <PlatformIcon platform={ch.platform} className="w-4 h-4 text-gray-600" />
-                            </div>
-                            <span className="text-sm font-medium text-gray-700 capitalize">{ch.platform}</span>
-                          </div>
-                          <div className="flex items-center gap-5 text-sm">
-                            <div className="text-right">
-                              <p className="font-semibold text-gray-900">{fmt(ch.followers)}</p>
-                              <p className="text-[10px] text-gray-400">followers</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-gray-900">{fmt(ch.views)}</p>
-                              <p className="text-[10px] text-gray-400">views</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-gray-900">{fmt(ch.likes)}</p>
-                              <p className="text-[10px] text-gray-400">likes</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: pColor, opacity: 0.7 }}
+                      />
+                    </div>
+                    <div className="flex gap-3 mt-1">
+                      <span className="text-[10px] text-gray-400">{fmt(p.followers)} followers</span>
+                      <span className="text-[10px] text-gray-400">{fmt(p.likes)} likes</span>
+                      <span className="text-[10px] text-gray-400">{pct.toFixed(1)}% of views</span>
                     </div>
                   </div>
                 )
               })}
             </div>
           </div>
-        )
-      })()}
+        )}
+      </div>
+
+      {/* Brand rows — expandable accordion sorted by views */}
+      {brandGroups.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-900">Brands</h3>
+            <span className="text-[11px] text-gray-400">sorted by views · click to expand</span>
+          </div>
+          <div className="space-y-2">
+            {brandGroups.map(([brandId, channels]) => {
+              const bColor = brandColorMap[brandId] || '#6B7280'
+              const label = brandLabels[brandId] || brandId
+              const totalFollowers = channels.reduce((s, c) => s + c.followers, 0)
+              const totalViews = channels.reduce((s, c) => s + c.views, 0)
+              const totalLikes = channels.reduce((s, c) => s + c.likes, 0)
+              const activePlatforms = channels.filter(c => c.followers > 0 || c.views > 0)
+              const inactivePlatforms = channels.filter(c => c.followers === 0 && c.views === 0)
+              const brandEngRate = totalViews > 0 ? ((totalLikes / totalViews) * 100).toFixed(2) : '0.00'
+              const isExpanded = expandedBrand === brandId
+
+              return (
+                <div
+                  key={brandId}
+                  className={`bg-white rounded-xl border border-gray-200 overflow-hidden transition-shadow ${
+                    isExpanded ? 'shadow-md' : 'shadow-sm'
+                  }`}
+                >
+                  {/* Collapsed row */}
+                  <button
+                    onClick={() => setExpandedBrand(isExpanded ? null : brandId)}
+                    className="w-full text-left px-5 py-3.5 grid items-center gap-2 hover:bg-gray-50/50 transition-colors"
+                    style={{ gridTemplateColumns: 'minmax(140px, 1.2fr) 80px repeat(3, 80px) 56px 24px' }}
+                  >
+                    {/* Brand name + platform icons */}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-xs font-extrabold"
+                        style={{ backgroundColor: bColor + '14', color: bColor }}
+                      >
+                        {label.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-gray-900 truncate">{label}</p>
+                        <div className="flex gap-1 mt-0.5">
+                          {activePlatforms.map(c => (
+                            <span key={c.platform} style={{ color: PLATFORM_COLORS[c.platform] || '#6B7280' }} className="opacity-70">
+                              <PlatformIcon platform={c.platform} className="w-3.5 h-3.5" />
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sparkline placeholder (area with daily data) */}
+                    <div className="h-8">
+                      <ResponsiveContainer width="100%" height={32}>
+                        <AreaChart data={data.daily.slice(-7)} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+                          <defs>
+                            <linearGradient id={`sp-${brandId}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={bColor} stopOpacity={0.25} />
+                              <stop offset="100%" stopColor={bColor} stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <Area type="monotone" dataKey="views" stroke={bColor} strokeWidth={1.5} fill={`url(#sp-${brandId})`} dot={false} isAnimationActive={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Followers */}
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900">{fmt(totalFollowers)}</p>
+                      <p className="text-[10px] text-gray-400">followers</p>
+                    </div>
+
+                    {/* Views */}
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900">{fmt(totalViews)}</p>
+                      <p className="text-[10px] text-gray-400">views</p>
+                    </div>
+
+                    {/* Likes */}
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900">{fmt(totalLikes)}</p>
+                      <p className="text-[10px] text-gray-400">likes</p>
+                    </div>
+
+                    {/* Eng rate badge */}
+                    <div className="text-right">
+                      <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                        parseFloat(brandEngRate) > 0.5
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {brandEngRate}%
+                      </span>
+                    </div>
+
+                    {/* Chevron */}
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Expanded platform breakdown */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-3 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {activePlatforms.map((c) => {
+                        const pEngRate = c.views > 0 ? ((c.likes / c.views) * 100).toFixed(2) : 'n/a'
+                        const pColor = PLATFORM_COLORS[c.platform] || '#6B7280'
+                        return (
+                          <div
+                            key={c.platform}
+                            className="grid items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-100"
+                            style={{ gridTemplateColumns: '120px 1fr 1fr 1fr 70px' }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span style={{ color: pColor }}>
+                                <PlatformIcon platform={c.platform} className="w-3.5 h-3.5" />
+                              </span>
+                              <span className="text-xs font-semibold text-gray-700 capitalize">{c.platform}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[13px] font-bold text-gray-900">{fmt(c.followers)}</span>
+                              <span className="text-[10px] text-gray-400 ml-1">followers</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[13px] font-bold text-gray-900">{fmt(c.views)}</span>
+                              <span className="text-[10px] text-gray-400 ml-1">views</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[13px] font-bold text-gray-900">{fmt(c.likes)}</span>
+                              <span className="text-[10px] text-gray-400 ml-1">likes</span>
+                            </div>
+                            <div className="text-right">
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                c.views > 0 ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400'
+                              }`}>
+                                {pEngRate === 'n/a' ? 'n/a' : pEngRate + '%'}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {inactivePlatforms.length > 0 && (
+                        <p className="text-[11px] text-gray-400 pl-3">
+                          + {inactivePlatforms.length} inactive platform{inactivePlatforms.length > 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

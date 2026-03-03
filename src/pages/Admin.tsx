@@ -7,7 +7,7 @@ import {
   Crown, ScrollText, X, Layers, Clock, ArrowUpDown, Trash2, ExternalLink,
   Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
   Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings, Brain,
-  Cpu, Image,
+  Cpu, Image, Database, HardDrive, Wifi, Server, Globe, BarChart3,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -1100,6 +1100,303 @@ interface CreditsResponse {
   }
 }
 
+// ─── Supabase Usage Types ──────────────────────────────────────────────────
+
+interface DbStats {
+  database_size_bytes?: number
+  database_size_mb?: number
+  active_connections?: number
+  total_connections?: number
+  top_tables?: Array<{ schema: string; table: string; row_count: number }>
+  error?: string
+}
+
+interface SupabaseUsageResponse {
+  db_stats: DbStats
+  usage: Record<string, unknown> | null
+  error: string | null
+}
+
+// ─── Usage Progress Bar ─────────────────────────────────────────────────────
+
+function UsageBar({ used, limit, label, icon, unit = 'GB', decimals = 2 }: {
+  used: number
+  limit: number
+  label: string
+  icon: React.ReactNode
+  unit?: string
+  decimals?: number
+}) {
+  const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0
+  const overLimit = used > limit
+  const barColor = overLimit
+    ? 'bg-red-500'
+    : pct > 80
+      ? 'bg-amber-500'
+      : 'bg-emerald-500'
+  const textColor = overLimit ? 'text-red-600' : pct > 80 ? 'text-amber-600' : 'text-gray-700'
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+          {icon} {label}
+        </span>
+        <span className={clsx('text-xs font-semibold', textColor)}>
+          {used.toFixed(decimals)} / {limit.toFixed(decimals)} {unit}
+          {' '}({pct.toFixed(0)}%)
+        </span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className={clsx('h-full rounded-full transition-all duration-500', barColor)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {overLimit && (
+        <p className="text-[10px] text-red-500 font-medium flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" /> Exceeded by {(used - limit).toFixed(decimals)} {unit}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Supabase Infrastructure Panel ─────────────────────────────────────────
+
+function SupabaseUsagePanel() {
+  const [expanded, setExpanded] = useState(true)
+  const [showTables, setShowTables] = useState(false)
+
+  const usageQuery = useQuery<SupabaseUsageResponse>({
+    queryKey: ['admin-supabase-usage'],
+    queryFn: () => apiClient.get('/api/admin/supabase-usage'),
+    staleTime: 10 * 60_000, // 10 minutes
+    refetchOnWindowFocus: false,
+  })
+
+  const db = usageQuery.data?.db_stats
+  const usage = usageQuery.data?.usage as Record<string, unknown> | null
+  const apiError = usageQuery.data?.error
+  const hasUsageApi = usage !== null && usage !== undefined
+
+  // Helper to safely extract usage array values from the Management API response
+  const getUsageTotal = (metric: string): number | null => {
+    if (!usage || !usage[metric]) return null
+    const m = usage[metric] as Record<string, unknown>
+    // The Management API can return different shapes; handle common ones
+    if (typeof m === 'object' && m.error) return null
+    // Some metrics return { usage: number } or { total: number }
+    if (typeof m.usage === 'number') return m.usage
+    if (typeof m.total === 'number') return m.total
+    // Some return an array of { period_start, usage } — sum them
+    if (Array.isArray(m)) {
+      return (m as Array<Record<string, number>>).reduce((s, r) => s + (r.usage ?? r.total ?? 0), 0)
+    }
+    // Nested data array
+    if (Array.isArray((m as Record<string, unknown>).data)) {
+      return ((m as Record<string, unknown>).data as Array<Record<string, number>>).reduce(
+        (s, r) => s + (r.usage ?? r.total ?? 0), 0
+      )
+    }
+    return null
+  }
+
+  const getUsageLimit = (metric: string): number | null => {
+    if (!usage || !usage[metric]) return null
+    const m = usage[metric] as Record<string, unknown>
+    if (typeof m === 'object' && m.error) return null
+    if (typeof m.limit === 'number') return m.limit
+    if (typeof m.included === 'number') return m.included
+    return null
+  }
+
+  // Free plan limits (fallback if API doesn't return limits)
+  const FREE_LIMITS: Record<string, { limit: number; unit: string; label: string }> = {
+    egress: { limit: 5, unit: 'GB', label: 'Egress' },
+    db_size: { limit: 0.5, unit: 'GB', label: 'Database Size' },
+    storage_size: { limit: 1, unit: 'GB', label: 'Storage Size' },
+    monthly_active_users: { limit: 50000, unit: 'MAU', label: 'Monthly Active Users' },
+    realtime_message_count: { limit: 2000000, unit: 'msgs', label: 'Realtime Messages' },
+    realtime_peak_connections: { limit: 200, unit: '', label: 'Realtime Peak Connections' },
+    func_invocations: { limit: 500000, unit: '', label: 'Edge Function Invocations' },
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200">
+      {/* Header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+      >
+        <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <Server className="w-4 h-4 text-emerald-500" />
+          Supabase Infrastructure
+        </h2>
+        <div className="flex items-center gap-2">
+          {usageQuery.isFetching && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4">
+          {usageQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-xs text-gray-400 py-4 justify-center">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading Supabase metrics…
+            </div>
+          ) : usageQuery.isError ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-600">
+              <AlertCircle className="w-3.5 h-3.5 inline mr-1" />
+              Failed to load usage data: {(usageQuery.error as Error).message}
+            </div>
+          ) : (
+            <>
+              {/* Setup notice if Management API key is missing */}
+              {apiError && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+                  <AlertCircle className="w-3.5 h-3.5 inline mr-1" />
+                  {apiError}
+                </div>
+              )}
+
+              {/* Database Stats (always available from postgres) */}
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Database</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                    <Database className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-blue-700 mb-0.5">Database Size</p>
+                      <p className="text-lg font-bold text-blue-900">
+                        {db?.database_size_mb != null ? `${db.database_size_mb} MB` : '—'}
+                      </p>
+                      <p className="text-[10px] text-blue-600">Limit: 500 MB (Free)</p>
+                      {db?.database_size_mb != null && (
+                        <div className="mt-1.5 h-1.5 bg-blue-100 rounded-full overflow-hidden">
+                          <div
+                            className={clsx(
+                              'h-full rounded-full',
+                              (db.database_size_mb / 500) > 0.9 ? 'bg-red-500' : 'bg-blue-500'
+                            )}
+                            style={{ width: `${Math.min((db.database_size_mb / 500) * 100, 100)}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                    <Wifi className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-emerald-700 mb-0.5">Active Connections</p>
+                      <p className="text-lg font-bold text-emerald-900">{db?.active_connections ?? '—'}</p>
+                      <p className="text-[10px] text-emerald-600">of {db?.total_connections ?? '—'} total</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 rounded-lg bg-violet-50 border border-violet-100">
+                    <HardDrive className="w-5 h-5 text-violet-500 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-violet-700 mb-0.5">Tables</p>
+                      <p className="text-lg font-bold text-violet-900">{db?.top_tables?.length ?? '—'}</p>
+                      <p className="text-[10px] text-violet-600">tracked tables</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Tables (collapsible) */}
+              {db?.top_tables && db.top_tables.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowTables(!showTables)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    {showTables ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    Top Tables by Row Count
+                  </button>
+                  {showTables && (
+                    <div className="mt-2 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                      <div className="grid grid-cols-[1fr_80px] gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-200 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                        <span>Table</span>
+                        <span className="text-right">Rows</span>
+                      </div>
+                      {db.top_tables.map((t, i) => (
+                        <div
+                          key={i}
+                          className="grid grid-cols-[1fr_80px] gap-2 px-3 py-1.5 border-b border-gray-100 last:border-b-0 text-xs"
+                        >
+                          <span className="text-gray-700 font-mono truncate">{t.table}</span>
+                          <span className="text-gray-500 text-right font-mono">{t.row_count.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Supabase Management API metrics */}
+              {hasUsageApi && (
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Billing Usage (Current Cycle)</h3>
+                  <div className="space-y-3">
+                    {Object.entries(FREE_LIMITS).map(([metric, info]) => {
+                      const total = getUsageTotal(metric)
+                      const apiLimit = getUsageLimit(metric)
+                      if (total === null) return null
+
+                      const limit = apiLimit ?? info.limit
+                      // Convert bytes to GB for size metrics
+                      const isBytes = metric === 'egress' || metric === 'storage_size'
+                      const displayUsed = isBytes ? total / (1024 ** 3) : total
+                      const displayLimit = limit
+
+                      const icons: Record<string, React.ReactNode> = {
+                        egress: <Globe className="w-3.5 h-3.5 text-gray-400" />,
+                        db_size: <Database className="w-3.5 h-3.5 text-gray-400" />,
+                        storage_size: <HardDrive className="w-3.5 h-3.5 text-gray-400" />,
+                        monthly_active_users: <Users className="w-3.5 h-3.5 text-gray-400" />,
+                        realtime_message_count: <Activity className="w-3.5 h-3.5 text-gray-400" />,
+                        realtime_peak_connections: <Wifi className="w-3.5 h-3.5 text-gray-400" />,
+                        func_invocations: <Zap className="w-3.5 h-3.5 text-gray-400" />,
+                      }
+
+                      return (
+                        <UsageBar
+                          key={metric}
+                          used={displayUsed}
+                          limit={displayLimit}
+                          label={info.label}
+                          icon={icons[metric] || <BarChart3 className="w-3.5 h-3.5 text-gray-400" />}
+                          unit={info.unit}
+                          decimals={isBytes ? 3 : 0}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Refresh Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => usageQuery.refetch()}
+                  disabled={usageQuery.isFetching}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                >
+                  <RefreshCw className={clsx('w-3 h-3', usageQuery.isFetching && 'animate-spin')} />
+                  Refresh
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AdminPage() {
   const [search, setSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
@@ -1250,6 +1547,9 @@ export function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Supabase Infrastructure */}
+      <SupabaseUsagePanel />
 
       {/* Search */}
       <div className="relative max-w-sm">
