@@ -191,10 +191,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   tiktok: '#010101',
 }
 
-const BRAND_PALETTE = [
-  '#6366f1', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899',
-  '#14b8a6', '#3b82f6', '#f97316', '#06b6d4', '#84cc16',
-]
+// Brand colors are 100% dynamic — loaded from each brand's DB config via useDynamicBrands()
 
 function OverviewTab({
   brand, platform, days,
@@ -216,19 +213,19 @@ function OverviewTab({
     return map
   }, [dynamicBrands])
 
-  // Assign stable colors to brands
+  // Brand colors from dynamic config — each brand defines its own primary color
   const brandColorMap = useMemo(() => {
     const map: Record<string, string> = {}
-    const allBrands = [...new Set(data?.channels.map(c => c.brand) ?? [])]
-    allBrands.forEach((b, i) => { map[b] = BRAND_PALETTE[i % BRAND_PALETTE.length] })
+    for (const b of dynamicBrands) map[b.id] = b.color
     return map
-  }, [data?.channels])
+  }, [dynamicBrands])
 
   // Group channels by brand, sorted by total views desc
   const brandGroups = useMemo(() => {
-    if (!data?.channels.length) return []
-    const grouped: Record<string, typeof data.channels> = {}
-    for (const ch of data.channels) {
+    const chs = data?.channels ?? []
+    if (!chs.length) return [] as [string, typeof chs][]
+    const grouped: Record<string, typeof chs> = {}
+    for (const ch of chs) {
       if (!grouped[ch.brand]) grouped[ch.brand] = []
       grouped[ch.brand].push(ch)
     }
@@ -241,9 +238,10 @@ function OverviewTab({
 
   // Platform totals for side panel
   const platformTotals = useMemo(() => {
-    if (!data?.channels.length) return []
+    const chs = data?.channels ?? []
+    if (!chs.length) return []
     const map: Record<string, { platform: string; views: number; likes: number; followers: number }> = {}
-    for (const ch of data.channels) {
+    for (const ch of chs) {
       if (!map[ch.platform]) map[ch.platform] = { platform: ch.platform, views: 0, likes: 0, followers: 0 }
       map[ch.platform].views += ch.views
       map[ch.platform].likes += ch.likes
