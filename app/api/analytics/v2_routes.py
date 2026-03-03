@@ -497,76 +497,71 @@ async def refresh_audience(
                 continue
 
             import requests as http_requests
-            # Fetch audience_gender_age
             url = f"https://graph.facebook.com/v21.0/{ig_id}/insights"
-            params = {
+            base_params = {
                 "metric": "follower_demographics",
                 "period": "lifetime",
                 "metric_type": "total_value",
                 "access_token": token,
             }
-            resp = http_requests.get(url, params=params, timeout=15)
-            if resp.status_code != 200:
-                errors.append(f"{b.id}: API error {resp.status_code}")
-                continue
 
-            data = resp.json().get("data", [])
             gender_age = {}
             top_cities = {}
             top_countries = {}
+            had_error = False
 
-            for metric in data:
-                name = metric.get("name", "")
-                total_value = metric.get("total_value", {}).get("breakdowns", [])
-                if not total_value:
+            # Meta Graph API v18+ requires explicit breakdown param
+            breakdown_targets = {
+                "age": gender_age,
+                "gender": gender_age,
+                "city": top_cities,
+                "country": top_countries,
+            }
+
+            for breakdown_type, target_dict in breakdown_targets.items():
+                params = {**base_params, "breakdown": breakdown_type}
+                resp = http_requests.get(url, params=params, timeout=15)
+                if resp.status_code != 200:
+                    try:
+                        err_body = resp.json().get("error", {}).get("message", resp.text[:200])
+                    except Exception:
+                        err_body = resp.text[:200]
+                    logger.warning(f"Audience {breakdown_type} fetch for {b.id}: {resp.status_code} - {err_body}")
+                    # age/gender are critical — skip brand entirely if they fail
+                    if breakdown_type in ("age", "gender"):
+                        errors.append(f"{b.id}: API error {resp.status_code} ({err_body})")
+                        had_error = True
+                        break
                     continue
-                results = total_value[0].get("results", [])
-                for result in results:
-                    dims = result.get("dimension_values", [])
-                    val = result.get("value", 0)
-                    if name == "follower_demographics":
-                        # dimension_values format depends on breakdown
-                        # Try to parse gender_age
-                        if len(dims) >= 2:
-                            key = f"{dims[0]}.{dims[1]}"  # e.g. "M.25-34"
-                            gender_age[key] = val
-                        elif len(dims) == 1:
-                            gender_age[dims[0]] = val
 
-            # Also try city/country breakdowns
-            for breakdown_type in ["city", "country"]:
-                params2 = {
-                    "metric": "follower_demographics",
-                    "period": "lifetime",
-                    "metric_type": "total_value",
-                    "breakdown": breakdown_type,
-                    "access_token": token,
-                }
-                resp2 = http_requests.get(url, params=params2, timeout=15)
-                if resp2.status_code == 200:
-                    data2 = resp2.json().get("data", [])
-                    for metric in data2:
-                        total_value = metric.get("total_value", {}).get("breakdowns", [])
-                        if not total_value:
+                data = resp.json().get("data", [])
+                for metric in data:
+                    breakdowns = metric.get("total_value", {}).get("breakdowns", [])
+                    if not breakdowns:
+                        continue
+                    for result in breakdowns[0].get("results", []):
+                        dims = result.get("dimension_values", [])
+                        val = result.get("value", 0)
+                        if not dims:
                             continue
-                        results = total_value[0].get("results", [])
-                        for result in results:
-                            dims = result.get("dimension_values", [])
-                            val = result.get("value", 0)
-                            if dims:
-                                if breakdown_type == "city":
-                                    top_cities[dims[0]] = val
-                                else:
-                                    top_countries[dims[0]] = val
+                        if breakdown_type in ("age", "gender"):
+                            # Store as "age.25-34" or "gender.M"
+                            target_dict[f"{breakdown_type}.{dims[0]}"] = val
+                        else:
+                            target_dict[dims[0]] = val
+
+            if had_error:
+                continue
 
             # Compute summary
-            total_audience = sum(gender_age.values()) if gender_age else 0
+            total_audience = sum(v for k, v in gender_age.items() if k.startswith("age."))
 
             # Top gender
             gender_totals = {}
             for k, v in gender_age.items():
-                g = k.split(".")[0] if "." in k else k
-                gender_totals[g] = gender_totals.get(g, 0) + v
+                if k.startswith("gender."):
+                    g = k.split(".")[1]
+                    gender_totals[g] = gender_totals.get(g, 0) + v
             gender_map = {"M": "Male", "F": "Female", "U": "Undisclosed"}
             top_g = max(gender_totals, key=gender_totals.get) if gender_totals else None
             top_gender = gender_map.get(top_g, top_g)
@@ -574,9 +569,9 @@ async def refresh_audience(
             # Top age range
             age_totals = {}
             for k, v in gender_age.items():
-                parts = k.split(".")
-                age = parts[1] if len(parts) > 1 else parts[0]
-                age_totals[age] = age_totals.get(age, 0) + v
+                if k.startswith("age."):
+                    age = k.split(".")[1]
+                    age_totals[age] = age_totals.get(age, 0) + v
             top_age = max(age_totals, key=age_totals.get) if age_totals else None
 
             # Top city
