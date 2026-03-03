@@ -1,7 +1,7 @@
 /**
  * TanStack Query hooks for Analytics V2 endpoints.
  */
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, keepPreviousData } from '@tanstack/react-query'
 import {
   fetchOverview,
   fetchPosts,
@@ -33,6 +33,7 @@ export function usePosts(params: {
     queryKey: ['analytics-v2-posts', params],
     queryFn: () => fetchPosts(params),
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
   })
 }
 

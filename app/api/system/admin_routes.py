@@ -7,6 +7,7 @@ Endpoints:
 - GET  /api/admin/users/{id}/brands              Get brands owned by a user
 - GET  /api/admin/users/{id}/scheduled           Get all scheduled posts for a user
 - GET  /api/admin/users/{id}/logs                Get system logs for a specific user
+- GET  /api/admin/supabase-usage                 Supabase usage metrics (super admin only)
 """
 
 import asyncio
@@ -491,3 +492,114 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
         results["deapi"] = {"error": "API key not configured"}
 
     return results
+
+
+# ─── Supabase Usage Metrics ───────────────────────────────────────────────────
+
+def _extract_project_ref(supabase_url: str) -> str | None:
+    """Extract Supabase project ref from the URL (e.g. 'abcdef123' from 'https://abcdef123.supabase.co')."""
+    import re
+    m = re.match(r"https?://([a-z0-9]+)\.supabase\.co", supabase_url.strip().rstrip("/"))
+    return m.group(1) if m else None
+
+
+@router.get("/api/admin/supabase-usage", summary="Supabase usage metrics (super admin only)")
+async def get_supabase_usage(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return Supabase project usage metrics: DB size, storage, egress, MAU, realtime, etc."""
+    _require_super_admin(user)
+
+    import os
+    import httpx
+    from sqlalchemy import text
+
+    result: dict = {"db_stats": {}, "usage": None, "error": None}
+
+    # ── Direct DB stats (always available) ───────────────────────────
+    try:
+        row = db.execute(text(
+            "SELECT pg_database_size(current_database()) AS db_bytes"
+        )).fetchone()
+        db_bytes = row[0] if row else 0
+
+        table_rows = db.execute(text(
+            "SELECT schemaname, relname, n_live_tup "
+            "FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 20"
+        )).fetchall()
+
+        active_conns = db.execute(text(
+            "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
+        )).fetchone()
+
+        total_conns = db.execute(text(
+            "SELECT count(*) FROM pg_stat_activity"
+        )).fetchone()
+
+        result["db_stats"] = {
+            "database_size_bytes": db_bytes,
+            "database_size_mb": round(db_bytes / (1024 * 1024), 2) if db_bytes else 0,
+            "active_connections": active_conns[0] if active_conns else 0,
+            "total_connections": total_conns[0] if total_conns else 0,
+            "top_tables": [
+                {"schema": r[0], "table": r[1], "row_count": r[2]}
+                for r in table_rows
+            ],
+        }
+    except Exception as exc:
+        result["db_stats"] = {"error": str(exc)}
+
+    # ── Supabase Management API (requires SUPABASE_MANAGEMENT_KEY) ───
+    mgmt_key = os.getenv("SUPABASE_MANAGEMENT_KEY")
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    project_ref = _extract_project_ref(supabase_url)
+
+    if not mgmt_key:
+        result["usage"] = None
+        result["error"] = (
+            "SUPABASE_MANAGEMENT_KEY not configured. "
+            "Generate one at https://supabase.com/dashboard/account/tokens "
+            "and set it as an environment variable."
+        )
+        return result
+
+    if not project_ref:
+        result["usage"] = None
+        result["error"] = f"Could not extract project ref from SUPABASE_URL: {supabase_url}"
+        return result
+
+    # Fetch usage data from Supabase Management API
+    headers = {"Authorization": f"Bearer {mgmt_key}"}
+    base = "https://api.supabase.com"
+
+    usage_data: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Fetch multiple usage metric categories in parallel
+            metric_categories = [
+                "egress", "db_size", "storage_size", "monthly_active_users",
+                "realtime_message_count", "realtime_peak_connections",
+                "func_invocations", "storage_image_render_count",
+            ]
+
+            tasks = []
+            for metric in metric_categories:
+                url = f"{base}/v1/projects/{project_ref}/usage?metric={metric}"
+                tasks.append(client.get(url, headers=headers))
+
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for metric, resp in zip(metric_categories, responses):
+                if isinstance(resp, Exception):
+                    usage_data[metric] = {"error": str(resp)}
+                elif resp.status_code == 200:
+                    usage_data[metric] = resp.json()
+                else:
+                    usage_data[metric] = {"error": f"HTTP {resp.status_code}"}
+
+        result["usage"] = usage_data
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return result

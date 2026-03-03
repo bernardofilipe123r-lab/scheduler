@@ -852,3 +852,111 @@ async def run_aggregation(
         "monthly_aggregates_created": created_monthly,
         "daily_snapshots_deleted": deleted_daily,
     }
+
+
+# ────────────────────────────────────────────────────────────
+# 7.  COMMENTS — fetch from IG Graph API on-demand
+# ────────────────────────────────────────────────────────────
+
+@router.get("/comments")
+async def analytics_comments(
+    brand: Optional[str] = None,
+    platform: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Fetch recent comments from IG Graph API for the user's published posts.
+    Queries the most recent posts (up to 15) and fetches their comments.
+    """
+    import requests as http_requests
+
+    user_id = user.get("id")
+
+    # Get brands with valid IG tokens
+    brands_q = db.query(Brand).filter(
+        Brand.user_id == user_id,
+        Brand.active == True,
+        Brand.instagram_business_account_id.isnot(None),
+    )
+    if brand:
+        brands_q = brands_q.filter(Brand.id == brand)
+
+    brand_rows = brands_q.all()
+    brand_tokens = {}
+    brand_names = {}
+    for b in brand_rows:
+        token = b.meta_access_token or b.instagram_access_token
+        if token:
+            brand_tokens[b.id] = token
+            brand_names[b.id] = b.display_name
+
+    if not brand_tokens:
+        return {"comments": [], "total": 0, "has_more": False}
+
+    # Get recent posts that have IG media IDs
+    posts_q = db.query(PostPerformance).filter(
+        PostPerformance.user_id == user_id,
+        PostPerformance.ig_media_id.isnot(None),
+        PostPerformance.brand.in_(list(brand_tokens.keys())),
+    ).order_by(desc(PostPerformance.published_at)).limit(15)
+
+    posts = posts_q.all()
+    if not posts:
+        return {"comments": [], "total": 0, "has_more": False}
+
+    all_comments = []
+
+    for post in posts:
+        token = brand_tokens.get(post.brand)
+        if not token:
+            continue
+
+        try:
+            url = f"https://graph.instagram.com/v21.0/{post.ig_media_id}/comments"
+            params = {
+                "fields": "id,text,username,timestamp,like_count",
+                "limit": "25",
+                "access_token": token,
+            }
+            resp = http_requests.get(url, params=params, timeout=10)
+            if resp.status_code != 200:
+                logger.debug(f"Comments fetch failed for {post.ig_media_id}: {resp.status_code}")
+                continue
+
+            comments_data = resp.json().get("data", [])
+            post_title = post.title or (post.caption[:60] + "…" if post.caption and len(post.caption) > 60 else post.caption)
+
+            for c in comments_data:
+                all_comments.append({
+                    "id": c.get("id", ""),
+                    "platform": "instagram",
+                    "brand": post.brand,
+                    "post_id": post.ig_media_id,
+                    "post_title": post_title,
+                    "author_name": c.get("username", "Unknown"),
+                    "author_username": c.get("username"),
+                    "author_avatar": None,
+                    "text": c.get("text", ""),
+                    "like_count": c.get("like_count", 0),
+                    "reply_count": 0,
+                    "created_at": c.get("timestamp", ""),
+                    "permalink": None,
+                })
+        except Exception as e:
+            logger.warning(f"Error fetching comments for post {post.ig_media_id}: {e}")
+            continue
+
+    # Sort all comments by created_at descending
+    all_comments.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+    # Apply limit
+    has_more = len(all_comments) > limit
+    all_comments = all_comments[:limit]
+
+    return {
+        "comments": all_comments,
+        "total": len(all_comments),
+        "has_more": has_more,
+    }

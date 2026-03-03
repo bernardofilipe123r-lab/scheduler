@@ -28,7 +28,14 @@ export default {
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-      }
+        'slide-in': 'slideIn 0.2s ease-out',
+      },
+      keyframes: {
+        slideIn: {
+          from: { transform: 'translateX(24px)', opacity: '0' },
+          to: { transform: 'translateX(0)', opacity: '1' },
+        },
+      },
     },
   },
   plugins: [],

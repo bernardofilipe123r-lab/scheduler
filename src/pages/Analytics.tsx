@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   BarChart3, Users, Eye, Heart, TrendingUp,
@@ -288,52 +288,63 @@ function OverviewTab({
         </div>
       )}
 
-      {/* Social Channels Overview table */}
-      {data.channels.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Social Channels Overview</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <th className="px-6 py-3 font-medium">Profile</th>
-                  <th className="px-6 py-3 font-medium text-right">Followers</th>
-                  <th className="px-6 py-3 font-medium text-right">Views (7d)</th>
-                  <th className="px-6 py-3 font-medium text-right">Likes (7d)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.channels.map((ch, i) => (
-                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                          <PlatformIcon platform={ch.platform} className="w-4 h-4 text-gray-600" />
+      {/* Social Channels — grouped by brand */}
+      {data.channels.length > 0 && (() => {
+        const grouped: Record<string, typeof data.channels> = {}
+        for (const ch of data.channels) {
+          if (!grouped[ch.brand]) grouped[ch.brand] = []
+          grouped[ch.brand].push(ch)
+        }
+        // Sort brands alphabetically by display name
+        const sortedBrands = Object.keys(grouped).sort((a, b) =>
+          (brandLabels[a] || a).localeCompare(brandLabels[b] || b)
+        )
+        return (
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-3">Channels by Brand</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {sortedBrands.map((brandId) => {
+                const channels = grouped[brandId]
+                const totalFollowers = channels.reduce((s, c) => s + c.followers, 0)
+                return (
+                  <div key={brandId} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-semibold text-gray-900">{brandLabels[brandId] || brandId}</h4>
+                      <span className="text-xs text-gray-400">{fmt(totalFollowers)} total followers</span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {channels.map((ch, i) => (
+                        <div key={i} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center">
+                              <PlatformIcon platform={ch.platform} className="w-4 h-4 text-gray-600" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-700 capitalize">{ch.platform}</span>
+                          </div>
+                          <div className="flex items-center gap-5 text-sm">
+                            <div className="text-right">
+                              <p className="font-semibold text-gray-900">{fmt(ch.followers)}</p>
+                              <p className="text-[10px] text-gray-400">followers</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-gray-900">{fmt(ch.views)}</p>
+                              <p className="text-[10px] text-gray-400">views</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-gray-900">{fmt(ch.likes)}</p>
+                              <p className="text-[10px] text-gray-400">likes</p>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{brandLabels[ch.brand] || ch.brand}</p>
-                          <p className="text-xs text-gray-400 capitalize">{ch.platform}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3.5 text-right">
-                      <span className="text-sm font-semibold text-gray-900">{fmt(ch.followers)}</span>
-                    </td>
-                    <td className="px-6 py-3.5 text-right">
-                      <span className="text-sm font-semibold text-gray-900">{fmt(ch.views)}</span>
-                    </td>
-                    <td className="px-6 py-3.5 text-right">
-                      <span className="text-sm font-semibold text-gray-900">{fmt(ch.likes)}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
@@ -346,7 +357,7 @@ function OverviewTab({
 function PostsTab({ brand, days }: { brand?: string; days: number }) {
   const [sortBy, setSortBy] = useState('views')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const { data, isLoading } = usePosts({
+  const { data, isLoading, isFetching } = usePosts({
     brand: brand !== 'all' ? brand : undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
@@ -380,8 +391,10 @@ function PostsTab({ brand, days }: { brand?: string; days: number }) {
 
   return (
     <div className="space-y-6">
-      {/* Summary row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      {/* Period label + summary row */}
+      <div>
+        <p className="text-xs text-gray-400 mb-3">Showing posts from the last {days} days &middot; {data.pagination.total} total</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
           { label: 'Posts', value: s.total_posts, icon: <BarChart3 className="w-4 h-4" /> },
           { label: 'Views', value: s.total_views, icon: <Eye className="w-4 h-4" /> },
@@ -398,10 +411,16 @@ function PostsTab({ brand, days }: { brand?: string; days: number }) {
             </p>
           </div>
         ))}
+        </div>
       </div>
 
       {/* Posts table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden relative">
+        {isFetching && !isLoading && (
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-100 overflow-hidden z-10">
+            <div className="h-full w-1/3 bg-blue-500 rounded-full animate-[shimmer_1s_ease-in-out_infinite]" style={{ animation: 'pulse 1s ease-in-out infinite' }} />
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -420,9 +439,12 @@ function PostsTab({ brand, days }: { brand?: string; days: number }) {
               {data.posts.map((p) => (
                 <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <div className="max-w-xs">
-                      <p className="text-sm font-medium text-gray-900 truncate">{p.title || (p.caption ? p.caption.slice(0, 60) + (p.caption.length > 60 ? '…' : '') : p.topic_bucket || p.content_type)}</p>
+                    <div className="max-w-xs" title={p.caption || p.title || ''}>
+                      <p className="text-sm font-medium text-gray-900" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {p.title || p.caption || p.topic_bucket || p.content_type}
+                      </p>
                       <div className="flex items-center gap-2 mt-0.5">
+                        <Instagram className="w-3.5 h-3.5 text-pink-500 shrink-0" />
                         <span className="text-xs text-gray-400 capitalize">{p.content_type}</span>
                         {p.topic_bucket && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{p.topic_bucket}</span>}
                         {p.published_at && <span className="text-xs text-gray-400">{new Date(p.published_at).toLocaleDateString()}</span>}
@@ -641,12 +663,21 @@ function AudienceTab({ brand }: { brand?: string }) {
     brand: brand !== 'all' ? brand : undefined,
   })
   const refreshMutation = useRefreshAudience()
+  const autoFetchedRef = useRef(false)
 
   const handleRefresh = () => {
     refreshMutation.mutate(brand !== 'all' ? brand : undefined)
   }
 
-  if (isLoading) return <AnalyticsSkeleton />
+  // Auto-fetch audience data on first mount when none exists
+  useEffect(() => {
+    if (data && !data.has_data && !autoFetchedRef.current && !refreshMutation.isPending) {
+      autoFetchedRef.current = true
+      refreshMutation.mutate(brand !== 'all' ? brand : undefined)
+    }
+  }, [data, refreshMutation, brand])
+
+  if (isLoading || (refreshMutation.isPending && !data?.has_data)) return <AnalyticsSkeleton />
 
   if (!data?.has_data) {
     return (
