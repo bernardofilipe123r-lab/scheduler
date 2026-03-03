@@ -301,7 +301,7 @@ function UserDetail({
     queryKey: ['admin-toby-status', user.id],
     queryFn: () => apiClient.get(`/api/toby/status?user_id=${user.id}`),
     enabled: activeTab === 'toby',
-    refetchInterval: activeTab === 'toby' ? 60_000 : false,
+    refetchInterval: activeTab === 'toby' ? 300_000 : false,
     refetchOnWindowFocus: false,
   })
 
@@ -1837,7 +1837,7 @@ export function AdminPage() {
   const { data, isLoading, error, refetch, isFetching } = useQuery<{ users: AdminUser[] }>({
     queryKey: ['admin-users'],
     queryFn: () => apiClient.get('/api/admin/users'),
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
   })
 
   const users = (data?.users ?? []).filter(u => {

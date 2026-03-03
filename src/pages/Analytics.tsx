@@ -1071,7 +1071,7 @@ function CommunityTab({ brand, platform }: { brand?: string; platform?: string }
       const q = sp.toString()
       return get<{ comments: CommunityComment[]; total: number; has_more: boolean }>(`/api/analytics/v2/comments${q ? `?${q}` : ''}`)
     },
-    staleTime: 2 * 60_000,
+    staleTime: 5 * 60_000,
     retry: 1,
   })
 

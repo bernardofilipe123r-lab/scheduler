@@ -85,7 +85,7 @@ export function CommunityPage() {
       const q = sp.toString()
       return get<CommentsResponse>(`/api/analytics/v2/comments${q ? `?${q}` : ''}`)
     },
-    staleTime: 2 * 60_000,
+    staleTime: 5 * 60_000,
     retry: 1,
   })
 

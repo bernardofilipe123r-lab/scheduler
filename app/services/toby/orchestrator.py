@@ -88,10 +88,14 @@ def _process_user(db: Session, state: TobyState):
     now = datetime.now(timezone.utc)
     user_id = state.user_id
 
+    # Query brands ONCE per tick — reused by buffer, metrics, analysis, deliberation
+    from app.models.brands import Brand
+    user_brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
+
     # 1. BUFFER CHECK — isolated commit
     if _should_check(state.last_buffer_check_at, BUFFER_CHECK_INTERVAL):
         try:
-            _run_buffer_check(db, user_id, state)
+            _run_buffer_check(db, user_id, state, brands=user_brands)
             state.last_buffer_check_at = now
             state.updated_at = now
             db.commit()
@@ -102,7 +106,7 @@ def _process_user(db: Session, state: TobyState):
     # 2. METRICS CHECK — isolated commit
     if _should_check(state.last_metrics_check_at, METRICS_CHECK_INTERVAL):
         try:
-            _run_metrics_check(db, user_id, state)
+            _run_metrics_check(db, user_id, state, brands=user_brands)
             state.last_metrics_check_at = now
             state.updated_at = now
             db.commit()
@@ -165,8 +169,6 @@ def _process_user(db: Session, state: TobyState):
                 from app.services.toby.feature_flags import is_enabled
                 if is_enabled("memory_system"):
                     from app.services.toby.agents.analyst import analyst_loop
-                    from app.models.brands import Brand
-                    user_brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
                     for brand in user_brands:
                         try:
                             analyst_loop(db, user_id, brand.id)
@@ -188,10 +190,8 @@ def _process_user(db: Session, state: TobyState):
         if is_enabled("deliberation_loop") and _should_check(state.last_deliberation_at, 1440):  # 24h
             from app.services.toby.agents.pattern_analyzer import pattern_analysis_loop
             from app.services.toby.agents.experiment_designer import design_experiment
-            from app.models.brands import Brand
             pattern_analysis_loop(db, user_id)
             # After pattern analysis, design experiments per brand
-            user_brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
             for brand in user_brands:
                 try:
                     design_experiment(db, user_id, brand.id, "reel")
@@ -291,14 +291,15 @@ def _should_check(last_at: datetime, interval_minutes: int) -> bool:
     return (now - last_at).total_seconds() >= interval_minutes * 60
 
 
-def _run_buffer_check(db: Session, user_id: str, state: TobyState):
+def _run_buffer_check(db: Session, user_id: str, state: TobyState, brands=None):
     """Check buffer and create plans for empty slots (rate-limited)."""
     from app.services.toby.buffer_manager import get_buffer_status
     from app.services.toby.content_planner import create_plans_for_empty_slots
 
     # A4/A6: Verify at least one brand has valid credentials before generating
-    from app.models.brands import Brand
-    brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
+    if brands is None:
+        from app.models.brands import Brand
+        brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
     valid_brands = [
         b for b in brands
         if (b.meta_access_token or b.instagram_access_token)
@@ -620,15 +621,16 @@ def _execute_content_plan(db: Session, plan):
     return {"job_id": job_id, "brand_id": plan.brand_id, "content_type": plan.content_type, "variant": variant}
 
 
-def _run_metrics_check(db: Session, user_id: str, state: TobyState):
+def _run_metrics_check(db: Session, user_id: str, state: TobyState, brands=None):
     """Collect metrics for Toby-created posts that need scoring."""
     try:
         from app.services.analytics.metrics_collector import get_metrics_collector
         collector = get_metrics_collector()
 
         # Collect metrics for all brands
-        from app.models.brands import Brand
-        brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
+        if brands is None:
+            from app.models.brands import Brand
+            brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
 
         total_collected = 0
         expired_brands = []

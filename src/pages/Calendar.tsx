@@ -68,8 +68,8 @@ function Calendar() {
       }))
     },
     enabled: isAdminView,
-    refetchInterval: 120_000,
-    staleTime: 10_000,
+    refetchInterval: 300_000,
+    staleTime: 120_000,
   })
 
   const scheduledPosts = isAdminView ? adminScheduledPosts : ownScheduledPosts

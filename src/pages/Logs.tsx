@@ -168,7 +168,7 @@ export function LogsPage() {
         : `/api/logs?${buildParams()}`
       return apiClient.get<LogsResponse>(endpoint)
     },
-    refetchInterval: autoRefresh ? 120_000 : false,
+    refetchInterval: autoRefresh ? 300_000 : false,
     refetchOnWindowFocus: false,
   })
 
