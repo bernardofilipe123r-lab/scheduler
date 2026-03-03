@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Save, Loader2, AlertTriangle, Film, LayoutGrid, ChevronRight, ArrowLeft, Globe, Plus } from 'lucide-react'
+import { PlatformIcon } from '@/shared/components'
 import { useTobyConfig, useUpdateTobyConfig, useTobyReset, useTobyBrandConfigs, useUpdateTobyBrandConfig } from '../hooks'
 import type { TobyBrandConfig } from '../types'
 import { SUPPORTED_PLATFORMS, PLATFORM_META, SUPPORTED_CONTENT_TYPES, CONTENT_TYPE_META } from '@/shared/constants/platforms'
@@ -556,7 +557,7 @@ function BrandDetailPanel({
                               : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
                           }`}
                         >
-                          <span className="text-sm">{pMeta.emoji}</span>
+                          <PlatformIcon platform={p} className={`w-4 h-4 ${active ? 'text-blue-700' : 'text-gray-500'}`} />
                           <span className={`text-sm font-medium flex-1 ${active ? 'text-blue-700' : 'text-gray-600'}`}>
                             {pMeta.label}
                           </span>

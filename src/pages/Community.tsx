@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   MessageSquare, RefreshCw, Filter, ChevronDown,
-  Instagram, Facebook, Youtube, ExternalLink,
+  ExternalLink,
   Clock, Heart, Reply,
 } from 'lucide-react'
 import { get } from '@/shared/api'
+import { PlatformIcon } from '@/shared/components'
 import { useDynamicBrands } from '@/features/brands'
 
 // ─── Types ──────────────────────────────────────────────
@@ -43,15 +44,6 @@ function timeAgo(dateStr: string): string {
   const days = Math.floor(hrs / 24)
   if (days < 7) return `${days}d ago`
   return new Date(dateStr).toLocaleDateString()
-}
-
-function PlatformIcon({ platform, className = 'w-4 h-4' }: { platform: string; className?: string }) {
-  switch (platform) {
-    case 'instagram': return <Instagram className={className} />
-    case 'facebook': return <Facebook className={className} />
-    case 'youtube': return <Youtube className={className} />
-    default: return <MessageSquare className={className} />
-  }
 }
 
 function platformColor(platform: string): string {

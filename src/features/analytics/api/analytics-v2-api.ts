@@ -75,6 +75,7 @@ export interface PostItem {
   id: number
   ig_media_id: string
   brand: string
+  platform: string | null
   content_type: string
   title: string | null
   caption: string | null

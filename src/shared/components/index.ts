@@ -19,4 +19,5 @@ export {
   NicheConfigSkeleton,
   BrandThemeSkeleton,
 } from './Skeleton'
+export { PlatformIcon } from './PlatformIcon'
 
