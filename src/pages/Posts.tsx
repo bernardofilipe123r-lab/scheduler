@@ -19,6 +19,7 @@ import toast from 'react-hot-toast'
 import { useCreateJob } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDynamicBrands, useBrandConnections } from '@/features/brands'
+import { useTobyBrandConfigs } from '@/features/toby'
 import { PostsSkeleton } from '@/shared/components'
 import {
   DEFAULT_GENERAL_SETTINGS,
@@ -64,6 +65,7 @@ export function PostsPage() {
   const { data: dbSettings, isLoading: settingsLoading } = useLayoutSettings()
   const { data: connectionsData } = useBrandConnections()
   const updateDbSettings = useUpdateLayoutSettings()
+  const { data: brandConfigsData } = useTobyBrandConfigs()
   const brandMap = useMemo(() => {
     const map: Record<string, { name: string; color: string }> = {}
     dynamicBrands.forEach(b => { map[b.id] = { name: b.label, color: b.color } })
@@ -78,6 +80,19 @@ export function PostsPage() {
     if (id === 'tiktok') return hasTikTok
     return true // always show instagram
   })
+
+  // Helper: check if a platform is enabled for given brands based on their enabled_platforms config
+  const isPostPlatformEnabledForBrands = (platform: PostPlatform, brands: BrandName[]): boolean => {
+    if (!brandConfigsData?.brands?.length || brands.length === 0) return true
+    return brands.some(brandId => {
+      const cfg = brandConfigsData.brands.find(bc => bc.brand_id === brandId)
+      if (!cfg) return true // no config = all enabled
+      if (!cfg.enabled_platforms) return true // null = all connected
+      const postsPlatforms = cfg.enabled_platforms['posts']
+      if (!postsPlatforms) return true
+      return postsPlatforms.includes(platform as any)
+    })
+  }
 
   // Form state
   const [title, setTitle] = useState('')
@@ -96,23 +111,34 @@ export function PostsPage() {
   const [autoBrands, setAutoBrands] = useState<BrandName[]>([])
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
 
-  // When connections data loads, filter unavailable platforms
+  // When connections or brand config data loads, filter unavailable/disabled platforms
   useEffect(() => {
     if (!connectionsData) return
-    const keep = (p: PostPlatform) => {
+    const isConnected = (p: PostPlatform) => {
       if (p === 'threads') return connectionsData.brands.some(b => b.threads?.connected)
       if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
       return true
     }
+    const keep = (p: PostPlatform) => isConnected(p) && isPostPlatformEnabledForBrands(p, selectedBrands)
     setSelectedPlatforms(prev => {
       const next = prev.filter(keep)
       return next.length > 0 ? next : prev
     })
+  }, [connectionsData, brandConfigsData, selectedBrands])
+
+  useEffect(() => {
+    if (!connectionsData) return
+    const isConnected = (p: PostPlatform) => {
+      if (p === 'threads') return connectionsData.brands.some(b => b.threads?.connected)
+      if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
+      return true
+    }
+    const keep = (p: PostPlatform) => isConnected(p) && isPostPlatformEnabledForBrands(p, autoBrands)
     setAutoPlatforms(prev => {
       const next = prev.filter(keep)
       return next.length > 0 ? next : prev
     })
-  }, [connectionsData])
+  }, [connectionsData, brandConfigsData, autoBrands])
 
   // Font loading
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -582,13 +608,22 @@ export function PostsPage() {
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
               <div className="flex gap-2">
                 {availablePostPlatforms.map(({ id, label, icon }) => {
-                  const active = selectedPlatforms.includes(id)
+                  const enabled = isPostPlatformEnabledForBrands(id, selectedBrands)
+                  const active = selectedPlatforms.includes(id) && enabled
                   return (
                     <button
                       key={id}
                       type="button"
-                      onClick={() => togglePlatform(id)}
-                      className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${active ? 'border-green-300 bg-green-50' : 'border-gray-200 hover:bg-gray-50 opacity-40'}`}
+                      onClick={() => enabled && togglePlatform(id)}
+                      disabled={!enabled}
+                      title={!enabled ? `${label} is not enabled for the selected brand` : undefined}
+                      className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${
+                        !enabled
+                          ? 'border-gray-100 bg-gray-50 opacity-30 cursor-not-allowed'
+                          : active
+                            ? 'border-green-300 bg-green-50'
+                            : 'border-gray-200 hover:bg-gray-50 opacity-40'
+                      }`}
                     >
                       {icon === 'threads' ? <ThreadsLogo className="h-5 w-5" /> : <img src={icon} alt={label} loading="eager" className="h-5 w-auto" />}
                       <span className="text-[10px] font-medium text-gray-700">{label}</span>
@@ -741,13 +776,22 @@ export function PostsPage() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
                 <div className="flex gap-2">
                   {availablePostPlatforms.map(({ id, label, icon }) => {
-                    const active = autoPlatforms.includes(id)
+                    const enabled = isPostPlatformEnabledForBrands(id, autoBrands)
+                    const active = autoPlatforms.includes(id) && enabled
                     return (
                       <button
                         key={id}
                         type="button"
-                        onClick={() => toggleAutoPlatform(id)}
-                        className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${active ? 'border-green-300 bg-green-50' : 'border-gray-200 hover:bg-gray-50 opacity-40'}`}
+                        onClick={() => enabled && toggleAutoPlatform(id)}
+                        disabled={!enabled}
+                        title={!enabled ? `${label} is not enabled for the selected brand(s)` : undefined}
+                        className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${
+                          !enabled
+                            ? 'border-gray-100 bg-gray-50 opacity-30 cursor-not-allowed'
+                            : active
+                              ? 'border-green-300 bg-green-50'
+                              : 'border-gray-200 hover:bg-gray-50 opacity-40'
+                        }`}
                       >
                       {icon === 'threads' ? <ThreadsLogo className="h-5 w-5" /> : <img src={icon} alt={label} loading="eager" className="h-5 w-auto" />}
                         <span className="text-[10px] font-medium text-gray-700">{label}</span>

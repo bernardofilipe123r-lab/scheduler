@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
 import { useDynamicBrands, useNicheConfig, useBrandConnections } from '@/features/brands'
 import { useUserMusic } from '@/features/brands/api/use-music'
+import { useTobyBrandConfigs } from '@/features/toby'
 import { GeneratorSkeleton } from '@/shared/components'
 import type { BrandName, Variant } from '@/shared/types'
 import type { Platform } from '@/shared/constants/platforms'
@@ -35,6 +36,7 @@ export function GeneratorPage() {
   const { data: nicheConfig, isLoading: configLoading } = useNicheConfig()
   const { data: connectionsData } = useBrandConnections()
   const { data: musicData } = useUserMusic()
+  const { data: brandConfigsData } = useTobyBrandConfigs()
   const musicTracks = musicData?.tracks ?? []
 
   // Derive which platforms have at least one connected brand
@@ -47,6 +49,19 @@ export function GeneratorPage() {
     if (id === 'tiktok') return hasTikTok
     return true // always show instagram
   })
+
+  // Helper: check if a platform is enabled for given brands based on their enabled_platforms config
+  const isPlatformEnabledForBrands = (platform: Platform, brands: BrandName[]): boolean => {
+    if (!brandConfigsData?.brands?.length || brands.length === 0) return true
+    return brands.some(brandId => {
+      const cfg = brandConfigsData.brands.find(bc => bc.brand_id === brandId)
+      if (!cfg) return true // no config = all enabled
+      if (!cfg.enabled_platforms) return true // null = all connected
+      const reelsPlatforms = cfg.enabled_platforms['reels']
+      if (!reelsPlatforms) return true
+      return reelsPlatforms.includes(platform)
+    })
+  }
   
   // CTA options from settings (weighted)
   const ctaOptions = (nicheConfig?.cta_options ?? []).filter(o => o.text && o.weight > 0)
@@ -83,24 +98,37 @@ export function GeneratorPage() {
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
   const [selectedMusic, setSelectedMusic] = useState<string>('auto')
   
-  // When connections data loads, remove platforms with no connected brands from defaults
+  // When connections or brand config data loads, remove platforms with no connected brands
+  // or not enabled for any selected brand from defaults
   useEffect(() => {
     if (!connectionsData) return
-    const keep = (p: Platform) => {
+    const isConnected = (p: Platform) => {
       if (p === 'facebook') return connectionsData.brands.some(b => b.facebook.connected)
       if (p === 'youtube') return connectionsData.brands.some(b => b.youtube.connected)
       if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
       return true
     }
+    const keep = (p: Platform) => isConnected(p) && isPlatformEnabledForBrands(p, selectedBrands)
     setSelectedPlatforms(prev => {
       const next = prev.filter(keep)
       return next.length > 0 ? next : prev // never empty
     })
+  }, [connectionsData, brandConfigsData, selectedBrands])
+
+  useEffect(() => {
+    if (!connectionsData) return
+    const isConnected = (p: Platform) => {
+      if (p === 'facebook') return connectionsData.brands.some(b => b.facebook.connected)
+      if (p === 'youtube') return connectionsData.brands.some(b => b.youtube.connected)
+      if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
+      return true
+    }
+    const keep = (p: Platform) => isConnected(p) && isPlatformEnabledForBrands(p, autoBrands)
     setAutoPlatforms(prev => {
       const next = prev.filter(keep)
       return next.length > 0 ? next : prev
     })
-  }, [connectionsData])
+  }, [connectionsData, brandConfigsData, autoBrands])
   
   // Refs for highlighting
   const titleRef = useRef<HTMLTextAreaElement>(null)
@@ -452,16 +480,21 @@ export function GeneratorPage() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Publish To</label>
                 <div className="flex gap-2">
                   {availablePlatforms.map(({ id, label, icon }) => {
-                    const active = selectedPlatforms.includes(id)
+                    const enabled = isPlatformEnabledForBrands(id, selectedBrands)
+                    const active = selectedPlatforms.includes(id) && enabled
                     return (
                       <button
                         key={id}
                         type="button"
-                        onClick={() => togglePlatform(id)}
+                        onClick={() => enabled && togglePlatform(id)}
+                        disabled={!enabled}
+                        title={!enabled ? `${label} is not enabled for the selected brand(s)` : undefined}
                         className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${
-                          active
-                            ? 'border-green-300 bg-green-50'
-                            : 'border-gray-200 hover:bg-gray-50 opacity-40'
+                          !enabled
+                            ? 'border-gray-100 bg-gray-50 opacity-30 cursor-not-allowed'
+                            : active
+                              ? 'border-green-300 bg-green-50'
+                              : 'border-gray-200 hover:bg-gray-50 opacity-40'
                         }`}
                       >
                         {typeof icon === 'string' && icon.length === 1 ? (
@@ -734,16 +767,21 @@ export function GeneratorPage() {
                   <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Publish To</label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {availablePlatforms.map(({ id, label, icon }) => {
-                      const active = autoPlatforms.includes(id)
+                      const enabled = isPlatformEnabledForBrands(id, autoBrands)
+                      const active = autoPlatforms.includes(id) && enabled
                       return (
                         <button
                           key={id}
                           type="button"
-                          onClick={() => toggleAutoPlatform(id)}
+                          onClick={() => enabled && toggleAutoPlatform(id)}
+                          disabled={!enabled}
+                          title={!enabled ? `${label} is not enabled for the selected brand(s)` : undefined}
                           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all ${
-                            active
-                              ? 'border-green-300 bg-green-50'
-                              : 'border-gray-200 hover:bg-gray-50 opacity-40'
+                            !enabled
+                              ? 'border-gray-100 bg-gray-50 opacity-30 cursor-not-allowed'
+                              : active
+                                ? 'border-green-300 bg-green-50'
+                                : 'border-gray-200 hover:bg-gray-50 opacity-40'
                           }`}
                         >
                           <img src={icon} alt={label} loading="eager" className="h-5 w-5 object-contain" />

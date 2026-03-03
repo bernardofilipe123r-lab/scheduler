@@ -1,289 +1,198 @@
-# CLAUDE.md — Healveth Autonomous Content Engine
- 
-This file documents the codebase structure, development workflows, and conventions for AI assistants working in this repository.
- 
+# Copilot Instructions
+
+## 100% Dynamic Architecture — MANDATORY
+
+ViralToby is a **multi-tenant SaaS platform**. Every user can have any number of brands, each with any combination of connected social platforms, each with its own colors, fonts, topics, tone, and audience. **Nothing about users, brands, or their configuration is hardcoded — ever.**
+
+### The Rule
+
+> **All user-facing data — brand count, brand names, brand colors, platform connections, niche settings, content preferences — MUST be loaded dynamically from the database or API. Zero exceptions.**
+
+### What MUST be dynamic (loaded from DB/API at runtime):
+- **Brand count** — a user can have 1 brand or 50. Never assume a fixed number.
+- **Brand names & labels** — from `brands.name` in DB
+- **Brand colors** — from `brands.colors` JSON column (`{ primary, accent, text, ... }`)
+- **Connected platforms per brand** — any subset of Instagram, Facebook, YouTube, Threads, TikTok
+- **Content DNA / NicheConfig** — topics, tone, target audience, visual style — all per-brand, user-defined
+- **Scheduling, publishing, analytics** — all scoped to whatever brands and platforms the user has configured
+
+### What IS acceptable as static constants:
+- **Platform identity** — `PLATFORM_COLORS` (Instagram gradient, YouTube red, Facebook blue), platform icon mappings. These represent the platforms themselves, not user data.
+- **UI layout** — breakpoints, spacing, grid sizes. Not user-specific.
+- **System defaults** — quality score threshold (80), tick interval (5 min), dedup window (3 days). Operational constants, not user content.
+
+### What is NEVER acceptable:
+- Hardcoded brand name arrays, color palettes tied to brand index, or brand ID lists
+- Any array/map whose length assumes a specific number of brands or platforms
+- Fallback lists that assume specific brands exist (e.g., "Healveth", "brand-1")
+- Static color assignments like `BRAND_PALETTE[i % length]` — use the brand's actual `colors.primary` from DB
+- Conditional logic that checks for specific brand IDs or names
+
+### Frontend source of truth:
+- `useDynamicBrands()` hook → returns `DynamicBrandInfo[]` with `{ id, label, color, shortName, active, ... }`
+- Each brand's `color` comes from `b.colors?.primary` in the database
+- **Always iterate over dynamic data** — never hardcode assumptions about what brands or platforms exist
+
+### Backend source of truth:
+- `Brand` model (`app/models/brands.py`) → `colors = Column(JSON)`
+- `get_brand_config(brand_id)` in `app/core/config.py` → returns `BrandConfig` dataclass
+- `NicheConfig` model (`app/models/niche_config.py`) → per-brand content identity
+
+**If you are about to write a constant array of brand names, colors, or IDs — STOP. Load it from the database instead.**
+
 ---
- 
-## Project Overview
- 
-An autonomous content engine that observes, creates, and publishes short-form video content across Instagram, Facebook, and YouTube — for multiple health & wellness brands simultaneously, with zero human input per post.
- 
-**Core concept:** A 10-stage pipeline (pattern → prompt → generate → score → deduplicate → differentiate → render → produce → caption → publish) driven by an autonomous AI agent called **Toby**.
- 
----
- 
-## Tech Stack
- 
-| Layer | Technology |
-|---|---|
-| Backend | Python 3.11+, FastAPI, SQLAlchemy, APScheduler |
-| Frontend | React 18, TypeScript, Vite, TailwindCSS, TanStack Query |
-| Database | PostgreSQL via Supabase |
-| AI | DeepSeek (content), OpenAI-compatible API |
-| Media | Pillow (images), FFmpeg/MoviePy (video) |
-| Auth | Supabase Auth + Meta OAuth + YouTube OAuth |
-| Deployment | Docker + Railway |
- 
----
- 
-## Directory Structure
- 
-```
-scheduler/
-├── app/                        # Python backend (FastAPI)
-│   ├── main.py                 # App entrypoint: routers, middleware, APScheduler
-│   ├── db_connection.py        # SessionLocal + DB engine setup
-│   ├── api/                    # Route handlers — one file per domain
-│   │   ├── routes.py           # Aggregator: includes all sub-routers under /reels
-│   │   ├── schemas.py          # Shared Pydantic schemas
-│   │   ├── analytics/          # Analytics endpoints
-│   │   ├── auth/               # User auth, IG OAuth, FB OAuth routes
-│   │   ├── brands/             # Brand management + connection tests
-│   │   ├── content/            # Reels, schedules, publish, jobs, prompts, feedback
-│   │   ├── system/             # Health, logs, settings, admin, legal
-│   │   ├── toby/               # Toby agent control endpoints
-│   │   ├── youtube/            # YouTube-specific endpoints
-│   │   └── niche_config_routes.py
-│   ├── core/                   # Shared logic (no DB access)
-│   │   ├── config.py           # BrandConfig dataclass + get_brand_config()
-│   │   ├── constants.py        # Image/video dimensions, font sizes, spacing
-│   │   ├── brand_colors.py     # Color helpers (hex_to_rgb, hex_to_rgba)
-│   │   ├── quality_scorer.py   # 5-dimension content quality gate
-│   │   ├── prompt_context.py   # NicheConfig → prompt context builder
-│   │   ├── prompt_templates.py # Reusable AI prompt templates
-│   │   ├── viral_patterns.py   # 59 trained viral archetypes
-│   │   └── cta.py              # Call-to-action variations
-│   ├── models/                 # SQLAlchemy ORM models (one file per domain)
-│   │   ├── base.py             # declarative_base() — import from here
-│   │   ├── brands.py, jobs.py, scheduling.py, analytics.py
-│   │   ├── toby.py             # TobyState, TobyActivityLog, TobyContentTag
-│   │   ├── toby_cognitive.py   # Cognitive memory models
-│   │   ├── auth.py, config.py, logs.py, niche_config.py, youtube.py
-│   └── services/               # Business logic (domain-organized)
-│       ├── brands/             # Brand resolution and config loading
-│       ├── content/            # generator, differentiator, job_manager, job_processor, tracker
-│       ├── publishing/         # scheduler, social_publisher, fb_token, ig_token
-│       ├── toby/               # Autonomous Toby agent
-│       │   ├── orchestrator.py # Main tick loop (runs every 5 min via APScheduler)
-│       │   ├── agents/         # analyst, creator, critic, scout, strategist, publisher, etc.
-│       │   └── memory/         # episodic, semantic, procedural, world_model, embeddings
-│       ├── analytics/, logging/, media/, storage/, youtube/
-├── src/                        # React 18 frontend (TypeScript)
-│   ├── main.tsx                # App entrypoint
-│   ├── app/                    # Router, layout, providers
-│   ├── features/               # Domain-organized feature modules
-│   │   ├── analytics/, auth/, brands/, jobs/, onboarding/
-│   │   ├── scheduling/, settings/, toby/
-│   ├── pages/                  # Top-level page components (one per route)
-│   └── shared/                 # Cross-feature utilities
-│       ├── api/                # client.ts, supabase.ts, use-layout-settings.ts
-│       ├── components/         # Reusable UI (Modal, Skeleton, StatusBadge, PostCanvas…)
-│       ├── hooks/, lib/, types/
-├── assets/                     # Static assets (fonts, icons, logos, music)
-├── migrations/                 # SQL migration scripts (run manually)
-├── scripts/                    # Utility and maintenance scripts
-│   └── validate_api.py         # CRITICAL: API validation (see below)
-├── docs/                       # Toby agent architecture documentation
-├── Dockerfile                  # Multi-stage build (Python + Node.js)
-├── railway.json                # Railway deployment config
-├── requirements.txt            # Python dependencies
-├── package.json                # Node/npm dependencies
-├── vite.config.ts              # Vite dev server + API proxy config
-└── tailwind.config.js
-```
- 
----
- 
-## API Route Prefixes
- 
-The FastAPI app (`app/main.py`) mounts these router prefixes:
- 
-| Prefix | Domain |
-|---|---|
-| `/reels` | Core content (reels, schedules, publish, feedback, status, user) |
-| `/api/jobs` | Job management |
-| `/api/youtube` | YouTube publishing |
-| `/api/brands` | Brand management + OAuth connection tests |
-| `/api/analytics` | Analytics data |
-| `/api/system` | Settings, logs, admin, health, legal |
-| `/api/auth` | User auth, Instagram OAuth, Facebook OAuth |
-| `/api/toby` | Toby agent control |
-| `/api/niche-config` | Per-brand niche configuration |
-| `/api/prompts` | Prompt management |
-| `/api/ig-oauth`, `/api/fb-oauth` | OAuth callback endpoints |
- 
-The frontend dev server proxies `/api`, `/reels`, `/health`, `/logs`, `/output`, `/docs`, `/jobs` to the production Railway backend.
- 
----
- 
-## CRITICAL: Validation Before Committing
- 
-After any change to API routes, models, services, or imports, run:
- 
-```bash
-# Fast check — validates all module imports (no server needed)
-python scripts/validate_api.py --imports
- 
-# Full check — imports + endpoint smoke tests + NicheConfig alignment
-python scripts/validate_api.py
-```
- 
-The script must exit with code 0 before committing. Keep `scripts/validate_api.py` up to date:
-- Add new route files to `CRITICAL_MODULES`
-- Add new endpoints to the appropriate test section
-- Adjust auth requirements when endpoints change
- 
----
- 
-## Development Workflows
- 
-### Frontend Development
- 
-```bash
-npm run dev      # Vite dev server at localhost:5173 (proxies API to production Railway)
-npm run build    # TypeScript check + Vite production build → dist/
-npm run lint     # ESLint — must have 0 errors (rules-of-hooks) before commit
-npm run preview  # Preview production build locally
-```
- 
-### Backend Development
- 
-No local backend server setup — the Vite dev proxy forwards all API calls to the live Railway production backend. To test backend changes, deploy to Railway.
- 
-```bash
-# Validate imports before pushing backend changes
-python scripts/validate_api.py --imports
- 
-# Run a specific utility/migration script
-python scripts/<script_name>.py
-```
- 
-### Deployment
- 
-Deployment is fully automated via Railway on push to `master`:
-1. Docker builds with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as build args (Vite bakes them into the frontend at build time)
-2. Python dependencies installed, then `npm run build` runs
-3. `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}` starts the server
-4. Railway restarts on failure (max 5 retries)
- 
----
- 
-## Environment Variables
- 
-These must be set in Railway (never committed to git):
- 
-```bash
-# Supabase
-SUPABASE_URL=
-SUPABASE_KEY=              # Anon/publishable key
-SUPABASE_SERVICE_KEY=      # Service role key (backend only — never exposed to frontend)
- 
-# Frontend (baked into build — also set as Railway build args)
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
- 
-# AI Services
-DEEPSEEK_API_KEY=          # Content generation (OpenAI-compatible)
-DEAPI_KEY=                 # AI background image generation
- 
-# Social Platforms
-META_APP_ID=               # Facebook/Instagram OAuth app
-META_APP_SECRET=
-YOUTUBE_CLIENT_ID=
-YOUTUBE_CLIENT_SECRET=
- 
-# Runtime
-PORT=8000                  # Set automatically by Railway
-```
- 
----
- 
-## Key Conventions
- 
-### Python Backend
- 
-- **SQLAlchemy models** — all inherit from `app.models.base.Base` (declarative_base)
-- **DB sessions** — use `app.db_connection.SessionLocal`; always close in `finally` blocks
-- **Route organization** — one router file per domain; aggregate in `app/api/routes.py` or mount directly in `main.py`
-- **Brand config** — load via `app.core.config.get_brand_config(brand_id)`; returns `BrandConfig` dataclass; always falls back to neutral defaults
-- **Constants** — image dimensions, font sizes, video settings all live in `app/core/constants.py`; do not hardcode these values elsewhere
-- **Quality gate** — content must score ≥ 80 to publish; 65–79 triggers regeneration; < 65 is rejected
-- **Toby rate limits** — MAX 2 pieces/brand/hour (steady-state), 6 pieces/user/hour; respect bootstrap vs. normal limits in `orchestrator.py`
-- **Error logging** — Toby uses debounced error logging (30-minute cooldown per action) to suppress log spam
- 
-### Frontend (React/TypeScript)
- 
-- **Path alias** — `@/` resolves to `./src/` (configured in `vite.config.ts` and `tsconfig.json`)
-- **Feature-first** — organize new code under `src/features/<domain>/` with `api/`, `components/`, `hooks/`, `types/` subdirectories; export through `index.ts`
-- **Server state** — TanStack Query (`@tanstack/react-query`) for all API calls
-- **Auth** — Supabase Auth via `src/shared/api/supabase.ts`
-- **API client** — use `src/shared/api/client.ts` for all backend requests
-- **Routing** — React Router v6 (`react-router-dom`)
-- **Styling** — TailwindCSS utility classes; no CSS modules
-- **Animations** — Framer Motion for transitions
-- **Canvas rendering** — Konva / react-konva for the in-browser post canvas preview
- 
-### Content Pipeline
- 
-The 10-stage pipeline runs inside `app/services/content/`:
-1. `viral_patterns.py` — pattern selection (archetype + topic + format)
-2. `prompt_templates.py` — prompt construction (< 500 tokens, cached context)
-3. `generator.py` — AI generation via DeepSeek
-4. `quality_scorer.py` — 5-dimension scoring gate
-5. `tracker.py` — fingerprint + cooldown deduplication (3-day per brand)
-6. `differentiator.py` — brand variation generation (1 piece → N unique versions)
-7. Media services — Pillow renders 1080×1920 branded frames
-8. Video services — FFmpeg/MoviePy produces MP4 with background music
-9. Caption services — AI paragraph + CTA + hashtags
-10. `publishing/social_publisher.py` — Meta Graph API + YouTube Data API
- 
-### Toby Agent
- 
-Toby runs every 5 minutes via APScheduler (`toby_tick()` in `orchestrator.py`).
- 
-Decision priority per tick:
-1. **Buffer check** — fill any empty scheduling slots for the next 2 days
-2. **Metrics check** — score posts > 48h old that lack a Toby score
-3. **Analysis check** — update strategy scores from new metrics
-4. **Discovery check** — TrendScout scan (every 4h)
-5. **Phase check** — advance to next content phase if criteria met
- 
-Agents in `app/services/toby/agents/`: `analyst`, `creator`, `critic`, `experiment_designer`, `intelligence`, `meta_learner`, `pattern_analyzer`, `publisher`, `reflector`, `scout`, `strategist`
- 
-Memory subsystem in `app/services/toby/memory/`: `episodic`, `semantic`, `procedural`, `world_model`, `embeddings`, `gardener`
- 
----
- 
+
 ## Database Migrations
- 
-Database migrations are manual SQL scripts in `migrations/` or one-off Python scripts in `scripts/`. There is no Alembic auto-migration workflow — apply migrations directly to the Supabase project dashboard or via psql. Check `migrations/` and `scripts/` for naming patterns before adding new migration scripts.
- 
----
- 
-## Asset Conventions
- 
-```
-assets/
-├── fonts/          # Poppins-Bold.ttf, Inter/ — referenced by constants.py
-├── icons/          # Platform icons
-├── logos/          # Per-brand logo files (referenced by BrandConfig.logo_filename)
-└── music/          # Background music tracks (referenced by DEFAULT_MUSIC_ID)
-```
- 
-The `output/` directory (generated video/image files) is gitignored — never commit it.
- 
----
- 
-## Git Workflow
- 
+
+The Supabase database is accessible directly via `psql` using the `DATABASE_URL` from `.env`. **All migrations must be run directly** — there is no Alembic or auto-migration system.
+
 ```bash
-git add <specific-files>   # Stage specific files (avoid git add -A)
-git commit -m "<message>"
-git push -u origin <branch>
+# Run a migration SQL file against Supabase
+source .env 2>/dev/null; psql "$DATABASE_URL" -f migrations/<migration_file>.sql
+
+# Verify columns exist after migration
+source .env 2>/dev/null; psql "$DATABASE_URL" -c "SELECT column_name FROM information_schema.columns WHERE table_name = '<table>' ORDER BY column_name;"
 ```
- 
-- Never commit `.env`, `output/`, `*.log`, `ed25519_key`, `youtube_quota.json`
-- Run `python scripts/validate_api.py --imports` before any commit touching `app/` (also checks React hooks)
-- Run `npm run lint` before any commit touching `src/` — 0 errors required
-- **NEVER place React hooks after an early return** — this causes React error #310 in production. The validate script and ESLint both catch this.
-- Commit messages use conventional format: `feat:`, `fix:`, `refactor:`, `UX:`, `UI:`
+
+**CRITICAL:** When adding or modifying SQLAlchemy model columns (`app/models/`), you MUST:
+1. Write the migration SQL in `migrations/`
+2. Run it immediately against Supabase using `psql "$DATABASE_URL"` — do NOT defer
+3. Verify the columns exist before committing
+4. Run `python scripts/validate_api.py --imports` to validate
+
+If model columns exist in Python but not in the database, **every query on that table will 500 in production**. SQLAlchemy includes all mapped columns in SELECT statements — missing columns crash the entire endpoint.
+
+## API Validation
+
+After any change that affects API routes, imports, models, services, or any major refactor:
+
+1. Run `python scripts/validate_api.py --imports` to verify all module imports and symbol checks pass
+2. If import checks pass, run `python scripts/validate_api.py` for the full validation (imports + endpoint smoke tests + NicheConfig alignment)
+3. Fix any failures before committing — the script must exit with code 0
+
+**When to run validation:**
+- Adding, renaming, or removing any route/endpoint
+- Changing imports in any `app/` module
+- Modifying models (`app/models/`) or services (`app/services/`)
+- Refactoring the router structure in `app/main.py`
+- Adding new dependencies used by route handlers
+
+**When to update `scripts/validate_api.py`:**
+- After adding new route files → add to `CRITICAL_MODULES`
+- After adding new endpoints → add to the appropriate endpoint test section
+- After changing auth requirements on endpoints → move between no-auth/auth sections
+
+## React Rules of Hooks — CRITICAL
+
+**NEVER place React hooks (`useState`, `useEffect`, `useMemo`, `useCallback`, `useQuery`, custom `use*` hooks) after an early return statement.** This violates React's Rules of Hooks and causes **React error #310** ("Rendered more hooks than during the previous render") which crashes the entire page in production.
+
+**Before committing any React component change:**
+1. Visually verify ALL hooks are called BEFORE any `if (...) return` early-return statement
+2. Run `npx eslint src/ --rule 'react-hooks/rules-of-hooks: error'` to machine-check
+3. The `python scripts/validate_api.py --imports` script also runs this check automatically
+
+**Common mistake pattern (BAD):**
+```tsx
+function MyPage() {
+  const { data, isLoading } = useQuery(...)  // ✅ hook before return
+  if (isLoading) return <Spinner />           // early return
+  const computed = useMemo(...)               // ❌ CRASH — hook after early return
+  return <div>{computed}</div>
+}
+```
+
+**Correct pattern (GOOD):**
+```tsx
+function MyPage() {
+  const { data, isLoading } = useQuery(...)
+  const computed = useMemo(...)            
+  if (isLoading) return <Spinner />
+  return <div>{computed}</div>
+}
+```
+
+## Railway CLI (Production Infrastructure)
+
+Railway CLI is installed and authenticated. **ALWAYS run Railway commands directly using run_in_terminal — NEVER ask the user to run them manually.**
+
+```bash
+# Check current project/service context
+railway status
+
+# List all env vars
+railway variables
+
+# Set an env var (triggers redeploy)
+railway variables set KEY=value
+
+# Delete an env var
+railway variables delete KEY
+
+# View recent deployment logs
+railway logs
+
+# Redeploy the service
+railway redeploy
+```
+
+**When to use Railway CLI:**
+- Adding or updating environment variables (API keys, secrets, OAuth credentials)
+- Checking if an env var is set before code depends on it
+- Viewing production logs for debugging
+- Triggering redeployments after config changes
+
+**CRITICAL:** When Railway commands are needed (setting env vars, checking logs, etc.), execute them immediately using `run_in_terminal`. Do NOT provide instructions for the user to run manually. The Railway CLI is available and authenticated in the workspace — use it directly.
+
+**Important:** Setting a variable via `railway variables set` triggers an automatic redeploy. The service is `scheduler` in project `responsible-mindfulness` (production environment).
+
+## What is ViralToby / Toby
+
+**ViralToby** (`viraltoby.com`) is a social media content scheduling and publishing platform that lets users connect any brand across Instagram, Facebook, YouTube, Threads, and TikTok, then have content created, scheduled, and published on their behalf.
+
+The core differentiator is **Toby** — an autonomous AI agent that runs in the background, removing the need for manual content work. Toby is not niche-specific; it adapts to **any brand's Content DNA** (niche, tone, target audience, topic categories, visual style) configured by the user via the NicheConfig system.
+
+**What Toby does autonomously:**
+- Selects viral content archetypes from 59 trained patterns (`app/core/viral_patterns.py`)
+- Generates content via DeepSeek AI, shaped entirely by the brand's Content DNA (`app/core/prompt_context.py`, `app/core/prompt_templates.py`)
+- Scores content quality across 5 dimensions (min 80 to publish)
+- Deduplicates against a 3-day fingerprint window per brand
+- Produces rendered image frames (Pillow) and MP4 videos (FFmpeg/MoviePy)
+- Schedules and publishes across all connected platforms
+- Tracks performance metrics and feeds them back into strategy decisions
+
+**Toby's tick loop** runs every 5 minutes via APScheduler (`app/services/toby/orchestrator.py`). Each tick checks: buffer fill → metric scoring → strategy analysis → trend discovery → phase advancement. All state persists in PostgreSQL — survives deploys and restarts.
+
+**Content DNA** is the user-defined brand identity stored in `NicheConfig` (per-brand, per-user). It drives every prompt, every visual, every tone decision. Toby never deviates from it.
+
+**Key source locations:**
+- Agent tick loop: `app/services/toby/orchestrator.py`
+- Specialized agents: `app/services/toby/agents/` (analyst, creator, critic, scout, strategist, publisher, …)
+- Memory subsystem: `app/services/toby/memory/` (episodic, semantic, procedural, world_model)
+- Content DNA schema: `app/core/prompt_context.py`, `app/models/niche_config.py`
+- Brand config: `app/core/config.py` (`BrandConfig` dataclass)
+
+## Legal Pages
+
+Public legal pages live in `src/pages/` and are served at these URLs:
+
+| URL | File | Purpose |
+|---|---|---|
+| `https://viraltoby.com/terms` | `src/pages/Terms.tsx` | Terms of Service |
+| `https://viraltoby.com/privacy` | `src/pages/PrivacyPolicy.tsx` | Privacy Policy |
+| `https://viraltoby.com/data-deletion` | `src/pages/DataDeletion.tsx` | Data Deletion Instructions |
+
+**CRITICAL:** When adding or removing a social platform integration (OAuth, publishing), you MUST update all three legal pages to:
+1. List the new platform in service description / data collection / third-party services sections
+2. Describe what data is collected from the new platform (tokens, IDs, profile info)
+3. Include the platform in "Your Rights" / "Revoke access" instructions
+4. Include the platform's tokens/IDs in the "What Gets Deleted" list (DataDeletion.tsx)
+
+These URLs are referenced in the TikTok Developer Portal, Meta App Dashboard, and Google API Console — they must stay accurate.
+
+## Git Workflow
+
+After making any changes to the codebase, always:
+
+1. Run `git add -A` to stage all changes
+2. Run `git commit -m "<descriptive commit message>"` with a clear, concise message describing what was changed
+3. Run `git push` to push the changes to the remote repository
