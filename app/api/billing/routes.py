@@ -100,7 +100,7 @@ async def billing_status(
             {
                 "brand_id": s.brand_id,
                 "brand_name": next(
-                    (b.name for b in all_brands if b.id == s.brand_id), s.brand_id
+                    (b.display_name for b in all_brands if b.id == s.brand_id), s.brand_id
                 ),
                 "status": s.status,
                 "current_period_end": (
@@ -113,7 +113,7 @@ async def billing_status(
         "brands_without_subscription": [
             {
                 "brand_id": b.id,
-                "brand_name": b.name,
+                "brand_name": b.display_name,
                 "requires_payment": not exempt,
             }
             for b in all_brands
