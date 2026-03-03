@@ -300,7 +300,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except ValueError:
         raise HTTPException(400, "Invalid payload")
-    except stripe.error.SignatureVerificationError:
+    except stripe.SignatureVerificationError:
         raise HTTPException(400, "Invalid signature")
 
     event_type = event["type"]
@@ -337,7 +337,7 @@ def _handle_checkout_completed(data: dict, db: Session):
     # SECURITY: verify subscription exists on Stripe
     try:
         stripe_sub = stripe.Subscription.retrieve(subscription_id)
-    except stripe.error.InvalidRequestError:
+    except stripe.InvalidRequestError:
         log.error(f"Subscription {subscription_id} not found on Stripe")
         return
 
