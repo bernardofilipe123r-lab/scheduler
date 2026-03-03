@@ -817,7 +817,7 @@ async def startup_event():
                             continue
 
                         import requests as http_requests
-                        url = f"https://graph.facebook.com/v21.0/{ig_id}/insights"
+                        url = f"https://graph.instagram.com/v21.0/{ig_id}/insights"
                         params = {
                             "metric": "follower_demographics",
                             "period": "lifetime",

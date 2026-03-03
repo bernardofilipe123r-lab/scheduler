@@ -497,7 +497,7 @@ async def refresh_audience(
                 continue
 
             import requests as http_requests
-            url = f"https://graph.facebook.com/v21.0/{ig_id}/insights"
+            url = f"https://graph.instagram.com/v21.0/{ig_id}/insights"
             base_params = {
                 "metric": "follower_demographics",
                 "period": "lifetime",
