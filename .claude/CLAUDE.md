@@ -150,3 +150,21 @@ After making any changes to the codebase, always:
 1. Run `git add -A` to stage all changes
 2. Run `git commit -m "<descriptive commit message>"` with a clear, concise message describing what was changed
 3. Run `git push` to push the changes to the remote repository
+
+## QA Enforcement Model
+
+Enforcement is **layered** — each layer trades speed for thoroughness:
+
+| Layer | Trigger | Cost | What it checks |
+|---|---|---|---|
+| **Post-edit hook** | After every file edit | ~1s | Python syntax, React hooks lint (single file) |
+| **Pre-commit hook** | `git commit` | ~10s | TypeScript build, ESLint hooks, onboarding, API imports |
+| **CI pipeline** | `git push` / PR | ~2min | Full import validation, drift detection, reviewer guardrails |
+
+**Deterministic guarantees** live in hooks and CI (scripts that exit non-zero on failure). **Skills and instructions** provide behavioral guidance — they guide Copilot but don't block execution.
+
+**Customization drift** is checked automatically in CI via `scripts/validate_customization_drift.py`. It detects when code changes outpace the skills/instructions that document them.
+
+**Reviewer guardrails** (`scripts/reviewer_guardrails.py`) run on every push. They enforce: no hardcoded brands, no hooks-after-return, model+migration pairing, API auth presence, legal page sync.
+
+> Self-maintenance trigger matrix → `self-maintenance.instructions.md`. Periodic deep audits → `/knowledge-audit` prompt.

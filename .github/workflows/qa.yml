@@ -1,0 +1,71 @@
+name: QA Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── Setup ──────────────────────────────────────────
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git diff
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+      # ── Fast checks ────────────────────────────────────
+      - name: TypeScript build
+        run: npm run build
+
+      - name: ESLint — React hooks
+        run: npx eslint src/ --rule 'react-hooks/rules-of-hooks: error' --no-error-on-unmatched-pattern
+
+      - name: Python import validation
+        run: python scripts/validate_api.py --imports
+        env:
+          # Minimal env vars for import checks (no real DB/API needed)
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+          SUPABASE_URL: "https://placeholder.supabase.co"
+          SUPABASE_KEY: "placeholder"
+          DEEPSEEK_API_KEY: "placeholder"
+          DEAPI_API_KEY: "placeholder"
+          STRIPE_SECRET_KEY: "placeholder"
+          STRIPE_WEBHOOK_SECRET: "placeholder"
+          META_ACCESS_TOKEN: "placeholder"
+          YOUTUBE_CLIENT_ID: "placeholder"
+          YOUTUBE_CLIENT_SECRET: "placeholder"
+
+      # ── Structural checks ──────────────────────────────
+      - name: Customization drift detection
+        run: python scripts/validate_customization_drift.py
+
+      - name: Reviewer guardrails
+        run: python scripts/reviewer_guardrails.py --base origin/main
+        if: github.event_name == 'pull_request'
+
+      - name: Reviewer guardrails (push)
+        run: python scripts/reviewer_guardrails.py
+        if: github.event_name == 'push'

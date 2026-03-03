@@ -108,6 +108,15 @@ Tags `TobyContentTag` with cognitive metadata (quality_score, strategy_rationale
 ### Reflector Agent (`agents/reflector.py`)
 Triple memory writing via DeepSeek Chat (temp=0.3): creates episodic event, semantic insight, and optional procedural IF-THEN rule. Fallback: basic text memories if LLM fails.
 
+### Experiment Designer Agent (`agents/experiment_designer.py`)
+Part of Loop 3 (daily deliberation). Designs hypothesis-driven A/B experiments with sequential testing for early stopping. Creates `TobyExperiment` entries with specific hypotheses and success metrics.
+
+### Meta-Learner Agent (`agents/meta_learner.py`)
+Weekly meta-cognitive loop (Loop 4). Evaluates whether Toby's learning is improving outcomes and adjusts the learning system itself — explore ratios, scoring weights, strategy selection parameters.
+
+### Pattern Analyzer Agent (`agents/pattern_analyzer.py`)
+Daily deliberation loop (Loop 3). Uses DeepSeek Reasoner R1 for deep pattern analysis across 7 days of performance data. Identifies strategy evolution opportunities, underperforming dimensions, and emergent trends.
+
 ## Memory System
 
 | Type | Table | Cap | Key Fields |
