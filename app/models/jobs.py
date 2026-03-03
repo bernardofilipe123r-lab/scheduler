@@ -3,6 +3,7 @@ Generation job model.
 """
 from datetime import datetime
 from app.models.base import Base, Column, String, DateTime, Text, Boolean, Integer, JSON
+from app.core.platforms import LEGACY_DEFAULT_PLATFORMS
 
 
 class GenerationJob(Base):
@@ -58,9 +59,9 @@ class GenerationJob(Base):
         """Convert to dictionary for API responses."""
         # Safely get platforms - handle case where column doesn't exist yet in DB
         try:
-            platforms = self.platforms or ["instagram", "facebook", "youtube"]
+            platforms = self.platforms or list(LEGACY_DEFAULT_PLATFORMS)
         except Exception:
-            platforms = ["instagram", "facebook", "youtube"]
+            platforms = list(LEGACY_DEFAULT_PLATFORMS)
         
         return {
             "job_id": self.job_id,

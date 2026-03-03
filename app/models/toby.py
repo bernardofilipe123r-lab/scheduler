@@ -278,5 +278,8 @@ class TobyBrandConfig(Base):
     enabled = Column(Boolean, nullable=False, default=True)
     reel_slots_per_day = Column(Integer, nullable=False, default=6)
     post_slots_per_day = Column(Integer, nullable=False, default=2)
+    # JSON list of enabled platform names, e.g. ["instagram","facebook","youtube","threads","tiktok"]
+    # NULL means "all connected platforms" (backwards-compatible default).
+    enabled_platforms = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)

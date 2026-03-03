@@ -357,6 +357,96 @@ class PostPerformance(Base):
         }
 
 
+class AnalyticsAggregate(Base):
+    """
+    Tiered rollups of analytics data: weekly and monthly.
+    Daily snapshots older than 90 days are compressed into weekly;
+    weekly data older than 1 year into monthly.  Allows showing
+    cumulative 1-year+ results without unbounded row growth.
+    """
+    __tablename__ = "analytics_aggregates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    brand = Column(String(50), nullable=False, index=True)
+    platform = Column(String(20), nullable=False)
+    period_type = Column(String(10), nullable=False)  # daily, weekly, monthly
+
+    from sqlalchemy import Date as _Date
+    period_start = Column(_Date, nullable=False)
+    period_end = Column(_Date, nullable=False)
+
+    avg_followers = Column(Integer, default=0)
+    min_followers = Column(Integer, default=0)
+    max_followers = Column(Integer, default=0)
+    avg_views = Column(Integer, default=0)
+    total_views = Column(Integer, default=0)
+    avg_likes = Column(Integer, default=0)
+    total_likes = Column(Integer, default=0)
+    snapshot_count = Column(Integer, default=1)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_agg_period_lookup", "period_type", "period_start"),
+    )
+
+    def to_dict(self):
+        return {
+            "brand": self.brand,
+            "platform": self.platform,
+            "period_type": self.period_type,
+            "period_start": str(self.period_start),
+            "period_end": str(self.period_end),
+            "avg_followers": self.avg_followers,
+            "max_followers": self.max_followers,
+            "avg_views": self.avg_views,
+            "total_views": self.total_views,
+            "avg_likes": self.avg_likes,
+            "total_likes": self.total_likes,
+            "snapshot_count": self.snapshot_count,
+        }
+
+
+class AudienceDemographics(Base):
+    """
+    Audience demographic data fetched from Instagram Business API.
+    Stores gender/age breakdowns, top cities, and countries.
+    One row per brand+platform, upserted on each fetch.
+    """
+    __tablename__ = "audience_demographics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    brand = Column(String(50), nullable=False, index=True)
+    platform = Column(String(20), nullable=False, default="instagram")
+
+    gender_age = Column(JSON, nullable=True)  # {"M.18-24": 1200, ...}
+    top_cities = Column(JSON, nullable=True)  # {"London": 5000, ...}
+    top_countries = Column(JSON, nullable=True)  # {"GB": 8000, ...}
+
+    top_gender = Column(String(20), nullable=True)
+    top_age_range = Column(String(10), nullable=True)
+    top_city = Column(String(100), nullable=True)
+    total_audience = Column(Integer, default=0)
+
+    fetched_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "brand": self.brand,
+            "platform": self.platform,
+            "gender_age": self.gender_age or {},
+            "top_cities": self.top_cities or {},
+            "top_countries": self.top_countries or {},
+            "top_gender": self.top_gender,
+            "top_age_range": self.top_age_range,
+            "top_city": self.top_city,
+            "total_audience": self.total_audience,
+            "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
+        }
+
+
 class TrendingContent(Base):
     """
     External viral content found via IG Hashtag Search or Business

@@ -558,6 +558,8 @@ def get_brand_configs(
     import uuid
     from app.models.toby import TobyBrandConfig
     from app.models.brands import Brand
+    from app.models.youtube import YouTubeChannel
+    from app.core.platforms import PLATFORM_CREDENTIAL_CHECKS
 
     uid = _resolve_user_id(user, target_user_id)
 
@@ -567,6 +569,13 @@ def get_brand_configs(
     # Get existing brand configs
     configs = db.query(TobyBrandConfig).filter(TobyBrandConfig.user_id == uid).all()
     config_map = {c.brand_id: c for c in configs}
+
+    # Pre-fetch YouTube channels for all brands
+    yt_channels = db.query(YouTubeChannel).filter(
+        YouTubeChannel.brand.in_([b.id for b in brands]),
+        YouTubeChannel.status == "connected",
+    ).all()
+    yt_connected_brands = {ch.brand for ch in yt_channels}
 
     # Auto-create configs for brands that don't have one yet
     result = []
@@ -590,6 +599,10 @@ def get_brand_configs(
             "enabled": c.enabled,
             "reel_slots_per_day": c.reel_slots_per_day,
             "post_slots_per_day": c.post_slots_per_day,
+            "enabled_platforms": c.enabled_platforms,  # None = all connected
+            # Dynamic credential checks from platform registry
+            **{f"has_{p}": check(brand) for p, check in PLATFORM_CREDENTIAL_CHECKS.items()},
+            "has_youtube": brand.id in yt_connected_brands,
         })
 
     db.commit()
@@ -638,6 +651,16 @@ def update_brand_config(
         cfg.reel_slots_per_day = body.reel_slots_per_day
     if body.post_slots_per_day is not None:
         cfg.post_slots_per_day = body.post_slots_per_day
+    if body.enabled_platforms is not None:
+        from app.core.platforms import SUPPORTED_PLATFORMS_SET, SUPPORTED_CONTENT_TYPES
+        # Sanitise: dict keyed by content-type → list of valid platform names
+        sanitised: dict[str, list[str]] = {}
+        for ct_key, platform_list in body.enabled_platforms.items():
+            if ct_key not in SUPPORTED_CONTENT_TYPES:
+                continue
+            cleaned = [p for p in platform_list if p in SUPPORTED_PLATFORMS_SET]
+            sanitised[ct_key] = cleaned
+        cfg.enabled_platforms = sanitised if sanitised else None
 
     cfg.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -650,6 +673,7 @@ def update_brand_config(
             "enabled": cfg.enabled,
             "reel_slots_per_day": cfg.reel_slots_per_day,
             "post_slots_per_day": cfg.post_slots_per_day,
+            "enabled_platforms": cfg.enabled_platforms,
         },
     }
 

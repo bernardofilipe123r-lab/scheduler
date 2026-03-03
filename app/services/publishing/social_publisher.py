@@ -6,7 +6,8 @@ import tempfile
 import time
 import re
 import requests
-from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 from app.core.config import BrandConfig
 
@@ -97,11 +98,23 @@ class SocialPublisher:
             self.ig_access_token = brand_config.meta_access_token
             # Facebook page token (from Facebook Login — a long-lived page token)
             self._system_user_token = brand_config.facebook_access_token or brand_config.meta_access_token
+            # Threads
+            self.threads_access_token = brand_config.threads_access_token
+            self.threads_user_id = brand_config.threads_user_id
+            # TikTok
+            self.tiktok_access_token = brand_config.tiktok_access_token
+            self.tiktok_refresh_token = brand_config.tiktok_refresh_token
+            self.tiktok_open_id = brand_config.tiktok_open_id
         else:
             self._system_user_token = None
             self.ig_access_token = None
             self.ig_business_account_id = None
             self.fb_page_id = None
+            self.threads_access_token = None
+            self.threads_user_id = None
+            self.tiktok_access_token = None
+            self.tiktok_refresh_token = None
+            self.tiktok_open_id = None
         
         self.api_version = "v21.0"
         # Instagram Business Login tokens must use graph.instagram.com;
@@ -1570,3 +1583,490 @@ class SocialPublisher:
             "facebook": facebook_result,
             "overall_success": instagram_result.get("success") and facebook_result.get("success")
         }
+
+    # =========================================================================
+    #  Threads Publishing
+    # =========================================================================
+
+    def _proactive_refresh_threads_token(self) -> Optional[str]:
+        """Refresh Threads long-lived token if stale (>6h or expiring within 5 days)."""
+        if not self.threads_access_token:
+            return None
+        try:
+            from app.db_connection import SessionLocal
+            from app.models.brands import Brand
+            from app.services.publishing.threads_token_service import ThreadsTokenService
+            from datetime import timedelta
+
+            db = SessionLocal()
+            try:
+                brand = db.query(Brand).filter(Brand.id == self.brand_name).first()
+                if not brand or not brand.threads_access_token:
+                    return None
+
+                now = datetime.now(timezone.utc)
+                needs_refresh = False
+
+                last_refreshed = brand.threads_token_last_refreshed_at
+                if last_refreshed:
+                    if last_refreshed.tzinfo is None:
+                        last_refreshed = last_refreshed.replace(tzinfo=timezone.utc)
+                    needs_refresh = (now - last_refreshed).total_seconds() / 3600 >= 6
+                else:
+                    needs_refresh = True
+
+                expires_at = brand.threads_token_expires_at
+                if expires_at and not needs_refresh:
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    if (expires_at - now).days <= 5:
+                        needs_refresh = True
+
+                if not needs_refresh:
+                    return None
+
+                svc = ThreadsTokenService()
+                result = svc.refresh_long_lived_token(brand.threads_access_token)
+                new_token = result.get("access_token")
+                expires_in = result.get("expires_in", 5184000)
+
+                if new_token:
+                    brand.threads_access_token = new_token
+                    brand.threads_token_expires_at = now + timedelta(seconds=expires_in)
+                    brand.threads_token_last_refreshed_at = now
+                    db.commit()
+                    self.threads_access_token = new_token
+                    print(f"   🔑 Refreshed Threads token for {self.brand_name}", flush=True)
+                    return new_token
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"   ⚠️ Threads token refresh failed: {e}", flush=True)
+        return None
+
+    def publish_threads_post(
+        self,
+        caption: str,
+        media_url: Optional[str] = None,
+        media_type: str = "TEXT",
+    ) -> Dict[str, Any]:
+        """
+        Publish a post to Threads (text-first, optional media).
+
+        Two-step flow:
+          1. Create media container  POST /{user_id}/threads
+          2. Publish container       POST /{user_id}/threads_publish
+
+        For VIDEO media, we poll the container status before step 2.
+
+        Args:
+            caption: Post text (required — Threads is text-first)
+            media_url: Optional public URL to image or video
+            media_type: "TEXT", "IMAGE", or "VIDEO"
+
+        Returns:
+            Dict with success, post_id, platform
+        """
+        if not self.threads_access_token or not self.threads_user_id:
+            return {
+                "success": False,
+                "error": "Threads credentials not configured",
+                "platform": "threads",
+            }
+
+        # Proactively refresh if stale
+        self._proactive_refresh_threads_token()
+
+        threads_api = "https://graph.threads.net/v21.0"
+
+        try:
+            # Step 1: Create media container
+            container_data = {
+                "text": caption,
+                "access_token": self.threads_access_token,
+            }
+            if media_url and media_type == "IMAGE":
+                container_data["media_type"] = "IMAGE"
+                container_data["image_url"] = media_url
+            elif media_url and media_type == "VIDEO":
+                container_data["media_type"] = "VIDEO"
+                container_data["video_url"] = media_url
+            else:
+                container_data["media_type"] = "TEXT"
+
+            print(f"   🧵 Threads: Creating container (type={container_data['media_type']})...", flush=True)
+
+            resp = requests.post(
+                f"{threads_api}/{self.threads_user_id}/threads",
+                data=container_data,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            creation_id = resp.json().get("id")
+            if not creation_id:
+                return {
+                    "success": False,
+                    "error": f"Threads container creation returned no ID: {resp.text}",
+                    "platform": "threads",
+                }
+
+            # Step 2: Poll for VIDEO processing
+            if media_type == "VIDEO":
+                self._poll_threads_container(creation_id, threads_api)
+
+            # Step 3: Publish
+            print(f"   🧵 Threads: Publishing container {creation_id}...", flush=True)
+            pub_resp = requests.post(
+                f"{threads_api}/{self.threads_user_id}/threads_publish",
+                data={
+                    "creation_id": creation_id,
+                    "access_token": self.threads_access_token,
+                },
+                timeout=30,
+            )
+            pub_resp.raise_for_status()
+            thread_id = pub_resp.json().get("id")
+
+            print(f"   ✅ Threads: Published thread {thread_id}", flush=True)
+            return {
+                "success": True,
+                "post_id": thread_id,
+                "platform": "threads",
+                "brand_used": self.brand_name,
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_body = ""
+            if e.response is not None:
+                try:
+                    error_body = e.response.json()
+                except Exception:
+                    error_body = e.response.text[:500]
+            error_msg = f"Threads API error: {e} — {error_body}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "threads"}
+        except Exception as e:
+            error_msg = f"Threads publish failed: {e}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "threads"}
+
+    def _poll_threads_container(self, creation_id: str, api_base: str, timeout_s: int = 120):
+        """Poll until Threads media container is FINISHED processing."""
+        import time as _time
+        deadline = _time.monotonic() + timeout_s
+        while _time.monotonic() < deadline:
+            resp = requests.get(
+                f"{api_base}/{creation_id}",
+                params={
+                    "fields": "status,error_message",
+                    "access_token": self.threads_access_token,
+                },
+                timeout=30,
+            )
+            data = resp.json()
+            status = data.get("status")
+            if status == "FINISHED":
+                return
+            if status == "ERROR":
+                raise RuntimeError(f"Threads media processing failed: {data.get('error_message', data)}")
+            _time.sleep(5)
+        raise TimeoutError("Threads media container processing timed out")
+
+    def publish_threads_carousel(
+        self,
+        caption: str,
+        image_urls: list,
+    ) -> Dict[str, Any]:
+        """
+        Publish a carousel post to Threads (up to 10 images).
+
+        Three-step flow:
+          1. Create child containers for each image
+          2. Create carousel container referencing children
+          3. Publish the carousel container
+
+        Args:
+            caption: Post text
+            image_urls: List of public image URLs (2-10)
+
+        Returns:
+            Dict with success, post_id, platform
+        """
+        if not self.threads_access_token or not self.threads_user_id:
+            return {
+                "success": False,
+                "error": "Threads credentials not configured",
+                "platform": "threads",
+            }
+
+        if len(image_urls) < 2 or len(image_urls) > 10:
+            return {
+                "success": False,
+                "error": f"Threads carousels require 2-10 items, got {len(image_urls)}",
+                "platform": "threads",
+            }
+
+        self._proactive_refresh_threads_token()
+        threads_api = "https://graph.threads.net/v21.0"
+
+        try:
+            # Step 1: Create child containers
+            child_ids = []
+            for i, url in enumerate(image_urls):
+                print(f"   🧵 Threads carousel: Creating child {i+1}/{len(image_urls)}...", flush=True)
+                resp = requests.post(
+                    f"{threads_api}/{self.threads_user_id}/threads",
+                    data={
+                        "media_type": "IMAGE",
+                        "image_url": url,
+                        "is_carousel_item": "true",
+                        "access_token": self.threads_access_token,
+                    },
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                child_id = resp.json().get("id")
+                if not child_id:
+                    return {
+                        "success": False,
+                        "error": f"Threads child container {i+1} returned no ID",
+                        "platform": "threads",
+                    }
+                child_ids.append(child_id)
+
+            # Step 2: Create carousel container
+            print(f"   🧵 Threads carousel: Creating carousel container...", flush=True)
+            resp = requests.post(
+                f"{threads_api}/{self.threads_user_id}/threads",
+                data={
+                    "media_type": "CAROUSEL",
+                    "children": ",".join(child_ids),
+                    "text": caption,
+                    "access_token": self.threads_access_token,
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            carousel_id = resp.json().get("id")
+
+            # Step 3: Publish
+            print(f"   🧵 Threads carousel: Publishing...", flush=True)
+            pub_resp = requests.post(
+                f"{threads_api}/{self.threads_user_id}/threads_publish",
+                data={
+                    "creation_id": carousel_id,
+                    "access_token": self.threads_access_token,
+                },
+                timeout=30,
+            )
+            pub_resp.raise_for_status()
+            thread_id = pub_resp.json().get("id")
+
+            print(f"   ✅ Threads carousel published: {thread_id}", flush=True)
+            return {
+                "success": True,
+                "post_id": thread_id,
+                "platform": "threads",
+                "brand_used": self.brand_name,
+            }
+
+        except Exception as e:
+            error_msg = f"Threads carousel publish failed: {e}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "threads"}
+
+    # =========================================================================
+    #  TikTok Publishing
+    # =========================================================================
+
+    def _refresh_tiktok_token(self) -> Optional[str]:
+        """
+        Refresh TikTok access token (24h expiry) and persist to DB.
+        Must be called before every TikTok publish.
+        Returns the fresh access token or None on failure.
+        """
+        if not self.tiktok_refresh_token:
+            return None
+
+        try:
+            from app.db_connection import SessionLocal
+            from app.models.brands import Brand
+            from app.services.publishing.tiktok_token_service import TikTokTokenService
+            from datetime import timedelta
+
+            svc = TikTokTokenService()
+            tokens = svc.refresh_access_token(self.tiktok_refresh_token)
+            new_access = tokens.get("access_token")
+            if not new_access:
+                print(f"   ⚠️ TikTok token refresh returned no access_token", flush=True)
+                return None
+
+            expires_in = tokens.get("expires_in", 86400)
+            new_refresh = tokens.get("refresh_token")
+
+            # Persist to DB
+            db = SessionLocal()
+            try:
+                brand = db.query(Brand).filter(Brand.id == self.brand_name).first()
+                if brand:
+                    brand.tiktok_access_token = new_access
+                    brand.tiktok_access_token_expires_at = (
+                        datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+                    )
+                    if new_refresh:
+                        brand.tiktok_refresh_token = new_refresh
+                        refresh_expires = tokens.get("refresh_expires_in", 31536000)
+                        brand.tiktok_refresh_token_expires_at = (
+                            datetime.now(timezone.utc) + timedelta(seconds=refresh_expires)
+                        )
+                    db.commit()
+                    print(f"   🔑 Refreshed TikTok token for {self.brand_name}", flush=True)
+            finally:
+                db.close()
+
+            # Update in-memory tokens
+            self.tiktok_access_token = new_access
+            if new_refresh:
+                self.tiktok_refresh_token = new_refresh
+            return new_access
+
+        except Exception as e:
+            print(f"   ⚠️ TikTok token refresh failed: {e}", flush=True)
+            return None
+
+    def publish_tiktok_video(
+        self,
+        video_url: str,
+        caption: str,
+    ) -> Dict[str, Any]:
+        """
+        Publish a video to TikTok using the PULL_FROM_URL method.
+
+        Flow:
+          1. Refresh access token (24h expiry)
+          2. POST /v2/post/publish/video/init/  — initialize with video_url + caption
+          3. Poll publish status until complete
+
+        Args:
+            video_url: Public Supabase URL for the video
+            caption: Video caption / description
+
+        Returns:
+            Dict with success, post_id (publish_id), platform
+        """
+        if not self.tiktok_access_token and not self.tiktok_refresh_token:
+            return {
+                "success": False,
+                "error": "TikTok credentials not configured",
+                "platform": "tiktok",
+            }
+
+        # Always refresh before publish (24h token lifetime)
+        fresh_token = self._refresh_tiktok_token()
+        if not fresh_token:
+            return {
+                "success": False,
+                "error": "TikTok token refresh failed — cannot publish",
+                "platform": "tiktok",
+            }
+
+        tiktok_api = "https://open.tiktokapis.com/v2"
+
+        try:
+            # Step 1: Initialize video publish (direct post with PULL_FROM_URL)
+            print(f"   📱 TikTok: Initializing video publish...", flush=True)
+            init_resp = requests.post(
+                f"{tiktok_api}/post/publish/video/init/",
+                headers={
+                    "Authorization": f"Bearer {fresh_token}",
+                    "Content-Type": "application/json; charset=UTF-8",
+                },
+                json={
+                    "post_info": {
+                        "title": caption[:150],
+                        "privacy_level": "PUBLIC_TO_EVERYONE",
+                        "disable_duet": False,
+                        "disable_comment": False,
+                        "disable_stitch": False,
+                        "video_cover_timestamp_ms": 1000,
+                    },
+                    "source_info": {
+                        "source": "PULL_FROM_URL",
+                        "video_url": video_url,
+                    },
+                },
+                timeout=30,
+            )
+            init_resp.raise_for_status()
+            init_data = init_resp.json()
+
+            error_block = init_data.get("error", {})
+            if error_block.get("code") != "ok":
+                error_msg = f"TikTok init failed: {error_block.get('message', init_data)}"
+                print(f"   ❌ {error_msg}", flush=True)
+                return {"success": False, "error": error_msg, "platform": "tiktok"}
+
+            publish_id = init_data.get("data", {}).get("publish_id")
+            if not publish_id:
+                return {
+                    "success": False,
+                    "error": f"TikTok init returned no publish_id: {init_data}",
+                    "platform": "tiktok",
+                }
+
+            print(f"   📱 TikTok: Got publish_id={publish_id}, polling status...", flush=True)
+
+            # Step 2: Poll for completion
+            self._poll_tiktok_status(publish_id, fresh_token)
+
+            print(f"   ✅ TikTok: Video published (publish_id={publish_id})", flush=True)
+            return {
+                "success": True,
+                "post_id": publish_id,
+                "platform": "tiktok",
+                "brand_used": self.brand_name,
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_body = ""
+            if e.response is not None:
+                try:
+                    error_body = e.response.json()
+                except Exception:
+                    error_body = e.response.text[:500]
+            error_msg = f"TikTok API error: {e} — {error_body}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "tiktok"}
+        except TimeoutError as e:
+            error_msg = f"TikTok publish timed out: {e}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "tiktok"}
+        except Exception as e:
+            error_msg = f"TikTok publish failed: {e}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "tiktok"}
+
+    def _poll_tiktok_status(self, publish_id: str, token: str, timeout_s: int = 180):
+        """Poll TikTok video processing status until PUBLISH_COMPLETE."""
+        import time as _time
+        deadline = _time.monotonic() + timeout_s
+        while _time.monotonic() < deadline:
+            resp = requests.post(
+                "https://open.tiktokapis.com/v2/post/publish/status/fetch/",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=UTF-8",
+                },
+                json={"publish_id": publish_id},
+                timeout=30,
+            )
+            data = resp.json()
+            status_val = data.get("data", {}).get("status")
+            if status_val == "PUBLISH_COMPLETE":
+                return
+            if status_val in ("FAILED", "PUBLISH_FAILED"):
+                fail_reason = data.get("data", {}).get("fail_reason", data)
+                raise RuntimeError(f"TikTok video publish failed: {fail_reason}")
+            # PROCESSING_UPLOAD / PROCESSING_DOWNLOAD / SENDING_TO_USER_INBOX — keep polling
+            _time.sleep(5)
+        raise TimeoutError(f"TikTok video processing timed out after {timeout_s}s")

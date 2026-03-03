@@ -2,6 +2,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from app.core.platforms import SUPPORTED_PLATFORMS_SET
+
 
 class TobyConfigUpdate(BaseModel):
     """Request to update Toby configuration."""
@@ -13,8 +15,17 @@ class TobyConfigUpdate(BaseModel):
     posts_enabled: Optional[bool] = None
 
 
+# Re-export for backwards compat — canonical source is app.core.platforms
+ALL_PLATFORMS = SUPPORTED_PLATFORMS_SET
+
+
 class TobyBrandConfigUpdate(BaseModel):
     """Request to update per-brand Toby configuration."""
     enabled: Optional[bool] = None
     reel_slots_per_day: Optional[int] = Field(None, ge=0, le=6)
     post_slots_per_day: Optional[int] = Field(None, ge=0, le=2)
+    # Per-content-type platform selection.
+    # Dict keyed by content-type key ("reels", "posts") → list of platform IDs.
+    # Example: {"reels": ["instagram", "youtube"], "posts": ["instagram", "threads"]}
+    # None = keep existing.  null in JSON body = all connected for all types.
+    enabled_platforms: Optional[dict[str, list[str]]] = None

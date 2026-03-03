@@ -80,28 +80,21 @@ def _get_user_brands(db: Session, user_id: str) -> List[Brand]:
 
 def _get_connected_platforms(brand: Brand, db: Optional[Session] = None) -> List[dict]:
     """Get list of connected platforms for a brand."""
-    platforms = []
-    
-    # Instagram — accept either instagram_access_token OR meta_access_token
-    ig_connected = bool(
-        brand.instagram_business_account_id and
-        (brand.instagram_access_token or brand.meta_access_token)
+    from app.core.platforms import (
+        PLATFORM_CREDENTIAL_CHECKS, PLATFORM_HANDLE_ATTRS,
     )
-    if ig_connected:
-        platforms.append({
-            "name": "instagram",
-            "handle": brand.instagram_handle or "Not set",
-            "connected": True,
-        })
-    
-    # Facebook
-    if brand.facebook_page_id and brand.facebook_access_token:
-        platforms.append({
-            "name": "facebook",
-            "handle": brand.facebook_page_name or "Not set",
-            "connected": True,
-        })
-    
+    platforms = []
+
+    # Check non-YouTube platforms via registry
+    for p_id, check_fn in PLATFORM_CREDENTIAL_CHECKS.items():
+        if check_fn(brand):
+            handle_attr = PLATFORM_HANDLE_ATTRS.get(p_id, "")
+            platforms.append({
+                "name": p_id,
+                "handle": (getattr(brand, handle_attr, None) or "Not set") if handle_attr else "Not set",
+                "connected": True,
+            })
+
     # YouTube — stored in a separate YouTubeChannel table
     if db is not None:
         yt_channel = db.query(YouTubeChannel).filter(
@@ -114,23 +107,7 @@ def _get_connected_platforms(brand: Brand, db: Optional[Session] = None) -> List
                 "handle": yt_channel.channel_name or "Not set",
                 "connected": True,
             })
-    
-    # Threads
-    if brand.threads_access_token:
-        platforms.append({
-            "name": "threads",
-            "handle": brand.threads_username or "Not set",
-            "connected": True,
-        })
-    
-    # TikTok
-    if brand.tiktok_access_token:
-        platforms.append({
-            "name": "tiktok",
-            "handle": brand.tiktok_username or "Not set",
-            "connected": True,
-        })
-    
+
     return platforms
 
 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import GenerationJob
 from app.services.brands.resolver import brand_resolver
+from app.core.platforms import LEGACY_DEFAULT_PLATFORMS
 
 
 def generate_job_id() -> str:
@@ -56,7 +57,7 @@ class JobManager:
         
         # Default to all platforms if not specified
         if platforms is None:
-            platforms = ["instagram", "facebook", "youtube"]
+            platforms = list(LEGACY_DEFAULT_PLATFORMS)
         
         job = GenerationJob(
             job_id=job_id,

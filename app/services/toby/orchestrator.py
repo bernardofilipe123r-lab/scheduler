@@ -442,14 +442,23 @@ def _execute_content_plan(db: Session, plan):
     job_manager = JobManager(db)
     slide_texts = result.get("slide_texts", result.get("content_lines", []))
 
-    # Determine platforms based on brand’s actual connections
+    # Determine platforms via centralized registry
     from app.services.brands.resolver import brand_resolver as _brand_resolver
+    from app.models.toby import TobyBrandConfig as _TBC
+    from app.core.platforms import detect_connected_platforms, get_platforms_for_content_type
+
     _brand_conf = _brand_resolver.get_brand_config(plan.brand_id)
-    _toby_platforms = ["instagram", "youtube"]  # always attempt these
-    if _brand_conf and _brand_conf.facebook_page_id:
-        _toby_platforms = ["instagram", "facebook", "youtube"]
-    else:
-        print(f"[TOBY] Facebook not configured for {plan.brand_id} — skipping (not an error)", flush=True)
+    _connected = detect_connected_platforms(_brand_conf, db) if _brand_conf else set()
+
+    _tbc = db.query(_TBC).filter(_TBC.user_id == plan.user_id, _TBC.brand_id == plan.brand_id).first()
+    _user_enabled = _tbc.enabled_platforms if (_tbc and _tbc.enabled_platforms) else None
+    _toby_platforms = get_platforms_for_content_type(_connected, _user_enabled, plan.content_type)
+
+    if not _toby_platforms:
+        print(f"[TOBY] No enabled+connected platforms for {plan.brand_id} ({plan.content_type}) -- skipping content generation", flush=True)
+        return None
+
+    print(f"[TOBY] Platforms for {plan.brand_id} ({plan.content_type}): {_toby_platforms} (connected={sorted(_connected)}, user_prefs={_user_enabled if _user_enabled else 'all'})", flush=True)
 
     job = job_manager.create_job(
         user_id=plan.user_id,

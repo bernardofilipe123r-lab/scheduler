@@ -161,3 +161,95 @@ async def ai_service_health():
         "ok": len(services) == 0,
         "services": services,
     }
+
+
+# ── Social Platform API Health ───────────────────────────────────────
+@router.get("/social-health")
+async def social_api_health():
+    """
+    Check for recent social platform API errors (Meta/IG, YouTube, TikTok).
+    Scans Toby error logs and publishing failures in the last 60 minutes.
+    No auth required — the global banner calls this cheaply.
+    """
+    from app.models.toby import TobyActivityLog
+    from app.models.scheduling import ScheduledReel
+    from sqlalchemy import or_
+
+    window = datetime.now(timezone.utc) - __import__("datetime").timedelta(minutes=60)
+    db = SessionLocal()
+    try:
+        # Check Toby error logs
+        errors = (
+            db.query(TobyActivityLog.description)
+            .filter(
+                TobyActivityLog.action_type == "error",
+                TobyActivityLog.created_at >= window,
+            )
+            .order_by(TobyActivityLog.created_at.desc())
+            .limit(50)
+            .all()
+        )
+
+        # Check recent publishing failures
+        pub_failures = (
+            db.query(ScheduledReel.publish_error)
+            .filter(
+                ScheduledReel.status == "failed",
+                ScheduledReel.published_at >= window,
+                ScheduledReel.publish_error.isnot(None),
+            )
+            .order_by(ScheduledReel.published_at.desc())
+            .limit(20)
+            .all()
+        )
+    finally:
+        db.close()
+
+    meta_down = False
+    youtube_down = False
+    tiktok_down = False
+    meta_detail = ""
+    youtube_detail = ""
+    tiktok_detail = ""
+
+    meta_keywords = [
+        "meta api", "graph api", "instagram api", "facebook api",
+        "ig publish", "fb publish", "media_publish", "oembed",
+        "190", "token expired", "oauth", "(#100)", "(#10)",
+    ]
+    youtube_keywords = [
+        "youtube api", "youtube data", "yt publish", "youtube upload",
+        "quota exceeded", "youtube token", "google api",
+    ]
+    tiktok_keywords = [
+        "tiktok api", "tiktok publish", "tiktok upload", "tiktok token",
+    ]
+
+    all_texts = [desc for (desc,) in errors] + [err for (err,) in pub_failures]
+    for text in all_texts:
+        lower = (text or "").lower()
+        if not meta_down and any(k in lower for k in meta_keywords):
+            meta_down = True
+            meta_detail = "Meta API is experiencing issues. Some Instagram/Facebook posts may fail or be delayed."
+        if not youtube_down and any(k in lower for k in youtube_keywords):
+            youtube_down = True
+            youtube_detail = "YouTube API is experiencing issues. YouTube publishing may be temporarily unavailable."
+        if not tiktok_down and any(k in lower for k in tiktok_keywords):
+            tiktok_down = True
+            tiktok_detail = "TikTok API is experiencing issues. TikTok publishing may be temporarily unavailable."
+        if meta_down and youtube_down and tiktok_down:
+            break
+
+    issues = []
+    if meta_down:
+        issues.append({"platform": "meta", "name": "Meta API (Instagram/Facebook)", "status": "degraded", "detail": meta_detail})
+    if youtube_down:
+        issues.append({"platform": "youtube", "name": "YouTube API", "status": "degraded", "detail": youtube_detail})
+    if tiktok_down:
+        issues.append({"platform": "tiktok", "name": "TikTok API", "status": "degraded", "detail": tiktok_detail})
+
+    return {
+        "ok": len(issues) == 0,
+        "issues": issues,
+    }
+

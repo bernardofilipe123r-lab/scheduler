@@ -20,6 +20,7 @@ import { LogsPage } from '@/pages/Logs'
 import { AdminPage } from '@/pages/Admin'
 import { CreateBrandPage } from '@/pages/CreateBrand'
 import { TobyPage } from '@/pages/Toby'
+import { CommunityPage } from '@/pages/Community'
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicy'
 import { DataDeletionPage } from '@/pages/DataDeletion'
 import { TermsPage } from '@/pages/Terms'
@@ -114,6 +115,7 @@ export function AppRoutes() {
         <Route path="brands/new" element={<CreateBrandPage />} />
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="community" element={<CommunityPage />} />
         <Route path="toby" element={<TobyPage />} />
         <Route path="settings" element={<Navigate to="/brands?tab=connections" replace />} />
         <Route path="about" element={<AboutPage />} />

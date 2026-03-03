@@ -55,7 +55,7 @@ import type { ScheduledPost, BrandName, Variant } from '@/shared/types'
 // Offsets now come from the DB via useDynamicBrands()
 
 // Platform type for filtering
-type PlatformFilter = 'all' | 'instagram' | 'facebook' | 'youtube'
+type PlatformFilter = 'all' | 'instagram' | 'facebook' | 'youtube' | 'threads' | 'tiktok'
 type ContentTypeFilter = 'all' | 'reels' | 'posts'
 type CreatorFilter = 'all' | 'user' | 'toby'
 
@@ -282,7 +282,7 @@ export function ScheduledPage() {
     if (platformFilter !== 'all') {
       dayPosts = dayPosts.filter(post => {
         // Check metadata for platform info, or assume all posts go to all platforms
-        const platforms = post.metadata?.platforms || ['instagram', 'facebook', 'youtube']
+        const platforms = post.metadata?.platforms || ['instagram', 'facebook', 'youtube']  // Legacy fallback
         return platforms.includes(platformFilter)
       })
     }

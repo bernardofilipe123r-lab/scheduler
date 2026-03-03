@@ -893,11 +893,13 @@ class DatabaseSchedulerService:
         
         # Priority: brand_config > brand_name > user_id > default
         publisher = None
+        resolved_config = None  # Will hold BrandConfig if available
         _skip_facebook = False  # FB not configured → graceful skip, not a credential error
         
         if brand_config:
             # Use brand-specific credentials
             print(f"🏷️ Using provided brand_config: {brand_config.name}")
+            resolved_config = brand_config
             publisher = SocialPublisher(brand_config=brand_config)
         elif brand_name:
             # Look up brand config by name
@@ -970,6 +972,7 @@ class DatabaseSchedulerService:
         
         # Pre-filter: skip Facebook if page_id not configured (not an error)
         # Pre-filter: skip YouTube if credentials don't exist (not an error)
+        # Pre-filter: skip Threads/TikTok if not configured (not an error)
         effective_platforms = list(platforms)
         if _skip_facebook and "facebook" in effective_platforms:
             effective_platforms.remove("facebook")
@@ -985,6 +988,14 @@ class DatabaseSchedulerService:
             except Exception:
                 effective_platforms.remove("youtube")
                 print(f"📺 YouTube credential check failed — skipping")
+        if "threads" in effective_platforms:
+            if not (resolved_config and resolved_config.threads_access_token and resolved_config.threads_user_id):
+                effective_platforms.remove("threads")
+                print(f"🧵 Threads not configured for {brand_name or 'unknown'} — skipping (not an error)")
+        if "tiktok" in effective_platforms:
+            if not (resolved_config and resolved_config.tiktok_refresh_token):
+                effective_platforms.remove("tiktok")
+                print(f"📱 TikTok not configured for {brand_name or 'unknown'} — skipping (not an error)")
         
         results = {}
         
@@ -1034,6 +1045,21 @@ class DatabaseSchedulerService:
                 caption=caption,
                 brand_name=brand_name,
                 yt_title=yt_title
+            )
+
+        if "threads" in effective_platforms:
+            print("🧵 Publishing to Threads...", flush=True)
+            results["threads"] = publisher.publish_threads_post(
+                caption=caption,
+                media_url=video_url,
+                media_type="VIDEO",
+            )
+
+        if "tiktok" in effective_platforms:
+            print("📱 Publishing to TikTok...", flush=True)
+            results["tiktok"] = publisher.publish_tiktok_video(
+                video_url=video_url,
+                caption=caption,
             )
         
         return results

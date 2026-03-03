@@ -3,6 +3,7 @@ Brand model.
 """
 from datetime import datetime
 from app.models.base import Base, Column, String, DateTime, Text, Boolean, Integer, JSON
+from app.core.platforms import PLATFORM_CREDENTIAL_CHECKS
 
 
 class Brand(Base):
@@ -100,10 +101,7 @@ class Brand(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             # Indicate if credentials are configured (without exposing them)
-            "has_instagram": bool(self.instagram_business_account_id and (self.instagram_access_token or self.meta_access_token)),
-            "has_facebook": bool(self.facebook_page_id and self.facebook_access_token),
-            "has_threads": bool(self.threads_access_token and self.threads_user_id),
-            "has_tiktok": bool(self.tiktok_access_token and self.tiktok_refresh_token),
+            **{f"has_{p}": check(self) for p, check in PLATFORM_CREDENTIAL_CHECKS.items()},
         }
         
         if include_credentials:

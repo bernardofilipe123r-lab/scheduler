@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
-  Bot, Layers, User, LogOut,
+  Bot, Layers, User, LogOut, MessageSquare,
   ChevronLeft, ChevronRight, ShieldCheck,
   X, AlertTriangle,
 } from 'lucide-react'
@@ -102,6 +102,50 @@ function AIServiceBanner() {
   )
 }
 
+/* ── Social Platform Health Banner ─────────────────────── */
+interface SocialIssue { platform: string; name: string; status: string; detail: string }
+
+function SocialHealthBanner() {
+  const [issues, setIssues] = useState<SocialIssue[]>([])
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      try {
+        const res = await fetch('/api/system/social-health')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setIssues(data.ok ? [] : (data.issues ?? []))
+      } catch {
+        /* silently ignore */
+      }
+    }
+    check()
+    const id = setInterval(check, 5 * 60_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
+
+  if (issues.length === 0 || dismissed) return null
+
+  const names = [...new Set(issues.map(i => i.name))].join(', ')
+
+  return (
+    <div className="bg-orange-500 text-white text-sm px-4 py-2.5 flex items-center gap-3">
+      <AlertTriangle className="w-4 h-4 shrink-0" />
+      <p className="flex-1 min-w-0">
+        <span className="font-semibold">Social platform issues:</span>{' '}
+        {names} — {issues.map(i => i.detail).join(' ')}
+        {' '}Publishing may be affected until resolved.
+      </p>
+      <button onClick={() => setDismissed(true)} className="shrink-0 p-0.5 hover:bg-orange-600 rounded transition-colors" aria-label="Dismiss">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
+
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/reels', icon: Film, label: 'Videos', end: false },
@@ -109,6 +153,7 @@ const NAV_ITEMS = [
   { to: '/jobs', icon: Briefcase, label: 'Jobs', end: false },
   { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', end: false },
+  { to: '/community', icon: MessageSquare, label: 'Community', end: false },
   { to: '/toby', icon: Bot, label: 'Toby', end: false },
 ]
 
@@ -316,6 +361,7 @@ export function AppLayout() {
       <div className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-200 ease-in-out ${expanded ? 'ml-52' : 'ml-16'}`}>
         <RailwayStatusBanner />
         <AIServiceBanner />
+        <SocialHealthBanner />
         {/* Page content */}
         <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 min-w-0">
           <Outlet />

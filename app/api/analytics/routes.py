@@ -345,7 +345,8 @@ async def get_snapshots(
     if brand and brand not in _get_brand_display_info():
         raise HTTPException(status_code=404, detail=f"Brand '{brand}' not found")
     
-    if platform and platform not in ["instagram", "facebook", "youtube"]:
+    from app.core.platforms import SUPPORTED_PLATFORMS_SET
+    if platform and platform not in SUPPORTED_PLATFORMS_SET:
         raise HTTPException(status_code=400, detail=f"Invalid platform '{platform}'")
     
     days = min(max(days, 1), 90)  # Clamp to 1-90 days

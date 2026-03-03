@@ -11,6 +11,8 @@ from app.models.analytics import (
     AnalyticsSnapshot,
     ContentHistory,
     PostPerformance,
+    AnalyticsAggregate,
+    AudienceDemographics,
     TrendingContent,
 )
 from app.models.youtube import YouTubeChannel
@@ -47,6 +49,8 @@ __all__ = [
     "AnalyticsSnapshot",
     "ContentHistory",
     "PostPerformance",
+    "AnalyticsAggregate",
+    "AudienceDemographics",
     "TrendingContent",
     "YouTubeChannel",
     "LogEntry",

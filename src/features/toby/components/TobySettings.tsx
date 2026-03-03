@@ -1,7 +1,21 @@
 import { useState } from 'react'
-import { Settings, Save, Loader2, RotateCcw, Film, LayoutGrid, ChevronDown, ChevronUp, Power } from 'lucide-react'
+import { Settings, Save, Loader2, RotateCcw, Film, LayoutGrid, ChevronDown, ChevronUp, Power, Globe } from 'lucide-react'
 import { useTobyConfig, useUpdateTobyConfig, useTobyReset, useTobyBrandConfigs, useUpdateTobyBrandConfig } from '../hooks'
 import type { TobyBrandConfig } from '../types'
+import { SUPPORTED_PLATFORMS, PLATFORM_META, SUPPORTED_CONTENT_TYPES, CONTENT_TYPE_META } from '@/shared/constants/platforms'
+import type { Platform, ContentType, EnabledPlatformsConfig } from '@/shared/constants/platforms'
+
+/** Deep-equal compare two EnabledPlatformsConfig values. */
+function platformConfigsEqual(a: EnabledPlatformsConfig, b: EnabledPlatformsConfig): boolean {
+  if (a === null && b === null) return true
+  if (a === null || b === null) return false
+  for (const ct of SUPPORTED_CONTENT_TYPES) {
+    const aList = [...(a[ct] ?? [])].sort().join(',')
+    const bList = [...(b[ct] ?? [])].sort().join(',')
+    if (aList !== bList) return false
+  }
+  return true
+}
 
 export function TobySettings() {
   const { data: config, isLoading: configLoading } = useTobyConfig()
@@ -13,7 +27,8 @@ export function TobySettings() {
   const [expandedBrand, setExpandedBrand] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, number | boolean>>({})
   const [brandForms, setBrandForms] = useState<Record<string, Record<string, number | boolean>>>({})
-
+  // Platform selection forms — tracks per-brand per-content-type platform edits
+  const [platformForms, setPlatformForms] = useState<Record<string, EnabledPlatformsConfig>>({})
   const isLoading = configLoading || brandsLoading
 
   if (isLoading || !config) {
@@ -41,11 +56,14 @@ export function TobySettings() {
     ([key, val]) => val !== (config as unknown as Record<string, number | boolean>)[key],
   )
   const hasBrandChanges = brandConfigs.some((bc) => {
+    // Check scalar fields
     const bf = brandForms[bc.brand_id]
-    if (!bf) return false
-    return Object.entries(bf).some(
+    const hasScalarChanges = bf ? Object.entries(bf).some(
       ([key, val]) => val !== (bc as unknown as Record<string, number | boolean>)[key],
-    )
+    ) : false
+    // Check platform selection
+    const hasPlatformChanges = bc.brand_id in platformForms
+    return hasScalarChanges || hasPlatformChanges
   })
   const hasChanges = hasGlobalChanges || hasBrandChanges
 
@@ -66,34 +84,45 @@ export function TobySettings() {
 
   const handleSaveBrand = (brandId: string) => {
     const brandForm = brandForms[brandId]
-    if (!brandForm) return
     const bc = brandConfigs.find(b => b.brand_id === brandId)
-    const data: Record<string, number | boolean> = {}
-    for (const [key, val] of Object.entries(brandForm)) {
-      if (!bc || val !== (bc as unknown as Record<string, number | boolean>)[key]) {
-        data[key] = val
+    const data: Record<string, unknown> = {}
+    // Scalar fields
+    if (brandForm) {
+      for (const [key, val] of Object.entries(brandForm)) {
+        if (!bc || val !== (bc as unknown as Record<string, number | boolean>)[key]) {
+          data[key] = val
+        }
       }
+    }
+    // Platform selection
+    if (brandId in platformForms) {
+      data.enabled_platforms = platformForms[brandId]
     }
     if (Object.keys(data).length === 0) return
     updateBrandMut.mutate(
       { brandId, data: data as any },
       {
-        onSuccess: () =>
+        onSuccess: () => {
           setBrandForms(prev => {
             const next = { ...prev }
             delete next[brandId]
             return next
-          }),
+          })
+          setPlatformForms(prev => {
+            const next = { ...prev }
+            delete next[brandId]
+            return next
+          })
+        },
       },
     )
   }
 
   const handleSaveAll = () => {
     if (hasGlobalChanges) handleSaveGlobal()
-    for (const brandId of Object.keys(brandForms)) {
-      if (Object.keys(brandForms[brandId]).length > 0) {
-        handleSaveBrand(brandId)
-      }
+    const brandIdsWithChanges = new Set([...Object.keys(brandForms), ...Object.keys(platformForms)])
+    for (const brandId of brandIdsWithChanges) {
+      handleSaveBrand(brandId)
     }
   }
 
@@ -236,6 +265,17 @@ export function TobySettings() {
               postsEnabled={postsEnabled}
               getVal={(key, fb) => getBrandVal(bc.brand_id, key, fb)}
               onChange={(key, val) => setBrandField(bc.brand_id, key, val)}
+              editedPlatforms={bc.brand_id in platformForms ? platformForms[bc.brand_id] : undefined}
+              onPlatformChange={(platforms) => setPlatformForms(prev => {
+                // If setting back to original value, remove from dirty state
+                const original = bc.enabled_platforms
+                if (platformConfigsEqual(platforms, original)) {
+                  const next = { ...prev }
+                  delete next[bc.brand_id]
+                  return next
+                }
+                return { ...prev, [bc.brand_id]: platforms }
+              })}
             />
           ))}
           {brandConfigs.length === 0 && (
@@ -299,6 +339,8 @@ function BrandConfigRow({
   postsEnabled,
   getVal,
   onChange,
+  editedPlatforms,
+  onPlatformChange,
 }: {
   brand: TobyBrandConfig
   expanded: boolean
@@ -307,10 +349,64 @@ function BrandConfigRow({
   postsEnabled: boolean
   getVal: (key: string, fallback: number | boolean) => number | boolean
   onChange: (key: string, val: number | boolean) => void
+  editedPlatforms: EnabledPlatformsConfig | undefined  // undefined = no edit
+  onPlatformChange: (platforms: EnabledPlatformsConfig) => void
 }) {
   const enabled = getVal('enabled', brand.enabled) as boolean
   const reelSlots = getVal('reel_slots_per_day', brand.reel_slots_per_day) as number
   const postSlots = getVal('post_slots_per_day', brand.post_slots_per_day) as number
+
+  // Derive which platforms are connected on this brand
+  const connectedPlatforms = SUPPORTED_PLATFORMS.filter(
+    (p) => brand[`has_${p}` as keyof TobyBrandConfig] === true,
+  )
+
+  // Current effective config: edited → saved → null (all connected)
+  const currentConfig: EnabledPlatformsConfig =
+    editedPlatforms !== undefined ? editedPlatforms : brand.enabled_platforms
+
+  // Get the platform list for a specific content type
+  const getPlatformsForType = (ct: ContentType): Platform[] => {
+    if (currentConfig === null) return [...connectedPlatforms]
+    return (currentConfig[ct] ?? connectedPlatforms) as Platform[]
+  }
+
+  const togglePlatformForType = (ct: ContentType, p: Platform) => {
+    if (!connectedPlatforms.includes(p)) return
+
+    const currentList = getPlatformsForType(ct)
+    let nextList: Platform[]
+    if (currentList.includes(p)) {
+      nextList = currentList.filter((x) => x !== p)
+    } else {
+      nextList = [...currentList, p]
+    }
+
+    // Build the full config dict
+    const nextConfig: Record<ContentType, Platform[]> = {} as Record<ContentType, Platform[]>
+    for (const otherCt of SUPPORTED_CONTENT_TYPES) {
+      nextConfig[otherCt] = otherCt === ct ? nextList : getPlatformsForType(otherCt)
+    }
+
+    // If every content type has all connected platforms selected, store null
+    const allMaxed = connectedPlatforms.length > 0 && SUPPORTED_CONTENT_TYPES.every((c) =>
+      connectedPlatforms.every((cp) => nextConfig[c].includes(cp)),
+    )
+
+    onPlatformChange(allMaxed ? null : nextConfig)
+  }
+
+  // Count total unique platforms across all content types
+  const totalEnabled = new Set(
+    SUPPORTED_CONTENT_TYPES.flatMap((ct) => getPlatformsForType(ct)),
+  ).size
+
+  // Which content types are actually active (globally enabled + slots > 0)
+  const activeContentTypes = SUPPORTED_CONTENT_TYPES.filter((ct) => {
+    if (ct === 'reels') return reelsEnabled && reelSlots > 0
+    if (ct === 'posts') return postsEnabled && postSlots > 0
+    return false
+  })
 
   return (
     <div className={!enabled ? 'opacity-60' : ''}>
@@ -328,6 +424,9 @@ function BrandConfigRow({
                 : [
                     reelsEnabled && reelSlots > 0 ? `${reelSlots} reel${reelSlots !== 1 ? 's' : ''}/day` : null,
                     postsEnabled && postSlots > 0 ? `${postSlots} carousel${postSlots !== 1 ? 's' : ''}/day` : null,
+                    connectedPlatforms.length > 0
+                      ? `${totalEnabled}/${connectedPlatforms.length} platforms`
+                      : 'No platforms connected',
                   ].filter(Boolean).join(' · ') || 'No content types enabled'
               }
             </p>
@@ -382,6 +481,82 @@ function BrandConfigRow({
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Both Reels and Carousels are disabled globally. Enable at least one content type above.
             </p>
+          )}
+
+          {/* Per-content-type platform selection */}
+          {enabled && activeContentTypes.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2.5">
+                <Globe className="w-4 h-4 text-gray-400" />
+                <p className="text-sm font-medium text-gray-700">Platform Publishing</p>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                Choose which platforms Toby publishes to for each content type
+              </p>
+
+              <div className="space-y-4">
+                {activeContentTypes.map((ct) => {
+                  const meta = CONTENT_TYPE_META[ct]
+                  const ctPlatforms = getPlatformsForType(ct)
+                  return (
+                    <div key={ct}>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        {meta.icon} {meta.label}
+                      </p>
+                      <div className="space-y-1">
+                        {SUPPORTED_PLATFORMS.map((p) => {
+                          const connected = connectedPlatforms.includes(p)
+                          const active = connected && ctPlatforms.includes(p)
+                          const pMeta = PLATFORM_META[p]
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => togglePlatformForType(ct, p)}
+                              disabled={!connected}
+                              className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-left transition-colors ${
+                                !connected
+                                  ? 'opacity-40 cursor-not-allowed bg-gray-50'
+                                  : active
+                                  ? 'bg-blue-50 border border-blue-200'
+                                  : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              <span className="text-sm">{pMeta.emoji}</span>
+                              <span className={`text-sm font-medium flex-1 ${active ? 'text-blue-700' : 'text-gray-600'}`}>
+                                {pMeta.label}
+                              </span>
+                              {connected ? (
+                                <div
+                                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                                    active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                                  }`}
+                                >
+                                  {active && (
+                                    <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">Not connected</span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {connectedPlatforms.length > 0 &&
+                activeContentTypes.some((ct) => getPlatformsForType(ct).length === 0) && (
+                  <p className="text-xs text-red-500 mt-2">
+                    At least one platform per content type is recommended. Toby will skip content types with no platforms.
+                  </p>
+                )}
+            </div>
           )}
         </div>
       )}

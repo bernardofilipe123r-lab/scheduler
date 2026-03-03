@@ -21,6 +21,7 @@ from sqlalchemy import cast, String, or_
 from app.db_connection import get_db
 from app.models import LogEntry
 from app.api.auth.middleware import get_current_user, get_supabase_client, is_super_admin_user
+from app.core.platforms import PLATFORM_CREDENTIAL_CHECKS
 
 router = APIRouter(tags=["admin"])
 
@@ -204,15 +205,8 @@ async def get_user_brands(
                 "baseline_for_content": getattr(b, "baseline_for_content", False),
                 # Colors
                 "colors": b.colors if b.colors else {},
-                # Credentials presence (never expose tokens)
-                "has_instagram": bool(
-                    getattr(b, "instagram_business_account_id", None)
-                    and (getattr(b, "instagram_access_token", None) or getattr(b, "meta_access_token", None))
-                ),
-                "has_facebook": bool(
-                    getattr(b, "facebook_page_id", None)
-                    and getattr(b, "facebook_access_token", None)
-                ),
+                # Credentials presence (never expose tokens) — uses platform registry
+                **{f"has_{p}": check(b) for p, check in PLATFORM_CREDENTIAL_CHECKS.items()},
                 "instagram_business_account_id": getattr(b, "instagram_business_account_id", None),
                 "facebook_page_id": getattr(b, "facebook_page_id", None),
                 # Logo

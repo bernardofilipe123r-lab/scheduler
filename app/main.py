@@ -20,6 +20,7 @@ from app.api.brands.routes import router as brands_router
 from app.api.brands.connection_test_routes import router as connection_test_router
 from app.api.system.settings_routes import router as settings_router
 from app.api.analytics.routes import router as analytics_router
+from app.api.analytics.v2_routes import router as analytics_v2_router
 from app.api.system.logs_routes import router as logs_router
 from app.api.system.admin_routes import router as admin_router
 from app.api.auth.routes import router as auth_router
@@ -111,6 +112,7 @@ app.include_router(brands_router, prefix="/api/v2")  # V2 mount
 app.include_router(connection_test_router, prefix="/api/v2")  # Connection test endpoints
 app.include_router(settings_router, prefix="/api")  # Settings management
 app.include_router(analytics_router, prefix="/api")
+app.include_router(analytics_v2_router, prefix="/api")  # Analytics V2 (overview, posts, answers, audience)
 app.include_router(logs_router)  # Logs dashboard at /logs and API at /api/logs
 app.include_router(admin_router)  # Admin user management at /api/admin/*
 app.include_router(auth_router)  # Authentication endpoints
@@ -579,6 +581,27 @@ async def startup_event():
                                         image_urls=all_urls,
                                         caption=caption,
                                     )
+                                if "threads" in platforms:
+                                    print("🧵 Publishing carousel to Threads...")
+                                    if len(all_urls) >= 2:
+                                        result["threads"] = publisher.publish_threads_carousel(
+                                            caption=caption,
+                                            image_urls=all_urls,
+                                        )
+                                    else:
+                                        result["threads"] = publisher.publish_threads_post(
+                                            caption=caption,
+                                            media_url=all_urls[0],
+                                            media_type="IMAGE",
+                                        )
+                                if "tiktok" in platforms:
+                                    # TikTok doesn't support image carousels via API — skip gracefully
+                                    result["tiktok"] = {
+                                        "success": False,
+                                        "not_connected": True,
+                                        "error": "TikTok does not support image carousel publishing via API",
+                                        "platform": "tiktok",
+                                    }
                             else:
                                 # ── SINGLE IMAGE PUBLISH ──
                                 if "instagram" in platforms:
@@ -593,6 +616,21 @@ async def startup_event():
                                         image_url=image_url,
                                         caption=caption,
                                     )
+                                if "threads" in platforms:
+                                    print("🧵 Publishing image post to Threads...")
+                                    result["threads"] = publisher.publish_threads_post(
+                                        caption=caption,
+                                        media_url=image_url,
+                                        media_type="IMAGE",
+                                    )
+                                if "tiktok" in platforms:
+                                    # TikTok doesn't support single image publishing via API — skip gracefully
+                                    result["tiktok"] = {
+                                        "success": False,
+                                        "not_connected": True,
+                                        "error": "TikTok does not support image publishing via API",
+                                        "platform": "tiktok",
+                                    }
                         else:
                             # ── REEL (VIDEO) PUBLISHING ──
                             # All paths are now Supabase URLs

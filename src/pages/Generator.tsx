@@ -17,8 +17,8 @@ import { useDynamicBrands, useNicheConfig, useBrandConnections } from '@/feature
 import { useUserMusic } from '@/features/brands/api/use-music'
 import { GeneratorSkeleton } from '@/shared/components'
 import type { BrandName, Variant } from '@/shared/types'
-
-type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok'
+import type { Platform } from '@/shared/constants/platforms'
+import { SUPPORTED_PLATFORMS } from '@/shared/constants/platforms'
 
 const PLATFORMS = [
   { id: 'instagram' as Platform, label: 'Instagram', icon: igIcon },
@@ -67,7 +67,7 @@ export function GeneratorPage() {
   }, [brandIds, brandsInitialized])
   const [aiPrompt, setAiPrompt] = useState('')
   const [ctaType, setCtaType] = useState('auto')
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube', 'tiktok'])
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([...SUPPORTED_PLATFORMS])
   
   // Loading states
   const [isAutoGenerating, setIsAutoGenerating] = useState(false)
@@ -78,7 +78,7 @@ export function GeneratorPage() {
   const [autoCount, setAutoCount] = useState(0)
   const [autoBrands, setAutoBrands] = useState<BrandName[]>([])
   const [autoVariant, setAutoVariant] = useState<Variant>('dark')
-  const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>(['instagram', 'facebook', 'youtube', 'tiktok'])
+  const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>([...SUPPORTED_PLATFORMS])
   const [autoCtaType, setAutoCtaType] = useState('auto')
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
   const [selectedMusic, setSelectedMusic] = useState<string>('auto')

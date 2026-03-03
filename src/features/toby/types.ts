@@ -1,3 +1,5 @@
+import type { EnabledPlatformsConfig } from '@/shared/constants/platforms'
+
 export type TobyPhase = 'bootstrap' | 'learning' | 'optimizing'
 
 export interface TobyConfig {
@@ -16,6 +18,13 @@ export interface TobyBrandConfig {
   enabled: boolean
   reel_slots_per_day: number
   post_slots_per_day: number
+  enabled_platforms: EnabledPlatformsConfig  // null = all connected for all types
+  // Dynamic flags — true when brand has valid credentials for the platform
+  has_instagram: boolean
+  has_facebook: boolean
+  has_youtube: boolean
+  has_threads: boolean
+  has_tiktok: boolean
 }
 
 export interface TobyBufferBrand {
