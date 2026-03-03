@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Settings, Save, Loader2, RotateCcw, Film, LayoutGrid, ChevronDown, ChevronUp, Power, Globe } from 'lucide-react'
+import { Save, Loader2, AlertTriangle, Film, LayoutGrid, ChevronDown, ChevronUp, Globe } from 'lucide-react'
 import { useTobyConfig, useUpdateTobyConfig, useTobyReset, useTobyBrandConfigs, useUpdateTobyBrandConfig } from '../hooks'
 import type { TobyBrandConfig } from '../types'
 import { SUPPORTED_PLATFORMS, PLATFORM_META, SUPPORTED_CONTENT_TYPES, CONTENT_TYPE_META } from '@/shared/constants/platforms'
@@ -164,7 +164,7 @@ export function TobySettings() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Save bar */}
       {hasChanges && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -184,16 +184,14 @@ export function TobySettings() {
         </div>
       )}
 
-      {/* Global Configuration */}
+      {/* Single unified panel */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <Settings className="w-4 h-4 text-gray-400" />
-            General Configuration
-          </h3>
-        </div>
 
-        <div className="p-5 space-y-5">
+        {/* ── Section: General ── */}
+        <div className="px-5 pt-5 pb-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">General</p>
+        </div>
+        <div className="px-5 pb-5 space-y-5">
           <ConfigSlider
             label="Buffer Days"
             desc="How many days ahead to keep the content buffer filled"
@@ -214,19 +212,14 @@ export function TobySettings() {
             format={(v) => `${(v * 100).toFixed(0)}%`}
           />
         </div>
-      </div>
 
-      {/* Content Types */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <Film className="w-4 h-4 text-gray-400" />
-            Content Types
-          </h3>
-          <p className="text-xs text-gray-400 mt-1">Enable or disable content types globally across all brands</p>
+        <div className="border-t border-gray-100" />
+
+        {/* ── Section: Content Types ── */}
+        <div className="px-5 pt-5 pb-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Content Types</p>
         </div>
-
-        <div className="p-5 space-y-3">
+        <div className="px-5 pb-5 space-y-3">
           <ToggleRow
             label="Reels"
             desc="Short-form video content"
@@ -242,18 +235,13 @@ export function TobySettings() {
             onChange={() => toggleGlobal('posts_enabled')}
           />
         </div>
-      </div>
 
-      {/* Per-Brand Configuration */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <Power className="w-4 h-4 text-gray-400" />
-            Brand Configuration
-          </h3>
-          <p className="text-xs text-gray-400 mt-1">Configure which brands Toby posts for and how many pieces per day</p>
+        <div className="border-t border-gray-100" />
+
+        {/* ── Section: Brands ── */}
+        <div className="px-5 pt-5 pb-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Brands</p>
         </div>
-
         <div className="divide-y divide-gray-100">
           {brandConfigs.map((bc) => (
             <BrandConfigRow
@@ -267,7 +255,6 @@ export function TobySettings() {
               onChange={(key, val) => setBrandField(bc.brand_id, key, val)}
               editedPlatforms={bc.brand_id in platformForms ? platformForms[bc.brand_id] : undefined}
               onPlatformChange={(platforms) => setPlatformForms(prev => {
-                // If setting back to original value, remove from dirty state
                 const original = bc.enabled_platforms
                 if (platformConfigsEqual(platforms, original)) {
                   const next = { ...prev }
@@ -284,38 +271,30 @@ export function TobySettings() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Danger zone */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-red-600 flex items-center gap-2">
-            <RotateCcw className="w-4 h-4" />
-            Danger Zone
-          </h3>
-        </div>
-        <div className="px-5 py-4">
+        {/* ── Danger zone: quiet footer ── */}
+        <div className="border-t border-gray-100 px-5 py-4">
           {!showResetConfirm ? (
             <button
               onClick={() => setShowResetConfirm(true)}
-              className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 font-medium transition-colors"
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-500 transition-colors"
             >
-              <RotateCcw className="w-4 h-4" />
+              <AlertTriangle className="w-3.5 h-3.5" />
               Reset all learnings
             </button>
           ) : (
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-red-600">This will erase all strategy scores and experiments. Are you sure?</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-xs text-red-600">Erase all strategy scores and experiments?</p>
               <button
                 onClick={() => { resetMut.mutate(); setShowResetConfirm(false) }}
                 disabled={resetMut.isPending}
-                className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                className="px-3 py-1 text-xs font-medium bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
               >
-                {resetMut.isPending ? 'Resetting...' : 'Confirm Reset'}
+                {resetMut.isPending ? 'Resetting...' : 'Confirm'}
               </button>
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+                className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700"
               >
                 Cancel
               </button>
