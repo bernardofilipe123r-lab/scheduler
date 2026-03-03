@@ -569,28 +569,55 @@ async def get_supabase_usage(
         result["error"] = f"Could not extract project ref from SUPABASE_URL: {supabase_url}"
         return result
 
-    # Fetch usage data from Supabase Management API
+    # Fetch data from Supabase Management API
     headers = {"Authorization": f"Bearer {mgmt_key}"}
     base = "https://api.supabase.com"
 
     usage_data: dict = {}
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            # Fetch multiple usage metric categories in parallel
+        async with httpx.AsyncClient(timeout=20) as client:
+            # ── Usage metrics ────────────────────────────────────────
             metric_categories = [
                 "egress", "db_size", "storage_size", "monthly_active_users",
                 "realtime_message_count", "realtime_peak_connections",
                 "func_invocations", "storage_image_render_count",
             ]
+            usage_tasks = [
+                client.get(f"{base}/v1/projects/{project_ref}/usage?metric={m}", headers=headers)
+                for m in metric_categories
+            ]
 
-            tasks = []
-            for metric in metric_categories:
-                url = f"{base}/v1/projects/{project_ref}/usage?metric={metric}"
-                tasks.append(client.get(url, headers=headers))
+            # ── Extra API endpoints (project info, health, configs, etc.) ──
+            extra_endpoints = {
+                "project_info":      f"{base}/v1/projects/{project_ref}",
+                "health":            f"{base}/v1/projects/{project_ref}/health?services=auth,realtime,storage,postgrest",
+                "disk_util":         f"{base}/v1/projects/{project_ref}/config/disk/util",
+                "disk_config":       f"{base}/v1/projects/{project_ref}/config/disk",
+                "postgres_config":   f"{base}/v1/projects/{project_ref}/config/database/postgres",
+                "pooler_config":     f"{base}/v1/projects/{project_ref}/config/database/pooler",
+                "postgrest_config":  f"{base}/v1/projects/{project_ref}/postgrest",
+                "storage_config":    f"{base}/v1/projects/{project_ref}/config/storage",
+                "storage_buckets":   f"{base}/v1/projects/{project_ref}/storage/buckets",
+                "backups":           f"{base}/v1/projects/{project_ref}/database/backups",
+                "edge_functions":    f"{base}/v1/projects/{project_ref}/functions",
+                "realtime_config":   f"{base}/v1/projects/{project_ref}/config/realtime",
+                "readonly_mode":     f"{base}/v1/projects/{project_ref}/readonly",
+                "ssl_enforcement":   f"{base}/v1/projects/{project_ref}/ssl-enforcement",
+                "billing_addons":    f"{base}/v1/projects/{project_ref}/billing/addons",
+                "api_usage_counts":  f"{base}/v1/projects/{project_ref}/analytics/endpoints/usage.api-counts",
+                "perf_advisors":     f"{base}/v1/projects/{project_ref}/advisors/performance",
+                "security_advisors": f"{base}/v1/projects/{project_ref}/advisors/security",
+            }
+            extra_keys = list(extra_endpoints.keys())
+            extra_tasks = [client.get(url, headers=headers) for url in extra_endpoints.values()]
 
-            responses = await asyncio.gather(*tasks, return_exceptions=True)
+            # Run all requests in parallel
+            all_responses = await asyncio.gather(
+                *usage_tasks, *extra_tasks, return_exceptions=True
+            )
 
-            for metric, resp in zip(metric_categories, responses):
+            # Parse usage metrics
+            for metric, resp in zip(metric_categories, all_responses[:len(metric_categories)]):
                 if isinstance(resp, Exception):
                     usage_data[metric] = {"error": str(resp)}
                 elif resp.status_code == 200:
@@ -598,7 +625,18 @@ async def get_supabase_usage(
                 else:
                     usage_data[metric] = {"error": f"HTTP {resp.status_code}"}
 
+            # Parse extra endpoints
+            extra_data: dict = {}
+            for key, resp in zip(extra_keys, all_responses[len(metric_categories):]):
+                if isinstance(resp, Exception):
+                    extra_data[key] = {"error": str(resp)}
+                elif resp.status_code == 200:
+                    extra_data[key] = resp.json()
+                else:
+                    extra_data[key] = {"error": f"HTTP {resp.status_code}"}
+
         result["usage"] = usage_data
+        result["infrastructure"] = extra_data
     except Exception as exc:
         result["error"] = str(exc)
 
