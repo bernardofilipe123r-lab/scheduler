@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "event": "PostToolUse",
+        "type": "command",
+        "command": "bash .github/hooks/scripts/post-edit-validate.sh \"${toolInput.filePath}\"",
+        "osx": "bash .github/hooks/scripts/post-edit-validate.sh \"${toolInput.filePath}\"",
+        "timeout": 30,
+        "matchers": {
+          "toolName": ["replace_string_in_file", "create_file", "multi_replace_string_in_file"]
+        }
+      }
+    ]
+  }
+}

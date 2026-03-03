@@ -44,43 +44,15 @@ ViralToby is a **multi-tenant SaaS platform**. Every user can have any number of
 
 ## Database Migrations
 
-The Supabase database is accessible directly via `psql` using the `DATABASE_URL` from `.env`. **All migrations must be run directly** — there is no Alembic or auto-migration system.
+No Alembic — migrations run directly via `psql "$DATABASE_URL"`. **Write and run migration SQL BEFORE adding model columns.** Missing DB columns crash every query on that table with 500.
 
-```bash
-# Run a migration SQL file against Supabase
-source .env 2>/dev/null; psql "$DATABASE_URL" -f migrations/<migration_file>.sql
-
-# Verify columns exist after migration
-source .env 2>/dev/null; psql "$DATABASE_URL" -c "SELECT column_name FROM information_schema.columns WHERE table_name = '<table>' ORDER BY column_name;"
-```
-
-**CRITICAL:** When adding or modifying SQLAlchemy model columns (`app/models/`), you MUST:
-1. Write the migration SQL in `migrations/`
-2. Run it immediately against Supabase using `psql "$DATABASE_URL"` — do NOT defer
-3. Verify the columns exist before committing
-4. Run `python scripts/validate_api.py --imports` to validate
-
-If model columns exist in Python but not in the database, **every query on that table will 500 in production**. SQLAlchemy includes all mapped columns in SELECT statements — missing columns crash the entire endpoint.
+> Full procedure → `database-migrations` skill. Per-file rules → `python-models.instructions.md` and `migration-sql.instructions.md`.
 
 ## API Validation
 
-After any change that affects API routes, imports, models, services, or any major refactor:
+After any change to routes, imports, models, or services: run `python scripts/validate_api.py --imports`. For route/endpoint changes, run the full suite: `python scripts/validate_api.py`. Exit code must be 0 before committing.
 
-1. Run `python scripts/validate_api.py --imports` to verify all module imports and symbol checks pass
-2. If import checks pass, run `python scripts/validate_api.py` for the full validation (imports + endpoint smoke tests + NicheConfig alignment)
-3. Fix any failures before committing — the script must exit with code 0
-
-**When to run validation:**
-- Adding, renaming, or removing any route/endpoint
-- Changing imports in any `app/` module
-- Modifying models (`app/models/`) or services (`app/services/`)
-- Refactoring the router structure in `app/main.py`
-- Adding new dependencies used by route handlers
-
-**When to update `scripts/validate_api.py`:**
-- After adding new route files → add to `CRITICAL_MODULES`
-- After adding new endpoints → add to the appropriate endpoint test section
-- After changing auth requirements on endpoints → move between no-auth/auth sections
+> Full details → `api-validation` skill. Per-file rules → `api-routes.instructions.md`.
 
 ## React Rules of Hooks — CRITICAL
 
@@ -91,25 +63,7 @@ After any change that affects API routes, imports, models, services, or any majo
 2. Run `npx eslint src/ --rule 'react-hooks/rules-of-hooks: error'` to machine-check
 3. The `python scripts/validate_api.py --imports` script also runs this check automatically
 
-**Common mistake pattern (BAD):**
-```tsx
-function MyPage() {
-  const { data, isLoading } = useQuery(...)  // ✅ hook before return
-  if (isLoading) return <Spinner />           // early return
-  const computed = useMemo(...)               // ❌ CRASH — hook after early return
-  return <div>{computed}</div>
-}
-```
-
-**Correct pattern (GOOD):**
-```tsx
-function MyPage() {
-  const { data, isLoading } = useQuery(...)
-  const computed = useMemo(...)            
-  if (isLoading) return <Spinner />
-  return <div>{computed}</div>
-}
-```
+> Code examples and full patterns → `react-components.instructions.md`
 
 ## Railway CLI (Production Infrastructure)
 
