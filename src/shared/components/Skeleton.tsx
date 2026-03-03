@@ -2,6 +2,7 @@
    Skeleton / Shimmer loading components
    All page-level skeletons live here, matched to real layouts.
 ────────────────────────────────────────────────────────────── */
+import { motion } from 'framer-motion'
 
 // ── Base shimmer block ──────────────────────────────────────
 interface SkProps {
@@ -59,49 +60,130 @@ const LABELS: Record<string, string> = {
 export function PageLoader({ page = 'default' }: PageLoaderProps) {
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-5">
-        {/* Brand logo — breathing pulse */}
-        <div className="animate-pulse-slow">
-          <svg width="40" height="40" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <div className="flex flex-col items-center gap-8">
+        {/* Logo + spinning ring */}
+        <motion.div
+          className="relative flex items-center justify-center"
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+        >
+          {/* Spinning arc */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              top: -11, right: -11, bottom: -11, left: -11,
+              border: '1.5px solid transparent',
+              borderTopColor: '#00435c',
+              borderRightColor: 'rgba(0, 67, 92, 0.28)',
+            }}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1.65, repeat: Infinity, ease: 'linear' }}
+          />
+          {/* Logo */}
+          <svg width="44" height="44" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="8" y="8" width="112" height="112" rx="28" fill="#F5EDD8"/>
             <path d="M29 34L48 94H61L42 34H29Z" fill="#1A1A1A"/>
             <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="#1A1A1A"/>
             <circle cx="99" cy="29" r="7" fill="#1A1A1A" fillOpacity="0.25"/>
             <circle cx="107" cy="40" r="3" fill="#1A1A1A" fillOpacity="0.18"/>
           </svg>
-        </div>
-        {/* Slim sliding bar */}
-        <div className="w-28 h-[2px] rounded-full bg-gray-200 overflow-hidden">
-          <div className="h-full w-2/5 rounded-full bg-primary-500 app-loader-bar" />
-        </div>
-        <p className="text-xs text-gray-400 font-medium tracking-wider uppercase">
+        </motion.div>
+        {/* Label */}
+        <motion.p
+          className="text-xs text-gray-400 font-medium tracking-widest uppercase"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.3 }}
+        >
           {LABELS[page]}
-        </p>
+        </motion.p>
       </div>
     </div>
   )
 }
 
 // ── Full-screen app-level loader (for auth guards) ──────────
+// Background exactly matches the #preloader in index.html to prevent any flicker.
 export function AppLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-950 via-stone-900 to-stone-800">
-      <div className="flex flex-col items-center gap-6">
-        {/* Brand logo with breathing animation */}
-        <div className="animate-pulse-slow">
-          <svg width="56" height="56" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="8" y="8" width="112" height="112" rx="28" fill="#F5EDD8"/>
-            <path d="M29 34L48 94H61L42 34H29Z" fill="#1A1A1A"/>
-            <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="#1A1A1A"/>
-            <circle cx="99" cy="29" r="7" fill="#1A1A1A" fillOpacity="0.25"/>
-            <circle cx="107" cy="40" r="3" fill="#1A1A1A" fillOpacity="0.18"/>
-          </svg>
-        </div>
-        {/* Slim progress bar */}
-        <div className="w-36 h-[3px] rounded-full bg-white/[0.08] overflow-hidden">
-          <div className="h-full w-2/5 rounded-full bg-primary-500 app-loader-bar" />
-        </div>
-      </div>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center"
+      style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1c1917 50%, #292524 100%)' }}
+    >
+      {/* Logo + rings container */}
+      <motion.div
+        className="relative flex items-center justify-center"
+        initial={{ scale: 0.72, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
+      >
+        {/* Outer counter-spinning arc */}
+        <motion.div
+          className="absolute rounded-full"
+          style={{
+            top: -27, right: -27, bottom: -27, left: -27,
+            border: '1px solid transparent',
+            borderTopColor: 'rgba(0, 67, 92, 0.42)',
+            borderBottomColor: 'rgba(0, 67, 92, 0.14)',
+          }}
+          animate={{ rotate: -360 }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: 'linear' }}
+        />
+        {/* Inner spinning arc */}
+        <motion.div
+          className="absolute rounded-full"
+          style={{
+            top: -15, right: -15, bottom: -15, left: -15,
+            border: '1.5px solid transparent',
+            borderTopColor: '#00435c',
+            borderRightColor: 'rgba(0, 67, 92, 0.32)',
+          }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.65, repeat: Infinity, ease: 'linear' }}
+        />
+        {/* Radial glow behind logo */}
+        <motion.div
+          className="absolute rounded-[28px]"
+          style={{
+            top: -6, right: -6, bottom: -6, left: -6,
+            background: 'radial-gradient(circle at center, rgba(0,67,92,0.38) 0%, transparent 68%)',
+          }}
+          animate={{ opacity: [0.45, 0.9, 0.45] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        {/* Logo */}
+        <svg width="80" height="80" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="112" height="112" rx="28" fill="#F5EDD8"/>
+          <path d="M29 34L48 94H61L42 34H29Z" fill="#1A1A1A"/>
+          <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="#1A1A1A"/>
+          <circle cx="99" cy="29" r="7" fill="#1A1A1A" fillOpacity="0.25"/>
+          <circle cx="107" cy="40" r="3" fill="#1A1A1A" fillOpacity="0.18"/>
+        </svg>
+      </motion.div>
+
+      {/* Three staggered bouncing dots */}
+      <motion.div
+        className="flex gap-[7px] mt-[44px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3, duration: 0.3 }}
+      >
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="w-[5px] h-[5px] rounded-full"
+            style={{ background: '#00435c' }}
+            animate={{ scale: [0.45, 1, 0.45], opacity: [0.3, 1, 0.3] }}
+            transition={{
+              duration: 1.4,
+              repeat: Infinity,
+              delay: i * 0.22,
+              ease: 'easeInOut',
+            }}
+          />
+        ))}
+      </motion.div>
     </div>
   )
 }

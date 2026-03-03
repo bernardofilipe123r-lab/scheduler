@@ -25,15 +25,6 @@
 .svg-spinner { animation: spinner-rotate 1.4s linear infinite; }
 .svg-spinner-circle { animation: spinner-dash 1.4s ease-in-out infinite; }
 
-/* ── App-level loader sliding bar ── */
-@keyframes app-loader-slide {
-  0%   { transform: translateX(-100%); }
-  50%  { transform: translateX(200%); }
-  100% { transform: translateX(400%); }
-}
-.app-loader-bar {
-  animation: app-loader-slide 1.2s ease-in-out infinite;
-}
 
 /* Prevent layout shift from scrollbar appearing/disappearing */
 html {
