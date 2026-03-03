@@ -160,7 +160,7 @@ const NAV_ITEMS = [
 
 const SETTINGS_ITEMS = [
   { to: '/brands', icon: Layers, label: 'Brands' },
-  { to: '/billing', icon: CreditCard, label: 'Billing' },
+  { to: '/billing', icon: CreditCard, label: 'Billing', billingOnly: true },
   { to: '/admin', icon: ShieldCheck, label: 'Admin', superAdminOnly: true },
 ]
 
@@ -196,6 +196,7 @@ export function AppLayout() {
   const settingsItems = SETTINGS_ITEMS.filter(item => {
     if ((item as { superAdminOnly?: boolean }).superAdminOnly) return user?.isSuperAdmin
     if ((item as { adminOnly?: boolean }).adminOnly) return user?.isAdmin
+    if ((item as { billingOnly?: boolean }).billingOnly) return billingData && !billingData.is_exempt
     return true
   })
 
