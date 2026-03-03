@@ -1,7 +1,7 @@
 /**
  * TanStack Query hooks for Analytics V2 endpoints.
  */
-import { useQuery, useMutation, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   fetchOverview,
   fetchPosts,
@@ -54,8 +54,12 @@ export function useAudience(params?: { brand?: string }) {
 }
 
 export function useRefreshAudience() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (brand?: string) => refreshAudience(brand),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['analytics-v2-audience'] })
+    },
   })
 }
 
