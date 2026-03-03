@@ -197,9 +197,10 @@ class SocialPublisher:
     def _ensure_jpeg_urls(self, image_urls: list[str]) -> list[str]:
         """Convert any PNG image URLs to JPEG for Instagram compatibility.
 
-        Instagram's Content Publishing API requires JPEG format for carousel
-        items.  If a URL ends with ``.png``, the image is downloaded, converted
-        to RGB JPEG, re-uploaded to Supabase, and the new URL returned.
+        Instagram's Content Publishing API works best with JPEG format for
+        carousel items.  If a URL ends with ``.png``, first check if a JPEG
+        version already exists (from pre-rendering).  If not, download the
+        PNG, convert to RGB JPEG, re-upload to Supabase, and return the new URL.
         URLs that already point to JPEG files are left untouched.
         """
         result = []
@@ -209,8 +210,17 @@ class SocialPublisher:
                 continue
 
             try:
-                from PIL import Image as _PILImage
                 from app.services.storage.supabase_storage import upload_file
+
+                # Check if a pre-rendered JPEG version already exists
+                jpeg_url_candidate = url.rsplit(".", 1)[0] + ".jpg"
+                head_resp = requests.head(jpeg_url_candidate, timeout=10)
+                if head_resp.status_code == 200:
+                    print(f"   ✅ JPEG already exists: {jpeg_url_candidate.split('/')[-1]}")
+                    result.append(jpeg_url_candidate)
+                    continue
+
+                from PIL import Image as _PILImage
 
                 print(f"   🔄 Converting PNG→JPEG: {url.split('/')[-1]}")
                 resp = requests.get(url, timeout=60)
@@ -713,63 +723,64 @@ class SocialPublisher:
             for idx, url in enumerate(image_urls):
                 print(f"   📸 Creating carousel item {idx + 1}/{len(image_urls)}: {url}")
 
-                item_resp = requests.post(
-                    container_url,
-                    data={
-                        "image_url": url,
-                        "is_carousel_item": "true",
-                        "access_token": self.ig_access_token,
-                    },
-                    timeout=30,
-                )
-                item_data = item_resp.json()
+                # Add delay between item creation calls to avoid Instagram rate limiting
+                if idx > 0:
+                    time.sleep(2)
 
-                if "error" in item_data:
-                    error_msg = item_data["error"].get("message", "Unknown error")
+                item_data = None
+                last_error_msg = ""
+                max_retries = 3
+                for attempt in range(max_retries):
+                    item_resp = requests.post(
+                        container_url,
+                        data={
+                            "image_url": url,
+                            "is_carousel_item": "true",
+                            "access_token": self.ig_access_token,
+                        },
+                        timeout=30,
+                    )
+                    item_data = item_resp.json()
+
+                    if "error" not in item_data:
+                        break  # Success
+
+                    last_error_msg = item_data["error"].get("message", "Unknown error")
                     error_code = item_data["error"].get("code", "")
-                    print(f"   ❌ Carousel item {idx + 1} failed: {error_msg}")
 
-                    # On first item, try token refresh if it looks like a token error
-                    if idx == 0 and ("access token" in error_msg.lower() or error_code in (190, "190")):
+                    # On first item, first attempt: try token refresh for auth errors
+                    if idx == 0 and attempt == 0 and ("access token" in last_error_msg.lower() or error_code in (190, "190")):
                         refreshed = self._try_refresh_ig_token()
                         if refreshed:
-                            print(f"   🔄 Retrying carousel item 1 with refreshed token...")
-                            retry_resp = requests.post(
-                                container_url,
-                                data={
-                                    "image_url": url,
-                                    "is_carousel_item": "true",
-                                    "access_token": self.ig_access_token,
-                                },
-                                timeout=30,
-                            )
-                            item_data = retry_resp.json()
-                            if "error" not in item_data:
-                                print(f"   ✅ Retry succeeded after token refresh")
-                            else:
-                                retry_err = item_data["error"].get("message", "Unknown")
-                                return {
-                                    "success": False,
-                                    "error": f"Token refresh succeeded but retry failed: {retry_err}",
-                                    "platform": "instagram",
-                                    "step": "create_item",
-                                    "hint": "Instagram token expired. Please reconnect Instagram in Brands > Connections."
-                                }
+                            print(f"   🔄 Refreshed token, retrying...")
+                            continue
                         else:
                             return {
                                 "success": False,
-                                "error": f"Carousel item {idx + 1} failed: {error_msg}",
+                                "error": f"Carousel item {idx + 1} failed: {last_error_msg}",
                                 "platform": "instagram",
                                 "step": "create_item",
                                 "hint": "Instagram token expired. Please reconnect Instagram in Brands > Connections."
                             }
-                    else:
-                        return {
-                            "success": False,
-                            "error": f"Carousel item {idx + 1} failed: {error_msg}",
-                            "platform": "instagram",
-                            "step": "create_item",
-                        }
+
+                    # For transient errors ("unexpected error", server errors), retry with backoff
+                    if attempt < max_retries - 1 and ("unexpected" in last_error_msg.lower() or "retry" in last_error_msg.lower() or error_code in (2, "2")):
+                        wait_time = (attempt + 1) * 3
+                        print(f"   ⏳ Carousel item {idx + 1} attempt {attempt + 1} failed: {last_error_msg}. Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+
+                    # Non-transient error — stop retrying
+                    break
+
+                if "error" in item_data:
+                    print(f"   ❌ Carousel item {idx + 1} failed after {max_retries} attempts: {last_error_msg}")
+                    return {
+                        "success": False,
+                        "error": f"Carousel item {idx + 1} failed: {last_error_msg}",
+                        "platform": "instagram",
+                        "step": "create_item",
+                    }
 
                 item_id = item_data.get("id")
                 if not item_id:
