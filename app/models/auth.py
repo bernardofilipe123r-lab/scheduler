@@ -4,6 +4,8 @@ User profile model.
 from datetime import datetime
 from app.models.base import Base, Column, String, DateTime, Text, Boolean
 
+EXEMPT_TAGS = frozenset({"special", "admin", "super_admin"})
+
 
 class UserProfile(Base):
     """Model for user profiles with Instagram/Facebook credentials."""
@@ -27,6 +29,13 @@ class UserProfile(Base):
     # Meta app credentials
     meta_access_token = Column(Text, nullable=True)
     
+    # Billing
+    tag = Column(String(20), nullable=False, default='user')
+    stripe_customer_id = Column(String(255), unique=True, nullable=True)
+    billing_status = Column(String(20), nullable=False, default='none')
+    billing_grace_deadline = Column(DateTime(timezone=True), nullable=True)
+    billing_locked_at = Column(DateTime(timezone=True), nullable=True)
+
     # Settings
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

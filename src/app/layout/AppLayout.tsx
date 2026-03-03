@@ -3,11 +3,13 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
   Bot, Layers, User, LogOut,
-  ChevronLeft, ChevronRight, ShieldCheck,
+  ChevronLeft, ChevronRight, ShieldCheck, CreditCard,
   X, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useJobs } from '@/features/jobs'
+import { useBillingStatus } from '@/features/billing/useBillingStatus'
+import { LockedBanner } from '@/features/billing/LockedBanner'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
 /* ── Railway Status Banner ─────────────────────────────── */
@@ -158,6 +160,7 @@ const NAV_ITEMS = [
 
 const SETTINGS_ITEMS = [
   { to: '/brands', icon: Layers, label: 'Brands' },
+  { to: '/billing', icon: CreditCard, label: 'Billing' },
   { to: '/admin', icon: ShieldCheck, label: 'Admin', superAdminOnly: true },
 ]
 
@@ -168,6 +171,8 @@ export function AppLayout() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { data: jobs = [] } = useJobs()
+  const { data: billingData } = useBillingStatus()
+  const isLocked = billingData?.billing_status === 'locked'
   const activeJobCount = (Array.isArray(jobs) ? jobs : []).filter(
     (j: any) => j.status === 'generating' || j.status === 'pending'
   ).length
@@ -361,6 +366,7 @@ export function AppLayout() {
         <RailwayStatusBanner />
         <AIServiceBanner />
         <SocialHealthBanner />
+        {isLocked && <LockedBanner />}
         {/* Page content */}
         <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 min-w-0">
           <Outlet />

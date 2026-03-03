@@ -62,6 +62,12 @@ def toby_tick():
 
         for state in enabled_states:
             try:
+                # Billing guard: skip locked users
+                from app.models.auth import UserProfile
+                profile = db.query(UserProfile).filter_by(user_id=state.user_id).first()
+                if profile and profile.billing_status == "locked":
+                    continue
+
                 _process_user(db, state)
             except Exception as e:
                 db.rollback()

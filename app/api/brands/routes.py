@@ -684,7 +684,25 @@ async def delete_brand(
     
     The brand is deactivated rather than permanently deleted,
     preserving historical data.
+    Also cancels any active Stripe subscription for this brand.
     """
+    # Cancel Stripe subscription if one exists
+    from app.models.billing import BrandSubscription
+    brand_sub = db.query(BrandSubscription).filter_by(
+        user_id=user["id"], brand_id=brand_id
+    ).first()
+    if brand_sub and brand_sub.status in ("active", "past_due") and brand_sub.stripe_subscription_id:
+        try:
+            import stripe
+            stripe.Subscription.modify(
+                brand_sub.stripe_subscription_id,
+                cancel_at_period_end=True,
+            )
+            brand_sub.cancel_at_period_end = True
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to cancel Stripe sub on brand delete: {e}")
+
     manager = get_brand_manager(db)
     
     success = manager.delete_brand(brand_id, user_id=user["id"])

@@ -37,6 +37,7 @@ from app.models.toby_cognitive import (
     TobyMetaReport,
     TobyReasoningTrace,
 )
+from app.models.billing import BrandSubscription
 
 __all__ = [
     "Base",
