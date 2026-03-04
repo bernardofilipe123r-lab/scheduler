@@ -96,7 +96,7 @@ export function GeneratorPage() {
   const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>([...SUPPORTED_PLATFORMS])
   const [autoCtaType, setAutoCtaType] = useState('auto')
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
-  const [musicSource, setMusicSource] = useState<string>('trending_random')
+  const [musicSource, setMusicSource] = useState<string>('trending_pick')
   const [selectedTrendingTrack, setSelectedTrendingTrack] = useState<string>('')
   
   // When connections or brand config data loads, remove platforms with no connected brands
@@ -207,8 +207,7 @@ export function GeneratorPage() {
         cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
         platforms: autoPlatforms,
         image_model: imageModel,
-        music_source: musicSource,
-        music_track_id: musicSource === 'trending_pick' ? selectedTrendingTrack || undefined : undefined,
+        music_source: 'trending_random',
       })
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -522,27 +521,29 @@ export function GeneratorPage() {
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
               >
                 <option value="none">🔇 No Music</option>
-                <option value="trending_random">🎲 Random Trending</option>
-                {trendingTracks.length > 0 && <option value="trending_pick">🎵 Pick from Trending</option>}
+                <option value="trending_pick">🎵 Pick from Trending</option>
               </select>
-              {musicSource === 'trending_pick' && trendingTracks.length > 0 && (
-                <select
-                  value={selectedTrendingTrack}
-                  onChange={(e) => setSelectedTrendingTrack(e.target.value)}
-                  className="w-full mt-2 px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
-                >
-                  <option value="">Select a track...</option>
-                  {trendingTracks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title}{t.author ? ` — ${t.author}` : ''}{t.duration_seconds ? ` (${Math.round(t.duration_seconds)}s)` : ''}
-                    </option>
-                  ))}
-                </select>
+              {musicSource === 'trending_pick' && (
+                trendingTracks.length > 0 ? (
+                  <select
+                    value={selectedTrendingTrack}
+                    onChange={(e) => setSelectedTrendingTrack(e.target.value)}
+                    className="w-full mt-2 px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
+                  >
+                    <option value="">Select a track...</option>
+                    {trendingTracks.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}{t.author ? ` — ${t.author}` : ''}{t.duration_seconds ? ` (${Math.round(t.duration_seconds)}s)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-2 italic">No trending tracks available yet — fetching soon...</p>
+                )
               )}
               <p className="text-[10px] text-gray-400 mt-1">
                 {musicSource === 'none' ? 'Video will have no background music' :
-                 musicSource === 'trending_random' ? 'A random trending TikTok track will be used' :
-                 'Pick a specific trending track for your reel'}
+                 'Pick a trending track for your reel'}
               </p>
             </div>
 
