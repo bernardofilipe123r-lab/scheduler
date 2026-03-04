@@ -248,12 +248,16 @@ class JobProcessor:
             })
             video_gen = VideoGenerator()
 
-            # Pick a user-uploaded music track (specific or weighted-random)
+            # Pick a music track based on music_source
             from app.services.media.music_picker import resolve_music_url
             from app.db_connection import SessionLocal
             _music_db = SessionLocal()
             try:
-                _music_url = resolve_music_url(_music_db, user_id, getattr(job, 'music_track_id', None))
+                _music_url = resolve_music_url(
+                    _music_db, user_id,
+                    getattr(job, 'music_track_id', None),
+                    getattr(job, 'music_source', None),
+                )
             finally:
                 _music_db.close()
 

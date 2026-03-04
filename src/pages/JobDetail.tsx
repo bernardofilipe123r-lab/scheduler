@@ -36,7 +36,7 @@ import {
   useChangeJobMusic,
 } from '@/features/jobs'
 import { useAutoScheduleReel } from '@/features/scheduling'
-import { useUserMusic } from '@/features/brands/api/use-music'
+import { useTrendingMusic } from '@/features/brands/api/use-trending-music'
 import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
 import { StatusBadge, JobDetailSkeleton, Modal } from '@/shared/components'
 import { createFacebookCaption } from '@/shared/lib/captionUtils'
@@ -59,8 +59,8 @@ export function JobDetailPage() {
   const autoSchedule = useAutoScheduleReel()
   const retryJob = useRetryJob()
   const changeMusic = useChangeJobMusic()
-  const { data: musicData } = useUserMusic()
-  const musicTracks = musicData?.tracks ?? []
+  const { data: trendingMusicData } = useTrendingMusic()
+  const trendingTracks = trendingMusicData?.tracks ?? []
   
   // Modal states
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -646,7 +646,7 @@ export function JobDetailPage() {
       )}
       
       {/* Music Section */}
-      {musicTracks.length > 0 && !isGenerating && (
+      {!isGenerating && (
         <div className="card p-4 bg-gray-50 border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -654,21 +654,21 @@ export function JobDetailPage() {
               <div>
                 <span className="font-semibold text-gray-900 text-sm">Background Music</span>
                 <span className="text-gray-500 text-sm ml-2">
-                  {job.music_track_id
-                    ? musicTracks.find(t => t.id === job.music_track_id)?.filename ?? 'Unknown track'
-                    : 'Auto (weighted random)'}
+                  {job.music_source === 'trending_random' ? '🎲 Random Trending' :
+                   job.music_source === 'trending_pick' ? '🎵 Trending Track' :
+                   '🔇 No Music'}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <select
-                value={job.music_track_id ?? 'auto'}
+                value={job.music_source ?? 'none'}
                 onChange={(e) => {
-                  const val = e.target.value === 'auto' ? null : e.target.value
+                  const source = e.target.value
                   changeMusic.mutate(
-                    { id, musicTrackId: val },
+                    { id, musicTrackId: null, musicSource: source },
                     {
-                      onSuccess: () => toast.success('Music changed — regenerating videos…'),
+                      onSuccess: () => toast.success(source === 'none' ? 'Music removed — regenerating videos…' : 'Music changed — regenerating videos…'),
                       onError: () => toast.error('Failed to change music'),
                     },
                   )
@@ -676,28 +676,29 @@ export function JobDetailPage() {
                 disabled={changeMusic.isPending || allScheduled}
                 className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white"
               >
-                <option value="auto">🎲 Auto (random)</option>
-                {musicTracks.map((t) => (
-                  <option key={t.id} value={t.id}>{t.filename}</option>
-                ))}
+                <option value="none">🔇 No Music</option>
+                <option value="trending_random">🎲 Random Trending</option>
+                {trendingTracks.length > 0 && <option value="trending_pick">🎵 Pick from Trending</option>}
               </select>
-              <button
-                onClick={() =>
-                  changeMusic.mutate(
-                    { id, musicTrackId: null },
-                    {
-                      onSuccess: () => toast.success('New random music — regenerating videos…'),
-                      onError: () => toast.error('Failed to re-roll music'),
-                    },
-                  )
-                }
-                disabled={changeMusic.isPending || allScheduled}
-                className="btn btn-secondary btn-sm"
-                title="Re-roll random music"
-              >
-                {changeMusic.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shuffle className="w-3.5 h-3.5" />}
-                Re-roll
-              </button>
+              {(job.music_source === 'trending_random') && (
+                <button
+                  onClick={() =>
+                    changeMusic.mutate(
+                      { id, musicTrackId: null, musicSource: 'trending_random' },
+                      {
+                        onSuccess: () => toast.success('New random trending music — regenerating videos…'),
+                        onError: () => toast.error('Failed to re-roll music'),
+                      },
+                    )
+                  }
+                  disabled={changeMusic.isPending || allScheduled}
+                  className="btn btn-secondary btn-sm"
+                  title="Re-roll random trending music"
+                >
+                  {changeMusic.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shuffle className="w-3.5 h-3.5" />}
+                  Re-roll
+                </button>
+              )}
             </div>
           </div>
         </div>

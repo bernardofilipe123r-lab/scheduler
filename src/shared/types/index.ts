@@ -60,6 +60,7 @@ export interface Job {
   error_message?: string
   created_by?: 'user' | 'toby'
   music_track_id?: string | null
+  music_source?: string | null
 }
 
 // Scheduled post entity

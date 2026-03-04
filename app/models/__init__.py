@@ -38,6 +38,7 @@ from app.models.toby_cognitive import (
     TobyReasoningTrace,
 )
 from app.models.billing import BrandSubscription
+from app.models.trending_music import TrendingMusic, TrendingMusicFetch
 
 __all__ = [
     "Base",
@@ -71,4 +72,6 @@ __all__ = [
     "TobyRawSignal",
     "TobyMetaReport",
     "TobyReasoningTrace",
+    "TrendingMusic",
+    "TrendingMusicFetch",
 ]

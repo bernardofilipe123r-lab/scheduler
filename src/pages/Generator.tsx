@@ -14,7 +14,7 @@ import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateJob } from '@/features/jobs'
 import { useDynamicBrands, useNicheConfig, useBrandConnections } from '@/features/brands'
-import { useUserMusic } from '@/features/brands/api/use-music'
+import { useTrendingMusic } from '@/features/brands/api/use-trending-music'
 import { useTobyBrandConfigs } from '@/features/toby'
 import { GeneratorSkeleton } from '@/shared/components'
 import type { BrandName, Variant } from '@/shared/types'
@@ -35,9 +35,9 @@ export function GeneratorPage() {
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: nicheConfig, isLoading: configLoading } = useNicheConfig()
   const { data: connectionsData } = useBrandConnections()
-  const { data: musicData } = useUserMusic()
   const { data: brandConfigsData } = useTobyBrandConfigs()
-  const musicTracks = musicData?.tracks ?? []
+  const { data: trendingMusicData } = useTrendingMusic()
+  const trendingTracks = trendingMusicData?.tracks ?? []
 
   // Derive which platforms have at least one connected brand
   const hasFacebook = connectionsData?.brands.some(b => b.facebook.connected) ?? true
@@ -96,7 +96,8 @@ export function GeneratorPage() {
   const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>([...SUPPORTED_PLATFORMS])
   const [autoCtaType, setAutoCtaType] = useState('auto')
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
-  const [selectedMusic, setSelectedMusic] = useState<string>('auto')
+  const [musicSource, setMusicSource] = useState<string>('none')
+  const [selectedTrendingTrack, setSelectedTrendingTrack] = useState<string>('')
   
   // When connections or brand config data loads, remove platforms with no connected brands
   // or not enabled for any selected brand from defaults
@@ -206,7 +207,8 @@ export function GeneratorPage() {
         cta_type: autoCtaType === 'auto' ? undefined : autoCtaType,
         platforms: autoPlatforms,
         image_model: imageModel,
-        music_track_id: selectedMusic === 'auto' ? undefined : selectedMusic,
+        music_source: musicSource,
+        music_track_id: musicSource === 'trending_pick' ? selectedTrendingTrack || undefined : undefined,
       })
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -290,7 +292,8 @@ export function GeneratorPage() {
         platforms: selectedPlatforms,
         image_model: imageModel,
         fixed_title: true,
-        music_track_id: selectedMusic === 'auto' ? undefined : selectedMusic,
+        music_source: musicSource,
+        music_track_id: musicSource === 'trending_pick' ? selectedTrendingTrack || undefined : undefined,
       })
       
       setTitle('')
@@ -511,22 +514,37 @@ export function GeneratorPage() {
             </div>
 
             {/* Card: Music */}
-            {musicTracks.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🎵 Background Music</label>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🎵 Background Music</label>
+              <select
+                value={musicSource}
+                onChange={(e) => { setMusicSource(e.target.value); setSelectedTrendingTrack('') }}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
+              >
+                <option value="none">🔇 No Music</option>
+                <option value="trending_random">🎲 Random Trending</option>
+                {trendingTracks.length > 0 && <option value="trending_pick">🎵 Pick from Trending</option>}
+              </select>
+              {musicSource === 'trending_pick' && trendingTracks.length > 0 && (
                 <select
-                  value={selectedMusic}
-                  onChange={(e) => setSelectedMusic(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
+                  value={selectedTrendingTrack}
+                  onChange={(e) => setSelectedTrendingTrack(e.target.value)}
+                  className="w-full mt-2 px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-stone-400 focus:border-transparent bg-white text-gray-900 text-sm"
                 >
-                  <option value="auto">🎲 Auto (weighted random)</option>
-                  {musicTracks.map((t) => (
-                    <option key={t.id} value={t.id}>{t.filename}</option>
+                  <option value="">Select a track...</option>
+                  {trendingTracks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}{t.author ? ` — ${t.author}` : ''}{t.duration_seconds ? ` (${Math.round(t.duration_seconds)}s)` : ''}
+                    </option>
                   ))}
                 </select>
-                <p className="text-[10px] text-gray-400 mt-1">A random segment of the track will be used</p>
-              </div>
-            )}
+              )}
+              <p className="text-[10px] text-gray-400 mt-1">
+                {musicSource === 'none' ? 'Video will have no background music' :
+                 musicSource === 'trending_random' ? 'A random trending TikTok track will be used' :
+                 'Pick a specific trending track for your reel'}
+              </p>
+            </div>
 
             {/* Card: Brands — 2-column grid */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -711,21 +729,32 @@ export function GeneratorPage() {
                 </div>
 
                 {/* Music */}
-                {musicTracks.length > 0 && (
-                  <div>
-                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">🎵 Background Music</label>
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">🎵 Background Music</label>
+                  <select
+                    value={musicSource}
+                    onChange={(e) => { setMusicSource(e.target.value); setSelectedTrendingTrack('') }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                  >
+                    <option value="none">🔇 No Music</option>
+                    <option value="trending_random">🎲 Random Trending</option>
+                    {trendingTracks.length > 0 && <option value="trending_pick">🎵 Pick from Trending</option>}
+                  </select>
+                  {musicSource === 'trending_pick' && trendingTracks.length > 0 && (
                     <select
-                      value={selectedMusic}
-                      onChange={(e) => setSelectedMusic(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                      value={selectedTrendingTrack}
+                      onChange={(e) => setSelectedTrendingTrack(e.target.value)}
+                      className="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                     >
-                      <option value="auto">🎲 Auto (weighted random)</option>
-                      {musicTracks.map((t) => (
-                        <option key={t.id} value={t.id}>{t.filename}</option>
+                      <option value="">Select a track...</option>
+                      {trendingTracks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.title}{t.author ? ` — ${t.author}` : ''}{t.duration_seconds ? ` (${Math.round(t.duration_seconds)}s)` : ''}
+                        </option>
                       ))}
                     </select>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {/* Right column — brands + platforms */}

@@ -23,6 +23,7 @@ interface BackendJob {
   error_message?: string
   created_by?: string
   music_track_id?: string | null
+  music_source?: string | null
 }
 
 interface JobsListResponse {
@@ -57,6 +58,7 @@ export interface JobCreateRequest {
   fixed_title?: boolean
   image_model?: string  // 'Flux1schnell' or 'ZImageTurbo_INT8'
   music_track_id?: string | null  // specific track or null for auto
+  music_source?: string | null  // 'none', 'trending_random', 'trending_pick'
 }
 
 // API functions
@@ -133,12 +135,12 @@ export const jobsApi = {
     return post<{ status: string; job_id: string; incomplete_brands: string[] }>(`/jobs/${id}/retry`)
   },
 
-  changeMusic: async (id: string, musicTrackId: string | null): Promise<{
-    status: string; job_id: string; music_track_id: string | null; brands_regenerating?: string[]
+  changeMusic: async (id: string, musicTrackId: string | null, musicSource?: string): Promise<{
+    status: string; job_id: string; music_track_id: string | null; music_source: string; brands_regenerating?: string[]
   }> => {
-    return patch<{ status: string; job_id: string; music_track_id: string | null; brands_regenerating?: string[] }>(
+    return patch<{ status: string; job_id: string; music_track_id: string | null; music_source: string; brands_regenerating?: string[] }>(
       `/jobs/${id}/music`,
-      { music_track_id: musicTrackId },
+      { music_track_id: musicTrackId, music_source: musicSource ?? 'none' },
     )
   },
 }

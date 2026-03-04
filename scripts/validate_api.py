@@ -121,6 +121,7 @@ CRITICAL_MODULES = [
     ("app.models.logs", "Logs model"),
     ("app.models.youtube", "YouTube model"),
     ("app.models.user_music", "UserMusic model"),
+    ("app.models.trending_music", "TrendingMusic model"),
     # ── Services ──
     ("app.services.content.generator", "Content generator"),
     ("app.services.content.niche_config_service", "NicheConfig service"),
@@ -141,6 +142,7 @@ CRITICAL_MODULES = [
     ("app.api.content.feedback_routes", "Feedback routes"),
     ("app.api.content.prompts_routes", "Prompts routes"),
     ("app.api.content.music_routes", "Music routes"),
+    ("app.api.content.trending_music_routes", "Trending music routes"),
     ("app.api.content.manual_routes", "Manual content routes"),
     ("app.api.auth.middleware", "Auth middleware"),
     ("app.api.auth.routes", "Auth routes"),

@@ -478,6 +478,7 @@ def _execute_content_plan(db: Session, plan):
         platforms=_toby_platforms,
         fixed_title=True,
         created_by="toby",
+        music_source="trending_random",
     )
     job_id = job.job_id
 

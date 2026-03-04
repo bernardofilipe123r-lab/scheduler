@@ -33,6 +33,9 @@ class GenerationJob(Base):
     # Music track selection (NULL = auto weighted-random)
     music_track_id = Column(Text, nullable=True)
     
+    # Music source: 'none', 'trending_random', 'trending_pick'
+    music_source = Column(Text, default="none", nullable=True)
+    
     # Generated outputs per brand
     # Format: {"gymcollege": {"reel_id": "...", "thumbnail": "...", "video": "...", "status": "completed"}, ...}
     brand_outputs = Column(JSON, default=dict)
@@ -86,4 +89,5 @@ class GenerationJob(Base):
             "error_message": self.error_message,
             "created_by": getattr(self, 'created_by', None) or "user",
             "music_track_id": getattr(self, 'music_track_id', None),
+            "music_source": getattr(self, 'music_source', 'none') or 'none',
         }

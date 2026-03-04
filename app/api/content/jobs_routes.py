@@ -33,7 +33,8 @@ class JobCreateRequest(BaseModel):
     platforms: Optional[List[str]] = None  # ["instagram", "facebook", "youtube"] - defaults to all if None
     fixed_title: bool = False  # If True, use title as-is (no AI generation)
     image_model: Optional[str] = None  # AI image model override ("Flux1schnell" or "ZImageTurbo_INT8")
-    music_track_id: Optional[str] = None  # Specific music track ID; None = auto weighted-random
+    music_track_id: Optional[str] = None  # Specific music track ID (trending_music.id or user_music.id)
+    music_source: Optional[str] = None  # 'none', 'trending_random', 'trending_pick'
 
 
 class JobUpdateRequest(BaseModel):
@@ -142,6 +143,7 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
                 fixed_title=request.fixed_title,
                 image_model=request.image_model,
                 music_track_id=request.music_track_id,
+                music_source=request.music_source,
             )
             
             job_id = job.job_id
@@ -1033,12 +1035,13 @@ async def regenerate_brand_image(
 class ChangeMusicRequest(BaseModel):
     """Change the music track for a job and regenerate videos."""
     music_track_id: Optional[str] = None  # None = re-roll random
+    music_source: Optional[str] = None  # 'none', 'trending_random', 'trending_pick'
 
 
 @router.patch(
     "/{job_id}/music",
     summary="Change music track and regenerate videos",
-    description="Update the music track for a job. Pass music_track_id=null to pick a new random track. Regenerates all brand videos.",
+    description="Update the music source for a job. Supports 'none', 'trending_random', 'trending_pick'. Regenerates all brand videos.",
 )
 async def change_job_music(
     job_id: str,
@@ -1054,8 +1057,9 @@ async def change_job_music(
             if not job:
                 raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
 
-            # Update the music_track_id on the job
+            # Update music fields on the job
             job.music_track_id = request.music_track_id
+            job.music_source = request.music_source or "none"
             db.commit()
 
             # Mark all completed brands as queued for regeneration
@@ -1071,6 +1075,7 @@ async def change_job_music(
                 "status": "updated",
                 "job_id": job_id,
                 "music_track_id": request.music_track_id,
+                "music_source": request.music_source or "none",
                 "message": "Music updated but no brands need regeneration",
             }
 
@@ -1091,6 +1096,7 @@ async def change_job_music(
             "status": "queued",
             "job_id": job_id,
             "music_track_id": request.music_track_id,
+            "music_source": request.music_source or "none",
             "brands_regenerating": brands_to_regen,
             "message": "Music updated, regenerating videos",
         }

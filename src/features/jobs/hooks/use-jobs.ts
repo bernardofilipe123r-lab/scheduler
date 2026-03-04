@@ -405,8 +405,8 @@ export function useChangeJobMusic() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, musicTrackId }: { id: string; musicTrackId: string | null }) =>
-      jobsApi.changeMusic(id, musicTrackId),
+    mutationFn: ({ id, musicTrackId, musicSource }: { id: string; musicTrackId: string | null; musicSource?: string }) =>
+      jobsApi.changeMusic(id, musicTrackId, musicSource),
     onSettled: (_, __, { id }) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })

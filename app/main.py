@@ -34,6 +34,7 @@ from app.api.auth.fb_oauth_routes import router as fb_oauth_router
 from app.api.auth.threads_oauth_routes import router as threads_oauth_router
 from app.api.auth.tiktok_oauth_routes import router as tiktok_oauth_router
 from app.api.content.music_routes import router as music_router
+from app.api.content.trending_music_routes import router as trending_music_router
 from app.api.billing.routes import router as billing_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set_user_id as set_logging_user_id, clear_user_id as clear_logging_user_id
@@ -126,6 +127,7 @@ app.include_router(fb_oauth_router)  # Facebook Login OAuth flow
 app.include_router(threads_oauth_router)  # Threads OAuth flow
 app.include_router(tiktok_oauth_router)  # TikTok OAuth flow
 app.include_router(music_router)  # User music upload/management
+app.include_router(trending_music_router)  # TikTok trending music
 app.include_router(billing_router, prefix="/api/billing")  # Stripe billing
 
 
@@ -1171,6 +1173,28 @@ async def startup_event():
     from app.services.billing_enforcer import billing_enforcement_tick
     scheduler.add_job(billing_enforcement_tick, 'interval', hours=1, id='billing_enforcement')
 
+    # TikTok trending music — fetch every 8 hours (3x/day max)
+    def fetch_trending_music_job():
+        """Fetch trending music from TikTok via RapidAPI."""
+        try:
+            from app.db_connection import get_db_session
+            from app.services.media.trending_music_fetcher import fetch_trending_music, cleanup_old_batches
+
+            print(f"\n🎵 Fetching TikTok trending music at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            with get_db_session() as db:
+                result = fetch_trending_music(db)
+                if result["success"]:
+                    print(f"   ✅ Stored {result['tracks_stored']} trending tracks (batch {result['batch_id'][:8]}...)")
+                else:
+                    print(f"   ⚠️ Trending music fetch: {result.get('error', 'unknown error')}")
+                # Clean up batches older than 3 days
+                cleanup_old_batches(db, keep_days=3)
+        except Exception as e:
+            print(f"❌ Trending music fetch failed: {e}")
+
+    scheduler.add_job(fetch_trending_music_job, 'interval', hours=8, id='trending_music_fetch')
+    scheduler.add_job(fetch_trending_music_job, 'date', run_date=datetime.now() + timedelta(seconds=30), id='trending_music_startup')
+
     scheduler.start()
 
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
@@ -1179,6 +1203,7 @@ async def startup_event():
     print("✅ Published content cleanup scheduled (every 6 hours, 1-day retention)", flush=True)
     print("✅ Instagram token auto-refresh scheduled (every 6 hours)", flush=True)
     print("✅ YouTube token validation scheduled (every 24 hours)", flush=True)
+    print("✅ TikTok trending music scheduled (every 8 hours)", flush=True)
     
     # Store scheduler for shutdown
     app.state.scheduler = scheduler
