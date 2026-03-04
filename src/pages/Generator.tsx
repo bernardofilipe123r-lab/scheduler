@@ -96,7 +96,7 @@ export function GeneratorPage() {
   const [autoPlatforms, setAutoPlatforms] = useState<Platform[]>([...SUPPORTED_PLATFORMS])
   const [autoCtaType, setAutoCtaType] = useState('auto')
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
-  const [musicSource, setMusicSource] = useState<string>('none')
+  const [musicSource, setMusicSource] = useState<string>('trending_random')
   const [selectedTrendingTrack, setSelectedTrendingTrack] = useState<string>('')
   
   // When connections or brand config data loads, remove platforms with no connected brands
