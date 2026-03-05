@@ -1,6 +1,6 @@
 # TEXT-VIDEO Reels — Full Implementation Spec
 
-> **Purpose:** This document is an AI-coder prompt. It contains every decision, file path, model field, migration, and UI spec needed to implement the TEXT-VIDEO reel format end-to-end in ViralToby. An AI agent reading this document should be able to execute the implementation without asking clarifying questions, except at the explicitly marked `[ASK USER]` decision points.
+> **Purpose:** This document is an AI-coder prompt. It contains every decision, file path, model field, migration, and UI spec needed to implement the TEXT-VIDEO reel format end-to-end in ViralToby. An AI agent reading this document should be able to execute the implementation without asking clarifying questions. All 18 decision points have been resolved — search for `[RESOLVED]` to see each answer.
 
 > **API Keys & Secrets:** This feature requires new external API keys (NewsAPI, Tavily, SerpAPI, Pexels, Gemini). **Do NOT hardcode, guess, or generate placeholder keys.** When you need a key:
 > 1. Ask the user in chat — specify which service and what scope/permissions are needed.
@@ -474,25 +474,27 @@ def _search_web_images(self, query: str, count: int = 5) -> list[dict]:
     return [r for r in results if r.get("original_width", 0) >= 800]
 ```
 
-### AI Image Generation (Gemini API — Nano Banana 2)
+### AI Image Generation (Gemini API — Imagen 3)
 
 ```python
 def _generate_ai_image(self, prompt: str) -> Optional[Path]:
-    """Generate image using Google Gemini API (Nano Banana 2 / Imagen)."""
-    import google.generativeai as genai  # pip install google-generativeai
+    """Generate image using Google Gemini Developer API (Imagen 3)."""
+    from google import genai  # pip install google-genai (NOT google-generativeai, which is EOL)
 
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    model = genai.ImageGenerationModel("imagen-3.0-generate-002")  # Nano Banana 2
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-    response = model.generate_images(
+    response = client.models.generate_images(
+        model="imagen-3.0-generate-002",
         prompt=prompt,
-        number_of_images=1,
-        aspect_ratio="9:16",  # Portrait for reels
-        safety_filter_level="block_only_high",
+        config=genai.types.GenerateImagesConfig(
+            number_of_images=1,
+            aspect_ratio="9:16",  # Portrait for reels
+            safety_filter_level="BLOCK_ONLY_HIGH",
+        ),
     )
 
-    if response.images:
-        img_bytes = response.images[0]._pil_image
+    if response.generated_images:
+        img_bytes = response.generated_images[0].image
         # Save to temp file
         path = Path(tempfile.mktemp(suffix=".png"))
         img_bytes.save(path)
@@ -500,7 +502,7 @@ def _generate_ai_image(self, prompt: str) -> Optional[Path]:
     return None
 ```
 
-**`[ASK USER]` Decision Point 1:** The Gemini API for Imagen (Nano Banana) uses the `google-generativeai` Python package. Confirm the exact model name and API structure — Google may have updated the SDK since this spec was written. The AI coder should check the latest Gemini API docs at `ai.google.dev` before implementing.
+**`[RESOLVED]` Decision Point 1:** Use the `google-genai` SDK (`from google import genai`). The old `google-generativeai` package reached EOL November 2025. Model: `imagen-3.0-generate-002` at $0.03/image via the Gemini Developer API (NOT Vertex AI).
 
 ### Image Post-Processing
 
@@ -1609,7 +1611,7 @@ ORDER BY column_name;
 | `app/core/prompt_context.py` | Format-aware example loading: use `text_video_reel_examples` when content_type is `text_video_reel` (Section 24) |
 | `app/main.py` | Register new routers (`text_video_router`, `text_video_design_router`) |
 | `scripts/validate_api.py` | Add new modules to `CRITICAL_MODULES` + endpoint tests |
-| `requirements.txt` | Add `google-generativeai`, `tavily-python`, `newsapi-python` |
+| `requirements.txt` | Add `google-genai`, `tavily-python`, `newsapi-python`, `yt-dlp` |
 
 ---
 
@@ -1872,7 +1874,7 @@ This is extremely cost-effective. The most expensive component is SerpAPI for im
 34. Add `reelFormat` to `DynamicBrandInfo` type and `useDynamicBrands()` hook (Section 26)
 35. Update `Home.tsx` slot coverage calculation to be format-aware (Section 26)
 36. Add "Text-Video Reels" tab to Content DNA page (Section 24, conditional on brands using text_video)
-37. Add format switching control to brand settings (location per ASK USER 13)
+37. Add format switching control to BOTH Content DNA / brand settings page AND Toby settings per-brand (both must stay in sync)
 
 ---
 
@@ -1917,57 +1919,53 @@ Create `scripts/test_text_video_pipeline.py`:
 
 These are decisions the AI coder MUST ask the user about before implementing:
 
-### `[ASK USER]` 1: Gemini API Package & Model Name
-The Gemini API for Imagen (Nano Banana 2) may use `google-generativeai` or `google-cloud-aiplatform`. The exact model ID for image generation (`imagen-3.0-generate-002` or `gemini-2.0-flash-exp`) needs confirmation. Check `ai.google.dev/gemini-api/docs/imagen` before implementing.
+### `[RESOLVED]` 1: Gemini API Package & Model Name
+**Answer:** Use the new `google-genai` SDK (`from google import genai`). The old `google-generativeai` package reached end-of-life November 2025 — do NOT use it. Model name `imagen-3.0-generate-002` is valid and active at $0.03/image. Do NOT use `google-cloud-aiplatform` (that's the Vertex AI enterprise path). Stick with the Gemini Developer API.
 
-### `[ASK USER]` 2: SerpAPI vs Bing Image Search
-SerpAPI costs $0.01/search (Google Images). Bing Image Search via Azure costs $3/1000 requests ($0.003/search). Both return high-quality results. Which to use as primary?
+### `[RESOLVED]` 2: SerpAPI vs Bing Image Search
+**Answer:** SerpAPI only. Bing Image Search API was retired — Microsoft killed all Bing Search APIs in August 2025. SerpAPI is the only option. ~$0.015/search on the base plan.
 
-### `[ASK USER]` 3: NewsAPI Free vs Paid Tier
-NewsAPI free tier (100 req/day) limits to articles from the last 30 days and no commercial use. Paid tier ($449/mo) removes limits. For MVP, free tier is enough. When should we upgrade?
+### `[RESOLVED]` 3: NewsAPI Free vs Paid Tier
+**Answer:** Start with free tier for dev/testing. 100 req/day is enough for development. It cannot be used in production (their terms prohibit commercial use). For production, evaluate NewsData.io (200 free credits/day, commercial use allowed) as a bridge before the $449/month NewsAPI jump.
 
-### `[ASK USER]` 4: Pexels API Key
-Do you already have a Pexels API key? If not, one needs to be created at `pexels.com/api/` (free, instant).
+### `[RESOLVED]` 4: Pexels API Key
+**Answer:** Pexels API is free — no credit card needed. Key will be provided and set via Railway. Env var: `PEXELS_API_KEY`.
 
-### `[ASK USER]` 5: Default Text Font for Reels
-Current reels use Poppins-Bold. The @execute format uses a similar bold font. Keep Poppins-Bold as default, or add a new font (e.g., Impact, Montserrat Black)?
+### `[RESOLVED]` 5: Default Text Font for Reels
+**Answer:** Keep Poppins-Bold as default. Available fonts: Poppins-Bold, Poppins-Regular, Poppins-SemiBold, Anton-Regular, Inter (variable), BrowalliaNew-Bold. No new fonts needed.
 
-### `[ASK USER]` 6: Story Pool Cron vs On-Demand
-Should we pre-fill the story pool daily via cron (faster generation, uses more API calls)? Or discover on-demand when a reel is requested (slower but more efficient)?
+### `[RESOLVED]` 6: Story Pool Cron vs On-Demand
+**Answer:** Pre-fill daily via cron. On-demand adds latency to reel generation and risks hitting API rate limits during peak usage. Cron pre-fill keeps generation fast and predictable.
 
-### `[ASK USER]` 7: Toby Text-Video Slots Default
-When a user enables Toby for TEXT-VIDEO, what should the default `text_video_slots_per_day` be? Suggestion: 1 (conservative, user can increase).
+### `[RESOLVED]` 7: Toby Text-Video Slots Default
+**Answer:** Default `text_video_slots_per_day` = 6 (same as reel slots). Uses the same slot system — no separate counter needed.
 
-### `[ASK USER]` 8: Manual Image Upload
-Should manual mode support direct image file upload from the user's device? This requires a Supabase Storage upload endpoint. Or only support search queries + AI generation?
+### `[RESOLVED]` 8: Manual Image Upload
+**Answer:** YES — manual mode MUST support direct image file upload via Supabase Storage. The Supabase Storage service already exists (`app/services/storage/supabase_storage.py`). Implement a user-facing upload endpoint that stores images in a user-scoped Supabase Storage bucket and returns the public URL for use in reel generation. This is mandatory, not optional. All three sources are available:
+1. Web search queries (SerpAPI)
+2. AI generation (Gemini Imagen)
+3. Direct file upload (Supabase Storage) ← REQUIRED
 
-### `[ASK USER]` 9: Niche per User vs per Brand
-Currently `NicheConfig` is per-user (one niche). But TEXT-VIDEO discovery requires a niche for searching. For multi-brand users with different niches, should the discovery system use the global NicheConfig niche, or should brands have their own niche override?
+### `[RESOLVED]` 9: Niche per User vs per Brand
+**Answer:** Use the global NicheConfig per-user (current architecture — NicheConfig has `user_id` only, no `brand_id`). Per-brand niche override is a future feature. The discovery system uses the global NicheConfig niche for all brands.
 
-### `[ASK USER]` 10: yt-dlp Integration
-The original discussion mentioned yt-dlp for YouTube video scraping as a "Tier 2" image/video source. This is a legal gray area. Should we include yt-dlp as an optional video frame source behind a feature flag? Or skip entirely for MVP?
+### `[RESOLVED]` 10: yt-dlp Integration
+**Answer:** YES — implement yt-dlp as an available video frame source. yt-dlp is legal for personal/fair use extraction of frames. It has been used for years on Instagram without issues. Implement it as an available Tier 2 source for extracting video frames from YouTube URLs. No feature flag needed — just make it available as a source option alongside web search and AI generation.
 
-### `[ASK USER]` 11: Text-Video Slot Hours (Section 23)
-Should text_video brands have different default slot hours than text_based? The @execute-style pages may post at different cadences (e.g., fewer but more impactful posts). Or keep the same 6-slot pattern (`[0, 4, 8, 12, 16, 20]` hours) for simplicity? The slot count is already configurable via `reel_slots_per_day` on `TobyBrandConfig`.
+### `[RESOLVED]` 11: Text-Video Slot Hours (Section 23)
+**Answer:** Same 6-slot pattern `[0, 4, 8, 12, 16, 20]` for both formats + per-brand offset. Each brand applies its own UTC offset to these base hours. Key difference: `text_video` slots have NO light/dark variant distinction — all slots are the same type. This reduces complexity. The dashboard design must account for the fact that some brands may not have light/dark mode at all.
 
-### `[ASK USER]` 12: NicheConfig Per-User vs Per-Brand for Text-Video (Section 24)
-Currently `NicheConfig` is per-user (one config for all brands). The text_video Content DNA settings (story sub-niches, story tone, preferred categories) will apply to ALL brands that use text_video. Is per-user sufficient for MVP? Or do you need per-brand text_video overrides? Options:
-- (a) Per-user only (simplest, current architecture)
-- (b) Add `text_video_overrides` JSONB column on `Brand` model (per-brand override on top of global)
-- (c) Add `text_video_config` table keyed by (user_id, brand_id)
+### `[RESOLVED]` 12: NicheConfig Per-User vs Per-Brand for Text-Video (Section 24)
+**Answer:** (a) Per-user only (current architecture). BUT — the onboarding flow MUST include an explicit explanation saying: "Each account currently supports one Content DNA configuration. We're working towards per-brand customization, but for now all brands you add will share the same niche settings. Toby will use the same content identity for all your brands." This sets user expectations correctly.
 
-### `[ASK USER]` 13: Format Switching UI Location
-Where should the "Switch reel format" control live?
-- (a) In the Content DNA / brand settings page
-- (b) In the Toby settings per-brand
-- (c) Both (Content DNA sets the creative direction, Toby settings reflect it)
-- (d) In the `/reels` page Design Editor tab
+### `[RESOLVED]` 13: Format Switching UI Location
+**Answer:** BOTH locations:
+- (a) Content DNA / brand settings page — primary location for changing creative direction
+- (b) Toby settings per-brand — reflected/synced, so users can see and change it from either place
+Both must stay in sync. Changing in one updates the other.
 
-### `[ASK USER]` 14: Mixed-Format Dashboard Display
-When a brand switches format mid-day, the dashboard may show a mix of text_based and text_video slots for that day. Should the UI:
-- (a) Show both types with different icons (transparent about the transition)
-- (b) Only show the new format's slots going forward (simpler but hides already-scheduled old-format content)
-- (c) Show a "transitioning" indicator for the day of the switch
+### `[RESOLVED]` 14: Mixed-Format Dashboard Display
+**Answer:** (a) Show both types with different icons (transparent). Users should see everything that was posted and what's scheduled. Don't hide information from them. The transition day shows a mix — this is correct behavior, not a bug.
 
 ---
 
@@ -2311,7 +2309,7 @@ for brand in brands:
 
 **Key point:** The slot _hours_ are the same for both formats. Both text_based and text_video brands get 6 reel slots at [0, 4, 8, 12, 16, 20] hours (adjusted by brand offset). The difference is the `content_type` field, which routes to the correct pipeline.
 
-`[ASK USER]` Decision Point 11: Should text_video brands have different default slot hours? The @execute-style pages seem to post at different cadences. Or keep the same 6-slot pattern for simplicity?
+`[RESOLVED]` Decision Point 11: Same 6-slot pattern `[0, 4, 8, 12, 16, 20]` + per-brand offset. No light/dark variant for text_video brands — all slots are the same type. The slot count is already configurable via `reel_slots_per_day` on `TobyBrandConfig`.
 
 ### Orchestrator Variant Logic Update
 
@@ -2491,12 +2489,7 @@ else:
 
 Since `NicheConfig` is per-user, the text_video content DNA settings apply to ALL brands that use text_video format. If a user has two text_video brands in different niches, the same story tone and examples apply to both.
 
-`[ASK USER]` Decision Point 12: Is per-user text_video configuration sufficient for MVP? Or do users need per-brand text_video settings? Per-brand would require either:
-- (a) Moving NicheConfig to per-brand (MAJOR refactor, breaks existing system)
-- (b) Adding a `text_video_overrides` JSONB column on `Brand` model (simpler, per-brand override on top of global NicheConfig)
-- (c) Adding a `text_video_config` table keyed by (user_id, brand_id) — a new per-brand config specifically for text-video
-
-Recommendation: Start with per-user (option a=skip), add per-brand later if users ask for it.
+`[RESOLVED]` Decision Point 12: Per-user NicheConfig is sufficient. The onboarding flow must include an explicit explanation: "Each account currently supports one Content DNA configuration. We're working towards per-brand customization, but for now all brands you add will share the same niche settings." Per-brand overrides deferred to a future update.
 
 ---
 
@@ -4304,13 +4297,13 @@ if feature_flags.get("threads_posts", False):
 **Threads slot system:**
 
 ```python
-# Default: 8 text posts per day, every 2 hours from 14:00-22:00 ET
-# (configurable per brand via TobyBrandConfig)
-BASE_THREADS_HOURS_ET = [14, 15, 16, 17, 18, 19, 20, 21]  # 8 posts, 2PM-9PM ET
-DEFAULT_THREADS_POSTS_PER_DAY = 8
+# Default: 2 text posts per day (configurable per brand via TobyBrandConfig)
+# Slot hours distributed across active hours, adjusted by brand offset
+BASE_THREADS_HOURS_ET = [14, 20]  # 2 posts, 2PM and 8PM ET
+DEFAULT_THREADS_POSTS_PER_DAY = 2
 ```
 
-The slot system converts ET hours to user's local timezone (same as reel slots). `TobyBrandConfig` gets a new column `threads_posts_per_day` (default 8).
+The slot system converts ET hours to user's local timezone (same as reel slots). `TobyBrandConfig` gets a new column `threads_posts_per_day` (default 2). Configurable in the Threads settings UI.
 
 **Thompson Sampling for Threads:**
 
@@ -4381,7 +4374,7 @@ threads_formatting_style = Column(Text, default="")  # User's preferred formatti
 threads_avoid_patterns = Column(JSONB, default=[])   # Anti-patterns to avoid
 
 # app/models/toby.py — TobyBrandConfig, add:
-threads_posts_per_day = Column(Integer, default=8)
+threads_posts_per_day = Column(Integer, default=2)
 ```
 
 ### Scheduler Changes
@@ -4620,22 +4613,34 @@ if platform == "threads":
         pass  # Keep sending until brand has Threads content enabled
 ```
 
-### `[ASK USER]` Decision Points
+### `[RESOLVED]` Decision Points
 
-### `[ASK USER]` 15: Threads Post Frequency Default
-Default `threads_posts_per_day = 8` is recommended based on research. Should this be configurable in the UI? Or fixed at 8 for MVP?
+### `[RESOLVED]` 15: Threads Post Frequency Default
+**Answer:** Configurable in UI with default of 2. A simple number input or dropdown in Threads settings. Some users want less, some more. Minimal dev effort, avoids hardcoding opinions. Set `threads_posts_per_day` on `TobyBrandConfig` with default=2.
 
-### `[ASK USER]` 16: Thread Chain Delay
-How many seconds between publishing each part of a thread chain? Research suggests 30-60 seconds. The Threads API may create them as a connected thread if posted quickly.
+### `[RESOLVED]` 16: Thread Chain Delay
+**Answer:** No delay needed. A thread chain is published as a single unit — all posts in the chain are submitted together in one API call to the Threads API. The Threads API handles creating them as a connected thread natively. The buffer/scheduler treats the entire thread chain as ONE scheduled item at ONE time slot, not individual posts staggered over time. Reference: Buffer's Threads composer schedules the entire thread (all posts in the chain) at a single timestamp — not individual posts with delays.
 
-### `[ASK USER]` 17: Threads Content Source
-Should Threads content be:
-- (a) Fully AI-generated from Content DNA + Threads config (simplest)
-- (b) Adapted from existing reel/post content (repurposed but rewritten for text-only)
-- (c) Mix: AI-generated + ability to convert a reel topic into a Threads post
+### `[RESOLVED]` 17: Threads Content Source
+**Answer:** (a) Fully AI-generated from Content DNA. Threads is a different platform with a different content style (text-only, conversational, shorter). Repurposing reel/carousel content for Threads would feel forced and unnatural. Let the AI generate native Threads content shaped by the brand's Content DNA. Clean and simple.
 
-### `[ASK USER]` 18: Threads Analytics Scope
-Does the Threads API provide post-level analytics (impressions, replies, reposts)? If not, we can only track publish success/failure. Check `graph.threads.net` docs for `threads_manage_insights` scope capabilities.
+### `[RESOLVED]` 18: Threads Analytics Scope
+**Answer:** YES — the Threads API provides post-level analytics: views, likes, replies, reposts, quotes, plus follower count and demographics. Build analytics ingestion for ALL of these metrics. The `threads_manage_insights` scope grants access. Implement the full analytics pipeline for Threads.
+
+### Design Reference: Buffer Threads Composer
+
+Buffer's Threads composer (observed March 2026) provides a good reference for the Threads publishing UI:
+- **Thread type selector**: "Thread" vs "Ghost Post" radio toggle at the top of the composer
+- **Multi-post composition**: Each post in the thread chain is a separate text editor block, stacked vertically with separators. Users can add/remove posts from the chain with a "+" button.
+- **Per-post media**: Each post in the chain can have its own image/media attachment (drag & drop or file select)
+- **Topic input**: A dedicated "Topic" field with a trending topics bar below it showing clickable trending items
+- **Location input**: A separate "Location" field with autocomplete
+- **Character counter**: Per-post character count (500 max for Threads)
+- **Preview panel**: Live preview on the right side showing thread posts with avatar, username, timestamps, and interaction icons (heart, comment, repost, share)
+- **Scheduling**: Entire thread chain scheduled at a single timestamp — one "Schedule Post" button for the whole chain
+- **Channel selection**: Channel picker at the top shows connected accounts (Instagram, Threads, etc.) with platform icons on avatars
+
+This confirms our architecture: a thread chain is ONE scheduled item, NOT multiple individually-scheduled posts. The composer creates the full chain, and publishing sends all posts as a connected thread in one operation.
 
 ---
 
@@ -6025,9 +6030,10 @@ To keep costs minimal, the prompt is deliberately short and `max_tokens` is capp
 
 ```
 # In requirements.txt, append:
-google-generativeai>=0.8.0     # Gemini API (Nano Banana 2 image gen)
+google-genai>=1.0.0            # Gemini Developer API (Imagen 3 image gen) — NOT google-generativeai (EOL)
 tavily-python>=0.3.0           # Tavily AI search
 newsapi-python>=0.2.7          # NewsAPI client
+yt-dlp>=2024.0.0               # YouTube video frame extraction
 ```
 
 ### Environment Variables to Set (Railway)
