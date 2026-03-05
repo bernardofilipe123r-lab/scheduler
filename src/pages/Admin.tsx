@@ -1203,12 +1203,24 @@ function SupabaseUsagePanel() {
   const [showBackups, setShowBackups] = useState(false)
   const [showAdvisors, setShowAdvisors] = useState(false)
   const [showApiUsage, setShowApiUsage] = useState(false)
+  const [confirmPurge, setConfirmPurge] = useState(false)
+
+  const queryClient = useQueryClient()
 
   const usageQuery = useQuery<SupabaseUsageResponse>({
     queryKey: ['admin-supabase-usage'],
     queryFn: () => apiClient.get('/api/admin/supabase-usage'),
     staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
+  })
+
+  const purgeMutation = useMutation<{ deleted: number; message: string }>({
+    mutationFn: () => apiClient.delete('/api/logs/purge'),
+    onSuccess: (res) => {
+      setConfirmPurge(false)
+      queryClient.invalidateQueries({ queryKey: ['admin-supabase-usage'] })
+      alert(`Purged ${res.deleted.toLocaleString()} log entries`)
+    },
   })
 
   const db = usageQuery.data?.db_stats
@@ -1458,16 +1470,62 @@ function SupabaseUsagePanel() {
                   </button>
                   {showTables && (
                     <div className="mt-2 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
-                      <div className="grid grid-cols-[1fr_80px] gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-200 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                      <div className="grid grid-cols-[1fr_80px_40px] gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-200 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
                         <span>Table</span>
                         <span className="text-right">Rows</span>
+                        <span />
                       </div>
                       {db.top_tables.map((t, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_80px] gap-2 px-3 py-1.5 border-b border-gray-100 last:border-b-0 text-xs">
+                        <div key={i} className="grid grid-cols-[1fr_80px_40px] gap-2 px-3 py-1.5 border-b border-gray-100 last:border-b-0 text-xs items-center">
                           <span className="text-gray-700 font-mono truncate">{t.table}</span>
                           <span className="text-gray-500 text-right font-mono">{t.row_count.toLocaleString()}</span>
+                          <span>
+                            {t.table === 'app_logs' && t.row_count > 0 && (
+                              <button
+                                onClick={() => setConfirmPurge(true)}
+                                title="Purge all app logs"
+                                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </span>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Purge confirmation dialog */}
+                  {confirmPurge && (
+                    <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3">
+                      <p className="text-xs font-medium text-red-800 mb-2">
+                        Delete all {db.top_tables.find(t => t.table === 'app_logs')?.row_count.toLocaleString() ?? ''} app log entries? This cannot be undone.
+                      </p>
+                      <p className="text-[10px] text-red-600 mb-3">
+                        These are debug/operational logs. Auto-cleanup runs weekly (7-day retention).
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => purgeMutation.mutate()}
+                          disabled={purgeMutation.isPending}
+                          className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {purgeMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          {purgeMutation.isPending ? 'Purging…' : 'Yes, purge all logs'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmPurge(false)}
+                          className="px-3 py-1.5 bg-white border border-gray-200 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {purgeMutation.isError && (
+                        <p className="text-xs text-red-600 mt-2">
+                          <AlertCircle className="w-3 h-3 inline mr-1" />
+                          {(purgeMutation.error as Error).message}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

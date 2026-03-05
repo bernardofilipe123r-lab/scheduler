@@ -28,7 +28,7 @@ from sqlalchemy import desc, func, or_, and_, cast, String
 from app.db_connection import get_db
 from app.models import LogEntry
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID
-from app.api.auth.middleware import get_current_user, is_admin_user
+from app.api.auth.middleware import get_current_user, is_admin_user, is_super_admin_user
 
 router = APIRouter(tags=["logs"])
 
@@ -310,13 +310,17 @@ def clear_logs(
     """Delete old log entries to manage database size."""
     _require_admin(user)
 
-    scoped_query = _apply_user_scope(db.query(LogEntry), user.get("id", ""))
+    # Super admins operate on all logs; regular admins only their own
+    if is_super_admin_user(user):
+        base_query = db.query(LogEntry)
+    else:
+        base_query = _apply_user_scope(db.query(LogEntry), user.get("id", ""))
 
     if retention_days == 0:
-        deleted = scoped_query.delete()
+        deleted = base_query.delete()
     else:
         cutoff = datetime.utcnow() - timedelta(days=retention_days)
-        deleted = scoped_query.filter(LogEntry.timestamp < cutoff).delete()
+        deleted = base_query.filter(LogEntry.timestamp < cutoff).delete()
     
     db.commit()
     
@@ -324,6 +328,24 @@ def clear_logs(
         "deleted": deleted,
         "retention_days": retention_days,
         "message": f"Deleted {deleted} log entries",
+    }
+
+
+@router.delete("/api/logs/purge", summary="Purge all logs (super admin only)")
+def purge_all_logs(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Delete ALL log entries. Super admin only."""
+    if not is_super_admin_user(user):
+        raise HTTPException(status_code=403, detail="Super admin access required")
+
+    deleted = db.query(LogEntry).delete()
+    db.commit()
+
+    return {
+        "deleted": deleted,
+        "message": f"Purged all {deleted} log entries",
     }
 
 

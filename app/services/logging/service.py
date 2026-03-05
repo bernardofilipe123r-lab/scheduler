@@ -27,7 +27,7 @@ import time
 import logging
 import traceback
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from collections import deque
 from contextlib import contextmanager
@@ -527,7 +527,7 @@ class LoggingService:
             from app.db_connection import SessionLocal
             from app.models import LogEntry
             
-            cutoff = datetime.utcnow() - timedelta(days=retention_days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
             db = SessionLocal()
             try:
                 deleted = db.query(LogEntry).filter(LogEntry.timestamp < cutoff).delete()
@@ -538,6 +538,23 @@ class LoggingService:
                 db.close()
         except Exception as e:
             print(f"[LOG-SERVICE] Failed to cleanup old logs: {e}", file=sys.__stderr__, flush=True)
+            return 0
+
+    def purge_all_logs(self):
+        """Delete ALL log entries."""
+        try:
+            from app.db_connection import SessionLocal
+            from app.models import LogEntry
+            
+            db = SessionLocal()
+            try:
+                deleted = db.query(LogEntry).delete()
+                db.commit()
+                return deleted
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"[LOG-SERVICE] Failed to purge all logs: {e}", file=sys.__stderr__, flush=True)
             return 0
 
 
