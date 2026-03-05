@@ -40,6 +40,7 @@ class ThreadsTokenService:
             timeout=30,
         )
         if resp.status_code != 200:
+            print(f"[THREADS] Token exchange failed: status={resp.status_code}, body={resp.text}")
             logger.error(f"Threads token exchange failed: status={resp.status_code}, body={resp.text}")
             resp.raise_for_status()
         return resp.json()  # {"access_token": "...", "user_id": "..."}

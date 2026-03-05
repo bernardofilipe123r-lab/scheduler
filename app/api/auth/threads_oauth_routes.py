@@ -123,6 +123,7 @@ def threads_callback(
 
     state_data = OAuthStateStore.validate(db, state, "threads")
     if not state_data:
+        print(f"[THREADS] OAuth callback: invalid or expired state token for state={state[:10]}...")
         logger.warning("Threads OAuth callback: invalid or expired state token")
         return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&threads_error=expired")
 
@@ -132,6 +133,7 @@ def threads_callback(
 
     try:
         token_service = ThreadsTokenService()
+        print(f"[THREADS] Exchanging code for brand={brand_id}, app_id={token_service.app_id[:6]}..., redirect_uri={token_service.redirect_uri}")
         logger.info(f"Threads callback: exchanging code for brand={brand_id}")
 
         # 1. Exchange code for short-lived token
@@ -200,6 +202,7 @@ def threads_callback(
                 error_detail = f"{e} — API response: {e.response.text}"
             except Exception:
                 pass
+        print(f"[THREADS] OAuth callback FAILED for brand {brand_id}: {error_detail}")
         logger.error(f"Threads OAuth callback failed for brand {brand_id}: {error_detail}")
         if return_to == "onboarding":
             redirect_url = f"{frontend_base}/onboarding?threads_error=failed"

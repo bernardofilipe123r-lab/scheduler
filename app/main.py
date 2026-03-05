@@ -41,6 +41,13 @@ from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set
 from app.services.logging.middleware import RequestLoggingMiddleware
 from app.db_connection import init_db
 
+# Configure root logger so app.* loggers emit to stdout
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s: %(message)s",
+)
+
 # Load environment variables from .env file
 env_path = Path(__file__).resolve().parent.parent / ".env"
 if env_path.exists():
