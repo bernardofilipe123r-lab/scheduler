@@ -67,10 +67,16 @@ def resolve_music_url(db: Session, user_id: str, music_track_id: Optional[str] =
         return None
 
     if source == "trending_pick" and music_track_id:
-        from app.services.media.trending_music_fetcher import get_trending_track_by_id
+        from app.services.media.trending_music_fetcher import get_trending_track_by_id, get_fresh_play_url
         track = get_trending_track_by_id(db, music_track_id)
         if track:
-            logger.info("Using trending track '%s' for user %s", track.title, user_id)
+            # Try refreshing the URL via TokInsight in case the stored CDN URL expired
+            if track.tiktok_id:
+                fresh_url = get_fresh_play_url(track.tiktok_id)
+                if fresh_url:
+                    logger.info("Using fresh TokInsight URL for track '%s' (user %s)", track.title, user_id)
+                    return fresh_url
+            logger.info("Using stored URL for trending track '%s' (user %s)", track.title, user_id)
             return track.play_url
         logger.warning("Trending track %s not found, falling back to no music", music_track_id)
         return None

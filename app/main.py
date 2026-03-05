@@ -1195,7 +1195,7 @@ async def startup_event():
             with get_db_session() as db:
                 result = fetch_trending_music(db)
                 if result["success"]:
-                    print(f"   ✅ Stored {result['tracks_stored']} trending tracks (batch {result['batch_id'][:8]}...)")
+                    print(f"   ✅ Stored {result['tracks_stored']} trending tracks from {result.get('source', 'unknown')} (batch {result['batch_id'][:8]}...)")
                 else:
                     print(f"   ⚠️ Trending music fetch: {result.get('error', 'unknown error')}")
                 # Clean up batches older than 3 days
