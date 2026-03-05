@@ -85,15 +85,17 @@ async def analytics_overview(
 
     # Daily chart data — for followers, sum the MAX per (brand, platform)
     # per day to avoid inflating counts from multiple snapshots.
-    # Use a subquery to get max followers per brand/platform/day first.
+    # Use a subquery to get the latest snapshot per (brand, platform, day).
+    # views_last_7_days and likes_last_7_days are rolling-window values, so we
+    # take MAX (≈latest) per group instead of SUM to avoid duplicating overlapping windows.
     from sqlalchemy import literal_column
     day_sub = db.query(
         func.date_trunc('day', AnalyticsSnapshot.snapshot_at).label("day"),
         AnalyticsSnapshot.brand,
         AnalyticsSnapshot.platform,
         func.max(AnalyticsSnapshot.followers_count).label("followers"),
-        func.sum(AnalyticsSnapshot.views_last_7_days).label("views"),
-        func.sum(AnalyticsSnapshot.likes_last_7_days).label("likes"),
+        func.max(AnalyticsSnapshot.views_last_7_days).label("views"),
+        func.max(AnalyticsSnapshot.likes_last_7_days).label("likes"),
     ).filter(
         AnalyticsSnapshot.user_id == user_id,
         AnalyticsSnapshot.snapshot_at >= current_start,
@@ -123,25 +125,8 @@ async def analytics_overview(
         for r in day_q.all()
     ]
 
-    # Per-brand breakdown
-    brand_q = db.query(
-        AnalyticsSnapshot.brand,
-        func.max(AnalyticsSnapshot.followers_count).label("followers"),
-        func.sum(AnalyticsSnapshot.views_last_7_days).label("views"),
-        func.sum(AnalyticsSnapshot.likes_last_7_days).label("likes"),
-    ).filter(
-        AnalyticsSnapshot.user_id == user_id,
-        AnalyticsSnapshot.snapshot_at >= current_start,
-    )
-    if platform:
-        brand_q = brand_q.filter(AnalyticsSnapshot.platform == platform)
-    brand_q = brand_q.group_by(AnalyticsSnapshot.brand)
-    brands = [
-        {"brand": r.brand, "followers": r.followers or 0, "views": r.views or 0, "likes": r.likes or 0}
-        for r in brand_q.all()
-    ]
-
-    # Social channels table (per brand+platform latest data)
+    # Social channels table (per brand+platform latest data) — must come before
+    # brand breakdown since brands are now derived from channels.
     channels_q = db.query(BrandAnalytics).filter(BrandAnalytics.user_id == user_id)
     if brand:
         channels_q = channels_q.filter(BrandAnalytics.brand == brand)
@@ -158,9 +143,23 @@ async def analytics_overview(
             "last_fetched_at": ba.last_fetched_at.isoformat() if ba.last_fetched_at else None,
         })
 
-    # Override followers with BrandAnalytics (authoritative live data).
-    # Snapshots can contain stale/peak values; followers is point-in-time.
+    # Per-brand breakdown — derive from BrandAnalytics (consistent with channels)
+    brand_map: dict = {}
+    for ch in channels:
+        b = ch["brand"]
+        if b not in brand_map:
+            brand_map[b] = {"brand": b, "followers": 0, "views": 0, "likes": 0}
+        brand_map[b]["followers"] += ch["followers"] or 0
+        brand_map[b]["views"] += ch["views"] or 0
+        brand_map[b]["likes"] += ch["likes"] or 0
+    brands = list(brand_map.values())
+
+    # Override current totals with BrandAnalytics (authoritative live data).
+    # Snapshots inflate views/likes because each stores a 7-day rolling window
+    # and there are ~7-8 snapshots per brand/platform/day, so SUM vastly overcounts.
     current["followers"] = sum(ch["followers"] or 0 for ch in channels)
+    current["views"] = sum(ch["views"] or 0 for ch in channels)
+    current["likes"] = sum(ch["likes"] or 0 for ch in channels)
 
     return {
         "period": {"days": days, "start": current_start.isoformat(), "end": now.isoformat()},
