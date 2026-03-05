@@ -17,7 +17,7 @@ from app.models.trending_music import TrendingMusic, TrendingMusicFetch
 logger = logging.getLogger(__name__)
 
 RAPIDAPI_HOST = "tiktok-trending-data.p.rapidapi.com"
-RAPIDAPI_URL = f"https://{RAPIDAPI_HOST}/m"
+RAPIDAPI_URL = f"https://{RAPIDAPI_HOST}/t"
 MAX_FETCHES_PER_DAY = 3
 REQUEST_TIMEOUT = 30
 
@@ -54,82 +54,83 @@ def get_latest_batch_id(db: Session) -> Optional[str]:
 
 def _parse_tracks(raw: Any) -> List[Dict]:
     """
-    Parse the API response into a list of track dicts.
+    Parse the /t endpoint response into a list of music track dicts.
 
-    The TikTok Trending Data API may return:
-    - A list of track objects directly
-    - A dict with a 'data' key containing the list
-    - A dict with a 'music_list' key
+    The /t endpoint returns all trending data in a single response:
+    {
+      "body": [
+        { "exploreList": [...] },   // index 0: trending users (type 2)
+        { "exploreList": [...] },   // index 1: trending hashtags (type 3)
+        { "exploreList": [...] },   // index 2: trending music (type 1)
+      ],
+      ...
+    }
 
-    Each track may have varying field names — we normalise them here.
+    Music items have type=1 and contain:
+    - cardItem.title — song title
+    - cardItem.description — artist name
+    - cardItem.extraInfo.playUrl — list of audio URLs
+    - cardItem.extraInfo.musicId — TikTok music ID
+    - cardItem.extraInfo.posts — number of videos using this track
+    - cardItem.cover — cover image URL
     """
-    items: List[Any] = []
-    if isinstance(raw, list):
-        items = raw
-    elif isinstance(raw, dict):
-        items = raw.get("data") or raw.get("music_list") or raw.get("musics") or raw.get("items") or []
-        if not items and isinstance(raw, dict):
-            # Maybe the whole dict is an error
-            if "message" in raw:
-                logger.warning("API returned message: %s", raw["message"])
-                return []
-    else:
+    if not isinstance(raw, dict):
         logger.error("Unexpected API response type: %s", type(raw))
         return []
 
-    tracks = []
-    for i, item in enumerate(items):
-        if not isinstance(item, dict):
-            continue
+    if "message" in raw and not raw.get("body"):
+        logger.warning("API returned message: %s", raw["message"])
+        return []
 
-        # Normalise field names across API versions
-        title = (
-            item.get("title")
-            or item.get("musicName")
-            or item.get("music_name")
-            or item.get("name")
-            or "Unknown"
-        )
-        author = (
-            item.get("author")
-            or item.get("authorName")
-            or item.get("author_name")
-            or item.get("creator")
-            or ""
-        )
-        play_url = (
-            item.get("playUrl")
-            or item.get("play_url")
-            or item.get("musicUrl")
-            or item.get("music_url")
-            or item.get("url")
-            or ""
-        )
-        cover_url = (
-            item.get("coverLarge")
-            or item.get("cover_large")
-            or item.get("coverMedium")
-            or item.get("cover")
-            or item.get("coverUrl")
-            or ""
-        )
-        tiktok_id = str(
-            item.get("id")
-            or item.get("musicId")
-            or item.get("music_id")
-            or ""
-        )
-        duration = (
-            item.get("duration")
-            or item.get("duration_seconds")
-            or item.get("musicDuration")
-            or None
-        )
-        if duration is not None:
-            try:
-                duration = float(duration)
-            except (ValueError, TypeError):
-                duration = None
+    # Extract music items from all exploreList sections
+    body = raw.get("body", [])
+    if not isinstance(body, list):
+        logger.error("Unexpected body type: %s", type(body))
+        return []
+
+    music_items: List[Dict] = []
+    for section in body:
+        if not isinstance(section, dict):
+            continue
+        explore_list = section.get("exploreList", [])
+        if not isinstance(explore_list, list):
+            continue
+        for entry in explore_list:
+            if not isinstance(entry, dict):
+                continue
+            card = entry.get("cardItem", {})
+            if not isinstance(card, dict):
+                continue
+            # type 1 = music
+            if card.get("type") == 1:
+                music_items.append(card)
+
+    if not music_items:
+        logger.warning("No music items (type=1) found in API response")
+        return []
+
+    tracks = []
+    for i, card in enumerate(music_items):
+        title = card.get("title", "Unknown")
+        author = card.get("description", "")  # artist is in description field
+        cover_url = card.get("cover", "")
+
+        extra = card.get("extraInfo", {})
+        if not isinstance(extra, dict):
+            extra = {}
+
+        tiktok_id = str(extra.get("musicId", "") or card.get("id", ""))
+
+        # playUrl is a list of URLs
+        play_urls = extra.get("playUrl", [])
+        if isinstance(play_urls, list) and play_urls:
+            play_url = play_urls[0]
+        elif isinstance(play_urls, str):
+            play_url = play_urls
+        else:
+            play_url = ""
+
+        posts = extra.get("posts", 0)
 
         if not play_url:
             logger.debug("Skipping track '%s' — no play_url", title)
@@ -141,10 +142,11 @@ def _parse_tracks(raw: Any) -> List[Dict]:
             "author": author,
             "play_url": play_url,
             "cover_url": cover_url,
-            "duration_seconds": duration,
+            "duration_seconds": None,  # /t endpoint doesn't provide duration
             "rank": i + 1,
         })
 
+    logger.info("Parsed %d music tracks from /t response", len(tracks))
     return tracks
 
 
