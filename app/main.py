@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import or_, type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
@@ -141,14 +141,22 @@ async def health_check():
 if FRONTEND_DIR.exists():
     print(f"⚛️ React frontend: {FRONTEND_DIR}")
     
-    # Mount React assets
+    # Mount React assets (hashed filenames → long cache)
     if (FRONTEND_DIR / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="react-assets")
+    
+    def _serve_index():
+        """Serve index.html with no-cache so browsers always get the latest asset references."""
+        resp = FileResponse(FRONTEND_DIR / "index.html")
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        return resp
     
     @app.get("/", tags=["frontend"])
     async def serve_root():
         """Serve React app."""
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return _serve_index()
     
     @app.get("/{full_path:path}", tags=["frontend"])
     async def serve_spa(full_path: str):
@@ -156,7 +164,7 @@ if FRONTEND_DIR.exists():
         # Never intercept API or health-check paths — let FastAPI return proper 404s
         if full_path.startswith("api/") or full_path in ("health", "docs", "redoc", "openapi.json"):
             raise HTTPException(status_code=404, detail="Not found")
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return _serve_index()
 else:
     print(f"⚠️ React frontend not found at {FRONTEND_DIR}. Run 'npm run build' to build.")
     
