@@ -25,10 +25,23 @@ REQUEST_TIMEOUT = 30
 TOKINSIGHT_HOST = "free-tiktok-api-scraper-mobile-version.p.rapidapi.com"
 TOKINSIGHT_MUSIC_DETAIL_URL = f"https://{TOKINSIGHT_HOST}/tok/v1/music_detail/"
 
+# Soundcharts API (for TikTok chart rankings)
+SOUNDCHARTS_BASE = "https://customer.api.soundcharts.com"
+SOUNDCHARTS_CHART_SLUG = "tiktok-breakout-us"  # US TikTok Breakout chart (daily)
+
 
 def _get_api_key() -> Optional[str]:
     """Return the RapidAPI key from environment."""
     return os.getenv("RAPIDAPI_KEY")
+
+
+def _get_soundcharts_creds() -> Optional[Dict[str, str]]:
+    """Return Soundcharts credentials from environment."""
+    app_id = os.getenv("SOUNDCHARTS_APP_ID")
+    api_key = os.getenv("SOUNDCHARTS_API_KEY")
+    if app_id and api_key:
+        return {"app_id": app_id, "api_key": api_key}
+    return None
 
 
 def _fetches_today(db: Session) -> int:
@@ -176,13 +189,19 @@ def fetch_trending_music(db: Session) -> Dict[str, Any]:
     tracks = _fetch_from_trending_api(api_key)
     source = "tiktok_trending_api"
 
-    # Fallback 1: TokInsight popular artist music
+    # Fallback 1: Soundcharts TikTok chart (real trending data, 1000 req/month)
     if not tracks:
-        logger.info("Trending API failed, falling back to TokInsight artist music")
+        logger.info("Trending API failed, trying Soundcharts TikTok chart")
+        tracks = _fetch_from_soundcharts()
+        source = "soundcharts"
+
+    # Fallback 2: TokInsight popular artist music
+    if not tracks:
+        logger.info("Soundcharts failed, falling back to TokInsight artist music")
         tracks = _fetch_from_tokinsight_artists(api_key)
         source = "tokinsight_artists"
 
-    # Fallback 2: curated seed library (always available, no API calls)
+    # Fallback 3: curated seed library (always available, no API calls)
     if not tracks:
         logger.info("TokInsight also failed, falling back to curated seed library")
         tracks = _get_curated_seed_tracks()
@@ -214,6 +233,90 @@ def _fetch_from_trending_api(api_key: str) -> List[Dict]:
     except ValueError:
         logger.warning("Trending API returned non-JSON")
         return []
+
+
+def _fetch_from_soundcharts() -> List[Dict]:
+    """
+    Fetch trending TikTok songs from Soundcharts API.
+
+    Uses the TikTok Breakout US chart for daily trending songs, then
+    looks up TikTok music IDs for each song via the identifiers endpoint.
+
+    Cost: ~21 API calls per fetch (1 chart + 20 identifier lookups).
+    Free plan: 1,000 requests/month ≈ 47 fetches/month.
+    """
+    creds = _get_soundcharts_creds()
+    if not creds:
+        logger.info("Soundcharts credentials not configured, skipping")
+        return []
+
+    sc_headers = {
+        "x-app-id": creds["app_id"],
+        "x-api-key": creds["api_key"],
+        "Accept": "application/json",
+    }
+
+    # Step 1: Get chart ranking (top 20 songs)
+    try:
+        resp = requests.get(
+            f"{SOUNDCHARTS_BASE}/api/v2.14/chart/song/{SOUNDCHARTS_CHART_SLUG}/ranking/latest",
+            params={"offset": "0", "limit": "20"},
+            headers=sc_headers,
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        chart_data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning("Soundcharts chart request failed: %s", e)
+        return []
+
+    items = chart_data.get("items", [])
+    if not items:
+        logger.warning("Soundcharts chart returned no items")
+        return []
+
+    # Step 2: For each song, look up TikTok identifiers
+    tracks: List[Dict] = []
+    for i, item in enumerate(items):
+        song = item.get("song", {})
+        if not isinstance(song, dict):
+            continue
+
+        song_uuid = song.get("uuid", "")
+        song_name = song.get("name", "Unknown")
+        artist = song.get("creditName", "")
+        image_url = song.get("imageUrl", "")
+
+        # Look up TikTok music ID
+        tiktok_id = ""
+        if song_uuid:
+            try:
+                id_resp = requests.get(
+                    f"{SOUNDCHARTS_BASE}/api/v2/song/{song_uuid}/identifiers",
+                    params={"platform": "tiktok", "offset": "0", "limit": "1"},
+                    headers=sc_headers,
+                    timeout=REQUEST_TIMEOUT,
+                )
+                id_resp.raise_for_status()
+                id_data = id_resp.json()
+                id_items = id_data.get("items", [])
+                if id_items and isinstance(id_items[0], dict):
+                    tiktok_id = id_items[0].get("identifier", "")
+            except (requests.RequestException, ValueError):
+                pass  # Non-critical — we still have song name/artist
+
+        tracks.append({
+            "tiktok_id": tiktok_id,
+            "title": song_name,
+            "author": artist,
+            "play_url": "",  # Soundcharts doesn't provide audio URLs
+            "cover_url": image_url,
+            "duration_seconds": None,
+            "rank": i + 1,
+        })
+
+    logger.info("Soundcharts: fetched %d trending songs from %s", len(tracks), SOUNDCHARTS_CHART_SLUG)
+    return tracks
 
 
 # Popular TikTok artists whose music is widely used in reels.
