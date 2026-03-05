@@ -5,7 +5,6 @@ import { BrandsTabBar, type BrandsTab } from '@/features/brands/components/Brand
 import { MyBrandsTab } from '@/features/brands/components/MyBrandsTab'
 import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 import { ConnectionsTab } from '@/features/brands/components/ConnectionsTab'
-import { MusicManager } from '@/features/brands/components/MusicManager'
 
 export function BrandsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -16,22 +15,11 @@ export function BrandsPage() {
     (tab: BrandsTab) => {
       if (tab === activeTab) return
 
-      const doNavigate = () => {
-        if (tab === 'brands') {
-          setSearchParams({})
-        } else {
-          setSearchParams({ tab })
-        }
+      if (tab === 'brands') {
+        setSearchParams({})
+      } else {
+        setSearchParams({ tab })
       }
-
-      // If leaving music tab, fire custom event so MusicManager can intercept
-      if (activeTab === 'music') {
-        const event = new CustomEvent('music-tab-leave', { detail: { navigate: doNavigate }, cancelable: true })
-        const allowed = window.dispatchEvent(event)
-        if (!allowed) return // MusicManager prevented navigation
-      }
-
-      doNavigate()
     },
     [activeTab, setSearchParams],
   )
@@ -68,11 +56,6 @@ export function BrandsPage() {
       {activeTab === 'brands' && <MyBrandsTab />}
       {activeTab === 'prompts' && <NicheConfigForm />}
       {activeTab === 'connections' && <ConnectionsTab />}
-      {activeTab === 'music' && (
-        <div className="max-w-2xl">
-          <MusicManager />
-        </div>
-      )}
     </div>
   )
 }

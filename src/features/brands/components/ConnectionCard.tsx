@@ -6,10 +6,6 @@ import {
   RefreshCw,
   Unlink,
   AlertTriangle,
-  Zap,
-  Loader2,
-  CheckCircle2,
-  XCircle,
   HelpCircle,
 } from 'lucide-react'
 import { Modal } from '@/shared/components/Modal'
@@ -17,8 +13,6 @@ import { PlatformIcon } from '@/shared/components'
 import {
   useDisconnectYouTube,
   connectYouTube,
-  testMetaConnection,
-  testYouTubeConnection,
   connectInstagram,
   disconnectInstagram,
   connectFacebook,
@@ -30,7 +24,6 @@ import {
   disconnectTikTok,
   type BrandConnectionStatus,
   type PlatformConnection,
-  type ConnectionTestResult,
   type FacebookPage,
 } from '@/features/brands'
 import type { BrandName } from '@/shared/types'
@@ -69,8 +62,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
   const [connectingThreads, setConnectingThreads] = useState(false)
   const [connectingTikTok, setConnectingTikTok] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
-  const [testResult, setTestResult] = useState<{ meta?: ConnectionTestResult; youtube?: ConnectionTestResult }>({})
-  const [testing, setTesting] = useState<{ meta: boolean; youtube: boolean }>({ meta: false, youtube: false })
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showPageSelector, setShowPageSelector] = useState(false)
   const [selectingPage, setSelectingPage] = useState(false)
@@ -115,32 +106,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
       console.error(`Failed to start ${platform} connection:`, error)
     }
   }, [brand.brand])
-
-  const handleTestMeta = async () => {
-    setTesting(p => ({ ...p, meta: true }))
-    setTestResult(p => ({ ...p, meta: undefined }))
-    try {
-      const result = await testMetaConnection(brand.brand)
-      setTestResult(p => ({ ...p, meta: result }))
-    } catch (err) {
-      setTestResult(p => ({ ...p, meta: { platform: 'meta', status: 'error', message: err instanceof Error ? err.message : 'Test failed' } }))
-    } finally {
-      setTesting(p => ({ ...p, meta: false }))
-    }
-  }
-
-  const handleTestYouTube = async () => {
-    setTesting(p => ({ ...p, youtube: true }))
-    setTestResult(p => ({ ...p, youtube: undefined }))
-    try {
-      const result = await testYouTubeConnection(brand.brand)
-      setTestResult(p => ({ ...p, youtube: result }))
-    } catch (err) {
-      setTestResult(p => ({ ...p, youtube: { platform: 'youtube', status: 'error', message: err instanceof Error ? err.message : 'Test failed' } }))
-    } finally {
-      setTesting(p => ({ ...p, youtube: false }))
-    }
-  }
 
   const handleYouTubeConnect = async () => {
     setConnectingYouTube(true)
@@ -573,42 +538,6 @@ export function ConnectionCard({ brand, brandLogo, onRefresh }: ConnectionCardPr
         {renderPlatformRow('youtube', brand.youtube)}
         {brand.threads && renderPlatformRow('threads', brand.threads)}
         {brand.tiktok && renderPlatformRow('tiktok', brand.tiktok)}
-      </div>
-
-      {/* Test Connection Buttons */}
-      <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center gap-2">
-        {(brand.instagram.connected || brand.facebook.connected) && (
-          <button
-            onClick={handleTestMeta}
-            disabled={testing.meta}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
-          >
-            {testing.meta ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-            Test Meta
-          </button>
-        )}
-        {brand.youtube.connected && (
-          <button
-            onClick={handleTestYouTube}
-            disabled={testing.youtube}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
-          >
-            {testing.youtube ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-            Test YouTube
-          </button>
-        )}
-        {testResult.meta && (
-          <span className={`flex items-center gap-1 text-xs ${testResult.meta.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-            {testResult.meta.status === 'success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-            {testResult.meta.message}
-          </span>
-        )}
-        {testResult.youtube && (
-          <span className={`flex items-center gap-1 text-xs ${testResult.youtube.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-            {testResult.youtube.status === 'success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-            {testResult.youtube.message}
-          </span>
-        )}
       </div>
 
       {/* Facebook Page Selector Modal */}
