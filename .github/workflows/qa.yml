@@ -40,8 +40,9 @@ jobs:
       - name: TypeScript build
         run: npm run build
 
-      - name: ESLint — React hooks
-        run: npx eslint src/ --rule 'react-hooks/rules-of-hooks: error' --no-error-on-unmatched-pattern
+      - name: ESLint - React hooks
+        run: |
+          npx eslint src/ --rule 'react-hooks/rules-of-hooks: error' --no-error-on-unmatched-pattern
 
       - name: Python import validation
         run: python scripts/validate_api.py --imports
