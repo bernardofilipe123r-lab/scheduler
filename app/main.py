@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from sqlalchemy import type_coerce
+from sqlalchemy import or_, type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.api.routes import router as reels_router
@@ -978,15 +978,27 @@ async def startup_event():
                     for b in brands
                 )
                 if all_published:
-                    # Clean up any remaining scheduled reels
+                    # Clean up scheduled reels that were published long enough ago.
+                    # CRITICAL: Only delete reels whose published_at < cutoff so that
+                    # recently-published reels still appear on the Home "Today's Coverage"
+                    # dashboard.  Reels published within the last day are preserved here
+                    # and will be cleaned up by the first query on a future run.
+                    reel_age_filter = or_(
+                        ScheduledReel.published_at < cutoff,
+                        # Also clean up stuck/failed reels with no publish timestamp
+                        # that belong to this fully-published job
+                        ScheduledReel.published_at.is_(None),
+                    )
                     for brand, output in outputs.items():
                         reel_id = output.get("reel_id") if isinstance(output, dict) else None
                         if reel_id:
                             db.query(ScheduledReel).filter(
-                                ScheduledReel.reel_id == reel_id
+                                ScheduledReel.reel_id == reel_id,
+                                reel_age_filter,
                             ).delete(synchronize_session=False)
                     db.query(ScheduledReel).filter(
-                        type_coerce(ScheduledReel.extra_data, JSONB)["job_id"].astext == job.job_id
+                        type_coerce(ScheduledReel.extra_data, JSONB)["job_id"].astext == job.job_id,
+                        reel_age_filter,
                     ).delete(synchronize_session=False)
                     # Clean up files (best-effort)
                     try:
@@ -1023,7 +1035,6 @@ async def startup_event():
 
         db = SessionLocal()
         try:
-            from sqlalchemy import or_
             brands = db.query(Brand).filter(
                 Brand.active.is_(True),
                 or_(
