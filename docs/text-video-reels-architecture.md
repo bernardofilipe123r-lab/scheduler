@@ -5,10 +5,10 @@
 > **API Keys & Secrets:** This feature requires new external API keys (NewsAPI, Tavily, SerpAPI, Pexels, Gemini). **Do NOT hardcode, guess, or generate placeholder keys.** When you need a key:
 > 1. Ask the user in chat — specify which service and what scope/permissions are needed.
 > 2. The user will provide the key via chat.
-> 3. The user will add it to Railway manually via CLI: `railway variables set KEY_NAME=value`
+> 3. **You (the AI coder) add it to Railway via CLI:** `railway variables set KEY_NAME=value` — you have full access.
 > 4. Reference the key in code via `os.environ.get("KEY_NAME")` — never commit secrets.
 >
-> The user has full Railway CLI access (authenticated, project `responsible-mindfulness`, service `scheduler`). All env var operations go through Railway — never store keys in `.env` files committed to git, config files, or inline in code.
+> Railway CLI is authenticated in the workspace (project `responsible-mindfulness`, service `scheduler`). **Run `railway variables set` directly using run_in_terminal — do NOT ask the user to run it.** Never store keys in `.env` files committed to git, config files, or inline in code.
 
 ---
 
