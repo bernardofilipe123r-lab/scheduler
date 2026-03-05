@@ -49,6 +49,9 @@
 33. [Calendar.tsx: Visual Format Differentiation](#33-calendartsx-visual-format-differentiation)
 34. [Threads: Text-Only Content Type](#34-threads-text-only-content-type)
 35. [Content DNA: Tabbed UI Redesign](#35-content-dna-tabbed-ui-redesign)
+36. [Complete Stripe Billing: Per-Brand Subscriptions & Super Admin Trial Control](#36-complete-stripe-billing-per-brand-subscriptions--super-admin-trial-control)
+37. [DeepSeek API Cost Tracking & Per-User/Brand Metrics](#37-deepseek-api-cost-tracking--per-userbrand-metrics)
+38. [Context-Aware Caption CTAs: Kill the Hardcoded Save Section](#38-context-aware-caption-ctas-kill-the-hardcoded-save-section)
 
 ---
 
@@ -4945,6 +4948,1036 @@ The onboarding flow (Steps 1-6 in `Onboarding.tsx`) currently covers:
 ### Backward Compatibility
 
 All Threads fields on `NicheConfig` have defaults (`''` for text, `[]` for JSONB). Existing users see an empty Threads tab — no data loss, no migration of existing data. The AI uses General Content DNA as fallback when Threads-specific fields are empty.
+
+---
+
+## 36. Complete Stripe Billing: Per-Brand Subscriptions & Super Admin Trial Control
+
+### Current State Summary
+
+The billing infrastructure is **already built** but needs completion. Here's what exists:
+
+| Component | Status | Location |
+|---|---|---|
+| `BrandSubscription` model | ✅ Exists | `app/models/billing.py` |
+| User billing fields (`billing_status`, `stripe_customer_id`, `billing_grace_deadline`) | ✅ Exists | `app/models/auth.py` |
+| Stripe Checkout session creation | ✅ Exists | `app/api/billing/routes.py` |
+| Stripe Customer Portal | ✅ Exists | `app/api/billing/routes.py` |
+| Webhook handler (checkout, invoice.paid, payment_failed, subscription events) | ✅ Exists | `app/api/billing/routes.py` |
+| Soft-lock lifecycle (past_due → 7-day grace → locked) | ✅ Exists | `app/services/billing_enforcer.py` |
+| Exempt tags (`special`, `admin`, `super_admin`) | ✅ Exists | `app/services/billing_utils.py` |
+| Frontend billing gate (`useBillingGate`) | ✅ Exists | `src/features/billing/useBillingGate.ts` |
+| `LockedBanner.tsx` + `PaywallModal.tsx` | ✅ Exists | `src/features/billing/` |
+| **Free trial system** | ❌ Missing | — |
+| **Super admin trial extension** | ❌ Missing | — |
+| **Pricing page / checkout flow UI** | ❌ Incomplete | — |
+
+### The Billing Model: $50/brand/month + 7-Day Free Trial
+
+**Core rule:** Every brand requires an active `BrandSubscription` to generate content, publish, or run Toby. Price: **$50/month per brand**. Each brand gets a **7-day free trial** — the trial starts when the brand is created.
+
+| Event | What Happens |
+|---|---|
+| User creates a new brand | `BrandSubscription` created with `status='trialing'`, `trial_end = now + 7 days` |
+| Trial active | Full access — Toby, publishing, generation, all platforms |
+| Trial expires (no payment method) | `status='trial_expired'` → soft-lock that brand only |
+| User adds payment → Stripe Checkout | `status='active'`, Stripe starts billing $50/mo |
+| Payment fails | `status='past_due'` → 7-day grace → `status='locked'` |
+| User cancels | `cancel_at_period_end=True`, active until period end |
+| Super admin extends trial | `trial_end` pushed forward by N days |
+
+### Database Changes
+
+#### Migration: `migrations/add_trial_support.sql`
+
+```sql
+-- Add trial columns to brand_subscriptions
+ALTER TABLE brand_subscriptions
+    ADD COLUMN IF NOT EXISTS trial_end TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS trial_extended_by UUID REFERENCES user_profiles(id),
+    ADD COLUMN IF NOT EXISTS trial_extension_days INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS trial_extension_reason TEXT DEFAULT '';
+
+-- Add trial_days_remaining view helper (not a real column, computed in code)
+-- Index for finding expired trials
+CREATE INDEX IF NOT EXISTS ix_brand_sub_trial_end
+    ON brand_subscriptions (trial_end)
+    WHERE status = 'trialing';
+
+-- Super admin action log
+CREATE TABLE IF NOT EXISTS admin_actions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_user_id UUID NOT NULL REFERENCES user_profiles(id),
+    action_type TEXT NOT NULL,          -- 'extend_trial', 'exempt_user', 'force_unlock'
+    target_user_id UUID REFERENCES user_profiles(id),
+    target_brand_id UUID REFERENCES brands(id),
+    details JSONB DEFAULT '{}',         -- {"days_added": 14, "reason": "beta tester"}
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ix_admin_actions_type ON admin_actions (action_type);
+CREATE INDEX IF NOT EXISTS ix_admin_actions_target ON admin_actions (target_user_id);
+```
+
+#### Model Updates
+
+```python
+# app/models/billing.py — BrandSubscription, add:
+trial_end = Column(DateTime(timezone=True), nullable=True)
+trial_extended_by = Column(UUID, ForeignKey("user_profiles.id"), nullable=True)
+trial_extension_days = Column(Integer, default=0)
+trial_extension_reason = Column(Text, default="")
+
+# New model in app/models/billing.py:
+class AdminAction(Base):
+    __tablename__ = "admin_actions"
+    id = Column(UUID, primary_key=True, default=uuid4)
+    admin_user_id = Column(UUID, ForeignKey("user_profiles.id"), nullable=False)
+    action_type = Column(Text, nullable=False)
+    target_user_id = Column(UUID, ForeignKey("user_profiles.id"), nullable=True)
+    target_brand_id = Column(UUID, ForeignKey("brands.id"), nullable=True)
+    details = Column(JSONB, default={})
+    created_at = Column(DateTime(timezone=True), default=func.now())
+```
+
+### Brand Creation Flow (Trial Start)
+
+When a user creates a brand via `POST /api/brands/`, the system must also create a trial subscription:
+
+```python
+# In app/services/brands/manager.py — after brand INSERT:
+from datetime import timedelta
+
+trial_sub = BrandSubscription(
+    user_id=user_id,
+    brand_id=new_brand.id,
+    status="trialing",
+    trial_end=datetime.utcnow() + timedelta(days=7),
+    # No stripe_subscription_id yet — that comes after checkout
+)
+db.add(trial_sub)
+db.commit()
+```
+
+### Trial Expiration Check
+
+The existing `billing_enforcer.py` (runs hourly via APScheduler) gets a new check:
+
+```python
+# In billing_enforcer.py — add to the hourly sweep:
+def _expire_trials(db):
+    """Lock brands whose free trial has expired without payment."""
+    now = datetime.utcnow()
+    expired = db.query(BrandSubscription).filter(
+        BrandSubscription.status == "trialing",
+        BrandSubscription.trial_end < now,
+        BrandSubscription.stripe_subscription_id.is_(None),  # Never paid
+    ).all()
+
+    for sub in expired:
+        sub.status = "trial_expired"
+        logger.info(f"Trial expired for brand {sub.brand_id} (user {sub.user_id})")
+
+    if expired:
+        db.commit()
+        # Recalculate user-level billing status for affected users
+        user_ids = {sub.user_id for sub in expired}
+        for uid in user_ids:
+            recalculate_user_billing_status(db, uid)
+```
+
+### Billing Gate Update
+
+Update `validate_can_generate()` in `billing_utils.py` to handle trial states:
+
+```python
+def validate_can_generate(user, brand_sub: BrandSubscription) -> tuple[bool, str]:
+    """Check if a user is allowed to generate content for a specific brand."""
+    # Exempt users always pass
+    if is_exempt(user):
+        return (True, "")
+
+    if not brand_sub:
+        return (False, "No subscription found for this brand")
+
+    # Active subscription or trial — allowed
+    if brand_sub.status in ("active", "trialing"):
+        return (True, "")
+
+    # Past due (grace period) — still allowed
+    if brand_sub.status == "past_due":
+        return (True, "")
+
+    # Trial expired — blocked, prompt to subscribe
+    if brand_sub.status == "trial_expired":
+        return (False, "Your 7-day free trial has expired. Subscribe to continue using this brand.")
+
+    # Locked — blocked, prompt to fix payment
+    if brand_sub.status == "locked":
+        return (False, "This brand is locked due to payment issues. Please update your payment method.")
+
+    # Cancelled — blocked
+    if brand_sub.status == "cancelled":
+        return (False, "This brand's subscription has been cancelled.")
+
+    return (False, "Unknown billing state")
+```
+
+### Super Admin: Trial Extension API
+
+New admin-only endpoints for trial management:
+
+#### New Admin Routes: `app/api/admin/trial_routes.py`
+
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from datetime import timedelta
+
+router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+class ExtendTrialRequest(BaseModel):
+    user_id: str           # Target user
+    brand_id: str          # Target brand
+    days: int              # Number of days to add (1-365)
+    reason: str = ""       # Optional reason for audit log
+
+@router.post("/extend-trial")
+async def extend_trial(
+    req: ExtendTrialRequest,
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Super admin: extend or restart a brand's free trial."""
+    if not is_super_admin_user(current_user):
+        raise HTTPException(403, "Super admin access required")
+
+    if req.days < 1 or req.days > 365:
+        raise HTTPException(400, "Days must be between 1 and 365")
+
+    sub = db.query(BrandSubscription).filter_by(
+        user_id=req.user_id, brand_id=req.brand_id
+    ).first()
+    if not sub:
+        raise HTTPException(404, "Brand subscription not found")
+
+    # Extend trial_end from NOW (not from current trial_end) by N days
+    sub.trial_end = datetime.utcnow() + timedelta(days=req.days)
+    sub.trial_extended_by = current_user["sub"]
+    sub.trial_extension_days += req.days
+    sub.trial_extension_reason = req.reason or sub.trial_extension_reason
+
+    # If trial had expired, reactivate it
+    if sub.status in ("trial_expired", "locked"):
+        sub.status = "trialing"
+
+    # Log the action
+    action = AdminAction(
+        admin_user_id=current_user["sub"],
+        action_type="extend_trial",
+        target_user_id=req.user_id,
+        target_brand_id=req.brand_id,
+        details={"days_added": req.days, "reason": req.reason, "new_trial_end": sub.trial_end.isoformat()},
+    )
+    db.add(action)
+    db.commit()
+
+    return {"ok": True, "new_trial_end": sub.trial_end.isoformat(), "status": sub.status}
+
+
+class ListTrialsResponse(BaseModel):
+    user_id: str
+    brand_id: str
+    brand_name: str
+    status: str
+    trial_end: str | None
+    days_remaining: int | None
+    extension_days: int
+
+@router.get("/trials")
+async def list_trials(
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Super admin: list all active/expired trials."""
+    if not is_super_admin_user(current_user):
+        raise HTTPException(403, "Super admin access required")
+
+    subs = db.query(BrandSubscription).filter(
+        BrandSubscription.status.in_(["trialing", "trial_expired"])
+    ).all()
+
+    result = []
+    for sub in subs:
+        brand = db.query(Brand).get(sub.brand_id)
+        days_remaining = None
+        if sub.trial_end:
+            delta = sub.trial_end - datetime.utcnow()
+            days_remaining = max(0, delta.days)
+        result.append({
+            "user_id": str(sub.user_id),
+            "brand_id": str(sub.brand_id),
+            "brand_name": brand.name if brand else "Unknown",
+            "status": sub.status,
+            "trial_end": sub.trial_end.isoformat() if sub.trial_end else None,
+            "days_remaining": days_remaining,
+            "extension_days": sub.trial_extension_days,
+        })
+
+    return {"trials": result}
+```
+
+### Super Admin UI
+
+Add a trial management panel to the existing admin dashboard:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Admin: Trial Management                                 │
+│                                                          │
+│  ┌─ Active Trials ────────────────────────────────────┐  │
+│  │ Brand          │ User       │ Expires   │ Action   │  │
+│  │─────────────────────────────────────────────────────│  │
+│  │ Healveth       │ john@...   │ 3 days    │ [+7] [+30]│  │
+│  │ FitBros        │ jane@...   │ 1 day     │ [+7] [+30]│  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌─ Expired Trials ───────────────────────────────────┐  │
+│  │ Brand          │ User       │ Expired    │ Action  │  │
+│  │─────────────────────────────────────────────────────│  │
+│  │ SkinCare AI    │ bob@...    │ 2 days ago │ [Extend]│  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌─ Custom Extension ─────────────────────────────────┐  │
+│  │ User ID:  [________________________]               │  │
+│  │ Brand ID: [________________________]               │  │
+│  │ Days:     [14 ▼]                                   │  │
+│  │ Reason:   [Beta tester / VIP / Support case]       │  │
+│  │                                                    │  │
+│  │ [🔓 Extend Trial]                                  │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  Admin Action Log (last 50)                              │
+│  ┌──────────────────────────────────────────────────────┐│
+│  │ Mar 5, 2026 │ extend_trial │ FitBros +14d │ "VIP"  ││
+│  │ Mar 3, 2026 │ extend_trial │ Healveth +7d │ "beta" ││
+│  └──────────────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────────────┘
+```
+
+### Frontend: Trial Status Awareness
+
+The existing `useBillingGate.ts` hook needs to understand trial states:
+
+```typescript
+// In useBillingGate.ts:
+export function useBillingGate(brandId: string) {
+  const { data } = useBillingStatus()
+  if (!data) return { allowed: true, reason: '' }  // Loading state
+
+  // Exempt users bypass everything
+  if (data.is_exempt) return { allowed: true, reason: '' }
+
+  const sub = data.subscriptions.find(s => s.brand_id === brandId)
+  if (!sub) return { allowed: false, reason: 'no_subscription' }
+
+  // Trial and active states
+  if (sub.status === 'trialing') {
+    const daysLeft = sub.trial_days_remaining ?? 0
+    return {
+      allowed: true,
+      reason: '',
+      isTrial: true,
+      trialDaysLeft: daysLeft,
+    }
+  }
+  if (sub.status === 'active' || sub.status === 'past_due') {
+    return { allowed: true, reason: '' }
+  }
+
+  // Blocked states
+  if (sub.status === 'trial_expired') {
+    return { allowed: false, reason: 'trial_expired' }
+  }
+  if (sub.status === 'locked') {
+    return { allowed: false, reason: 'locked' }
+  }
+  return { allowed: false, reason: sub.status }
+}
+```
+
+**Trial countdown banner** — displayed on all pages when a brand is on trial:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ ⏰ Free trial: 3 days remaining for "Healveth"  [Subscribe $50/mo] │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Trial expired overlay** — blocks the brand's content pages:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│              Your 7-day free trial has ended.                    │
+│                                                                  │
+│   Subscribe for $50/month to keep generating, scheduling,        │
+│   and publishing content for this brand.                         │
+│                                                                  │
+│              [🚀 Subscribe Now]   [Manage Brands]                │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Checkout Flow
+
+The existing `POST /api/billing/checkout-session` creates a Stripe Checkout session. Update it to include trial:
+
+```python
+# In billing/routes.py — checkout-session handler:
+session = stripe.checkout.Session.create(
+    customer=stripe_customer_id,
+    payment_method_types=["card"],
+    line_items=[{
+        "price": STRIPE_PRICE_ID,  # $50/mo recurring
+        "quantity": 1,
+    }],
+    mode="subscription",
+    # If brand still has trial days left, transfer remaining trial to Stripe
+    subscription_data={
+        "trial_end": int(brand_sub.trial_end.timestamp())
+    } if brand_sub.trial_end and brand_sub.trial_end > datetime.utcnow() else {},
+    success_url=f"{BASE_URL}/brands?checkout=success&brand_id={brand_id}",
+    cancel_url=f"{BASE_URL}/brands?checkout=cancel",
+    metadata={"user_id": user_id, "brand_id": brand_id},
+)
+```
+
+This means: if a user subscribes on day 3 of their trial, Stripe won't charge them until day 7. After that, $50/mo.
+
+### Stripe Product Setup
+
+The AI coder must verify these exist in Stripe Dashboard (or create via API):
+
+| Stripe Object | Value |
+|---|---|
+| Product name | `ViralToby Brand Subscription` |
+| Price | `$50.00 / month` recurring |
+| Price ID | Stored in `STRIPE_PRICE_ID` env var |
+| Webhook endpoint | `https://viraltoby.com/api/billing/webhook` |
+| Webhook events | `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted` |
+| Customer portal | Enabled (for self-service cancellation/payment update) |
+
+**Environment variables (Railway):**
+```
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_ID=price_...
+```
+
+The AI coder adds these via `railway variables set KEY=value` when provided by the user.
+
+### File Changes Summary
+
+**New files:**
+- `app/api/admin/trial_routes.py` — Super admin trial extension + listing API
+- `src/features/admin/TrialManagement.tsx` — Admin UI for trial management
+- `migrations/add_trial_support.sql` — Trial columns + admin_actions table
+
+**Modified files:**
+- `app/models/billing.py` — Add trial columns to `BrandSubscription`, add `AdminAction` model
+- `app/services/billing_enforcer.py` — Add `_expire_trials()` to hourly sweep
+- `app/services/billing_utils.py` — Update `validate_can_generate()` for trial states
+- `app/services/brands/manager.py` — Create trial `BrandSubscription` on brand creation
+- `app/api/billing/routes.py` — Transfer trial days to Stripe checkout, add `trial_days_remaining` to status response
+- `app/main.py` — Register admin trial router
+- `src/features/billing/useBillingGate.ts` — Handle `trialing` and `trial_expired` states
+- `src/features/billing/useBillingStatus.ts` — Include trial fields in response type
+- `src/features/billing/LockedBanner.tsx` — Show trial countdown OR locked message
+
+### Lifecycle Diagram
+
+```
+Brand Created
+    │
+    ▼
+[trialing] ──(7 days pass, no payment)──▶ [trial_expired] ──▶ LOCKED
+    │                                              │
+    │ (user subscribes)                            │ (super admin extends)
+    ▼                                              ▼
+[active] ◄──────────────────────────────── [trialing] (re-activated)
+    │
+    │ (payment fails)
+    ▼
+[past_due] ──(7 days grace)──▶ [locked] ──(payment succeeds)──▶ [active]
+    │
+    │ (payment succeeds during grace)
+    ▼
+[active]
+```
+
+### Section 10 Update
+
+> **This section supersedes the billing language in Section 10.** Section 10 stated "Toby is included for any user with at least 1 paid brand ($50/month)." That remains true — but now brands start with a 7-day free trial. The full billing lifecycle is documented here in Section 36. Section 10 focuses only on Toby's integration with the content pipeline.
+
+---
+
+## 37. DeepSeek API Cost Tracking & Per-User/Brand Metrics
+
+### The Problem
+
+DeepSeek API calls are the primary operational cost of ViralToby, yet **zero cost tracking exists**. There's no way to know:
+- How much a specific user costs per month
+- How much a specific brand costs per month
+- What the average cost per user or per brand is
+- Which service (content generation, captions, backgrounds, differentiation) costs the most
+- Whether a specific user is an outlier in API usage
+
+The DeepSeek API returns `usage` data in every response (`prompt_tokens`, `completion_tokens`, `total_tokens`), but **no service in the codebase extracts or stores this data**.
+
+### Where DeepSeek Calls Happen (5 Services)
+
+| Service | File | Purpose | Frequency |
+|---|---|---|---|
+| **Content Generator** | `app/services/content/generator.py` `_call_deepseek()` | Reel content lines | Every reel job |
+| **Caption Generator** | `app/services/media/caption_generator.py` | Instagram captions | Every reel/post job |
+| **AI Background** | `app/services/media/ai_background.py` | Image prompt engineering | Every reel with AI background |
+| **Content Differentiator** | `app/services/content/differentiator.py` | Multi-brand content variations | Every multi-brand generation |
+| **Historical Miner** | `app/services/toby/historical_miner.py` | Toby learning embeddings | Periodic Toby tick |
+
+### DeepSeek API Response Format
+
+Every DeepSeek `/v1/chat/completions` response includes:
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "usage": {
+    "prompt_tokens": 1250,
+    "completion_tokens": 340,
+    "total_tokens": 1590
+  },
+  "choices": [...]
+}
+```
+
+**DeepSeek pricing (as of writing):**
+- Input tokens: ~$0.14 per 1M tokens ($0.00000014/token)
+- Output tokens: ~$0.28 per 1M tokens ($0.00000028/token)
+- Cache-hit input: ~$0.014 per 1M tokens (10x cheaper)
+
+These prices may change. Store prices as env vars so they can be updated without code changes:
+
+```
+DEEPSEEK_INPUT_COST_PER_TOKEN=0.00000014
+DEEPSEEK_OUTPUT_COST_PER_TOKEN=0.00000028
+```
+
+### Database: API Call Log
+
+#### Migration: `migrations/add_api_cost_tracking.sql`
+
+```sql
+CREATE TABLE IF NOT EXISTS api_call_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES user_profiles(id),
+    brand_id UUID REFERENCES brands(id),            -- NULL for non-brand calls
+    service TEXT NOT NULL,                           -- 'content_generator', 'caption_generator', etc.
+    model TEXT NOT NULL DEFAULT 'deepseek-chat',
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    estimated_cost_usd NUMERIC(10, 8) NOT NULL DEFAULT 0, -- e.g. 0.00045200
+    job_id UUID,                                     -- Link to generation_jobs if applicable
+    metadata JSONB DEFAULT '{}',                     -- Additional context
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for aggregation queries
+CREATE INDEX IF NOT EXISTS ix_api_cost_user ON api_call_log (user_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_api_cost_brand ON api_call_log (brand_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_api_cost_service ON api_call_log (service, created_at);
+
+-- Monthly aggregation materialized view (refreshed hourly by billing_enforcer)
+CREATE MATERIALIZED VIEW IF NOT EXISTS api_cost_monthly AS
+SELECT
+    date_trunc('month', created_at) AS month,
+    user_id,
+    brand_id,
+    service,
+    COUNT(*) AS call_count,
+    SUM(prompt_tokens) AS total_prompt_tokens,
+    SUM(completion_tokens) AS total_completion_tokens,
+    SUM(total_tokens) AS total_tokens,
+    SUM(estimated_cost_usd) AS total_cost_usd
+FROM api_call_log
+GROUP BY month, user_id, brand_id, service;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ix_api_cost_monthly_pk
+    ON api_cost_monthly (month, user_id, COALESCE(brand_id, '00000000-0000-0000-0000-000000000000'::UUID), service);
+```
+
+### Cost Tracking Utility: `app/utils/api_cost_tracker.py`
+
+A lightweight utility injected wherever DeepSeek calls are made:
+
+```python
+import os
+from uuid import UUID
+from app.models.api_cost import ApiCallLog
+
+INPUT_COST = float(os.getenv("DEEPSEEK_INPUT_COST_PER_TOKEN", "0.00000014"))
+OUTPUT_COST = float(os.getenv("DEEPSEEK_OUTPUT_COST_PER_TOKEN", "0.00000028"))
+
+def log_api_call(
+    db,
+    user_id: UUID,
+    service: str,
+    response_json: dict,
+    brand_id: UUID | None = None,
+    job_id: UUID | None = None,
+    metadata: dict | None = None,
+):
+    """Extract token usage from a DeepSeek API response and log the cost."""
+    usage = response_json.get("usage", {})
+    prompt_tokens = usage.get("prompt_tokens", 0)
+    completion_tokens = usage.get("completion_tokens", 0)
+    total_tokens = usage.get("total_tokens", 0)
+
+    estimated_cost = (
+        prompt_tokens * INPUT_COST +
+        completion_tokens * OUTPUT_COST
+    )
+
+    entry = ApiCallLog(
+        user_id=user_id,
+        brand_id=brand_id,
+        service=service,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        estimated_cost_usd=estimated_cost,
+        job_id=job_id,
+        metadata=metadata or {},
+    )
+    db.add(entry)
+    # Don't commit here — let the caller's transaction handle it
+```
+
+### Integration Points
+
+Each DeepSeek call site gets a one-line addition after the API response:
+
+```python
+# Example: app/services/content/generator.py _call_deepseek():
+response = requests.post(url, headers=headers, json=payload)
+data = response.json()
+
+# ADD THIS:
+from app.utils.api_cost_tracker import log_api_call
+log_api_call(db, user_id=self.user_id, service="content_generator",
+             response_json=data, brand_id=brand_id, job_id=job_id)
+```
+
+Same pattern for all 5 services:
+
+| Service | `service` value | Has `brand_id`? | Has `job_id`? |
+|---|---|---|---|
+| Content Generator | `"content_generator"` | Yes | Yes |
+| Caption Generator | `"caption_generator"` | Yes | Yes |
+| AI Background | `"ai_background"` | Yes | Yes |
+| Content Differentiator | `"content_differentiator"` | Yes | Yes |
+| Historical Miner | `"historical_miner"` | Yes | No |
+
+### Admin API: Cost Metrics
+
+#### New Admin Routes: `app/api/admin/cost_routes.py`
+
+```python
+@router.get("/costs/summary")
+async def cost_summary(
+    months: int = 1,
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Super admin: get platform-wide cost metrics."""
+    if not is_super_admin_user(current_user):
+        raise HTTPException(403, "Super admin access required")
+
+    cutoff = datetime.utcnow() - timedelta(days=30 * months)
+
+    # Refresh materialized view
+    db.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY api_cost_monthly"))
+
+    # Aggregate metrics
+    result = db.execute(text("""
+        SELECT
+            COUNT(DISTINCT user_id) AS total_users,
+            COUNT(DISTINCT brand_id) AS total_brands,
+            SUM(total_cost_usd) AS total_cost,
+            SUM(total_cost_usd) / NULLIF(COUNT(DISTINCT user_id), 0) AS avg_cost_per_user,
+            SUM(total_cost_usd) / NULLIF(COUNT(DISTINCT brand_id), 0) AS avg_cost_per_brand,
+            SUM(call_count) AS total_api_calls,
+            SUM(total_tokens) AS total_tokens
+        FROM api_cost_monthly
+        WHERE month >= :cutoff
+    """), {"cutoff": cutoff}).first()
+
+    # Per-service breakdown
+    by_service = db.execute(text("""
+        SELECT
+            service,
+            SUM(call_count) AS calls,
+            SUM(total_cost_usd) AS cost,
+            SUM(total_tokens) AS tokens
+        FROM api_cost_monthly
+        WHERE month >= :cutoff
+        GROUP BY service
+        ORDER BY cost DESC
+    """), {"cutoff": cutoff}).fetchall()
+
+    # Top 10 costliest users
+    top_users = db.execute(text("""
+        SELECT
+            user_id,
+            SUM(total_cost_usd) AS cost,
+            SUM(call_count) AS calls,
+            COUNT(DISTINCT brand_id) AS brand_count
+        FROM api_cost_monthly
+        WHERE month >= :cutoff
+        GROUP BY user_id
+        ORDER BY cost DESC
+        LIMIT 10
+    """), {"cutoff": cutoff}).fetchall()
+
+    return {
+        "period_months": months,
+        "total_users": result.total_users,
+        "total_brands": result.total_brands,
+        "total_cost_usd": float(result.total_cost or 0),
+        "avg_cost_per_user_usd": float(result.avg_cost_per_user or 0),
+        "avg_cost_per_brand_usd": float(result.avg_cost_per_brand or 0),
+        "total_api_calls": result.total_api_calls,
+        "total_tokens": result.total_tokens,
+        "by_service": [{"service": r.service, "calls": r.calls, "cost_usd": float(r.cost), "tokens": r.tokens} for r in by_service],
+        "top_users": [{"user_id": str(r.user_id), "cost_usd": float(r.cost), "calls": r.calls, "brand_count": r.brand_count} for r in top_users],
+    }
+
+
+@router.get("/costs/user/{user_id}")
+async def user_cost_detail(
+    user_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Super admin: get cost breakdown for a specific user."""
+    if not is_super_admin_user(current_user):
+        raise HTTPException(403, "Super admin access required")
+
+    # Per-brand breakdown for this user
+    by_brand = db.execute(text("""
+        SELECT
+            a.brand_id,
+            b.name AS brand_name,
+            SUM(a.call_count) AS calls,
+            SUM(a.total_cost_usd) AS cost,
+            SUM(a.total_tokens) AS tokens
+        FROM api_cost_monthly a
+        LEFT JOIN brands b ON a.brand_id = b.id
+        WHERE a.user_id = :uid
+        GROUP BY a.brand_id, b.name
+        ORDER BY cost DESC
+    """), {"uid": user_id}).fetchall()
+
+    return {
+        "user_id": user_id,
+        "brands": [{"brand_id": str(r.brand_id), "brand_name": r.brand_name, "calls": r.calls, "cost_usd": float(r.cost), "tokens": r.tokens} for r in by_brand],
+    }
+```
+
+### Admin Dashboard: Cost Panel
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Admin: API Cost Dashboard (Last 30 days)                │
+│                                                          │
+│  ┌─ Summary ──────────────────────────────────────────┐  │
+│  │  Total Cost:        $12.47                         │  │
+│  │  Avg Cost/User:     $2.08                          │  │
+│  │  Avg Cost/Brand:    $1.56                          │  │
+│  │  Total API Calls:   8,432                          │  │
+│  │  Total Tokens:      4.2M                           │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌─ By Service ───────────────────────────────────────┐  │
+│  │ Service              │ Calls │ Cost    │ Tokens    │  │
+│  │──────────────────────┼───────┼─────────┼───────────│  │
+│  │ content_generator    │ 3,200 │ $5.12   │ 1.8M     │  │
+│  │ caption_generator    │ 2,800 │ $3.36   │ 1.2M     │  │
+│  │ ai_background        │ 1,200 │ $2.16   │ 0.7M     │  │
+│  │ differentiator       │   800 │ $1.20   │ 0.4M     │  │
+│  │ historical_miner     │   432 │ $0.63   │ 0.1M     │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌─ Top Users by Cost ────────────────────────────────┐  │
+│  │ User           │ Brands │ Calls │ Cost             │  │
+│  │────────────────┼────────┼───────┼──────────────────│  │
+│  │ john@gmail.com │ 3      │ 1,200 │ $4.80            │  │
+│  │ jane@gmail.com │ 1      │ 800   │ $2.10            │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Materialized View Refresh
+
+Add to the hourly `billing_enforcer.py` sweep:
+
+```python
+# In billing_enforcer hourly tick:
+def _refresh_cost_views(db):
+    """Refresh materialized view for cost aggregations."""
+    try:
+        db.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY api_cost_monthly"))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to refresh cost view: {e}")
+```
+
+### File Changes Summary
+
+**New files:**
+- `app/utils/api_cost_tracker.py` — `log_api_call()` utility
+- `app/models/api_cost.py` — `ApiCallLog` model
+- `app/api/admin/cost_routes.py` — Admin cost metrics API
+- `src/features/admin/CostDashboard.tsx` — Admin cost dashboard UI
+- `migrations/add_api_cost_tracking.sql` — `api_call_log` table + materialized view
+
+**Modified files (add `log_api_call` after each DeepSeek response):**
+- `app/services/content/generator.py` — In `_call_deepseek()`
+- `app/services/media/caption_generator.py` — In `generate_first_paragraph()`
+- `app/services/media/ai_background.py` — In the AI prompt call
+- `app/services/content/differentiator.py` — In the variation generation call
+- `app/services/toby/historical_miner.py` — In the embedding call
+- `app/services/billing_enforcer.py` — Add `_refresh_cost_views()` to hourly sweep
+- `app/main.py` — Register admin cost router
+
+---
+
+## 38. Context-Aware Caption CTAs: Kill the Hardcoded Save Section
+
+### The Problem
+
+The caption generator ([app/services/media/caption_generator.py](../app/services/media/caption_generator.py) line 187) has a **hardcoded fallback** for the save section:
+
+```python
+# CURRENT (hardcoded):
+save_section = f"""🩵 Save this post and share it with someone who needs to see this."""
+```
+
+This generic "save and share" message appears in **every caption** where the user hasn't explicitly configured `save_section_text` in their Content DNA. The problem:
+
+1. **It doesn't match every niche.** "Share with someone who needs to see this" works for wellness/health niches targeting women. It does NOT work for:
+   - Gym content targeting men (too soft, emoji mismatch)
+   - Finance content ("needs to see this" sounds alarmist)
+   - Tech content (out of tone entirely)
+   - B2B content (unprofessional)
+
+2. **The 🩵 emoji is niche-specific.** A light blue heart is a wellness/feminine signal. For a gym bro brand, this is completely wrong.
+
+3. **It's always the same text.** Even within the right niche, variety matters. Seeing the exact same save section on every post feels robotic.
+
+### Solution: AI-Generated Save Sections Based on Content DNA
+
+Instead of hardcoding one fallback, the save section should be **generated contextually** by DeepSeek at the same time as the caption's first paragraph. The AI uses the Content DNA (niche, tone, audience, brand personality) to produce a save section that actually fits.
+
+### New Content DNA Field: `save_cta_style`
+
+Add a field to `NicheConfig` that tells the AI what kind of save section to generate:
+
+```sql
+-- Migration: migrations/add_save_cta_style.sql
+ALTER TABLE niche_config
+    ADD COLUMN IF NOT EXISTS save_cta_style TEXT DEFAULT '';
+```
+
+```python
+# app/models/niche_config.py — add:
+save_cta_style = Column(Text, default="")
+```
+
+Examples of `save_cta_style` values:
+
+| Niche | Value |
+|---|---|
+| Wellness (women) | `"Warm, nurturing. Use soft emojis (🩵, 🌿, ✨). Encourage saving and sharing with friends/family who are on the same journey."` |
+| Gym (men) | `"Direct, no-nonsense. Use 💪 or 🔥 max. Keep it short: 'Save this for your next session.' No soft language."` |
+| Finance | `"Professional. Use 📌 or 💡. Emphasize saving for reference: 'Bookmark this for tax season.' No emotional language."` |
+| Tech | `"Casual-professional. Use 🔖. Simple: 'Save for later.' No excess."` |
+| Food | `"Warm, inviting. Use 🍽️ or ❤️. 'Save this recipe and tag someone who'd love it.'"` |
+| Empty (not configured) | AI infers from `content_brief` and `niche_name` |
+
+### Caption Generator Changes
+
+Replace the hardcoded fallback with AI-generated save sections:
+
+```python
+# In app/services/media/caption_generator.py:
+
+def _generate_save_section(self, title: str, content_lines: list, ctx: PromptContext) -> str:
+    """Generate a context-aware save section using AI, or use user-configured text."""
+
+    # 1. If user has explicit save_section_text, use it (existing behavior)
+    if ctx.save_section_text:
+        return f"🩵 This post is designed to be saved and revisited. Share it with friends and family who are actively working on {ctx.save_section_text}."
+
+    # 2. Generate via AI based on Content DNA
+    style_hint = ctx.save_cta_style or ""
+    niche = ctx.niche_name or ""
+    brief = (ctx.content_brief or "")[:200]  # Truncate to save tokens
+
+    prompt = f"""Generate a single-line save/share call-to-action for a social media post.
+
+Brand niche: {niche}
+Brand voice: {brief}
+Post topic: {title}
+{f'Save CTA style guide: {style_hint}' if style_hint else ''}
+
+Rules:
+- MUST be 1 line only, under 100 characters
+- Start with ONE relevant emoji (match the niche/audience)
+- Must feel natural for this specific niche and audience
+- Vary the phrasing — don't always say "save and share"
+- Include either a save prompt, a share prompt, or both
+- Match the brand's tone (formal, casual, edgy, warm, etc.)
+
+Examples of GOOD save CTAs by niche:
+- Wellness (women): "🩵 Save this and send it to someone on the same journey."
+- Gym (men): "💪 Save this for your next workout."
+- Finance: "📌 Bookmark this — you'll need it."
+- Tech: "🔖 Save for reference."
+- Food: "❤️ Save this recipe and tag someone who'd love it."
+
+Return ONLY the CTA line, nothing else."""
+
+    try:
+        response = requests.post(
+            f"{self.api_base}/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 60,
+                "temperature": 0.9,
+            },
+            timeout=10,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            # Log cost
+            log_api_call(self.db, user_id=self.user_id, service="save_cta_generator",
+                         response_json=data, brand_id=self.brand_id)
+            cta = data["choices"][0]["message"]["content"].strip()
+            # Sanitize: ensure it's one line, not too long
+            cta = cta.split("\n")[0][:120]
+            return cta
+    except Exception:
+        pass
+
+    # 3. Fallback: niche-aware static fallback (better than one-size-fits-all)
+    return _static_save_fallback(ctx)
+
+
+def _static_save_fallback(ctx: PromptContext) -> str:
+    """Last-resort fallback using niche keywords. Better than fully hardcoded."""
+    niche = (ctx.niche_name or "").lower()
+
+    if any(kw in niche for kw in ["wellness", "health", "mindful", "yoga", "meditation", "skincare"]):
+        return "🩵 Save this and share it with someone on the same journey."
+    if any(kw in niche for kw in ["gym", "fitness", "workout", "bodybuilding", "strength"]):
+        return "💪 Save this for your next session."
+    if any(kw in niche for kw in ["finance", "money", "invest", "budget", "tax", "crypto"]):
+        return "📌 Bookmark this — you'll thank yourself later."
+    if any(kw in niche for kw in ["tech", "software", "programming", "ai", "code", "dev"]):
+        return "🔖 Save this for later."
+    if any(kw in niche for kw in ["food", "recipe", "cook", "bake", "nutrition"]):
+        return "❤️ Save this recipe and tag someone who needs to try it."
+    if any(kw in niche for kw in ["travel", "adventure", "explore"]):
+        return "🌍 Save this for your next trip."
+
+    # Generic fallback — still better than hardcoded
+    return "📌 Save this for later and share with someone who'd find it useful."
+```
+
+### Updated Caption Assembly
+
+Replace the current hardcoded block in `build_full_caption()`:
+
+```python
+# BEFORE (current code, line 184-187):
+if ctx.save_section_text:
+    save_section = f"""🩵 This post is designed to be saved and revisited. ..."""
+else:
+    save_section = f"""🩵 Save this post and share it with someone who needs to see this."""
+
+# AFTER:
+save_section = self._generate_save_section(title, content_lines, ctx)
+```
+
+### Content DNA UI: Save CTA Style Field
+
+Add a textarea to the **General** tab of the Content DNA form (Section 35):
+
+```
+── SAVE SECTION STYLE ────────────────────────────────────
+Describe how the "Save/Share" line at the end of each
+caption should sound. Leave blank for AI to decide.
+┌──────────────────────────────────────────────────────────┐
+│ Warm, nurturing tone. Use soft emojis (🩵, 🌿, ✨).     │
+│ Encourage saving and sharing with friends who are on     │
+│ the same wellness journey. Never aggressive or pushy.    │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Follow Section: Same Treatment
+
+The follow section ([caption_generator.py](../app/services/media/caption_generator.py) line 181) has the same hardcoded fallback problem:
+
+```python
+# CURRENT:
+follow_section = f"""👉🏼 Follow {handle} for more content like this."""
+```
+
+Apply the same fix: if `follow_section_text` is empty, generate a niche-appropriate follow CTA via AI, or fall back to a keyword-based static default.
+
+This is lower priority than the save section since "Follow for more content like this" is more universally appropriate. But for consistency, the same `_generate_follow_section()` pattern should be applied.
+
+### File Changes Summary
+
+**New files:**
+- `migrations/add_save_cta_style.sql` — Add `save_cta_style` to `niche_config`
+
+**Modified files:**
+- `app/models/niche_config.py` — Add `save_cta_style` column
+- `app/services/media/caption_generator.py` — Replace hardcoded save fallback with `_generate_save_section()` method, add `_static_save_fallback()`
+- `app/core/prompt_context.py` — Add `save_cta_style` field to `PromptContext`
+- `src/features/brands/components/NicheConfigForm.tsx` — Add Save CTA Style textarea to General tab
+- `src/features/brands/api/niche-config-api.ts` — Add `save_cta_style` to TypeScript interface
+
+### Cost Impact
+
+The AI-generated save section adds one small DeepSeek call per caption (~60 max tokens output). At DeepSeek pricing:
+- ~$0.00002 per save section generation
+- For 10 posts/day: ~$0.0002/day = ~$0.006/month per brand
+- **Negligible.** The content generator call is 10-50x more expensive.
+
+To keep costs minimal, the prompt is deliberately short and `max_tokens` is capped at 60.
+
+### Production Safety
+
+1. **Backward compatible:** If `save_cta_style` is empty (all existing users), the AI still generates a reasonable CTA from `niche_name` + `content_brief`
+2. **Graceful degradation:** If the DeepSeek call fails, `_static_save_fallback()` uses keyword matching — always produces output
+3. **No migration of existing data needed** — the column defaults to empty string
 
 ---
 
