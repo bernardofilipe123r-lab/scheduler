@@ -2,6 +2,14 @@
 
 > **Purpose:** This document is an AI-coder prompt. It contains every decision, file path, model field, migration, and UI spec needed to implement the TEXT-VIDEO reel format end-to-end in ViralToby. An AI agent reading this document should be able to execute the implementation without asking clarifying questions, except at the explicitly marked `[ASK USER]` decision points.
 
+> **API Keys & Secrets:** This feature requires new external API keys (NewsAPI, Tavily, SerpAPI, Pexels, Gemini). **Do NOT hardcode, guess, or generate placeholder keys.** When you need a key:
+> 1. Ask the user in chat — specify which service and what scope/permissions are needed.
+> 2. The user will provide the key via chat.
+> 3. The user will add it to Railway manually via CLI: `railway variables set KEY_NAME=value`
+> 4. Reference the key in code via `os.environ.get("KEY_NAME")` — never commit secrets.
+>
+> The user has full Railway CLI access (authenticated, project `responsible-mindfulness`, service `scheduler`). All env var operations go through Railway — never store keys in `.env` files committed to git, config files, or inline in code.
+
 ---
 
 ## Table of Contents
