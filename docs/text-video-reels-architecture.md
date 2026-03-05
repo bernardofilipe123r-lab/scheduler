@@ -36,6 +36,9 @@
 28. [Production Safety: Zero-Downtime Migration Plan](#28-production-safety-zero-downtime-migration-plan)
 29. [Complete Code Touchpoint Map](#29-complete-code-touchpoint-map)
 30. [Scalability & Resilience Architecture](#30-scalability--resilience-architecture)
+31. [Job Detail Page for text_video Jobs](#31-job-detail-page-for-text_video-jobs)
+32. [Analytics Page: Format Filter & Comparison](#32-analytics-page-format-filter--comparison)
+33. [Calendar.tsx: Visual Format Differentiation](#33-calendartsx-visual-format-differentiation)
 
 ---
 
@@ -1180,13 +1183,36 @@ def process_job(self, job_id: str):
 
 ---
 
-## 10. Toby Integration (Optional Premium Upsell)
+## 10. Toby Integration
 
 ### Concept
 
-Toby's TEXT-VIDEO integration is an **optional premium feature**. Users who just want to click buttons manually use the `/reels` page. Users who want full hands-off daily automation enable Toby.
+Toby's TEXT-VIDEO integration extends the existing Toby agent with a new `content_type`. Users who just want to click buttons manually use the `/reels` page. Users who want full hands-off daily automation enable Toby.
 
-This is NOT a billing tier change — it's a feature flag on Toby. Toby already has billing gates via `BrandSubscription`. The TEXT-VIDEO format is just a new `content_type` that Toby can produce.
+TEXT-VIDEO is a feature flag on Toby — not a billing tier. The TEXT-VIDEO format is just a new `content_type` that Toby can produce.
+
+### Billing & Access — Current State + Future Architecture
+
+> **Current state (as of writing):** Toby is **included** for any user with at least 1 paid brand ($50/month). Every current user in the app has privilege access — there is no separate Toby upsell gate. TEXT-VIDEO follows the same rule: if you have Toby, you have text_video.
+>
+> **DO NOT over-engineer billing gates for text_video.** The current `BrandSubscription` check is sufficient. No new billing code needed.
+
+**Future-proofing note:** The architecture is designed so Toby (and by extension text_video) CAN be gated as a paid upsell in the future without code changes to the content pipeline. The separation points are:
+
+| Gate Point | Current Behavior | Future Upsell Behavior (no code change needed) |
+|---|---|---|
+| `feature_flags.text_video_reels` | `True` for all users | Set to `False` by default, `True` for paid tier |
+| `TobyBrandConfig.reel_format` | User can set to `"text_video"` freely | UI disables the toggle unless subscription tier includes text_video |
+| Toby tick (`orchestrator.py`) | Checks `feature_flags` before generating | Same — flag controls everything |
+| Semi-Auto / Full-Auto (`/reels` Tab 2) | Available to all users | Frontend gate: `if (!subscription.includes('text_video')) show upgrade prompt` |
+| Free-tier auto-generate limits | No limit currently | Add `auto_generates_remaining` counter per user/month in `user_profiles` |
+
+When the business decides to gate Toby or text_video behind a higher tier, the implementation is:
+1. Add a `tier` field to `BrandSubscription` (e.g., `"starter"` vs `"pro"`)
+2. Add tier checks in the frontend route guards and Toby feature flag loader
+3. No pipeline, model, or migration changes needed — the content_type system is tier-agnostic
+
+**For now: ship it included. Gate it later if needed.**
 
 > **CRITICAL: Brain-Per-Format (Section 22).** Toby maintains separate learning brains per content format. When a brand uses `text_video`, Toby queries `TobyStrategyScore WHERE content_type = "text_video_reel"`, draws from `TEXT_VIDEO_PERSONALITIES`, and runs the story discovery pipeline. The existing `content_type = "reel"` data (text_based brain) is untouched and dormant. See [Section 22](#22-brain-per-format-learning-engine-isolation) for full details.
 
@@ -3600,6 +3626,520 @@ railway logs -n 500 | grep "\[TEXT_VIDEO\]"
 ```
 
 This gives per-step visibility into text_video performance without adding a logging framework.
+
+---
+
+## 31. Job Detail Page for text_video Jobs
+
+### Current State
+
+The existing job detail page lives at [src/pages/JobDetail.tsx](../src/pages/JobDetail.tsx), routed at `/job/:jobId`. It already handles two formats:
+- **Reels** (variant `"light"` / `"dark"`) — renders inline with video preview, content lines, music section, per-brand cards with schedule/regenerate/download actions
+- **Posts** (variant `"post"`) — delegates to [src/pages/PostJobDetail.tsx](../src/pages/PostJobDetail.tsx) with carousel previews, Konva canvas rendering, font controls
+
+The routing logic at line ~455:
+```typescript
+if (job.variant === 'post') return <PostJobDetail job={job} ... />
+// else: render reel detail inline
+```
+
+text_video jobs need their own detail view because they have fundamentally different content (stories with source attribution, multi-image slideshows, composed thumbnails) that the existing reel detail view can't display.
+
+### Routing Change
+
+Extend the variant routing in `JobDetailPage`:
+
+```typescript
+if (job.variant === 'post') return <PostJobDetail job={job} ... />
+if (job.variant === 'text_video') return <TextVideoJobDetail job={job} ... />
+// else: existing reel detail (light/dark)
+```
+
+### New Component: `TextVideoJobDetail`
+
+**File:** `src/pages/TextVideoJobDetail.tsx`
+
+This component displays all the unique data a text_video job produces. The job's `text_video_data` JSON column contains the full pipeline output:
+
+```typescript
+interface TextVideoData {
+  story: {
+    source_url: string        // Original article URL
+    source_name: string       // "BBC", "Reuters", etc.
+    category: string          // "science", "business", etc.
+    original_headline: string // Raw headline from API
+    discovered_at: string     // ISO timestamp
+  }
+  reel_text: string[]         // 3-5 lines of polished reel text
+  thumbnail_title: string     // Bold title for thumbnail
+  images: {
+    url: string               // Source URL or local path
+    source: string            // "serpapi", "pexels", "gemini", "upload"
+    query: string             // Search query used
+    alt_text: string          // Accessibility description
+  }[]
+  design: {                   // Snapshot of design settings at generation time
+    text_font: string
+    text_size: number
+    image_duration: number
+    thumbnail_layout: string
+  }
+}
+```
+
+### UI Layout
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ← Back to History                                    Job #GEN-1234 │
+│                                                                      │
+│  ┌─ Status ────────────────────────────────────────────────────────┐ │
+│  │ ✅ Completed  •  Created 2h ago by 🤖 Toby  •  text_video      │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Story Source ──────────────────────────────────────────────────┐ │
+│  │ 📰 "Pentagon summons Anthropic CEO for AI briefing"             │ │
+│  │    BBC News  •  5 hours ago  •  Category: Technology            │ │
+│  │    🔗 View original article                                     │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Reel Text ─────────────────────────────────────────────────────┐ │
+│  │ "The Pentagon just summoned the CEO of Anthropic for an         │ │
+│  │  emergency AI briefing."                                        │ │
+│  │ "They're worried their own AI systems can't keep up with        │ │
+│  │  what Silicon Valley is building."                               │ │
+│  │ "When the military calls a startup founder to the Pentagon,     │ │
+│  │  you know something big is happening."                           │ │
+│  │                                                                  │ │
+│  │ [✏️ Edit Text]  [🔄 Regenerate Text]                            │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Slideshow Images ──────────────────────────────────────────────┐ │
+│  │ ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │ │
+│  │ │          │  │          │  │          │  │          │         │ │
+│  │ │  Image 1 │  │  Image 2 │  │  Image 3 │  │  Image 4 │         │ │
+│  │ │          │  │          │  │          │  │          │         │ │
+│  │ └──────────┘  └──────────┘  └──────────┘  └──────────┘         │ │
+│  │ serpapi       pexels        gemini         serpapi               │ │
+│  │ "pentagon"    "AI robot"   AI-generated   "military"            │ │
+│  │                                                                  │ │
+│  │ [🔄 Regenerate Images]  [🔀 Swap Image]  [📤 Upload Replace]   │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Composed Thumbnail ────────────────────────────────────────────┐ │
+│  │ ┌──────────────────┐                                            │ │
+│  │ │                  │  Title: "PENTAGON SUMMONS AI CEO"           │ │
+│  │ │   [9:16 thumb    │  Layout: image_top_text_bottom              │ │
+│  │ │    preview]      │  Font: Poppins-Bold 72px                    │ │
+│  │ │                  │                                             │ │
+│  │ └──────────────────┘  [🔄 Regenerate Thumbnail]                 │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Per-Brand Cards ───────────────────────────────────────────────┐ │
+│  │ (Same pattern as existing reel detail — per-brand status,       │ │
+│  │  video preview, schedule/dismiss/regenerate, download,           │ │
+│  │  caption copy, platform publish results)                         │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Music ─────────────────────────────────────────────────────────┐ │
+│  │ (Same as existing — music source selector, re-roll button)       │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─ Quick Schedule ────────────────────────────────────────────────┐ │
+│  │ (Same as existing — auto schedule + custom date picker)          │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Partial Retry Buttons
+
+text_video jobs have a multi-step pipeline. When a step fails, the user should be able to retry JUST that step without re-running the entire pipeline. This is a key UX improvement over text_based reels where the only option is "regenerate everything."
+
+| Button | What It Does | API Call | When Visible |
+|---|---|---|---|
+| **Regenerate Text** | Re-runs StoryPolisher on the same source story. Produces new reel text + thumbnail title. Images unchanged. | `POST /api/text-video/jobs/{id}/regenerate-text` | Always (on completed or failed jobs) |
+| **Regenerate Images** | Re-runs ImageSourcer with same/edited search queries. Video recomposed with new images. Text unchanged. | `POST /api/text-video/jobs/{id}/regenerate-images` | Always |
+| **Regenerate Thumbnail** | Re-composites the thumbnail using current images + title. Useful if user edited the title. | `POST /api/text-video/jobs/{id}/regenerate-thumbnail` | Always |
+| **Swap Image** | Replace a single image (by index). Opens a mini search/upload modal. Recomposes video after swap. | `PUT /api/text-video/jobs/{id}/images/{index}` | Per-image hover action |
+| **Retry Failed** | If job failed mid-pipeline, resumes from the failed step (stored in `current_step`). | `POST /api/text-video/jobs/{id}/retry` | Only when `status === 'failed'` |
+
+### Backend Endpoints for Partial Retry
+
+```python
+# app/api/content/text_video_routes.py
+
+@router.post("/jobs/{job_id}/regenerate-text")
+async def regenerate_text(job_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    """Re-run StoryPolisher. Keep same source story + images."""
+    job = _get_job_or_404(db, job_id, user.id)
+    _assert_text_video_job(job)
+    tv_data = job.text_video_data or {}
+    story = tv_data.get("story", {})
+    # Re-polish the story
+    polisher = StoryPolisher()
+    result = await polisher.polish(story["original_headline"], story.get("source_url"))
+    tv_data["reel_text"] = result["reel_text"]
+    tv_data["thumbnail_title"] = result["thumbnail_title"]
+    job.text_video_data = tv_data
+    flag_modified(job, "text_video_data")
+    db.commit()
+    return {"reel_text": result["reel_text"], "thumbnail_title": result["thumbnail_title"]}
+
+@router.post("/jobs/{job_id}/regenerate-images")
+async def regenerate_images(job_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    """Re-run ImageSourcer. Keep same text. Recompose video."""
+    job = _get_job_or_404(db, job_id, user.id)
+    _assert_text_video_job(job)
+    # ... source new images, recompose slideshow, update brand_outputs
+
+@router.put("/jobs/{job_id}/images/{index}")
+async def swap_image(job_id: str, index: int, body: SwapImageRequest,
+                     user=Depends(get_current_user), db=Depends(get_db)):
+    """Replace a single slideshow image by index and recompose."""
+    job = _get_job_or_404(db, job_id, user.id)
+    _assert_text_video_job(job)
+    # ... replace image at index, recompose video for all brands
+
+@router.post("/jobs/{job_id}/regenerate-thumbnail")
+async def regenerate_thumbnail(job_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    """Recomposite thumbnail with current title + images."""
+    job = _get_job_or_404(db, job_id, user.id)
+    _assert_text_video_job(job)
+    # ... recompose thumbnail for all brands
+```
+
+### File Changes
+
+**New files:**
+- `src/pages/TextVideoJobDetail.tsx` — Main detail component
+- `src/features/reels/components/StorySourceCard.tsx` — Story attribution display
+- `src/features/reels/components/SlideshowImageGrid.tsx` — Image grid with swap/replace actions
+- `src/features/reels/components/ThumbnailPreview.tsx` — Composed thumbnail preview
+
+**Modified files:**
+- `src/pages/JobDetail.tsx` — Add `text_video` variant routing (one `if` statement)
+- `src/shared/types/index.ts` — Add `TextVideoData` interface to `Job` type
+- `app/api/content/text_video_routes.py` — Add partial retry endpoints (4 new endpoints)
+
+### Data Flow
+
+The `text_video_data` JSON column on `GenerationJob` is the **single source of truth** for all text_video-specific data. The frontend reads it via the existing `GET /api/content/jobs/{id}` endpoint — no new fetch endpoint needed. The partial retry endpoints mutate `text_video_data` and return the updated slice.
+
+---
+
+## 32. Analytics Page: Format Filter & Comparison
+
+### The Problem
+
+The current Analytics page ([src/pages/Analytics.tsx](../src/pages/Analytics.tsx)) shows all content together with filters for brand, platform, and time range. There is NO content format filter.
+
+With two fundamentally different reel formats (text_based: personality-driven viral hooks; text_video: news/story-driven slideshows), mixing them in aggregate metrics is misleading:
+- text_video reels may have higher view counts (news is broadly appealing) but lower saves (less "reference" value)
+- text_based reels may have lower views but higher save rates and follower conversion
+- Comparing blended averages hides these insights
+
+Users need to see format-level performance to make informed decisions about which format to invest in per brand.
+
+### Solution: Format Filter Chip + Format Comparison Card
+
+Two additions to the existing Analytics page — minimal footprint, maximum insight:
+
+#### 1. Format Filter Chip (in existing filter bar)
+
+Add a filter chip next to the existing Brand / Platform / Time Range filters:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Brand: [All ▼]  Platform: [All ▼]  Time: [30 days ▼]       │
+│  Format: [All ▼ | Text Reels | Text-Video Reels]             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+```typescript
+// In Analytics.tsx, add to existing filter state:
+type FormatFilter = 'all' | 'text_based' | 'text_video'
+const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
+
+// Filter logic applied to posts data:
+const filteredPosts = posts.filter(p => {
+  if (formatFilter === 'all') return true
+  if (formatFilter === 'text_based') return p.content_type === 'reel'
+  if (formatFilter === 'text_video') return p.content_type === 'text_video_reel'
+  return true
+})
+```
+
+The `content_type` field already exists on `post_performance` rows (it's `"reel"` for text_based, `"post"` for carousels). text_video rows will have `content_type = "text_video_reel"`. The filter simply narrows which rows feed the aggregate calculations.
+
+**Filter chips UI:**
+
+```typescript
+<div className="flex gap-2">
+  <button
+    onClick={() => setFormatFilter('all')}
+    className={cn(
+      'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+      formatFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+    )}
+  >
+    All Formats
+  </button>
+  <button
+    onClick={() => setFormatFilter('text_based')}
+    className={cn(
+      'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+      formatFilter === 'text_based' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+    )}
+  >
+    🎬 Text Reels
+  </button>
+  <button
+    onClick={() => setFormatFilter('text_video')}
+    className={cn(
+      'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+      formatFilter === 'text_video' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+    )}
+  >
+    📰 Text-Video Reels
+  </button>
+</div>
+```
+
+#### 2. Format Comparison Card (new card in Overview tab)
+
+Add a new card below the existing trend chart that shows side-by-side format performance:
+
+```
+┌─ Format Performance Comparison ──────────────────────────────────┐
+│                                                                   │
+│  ┌─────────────────────────┐  ┌─────────────────────────────────┐│
+│  │ 🎬 Text Reels           │  │ 📰 Text-Video Reels            ││
+│  │                         │  │                                 ││
+│  │ Avg Views:   12,400     │  │ Avg Views:   18,200  ↑47%       ││
+│  │ Avg Likes:   890        │  │ Avg Likes:   1,240   ↑39%       ││
+│  │ Avg Saves:   320        │  │ Avg Saves:   180     ↓44%       ││
+│  │ Engagement:  4.2%       │  │ Engagement:  3.8%    ↓10%       ││
+│  │ Posts:       42         │  │ Posts:       18                  ││
+│  │                         │  │                                 ││
+│  │ Best: "10 habits..."    │  │ Best: "Pentagon..."             ││
+│  └─────────────────────────┘  └─────────────────────────────────┘│
+│                                                                   │
+│  💡 Text-Video reels get 47% more views but Text Reels have      │
+│     78% more saves. Consider text_video for reach, text_based     │
+│     for engagement depth.                                         │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+**The insight line** at the bottom is generated by comparing the two sides. Simple heuristic:
+
+```typescript
+function getFormatInsight(textBased: FormatStats, textVideo: FormatStats): string {
+  if (!textVideo.count || !textBased.count) return ''  // Need data for both
+
+  const viewsDiff = ((textVideo.avgViews - textBased.avgViews) / textBased.avgViews * 100).toFixed(0)
+  const savesDiff = ((textVideo.avgSaves - textBased.avgSaves) / textBased.avgSaves * 100).toFixed(0)
+
+  if (Number(viewsDiff) > 20 && Number(savesDiff) < -20) {
+    return `Text-Video gets ${viewsDiff}% more views but Text Reels have ${Math.abs(Number(savesDiff))}% more saves. Use text_video for reach, text_based for depth.`
+  }
+  // ... other comparison patterns
+  return ''
+}
+```
+
+**This card only appears when the user has published content in BOTH formats.** If all content is text_based (the default), the card is hidden — no visual clutter for users who haven't adopted text_video yet.
+
+#### 3. Format Label on Posts Tab
+
+The existing Posts tab already shows `p.content_type` as a label. Extend it with a visual badge:
+
+```typescript
+// In the posts table row:
+<span className={cn(
+  'px-2 py-0.5 rounded-full text-xs font-medium',
+  p.content_type === 'text_video_reel'
+    ? 'bg-amber-100 text-amber-800'
+    : p.content_type === 'reel'
+      ? 'bg-indigo-100 text-indigo-800'
+      : 'bg-purple-100 text-purple-800'
+)}>
+  {p.content_type === 'text_video_reel' ? '📰 Text-Video'
+   : p.content_type === 'reel' ? '🎬 Text Reel'
+   : '🖼️ Post'}
+</span>
+```
+
+#### 4. Backend: content_type in Analytics V2
+
+The analytics V2 API ([app/api/analytics/v2_routes.py](../app/api/analytics/v2_routes.py)) aggregates data from `post_performance`. The `content_type` column already stores `"reel"` or `"post"`. text_video content will have `"text_video_reel"`.
+
+**No backend changes needed for filtering** — the frontend filters rows client-side from the existing response. The V2 aggregate endpoint already includes `content_type` in the breakdown.
+
+**Optional backend enhancement** (nice-to-have, not blocking): Add a `?format=text_video_reel` query param to the aggregate endpoint to filter server-side. This matters for performance only when a user has 1000+ posts.
+
+### File Changes
+
+**Modified files:**
+- `src/pages/Analytics.tsx` — Add format filter state, filter chips, format comparison card, format badges on posts table
+
+**New files:**
+- `src/features/analytics/FormatComparisonCard.tsx` — The side-by-side comparison card component
+
+### Backward Compatibility
+
+All existing `content_type = "reel"` data continues to display as "🎬 Text Reels". The format filter defaults to "All" — existing behavior unchanged until user explicitly filters. The comparison card is hidden until text_video data exists.
+
+---
+
+## 33. Calendar.tsx: Visual Format Differentiation
+
+### The Problem
+
+The current Calendar ([src/pages/Calendar.tsx](../src/pages/Calendar.tsx)) shows scheduled content with minimal visual differentiation:
+- **Status dots:** green (published), red (failed), yellow (scheduled) — these indicate status, not format
+- **Background color:** blue-50 (user-created) vs gray-100 (Toby-created) — this indicates creator, not format
+- **Content type filter:** Chips for `🎬 Reels` / `🖼️ Posts` — but no text_video distinction
+- **Day detail modal:** Shows video player for reels, carousel for posts — aspect ratio varies by variant
+
+With text_video reels in the mix, a calendar cell showing "14:00 BrandX" and "16:00 BrandX" gives no clue which is text_based and which is text_video. Users need to know at a glance.
+
+### Solution: Three-Layer Visual System
+
+#### Layer 1: Format Icon in Calendar Cells
+
+Add a small format icon before the time in each cell preview:
+
+```
+┌─────────────┐
+│  Mon 15      │
+│  ●3          │  ← count badge (unchanged)
+│              │
+│ 🎬 08:00 Bx │  ← text_based reel (existing film icon)
+│ 📰 12:00 Bx │  ← text_video reel (newspaper icon)
+│ 🖼️ 16:00 Bx │  ← post (existing frame icon)
+└─────────────┘
+```
+
+**Implementation** — in the cell preview rendering (around line 530):
+
+```typescript
+function getFormatIcon(post: ScheduledPost): string {
+  const variant = post.metadata?.variant
+  if (variant === 'text_video') return '📰'
+  if (variant === 'post') return '🖼️'
+  return '🎬'  // light, dark = text_based reels
+}
+
+// In the cell preview item:
+<span className="text-xs text-gray-500 truncate">
+  {getFormatIcon(post)} {formatTime(post.time)} {post.brand_name}
+</span>
+```
+
+#### Layer 2: Format-Colored Left Border
+
+Add a 2px left border to each calendar cell preview item, colored by format:
+
+```typescript
+function getFormatBorderClass(post: ScheduledPost): string {
+  const variant = post.metadata?.variant
+  if (variant === 'text_video') return 'border-l-2 border-l-amber-500'
+  if (variant === 'post') return 'border-l-2 border-l-purple-500'
+  return 'border-l-2 border-l-indigo-500'  // text_based reels
+}
+```
+
+This creates a subtle but scannable color pattern:
+- **Indigo** left border = text_based reel (matches existing reel filter chip color)
+- **Amber** left border = text_video reel (matches analytics format badge)
+- **Purple** left border = post (matches existing post filter chip color)
+
+#### Layer 3: Extended Content Type Filter
+
+Update the existing `ContentTypeFilter` to add text_video:
+
+**Current:**
+```typescript
+type ContentTypeFilter = 'all' | 'reels' | 'posts'
+```
+
+**New:**
+```typescript
+type ContentTypeFilter = 'all' | 'text_reels' | 'text_video_reels' | 'posts'
+```
+
+**Filter chips:**
+```
+[All] [🎬 Text Reels] [📰 Text-Video] [🖼️ Posts]
+```
+
+**Filter logic update** (around line 177):
+
+```typescript
+const filtered = allPosts.filter(post => {
+  const variant = post.metadata?.variant
+  if (contentTypeFilter === 'all') return true
+  if (contentTypeFilter === 'text_reels') return variant === 'light' || variant === 'dark'
+  if (contentTypeFilter === 'text_video_reels') return variant === 'text_video'
+  if (contentTypeFilter === 'posts') return variant === 'post'
+  return true
+})
+```
+
+#### Day Detail Modal Updates
+
+When clicking a calendar cell to open the day detail, text_video items show:
+
+```typescript
+// Around line 627 — aspect ratio handling:
+const isPost = selectedPost?.metadata?.variant === 'post'
+const isTextVideo = selectedPost?.metadata?.variant === 'text_video'
+// text_video uses 9:16 like regular reels
+const aspectClass = isPost ? 'aspect-[4/5]' : 'aspect-[9/16]'
+```
+
+**Additional detail in modal for text_video:**
+```typescript
+{isTextVideo && selectedPost?.metadata?.story_source && (
+  <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
+    <span>📰</span>
+    <span>Source: {selectedPost.metadata.story_source}</span>
+    {selectedPost.metadata.story_url && (
+      <a href={selectedPost.metadata.story_url} target="_blank" rel="noopener noreferrer"
+         className="text-blue-500 hover:underline">View article ↗</a>
+    )}
+  </div>
+)}
+```
+
+### Color System Consistency
+
+The format color assignments are consistent across all pages:
+
+| Format | Primary Color | Usage |
+|---|---|---|
+| text_based reels | **Indigo** (`indigo-500/600`) | Calendar border, filter chip, analytics badge, scheduled page |
+| text_video reels | **Amber** (`amber-500/600`) | Calendar border, filter chip, analytics badge, scheduled page |
+| posts (carousel) | **Purple** (`purple-500/600`) | Calendar border, filter chip, analytics badge, scheduled page |
+
+This is NOT brand color (which comes from `brands.colors.primary` in the DB). This is format identity — static, consistent, recognizable across the entire UI.
+
+### Scheduled.tsx Impact
+
+The Scheduled page ([src/pages/Scheduled.tsx](../src/pages/Scheduled.tsx)) also needs the same visual treatment. Apply the same icon + border pattern to scheduled content items. The filter already exists — just extend it from `reels | posts` to `text_reels | text_video_reels | posts`.
+
+### File Changes
+
+**Modified files:**
+- `src/pages/Calendar.tsx` — Format icons, colored borders, extended content type filter, day detail modal text_video handling
+- `src/pages/Scheduled.tsx` — Same visual treatment (icon, border, filter extension)
+- `src/pages/History.tsx` — Add format badge to job list items ("📰 Text-Video" vs "🎬 Reel")
+
+### Backward Compatibility
+
+All existing calendar items (text_based reels and posts) get the indigo/purple treatment automatically — the icon/border logic defaults to text_based for any variant that isn't `'text_video'` or `'post'`. No data migration needed. The extended filter defaults to "All", preserving existing UX.
 
 ---
 
