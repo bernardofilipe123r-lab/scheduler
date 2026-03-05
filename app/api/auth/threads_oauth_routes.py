@@ -132,6 +132,7 @@ def threads_callback(
 
     try:
         token_service = ThreadsTokenService()
+        logger.info(f"Threads callback: exchanging code for brand={brand_id}")
 
         # 1. Exchange code for short-lived token
         short_lived = token_service.exchange_code_for_token(code)
@@ -192,7 +193,14 @@ def threads_callback(
         return RedirectResponse(url=redirect_url)
 
     except Exception as e:
-        logger.exception(f"Threads OAuth callback failed for brand {brand_id}: {e}")
+        error_detail = str(e)
+        # Extract API error body from httpx errors
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_detail = f"{e} — API response: {e.response.text}"
+            except Exception:
+                pass
+        logger.error(f"Threads OAuth callback failed for brand {brand_id}: {error_detail}")
         if return_to == "onboarding":
             redirect_url = f"{frontend_base}/onboarding?threads_error=failed"
         else:

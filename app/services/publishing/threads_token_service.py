@@ -27,6 +27,7 @@ class ThreadsTokenService:
 
     def exchange_code_for_token(self, code: str) -> dict:
         """Exchange authorization code for short-lived access token."""
+        logger.info(f"Threads token exchange: app_id={self.app_id[:6]}..., redirect_uri={self.redirect_uri}")
         resp = httpx.post(
             f"{THREADS_API_BASE}/oauth/access_token",
             data={
@@ -38,7 +39,9 @@ class ThreadsTokenService:
             },
             timeout=30,
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            logger.error(f"Threads token exchange failed: status={resp.status_code}, body={resp.text}")
+            resp.raise_for_status()
         return resp.json()  # {"access_token": "...", "user_id": "..."}
 
     def exchange_for_long_lived_token(self, short_token: str) -> dict:
