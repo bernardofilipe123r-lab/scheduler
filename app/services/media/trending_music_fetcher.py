@@ -5,6 +5,7 @@ up to 3 times per day and stores trending tracks in the database.
 import logging
 import os
 import random
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,18 @@ TOKINSIGHT_MUSIC_DETAIL_URL = f"https://{TOKINSIGHT_HOST}/tok/v1/music_detail/"
 # Soundcharts API (for TikTok chart rankings)
 SOUNDCHARTS_BASE = "https://customer.api.soundcharts.com"
 SOUNDCHARTS_CHART_SLUG = "tiktok-breakout-us"  # US TikTok Breakout chart (daily)
+
+# Language filter — only keep tracks whose title + artist use Latin script.
+# This filters out non-English/non-European tracks (Cyrillic, CJK, Arabic, etc.)
+_NON_LATIN_RE = re.compile(r'[\u0400-\u04FF\u0500-\u052F\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF'
+                           r'\uAC00-\uD7AF\u0600-\u06FF\u0980-\u09FF\u0A00-\u0A7F'
+                           r'\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F\u0E00-\u0E7F'
+                           r'\u1000-\u109F\u1780-\u17FF]')
+
+
+def _is_latin_script(text: str) -> bool:
+    """Return True if text contains only Latin-compatible characters (English/European)."""
+    return not _NON_LATIN_RE.search(text)
 
 
 def _get_api_key() -> Optional[str]:
@@ -153,6 +166,11 @@ def _parse_tracks(raw: Any) -> List[Dict]:
             logger.debug("Skipping track '%s' — no play_url", title)
             continue
 
+        # Filter: only keep English/European/instrumental tracks (Latin script)
+        if not _is_latin_script(title) or not _is_latin_script(author):
+            logger.debug("Skipping non-Latin track: '%s' by '%s'", title, author)
+            continue
+
         tracks.append({
             "tiktok_id": tiktok_id,
             "title": title,
@@ -160,7 +178,7 @@ def _parse_tracks(raw: Any) -> List[Dict]:
             "play_url": play_url,
             "cover_url": cover_url,
             "duration_seconds": None,  # /t endpoint doesn't provide duration
-            "rank": i + 1,
+            "rank": len(tracks) + 1,
         })
 
     logger.info("Parsed %d music tracks from /t response", len(tracks))
@@ -305,6 +323,11 @@ def _fetch_from_soundcharts() -> List[Dict]:
             except (requests.RequestException, ValueError):
                 pass  # Non-critical — we still have song name/artist
 
+        # Filter: only keep English/European/instrumental tracks (Latin script)
+        if not _is_latin_script(song_name) or not _is_latin_script(artist):
+            logger.debug("Skipping non-Latin track: '%s' by '%s'", song_name, artist)
+            continue
+
         tracks.append({
             "tiktok_id": tiktok_id,
             "title": song_name,
@@ -312,10 +335,10 @@ def _fetch_from_soundcharts() -> List[Dict]:
             "play_url": "",  # Soundcharts doesn't provide audio URLs
             "cover_url": image_url,
             "duration_seconds": None,
-            "rank": i + 1,
+            "rank": len(tracks) + 1,
         })
 
-    logger.info("Soundcharts: fetched %d trending songs from %s", len(tracks), SOUNDCHARTS_CHART_SLUG)
+    logger.info("Soundcharts: fetched %d English/European trending songs from %s", len(tracks), SOUNDCHARTS_CHART_SLUG)
     return tracks
 
 
@@ -369,6 +392,12 @@ def _fetch_from_tokinsight_artists(api_key: str) -> List[Dict]:
                 play_url = ""
 
             if not play_url or not play_url.startswith("http"):
+                continue
+
+            # Filter: only keep English/European/instrumental tracks
+            track_title = item.get("title", "Unknown")
+            track_author = item.get("author", artist_name)
+            if not _is_latin_script(track_title) or not _is_latin_script(track_author):
                 continue
 
             cover_obj = item.get("cover_medium") or item.get("cover_large") or item.get("cover_thumb") or {}
@@ -493,20 +522,22 @@ def get_trending_tracks(db: Session, limit: int = 50) -> List[TrendingMusic]:
 def get_random_trending_url(db: Session) -> Optional[str]:
     """Pick a random play_url from the top 50 trending tracks.
 
+    Shuffles all tracks and tries each one until a working URL is found.
     Tries to refresh the URL via TokInsight to avoid expired CDN links.
     For curated-seed tracks (empty play_url), only TokInsight can provide a URL.
-    Tries up to 3 different tracks before giving up.
     """
     tracks = get_trending_tracks(db, limit=50)
     if not tracks:
         return None
     random.shuffle(tracks)
-    for chosen in tracks[:3]:
+    for chosen in tracks:
         if chosen.tiktok_id:
             fresh = get_fresh_play_url(chosen.tiktok_id)
             if fresh:
+                logger.info("Random trending pick: '%s' by %s", chosen.title, chosen.author)
                 return fresh
         if chosen.play_url:
+            logger.info("Random trending pick: '%s' by %s", chosen.title, chosen.author)
             return chosen.play_url
     return None
 
