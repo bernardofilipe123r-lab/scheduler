@@ -26,6 +26,16 @@
 18. [Implementation Order](#18-implementation-order)
 19. [Validation & Testing](#19-validation--testing)
 20. [Open Decision Points](#20-open-decision-points)
+21. [Multi-Format Per-Brand Architecture](#21-multi-format-per-brand-architecture)
+22. [Brain-Per-Format: Learning Engine Isolation](#22-brain-per-format-learning-engine-isolation)
+23. [Slot System Changes](#23-slot-system-changes)
+24. [Content DNA Format Split](#24-content-dna-format-split)
+25. [Format Switching Resilience](#25-format-switching-resilience)
+26. [Dashboard & Home.tsx Multi-Format Awareness](#26-dashboard--hometsx-multi-format-awareness)
+27. [Scalability: Adding Future Formats](#27-scalability-adding-future-formats)
+28. [Production Safety: Zero-Downtime Migration Plan](#28-production-safety-zero-downtime-migration-plan)
+29. [Complete Code Touchpoint Map](#29-complete-code-touchpoint-map)
+30. [Scalability & Resilience Architecture](#30-scalability--resilience-architecture)
 
 ---
 
@@ -114,9 +124,20 @@ The TEXT-VIDEO format introduces a third pipeline. Rather than overloading `vari
 |---|---|---|
 | `text_based` (default) | `light` / `dark` | Current: Pillow image → FFmpeg static video |
 | `text_based` | `post` | Current: Konva carousel rendering |
-| `text_video` | (not used) | New: Story discovery → image sourcing → FFmpeg slideshow |
+| `text_video` | `text_video` | New: Story discovery → image sourcing → FFmpeg slideshow |
 
 **Backward compatibility:** All existing jobs and content have `content_format = NULL` or `text_based`. The new field defaults to `text_based` so nothing breaks.
+
+### Multi-Format Per-Brand
+
+> **CRITICAL (added Section 21-27):** Each brand can independently select its reel format. Brand A may use `text_based` while Brand B uses `text_video`. The reel format is stored in `TobyBrandConfig.reel_format` and drives the entire downstream pipeline: slot content_type, learning engine brain, personality pool, variant logic, and dashboard display. See [Section 21](#21-multi-format-per-brand-architecture) for the complete architecture.
+
+**Key content_type taxonomy:**
+| `content_type` | Parent format | Slot variant | Learning brain |
+|---|---|---|---|
+| `"reel"` | `text_based` | `light` / `dark` (alternating) | `REEL_PERSONALITIES` pool |
+| `"text_video_reel"` | `text_video` | `"text_video"` (uniform) | `TEXT_VIDEO_PERSONALITIES` pool |
+| `"post"` | (carousel) | `"post"` | `POST_PERSONALITIES` pool |
 
 ### End-to-End Pipeline
 
@@ -1167,6 +1188,8 @@ Toby's TEXT-VIDEO integration is an **optional premium feature**. Users who just
 
 This is NOT a billing tier change — it's a feature flag on Toby. Toby already has billing gates via `BrandSubscription`. The TEXT-VIDEO format is just a new `content_type` that Toby can produce.
 
+> **CRITICAL: Brain-Per-Format (Section 22).** Toby maintains separate learning brains per content format. When a brand uses `text_video`, Toby queries `TobyStrategyScore WHERE content_type = "text_video_reel"`, draws from `TEXT_VIDEO_PERSONALITIES`, and runs the story discovery pipeline. The existing `content_type = "reel"` data (text_based brain) is untouched and dormant. See [Section 22](#22-brain-per-format-learning-engine-isolation) for full details.
+
 ### How Toby Uses TEXT-VIDEO
 
 In `app/services/toby/orchestrator.py`, the `_execute_content_plan()` method currently handles `content_type == "reel"` and `content_type == "post"`. Add `content_type == "text_video_reel"`:
@@ -1178,7 +1201,7 @@ if plan.content_type == "text_video_reel":
     discoverer = StoryDiscoverer()
     stories = await discoverer.discover_stories(
         niche=ctx.niche_name,
-        category=plan.topic_bucket,
+        category=plan.story_category or plan.topic_bucket,  # story_category from learning engine
         recency="mixed",
         count=5,
     )
@@ -1224,7 +1247,33 @@ The `ContentPlan.content_type` gains a new value: `"text_video_reel"`. The learn
 - `underdog` — surprising success stories
 - `mind_blowing` — shocking facts and statistics
 
-These get added to `app/services/toby/learning_engine.py` alongside the existing reel and post personalities.
+These get added to `app/services/toby/learning_engine.py` alongside the existing reel and post personalities. See [Section 22](#22-brain-per-format-learning-engine-isolation) for the complete personality pool definitions, new strategy dimensions (text_video-specific hooks, title formats, visual styles, story categories), and the learning engine routing logic.
+
+### ContentPlan Update
+
+The `ContentPlan` dataclass gains a `story_category` field for text_video:
+
+```python
+@dataclass
+class ContentPlan:
+    user_id: str
+    brand_id: str
+    content_type: str            # "reel" | "text_video_reel" | "post"
+    scheduled_time: str
+    personality_id: str
+    personality_prompt: str
+    topic_bucket: str
+    hook_strategy: str
+    title_format: str
+    visual_style: str
+    story_category: Optional[str] = None  # NEW — text_video only, drives StoryDiscoverer
+    experiment_id: Optional[str] = None
+    is_experiment: bool = False
+    is_control: bool = False
+    used_fallback: bool = False
+```
+
+The `content_planner.py` reads each brand's `reel_format` from `TobyBrandConfig` and sets `content_type` accordingly when creating plans for empty slots. This is already handled by the buffer manager (Section 23) — slots arrive with the correct `content_type`, so the content planner just passes it through.
 
 ### Feature Flag
 
@@ -1236,15 +1285,15 @@ Add to `app/services/toby/feature_flags.py`:
 
 Set to `True` per-user or globally when ready to roll out.
 
-### TobyState Update
+### TobyState / TobyBrandConfig: No Separate Slot Counter Needed
 
-Add `text_video_slots_per_day` to `TobyState`:
-
-```python
-text_video_slots_per_day = Column(Integer, default=0)  # 0 = disabled for this user
-```
-
-When set to > 0, the buffer manager includes text_video_reel slots in the daily schedule.
+> **IMPORTANT (revised from original spec):** The original spec proposed adding `text_video_slots_per_day` to `TobyState`. This is **no longer needed** with the per-brand `reel_format` architecture (Section 23). Instead:
+>
+> - The existing `reel_slots_per_day` (on `TobyState` and `TobyBrandConfig`) controls how many reel slots a brand gets per day.
+> - The `TobyBrandConfig.reel_format` column determines whether those slots are `content_type = "reel"` (text_based) or `"text_video_reel"` (text_video).
+> - The **same 6-slot schedule** applies to both formats. Format switching doesn't change the slot count.
+>
+> This simplifies the migration (no need for Migration 4 from the original spec) and avoids confusing users with two separate slot counters.
 
 ---
 
@@ -1384,30 +1433,98 @@ WHERE table_name = 'text_video_story_pool'
 ORDER BY ordinal_position;
 ```
 
-### Migration 4: `toby_text_video.sql`
+### Migration 4: `toby_brand_reel_format.sql`
 
-Add Toby support for text_video:
+Add reel_format to TobyBrandConfig (replaces the original `toby_text_video.sql` which added `text_video_slots_per_day` — that column is no longer needed, see Section 23):
 
 ```sql
--- Migration: Add TEXT-VIDEO support to Toby
--- Run: psql "$DATABASE_URL" < migrations/toby_text_video.sql
+-- Migration: Add reel_format to toby_brand_config
+-- Run: psql "$DATABASE_URL" < migrations/toby_brand_reel_format.sql
 
--- 1. Add text_video_slots_per_day to toby_state
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'toby_state' AND column_name = 'text_video_slots_per_day'
+        WHERE table_name = 'toby_brand_config' AND column_name = 'reel_format'
     ) THEN
-        ALTER TABLE toby_state ADD COLUMN text_video_slots_per_day INTEGER DEFAULT 0;
+        ALTER TABLE toby_brand_config ADD COLUMN reel_format VARCHAR(30) DEFAULT 'text_based';
+    END IF;
+END $$;
+
+-- Check constraint: only valid format values
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.constraint_column_usage
+        WHERE table_name = 'toby_brand_config' AND constraint_name = 'chk_reel_format'
+    ) THEN
+        ALTER TABLE toby_brand_config
+            ADD CONSTRAINT chk_reel_format
+            CHECK (reel_format IN ('text_based', 'text_video'));
     END IF;
 END $$;
 
 -- Verify
 SELECT column_name, data_type, column_default
 FROM information_schema.columns
-WHERE table_name = 'toby_state'
-  AND column_name = 'text_video_slots_per_day';
+WHERE table_name = 'toby_brand_config'
+  AND column_name = 'reel_format';
+```
+
+### Migration 5: `niche_config_text_video.sql`
+
+Add text-video specific columns to NicheConfig for Content DNA format split (Section 24):
+
+```sql
+-- Migration: Add text-video specific columns to niche_config
+-- Run: psql "$DATABASE_URL" < migrations/niche_config_text_video.sql
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_reel_examples'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_reel_examples JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_story_niches'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_story_niches JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_story_tone'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_story_tone TEXT DEFAULT '';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_preferred_categories'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_preferred_categories JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+-- Verify
+SELECT column_name, data_type, column_default
+FROM information_schema.columns
+WHERE table_name = 'niche_config'
+  AND column_name LIKE 'text_video_%'
+ORDER BY column_name;
 ```
 
 **CRITICAL: Run all migrations BEFORE adding the corresponding model columns.** This is the ViralToby migration-first workflow. See [.github/instructions/python-models.instructions.md](../.github/instructions/python-models.instructions.md).
@@ -1434,20 +1551,23 @@ WHERE table_name = 'toby_state'
 | `migrations/text_video_format.sql` | Migration: add content_format to jobs | ~25 |
 | `migrations/text_video_design.sql` | Migration: create design table | ~40 |
 | `migrations/text_video_story_pool.sql` | Migration: create story pool table | ~35 |
-| `migrations/toby_text_video.sql` | Migration: add Toby text_video support | ~15 |
+| `migrations/toby_brand_reel_format.sql` | Migration: add reel_format to toby_brand_config (Section 21) | ~25 |
+| `migrations/niche_config_text_video.sql` | Migration: add text_video columns to niche_config (Section 24) | ~40 |
 
 ### Files to Modify
 
 | File | Changes |
 |---|---|
 | `app/models/jobs.py` | Add `content_format` and `text_video_data` columns to `GenerationJob` |
-| `app/models/toby.py` | Add `text_video_slots_per_day` to `TobyState` |
+| `app/models/toby.py` | Add `reel_format` to `TobyBrandConfig` (NOT `text_video_slots_per_day` on TobyState — see Section 23) |
+| `app/models/niche_config.py` | Add `text_video_reel_examples`, `text_video_story_niches`, `text_video_story_tone`, `text_video_preferred_categories` columns (Section 24) |
 | `app/services/content/job_processor.py` | Add format routing: `text_video` → slideshow compositor |
-| `app/services/toby/orchestrator.py` | Add `text_video_reel` content_type handling in `_execute_content_plan()` |
-| `app/services/toby/content_planner.py` | Add `text_video_reel` to content plan creation |
-| `app/services/toby/learning_engine.py` | Add TEXT-VIDEO personalities and strategy dimensions |
-| `app/services/toby/buffer_manager.py` | Include `text_video_slots_per_day` in slot calculation |
+| `app/services/toby/orchestrator.py` | Add `text_video_reel` content_type handling in `_execute_content_plan()`, update variant logic (Section 23) |
+| `app/services/toby/content_planner.py` | Add `story_category` to `ContentPlan`, pass through from learning engine |
+| `app/services/toby/learning_engine.py` | Add `TEXT_VIDEO_PERSONALITIES`, new hooks/titles/visuals/story_categories, route by content_type in `choose_strategy()` and `get_personality_prompt()`, add `story_category` to `StrategyChoice` (Section 22) |
+| `app/services/toby/buffer_manager.py` | Read `TobyBrandConfig.reel_format`, generate format-aware `content_type` per slot (Section 23) |
 | `app/services/toby/feature_flags.py` | Add `text_video_reels` flag |
+| `app/core/prompt_context.py` | Format-aware example loading: use `text_video_reel_examples` when content_type is `text_video_reel` (Section 24) |
 | `app/main.py` | Register new routers (`text_video_router`, `text_video_design_router`) |
 | `scripts/validate_api.py` | Add new modules to `CRITICAL_MODULES` + endpoint tests |
 | `requirements.txt` | Add `google-generativeai`, `tavily-python`, `newsapi-python` |
@@ -1499,6 +1619,7 @@ WHERE table_name = 'toby_state'
 | `GET` | `/api/content/text-video/design` | JWT | Get user's design preferences |
 | `PUT` | `/api/content/text-video/design` | JWT | Update user's design preferences |
 | `GET` | `/api/content/text-video/story-pool` | JWT | Get user's story pool (for dedup visibility) |
+| `PUT` | `/api/brands/{brand_id}/reel-format` | JWT | Switch a brand's reel format (Section 25) |
 
 ### Router Registration
 
@@ -1657,12 +1778,13 @@ This is extremely cost-effective. The most expensive component is SerpAPI for im
 
 ### Phase 1: Core Backend Infrastructure (Do First)
 
-1. Run migrations (all 4 SQL files)
-2. Add model columns (`GenerationJob.content_format`, `GenerationJob.text_video_data`, `TobyState.text_video_slots_per_day`)
-3. Create `TextVideoDesign` model
-4. Create `StoryPool` model
-5. Create `app/core/text_video_prompts.py`
-6. Set environment variables via Railway CLI
+1. Run migrations (all 5 SQL files — including `toby_brand_reel_format.sql` and `niche_config_text_video.sql`)
+2. Add model columns (`GenerationJob.content_format`, `GenerationJob.text_video_data`, `TobyBrandConfig.reel_format`)
+3. Add NicheConfig columns (`text_video_reel_examples`, `text_video_story_niches`, `text_video_story_tone`, `text_video_preferred_categories`)
+4. Create `TextVideoDesign` model
+5. Create `StoryPool` model
+6. Create `app/core/text_video_prompts.py`
+7. Set environment variables via Railway CLI
 
 ### Phase 2: Discovery + Polishing
 
@@ -1696,13 +1818,22 @@ This is extremely cost-effective. The most expensive component is SerpAPI for im
 25. Create API hooks and types
 26. Update router
 
-### Phase 6: Toby Integration (Optional, Later)
+### Phase 6: Toby Integration + Multi-Format Brain (Optional, Later)
 
 27. Add `text_video_reels` feature flag
-28. Update `learning_engine.py` with new personalities
-29. Update `content_planner.py` with `text_video_reel` type
-30. Update `buffer_manager.py` to include text_video slots
-31. Update `orchestrator.py` with text_video_reel execution path
+28. Update `learning_engine.py` with `TEXT_VIDEO_PERSONALITIES`, new strategy dimensions, `story_category` dimension, and content_type routing (Section 22)
+29. Update `content_planner.py` with `text_video_reel` type and `story_category` field on `ContentPlan`
+30. Update `buffer_manager.py` to read `TobyBrandConfig.reel_format` and generate format-aware slots (Section 23)
+31. Update `orchestrator.py` with text_video_reel execution path and variant logic fix (Section 23)
+32. Add `PUT /api/brands/{brand_id}/reel-format` endpoint for format switching (Section 25)
+33. Update `app/core/prompt_context.py` for format-aware example loading (Section 24)
+
+### Phase 7: Dashboard + Content DNA Multi-Format UI
+
+34. Add `reelFormat` to `DynamicBrandInfo` type and `useDynamicBrands()` hook (Section 26)
+35. Update `Home.tsx` slot coverage calculation to be format-aware (Section 26)
+36. Add "Text-Video Reels" tab to Content DNA page (Section 24, conditional on brands using text_video)
+37. Add format switching control to brand settings (location per ASK USER 13)
 
 ---
 
@@ -1776,6 +1907,1699 @@ Currently `NicheConfig` is per-user (one niche). But TEXT-VIDEO discovery requir
 
 ### `[ASK USER]` 10: yt-dlp Integration
 The original discussion mentioned yt-dlp for YouTube video scraping as a "Tier 2" image/video source. This is a legal gray area. Should we include yt-dlp as an optional video frame source behind a feature flag? Or skip entirely for MVP?
+
+### `[ASK USER]` 11: Text-Video Slot Hours (Section 23)
+Should text_video brands have different default slot hours than text_based? The @execute-style pages may post at different cadences (e.g., fewer but more impactful posts). Or keep the same 6-slot pattern (`[0, 4, 8, 12, 16, 20]` hours) for simplicity? The slot count is already configurable via `reel_slots_per_day` on `TobyBrandConfig`.
+
+### `[ASK USER]` 12: NicheConfig Per-User vs Per-Brand for Text-Video (Section 24)
+Currently `NicheConfig` is per-user (one config for all brands). The text_video Content DNA settings (story sub-niches, story tone, preferred categories) will apply to ALL brands that use text_video. Is per-user sufficient for MVP? Or do you need per-brand text_video overrides? Options:
+- (a) Per-user only (simplest, current architecture)
+- (b) Add `text_video_overrides` JSONB column on `Brand` model (per-brand override on top of global)
+- (c) Add `text_video_config` table keyed by (user_id, brand_id)
+
+### `[ASK USER]` 13: Format Switching UI Location
+Where should the "Switch reel format" control live?
+- (a) In the Content DNA / brand settings page
+- (b) In the Toby settings per-brand
+- (c) Both (Content DNA sets the creative direction, Toby settings reflect it)
+- (d) In the `/reels` page Design Editor tab
+
+### `[ASK USER]` 14: Mixed-Format Dashboard Display
+When a brand switches format mid-day, the dashboard may show a mix of text_based and text_video slots for that day. Should the UI:
+- (a) Show both types with different icons (transparent about the transition)
+- (b) Only show the new format's slots going forward (simpler but hides already-scheduled old-format content)
+- (c) Show a "transitioning" indicator for the day of the switch
+
+---
+
+## 21. Multi-Format Per-Brand Architecture
+
+### The Problem
+
+The original spec treats `text_video` as a simple addition. But ViralToby is multi-tenant multi-brand: one user may have Brand A using `text_based` reels and Brand B using `text_video` reels. This creates cascading complexity that the original 20 sections did not address:
+
+1. **Slot system** — `text_based` slots alternate light/dark. `text_video` slots have no variant distinction.
+2. **Learning engine** — Toby's Thompson Sampling brain for `text_based` reels is useless for `text_video`. Different personality pools, different strategy dimensions, different performance signals.
+3. **Content DNA** — `text_based` examples don't help `text_video` generation. Users need format-specific examples.
+4. **Dashboard** — Home.tsx slot coverage display is hardcoded to light/dark pattern. `text_video` brands need different labels.
+5. **Format switching** — A brand switching from `text_based` to `text_video` (or vice versa) must not corrupt learning data, delete scheduled content, or crash the buffer manager.
+
+### The Rule
+
+> **Each brand has exactly one reel format at any time. That format determines its slot pattern, learning brain, personality pool, and generation pipeline. Switching format activates a different brain — it does NOT reset or corrupt the existing one.**
+
+### Source of Truth: `TobyBrandConfig.reel_format`
+
+The per-brand reel format is stored in `TobyBrandConfig`:
+
+```python
+# app/models/toby.py — TobyBrandConfig
+reel_format = Column(String(30), default="text_based")
+# Values: "text_based" (default) | "text_video"
+```
+
+This column drives everything downstream:
+
+| `reel_format` | `content_type` in slots | `variant` pattern | Personality pool | Pipeline |
+|---|---|---|---|---|
+| `text_based` | `"reel"` | `light` / `dark` (alternating by slot index) | `REEL_PERSONALITIES` (5: edu_calm, provoc, story, data, urgent) | Pillow image → FFmpeg static video |
+| `text_video` | `"text_video_reel"` | `"text_video"` (uniform, no alternation) | `TEXT_VIDEO_PERSONALITIES` (5: breaking_news, power_moves, controversy, underdog, mind_blowing) | Story discovery → image sourcing → FFmpeg slideshow |
+
+**Backward compatibility:** Existing brands have no `reel_format` value (NULL). NULL is treated as `"text_based"` everywhere. No existing behavior changes.
+
+### Content Type Taxonomy
+
+The full `content_type` taxonomy after this change:
+
+| `content_type` value | Parent format | Used in |
+|---|---|---|
+| `"reel"` | `text_based` | Existing text-based reels. Thompson Sampling, buffer slots, experiments. |
+| `"text_video_reel"` | `text_video` | New text-video reels. Separate Thompson Sampling brain. |
+| `"post"` | (carousel) | Existing carousel posts. Unchanged. |
+
+The `content_type` string is the **primary key dimension** in `TobyStrategyScore`, `TobyExperiment`, `TobyContentTag`, and the learning engine's `choose_strategy()`. By using distinct content_type values, learning data is **automatically isolated** between formats without any special migration or data split logic.
+
+### How It Flows Through the System
+
+```
+User sets Brand X reel_format = "text_video" (via Settings or Content DNA)
+         │
+         ▼
+Buffer Manager reads TobyBrandConfig.reel_format for Brand X
+         │
+         ▼
+Generates slots: content_type = "text_video_reel" (not "reel")
+         │
+         ▼
+Content Planner picks empty slot → calls choose_strategy(content_type="text_video_reel")
+         │
+         ▼
+Learning Engine:
+  - Uses TEXT_VIDEO_PERSONALITIES pool (not REEL_PERSONALITIES)
+  - Queries TobyStrategyScore WHERE content_type = "text_video_reel"
+  - Finds zero rows → pure exploration (cold-start, H5 logic)
+         │
+         ▼
+Orchestrator._execute_content_plan():
+  - Detects plan.content_type == "text_video_reel"
+  - Runs story discovery + polishing + image sourcing pipeline
+  - Creates job with content_format = "text_video", variant = "text_video"
+         │
+         ▼
+JobProcessor detects content_format = "text_video" → slideshow compositor
+         │
+         ▼
+Publishing → ScheduledReel with extra_data.content_type = "text_video_reel"
+         │
+         ▼
+Home.tsx reads brand's reel_format → shows correct slot labels
+```
+
+### Migration: `toby_brand_reel_format.sql`
+
+```sql
+-- Migration: Add reel_format to toby_brand_config
+-- Run: psql "$DATABASE_URL" < migrations/toby_brand_reel_format.sql
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'toby_brand_config' AND column_name = 'reel_format'
+    ) THEN
+        ALTER TABLE toby_brand_config ADD COLUMN reel_format VARCHAR(30) DEFAULT 'text_based';
+    END IF;
+END $$;
+
+-- Check constraint: only valid format values
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.constraint_column_usage
+        WHERE table_name = 'toby_brand_config' AND constraint_name = 'chk_reel_format'
+    ) THEN
+        ALTER TABLE toby_brand_config
+            ADD CONSTRAINT chk_reel_format
+            CHECK (reel_format IN ('text_based', 'text_video'));
+    END IF;
+END $$;
+
+-- Verify
+SELECT column_name, data_type, column_default
+FROM information_schema.columns
+WHERE table_name = 'toby_brand_config'
+  AND column_name = 'reel_format';
+```
+
+This migration runs as **Migration 5** (after the 4 in Section 11). The model column is added to `TobyBrandConfig` in `app/models/toby.py` AFTER the migration runs.
+
+---
+
+## 22. Brain-Per-Format: Learning Engine Isolation
+
+### Concept
+
+Toby doesn't have "one brain" — it has one brain **per (brand_id, content_type)**. The learning engine already implements this via the composite key `(user_id, brand_id, content_type, dimension, option_value)` in `TobyStrategyScore`.
+
+By introducing `content_type = "text_video_reel"` as distinct from `"reel"`, we get automatic brain isolation:
+
+```
+Brand A (text_based):
+  TobyStrategyScore WHERE brand_id = "A" AND content_type = "reel"
+  → 5 dimensions × N options each → ~25-30 rows
+  → This is the "text_based brain" for Brand A
+
+Brand A (switches to text_video):
+  TobyStrategyScore WHERE brand_id = "A" AND content_type = "text_video_reel"
+  → 0 rows initially → cold-start → pure exploration
+  → The old "reel" rows stay in DB, untouched, dormant
+
+Brand A (switches back to text_based):
+  → The "reel" rows are still there → Toby picks up where it left off
+  → Zero data loss, zero corruption
+```
+
+### Personality Pools Per Format
+
+**Existing pool (text_based reels)** — no changes:
+```python
+REEL_PERSONALITIES = {
+    "edu_calm":  "You are a calm, knowledgeable educator...",
+    "provoc":    "You challenge common myths with surprising facts...",
+    "story":     "Frame every tip as a mini-story...",
+    "data":      "Lead with specific numbers and statistics...",
+    "urgent":    "Create a sense of urgency...",
+}
+```
+
+**New pool (text_video reels):**
+```python
+TEXT_VIDEO_PERSONALITIES = {
+    "breaking_news":  "You report just-happened stories with urgency. 'BREAKING:', timely, factual, impactful.",
+    "power_moves":    "You narrate bold business and wealth decisions. Confident, awed tone. 'He just sold...'",
+    "controversy":    "You present provocative takes and public debates. Two-sided, dramatic. 'Here's what no one is saying...'",
+    "underdog":       "You tell surprising success stories from underdogs. Inspirational, 'Nobody expected this...'",
+    "mind_blowing":   "You reveal shocking facts and statistics. 'This number will change how you think about...'",
+}
+```
+
+**New strategy dimensions for text_video:**
+
+The existing dimensions (personality, topic, hook, title_format, visual_style) mostly apply, but some options differ:
+
+| Dimension | text_based options | text_video options |
+|---|---|---|
+| `personality` | edu_calm, provoc, story, data, urgent | breaking_news, power_moves, controversy, underdog, mind_blowing |
+| `topic` | From NicheConfig.topic_categories | From NicheConfig.topic_categories (same, shared) |
+| `hook` | question, myth_buster, shocking_stat, personal_story, bold_claim | breaking_hook, statistic_lead, name_drop, controversy_opener, prediction |
+| `title_format` | how_x_does_y, number_one_mistake, why_experts_say, stop_doing_this, hidden_truth | name_action, shocking_number, versus_outcome, one_word_punch, question_reveal |
+| `visual_style` | dark_cinematic, light_clean, vibrant_bold | news_dramatic, cinematic_epic, minimal_stark |
+| `story_category` | (N/A for text_based) | power_moves, controversy, underdog, prediction, shocking_stat, human_moment, industry_shift, failed_bet, hidden_cost, scientific_breakthrough |
+
+The `story_category` dimension is **unique to text_video** — it drives the StoryDiscoverer's search category. Thompson Sampling learns which categories perform best per brand.
+
+### Implementation Changes to `learning_engine.py`
+
+```python
+# Add to existing constants at top of file
+
+TEXT_VIDEO_PERSONALITIES = {
+    "breaking_news":  "You report just-happened stories with urgency...",
+    "power_moves":    "You narrate bold business and wealth decisions...",
+    "controversy":    "You present provocative takes and public debates...",
+    "underdog":       "You tell surprising success stories from underdogs...",
+    "mind_blowing":   "You reveal shocking facts and statistics...",
+}
+
+TEXT_VIDEO_HOOKS = ["breaking_hook", "statistic_lead", "name_drop", "controversy_opener", "prediction"]
+
+TEXT_VIDEO_TITLE_FORMATS = ["name_action", "shocking_number", "versus_outcome", "one_word_punch", "question_reveal"]
+
+TEXT_VIDEO_VISUAL_STYLES = ["news_dramatic", "cinematic_epic", "minimal_stark"]
+
+TEXT_VIDEO_STORY_CATEGORIES = [
+    "power_moves", "controversy", "underdog", "prediction", "shocking_stat",
+    "human_moment", "industry_shift", "failed_bet", "hidden_cost", "scientific_breakthrough",
+]
+
+
+def get_personality_prompt(content_type: str, personality_id: str) -> str:
+    """Get the system prompt modifier for a personality."""
+    if content_type == "text_video_reel":
+        pool = TEXT_VIDEO_PERSONALITIES
+    elif content_type == "reel":
+        pool = REEL_PERSONALITIES
+    else:
+        pool = POST_PERSONALITIES
+    return pool.get(personality_id, "")
+
+
+def choose_strategy(...):
+    # Updated routing:
+    if content_type == "text_video_reel":
+        personality_pool = list(TEXT_VIDEO_PERSONALITIES.keys())
+        hooks = TEXT_VIDEO_HOOKS
+        titles = TEXT_VIDEO_TITLE_FORMATS
+        visuals = TEXT_VIDEO_VISUAL_STYLES
+    elif content_type == "reel":
+        personality_pool = list(REEL_PERSONALITIES.keys())
+        hooks = HOOK_STRATEGIES
+        titles = TITLE_FORMATS
+        visuals = VISUAL_STYLES
+    else:
+        personality_pool = list(POST_PERSONALITIES.keys())
+        hooks = HOOK_STRATEGIES
+        titles = TITLE_FORMATS
+        visuals = VISUAL_STYLES
+
+    personality = _pick_dimension(db, user_id, brand_id, content_type, "personality", personality_pool, ...)
+    topic = _pick_dimension(db, user_id, brand_id, content_type, "topic", topics, ...)
+    hook = _pick_dimension(db, user_id, brand_id, content_type, "hook", hooks, ...)
+    title_fmt = _pick_dimension(db, user_id, brand_id, content_type, "title_format", titles, ...)
+    visual = _pick_dimension(db, user_id, brand_id, content_type, "visual_style", visuals, ...)
+
+    # TEXT-VIDEO also picks story_category:
+    story_category = None
+    if content_type == "text_video_reel":
+        story_category = _pick_dimension(
+            db, user_id, brand_id, content_type, "story_category",
+            TEXT_VIDEO_STORY_CATEGORIES, is_explore, use_thompson,
+        )
+
+    return StrategyChoice(
+        personality=personality,
+        topic_bucket=topic,
+        hook_strategy=hook,
+        title_format=title_fmt,
+        visual_style=visual,
+        story_category=story_category,  # New field
+        ...
+    )
+```
+
+### StrategyChoice Dataclass Update
+
+```python
+@dataclass
+class StrategyChoice:
+    personality: str
+    topic_bucket: str
+    hook_strategy: str
+    title_format: str
+    visual_style: str
+    story_category: Optional[str] = None   # NEW — only set for text_video_reel
+    is_experiment: bool = False
+    experiment_id: Optional[str] = None
+    used_fallback: bool = False
+```
+
+### Cross-Brand Cold-Start for text_video
+
+The existing Phase C cold-start logic checks: "if this brand has <10 samples for a dimension, borrow from other brands of the same user." This **already works** for `text_video_reel` because it filters by `(user_id, content_type, dimension)` — it will only borrow from other brands that also use text_video, never from text_based data.
+
+If no brand has text_video data yet (first brand to enable it), the learning engine falls back to pure exploration (`explore_ratio = 1.0`), which is the correct behavior for a fresh format.
+
+### Experiments Per Format
+
+`TobyExperiment` already has a `content_type` field. Experiments for text_video use `content_type = "text_video_reel"`. They never interfere with `content_type = "reel"` experiments. This is automatic — no code changes needed in experiment creation/completion logic.
+
+---
+
+## 23. Slot System Changes
+
+### Current Slot Pattern (text_based only)
+
+```python
+# buffer_manager.py
+BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]   # 6 reels/day
+BASE_POST_HOURS = [8, 14]                   # 2 posts/day
+```
+
+All reel slots have `content_type: "reel"`. The variant (light/dark) is NOT determined in the buffer manager — it's determined later in the orchestrator:
+
+```python
+# orchestrator.py line 444
+variant = "light" if slot_index % 2 == 0 else "dark"
+```
+
+### New Slot Pattern (format-aware)
+
+The buffer manager must read each brand's `reel_format` and generate the correct `content_type`:
+
+```python
+# buffer_manager.py — updated slot generation loop
+
+for brand in brands:
+    bc = brand_config_map.get(brand.id)
+    brand_reel_format = (bc.reel_format if bc and bc.reel_format else "text_based")
+
+    # Determine content_type based on brand's reel format
+    reel_content_type = "text_video_reel" if brand_reel_format == "text_video" else "reel"
+
+    # Reel slots (same hours, different content_type)
+    for base_hour in BASE_REEL_HOURS[:brand_reel_slots]:
+        hour = (base_hour + offset_hours) % 24
+        slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
+        if slot_time <= now:
+            continue
+        all_slots.append({
+            "brand_id": brand.id,
+            "time": slot_time.isoformat(),
+            "content_type": reel_content_type,  # ← FORMAT-AWARE
+            "filled": _slot_is_filled(brand.id, slot_time),
+        })
+```
+
+**Key point:** The slot _hours_ are the same for both formats. Both text_based and text_video brands get 6 reel slots at [0, 4, 8, 12, 16, 20] hours (adjusted by brand offset). The difference is the `content_type` field, which routes to the correct pipeline.
+
+`[ASK USER]` Decision Point 11: Should text_video brands have different default slot hours? The @execute-style pages seem to post at different cadences. Or keep the same 6-slot pattern for simplicity?
+
+### Orchestrator Variant Logic Update
+
+```python
+# orchestrator.py — _execute_content_plan() Step 3
+
+if plan.content_type == "text_video_reel":
+    variant = "text_video"
+elif plan.content_type == "reel":
+    sched_time = datetime.fromisoformat(plan.scheduled_time)
+    slot_index = sched_time.hour // 4
+    variant = "light" if slot_index % 2 == 0 else "dark"
+else:
+    variant = "post"
+```
+
+### text_video_slots_per_day vs reel_slots_per_day
+
+In the original spec, Section 10 proposed a separate `text_video_slots_per_day` column on `TobyState`. This is **no longer needed** with the per-brand `reel_format` approach.
+
+Instead:
+- `reel_slots_per_day` (on `TobyState` and `TobyBrandConfig`) applies to **whichever reel format the brand uses**.
+- If a brand uses `text_video`, its `reel_slots_per_day` slots are `text_video_reel` type. If `text_based`, they're `reel` type.
+- No need for a separate slot counter. The format determines the content_type; the count is the same.
+
+**Correction to Section 10:** Remove `text_video_slots_per_day` from `TobyState`. Remove Migration 4 (`toby_text_video.sql`). The slot count is controlled by the existing `reel_slots_per_day` on `TobyBrandConfig`.
+
+---
+
+## 24. Content DNA Format Split
+
+### Current State
+
+`NicheConfig` is per-user (not per-brand), with format-agnostic fields:
+- `reel_examples` (JSONB) — user-provided example reels for few-shot prompting
+- `post_examples` (JSONB) — user-provided example posts
+- `content_tone`, `hook_themes`, `content_philosophy`, etc. — shared across all formats
+
+### The Problem
+
+Text-based reels and text-video reels are fundamentally different content styles:
+- **Text-based:** Health tips, educational advice, myth-busting. Tone is authoritative, personal.
+- **Text-video:** Real-world stories, news, viral facts. Tone is dramatic, factual, awe-inspiring.
+
+A user's Content DNA should allow format-specific customization without fragmenting the shared identity (brand personality, target audience, logo, etc.).
+
+### Solution: Format-Specific Example Columns + Shared Core
+
+The `NicheConfig` model gains text_video-specific columns. The core identity fields (niche_name, content_tone, target_audience, brand_personality) remain shared — they define what the brand IS, regardless of format. The format-specific fields define HOW each format expresses that identity.
+
+**New columns on `NicheConfig`:**
+
+```python
+# Format-specific reel examples
+text_video_reel_examples = Column(JSONB, default=[])  # Examples of @execute-style reels
+text_video_story_niches = Column(JSONB, default=[])    # Sub-niches for story discovery
+                                                        # e.g., ["celebrity finance", "tech scandals", "startup stories"]
+text_video_story_tone = Column(Text, default="")       # Tone override for text-video
+                                                        # e.g., "dramatic, factual, awe-inspiring"
+text_video_preferred_categories = Column(JSONB, default=[])  # Weighted preferences for story categories
+                                                              # e.g., [{"category": "power_moves", "weight": 0.3}, ...]
+```
+
+### Migration: `niche_config_text_video.sql`
+
+```sql
+-- Migration: Add text-video specific columns to niche_config
+-- Run: psql "$DATABASE_URL" < migrations/niche_config_text_video.sql
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_reel_examples'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_reel_examples JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_story_niches'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_story_niches JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_story_tone'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_story_tone TEXT DEFAULT '';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'niche_config' AND column_name = 'text_video_preferred_categories'
+    ) THEN
+        ALTER TABLE niche_config ADD COLUMN text_video_preferred_categories JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+-- Verify
+SELECT column_name, data_type, column_default
+FROM information_schema.columns
+WHERE table_name = 'niche_config'
+  AND column_name LIKE 'text_video_%'
+ORDER BY column_name;
+```
+
+### Content DNA Page: New Tab/Section
+
+The existing Content DNA page (wherever NicheConfig is edited) gains a new section:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Content DNA                                             │
+│                                                          │
+│  ┌────────────────┐  ┌──────────────────┐  ┌──────────┐ │
+│  │ Core Identity  │  │ Text-Based Reels │  │ Text-    │ │
+│  │                │  │                  │  │ Video    │ │
+│  └────────────────┘  └──────────────────┘  │ Reels    │ │
+│                                             └──────────┘ │
+│                                                          │
+│  ── Text-Video Reels Settings ──────────────────────     │
+│                                                          │
+│  Story Sub-Niches (comma-separated):                     │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │ celebrity finance, tech scandals, startup stories │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  Story Tone Override (leave empty to use core tone):     │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │ dramatic, factual, awe-inspiring                  │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  Text-Video Reel Examples (paste Instagram URLs):        │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │ https://instagram.com/reel/...                    │    │
+│  │ https://instagram.com/reel/...                    │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  Preferred Story Categories:                             │
+│  [✓] Power Moves    [ ] Controversy    [✓] Underdog     │
+│  [✓] Shocking Stat  [ ] Human Moment   [ ] Failed Bet   │
+│  [ ] Prediction     [✓] Industry Shift [ ] Hidden Cost  │
+│  [✓] Scientific Breakthrough                             │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Conditional visibility:** The "Text-Video Reels" tab only appears if at least one of the user's brands has `reel_format = "text_video"`. Otherwise it's hidden to avoid confusing users who haven't enabled the format.
+
+### PromptContext Integration
+
+The `PromptContext` dataclass (`app/core/prompt_context.py`) currently passes `reel_examples` to prompts. It needs format-aware example loading:
+
+```python
+# In prompt_context.py — build_context() or wherever PromptContext is constructed
+
+if content_type == "text_video_reel":
+    ctx.reel_examples = niche.text_video_reel_examples or []
+    ctx.story_sub_niches = niche.text_video_story_niches or []
+    ctx.content_tone_override = niche.text_video_story_tone or ctx.content_tone
+else:
+    ctx.reel_examples = niche.reel_examples or []
+```
+
+### NicheConfig Is Per-User, Not Per-Brand — Impact
+
+Since `NicheConfig` is per-user, the text_video content DNA settings apply to ALL brands that use text_video format. If a user has two text_video brands in different niches, the same story tone and examples apply to both.
+
+`[ASK USER]` Decision Point 12: Is per-user text_video configuration sufficient for MVP? Or do users need per-brand text_video settings? Per-brand would require either:
+- (a) Moving NicheConfig to per-brand (MAJOR refactor, breaks existing system)
+- (b) Adding a `text_video_overrides` JSONB column on `Brand` model (simpler, per-brand override on top of global NicheConfig)
+- (c) Adding a `text_video_config` table keyed by (user_id, brand_id) — a new per-brand config specifically for text-video
+
+Recommendation: Start with per-user (option a=skip), add per-brand later if users ask for it.
+
+---
+
+## 25. Format Switching Resilience
+
+### Scenario
+
+User changes Brand X's `reel_format` from `text_based` to `text_video` (or vice versa).
+
+### What MUST Happen
+
+1. **`TobyBrandConfig.reel_format` updated** — Single column update via API or Settings UI.
+
+2. **Already-scheduled content is NOT deleted.** Existing `ScheduledReel` entries for Brand X with `content_type = "reel"` or `variant = "light"/"dark"` remain and will be published as planned. They're already generated — destroying them would waste compute and create gaps.
+
+3. **Buffer manager recalculates on next tick.** The next time `get_buffer_status()` runs for this user, Brand X's slots will use the new `content_type`. New empty slots will be `text_video_reel` (or `reel`, depending on direction). Toby fills them with the correct format.
+
+4. **Learning engine activates the other brain.** Toby starts querying `TobyStrategyScore WHERE content_type = "text_video_reel"` instead of `"reel"`. If no data exists (first time), cold-start exploration kicks in.
+
+5. **Old learning data is preserved.** The `TobyStrategyScore` rows for the old `content_type` remain in the database. If the user switches back, Toby picks up exactly where it left off.
+
+6. **Dashboard updates immediately.** The API that feeds Home.tsx includes `content_type` in slot data. The frontend reads the brand's reel_format and adjusts labels.
+
+### What Must NOT Happen
+
+- ❌ Deleting or resetting Thompson Sampling scores
+- ❌ Deleting scheduled content for the old format
+- ❌ Mixing old-format slots with new-format slots for the same brand
+- ❌ Crashing if `reel_format` is NULL (treat as `text_based`)
+- ❌ Allowing both formats simultaneously for the same brand (one at a time)
+
+### API Endpoint for Format Switching
+
+```python
+# app/api/toby/toby_routes.py or app/api/brands/brand_routes.py
+
+@router.put("/api/brands/{brand_id}/reel-format")
+async def update_brand_reel_format(
+    brand_id: str,
+    request: UpdateReelFormatRequest,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Switch a brand's reel format. Does NOT delete existing content."""
+
+class UpdateReelFormatRequest(BaseModel):
+    reel_format: str  # "text_based" | "text_video"
+```
+
+The endpoint:
+1. Validates `reel_format` is one of the allowed values
+2. Verifies brand ownership (`brand.user_id == user["id"]`)
+3. Updates `TobyBrandConfig.reel_format`
+4. Does NOT touch `ScheduledReel`, `TobyStrategyScore`, or any other table
+5. Returns the updated brand config
+
+### Transition Period
+
+During the buffer window (48h default), a brand may have mixed content:
+- Slots filled BEFORE the switch → old format (will publish normally)
+- Slots filled AFTER the switch → new format
+
+This is expected and fine. The buffer progressively transitions as new content fills the new-format slots.
+
+### Edge Case: Mid-Day Switch
+
+If a user switches format mid-day:
+- Slots already filled today: stay as-is (old format)
+- Slots not yet filled today: become new format on next tick
+- The dashboard shows a mix for today — this is correct behavior
+
+---
+
+## 26. Dashboard & Home.tsx Multi-Format Awareness
+
+### Current Problem
+
+Home.tsx uses a hardcoded slot definition:
+
+```tsx
+const BASE_REEL_SLOTS: Array<{ hour: number; variant: 'light' | 'dark' }> = [
+  { hour: 0, variant: 'light' },
+  { hour: 4, variant: 'dark' },
+  // ...
+]
+```
+
+This doesn't work for `text_video` brands, which have no light/dark distinction.
+
+### Solution: Dynamic Slot Labels Per Brand
+
+The slot hours remain the same (6 slots at [0, 4, 8, 12, 16, 20]). What changes is the **label and variant type** per brand.
+
+**Option A (Preferred): Backend provides slot info including content_type**
+
+The `/api/toby/buffer-status` endpoint already returns per-slot data with `content_type`. The frontend should use this instead of a hardcoded array:
+
+```tsx
+// NEW — get slot pattern from backend buffer status or brand config
+const getReelSlotPattern = (brandId: string, brandReelFormat: string) => {
+  if (brandReelFormat === 'text_video') {
+    return BASE_REEL_HOURS.map(hour => ({
+      hour,
+      variant: 'text_video' as const,
+      label: '📹',
+    }))
+  }
+  // Default: text_based with light/dark alternation
+  return BASE_REEL_SLOTS  // existing light/dark array
+}
+```
+
+**Option B: Extend DynamicBrandInfo with reel_format**
+
+The `useDynamicBrands()` hook returns `DynamicBrandInfo[]`. Add `reelFormat: 'text_based' | 'text_video'` to this type so the frontend knows each brand's format without an extra API call:
+
+```tsx
+interface DynamicBrandInfo {
+  id: string
+  label: string
+  color: string
+  // ... existing fields
+  reelFormat: 'text_based' | 'text_video'  // NEW
+}
+```
+
+This comes from the `TobyBrandConfig.reel_format` column, loaded by the brands API.
+
+### Updated Coverage Calculation
+
+```tsx
+const coverage = useMemo(() => {
+  return dynamicBrands.map(brand => {
+    const brandToday = todayPosts.filter(p => p.metadata?.brand === brand.id)
+    const reelsByHour = new Map<number, string>()
+    brandToday.filter(p => p.metadata?.variant !== 'post').forEach(p => {
+      reelsByHour.set(new Date(p.scheduled_time).getHours(), p.metadata?.variant || 'light')
+    })
+
+    const offset = brand.scheduleOffset || 0
+    const isTextVideo = brand.reelFormat === 'text_video'
+
+    const reelSlots = (isTextVideo ? BASE_REEL_HOURS : BASE_REEL_SLOTS).map((slot, idx) => {
+      const base = typeof slot === 'number' ? slot : slot.hour
+      const expectedVariant = isTextVideo ? 'text_video' : (slot as any).variant || (idx % 2 === 0 ? 'light' : 'dark')
+      const hour = (base + offset) % 24
+      const t = new Date(dayStart); t.setHours(hour, 0, 0, 0)
+      const isPast = t < n
+      const filled = reelsByHour.has(hour)
+      return { hour, filled, isPast, variant: expectedVariant }
+    })
+
+    // ... rest of coverage calculation unchanged
+  })
+}, [todayPosts, dynamicBrands])
+```
+
+### Slot Visual Indicators
+
+| Format | Filled indicator | Empty indicator |
+|---|---|---|
+| `text_based` light | ☀️ (gold dot) | ○ (outlined gold) |
+| `text_based` dark | 🌙 (purple dot) | ○ (outlined purple) |
+| `text_video` | 📹 (blue dot) | ○ (outlined blue) |
+
+### Where `reelFormat` Comes From
+
+The `/api/brands` endpoint (or `/api/toby/state`) must include each brand's `reel_format` in the response. This means the backend social connect or brands API needs to JOIN with `TobyBrandConfig` to include the format field.
+
+Alternatively, the Toby state endpoint (`/api/toby/state`) already returns `brand_configs` — ensure it includes `reel_format` in each brand config object:
+
+```python
+# In the toby state API response
+"brand_configs": [
+    {
+        "brand_id": "...",
+        "reel_slots_per_day": 6,
+        "post_slots_per_day": 2,
+        "enabled_platforms": [...],
+        "reel_format": "text_video",  # ← NEW
+    }
+]
+```
+
+---
+
+## 27. Scalability: Adding Future Formats
+
+### Extension Pattern
+
+The architecture is designed so new formats follow a predictable pattern:
+
+1. **Define a new `content_type` string** — e.g., `"carousel_reel"`, `"story_clip"`, `"youtube_short"`
+2. **Add a personality pool** — `CAROUSEL_REEL_PERSONALITIES = {...}`
+3. **Add strategy dimension options** — new hooks, title formats, visual styles specific to the format
+4. **Extend `reel_format` (or add `post_format`)** — `CHECK (reel_format IN ('text_based', 'text_video', 'carousel_reel'))`
+5. **Add format-specific examples to NicheConfig** — `carousel_reel_examples = Column(JSONB, default=[])`
+6. **Add a compositor** — `carousel_reel_compositor.py`
+7. **Route in orchestrator** — `elif plan.content_type == "carousel_reel": ...`
+8. **Route in job_processor** — `elif content_format == "carousel_reel": ...`
+
+### What's Shared vs. Format-Specific
+
+| Component | Shared across formats | Format-specific |
+|---|---|---|
+| Thompson Sampling engine | ✅ (algorithm, update logic) | Personality pools, option lists, data rows (keyed by content_type) |
+| Buffer manager | ✅ (slot generation algorithm, hours, fuzzy matching) | `content_type` label per slot |
+| Experiment engine | ✅ (creation, completion, timeout) | `content_type` filter on experiments |
+| NicheConfig core fields | ✅ (niche_name, tone, audience, topics) | Example columns, tone overrides, category preferences |
+| Publishing pipeline | ✅ (ScheduledReel, SocialPublisher, scheduling) | `variant` value, media type |
+| Billing/subscription | ✅ (BrandSubscription, gates) | None — billing is format-agnostic |
+| Feature flags | ✅ (flag system) | Per-format flag (e.g., `"text_video_reels"`) |
+
+### Adding a Format: Checklist
+
+```markdown
+- [ ] New `content_type` string constant
+- [ ] Personality pool (5-7 personalities)
+- [ ] Strategy dimension options (hooks, titles, visuals + any format-specific dims)
+- [ ] Migration: extend CHECK constraint on reel_format (or equivalent format column)
+- [ ] Migration: add example column(s) to niche_config
+- [ ] Model: add columns to NicheConfig, TobyBrandConfig format, TextVideoDesign (if applicable)
+- [ ] learning_engine.py: add pool routing in choose_strategy()
+- [ ] learning_engine.py: add pool routing in get_personality_prompt()
+- [ ] buffer_manager.py: already handles dynamically (reads reel_format — extend to new value)
+- [ ] content_planner.py: StrategyChoice may need new format-specific fields
+- [ ] orchestrator.py: add content_type routing in _execute_content_plan()
+- [ ] job_processor.py: add content_format routing in process_job()
+- [ ] Home.tsx: add visual indicator for new format
+- [ ] Content DNA page: add format-specific tab (conditional on brands using it)
+- [ ] /reels page: add tab for new format
+- [ ] validate_api.py: add new modules
+- [ ] Feature flag: add "new_format_name" flag
+- [ ] Self-maintenance: update customization files
+```
+
+### Why Not a Generic `format_config` JSONB Column?
+
+Tempting to replace `reel_format VARCHAR` with a flexible `format_config JSONB` that stores arbitrary format settings. We avoid this because:
+1. CHECK constraints on VARCHAR catch typos at the DB level
+2. Explicit columns are easier to query and index
+3. The number of reel formats will be small (3-5 total, ever)
+4. JSONB loses type safety; VARCHAR with CHECK is safer
+
+If we ever need >5 formats (unlikely), we can migrate to an enum or a separate `content_formats` lookup table.
+
+---
+
+## 28. Production Safety: Zero-Downtime Migration Plan
+
+> **PRIME DIRECTIVE:** Existing users with complex Toby configurations — active Thompson Sampling scores, running experiments, multi-brand buffer schedules, scheduled content queued for publishing — MUST NOT be affected during or after this deployment. No data loss. No 500 errors. No Toby tick crashes. No missed publishes. The system must remain fully functional at every intermediate step.
+
+### 28.1 Why This Matters
+
+ViralToby runs as a single Railway service with:
+- **Toby tick loop** every 5 minutes (APScheduler) querying `generation_jobs`, `scheduled_reels`, `toby_state`, `toby_brand_config`, `toby_strategy_score`, `toby_experiments`
+- **Active publishing** running 24/7 — scheduled content must publish on time
+- **No automatic migration on startup** — Dockerfile runs `uvicorn` directly, migrations are manual
+- **SQLAlchemy model-first** — if a model references a column that doesn't exist in the DB, every query on that table returns HTTP 500 (`UndefinedColumn`)
+
+If we add `content_format` to the `GenerationJob` model in Python but haven't run the SQL migration, **every single page load, every job creation, every Toby tick** crashes. The entire app goes down.
+
+### 28.2 The Golden Rule: Migrations-First, Code-Second
+
+```
+1. Run SQL migrations (add columns, tables, indexes)     — DB changes only
+2. Verify migrations succeeded (SELECT new columns)       — Validation
+3. Deploy new code that references the columns             — Code changes only
+4. Verify new code works with new + old data               — Smoke test
+```
+
+**Never, ever deploy code that references a column before the migration has run and been verified.**
+
+### 28.3 Staged Migration Plan
+
+The deployment is split into **4 stages**, each independently safe to deploy and independently rollback-able.
+
+#### Stage 1: Database Schema Additions (Zero Code Changes)
+
+Run these in order. Each is idempotent (`IF NOT EXISTS`). Run them via:
+```bash
+railway run -- psql "$DATABASE_URL" < migrations/<file>.sql
+```
+
+Or via Supabase SQL Editor (Dashboard → SQL Editor → paste + run).
+
+| Order | Migration File | What It Does | Tables Affected | Risk |
+|---|---|---|---|---|
+| 1 | `migrations/text_video_format.sql` | Add `content_format VARCHAR(30) DEFAULT 'text_based'` + `text_video_data JSONB` to `generation_jobs` | `generation_jobs` | **NONE** — additive column with default. Existing rows get `'text_based'` or NULL. SQLAlchemy won't query these columns until code deploys. |
+| 2 | `migrations/text_video_design.sql` | Create new table `text_video_design` | New table | **NONE** — new table, no existing queries touch it. |
+| 3 | `migrations/text_video_story_pool.sql` | Create new table `text_video_story_pool` | New table | **NONE** — new table. |
+| 4 | `migrations/toby_brand_reel_format.sql` | Add `reel_format VARCHAR(30) DEFAULT 'text_based'` to `toby_brand_config` + CHECK constraint | `toby_brand_config` | **NONE** — additive column with default. All existing brands get `'text_based'` (NULL also treated as text_based in code). |
+| 5 | `migrations/niche_config_text_video.sql` | Add 4 JSONB columns to `niche_config` | `niche_config` | **NONE** — additive columns with `DEFAULT '[]'`. |
+
+**After Stage 1, verify:**
+```sql
+-- Run in Supabase SQL Editor or psql
+SELECT column_name, data_type, column_default
+FROM information_schema.columns
+WHERE table_name = 'generation_jobs' AND column_name IN ('content_format', 'text_video_data');
+
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'toby_brand_config' AND column_name = 'reel_format';
+
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'niche_config' AND column_name LIKE 'text_video_%';
+
+SELECT count(*) FROM text_video_design;  -- should be 0
+SELECT count(*) FROM text_video_story_pool;  -- should be 0
+```
+
+**Rollback for Stage 1:** Not needed — these are additive changes. But if you must:
+```sql
+ALTER TABLE generation_jobs DROP COLUMN IF EXISTS content_format;
+ALTER TABLE generation_jobs DROP COLUMN IF EXISTS text_video_data;
+ALTER TABLE toby_brand_config DROP COLUMN IF EXISTS reel_format;
+ALTER TABLE niche_config DROP COLUMN IF EXISTS text_video_reel_examples;
+ALTER TABLE niche_config DROP COLUMN IF EXISTS text_video_story_niches;
+ALTER TABLE niche_config DROP COLUMN IF EXISTS text_video_story_tone;
+ALTER TABLE niche_config DROP COLUMN IF EXISTS text_video_preferred_categories;
+DROP TABLE IF EXISTS text_video_design;
+DROP TABLE IF EXISTS text_video_story_pool;
+```
+
+#### Stage 2: Backend Code — Backward-Compatible Model Updates + New Files
+
+Deploy new Python code that:
+1. Adds new columns to SQLAlchemy models (now safe — columns exist in DB from Stage 1)
+2. Adds new service files (`story_discoverer.py`, `slideshow_compositor.py`, etc.)
+3. Adds new API routes (new routers registered in `main.py`)
+4. Updates existing code with **backward-compatible guards** (see Section 28.5)
+
+**Critical model updates (must match Stage 1 migrations):**
+
+```python
+# app/models/jobs.py — add after existing columns
+content_format = Column(String(30), default="text_based")
+text_video_data = Column(JSON)
+
+# app/models/toby.py — TobyBrandConfig, add after existing columns
+reel_format = Column(String(30), default="text_based")
+
+# app/models/niche_config.py — add after existing columns
+text_video_reel_examples = Column(JSONB, default=[])
+text_video_story_niches = Column(JSONB, default=[])
+text_video_story_tone = Column(Text, default="")
+text_video_preferred_categories = Column(JSONB, default=[])
+```
+
+**Safety guarantee:** After Stage 2 deploys:
+- All existing content remains `content_format = 'text_based'` (or NULL, treated as text_based)
+- All existing brands remain `reel_format = 'text_based'` (or NULL, treated as text_based)
+- No existing code paths change behavior — all new logic is gated behind `content_type == "text_video_reel"` or `content_format == "text_video"` checks, which no existing data satisfies
+- Toby tick loop continues as normal — no brand has text_video, so no text_video code executes
+
+#### Stage 3: Frontend Code — Backward-Compatible Type Updates
+
+Deploy frontend changes:
+1. Extend `Variant` type: `'light' | 'dark' | 'post' | 'text_video'`
+2. Add `text_video` handling to all variant switch/conditional statements
+3. Add new tab pages, design editor, etc.
+4. All new UI is behind feature gates (brands must have `reel_format = 'text_video'` which none do yet)
+
+**Safety guarantee:** Until a user explicitly sets a brand to `text_video` format, no new UI code activates. The existing experience is identical.
+
+#### Stage 4: Feature Enablement (User-by-User)
+
+Format switching is manual — users opt in per brand:
+1. Admin sets `text_video_reels = True` in feature flags (or per-user override)
+2. User goes to brand settings → switches reel format to "Text-Video"
+3. Toby reads `reel_format = 'text_video'` on next tick → starts generating text_video content
+
+**Rollback:** User switches brand back to `text_based`. Toby resumes text_based on next tick.
+
+### 28.4 Existing Data Preservation Guarantees
+
+| Data | What Happens | Guarantee |
+|---|---|---|
+| `TobyStrategyScore` rows (Thompson Sampling) | **Untouched.** All existing rows have `content_type = "reel"` or `"post"`. New text_video rows use `content_type = "text_video_reel"`. Different key = different rows. | Zero data loss. Zero corruption. |
+| `TobyExperiment` rows | **Untouched.** Same `content_type` isolation. | Active experiments continue uninterrupted. |
+| `TobyContentTag` rows | **Untouched.** Historical strategy records preserved. | Full audit trail preserved. |
+| `TobyBrandConfig` rows | **Extended.** Gains `reel_format` column with `DEFAULT 'text_based'`. Existing configs remain identical in behavior. | No change in behavior. |
+| `TobyState` rows | **Untouched.** No columns added. | Toby configuration unchanged. |
+| `GenerationJob` rows | **Extended.** Gains `content_format DEFAULT 'text_based'` and `text_video_data` (NULL for existing). | All existing jobs continue to process normally. |
+| `ScheduledReel` rows | **Untouched.** No schema changes. `extra_data` continues to work as-is. | All scheduled publishes execute on time. |
+| `NicheConfig` rows | **Extended.** Gains 4 optional columns with `DEFAULT '[]'` / `''`. | Existing Content DNA fully preserved. |
+| Brand schedule offsets | **Untouched.** Clock offsets continue to apply to text_video slots. | Scheduling behavior unchanged. |
+| Active publish queue | **Untouched.** Publishing pipeline checks `variant` on `ScheduledReel.extra_data`, not `content_format` on jobs. | Zero risk to in-flight publishes. |
+| Billing/subscriptions | **Untouched.** Billing is format-agnostic. | No billing impact. |
+
+### 28.5 Backward-Compatible Code Guards
+
+Every existing code path that currently checks `content_type == "reel"` or `variant == "light"/"dark"` must handle the new `text_video_reel` / `text_video` values **without breaking the existing paths**. Here's the exact pattern:
+
+**Pattern: Use `elif` chains, never change `else` behavior**
+
+```python
+# WRONG — changing else catches text_video in reel pipeline:
+if plan.content_type == "reel":
+    ...  # reel pipeline
+else:
+    ...  # post pipeline (text_video would land here!)
+
+# RIGHT — explicit routing, unknown falls through to safe default:
+if plan.content_type == "reel":
+    ...  # existing reel pipeline (unchanged)
+elif plan.content_type == "text_video_reel":
+    ...  # new text_video pipeline
+elif plan.content_type == "post":
+    ...  # existing post pipeline (unchanged)
+else:
+    print(f"[TOBY] Unknown content_type: {plan.content_type}")
+    return None  # safe no-op
+```
+
+**Files that MUST use this pattern (exhaustive list):**
+
+| File | Line(s) | Current Code | Required Change |
+|---|---|---|---|
+| `app/services/toby/orchestrator.py` | L417 | `if plan.content_type == "reel"` / `else` | Add `elif plan.content_type == "text_video_reel"` before `else` |
+| `app/services/toby/orchestrator.py` | L441-446 | `if plan.content_type == "reel"` → variant light/dark, `else` → "post" | Add `elif plan.content_type == "text_video_reel": variant = "text_video"` |
+| `app/services/content/job_processor.py` | L585 | `if job.variant == "post"` / `else` (reel pipeline) | Add `elif job.variant == "text_video"` or check `content_format` |
+| `app/services/toby/learning_engine.py` | L78 | `pool = REEL if content_type == "reel" else POST` | Add `if "text_video_reel": TEXT_VIDEO pool` before `else` |
+| `app/services/toby/analysis_engine.py` | L66-70 | `if content_type == "post"` / `else` (reel scoring) | text_video uses reel scoring (views-based). Keep `else` as reel scoring. Add comment. |
+| `app/services/publishing/scheduler.py` | L190-194 | Dedup: `variant in ("light","dark")` OR `variant == "post"` | Add `or (variant == "text_video" and ex_variant == "text_video")` |
+| `app/core/platforms.py` | L62-65 | `CONTENT_TYPE_KEY_MAP = {"reel":"reels","post":"posts"}` | Add `"text_video_reel": "reels"` (text_video publishes to same platforms as reels) |
+| `app/services/toby/buffer_manager.py` | L143 | `"content_type": "reel"` hardcoded | Read `TobyBrandConfig.reel_format`, set `"text_video_reel"` or `"reel"` |
+| `app/services/toby/buffer_manager.py` | L182 | `s["content_type"] == "reel"` for stats | Count text_video_reel separately, or group with reels in breakdown |
+| `app/services/analytics/metrics_collector.py` | L449 | Default `content_type="reel"` | text_video content gets `content_type="text_video_reel"` — safe, just a label |
+| Frontend `Variant` type | `src/shared/types/index.ts` L15 | `'light' \| 'dark' \| 'post'` | Add `\| 'text_video'` |
+| `src/pages/Scheduled.tsx` | L234-237 | Exhaustive light/dark/post switch | Add `text_video` case |
+| `src/pages/Home.tsx` | L33-40 | `BASE_REEL_SLOTS` with light/dark | Format-aware per-brand (Section 26) |
+| `src/pages/History.tsx` | L151 | Variant filter dropdown | Add `text_video` option |
+| `src/pages/Calendar.tsx` | L177 | Default to 'light' for unknown | text_video would default to 'light' (harmless, slight visual mismatch) |
+| `src/features/toby/components/TobyBufferStatus.tsx` | L174 | `slot.content_type === 'reel'` | Add `'text_video_reel'` handling |
+
+### 28.6 Null-Safety Requirements
+
+Every code path reading new columns MUST handle NULL (column exists but hasn't been populated):
+
+```python
+# content_format — NULL means text_based (all pre-existing jobs)
+content_format = getattr(job, 'content_format', None) or 'text_based'
+
+# reel_format — NULL means text_based (all pre-existing brand configs)
+reel_format = (bc.reel_format if bc and bc.reel_format else "text_based")
+
+# text_video_data — NULL means no text_video metadata
+text_video_data = getattr(job, 'text_video_data', None)  # Could be None
+
+# NicheConfig text_video columns — empty defaults
+text_video_reel_examples = niche.text_video_reel_examples or []
+text_video_story_niches = niche.text_video_story_niches or []
+text_video_story_tone = niche.text_video_story_tone or ""
+text_video_preferred_categories = niche.text_video_preferred_categories or []
+```
+
+### 28.7 Pre-Deployment Validation Checklist
+
+Run these checks BEFORE deploying any stage:
+
+```bash
+# 1. Python syntax + imports (catches missing imports, circular deps)
+python scripts/validate_api.py --imports
+
+# 2. React hooks lint (catches hooks-after-return violations)
+npx eslint src/ --rule 'react-hooks/rules-of-hooks: error'
+
+# 3. TypeScript build (catches type errors from Variant extension)
+npx tsc --noEmit
+
+# 4. Full API validation (catches broken endpoints)
+python scripts/validate_api.py
+```
+
+### 28.8 Post-Deployment Verification Script
+
+Create `scripts/verify_text_video_migration.py` to verify the deployment is safe:
+
+```python
+"""
+Post-deployment verification for TEXT-VIDEO migration.
+Run after each deployment stage to verify data integrity.
+
+Usage: railway run -- python scripts/verify_text_video_migration.py
+  Or locally: python scripts/verify_text_video_migration.py
+"""
+import sys
+from app.db_connection import SessionLocal
+from sqlalchemy import text
+
+def verify():
+    db = SessionLocal()
+    errors = []
+
+    # 1. Check new columns exist
+    for table, col in [
+        ("generation_jobs", "content_format"),
+        ("generation_jobs", "text_video_data"),
+        ("toby_brand_config", "reel_format"),
+        ("niche_config", "text_video_reel_examples"),
+    ]:
+        result = db.execute(text(
+            f"SELECT 1 FROM information_schema.columns "
+            f"WHERE table_name = '{table}' AND column_name = '{col}'"
+        )).fetchone()
+        if not result:
+            errors.append(f"MISSING COLUMN: {table}.{col}")
+
+    # 2. Check new tables exist
+    for table in ["text_video_design", "text_video_story_pool"]:
+        result = db.execute(text(
+            f"SELECT 1 FROM information_schema.tables WHERE table_name = '{table}'"
+        )).fetchone()
+        if not result:
+            errors.append(f"MISSING TABLE: {table}")
+
+    # 3. Verify existing data NOT corrupted
+    # All existing jobs should have content_format NULL or 'text_based'
+    bad_jobs = db.execute(text(
+        "SELECT count(*) FROM generation_jobs "
+        "WHERE content_format IS NOT NULL AND content_format != 'text_based'"
+    )).scalar()
+    if bad_jobs > 0:
+        errors.append(f"CORRUPTION: {bad_jobs} jobs have unexpected content_format values")
+
+    # All existing brand configs should have reel_format NULL or 'text_based'
+    bad_configs = db.execute(text(
+        "SELECT count(*) FROM toby_brand_config "
+        "WHERE reel_format IS NOT NULL AND reel_format != 'text_based'"
+    )).scalar()
+    if bad_configs > 0:
+        errors.append(f"CORRUPTION: {bad_configs} brand configs have unexpected reel_format values")
+
+    # 4. Verify Thompson Sampling data intact
+    score_count = db.execute(text("SELECT count(*) FROM toby_strategy_scores")).scalar()
+    print(f"  Thompson Sampling scores: {score_count} rows (preserved)")
+
+    exp_count = db.execute(text("SELECT count(*) FROM toby_experiments")).scalar()
+    print(f"  Active experiments: {exp_count} rows (preserved)")
+
+    tag_count = db.execute(text("SELECT count(*) FROM toby_content_tags")).scalar()
+    print(f"  Content tags: {tag_count} rows (preserved)")
+
+    # 5. Verify scheduled queue intact
+    pending = db.execute(text(
+        "SELECT count(*) FROM scheduled_reels WHERE status = 'scheduled'"
+    )).scalar()
+    print(f"  Pending scheduled items: {pending} (preserved)")
+
+    # 6. Check current Toby state for all users
+    toby_users = db.execute(text(
+        "SELECT count(*) FROM toby_state WHERE enabled = true"
+    )).scalar()
+    print(f"  Active Toby users: {toby_users}")
+
+    db.close()
+
+    if errors:
+        print("\n❌ VERIFICATION FAILED:")
+        for e in errors:
+            print(f"  - {e}")
+        sys.exit(1)
+    else:
+        print("\n✅ All verification checks passed — safe to proceed")
+        sys.exit(0)
+
+if __name__ == "__main__":
+    verify()
+```
+
+### 28.9 Rollback Plan Per Stage
+
+| Stage | Rollback Procedure | Data Lost | Downtime |
+|---|---|---|---|
+| **Stage 1** (migrations) | `ALTER TABLE ... DROP COLUMN IF EXISTS` for each added column; `DROP TABLE IF EXISTS` for new tables | Zero (columns were empty/defaulted) | Zero (no app restart needed) |
+| **Stage 2** (backend code) | `git revert` to previous commit → `railway redeploy` | Zero (no text_video content was created yet) | ~2 min (Railway redeploy) |
+| **Stage 3** (frontend code) | `git revert` → rebuild → redeploy | Zero | ~2 min |
+| **Stage 4** (feature enablement) | Set `text_video_reels = False` in feature flags, or user switches brand back to `text_based` | text_video content that was already generated stays in DB but stops being filled. Can be manually cleaned if needed. | Zero (flag change = immediate) |
+
+### 28.10 What Happens to the Toby Tick During Deployment
+
+Railway deployments use rolling restarts (new container starts, old container drains). During the ~30s overlap:
+- **Old container** may run a Toby tick with old code → fine, no new columns referenced
+- **New container** starts, APScheduler initializes → first tick runs new code against new schema → fine, migrations already ran
+
+If a tick is running during container swap, it gets SIGTERM. APScheduler handles graceful shutdown. The next tick (5 min later on new container) picks up where it left off. Buffer state is in PostgreSQL, not in memory — no state loss.
+
+### 28.11 Monitoring After Deployment
+
+Watch for these in Railway logs (`railway logs -n 500 | grep -iE "error|crash|undefined"`) for 30 minutes after each stage:
+
+```
+# BAD — column doesn't exist (Stage 1 failed):
+UndefinedColumn: column "content_format" of relation "generation_jobs" does not exist
+
+# BAD — code tries to use text_video before feature is enabled:
+[TOBY] Unknown content_type: text_video_reel
+
+# GOOD — normal operation:
+[TOBY] Buffer status: healthy (12/12 filled)
+[TOBY] Tick complete for user_xxx
+```
+
+---
+
+## 29. Complete Code Touchpoint Map
+
+This is the **exhaustive reference** of every file that must be modified, why, and exactly how. Ordered by deployment stage.
+
+### 29.1 Backend: Files That Route by content_type or variant
+
+These are the most critical changes — an incorrect modification here crashes existing users.
+
+#### `app/services/toby/orchestrator.py` — Content Generation Routing (Line ~417)
+
+**Current code:**
+```python
+if plan.content_type == "reel":
+    result = generator.generate_viral_content(...)
+else:
+    results = generator.generate_post_titles_batch(...)
+    result = results[0] if results else None
+```
+
+**Required change:**
+```python
+if plan.content_type == "reel":
+    result = generator.generate_viral_content(...)
+elif plan.content_type == "text_video_reel":
+    # NEW: Text-video pipeline (story discovery → polish → image source)
+    result = _generate_text_video_content(db, plan, ctx, brand_config)
+elif plan.content_type == "post":
+    results = generator.generate_post_titles_batch(...)
+    result = results[0] if results else None
+else:
+    print(f"[TOBY] Unknown content_type: {plan.content_type} — skipping")
+    return None
+```
+
+**Why it's safe:** The `elif` chain preserves existing `"reel"` and `"post"` branches byte-for-byte. The new `"text_video_reel"` branch only executes when a brand's slot has that content_type (which requires `TobyBrandConfig.reel_format = "text_video"` — Stage 4).
+
+#### `app/services/toby/orchestrator.py` — Variant Assignment (Line ~441)
+
+**Current code:**
+```python
+if plan.content_type == "reel":
+    sched_time = datetime.fromisoformat(plan.scheduled_time)
+    slot_index = sched_time.hour // 4
+    variant = "light" if slot_index % 2 == 0 else "dark"
+else:
+    variant = "post"
+```
+
+**Required change:**
+```python
+if plan.content_type == "text_video_reel":
+    variant = "text_video"
+elif plan.content_type == "reel":
+    sched_time = datetime.fromisoformat(plan.scheduled_time)
+    slot_index = sched_time.hour // 4
+    variant = "light" if slot_index % 2 == 0 else "dark"
+elif plan.content_type == "post":
+    variant = "post"
+else:
+    variant = "light"  # safe fallback
+```
+
+**Why `text_video_reel` check is FIRST:** If we put it after `"reel"`, someone might future-edit the reel branch's else to catch text_video. Putting the most specific check first prevents that.
+
+#### `app/services/content/job_processor.py` — Pipeline Routing (Line ~585)
+
+**Current code:**
+```python
+if job.variant == "post":
+    # carousel pipeline
+else:
+    # reel pipeline (light/dark)
+```
+
+**Required change:**
+```python
+content_format = getattr(job, 'content_format', None) or 'text_based'
+
+if content_format == "text_video":
+    return self._process_text_video_job(job)
+elif job.variant == "post":
+    return self._process_post_brand(job)
+else:
+    return self._process_reel_job(job)  # existing light/dark pipeline
+```
+
+**Why `content_format` not `variant`:** Using the new `content_format` column (with NULL→text_based fallback) is cleaner than overloading `variant`. All existing jobs have `content_format` NULL or `text_based`, so they hit the existing `"post"` / reel branches.
+
+#### `app/services/publishing/scheduler.py` — Dedup Guard (Line ~190)
+
+**Current code:**
+```python
+is_same_type = (
+    (variant in ("light", "dark") and ex_variant in ("light", "dark"))
+    or (variant == "post" and ex_variant == "post")
+)
+```
+
+**Required change:**
+```python
+is_same_type = (
+    (variant in ("light", "dark") and ex_variant in ("light", "dark"))
+    or (variant == "post" and ex_variant == "post")
+    or (variant == "text_video" and ex_variant == "text_video")
+)
+```
+
+**Why this is critical:** Without this, two text_video reels for the same brand in the same time slot would BOTH get scheduled. This causes duplicate publishes to Instagram, which can trigger Instagram's spam detection and potentially restrict the account.
+
+#### `app/core/platforms.py` — Content Type Key Map (Line ~62)
+
+**Current:**
+```python
+CONTENT_TYPE_KEY_MAP = {"reel": "reels", "post": "posts"}
+```
+
+**Required:**
+```python
+CONTENT_TYPE_KEY_MAP = {"reel": "reels", "text_video_reel": "reels", "post": "posts"}
+```
+
+**Why:** text_video reels publish to the same platforms as regular reels (Instagram Reels, Facebook Reels, YouTube Shorts, TikTok). Without this mapping, `get_platforms_for_content_type()` can't look up the user's per-content-type platform preferences and falls through to "all connected platforms" — which might include platforms the user has disabled for reels.
+
+#### `app/services/toby/analysis_engine.py` — Scoring Formula (Line ~66)
+
+**Current:**
+```python
+primary = views if content_type == "reel" else reach
+if content_type == "post":
+    # carousel scoring...
+else:
+    # reel scoring...
+```
+
+**Required change:**
+```python
+primary = views if content_type in ("reel", "text_video_reel") else reach
+if content_type == "post":
+    # carousel scoring (unchanged)
+else:
+    # reel scoring (applies to both text_based reels AND text_video reels)
+```
+
+**Why:** text_video reels are published as Instagram Reels and have `views` as their primary metric, same as text_based reels. Using `reach` (carousel formula) would produce wrong Toby Scores and corrupt the learning engine's reward signals for text_video brands.
+
+### 29.2 Backend: Files That Generate Slots
+
+#### `app/services/toby/buffer_manager.py` — Slot Generation (Line ~143)
+
+**Current:**
+```python
+for base_hour in BASE_REEL_HOURS[:brand_reel_slots]:
+    ...
+    all_slots.append({
+        "brand_id": brand.id,
+        "time": slot_time.isoformat(),
+        "content_type": "reel",
+        "filled": _slot_is_filled(brand.id, slot_time),
+    })
+```
+
+**Required:**
+```python
+# Determine content_type from brand's reel format
+reel_content_type = "text_video_reel" if (bc and bc.reel_format == "text_video") else "reel"
+
+for base_hour in BASE_REEL_HOURS[:brand_reel_slots]:
+    ...
+    all_slots.append({
+        "brand_id": brand.id,
+        "time": slot_time.isoformat(),
+        "content_type": reel_content_type,
+        "filled": _slot_is_filled(brand.id, slot_time),
+    })
+```
+
+**Why it's safe:** The `_slot_is_filled()` function uses fuzzy time matching against `ScheduledReel` rows (which store variant in `extra_data`, not content_type). It will correctly detect filled slots regardless of format — a slot at hour 8 is filled if ANY scheduled reel exists for that brand at ~8:00±15min. The `content_type` label on the slot dict only affects what pipeline Toby runs to fill empty slots.
+
+#### `app/services/toby/buffer_manager.py` — Brand Breakdown Stats (Line ~182)
+
+**Current:**
+```python
+brand_reels = sum(1 for s in brand_slots if s["content_type"] == "reel")
+brand_posts = sum(1 for s in brand_slots if s["content_type"] == "post")
+```
+
+**Required:**
+```python
+brand_reels = sum(1 for s in brand_slots if s["content_type"] in ("reel", "text_video_reel"))
+brand_posts = sum(1 for s in brand_slots if s["content_type"] == "post")
+```
+
+**Why:** The `reels` count in the breakdown should include text_video reels — they're still reels from a scheduling perspective. Displaying them separately in the breakdown is optional (nice to have) but not required for correctness.
+
+### 29.3 Backend: Learning Engine
+
+#### `app/services/toby/learning_engine.py` — Personality Pool Selection (Line ~78)
+
+**Current:**
+```python
+def get_personality_prompt(content_type: str, personality_id: str) -> str:
+    pool = REEL_PERSONALITIES if content_type == "reel" else POST_PERSONALITIES
+    return pool.get(personality_id, "")
+```
+
+**Required:**
+```python
+def get_personality_prompt(content_type: str, personality_id: str) -> str:
+    if content_type == "text_video_reel":
+        pool = TEXT_VIDEO_PERSONALITIES
+    elif content_type == "reel":
+        pool = REEL_PERSONALITIES
+    else:
+        pool = POST_PERSONALITIES
+    return pool.get(personality_id, "")
+```
+
+**Why it's safe:** A `personality_id` like `"edu_calm"` would return `""` from `TEXT_VIDEO_PERSONALITIES.get("edu_calm", "")`. This means if somehow a text_video plan had a text_based personality (impossible in normal flow, but defensive), it would just get an empty personality prompt — the content generator would still work, just without a personality modifier. No crash.
+
+#### `app/services/toby/learning_engine.py` — Strategy Selection (Line ~85)
+
+**Current:**
+```python
+personality = _pick_dimension(
+    db, user_id, brand_id, content_type, "personality",
+    list(REEL_PERSONALITIES.keys() if content_type == "reel" else POST_PERSONALITIES.keys()),
+    ...
+)
+```
+
+**Required:** See Section 22 for the complete implementation. Key point: the `_pick_dimension()` function already accepts an `options` list. By passing `list(TEXT_VIDEO_PERSONALITIES.keys())` when `content_type == "text_video_reel"`, Thompson Sampling automatically operates in the text_video personality space. All the sampling math (Beta distributions, alpha/beta params) is content_type-keyed in `TobyStrategyScore`, so text_video data never mixes with text_based data.
+
+### 29.4 Frontend: Type System + variant Handling
+
+#### `src/shared/types/index.ts` — Variant Type
+
+**Current:**
+```typescript
+export type Variant = 'light' | 'dark' | 'post'
+```
+
+**Required:**
+```typescript
+export type Variant = 'light' | 'dark' | 'post' | 'text_video'
+```
+
+**Impact:** TypeScript compiler will flag any exhaustive switch/conditional that doesn't handle `'text_video'`. This is by design — it forces the developer to explicitly handle the new variant in every location, ensuring nothing is missed.
+
+#### `src/pages/Scheduled.tsx` — Slot Placement (Line ~234)
+
+**Current:**
+```typescript
+if (variant === 'post') return
+if (variant === 'light') {
+    lightSlots.delete(nearestLight)
+} else if (variant === 'dark') {
+    darkSlots.delete(nearestDark)
+}
+```
+
+**Required:**
+```typescript
+if (variant === 'post') return
+if (variant === 'text_video') {
+    // Text-video reels occupy any available reel slot
+    // (no light/dark distinction)
+    const nearest = findNearestSlot(hour, [...lightSlots, ...darkSlots])
+    if (nearest !== undefined) {
+        lightSlots.delete(nearest) || darkSlots.delete(nearest)
+    }
+    return
+}
+if (variant === 'light') {
+    lightSlots.delete(nearestLight)
+} else if (variant === 'dark') {
+    darkSlots.delete(nearestDark)
+}
+```
+
+**Why:** text_video reels occupy a reel slot (they're still reels) but don't have a light/dark distinction. When displaying them on the timeline, they should fill whatever reel slot they're closest to.
+
+### 29.5 Existing Code Paths That Need NO Changes
+
+These are important to document — confirming what we DON'T touch reduces risk:
+
+| File | Why No Changes |
+|---|---|
+| `app/services/publishing/social_publisher.py` | Publishes based on platform + media paths. Doesn't check variant or content_type. text_video produces video+thumbnail like regular reels. |
+| `app/services/media/video_generator.py` | Only used by text_based reels. text_video uses its own `slideshow_compositor.py`. |
+| `app/services/media/image_generator.py` | Only used by text_based reels. text_video uses its own `thumbnail_compositor.py`. |
+| `app/services/toby/agents/critic.py` | Quality scoring uses content_type for prompt differences. Falls through to reel scoring for unknowns — safe. |
+| `app/services/toby/agents/creator.py` | Token limits differ by content_type. text_video_reel would get reel limits (1200 tokens) — reasonable. |
+| `app/services/toby/memory/` | Memory system stores observations keyed by content. Format-agnostic. |
+| `app/models/brands.py` | Brand model unchanged. `reel_format` lives on `TobyBrandConfig`, not `Brand`. |
+| `app/models/scheduling.py` | `ScheduledReel` schema unchanged. `extra_data` is untyped JSON — stores whatever we put in it. |
+| Billing (`app/api/billing/`) | Billing is format-agnostic. No content_type checks. |
+| OAuth routes | Platform connections are format-agnostic. |
+| Legal pages | TEXT-VIDEO doesn't add new platforms, so no legal page updates needed. |
+
+---
+
+## 30. Scalability & Resilience Architecture
+
+### 30.1 Design Principles
+
+The text_video feature must not degrade the existing system's performance or reliability. These principles guide every design decision:
+
+1. **Additive, not transformative.** New tables, new columns, new files. Never rename existing columns, change column types, or alter existing indexes.
+2. **Content-type as namespace.** The `content_type` string acts as a namespace that isolates data, logic, and pipelines. Adding a format = adding a namespace.
+3. **Fail-closed for unknown formats.** If code encounters a `content_type` it doesn't recognize, it logs a warning and skips — never crashes, never runs wrong pipeline.
+4. **Horizontal format scaling.** The pattern for adding format N+1 is identical to adding format N. No architectural changes needed — just new personality pool, new pipeline, new content_type string.
+5. **Resource isolation.** text_video generation (web API calls, image downloads, FFmpeg slideshow) is more resource-intensive than text_based. It must not starve text_based generation.
+
+### 30.2 Database Scalability
+
+#### Current Load Profile
+- ~5 active Toby users, ~15 brands total
+- ~6 reels + 2 posts per brand per day = ~120 scheduled items/day
+- ~30 `TobyStrategyScore` rows per brand (5 dimensions × 5-6 options)
+- Single Supabase PostgreSQL instance (shared compute)
+
+#### Projected Load with text_video
+- Same slot count per brand (6 reels/day), but some are text_video
+- Additional tables: `text_video_story_pool` (10-50 rows/user/week), `text_video_design` (1 row/user)
+- Additional columns on `generation_jobs`: `content_format` (indexed), `text_video_data` (JSONB, not indexed)
+- Additional `TobyStrategyScore` rows: +30 per brand using text_video (6 dimensions × 5 options)
+
+#### Index Strategy for text_video
+
+```sql
+-- Already in migration: index for content_format filtering
+CREATE INDEX IF NOT EXISTS ix_generation_jobs_content_format
+    ON generation_jobs (content_format);
+
+-- Story pool: user + status lookup (hot path: "find available stories")
+CREATE INDEX IF NOT EXISTS ix_story_pool_user_status
+    ON text_video_story_pool (user_id, status);
+
+-- Story pool: niche + status (for category-based story selection)
+CREATE INDEX IF NOT EXISTS ix_story_pool_niche
+    ON text_video_story_pool (user_id, niche, status);
+
+-- No index on text_video_data (JSONB) — it's metadata, not queried
+-- No index on text_video_design (1 row/user, UNIQUE constraint is enough)
+```
+
+#### Story Pool Cleanup (Prevents Unbounded Growth)
+
+The `text_video_story_pool` table accumulates stories. Without cleanup, it grows indefinitely. Add a cleanup job:
+
+```python
+# Run weekly (or on each Toby tick, rate-limited)
+def cleanup_expired_stories(db: Session, user_id: str):
+    """Remove stories older than 30 days to prevent unbounded table growth."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    db.query(StoryPool).filter(
+        StoryPool.user_id == user_id,
+        StoryPool.created_at < cutoff,
+    ).delete()
+    db.commit()
+```
+
+### 30.3 API Rate Limit Protection
+
+text_video generation calls 3-4 external APIs per reel (NewsAPI, Tavily, SerpAPI, Gemini). Toby generating 6 text_video reels/day per brand = 18-24 API calls/brand/day. With multiple brands, this can hit free tier limits quickly.
+
+#### Rate Limit Strategy
+
+```python
+# Per-user daily limits (enforce in StoryDiscoverer)
+TEXT_VIDEO_API_LIMITS = {
+    "newsapi": 80,        # Free tier: 100/day, reserve 20 for semi-auto
+    "tavily": 30,         # Free tier: 33/day (1000/month ÷ 30)
+    "serpapi": 80,        # Free tier: 100/month ÷ 30 ≈ 3/day. Paid: 5000/mo
+    "gemini": 50,         # Free tier: generous. Track for cost control.
+}
+
+# Track in memory (per-process, resets on deploy — acceptable)
+_api_call_counts: dict[str, int] = {}
+
+def check_api_budget(api_name: str) -> bool:
+    """Return True if we're within daily budget for this API."""
+    today_key = f"{api_name}:{datetime.now().strftime('%Y-%m-%d')}"
+    count = _api_call_counts.get(today_key, 0)
+    limit = TEXT_VIDEO_API_LIMITS.get(api_name, 100)
+    return count < limit
+
+def record_api_call(api_name: str):
+    today_key = f"{api_name}:{datetime.now().strftime('%Y-%m-%d')}"
+    _api_call_counts[today_key] = _api_call_counts.get(today_key, 0) + 1
+```
+
+#### Graceful Degradation
+
+If an API is exhausted:
+1. **NewsAPI exhausted** → Tavily becomes primary for fresh stories. If both exhausted → DeepSeek generates from training data (evergreen mode).
+2. **SerpAPI exhausted** → Pexels becomes primary for images. If both exhausted → Gemini AI generates all images.
+3. **Gemini exhausted** → All images sourced from web search + Pexels. If all exhausted → solid color backgrounds (degraded but functional).
+4. **All APIs exhausted** → text_video generation skips for this tick. Toby logs: `[TOBY] text_video APIs exhausted — skipping generation for {brand}`. Buffer health drops to "low", next tick retries.
+
+This ensures text_video failures never cascade into text_based failures. They're isolated pipelines.
+
+### 30.4 Resource Isolation: text_video vs text_based
+
+#### CPU/Memory Concern
+
+text_video FFmpeg slideshow composition is heavier than text_based static image → video:
+- **text_based:** 1 Pillow render (~0.5s) + 1 FFmpeg static video (~3s) = ~4s total
+- **text_video:** 3-4 image downloads (~2s) + 1 Pillow text overlay (~0.5s) + 1 FFmpeg crossfade composition (~8-12s) = ~12-15s total
+
+On Railway's single-container setup, a text_video render blocks the event loop for ~15s. If Toby is generating 3 text_video reels at once (multiple brands), that's ~45s of blocking.
+
+#### Mitigation: Sequential Per-Brand, Max Concurrent
+
+The content planner already limits to `max_plans = 6` per tick and round-robins across brands. For text_video, add:
+
+```python
+# In orchestrator._execute_content_plan():
+MAX_TEXT_VIDEO_PER_TICK = 2  # Don't generate more than 2 text_video reels per tick
+
+# Count text_video plans already executed this tick
+if plan.content_type == "text_video_reel":
+    if self._text_video_count >= MAX_TEXT_VIDEO_PER_TICK:
+        print(f"[TOBY] text_video limit reached ({MAX_TEXT_VIDEO_PER_TICK}/tick) — deferring")
+        return None  # Will be picked up next tick
+    self._text_video_count += 1
+```
+
+This ensures text_video never starves text_based brands of their generation slots.
+
+### 30.5 Fault Tolerance: What If text_video Crashes?
+
+#### Story Discovery API Failures
+
+```python
+class StoryDiscoverer:
+    async def discover_stories(self, ...):
+        try:
+            stories = await self._search_newsapi(...)
+        except Exception as e:
+            print(f"[StoryDiscoverer] NewsAPI failed: {e}")
+            stories = []
+
+        if not stories:
+            try:
+                stories = await self._search_tavily(...)
+            except Exception as e:
+                print(f"[StoryDiscoverer] Tavily failed: {e}")
+                stories = []
+
+        if not stories:
+            # Last resort: no external API, generate from DeepSeek training data
+            stories = [self._generate_evergreen_story(niche)]
+
+        return stories
+```
+
+#### Image Sourcing Failures
+
+```python
+class ImageSourcer:
+    def source_images_batch(self, plans: list[ImagePlan]) -> list[Path]:
+        results = []
+        for plan in plans:
+            path = None
+            try:
+                path = self._source_single(plan)
+            except Exception as e:
+                print(f"[ImageSourcer] Failed for '{plan.query}': {e}")
+
+            if not path and plan.fallback_query:
+                try:
+                    path = self._source_single(ImagePlan("web_search", plan.fallback_query))
+                except Exception:
+                    pass
+
+            if not path:
+                # Generate a gradient background as last resort
+                path = self._generate_fallback_gradient(plan.query)
+
+            results.append(path)
+        return results
+```
+
+#### FFmpeg Slideshow Failures
+
+```python
+class SlideshowCompositor:
+    def compose_reel(self, ...):
+        try:
+            return self._compose_with_ffmpeg(...)
+        except subprocess.TimeoutExpired:
+            print("[SlideshowCompositor] FFmpeg timed out — retrying with simpler settings")
+            return self._compose_simple_fallback(...)  # single image + text, no crossfade
+        except Exception as e:
+            print(f"[SlideshowCompositor] FFmpeg failed: {e}")
+            # Fall back to static image (same as text_based)
+            return self._compose_static_fallback(...)
+```
+
+**Key principle:** text_video failures produce degraded content (fewer images, simpler transitions, static instead of slideshow) rather than no content. Toby's buffer stays healthy.
+
+### 30.6 Horizontal Scaling Readiness
+
+The current architecture is single-container. If ViralToby grows to 50+ users with text_video:
+
+| Bottleneck | Current | Scaled Solution |
+|---|---|---|
+| FFmpeg rendering | Single process, Railway container | Move rendering to background worker (Bull queue + separate Railway service). Job processor sends to queue, worker renders, uploads result. |
+| External API calls | In-process, blocking | Move to async task queue. Story discovery + image sourcing run as background jobs. |
+| Toby tick loop | APScheduler in-process | Extract to dedicated scheduler service. Main API becomes stateless. Tick loop runs on separate container. |
+| Database | Single Supabase instance | Supabase auto-scales on paid plans. Add read replica for analytics queries if needed. |
+| Story pool | Per-user rows in single table | Partition by user_id if row count exceeds 1M. Or move to Redis for hot cache + PostgreSQL for cold storage. |
+
+These are **future optimizations** — not needed for MVP. The current architecture handles 10-20 users with text_video without any scaling changes. The important thing is that the code is structured so these changes are possible without rewriting the feature.
+
+### 30.7 Monitoring & Alerting Additions
+
+Add these log markers for production monitoring:
+
+```python
+# In each text_video pipeline step, emit structured logs:
+print(f"[TEXT_VIDEO] story_discover brand={brand_id} api={api_name} stories_found={len(stories)}", flush=True)
+print(f"[TEXT_VIDEO] story_polish brand={brand_id} category={category} duration_ms={elapsed}", flush=True)
+print(f"[TEXT_VIDEO] image_source brand={brand_id} images_found={found}/{total} fallbacks={fallback_count}", flush=True)
+print(f"[TEXT_VIDEO] slideshow_compose brand={brand_id} images={len(images)} duration_ms={elapsed}", flush=True)
+print(f"[TEXT_VIDEO] thumbnail_compose brand={brand_id} duration_ms={elapsed}", flush=True)
+print(f"[TEXT_VIDEO] complete brand={brand_id} job_id={job_id} total_ms={total_elapsed}", flush=True)
+```
+
+Filter in Railway logs:
+```bash
+railway logs -n 500 | grep "\[TEXT_VIDEO\]"
+```
+
+This gives per-step visibility into text_video performance without adding a logging framework.
 
 ---
 
