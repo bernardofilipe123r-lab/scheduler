@@ -34,6 +34,7 @@ import type { ScheduledPost } from '@/shared/types'
 type CreatorFilter = 'all' | 'user' | 'toby'
 type ContentTypeFilter = 'all' | 'reels' | 'posts'
 type StatusFilter = 'all' | 'scheduled' | 'published' | 'partial' | 'failed'
+type PlatformFilter = string | null
 
 function Calendar() {
   const [searchParams] = useSearchParams()
@@ -93,6 +94,7 @@ function Calendar() {
   const [filterCreator, setFilterCreator] = useState<CreatorFilter>('all')
   const [filterContentType, setFilterContentType] = useState<ContentTypeFilter>('all')
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('all')
+  const [filterPlatform, setFilterPlatform] = useState<PlatformFilter>(null)
 
   // Upload form state
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
@@ -281,13 +283,17 @@ function Calendar() {
         if (filterContentType === 'reels' && isPost) continue
       }
       if (filterStatus !== 'all' && post.status !== filterStatus) continue
+      if (filterPlatform) {
+        const postPlatforms = post.metadata?.platforms || []
+        if (!postPlatforms.includes(filterPlatform)) continue
+      }
 
       const dateKey = post.scheduled_time.slice(0, 10)
       if (!map[dateKey]) map[dateKey] = []
       map[dateKey].push(post)
     }
     return map
-  }, [scheduledPosts, filterBrand, filterCreator, filterContentType, filterStatus])
+  }, [scheduledPosts, filterBrand, filterCreator, filterContentType, filterStatus, filterPlatform])
 
   const getContentForDate = (date: Date): ScheduledPost[] => {
     return postsByDate[format(date, 'yyyy-MM-dd')] || []
@@ -494,14 +500,20 @@ function Calendar() {
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Filters
-              {((filterBrand ? 1 : 0) + (filterCreator !== 'all' ? 1 : 0) + (filterContentType !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0)) > 0 && (
+              {((filterBrand ? 1 : 0) + (filterCreator !== 'all' ? 1 : 0) + (filterContentType !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0) + (filterPlatform ? 1 : 0)) > 0 && (
                 <span className="bg-emerald-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                  {(filterBrand ? 1 : 0) + (filterCreator !== 'all' ? 1 : 0) + (filterContentType !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0)}
+                  {(filterBrand ? 1 : 0) + (filterCreator !== 'all' ? 1 : 0) + (filterContentType !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0) + (filterPlatform ? 1 : 0)}
                 </span>
               )}
             </button>
 
             {/* Active filter chips */}
+            {filterPlatform && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full capitalize">
+                {filterPlatform}
+                <button onClick={() => setFilterPlatform(null)} className="ml-0.5 hover:text-cyan-900"><X className="h-3 w-3" /></button>
+              </span>
+            )}
             {filterBrand && (
               <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded-full">
                 {brands.find(b => b.id === filterBrand)?.shortName || filterBrand}
@@ -526,9 +538,9 @@ function Calendar() {
                 <button onClick={() => setFilterStatus('all')} className="ml-0.5 hover:text-gray-900"><X className="h-3 w-3" /></button>
               </span>
             )}
-            {(filterBrand || filterCreator !== 'all' || filterContentType !== 'all' || filterStatus !== 'all') && (
+            {(filterBrand || filterCreator !== 'all' || filterContentType !== 'all' || filterStatus !== 'all' || filterPlatform) && (
               <button
-                onClick={() => { setFilterBrand(null); setFilterCreator('all'); setFilterContentType('all'); setFilterStatus('all') }}
+                onClick={() => { setFilterBrand(null); setFilterCreator('all'); setFilterContentType('all'); setFilterStatus('all'); setFilterPlatform(null) }}
                 className="text-xs text-gray-500 hover:text-gray-800 underline"
               >
                 Clear all
@@ -565,6 +577,46 @@ function Calendar() {
                       {brand.shortName}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Platform */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Platform</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setFilterPlatform(null)}
+                    className={clsx(
+                      'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                      !filterPlatform ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    All platforms
+                  </button>
+                  {allAvailablePlatforms.map(platform => {
+                    const active = filterPlatform === platform.name
+                    const colorMap: Record<string, string> = {
+                      instagram: 'bg-gradient-to-r from-purple-500 to-pink-500',
+                      tiktok: 'bg-black',
+                      youtube: 'bg-red-600',
+                      facebook: 'bg-blue-600',
+                      threads: 'bg-gray-900',
+                    }
+                    return (
+                      <button
+                        key={platform.name}
+                        onClick={() => setFilterPlatform(active ? null : platform.name)}
+                        className={clsx(
+                          'px-3 py-1.5 rounded-full text-xs font-medium transition-all capitalize',
+                          active
+                            ? `${colorMap[platform.name] || 'bg-gray-800'} text-white`
+                            : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                        )}
+                      >
+                        {platform.name}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
