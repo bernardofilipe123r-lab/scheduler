@@ -85,7 +85,9 @@ class DatabaseSchedulerService:
     
     def __init__(self):
         """Initialize the database scheduler service."""
-        self.publisher = SocialPublisher()
+        # Note: self.publisher is a lazy fallback. Brand-specific publishers
+        # are created in publish_now() with proper credentials.
+        self._publisher = None
 
     @staticmethod
     def _brands_match(brand: str, schedule_brand: str) -> bool:
@@ -761,7 +763,8 @@ class DatabaseSchedulerService:
         Returns number of posts queued for retry.
         """
         TRANSIENT_KEYWORDS = ["timeout", "rate limit", "429", "500", "502", "503",
-                              "connection", "temporarily", "unavailable"]
+                              "connection", "temporarily", "unavailable",
+                              "unexpected", "retry your request", "retry later"]
         MAX_AUTO_RETRIES = 3
 
         with get_db_session() as db:

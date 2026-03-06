@@ -115,7 +115,7 @@ get_pending_publications() → atomically marks 'publishing' (FOR UPDATE SKIP LO
 
 ### Recovery
 - **Stuck reset:** `reset_stuck_publishing(max_age_minutes=10)` — if has post_ids → mark published, else reset to scheduled (max 3 resets)
-- **Auto-retry:** `auto_retry_failed_toby_posts()` — retries transient errors (timeout, rate limit, 429, 500-503, connection). Max 3 auto-retries per post
+- **Auto-retry:** `auto_retry_failed_toby_posts()` — retries transient errors (timeout, rate limit, 429, 500-503, connection, unexpected, retry your request). Max 3 auto-retries per post
 - **Partial retry:** Only re-publishes to failed platforms, skips already-succeeded ones
 
 ## Token Lifetime Summary
