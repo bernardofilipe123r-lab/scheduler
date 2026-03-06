@@ -158,8 +158,8 @@ export function CommunityPage() {
           <MessageSquare className="w-14 h-14 text-gray-200 mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No comments yet</h3>
           <p className="text-sm text-gray-400 mt-1 max-w-md">
-            Comments from your Instagram and Facebook posts will appear here.
-            Make sure you have at least one brand with a connected social account.
+            Reading comments requires Advanced Access for <span className="font-medium">instagram_business_manage_comments</span> in the Meta App Dashboard.
+            Request it under App Review &rarr; Permissions and Features.
           </p>
         </div>
       ) : (
