@@ -26,35 +26,31 @@ export function ReelsPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="space-y-6">
       {/* Tab Navigation */}
-      <div className="border-b border-gray-700/50 bg-gray-900/30 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex gap-1 -mb-px">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-purple-500 text-purple-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </div>
+      <div className="border-b border-gray-200">
+        <div className="flex gap-1 -mb-px">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Tab Content */}
-      <div className="max-w-7xl mx-auto">
-        {activeTab === 'text-reels' && <GeneratorPage />}
-        {activeTab === 'text-video' && <TextVideoTab />}
-        {activeTab === 'design' && <DesignEditorTab />}
-      </div>
+      {activeTab === 'text-reels' && <GeneratorPage />}
+      {activeTab === 'text-video' && <TextVideoTab />}
+      {activeTab === 'design' && <DesignEditorTab />}
     </div>
   )
 }

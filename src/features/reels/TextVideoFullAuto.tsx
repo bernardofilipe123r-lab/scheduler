@@ -50,10 +50,10 @@ export function TextVideoFullAuto() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-purple-500/20 rounded-xl p-6 text-center">
-        <Zap className="w-10 h-10 text-purple-400 mx-auto mb-3" />
-        <h3 className="text-lg font-semibold text-white mb-2">Full Auto Mode</h3>
-        <p className="text-sm text-gray-400 max-w-md mx-auto">
+      <div className="bg-primary-50 border border-primary-200 rounded-xl p-6 text-center">
+        <Zap className="w-10 h-10 text-primary-600 mx-auto mb-3" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Full Auto Mode</h3>
+        <p className="text-sm text-gray-500 max-w-md mx-auto">
           We'll discover a trending story in your niche, polish it into viral format,
           source images, compose the slideshow, and create the reel — all automatically.
         </p>
@@ -61,18 +61,18 @@ export function TextVideoFullAuto() {
 
       {/* Niche Override */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Niche (optional override)</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Niche (optional override)</label>
         <input
           value={niche}
           onChange={e => setNiche(e.target.value)}
           placeholder="Uses your Content DNA niche by default"
-          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 outline-none text-sm"
+          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 outline-none text-sm"
         />
       </div>
 
       {/* Brand Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Brands</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Brands</label>
         <div className="flex flex-wrap gap-2">
           {brandIds.map(id => (
             <button
@@ -82,8 +82,8 @@ export function TextVideoFullAuto() {
               )}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 selectedBrands.includes(id)
-                  ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300'
-                  : 'bg-gray-800/50 border border-gray-700/50 text-gray-400 hover:border-gray-600'
+                  ? 'bg-primary-50 border border-primary-300 text-primary-700'
+                  : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'
               }`}
             >
               {id}
@@ -96,7 +96,7 @@ export function TextVideoFullAuto() {
       <button
         onClick={handleGenerate}
         disabled={generateMutation.isPending || selectedBrands.length === 0}
-        className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
+        className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
       >
         {generateMutation.isPending ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>

@@ -68,26 +68,26 @@ export function TextVideoManual() {
     <div className="space-y-6">
       {/* Thumbnail Title */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Thumbnail Title</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Thumbnail Title</label>
         <textarea
           value={thumbnailTitle}
           onChange={e => setThumbnailTitle(e.target.value)}
           placeholder={"ELON MUSK\nJUST BOUGHT\nTIKTOK"}
           rows={3}
-          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 outline-none text-sm"
+          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/30 outline-none text-sm"
         />
         <p className="text-xs text-gray-500 mt-1">ALL CAPS, one line per row (max 4 lines)</p>
       </div>
 
       {/* Reel Text */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Reel Script</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Reel Script</label>
         <textarea
           value={reelText}
           onChange={e => setReelText(e.target.value)}
           placeholder={"In a move nobody saw coming...\nElon Musk just acquired TikTok for $50 billion.\nThis could reshape social media forever.\nHere's what it means for creators..."}
           rows={5}
-          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 outline-none text-sm"
+          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/30 outline-none text-sm"
         />
         <p className="text-xs text-gray-500 mt-1">One line per row. Each line shows as a text overlay on the slideshow.</p>
       </div>
@@ -95,8 +95,8 @@ export function TextVideoManual() {
       {/* Image Queries */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-300">Image Search Queries</label>
-          <button onClick={addImageQuery} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+          <label className="block text-sm font-medium text-gray-700">Image Search Queries</label>
+          <button onClick={addImageQuery} className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1">
             <Plus className="w-3 h-3" /> Add
           </button>
         </div>
@@ -107,10 +107,10 @@ export function TextVideoManual() {
                 value={q}
                 onChange={e => updateImageQuery(i, e.target.value)}
                 placeholder={`Image ${i + 1} search query...`}
-                className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:border-purple-500/50 outline-none text-sm"
+                className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 outline-none text-sm"
               />
               {imageQueries.length > 1 && (
-                <button onClick={() => removeImageQuery(i)} className="text-gray-500 hover:text-red-400">
+                <button onClick={() => removeImageQuery(i)} className="text-gray-400 hover:text-red-500">
                   <X className="w-4 h-4" />
                 </button>
               )}
@@ -122,7 +122,7 @@ export function TextVideoManual() {
 
       {/* Brand Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Brands</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Brands</label>
         <div className="flex flex-wrap gap-2">
           {brandIds.map(id => (
             <button
@@ -132,8 +132,8 @@ export function TextVideoManual() {
               )}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 selectedBrands.includes(id)
-                  ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300'
-                  : 'bg-gray-800/50 border border-gray-700/50 text-gray-400 hover:border-gray-600'
+                  ? 'bg-primary-50 border border-primary-300 text-primary-700'
+                  : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'
               }`}
             >
               {id}
@@ -146,7 +146,7 @@ export function TextVideoManual() {
       <button
         onClick={handleGenerate}
         disabled={generateMutation.isPending || !thumbnailTitle.trim() || !reelText.trim()}
-        className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
+        className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
       >
         {generateMutation.isPending ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>

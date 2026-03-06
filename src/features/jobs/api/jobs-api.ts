@@ -1,5 +1,5 @@
 import { get, post, put, del, patch } from '@/shared/api'
-import type { Job, BrandName } from '@/shared/types'
+import type { Job, BrandName, Variant } from '@/shared/types'
 
 // Response types from the backend
 interface BackendJob {
@@ -8,7 +8,7 @@ interface BackendJob {
   title: string
   content_lines: string[]
   brands: BrandName[]
-  variant: 'light' | 'dark' | 'post'
+  variant: Variant
   ai_prompt?: string
   cta_type: string
   status: string
@@ -51,7 +51,7 @@ export interface JobCreateRequest {
   title: string
   content_lines?: string[]
   brands: BrandName[]
-  variant: 'light' | 'dark' | 'post'
+  variant: Variant
   ai_prompt?: string
   cta_type?: string
   platforms?: string[]  // ['instagram', 'facebook', 'youtube']

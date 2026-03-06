@@ -599,6 +599,7 @@ def get_brand_configs(
             "enabled": c.enabled,
             "reel_slots_per_day": c.reel_slots_per_day,
             "post_slots_per_day": c.post_slots_per_day,
+            "reel_format": c.reel_format or "text_based",
             "enabled_platforms": c.enabled_platforms,  # None = all connected
             # Dynamic credential checks from platform registry
             **{f"has_{p}": check(brand) for p, check in PLATFORM_CREDENTIAL_CHECKS.items()},
@@ -651,6 +652,8 @@ def update_brand_config(
         cfg.reel_slots_per_day = body.reel_slots_per_day
     if body.post_slots_per_day is not None:
         cfg.post_slots_per_day = body.post_slots_per_day
+    if body.reel_format is not None:
+        cfg.reel_format = body.reel_format
     if body.enabled_platforms is not None:
         from app.core.platforms import SUPPORTED_PLATFORMS_SET, SUPPORTED_CONTENT_TYPES
         # Sanitise: dict keyed by content-type → list of valid platform names
@@ -673,6 +676,7 @@ def update_brand_config(
             "enabled": cfg.enabled,
             "reel_slots_per_day": cfg.reel_slots_per_day,
             "post_slots_per_day": cfg.post_slots_per_day,
+            "reel_format": cfg.reel_format or "text_based",
             "enabled_platforms": cfg.enabled_platforms,
         },
     }

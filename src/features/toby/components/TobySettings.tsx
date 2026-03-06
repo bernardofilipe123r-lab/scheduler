@@ -41,8 +41,8 @@ export function TobySettings() {
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [tab, setTab] = useState<'brands' | 'general'>('brands')
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
-  const [form, setForm] = useState<Record<string, number | boolean>>({})
-  const [brandForms, setBrandForms] = useState<Record<string, Record<string, number | boolean>>>({})
+  const [form, setForm] = useState<Record<string, number | boolean | string>>({})
+  const [brandForms, setBrandForms] = useState<Record<string, Record<string, number | boolean | string>>>({})
   const [platformForms, setPlatformForms] = useState<Record<string, EnabledPlatformsConfig>>({})
   const isLoading = configLoading || brandsLoading
 
@@ -63,17 +63,17 @@ export function TobySettings() {
 
   const brandConfigs = brandConfigsData?.brands ?? []
 
-  const getVal = (key: string, fallback: number | boolean) => form[key] ?? fallback
-  const getBrandVal = (brandId: string, key: string, fallback: number | boolean) =>
+  const getVal = (key: string, fallback: number | boolean | string) => form[key] ?? fallback
+  const getBrandVal = (brandId: string, key: string, fallback: number | boolean | string) =>
     brandForms[brandId]?.[key] ?? fallback
 
   const hasGlobalChanges = Object.entries(form).some(
-    ([key, val]) => val !== (config as unknown as Record<string, number | boolean>)[key],
+    ([key, val]) => val !== (config as unknown as Record<string, number | boolean | string>)[key],
   )
   const hasBrandChanges = brandConfigs.some((bc) => {
     const bf = brandForms[bc.brand_id]
     const hasScalarChanges = bf ? Object.entries(bf).some(
-      ([key, val]) => val !== (bc as unknown as Record<string, number | boolean>)[key],
+      ([key, val]) => val !== (bc as unknown as Record<string, number | boolean | string>)[key],
     ) : false
     const hasPlatformChanges = bc.brand_id in platformForms
     return hasScalarChanges || hasPlatformChanges
@@ -84,9 +84,9 @@ export function TobySettings() {
   const postsEnabled = getVal('posts_enabled', config.posts_enabled) as boolean
 
   const handleSaveGlobal = () => {
-    const updates: Record<string, number | boolean> = {}
+    const updates: Record<string, number | boolean | string> = {}
     for (const [key, val] of Object.entries(form)) {
-      if (val !== (config as unknown as Record<string, number | boolean>)[key]) {
+      if (val !== (config as unknown as Record<string, number | boolean | string>)[key]) {
         updates[key] = val
       }
     }
@@ -101,7 +101,7 @@ export function TobySettings() {
     const data: Record<string, unknown> = {}
     if (brandForm) {
       for (const [key, val] of Object.entries(brandForm)) {
-        if (!bc || val !== (bc as unknown as Record<string, number | boolean>)[key]) {
+        if (!bc || val !== (bc as unknown as Record<string, number | boolean | string>)[key]) {
           data[key] = val
         }
       }
@@ -137,8 +137,8 @@ export function TobySettings() {
     }
   }
 
-  const setGlobalField = (key: string, val: number | boolean) => {
-    const original = (config as unknown as Record<string, number | boolean>)[key]
+  const setGlobalField = (key: string, val: number | boolean | string) => {
+    const original = (config as unknown as Record<string, number | boolean | string>)[key]
     if (val === original) {
       setForm(prev => {
         const next = { ...prev }
@@ -155,9 +155,9 @@ export function TobySettings() {
     setGlobalField(key, !current)
   }
 
-  const setBrandField = (brandId: string, key: string, val: number | boolean) => {
+  const setBrandField = (brandId: string, key: string, val: number | boolean | string) => {
     const bc = brandConfigs.find(b => b.brand_id === brandId)
-    const original = bc ? (bc as unknown as Record<string, number | boolean>)[key] : undefined
+    const original = bc ? (bc as unknown as Record<string, number | boolean | string>)[key] : undefined
     setBrandForms(prev => {
       const brandForm = { ...(prev[brandId] || {}) }
       if (val === original) {
@@ -410,8 +410,8 @@ function BrandDetailPanel({
   onBack: () => void
   reelsEnabled: boolean
   postsEnabled: boolean
-  getVal: (key: string, fallback: number | boolean) => number | boolean
-  onChange: (key: string, val: number | boolean) => void
+  getVal: (key: string, fallback: number | boolean | string) => number | boolean | string
+  onChange: (key: string, val: number | boolean | string) => void
   editedPlatforms: EnabledPlatformsConfig | undefined
   onPlatformChange: (platforms: EnabledPlatformsConfig) => void
 }) {
@@ -489,6 +489,33 @@ function BrandDetailPanel({
         enabled={enabled}
         onChange={() => onChange('enabled', !enabled)}
       />
+
+      {/* Reel format selector */}
+      {enabled && reelsEnabled && (
+        <div className="bg-slate-50 rounded-xl p-4 mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Reel Format</p>
+          <div className="flex gap-2">
+            {([['text_based', 'Text-Based', 'Classic caption-overlay reels'], ['text_video', 'Text-Video', 'Slideshow reels with text overlays']] as const).map(([val, label, desc]) => {
+              const active = (getVal('reel_format', brand.reel_format ?? 'text_based') as string) === val
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => onChange('reel_format', val)}
+                  className={`flex-1 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    active
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <p className={`text-sm font-medium ${active ? 'text-primary-700' : 'text-gray-700'}`}>{label}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{desc}</p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Volume sliders */}
       <div className={`bg-slate-50 rounded-xl p-4 mt-4 space-y-5 ${!enabled ? 'opacity-50 pointer-events-none' : ''}`}>

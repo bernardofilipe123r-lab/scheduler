@@ -12,7 +12,7 @@ export type BrandStatus = 'pending' | 'generating' | 'completed' | 'failed' | 's
 export type ScheduleStatus = 'scheduled' | 'publishing' | 'published' | 'partial' | 'failed'
 
 // Variant type
-export type Variant = 'light' | 'dark' | 'post'
+export type Variant = 'light' | 'dark' | 'post' | 'text_video'
 
 // Brand output for a single brand in a job
 export interface BrandOutput {

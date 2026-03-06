@@ -16,7 +16,7 @@ export function TextVideoTab() {
   const [mode, setMode] = useState<SubMode>('semi_auto')
 
   return (
-    <div className="px-4 sm:px-6 py-6 space-y-6">
+    <div className="space-y-6">
       {/* Mode Selector */}
       <div className="flex gap-3">
         {SUB_MODES.map(m => (
@@ -25,8 +25,8 @@ export function TextVideoTab() {
             onClick={() => setMode(m.id)}
             className={`flex-1 p-3 rounded-xl border transition-all text-left ${
               mode === m.id
-                ? 'border-purple-500/60 bg-purple-500/10 text-white'
-                : 'border-gray-700/50 bg-gray-800/30 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                ? 'border-primary-500 bg-primary-50 text-gray-900 shadow-sm'
+                : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
             <div className="flex items-center gap-2 mb-1">
