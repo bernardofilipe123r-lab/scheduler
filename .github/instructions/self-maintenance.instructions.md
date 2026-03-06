@@ -29,6 +29,7 @@ When you make a code change that affects documented patterns, you MUST update th
 | Add/remove feature flags | `.github/skills/toby-agent/SKILL.md` (feature flags section) |
 | Change frontend routing structure | `.github/skills/frontend-patterns/SKILL.md` |
 | Change deployment procedure | `.github/prompts/deploy.prompt.md` |
+| Add/remove/change external API with cost or rate limit | `app/services/monitoring/api_usage_tracker.py` (API_LIMITS dict) + `src/pages/Admin.tsx` (API Usage Monitoring section) + `docs/api-usage-monitoring-research.md` |
 
 ## How to Update
 

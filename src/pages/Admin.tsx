@@ -1102,6 +1102,20 @@ interface CreditsResponse {
 
 // ─── Supabase Usage Types ──────────────────────────────────────────────────
 
+// ─── API Usage Types ───────────────────────────────────────────────────────
+
+interface ApiUsageEntry {
+  label: string
+  local_count: number
+  limit: number
+  period: 'daily' | 'monthly'
+  remaining: number
+  usage_pct: number
+  live?: Record<string, unknown>
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 interface DbStats {
   database_size_bytes?: number
   database_size_mb?: number
@@ -1892,6 +1906,13 @@ export function AdminPage() {
     refetchOnWindowFocus: false,
   })
 
+  const apiUsageQuery = useQuery<{ usage: Record<string, ApiUsageEntry> }>({
+    queryKey: ['admin-api-usage'],
+    queryFn: () => apiClient.get('/api/admin/api-usage'),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  })
+
   const { data, isLoading, error, refetch, isFetching } = useQuery<{ users: AdminUser[] }>({
     queryKey: ['admin-users'],
     queryFn: () => apiClient.get('/api/admin/users'),
@@ -2029,6 +2050,73 @@ export function AdminPage() {
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* API Usage Monitoring */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-500" />
+            API Usage Monitoring
+          </h2>
+          <button
+            onClick={() => apiUsageQuery.refetch()}
+            disabled={apiUsageQuery.isFetching}
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-200 bg-white disabled:opacity-50"
+            title="Refresh API usage"
+          >
+            <RefreshCw className={clsx('w-3.5 h-3.5', apiUsageQuery.isFetching && 'animate-spin')} />
+          </button>
+        </div>
+        {apiUsageQuery.isLoading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-400 py-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading API usage…
+          </div>
+        ) : apiUsageQuery.isError ? (
+          <div className="flex items-center gap-2 text-xs text-red-500 py-1">
+            <AlertCircle className="w-3.5 h-3.5" /> Failed to load API usage
+          </div>
+        ) : apiUsageQuery.data?.usage ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(apiUsageQuery.data.usage).map(([key, api]) => {
+              const pct = api.usage_pct ?? 0
+              const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+              const badgeColor = pct >= 90
+                ? 'bg-red-50 text-red-700 border-red-100'
+                : pct >= 70
+                  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+              const hasLive = !!api.live
+              return (
+                <div key={key} className="p-3 rounded-lg bg-gray-50 border border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-700">{api.label}</p>
+                    <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded border', badgeColor)}>
+                      {pct.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={clsx('h-full rounded-full transition-all duration-500', barColor)}
+                      style={{ width: `${Math.min(pct, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-gray-500">
+                    <span>{api.remaining?.toLocaleString()} remaining</span>
+                    <span>{api.limit?.toLocaleString()} / {api.period}</span>
+                  </div>
+                  {hasLive && (
+                    <span className="inline-flex items-center gap-1 text-[9px] text-emerald-600 font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live data
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400">No API usage data available</p>
         )}
       </div>
 
