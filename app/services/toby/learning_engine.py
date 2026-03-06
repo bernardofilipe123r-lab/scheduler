@@ -52,6 +52,26 @@ TITLE_FORMATS = ["how_x_does_y", "number_one_mistake", "why_experts_say", "stop_
 
 VISUAL_STYLES = ["dark_cinematic", "light_clean", "vibrant_bold"]
 
+# ── Text-Video personality pool (brain-per-format, Section 22) ──
+TEXT_VIDEO_PERSONALITIES = {
+    "breaking_news":  "You report just-happened stories with urgency. 'BREAKING:', timely, factual, impactful.",
+    "power_moves":    "You narrate bold business and wealth decisions. Confident, awed tone. 'He just sold...'",
+    "controversy":    "You present provocative takes and public debates. Two-sided, dramatic. 'Here's what no one is saying...'",
+    "underdog":       "You tell surprising success stories from underdogs. Inspirational, 'Nobody expected this...'",
+    "mind_blowing":   "You reveal shocking facts and statistics. 'This number will change how you think about...'",
+}
+
+TEXT_VIDEO_HOOKS = ["breaking_hook", "statistic_lead", "name_drop", "controversy_opener", "prediction"]
+
+TEXT_VIDEO_TITLE_FORMATS = ["name_action", "shocking_number", "versus_outcome", "one_word_punch", "question_reveal"]
+
+TEXT_VIDEO_VISUAL_STYLES = ["news_dramatic", "cinematic_epic", "minimal_stark"]
+
+TEXT_VIDEO_STORY_CATEGORIES = [
+    "power_moves", "controversy", "underdog", "prediction", "shocking_stat",
+    "human_moment", "industry_shift", "failed_bet", "hidden_cost", "scientific_breakthrough",
+]
+
 
 @dataclass
 class StrategyChoice:
@@ -61,6 +81,7 @@ class StrategyChoice:
     hook_strategy: str
     title_format: str
     visual_style: str
+    story_category: Optional[str] = None
     is_experiment: bool = False
     experiment_id: Optional[str] = None
     used_fallback: bool = False
@@ -68,7 +89,12 @@ class StrategyChoice:
 
 def get_personality_prompt(content_type: str, personality_id: str) -> str:
     """Get the system prompt modifier for a personality."""
-    pool = REEL_PERSONALITIES if content_type == "reel" else POST_PERSONALITIES
+    if content_type == "text_video_reel":
+        pool = TEXT_VIDEO_PERSONALITIES
+    elif content_type == "reel":
+        pool = REEL_PERSONALITIES
+    else:
+        pool = POST_PERSONALITIES
     return pool.get(personality_id, "")
 
 
@@ -93,9 +119,26 @@ def choose_strategy(
     )
     is_explore = random.random() < effective_explore
 
+    # Brain-per-format: route to correct pools based on content_type
+    if content_type == "text_video_reel":
+        personality_pool = list(TEXT_VIDEO_PERSONALITIES.keys())
+        hooks = TEXT_VIDEO_HOOKS
+        titles = TEXT_VIDEO_TITLE_FORMATS
+        visuals = TEXT_VIDEO_VISUAL_STYLES
+    elif content_type == "reel":
+        personality_pool = list(REEL_PERSONALITIES.keys())
+        hooks = HOOK_STRATEGIES
+        titles = TITLE_FORMATS
+        visuals = VISUAL_STYLES
+    else:
+        personality_pool = list(POST_PERSONALITIES.keys())
+        hooks = HOOK_STRATEGIES
+        titles = TITLE_FORMATS
+        visuals = VISUAL_STYLES
+
     personality = _pick_dimension(
         db, user_id, brand_id, content_type, "personality",
-        list(REEL_PERSONALITIES.keys() if content_type == "reel" else POST_PERSONALITIES.keys()),
+        personality_pool,
         is_explore, use_thompson,
     )
 
@@ -107,18 +150,26 @@ def choose_strategy(
 
     hook = _pick_dimension(
         db, user_id, brand_id, content_type, "hook",
-        HOOK_STRATEGIES, is_explore, use_thompson,
+        hooks, is_explore, use_thompson,
     )
 
     title_fmt = _pick_dimension(
         db, user_id, brand_id, content_type, "title_format",
-        TITLE_FORMATS, is_explore, use_thompson,
+        titles, is_explore, use_thompson,
     )
 
     visual = _pick_dimension(
         db, user_id, brand_id, content_type, "visual_style",
-        VISUAL_STYLES, is_explore, use_thompson,
+        visuals, is_explore, use_thompson,
     )
+
+    # TEXT-VIDEO also picks story_category via Thompson Sampling
+    story_category = None
+    if content_type == "text_video_reel":
+        story_category = _pick_dimension(
+            db, user_id, brand_id, content_type, "story_category",
+            TEXT_VIDEO_STORY_CATEGORIES, is_explore, use_thompson,
+        )
 
     # Check for an active experiment and link to it
     experiment_id = None
@@ -140,6 +191,7 @@ def choose_strategy(
         hook_strategy=hook,
         title_format=title_fmt,
         visual_style=visual,
+        story_category=story_category,
         is_experiment=is_explore,
         experiment_id=experiment_id,
     )

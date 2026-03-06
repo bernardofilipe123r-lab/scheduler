@@ -1,0 +1,64 @@
+"""TextVideoDesign model — per-user design preferences for TEXT-VIDEO reels."""
+
+from sqlalchemy import Column, String, Integer, Float, Boolean
+from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
+from app.models.base import Base
+from datetime import datetime
+
+
+class TextVideoDesign(Base):
+    __tablename__ = "text_video_design"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, server_default="gen_random_uuid()")
+    user_id = Column(String(100), nullable=False, unique=True)
+
+    # Reel body settings
+    reel_text_font = Column(String(100), default="Poppins-Bold.ttf")
+    reel_text_size = Column(Integer, default=52)
+    reel_line_spacing = Column(Integer, default=20)
+    reel_text_region_pct = Column(Float, default=0.55)
+    reel_text_bg_opacity = Column(Integer, default=85)
+    reel_show_logo = Column(Boolean, default=True)
+    reel_show_handle = Column(Boolean, default=True)
+    reel_handle_text = Column(String(100), default="")
+    image_duration = Column(Float, default=3.0)
+    image_fade_duration = Column(Float, default=0.2)
+    reel_total_duration = Column(Integer, default=15)
+    black_fade_duration = Column(Float, default=1.0)
+
+    # Thumbnail settings
+    thumbnail_title_color = Column(String(10), default="#FFD700")
+    thumbnail_title_font = Column(String(100), default="Poppins-Bold.ttf")
+    thumbnail_title_size = Column(Integer, default=72)
+    thumbnail_title_max_lines = Column(Integer, default=4)
+    thumbnail_title_padding_x = Column(Integer, default=40)
+    thumbnail_image_ratio = Column(Float, default=0.6)
+    thumbnail_divider_style = Column(String(30), default="line_with_logo")
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default="now()")
+    updated_at = Column(TIMESTAMP(timezone=True), server_default="now()")
+
+    def to_dict(self):
+        return {
+            "id": str(self.id) if self.id else None,
+            "user_id": self.user_id,
+            "reel_text_font": self.reel_text_font,
+            "reel_text_size": self.reel_text_size,
+            "reel_line_spacing": self.reel_line_spacing,
+            "reel_text_region_pct": self.reel_text_region_pct,
+            "reel_text_bg_opacity": self.reel_text_bg_opacity,
+            "reel_show_logo": self.reel_show_logo,
+            "reel_show_handle": self.reel_show_handle,
+            "reel_handle_text": self.reel_handle_text,
+            "image_duration": self.image_duration,
+            "image_fade_duration": self.image_fade_duration,
+            "reel_total_duration": self.reel_total_duration,
+            "black_fade_duration": self.black_fade_duration,
+            "thumbnail_title_color": self.thumbnail_title_color,
+            "thumbnail_title_font": self.thumbnail_title_font,
+            "thumbnail_title_size": self.thumbnail_title_size,
+            "thumbnail_title_max_lines": self.thumbnail_title_max_lines,
+            "thumbnail_title_padding_x": self.thumbnail_title_padding_x,
+            "thumbnail_image_ratio": self.thumbnail_image_ratio,
+            "thumbnail_divider_style": self.thumbnail_divider_style,
+        }

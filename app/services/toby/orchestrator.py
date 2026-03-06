@@ -414,7 +414,36 @@ def _execute_content_plan(db: Session, plan):
     # ── Step 2: Generate text content ────────────────────────
     generator = ContentGeneratorV2()
 
-    if plan.content_type == "reel":
+    if plan.content_type == "text_video_reel":
+        # TEXT-VIDEO pipeline: discover story → polish → build job
+        from app.services.discovery.story_discoverer import StoryDiscoverer
+        from app.services.discovery.story_polisher import StoryPolisher
+        from dataclasses import asdict
+
+        discoverer = StoryDiscoverer(db=db)
+        stories = discoverer.discover_stories(
+            niche=ctx.niche_name or "business",
+            category=getattr(plan, "story_category", None) or plan.topic_bucket,
+            recency="mixed",
+            count=5,
+        )
+        if not stories:
+            raise ValueError("StoryDiscoverer returned no stories")
+
+        polisher = StoryPolisher()
+        polished = polisher.polish_story(stories[0], niche=ctx.niche_name or "business")
+        if not polished:
+            raise ValueError("StoryPolisher failed to polish story")
+
+        result = {
+            "title": polished.thumbnail_title,
+            "content_lines": polished.reel_lines,
+            "slide_texts": polished.reel_lines,
+            "caption": polished.caption,
+            "image_prompt": "",
+            "text_video_data": polished.to_dict(),
+        }
+    elif plan.content_type == "reel":
         result = generator.generate_viral_content(
             topic_hint=plan.topic_bucket,
             hook_hint=plan.hook_strategy,
@@ -438,7 +467,9 @@ def _execute_content_plan(db: Session, plan):
         plan.used_fallback = True
 
     # ── Step 3: Determine variant from slot pattern ──────────
-    if plan.content_type == "reel":
+    if plan.content_type == "text_video_reel":
+        variant = "text_video"
+    elif plan.content_type == "reel":
         sched_time = datetime.fromisoformat(plan.scheduled_time)
         slot_index = sched_time.hour // 4  # 0-5 across 24h
         variant = "light" if slot_index % 2 == 0 else "dark"
@@ -479,6 +510,8 @@ def _execute_content_plan(db: Session, plan):
         fixed_title=True,
         created_by="toby",
         music_source="trending_random",
+        content_format="text_video" if plan.content_type == "text_video_reel" else "text_based",
+        text_video_data=result.get("text_video_data"),
     )
     job_id = job.job_id
 
@@ -501,7 +534,9 @@ def _execute_content_plan(db: Session, plan):
     job_manager.update_job_status(job_id, "generating", "Toby generating media...", 5)
 
     try:
-        if variant == "post":
+        if variant == "text_video":
+            media_result = processor.process_text_video_brand(job_id, plan.brand_id)
+        elif variant == "post":
             media_result = processor.process_post_brand(job_id, plan.brand_id)
         else:
             media_result = processor.regenerate_brand(job_id, plan.brand_id)

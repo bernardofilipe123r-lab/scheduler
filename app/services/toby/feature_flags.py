@@ -27,6 +27,8 @@ TOBY_FEATURES = {
     "intelligence_pipeline": False,  # v3: Raw signal processing + competitor analysis
     "historical_mining": False,      # v3: Retroactive learning from historical content
     "cross_brand_intelligence": False,  # v3: Rule/prior transfer between brands
+    # ── text-video flags ──
+    "text_video_reels": False,           # TEXT-VIDEO reel format support in Toby
 }
 
 

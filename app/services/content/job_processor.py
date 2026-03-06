@@ -532,6 +532,189 @@ class JobProcessor:
             })
             return {"success": False, "error": error_msg}
 
+    def process_text_video_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
+        """
+        Process a TEXT-VIDEO reel for a single brand.
+        Sources images, composes thumbnail, composes slideshow video, uploads to Supabase.
+        """
+        print(f"\n📹 process_text_video_brand() — {brand}", flush=True)
+
+        job = self._manager.get_job(job_id)
+        if not job:
+            return {"success": False, "error": f"Job not found: {job_id}"}
+
+        tv_data = job.text_video_data or {}
+        brand_data = (job.brand_outputs or {}).get(brand, {})
+        reel_id = f"{job_id}_{brand}"
+        user_id = job.user_id
+
+        self._manager.update_brand_output(job_id, brand, {
+            "status": "generating",
+            "progress_message": "Sourcing images...",
+            "progress_percent": 5,
+        })
+
+        try:
+            from app.services.media.image_sourcer import ImageSourcer
+            from app.services.media.thumbnail_compositor import ThumbnailCompositor
+            from app.services.media.slideshow_compositor import SlideshowCompositor
+            from app.services.discovery.story_polisher import ImagePlan
+            from app.models.text_video_design import TextVideoDesign
+            from app.db_connection import SessionLocal
+
+            # Load user's design preferences
+            design_db = SessionLocal()
+            try:
+                design = design_db.query(TextVideoDesign).filter(
+                    TextVideoDesign.user_id == user_id
+                ).first()
+            finally:
+                design_db.close()
+
+            # ── Step 1: Source images ──────────────────────────
+            sourcer = ImageSourcer(db=self.db)
+            image_plans = [
+                ImagePlan(**ip) for ip in tv_data.get("images", [])
+            ]
+            thumb_plan_raw = tv_data.get("thumbnail_image", {})
+            thumb_plan = ImagePlan(**thumb_plan_raw) if thumb_plan_raw else (
+                image_plans[0] if image_plans else None
+            )
+
+            image_paths = []
+            for i, plan in enumerate(image_plans):
+                self._manager.update_brand_output(job_id, brand, {
+                    "progress_message": f"Sourcing image {i+1}/{len(image_plans)}...",
+                    "progress_percent": 5 + int(30 * (i / max(len(image_plans), 1))),
+                })
+                path = sourcer.source_image(plan)
+                if path:
+                    image_paths.append(path)
+                    print(f"   ✓ Image {i+1}: {path}", flush=True)
+                else:
+                    print(f"   ⚠️ Image {i+1} failed to source", flush=True)
+
+            if not image_paths:
+                raise ValueError("Failed to source any images for text-video reel")
+
+            # ── Step 2: Compose thumbnail ─────────────────────
+            self._manager.update_brand_output(job_id, brand, {
+                "progress_message": "Composing thumbnail...",
+                "progress_percent": 40,
+            })
+
+            thumb_image_path = None
+            if thumb_plan:
+                thumb_image_path = sourcer.source_image(thumb_plan)
+            if not thumb_image_path:
+                thumb_image_path = image_paths[0]
+
+            title_lines = tv_data.get("thumbnail_title_lines", [])
+            if not title_lines:
+                raw_title = tv_data.get("thumbnail_title", job.title or "")
+                title_lines = [l.strip() for l in raw_title.split("\n") if l.strip()]
+
+            compositor = ThumbnailCompositor()
+            thumbnail_path = compositor.compose_thumbnail(
+                main_image_path=thumb_image_path,
+                title_lines=title_lines,
+                design=design,
+            )
+            print(f"   ✓ Thumbnail composed: {thumbnail_path}", flush=True)
+
+            # ── Step 3: Compose slideshow video ───────────────
+            self._manager.update_brand_output(job_id, brand, {
+                "progress_message": "Composing video slideshow...",
+                "progress_percent": 55,
+            })
+
+            reel_lines = tv_data.get("reel_lines", job.content_lines or [])
+            tmp_video = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+            tmp_video.close()
+            video_output = Path(tmp_video.name)
+
+            slideshow = SlideshowCompositor()
+            result_path = slideshow.compose_reel(
+                image_paths=image_paths,
+                reel_lines=reel_lines,
+                output_path=video_output,
+                design=design,
+            )
+            if not result_path:
+                raise ValueError("Slideshow composition failed (FFmpeg error)")
+            print(f"   ✓ Video composed: {result_path}", flush=True)
+
+            # ── Step 4: Upload to Supabase ────────────────────
+            self._manager.update_brand_output(job_id, brand, {
+                "progress_message": "Uploading to storage...",
+                "progress_percent": 80,
+            })
+
+            brand_slug = brand
+            all_tmp = list(image_paths) + [thumbnail_path, video_output]
+
+            def _cleanup():
+                for p in all_tmp:
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
+
+            try:
+                thumb_remote = storage_path(user_id, brand_slug, "thumbnails", f"{reel_id}_thumbnail.jpg")
+                thumb_url = upload_from_path("media", thumb_remote, str(thumbnail_path))
+                print(f"   ☁️  Thumbnail uploaded: {thumb_url}", flush=True)
+            except StorageError as e:
+                _cleanup()
+                raise Exception(f"Thumbnail upload failed: {e}")
+
+            try:
+                video_remote = storage_path(user_id, brand_slug, "videos", f"{reel_id}_text_video.mp4")
+                video_url = upload_from_path("media", video_remote, str(video_output))
+                print(f"   ☁️  Video uploaded: {video_url}", flush=True)
+            except StorageError as e:
+                _cleanup()
+                raise Exception(f"Video upload failed: {e}")
+
+            _cleanup()
+
+            # ── Step 5: Update brand output ───────────────────
+            import time as _time
+            cache_bust = int(_time.time())
+
+            caption = tv_data.get("caption", "")
+            self._manager.update_brand_output(job_id, brand, {
+                "status": "completed",
+                "reel_id": reel_id,
+                "thumbnail_path": thumb_url,
+                "thumbnail_url": f"{thumb_url}?t={cache_bust}" if thumb_url else "",
+                "video_path": video_url,
+                "caption": caption,
+                "content_format": "text_video",
+                "content_lines": reel_lines,
+                "regenerated_at": datetime.utcnow().isoformat(),
+            })
+
+            print(f"   ✅ {brand} text-video reel completed", flush=True)
+            return {
+                "success": True,
+                "brand": brand,
+                "reel_id": reel_id,
+                "thumbnail_path": thumb_url,
+                "video_path": video_url,
+            }
+
+        except Exception as e:
+            import traceback
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            print(f"   ❌ Text-video failed: {error_msg}", flush=True)
+            traceback.print_exc()
+            self._manager.update_brand_output(job_id, brand, {
+                "status": "failed",
+                "error": error_msg,
+            })
+            return {"success": False, "error": error_msg}
+
     def process_job(self, job_id: str) -> Dict[str, Any]:
         """
         Process a generation job (generate all brands).

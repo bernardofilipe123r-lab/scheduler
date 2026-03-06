@@ -48,6 +48,8 @@ class JobManager:
         created_by: str = "user",
         music_track_id: Optional[str] = None,
         music_source: Optional[str] = None,
+        content_format: Optional[str] = None,
+        text_video_data: Optional[dict] = None,
     ) -> GenerationJob:
         """Create a new generation job."""
         job_id = generate_job_id() if created_by != "toby" else generate_toby_job_id()
@@ -75,6 +77,8 @@ class JobManager:
             created_by=created_by,
             music_track_id=music_track_id,
             music_source=music_source or "none",
+            content_format=content_format or "text_based",
+            text_video_data=text_video_data,
             status="pending",
             brand_outputs={brand: {"status": "pending"} for brand in brands}
         )

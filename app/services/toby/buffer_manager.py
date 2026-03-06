@@ -121,6 +121,10 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         brand_reel_slots = bc.reel_slots_per_day if bc else (state.reel_slots_per_day or 6)
         brand_post_slots = bc.post_slots_per_day if bc else (state.post_slots_per_day or 2)
 
+        # Determine reel content_type based on brand's reel_format
+        brand_reel_format = (bc.reel_format if bc and bc.reel_format else "text_based")
+        reel_content_type = "text_video_reel" if brand_reel_format == "text_video" else "reel"
+
         # Respect global toggles
         if not reels_enabled:
             brand_reel_slots = 0
@@ -140,7 +144,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                 all_slots.append({
                     "brand_id": brand.id,
                     "time": slot_time.isoformat(),
-                    "content_type": "reel",
+                    "content_type": reel_content_type,
                     "filled": _slot_is_filled(brand.id, slot_time),
                 })
 
@@ -179,7 +183,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         brand_slots = [s for s in all_slots if s["brand_id"] == brand.id]
         brand_filled = sum(1 for s in brand_slots if s["filled"])
         brand_total = len(brand_slots)
-        brand_reels = sum(1 for s in brand_slots if s["content_type"] == "reel")
+        brand_reels = sum(1 for s in brand_slots if s["content_type"] in ("reel", "text_video_reel"))
         brand_posts = sum(1 for s in brand_slots if s["content_type"] == "post")
         brand_breakdown.append({
             "brand_id": brand.id,

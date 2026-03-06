@@ -19,7 +19,7 @@ class ContentPlan:
     """A plan for one piece of content that Toby will create."""
     user_id: str
     brand_id: str
-    content_type: str            # "reel" or "post"
+    content_type: str            # "reel" | "text_video_reel" | "post"
     scheduled_time: str          # ISO datetime
     personality_id: str
     personality_prompt: str      # System prompt modifier
@@ -27,6 +27,7 @@ class ContentPlan:
     hook_strategy: str
     title_format: str
     visual_style: str
+    story_category: Optional[str] = None  # text_video only, drives StoryDiscoverer
     experiment_id: Optional[str] = None
     is_experiment: bool = False
     is_control: bool = False
@@ -95,6 +96,7 @@ def create_plans_for_empty_slots(
             hook_strategy=strategy.hook_strategy,
             title_format=strategy.title_format,
             visual_style=strategy.visual_style,
+            story_category=strategy.story_category,
             experiment_id=strategy.experiment_id,
             is_experiment=strategy.is_experiment,
         )

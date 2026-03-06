@@ -111,6 +111,10 @@ class NicheConfigService:
             'carousel_cta_options': 'carousel_cta_options',
             'carousel_cover_overlay_opacity': 'carousel_cover_overlay_opacity',
             'carousel_content_overlay_opacity': 'carousel_content_overlay_opacity',
+            'text_video_reel_examples': 'text_video_reel_examples',
+            'text_video_story_niches': 'text_video_story_niches',
+            'text_video_story_tone': 'text_video_story_tone',
+            'text_video_preferred_categories': 'text_video_preferred_categories',
         }
 
         for db_field, ctx_field in field_map.items():

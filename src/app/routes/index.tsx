@@ -6,7 +6,7 @@ import { LoginPage } from '@/pages/Login'
 import { OnboardingPage } from '@/pages/Onboarding'
 import { ProfilePage } from '@/pages/Profile'
 import { HomePage } from '@/pages/Home'
-import { GeneratorPage } from '@/pages/Generator'
+import { ReelsPage } from '@/pages/Reels'
 import { HistoryPage } from '@/pages/History'
 import { JobDetailPage } from '@/pages/JobDetail'
 import { ScheduledPage } from '@/pages/Scheduled'
@@ -104,7 +104,7 @@ export function AppRoutes() {
         <Route path="/onboarding" element={<OnboardingPageGuard />} />
         <Route path="/" element={<AuthGuard><OnboardingGuard><AppLayout /></OnboardingGuard></AuthGuard>}>
         <Route index element={<HomePage />} />
-        <Route path="reels" element={<GeneratorPage />} />
+        <Route path="reels" element={<ReelsPage />} />
         <Route path="jobs" element={<HistoryPage />} />
         <Route path="history" element={<Navigate to="/jobs" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />

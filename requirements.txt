@@ -18,6 +18,12 @@ numpy>=1.26.0
 scipy>=1.12.0
 pgvector>=0.3.0
 
+# Text-Video: External API clients
+google-genai>=1.0.0
+tavily-python>=0.3.0
+newsdataapi>=0.6.0
+yt-dlp>=2024.0.0
+
 # Background Jobs & Scheduling
 apscheduler>=3.10.4
 

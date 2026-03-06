@@ -33,6 +33,7 @@ export interface BrandOutput {
   ai_prompt?: string        // Per-brand image prompt (posts)
   slide_texts?: string[]    // Carousel text slide content (posts)
   carousel_paths?: string[] // Pre-rendered carousel image URLs (cover + text slides)
+  content_format?: string   // 'text_based' | 'text_video'
 }
 
 // Job entity
@@ -61,6 +62,8 @@ export interface Job {
   created_by?: 'user' | 'toby'
   music_track_id?: string | null
   music_source?: string | null
+  content_format?: 'text_based' | 'text_video'
+  text_video_data?: Record<string, unknown>
 }
 
 // Scheduled post entity

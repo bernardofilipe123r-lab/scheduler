@@ -62,6 +62,7 @@ CONTENT_TYPE_DISPLAY_NAMES: dict[str, str] = {
 CONTENT_TYPE_KEY_MAP: dict[str, str] = {
     "reel": "reels",
     "post": "posts",
+    "text_video_reel": "reels",
 }
 
 

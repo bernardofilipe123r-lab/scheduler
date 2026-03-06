@@ -35,6 +35,9 @@ from app.api.auth.threads_oauth_routes import router as threads_oauth_router
 from app.api.auth.tiktok_oauth_routes import router as tiktok_oauth_router
 from app.api.content.music_routes import router as music_router
 from app.api.content.trending_music_routes import router as trending_music_router
+from app.api.content.text_video_routes import router as text_video_router
+from app.api.content.text_video_design_routes import router as text_video_design_router
+from app.api.system.api_usage_routes import router as api_usage_router
 from app.api.billing.routes import router as billing_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set_user_id as set_logging_user_id, clear_user_id as clear_logging_user_id
@@ -136,6 +139,9 @@ app.include_router(tiktok_oauth_router)  # TikTok OAuth flow
 app.include_router(music_router)  # User music upload/management
 app.include_router(trending_music_router)  # TikTok trending music
 app.include_router(billing_router, prefix="/api/billing")  # Stripe billing
+app.include_router(text_video_router)  # TEXT-VIDEO reel generation
+app.include_router(text_video_design_router)  # TEXT-VIDEO design preferences
+app.include_router(api_usage_router)  # API usage monitoring (admin)
 
 
 @app.get("/health", tags=["system"])
