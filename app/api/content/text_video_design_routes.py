@@ -29,9 +29,12 @@ class DesignUpdate(BaseModel):
     instagram_handle: Optional[str] = Field(None, max_length=100)
 
     # Reel frame layout
-    reel_section_gap: Optional[int] = Field(None, ge=0, le=60)
-    reel_padding_top: Optional[int] = Field(None, ge=0, le=100)
-    reel_padding_bottom: Optional[int] = Field(None, ge=0, le=100)
+    reel_section_gap: Optional[int] = Field(None, ge=0, le=120)
+    reel_padding_top: Optional[int] = Field(None, ge=0, le=600)
+    reel_padding_bottom: Optional[int] = Field(None, ge=0, le=200)
+    reel_padding_left: Optional[int] = Field(None, ge=0, le=200)
+    reel_padding_right: Optional[int] = Field(None, ge=0, le=200)
+    reel_image_height: Optional[int] = Field(None, ge=200, le=1200)
     reel_avg_word_count: Optional[int] = Field(None, ge=10, le=200)
     reel_brand_name_color: Optional[str] = Field(None, max_length=20)
     reel_brand_name_size: Optional[int] = Field(None, ge=10, le=40)

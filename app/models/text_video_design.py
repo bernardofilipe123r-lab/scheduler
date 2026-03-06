@@ -27,9 +27,12 @@ class TextVideoDesign(Base):
     black_fade_duration = Column(Float, default=1.0)
 
     # Reel frame layout (brand header + text + image)
-    reel_section_gap = Column(Integer, default=16)
-    reel_padding_top = Column(Integer, default=24)
-    reel_padding_bottom = Column(Integer, default=16)
+    reel_section_gap = Column(Integer, default=40)
+    reel_padding_top = Column(Integer, default=320)
+    reel_padding_bottom = Column(Integer, default=40)
+    reel_padding_left = Column(Integer, default=85)
+    reel_padding_right = Column(Integer, default=85)
+    reel_image_height = Column(Integer, default=600)
     reel_avg_word_count = Column(Integer, default=50)
     reel_brand_name_color = Column(String(20), default="#FFFFFF")
     reel_brand_name_size = Column(Integer, default=16)
@@ -68,6 +71,9 @@ class TextVideoDesign(Base):
             "reel_section_gap": self.reel_section_gap,
             "reel_padding_top": self.reel_padding_top,
             "reel_padding_bottom": self.reel_padding_bottom,
+            "reel_padding_left": self.reel_padding_left,
+            "reel_padding_right": self.reel_padding_right,
+            "reel_image_height": self.reel_image_height,
             "reel_avg_word_count": self.reel_avg_word_count,
             "reel_brand_name_color": self.reel_brand_name_color,
             "reel_brand_name_size": self.reel_brand_name_size,

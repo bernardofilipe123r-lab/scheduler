@@ -21,3 +21,13 @@ ALTER TABLE text_video_design ADD COLUMN IF NOT EXISTS reel_handle_size INTEGER 
 -- Update default font for thumbnail from Poppins to Anton
 -- (only affects NEW rows; existing rows keep their current setting)
 ALTER TABLE text_video_design ALTER COLUMN thumbnail_title_font SET DEFAULT 'Anton-Regular.ttf';
+
+-- Reel frame padding left/right and image height
+ALTER TABLE text_video_design ADD COLUMN IF NOT EXISTS reel_padding_left INTEGER DEFAULT 85;
+ALTER TABLE text_video_design ADD COLUMN IF NOT EXISTS reel_padding_right INTEGER DEFAULT 85;
+ALTER TABLE text_video_design ADD COLUMN IF NOT EXISTS reel_image_height INTEGER DEFAULT 600;
+
+-- Update defaults for spacing
+ALTER TABLE text_video_design ALTER COLUMN reel_padding_top SET DEFAULT 320;
+ALTER TABLE text_video_design ALTER COLUMN reel_section_gap SET DEFAULT 40;
+ALTER TABLE text_video_design ALTER COLUMN reel_padding_bottom SET DEFAULT 40;

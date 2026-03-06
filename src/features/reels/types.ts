@@ -62,6 +62,9 @@ export interface DesignSettings {
   reel_section_gap: number
   reel_padding_top: number
   reel_padding_bottom: number
+  reel_padding_left: number
+  reel_padding_right: number
+  reel_image_height: number
   reel_avg_word_count: number
   reel_brand_name_color: string
   reel_brand_name_size: number
