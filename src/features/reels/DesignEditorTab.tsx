@@ -180,8 +180,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
 }
 
 /* ──────────────────────────────────────────────
- * REEL FRAME PREVIEW (1080×1920 scaled)
- * 3 divs: brand header, text, image/video
+ * REEL FRAME PREVIEW — 3 divs with independent gaps
  * ────────────────────────────────────────────── */
 function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
   const textColor = form.reel_text_color || '#FFFFFF'
@@ -190,7 +189,8 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
   const textShadow = form.reel_text_shadow ?? true
   const showLogo = form.show_logo ?? true
   const showHandle = form.show_handle ?? true
-  const sectionGap = form.reel_section_gap ?? 40
+  const gapHeaderText = form.reel_gap_header_text ?? 40
+  const gapTextMedia = form.reel_gap_text_media ?? 40
   const paddingTop = form.reel_padding_top ?? 320
   const paddingBottom = form.reel_padding_bottom ?? 40
   const paddingLeft = form.reel_padding_left ?? 85
@@ -200,11 +200,15 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
   const brandNameSize = form.reel_brand_name_size ?? 16
   const handleColor = form.reel_handle_color || '#AAAAAA'
   const handleSize = form.reel_handle_size ?? 14
+  const logoSizePx = form.reel_logo_size ?? 120
+  const avgWords = form.reel_avg_word_count ?? 50
+
+  const exampleText = useMemo(() => buildExampleText(avgWords), [avgWords])
 
   const s = SCALE
   const pw = CANVAS_W * s
   const ph = CANVAS_H * s
-  const logoSize = 48 * s
+  const scaledLogo = logoSizePx * s
 
   return (
     <div className="rounded-xl overflow-hidden shadow-lg border border-gray-200 relative bg-black mx-auto"
@@ -212,20 +216,19 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
       {/* Dark background */}
       <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-black" />
 
-      {/* 3-div column layout */}
+      {/* 3-div column — text div auto-heights */}
       <div className="absolute inset-0 flex flex-col" style={{
         paddingTop: `${paddingTop * s}px`,
         paddingBottom: `${paddingBottom * s}px`,
         paddingLeft: `${paddingLeft * s}px`,
         paddingRight: `${paddingRight * s}px`,
-        gap: `${sectionGap * s}px`,
       }}>
-        {/* DIV 1: Brand Header (row) */}
+        {/* DIV 1: Brand Header */}
         <div className="flex items-center flex-shrink-0" style={{ gap: `${12 * s}px` }}>
           {showLogo && (
-            <div className="rounded-full border-2 border-white flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-800"
-              style={{ width: logoSize, height: logoSize }}>
-              <img src={vaLogo} alt="Logo" className="rounded-sm" style={{ width: logoSize * 0.7, height: logoSize * 0.7 }} />
+            <div className="rounded-full border-white flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-800"
+              style={{ width: scaledLogo, height: scaledLogo, borderWidth: `${Math.max(1, 2 * s)}px`, borderStyle: 'solid' }}>
+              <img src={vaLogo} alt="Logo" className="rounded-sm" style={{ width: scaledLogo * 0.7, height: scaledLogo * 0.7 }} />
             </div>
           )}
           <div className="flex flex-col min-w-0">
@@ -245,8 +248,11 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
           </div>
         </div>
 
-        {/* DIV 2: Text Content */}
-        <div className="flex-1 min-h-0 overflow-hidden" style={{ fontFamily: textFont }}>
+        {/* Gap: Header → Text */}
+        <div className="flex-shrink-0" style={{ height: `${gapHeaderText * s}px` }} />
+
+        {/* DIV 2: Text Content — auto height, adapts to font size & word count */}
+        <div className="flex-shrink-0 overflow-hidden" style={{ fontFamily: textFont }}>
           <p className="leading-snug" style={{
             color: textColor,
             fontSize: `${textSize * s}px`,
@@ -257,23 +263,48 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
             WebkitBoxOrient: 'vertical' as const,
             overflow: 'hidden',
           }}>
-            {EXAMPLE_REEL_TEXT}
+            {exampleText}
           </p>
         </div>
 
-        {/* DIV 3: Image/Video Area */}
+        {/* Gap: Text → Media */}
+        <div className="flex-shrink-0" style={{ height: `${gapTextMedia * s}px` }} />
+
+        {/* DIV 3: Image/Video Area — animated video simulation */}
         <div className="relative flex-shrink-0 rounded-lg overflow-hidden"
           style={{ height: `${imageHeight * s}px` }}>
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-900/50 to-purple-900/50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-600/30 via-gray-500/20 to-gray-600/30 animate-pulse" />
-            <div className="relative z-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm"
-              style={{ width: 40 * s, height: 40 * s }}>
-              <div className="border-l-white/80 border-y-transparent ml-0.5"
-                style={{ width: 0, height: 0, borderLeftWidth: `${10 * s}px`, borderTopWidth: `${6 * s}px`, borderBottomWidth: `${6 * s}px` }} />
+          <div className="absolute inset-0" style={{
+            background: 'linear-gradient(120deg, #0f2027, #203a43, #2c5364, #203a43, #0f2027)',
+            backgroundSize: '300% 300%',
+            animation: 'reelVideoShift 6s ease-in-out infinite',
+          }} />
+          {/* Film grain overlay */}
+          <div className="absolute inset-0 opacity-20" style={{
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px)',
+            backgroundSize: `${4 * s}px ${4 * s}px`,
+          }} />
+          {/* Play button */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm"
+              style={{ width: 48 * s, height: 48 * s }}>
+              <div style={{
+                width: 0, height: 0, marginLeft: `${2 * s}px`,
+                borderLeft: `${12 * s}px solid rgba(255,255,255,0.85)`,
+                borderTop: `${7 * s}px solid transparent`,
+                borderBottom: `${7 * s}px solid transparent`,
+              }} />
             </div>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes reelVideoShift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+      `}</style>
     </div>
   )
 }
@@ -362,7 +393,7 @@ export function DesignEditorTab() {
 }
 
 /* ──────────────────────────────────────────────
- * THUMBNAIL SETTINGS PANEL
+ * THUMBNAIL SETTINGS
  * ────────────────────────────────────────────── */
 function ThumbnailSettings({ form, update }: {
   form: Partial<DesignSettings>
@@ -372,7 +403,7 @@ function ThumbnailSettings({ form, update }: {
     <div className="space-y-4">
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Title</h4>
-        <ColorRow label="Title Color" value={form.thumbnail_title_color || '#FFFFFF'} onChange={v => update('thumbnail_title_color', v)} />
+        <ColorRow label="Title Color" value={form.thumbnail_title_color || '#FFD700'} onChange={v => update('thumbnail_title_color', v)} />
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500 w-28 flex-shrink-0">Font</span>
           <select value={form.thumbnail_title_font || 'Anton'} onChange={e => update('thumbnail_title_font', e.target.value)}
@@ -382,6 +413,11 @@ function ThumbnailSettings({ form, update }: {
         </div>
         <SliderRow label="Title Size" value={form.thumbnail_title_size ?? 72} min={36} max={120} onChange={v => update('thumbnail_title_size', v)} />
         <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 40} min={10} max={200} onChange={v => update('thumbnail_title_padding', v)} />
+      </section>
+
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Logo</h4>
+        <SliderRow label="Logo Size" value={form.thumbnail_logo_size ?? 200} min={40} max={400} onChange={v => update('thumbnail_logo_size', v)} />
       </section>
 
       <section className="space-y-2">
@@ -404,7 +440,7 @@ function ThumbnailSettings({ form, update }: {
 }
 
 /* ──────────────────────────────────────────────
- * CONTENT / REEL FRAME SETTINGS PANEL
+ * CONTENT / REEL FRAME SETTINGS
  * ────────────────────────────────────────────── */
 function ContentSettings({ form, update }: {
   form: Partial<DesignSettings>
@@ -419,6 +455,7 @@ function ContentSettings({ form, update }: {
         <SliderRow label="Name Size" value={form.reel_brand_name_size ?? 16} min={10} max={40} onChange={v => update('reel_brand_name_size', v)} />
         <ColorRow label="Handle Color" value={form.reel_handle_color || '#AAAAAA'} onChange={v => update('reel_handle_color', v)} />
         <SliderRow label="Handle Size" value={form.reel_handle_size ?? 14} min={8} max={30} onChange={v => update('reel_handle_size', v)} />
+        <SliderRow label="Logo Size" value={form.reel_logo_size ?? 120} min={40} max={300} onChange={v => update('reel_logo_size', v)} />
         <div className="flex items-center gap-4 pt-1">
           <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
             <input type="checkbox" checked={form.show_logo ?? true} onChange={e => update('show_logo', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
@@ -458,7 +495,8 @@ function ContentSettings({ form, update }: {
         <SliderRow label="Padding Bottom" value={form.reel_padding_bottom ?? 40} min={0} max={200} onChange={v => update('reel_padding_bottom', v)} />
         <SliderRow label="Padding Left" value={form.reel_padding_left ?? 85} min={0} max={200} onChange={v => update('reel_padding_left', v)} />
         <SliderRow label="Padding Right" value={form.reel_padding_right ?? 85} min={0} max={200} onChange={v => update('reel_padding_right', v)} />
-        <SliderRow label="Section Gap" value={form.reel_section_gap ?? 40} min={0} max={120} onChange={v => update('reel_section_gap', v)} />
+        <SliderRow label="Header → Text" value={form.reel_gap_header_text ?? 40} min={0} max={200} onChange={v => update('reel_gap_header_text', v)} />
+        <SliderRow label="Text → Media" value={form.reel_gap_text_media ?? 40} min={0} max={200} onChange={v => update('reel_gap_text_media', v)} />
         <SliderRow label="Image Height" value={form.reel_image_height ?? 600} min={200} max={1200} onChange={v => update('reel_image_height', v)} />
       </section>
 
