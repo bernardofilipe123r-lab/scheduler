@@ -222,12 +222,14 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             # Use custom time provided by user
             from datetime import datetime
             next_slot = datetime.fromisoformat(request.scheduled_time.replace('Z', '+00:00'))
-            # Remove timezone info if present to match scheduler expectations
-            if next_slot.tzinfo is not None:
-                next_slot = next_slot.replace(tzinfo=None)
+            # Ensure timezone-aware UTC
+            if next_slot.tzinfo is None:
+                next_slot = next_slot.replace(tzinfo=__import__('datetime').timezone.utc)
+            else:
+                next_slot = next_slot.astimezone(__import__('datetime').timezone.utc)
             print(f"📅 Using custom time: {next_slot.isoformat()}")
             
-            if next_slot <= datetime.now():
+            if next_slot <= datetime.now(__import__('datetime').timezone.utc):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Cannot schedule in the past"
@@ -564,9 +566,12 @@ async def reschedule_post(schedule_id: str, request: RescheduleRequest, user: di
         # Parse the new scheduled time
         new_time = datetime.fromisoformat(request.scheduled_time.replace('Z', '+00:00'))
         
-        # Strip timezone for comparison
-        new_time_naive = new_time.replace(tzinfo=None) if new_time.tzinfo else new_time
-        if new_time_naive <= datetime.now():
+        # Ensure timezone-aware UTC for comparison
+        if new_time.tzinfo is None:
+            new_time = new_time.replace(tzinfo=__import__('datetime').timezone.utc)
+        else:
+            new_time = new_time.astimezone(__import__('datetime').timezone.utc)
+        if new_time <= datetime.now(__import__('datetime').timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot reschedule to a time in the past"
@@ -731,8 +736,11 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
         
         # Validate schedule time is not in the past
         schedule_dt = datetime.fromisoformat(request.schedule_time.replace('Z', '+00:00'))
-        schedule_dt_naive = schedule_dt.replace(tzinfo=None) if schedule_dt.tzinfo else schedule_dt
-        if schedule_dt_naive <= datetime.now():
+        if schedule_dt.tzinfo is None:
+            schedule_dt = schedule_dt.replace(tzinfo=__import__('datetime').timezone.utc)
+        else:
+            schedule_dt = schedule_dt.astimezone(__import__('datetime').timezone.utc)
+        if schedule_dt <= datetime.now(__import__('datetime').timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot schedule in the past"
@@ -791,8 +799,10 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
         
         # Parse schedule time
         schedule_dt = datetime.fromisoformat(request.schedule_time.replace('Z', '+00:00'))
-        if schedule_dt.tzinfo is not None:
-            schedule_dt = schedule_dt.replace(tzinfo=None)
+        if schedule_dt.tzinfo is None:
+            schedule_dt = schedule_dt.replace(tzinfo=__import__('datetime').timezone.utc)
+        else:
+            schedule_dt = schedule_dt.astimezone(__import__('datetime').timezone.utc)
         
         # Use Supabase URL for thumbnail path
         thumbnail_path_rel = cover_url
@@ -984,8 +994,8 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
 
             if not hasattr(sched_time, 'hour'):
                 sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
-                if sched_time.tzinfo is not None:
-                    sched_time = sched_time.replace(tzinfo=None)
+                if sched_time.tzinfo is None:
+                    sched_time = sched_time.replace(tzinfo=__import__('datetime').timezone.utc)
 
             valid_hours = get_valid_hours_for_brand(brand)
             hour = sched_time.hour
@@ -1073,8 +1083,8 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
                     continue
                 if not hasattr(sched_time, 'hour'):
                     sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
-                    if sched_time.tzinfo is not None:
-                        sched_time = sched_time.replace(tzinfo=None)
+                    if sched_time.tzinfo is None:
+                        sched_time = sched_time.replace(tzinfo=__import__('datetime').timezone.utc)
 
                 new_time = find_next_valid_reel_slot(
                     brand, variant, sched_time,
@@ -1223,8 +1233,8 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
                 
                 if not hasattr(sched_time, 'hour'):
                     sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
-                    if sched_time.tzinfo is not None:
-                        sched_time = sched_time.replace(tzinfo=None)
+                    if sched_time.tzinfo is None:
+                        sched_time = sched_time.replace(tzinfo=__import__('datetime').timezone.utc)
                 
                 # Find next valid post slot for this brand
                 new_time = find_next_valid_slot(

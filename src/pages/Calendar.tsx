@@ -222,7 +222,9 @@ function Calendar() {
           formData.append('brand_id', brandId)
           formData.append('caption', caption)
           formData.append('platforms', JSON.stringify(selectedPlatforms))
-          formData.append('scheduled_time', scheduledTime)
+          // Convert local datetime-local value to UTC ISO string
+          // Uses the browser's OS timezone (immune to VPN)
+          formData.append('scheduled_time', new Date(scheduledTime).toISOString())
           if (uploadedFile) {
             formData.append('file', uploadedFile)
           }

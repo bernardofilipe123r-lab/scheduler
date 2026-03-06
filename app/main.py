@@ -3,7 +3,7 @@ Main FastAPI application for the reels automation service.
 """
 import os
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -969,7 +969,7 @@ async def startup_event():
 
         db = SessionLocal()
         try:
-            cutoff = datetime.utcnow() - timedelta(days=1)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=1)
 
             # Delete scheduled reels published more than 1 day ago
             old_published_reels = db.query(ScheduledReel).filter(

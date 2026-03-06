@@ -116,18 +116,21 @@ def _validate_scheduled_time(scheduled_time_str: str) -> datetime:
     Parse and validate scheduled time.
     
     Must be in future (at least 1 minute from now).
+    Returns a timezone-aware UTC datetime.
     """
     try:
         scheduled_time = datetime.fromisoformat(
             scheduled_time_str.replace('Z', '+00:00')
         )
         
-        # Convert to UTC and strip timezone for comparison
+        # Ensure timezone-aware UTC
         if scheduled_time.tzinfo is not None:
             scheduled_time = scheduled_time.astimezone(timezone.utc)
-            scheduled_time = scheduled_time.replace(tzinfo=None)
+        else:
+            # Naive datetime — assume UTC (frontend should always send UTC)
+            scheduled_time = scheduled_time.replace(tzinfo=timezone.utc)
         
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(timezone.utc)
         if scheduled_time <= now:
             raise ValueError("Must be scheduled for at least 1 minute in the future")
         
@@ -337,6 +340,7 @@ async def upload_and_schedule(
                 "social_media": social_media,
                 "file_url": file_url,
                 "manual": True,  # Flag for frontend differentiation
+                "variant": "post" if content_type in ("carousel", "text") else "light",
             }
         )
         
