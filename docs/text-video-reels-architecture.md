@@ -2,13 +2,17 @@
 
 > **Purpose:** This document is an AI-coder prompt. It contains every decision, file path, model field, migration, and UI spec needed to implement the TEXT-VIDEO reel format end-to-end in ViralToby. An AI agent reading this document should be able to execute the implementation without asking clarifying questions. All 18 decision points have been resolved — search for `[RESOLVED]` to see each answer.
 
-> **API Keys & Secrets:** This feature requires new external API keys (NewsAPI, Tavily, SerpAPI, Pexels, Gemini). **Do NOT hardcode, guess, or generate placeholder keys.** When you need a key:
-> 1. Ask the user in chat — specify which service and what scope/permissions are needed.
-> 2. The user will provide the key via chat.
-> 3. **You (the AI coder) add it to Railway via CLI:** `railway variables set KEY_NAME=value` — you have full access.
-> 4. Reference the key in code via `os.environ.get("KEY_NAME")` — never commit secrets.
+> **API Keys & Secrets:** This feature requires new external API keys (NewsData.io, Tavily, SerpAPI, Pexels, Gemini). **All keys are already set in Railway production environment** — do NOT hardcode, guess, or generate placeholder keys.
 >
-> Railway CLI is authenticated in the workspace (project `responsible-mindfulness`, service `scheduler`). **Run `railway variables set` directly using run_in_terminal — do NOT ask the user to run it.** Never store keys in `.env` files committed to git, config files, or inline in code.
+> **Keys already configured (DO NOT re-set these):**
+> - `NEWSDATA_API_KEY` — NewsData.io (replaces NewsAPI which requires institutional email)
+> - `TAVILY_API_KEY` — Tavily AI search (1,000 free credits/month)
+> - `SERPAPI_KEY` — SerpAPI Google Search (250 free searches/month)
+> - `GEMINI_API_KEY` — Google Gemini AI (free tier: ~1000-1500 req/day, flash models)
+> - `PEXELS_API_KEY` — Pexels stock photos/videos (200 req/hour, 20,000 req/month)
+>
+> Reference keys in code via `os.environ.get("KEY_NAME")` — never commit secrets.
+> Railway CLI is authenticated in the workspace (project `responsible-mindfulness`, service `scheduler`). If you need to add NEW keys: `railway variables set KEY_NAME=value` using run_in_terminal.
 
 ---
 
@@ -52,6 +56,7 @@
 36. [Complete Stripe Billing: Per-Brand Subscriptions & Super Admin Trial Control](#36-complete-stripe-billing-per-brand-subscriptions--super-admin-trial-control)
 37. [DeepSeek API Cost Tracking & Per-User/Brand Metrics](#37-deepseek-api-cost-tracking--per-userbrand-metrics)
 38. [Context-Aware Caption CTAs: Kill the Hardcoded Save Section](#38-context-aware-caption-ctas-kill-the-hardcoded-save-section)
+39. [Admin Panel: API Usage Monitoring Dashboard](#39-admin-panel-api-usage-monitoring-dashboard)
 
 ---
 
@@ -163,7 +168,7 @@ User selects niche (Finance, Tech, Health, etc.)
          ▼
 ┌─────────────────────────────────────────────┐
 │  1. STORY DISCOVERY                          │
-│     NewsAPI + Tavily → 10-15 raw stories     │
+│     NewsData.io + Tavily → 10-15 raw stories │
 │     Per niche category, mixed recency         │
 └──────────┬──────────────────────────────────┘
            │
@@ -221,10 +226,12 @@ Find real, specific, interesting stories from the web. The current system only u
 
 | API | Purpose | Free Tier | Cost (Paid) | Priority |
 |---|---|---|---|---|
-| **NewsAPI** (`newsapi.org`) | Recent news articles (last 30 days) | 100 req/day | $449/mo for 250k req | **Primary** for fresh stories |
-| **Tavily** (`tavily.com`) | AI-native web search, returns clean text | 1000 req/mo free | $0.01/search | **Primary** for famous/timeless stories |
-| **SerpAPI** (`serpapi.com`) | Google Search results as JSON | 100 req/mo free | $50/mo for 5k req | **Backup** search engine |
+| **NewsData.io** (`newsdata.io`) | Recent news articles (last 30 days) | 200 credits/day | $79/mo for 10k credits | **Primary** for fresh stories |
+| **Tavily** (`tavily.com`) | AI-native web search, returns clean text | 1000 credits/mo free | Pay-as-you-go | **Primary** for famous/timeless stories |
+| **SerpAPI** (`serpapi.com`) | Google Search results as JSON | 250 searches/mo free | $50/mo for 5k req | **Backup** search engine |
 | **Google Trends** (unofficial pytrends) | What's trending right now | Free (scraping) | — | **Discovery** for topic ideas |
+
+> **WHY NOT NewsAPI?** NewsAPI (`newsapi.org`) requires an institutional/corporate email to register — personal emails (Gmail, Outlook, etc.) are rejected. NewsData.io provides equivalent functionality (news search by keyword, category, country, language) with no institutional email requirement and a more generous free tier (200 credits/day vs NewsAPI's 100 req/day). The `newsdata-python` SDK is a drop-in replacement.
 
 ### New File: `app/services/discovery/story_discoverer.py`
 
@@ -267,14 +274,17 @@ class RawStory:
 
 **Recent (60% of daily stories):**
 ```python
-# NewsAPI call
-newsapi.get_everything(
+# NewsData.io call
+from newsdataapi import NewsDataApiClient
+
+newsdata = NewsDataApiClient(apikey=os.environ.get("NEWSDATA_API_KEY"))
+response = newsdata.news_api(
     q=f"{niche} {category_keywords}",
     language="en",
-    sort_by="relevancy",
-    from_param=(datetime.now() - timedelta(days=7)).isoformat(),
-    page_size=10,
+    size=10,
+    timeframe=7,  # last 7 days
 )
+# response["results"] → list of articles with title, description, link, image_url, pubDate
 ```
 
 **Famous/Timeless (30% of daily stories):**
@@ -298,13 +308,14 @@ Empty init file for the discovery service module.
 ### Environment Variables Required
 
 ```
-NEWSAPI_KEY=<newsapi.org API key>
-TAVILY_API_KEY=<tavily.com API key>
-SERPAPI_KEY=<serpapi.com API key>  # optional backup
-GEMINI_API_KEY=<Google AI Studio API key>  # for Nano Banana 2 image gen
+NEWSDATA_API_KEY=<newsdata.io API key>    # Primary for fresh stories (200 credits/day free)
+TAVILY_API_KEY=<tavily.com API key>       # Primary for famous/timeless stories (1000 credits/month free)
+SERPAPI_KEY=<serpapi.com API key>          # Backup search (250 searches/month free)
+GEMINI_API_KEY=<Google AI Studio API key> # Image gen + AI (free tier: ~1000-1500 req/day)
+PEXELS_API_KEY=<pexels.com API key>       # Stock images/videos (200 req/hour, 20k/month free)
 ```
 
-These must be set via `railway variables set KEY=value` before deployment.
+**All keys are already set in Railway production.** Reference via `os.environ.get("KEY_NAME")`. Do NOT re-set them.
 
 ---
 
@@ -1579,7 +1590,7 @@ ORDER BY column_name;
 | File | Purpose | Lines (est.) |
 |---|---|---|
 | `app/services/discovery/__init__.py` | Package init | 1 |
-| `app/services/discovery/story_discoverer.py` | Web search story discovery (NewsAPI + Tavily) | ~200 |
+| `app/services/discovery/story_discoverer.py` | Web search story discovery (NewsData.io + Tavily) | ~200 |
 | `app/services/discovery/story_polisher.py` | DeepSeek story → viral format rewriter | ~150 |
 | `app/services/media/image_sourcer.py` | Image sourcing (SerpAPI + Gemini Nano Banana 2) | ~250 |
 | `app/services/media/thumbnail_compositor.py` | Pillow thumbnail composition | ~150 |
@@ -1611,7 +1622,7 @@ ORDER BY column_name;
 | `app/core/prompt_context.py` | Format-aware example loading: use `text_video_reel_examples` when content_type is `text_video_reel` (Section 24) |
 | `app/main.py` | Register new routers (`text_video_router`, `text_video_design_router`) |
 | `scripts/validate_api.py` | Add new modules to `CRITICAL_MODULES` + endpoint tests |
-| `requirements.txt` | Add `google-genai`, `tavily-python`, `newsapi-python`, `yt-dlp` |
+| `requirements.txt` | Add `google-genai`, `tavily-python`, `newsdataapi`, `yt-dlp` |
 
 ---
 
@@ -1795,8 +1806,8 @@ Category selection uses weighted random. The learning engine (Thompson Sampling,
 
 | Step | API | Cost per Call | Calls per Reel | Cost |
 |---|---|---|---|---|
-| Story Discovery | NewsAPI | Free (100/day) | 1 | $0.00 |
-| Story Discovery | Tavily | $0.01/search | 0.3 avg | $0.003 |
+| Story Discovery | NewsData.io | Free (200 credits/day) | 1 | $0.00 |
+| Story Discovery | Tavily | Free (1000/mo) | 0.3 avg | $0.00 |
 | Story Polishing | DeepSeek chat | ~$0.001/req | 1 | $0.001 |
 | Image Search | SerpAPI | $0.01/search | 2-3 | $0.025 |
 | AI Image Gen | Gemini (Nano Banana 2) | ~$0.01/image | 1-2 | $0.015 |
@@ -1926,7 +1937,7 @@ These are decisions the AI coder MUST ask the user about before implementing:
 **Answer:** SerpAPI only. Bing Image Search API was retired — Microsoft killed all Bing Search APIs in August 2025. SerpAPI is the only option. ~$0.015/search on the base plan.
 
 ### `[RESOLVED]` 3: NewsAPI Free vs Paid Tier
-**Answer:** Start with free tier for dev/testing. 100 req/day is enough for development. It cannot be used in production (their terms prohibit commercial use). For production, evaluate NewsData.io (200 free credits/day, commercial use allowed) as a bridge before the $449/month NewsAPI jump.
+**Answer:** NewsAPI is **NOT available** — it requires an institutional/corporate email to register, which the user cannot provide. **NewsData.io** (`newsdata.io`) replaces it entirely. NewsData.io offers 200 free credits/day, allows commercial use, and has no institutional email requirement. The `newsdata-python` SDK is the drop-in replacement. Env var: `NEWSDATA_API_KEY`.
 
 ### `[RESOLVED]` 4: Pexels API Key
 **Answer:** Pexels API is free — no credit card needed. Key will be provided and set via Railway. Env var: `PEXELS_API_KEY`.
@@ -3460,17 +3471,18 @@ def cleanup_expired_stories(db: Session, user_id: str):
 
 ### 30.3 API Rate Limit Protection
 
-text_video generation calls 3-4 external APIs per reel (NewsAPI, Tavily, SerpAPI, Gemini). Toby generating 6 text_video reels/day per brand = 18-24 API calls/brand/day. With multiple brands, this can hit free tier limits quickly.
+text_video generation calls 3-4 external APIs per reel (NewsData.io, Tavily, SerpAPI, Gemini). Toby generating 6 text_video reels/day per brand = 18-24 API calls/brand/day. With multiple brands, this can hit free tier limits quickly.
 
 #### Rate Limit Strategy
 
 ```python
 # Per-user daily limits (enforce in StoryDiscoverer)
 TEXT_VIDEO_API_LIMITS = {
-    "newsapi": 80,        # Free tier: 100/day, reserve 20 for semi-auto
+    "newsdata": 160,      # Free tier: 200 credits/day, reserve 40 for semi-auto
     "tavily": 30,         # Free tier: 33/day (1000/month ÷ 30)
-    "serpapi": 80,        # Free tier: 100/month ÷ 30 ≈ 3/day. Paid: 5000/mo
-    "gemini": 50,         # Free tier: generous. Track for cost control.
+    "serpapi": 8,          # Free tier: 250/month ÷ 30 ≈ 8/day
+    "gemini": 50,         # Free tier: generous (~1000-1500/day). Track for cost control.
+    "pexels": 150,        # Free tier: 200/hour, 20000/month. Reserve buffer.
 }
 
 # Track in memory (per-process, resets on deploy — acceptable)
@@ -3491,7 +3503,7 @@ def record_api_call(api_name: str):
 #### Graceful Degradation
 
 If an API is exhausted:
-1. **NewsAPI exhausted** → Tavily becomes primary for fresh stories. If both exhausted → DeepSeek generates from training data (evergreen mode).
+1. **NewsData.io exhausted** → Tavily becomes primary for fresh stories. If both exhausted → DeepSeek generates from training data (evergreen mode).
 2. **SerpAPI exhausted** → Pexels becomes primary for images. If both exhausted → Gemini AI generates all images.
 3. **Gemini exhausted** → All images sourced from web search + Pexels. If all exhausted → solid color backgrounds (degraded but functional).
 4. **All APIs exhausted** → text_video generation skips for this tick. Toby logs: `[TOBY] text_video APIs exhausted — skipping generation for {brand}`. Buffer health drops to "low", next tick retries.
@@ -3534,9 +3546,9 @@ This ensures text_video never starves text_based brands of their generation slot
 class StoryDiscoverer:
     async def discover_stories(self, ...):
         try:
-            stories = await self._search_newsapi(...)
+            stories = await self._search_newsdata(...)
         except Exception as e:
-            print(f"[StoryDiscoverer] NewsAPI failed: {e}")
+            print(f"[StoryDiscoverer] NewsData.io failed: {e}")
             stories = []
 
         if not stories:
@@ -5986,6 +5998,318 @@ To keep costs minimal, the prompt is deliberately short and `max_tokens` is capp
 
 ---
 
+## 39. Admin Panel: API Usage Monitoring Dashboard
+
+### Purpose
+
+All external APIs used by TEXT-VIDEO have free tier limits. The admin panel MUST provide real-time visibility into current usage, remaining quota, reset times, and percentage consumed — so the user can see at a glance if any API is running low before it affects content generation.
+
+### APIs to Monitor
+
+| API | Quota Type | Free Limit | Reset Cycle | How to Track |
+|---|---|---|---|---|
+| **NewsData.io** | Credits/day | 200 credits/day | Daily (midnight UTC) | Track calls in DB; NewsData.io returns `totalResults` but no quota headers |
+| **Tavily** | Credits/month | 1,000 credits/month | Monthly (1st of month) | Track calls in DB; Tavily dashboard shows usage but no API endpoint for quota |
+| **SerpAPI** | Searches/month | 250 searches/month | Monthly (from signup date) | SerpAPI account API: `GET https://serpapi.com/account.json?api_key=KEY` returns `{ total_searches_left, this_month_usage, plan_searches_left }` |
+| **Gemini** | Requests/day + RPM | ~1000-1500 req/day, 15-60 RPM | Daily (midnight PT) | Track calls in DB; Google AI Studio dashboard shows usage |
+| **Pexels** | Requests/hour + /month | 200/hour, 20,000/month | Hourly + Monthly | **Response headers:** `X-Ratelimit-Limit`, `X-Ratelimit-Remaining`, `X-Ratelimit-Reset` |
+
+### Backend: API Usage Tracking
+
+#### New File: `app/services/monitoring/api_usage_tracker.py`
+
+```python
+"""Track external API usage for admin dashboard visibility."""
+from datetime import datetime, date
+from sqlalchemy.orm import Session
+from app.models.api_usage import APIUsageLog
+
+class APIUsageTracker:
+    """Tracks per-API call counts and quota info."""
+
+    DAILY_APIS = {
+        "newsdata": {"limit": 200, "reset": "daily"},
+        "gemini": {"limit": 1000, "reset": "daily"},
+    }
+    MONTHLY_APIS = {
+        "tavily": {"limit": 1000, "reset": "monthly"},
+        "serpapi": {"limit": 250, "reset": "monthly"},
+    }
+    HOURLY_APIS = {
+        "pexels": {"limit": 200, "reset": "hourly", "monthly_limit": 20000},
+    }
+
+    def record_call(self, db: Session, api_name: str, endpoint: str = ""):
+        """Record a single API call. Call this from every API client wrapper."""
+        log = APIUsageLog(
+            api_name=api_name,
+            endpoint=endpoint,
+            called_at=datetime.utcnow(),
+        )
+        db.add(log)
+        db.commit()
+
+    def get_usage_summary(self, db: Session) -> list[dict]:
+        """Return current usage for all APIs — consumed, limit, remaining, reset_at, pct."""
+        summaries = []
+
+        for api, config in {**self.DAILY_APIS, **self.MONTHLY_APIS, **self.HOURLY_APIS}.items():
+            if config["reset"] == "daily":
+                count = self._count_today(db, api)
+                reset_at = "midnight UTC"
+            elif config["reset"] == "monthly":
+                count = self._count_this_month(db, api)
+                reset_at = "1st of next month"
+            elif config["reset"] == "hourly":
+                count = self._count_this_hour(db, api)
+                reset_at = "top of next hour"
+
+            limit = config["limit"]
+            remaining = max(0, limit - count)
+            pct_used = round((count / limit) * 100, 1) if limit > 0 else 0
+
+            summaries.append({
+                "api": api,
+                "used": count,
+                "limit": limit,
+                "remaining": remaining,
+                "pct_used": pct_used,
+                "reset_cycle": config["reset"],
+                "reset_at": reset_at,
+                "status": "critical" if pct_used >= 90 else "warning" if pct_used >= 70 else "ok",
+            })
+
+        # Pexels also has monthly tracking
+        pexels_monthly = self._count_this_month(db, "pexels")
+        summaries.append({
+            "api": "pexels_monthly",
+            "used": pexels_monthly,
+            "limit": 20000,
+            "remaining": max(0, 20000 - pexels_monthly),
+            "pct_used": round((pexels_monthly / 20000) * 100, 1),
+            "reset_cycle": "monthly",
+            "reset_at": "1st of next month",
+            "status": "critical" if pexels_monthly >= 18000 else "warning" if pexels_monthly >= 14000 else "ok",
+        })
+
+        # SerpAPI: also query their account API for real-time data
+        serpapi_live = self._get_serpapi_account_info()
+        if serpapi_live:
+            # Override with live data from SerpAPI
+            for s in summaries:
+                if s["api"] == "serpapi":
+                    s["remaining"] = serpapi_live.get("plan_searches_left", s["remaining"])
+                    s["used"] = serpapi_live.get("this_month_usage", s["used"])
+
+        return summaries
+
+    def _get_serpapi_account_info(self) -> dict | None:
+        """Query SerpAPI account endpoint for real-time quota."""
+        import os, httpx
+        key = os.environ.get("SERPAPI_KEY")
+        if not key:
+            return None
+        try:
+            resp = httpx.get(f"https://serpapi.com/account.json?api_key={key}", timeout=5)
+            return resp.json() if resp.status_code == 200 else None
+        except Exception:
+            return None
+```
+
+#### Integration Points
+
+Every external API call wrapper MUST call `tracker.record_call(db, api_name)`:
+- `story_discoverer.py` → `record_call(db, "newsdata")` after each NewsData.io call
+- `story_discoverer.py` → `record_call(db, "tavily")` after each Tavily call
+- `image_sourcer.py` → `record_call(db, "serpapi")` after each SerpAPI call
+- `image_sourcer.py` → `record_call(db, "gemini")` after each Gemini image gen call
+- `image_sourcer.py` → `record_call(db, "pexels")` after each Pexels call
+
+For **Pexels**, also capture rate limit headers from each response:
+```python
+# After any Pexels API call:
+pexels_remaining = response.headers.get("X-Ratelimit-Remaining")
+pexels_reset = response.headers.get("X-Ratelimit-Reset")  # Unix timestamp
+# Store these in a cache/DB for the admin dashboard to display
+```
+
+#### New Migration: `migrations/api_usage_tracking.sql`
+
+```sql
+-- Idempotent: API usage tracking for admin dashboard
+CREATE TABLE IF NOT EXISTS api_usage_log (
+    id BIGSERIAL PRIMARY KEY,
+    api_name VARCHAR(50) NOT NULL,      -- 'newsdata', 'tavily', 'serpapi', 'gemini', 'pexels'
+    endpoint VARCHAR(200) DEFAULT '',    -- optional: which endpoint was called
+    called_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Index for fast time-range queries
+CREATE INDEX IF NOT EXISTS idx_api_usage_api_called
+    ON api_usage_log (api_name, called_at DESC);
+
+-- Partition-friendly: old rows can be deleted monthly via cron
+-- DELETE FROM api_usage_log WHERE called_at < NOW() - INTERVAL '90 days';
+```
+
+#### New Model: `app/models/api_usage.py`
+
+```python
+from sqlalchemy import Column, BigInteger, String, DateTime
+from app.db_connection import Base
+from datetime import datetime
+
+class APIUsageLog(Base):
+    __tablename__ = "api_usage_log"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    api_name = Column(String(50), nullable=False)
+    endpoint = Column(String(200), default="")
+    called_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+```
+
+### Backend: Admin API Endpoint
+
+#### New File: `app/api/admin/api_usage_routes.py`
+
+```python
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.db_connection import get_db
+from app.api.deps import get_current_user_admin  # admin-only
+
+router = APIRouter(prefix="/api/admin/api-usage", tags=["admin-api-usage"])
+
+@router.get("/summary")
+def get_api_usage_summary(
+    db: Session = Depends(get_db),
+    _admin = Depends(get_current_user_admin),
+):
+    """Return current usage, limits, remaining, pct for all external APIs."""
+    from app.services.monitoring.api_usage_tracker import APIUsageTracker
+    tracker = APIUsageTracker()
+    return {"apis": tracker.get_usage_summary(db)}
+```
+
+### Frontend: Admin API Usage Dashboard
+
+#### Location
+
+Add to the existing admin panel (or create a new admin sub-page if none exists). The component displays a card for each API with:
+
+1. **API name + icon** (e.g., 📰 NewsData.io, 🔍 Tavily, etc.)
+2. **Progress bar** showing percentage used (green < 70%, yellow 70-90%, red > 90%)
+3. **Usage text**: "142 / 200 credits used (71%)"
+4. **Remaining**: "58 credits remaining"
+5. **Reset info**: "Resets daily at midnight UTC" or "Resets on July 1"
+6. **Status badge**: `OK` / `WARNING` / `CRITICAL`
+
+#### Component: `src/features/admin/ApiUsageDashboard.tsx`
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/shared/api/client";
+
+interface ApiUsage {
+  api: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  pct_used: number;
+  reset_cycle: string;
+  reset_at: string;
+  status: "ok" | "warning" | "critical";
+}
+
+const API_LABELS: Record<string, { name: string; icon: string }> = {
+  newsdata: { name: "NewsData.io", icon: "📰" },
+  tavily: { name: "Tavily", icon: "🔍" },
+  serpapi: { name: "SerpAPI", icon: "🌐" },
+  gemini: { name: "Gemini AI", icon: "✨" },
+  pexels: { name: "Pexels (hourly)", icon: "📸" },
+  pexels_monthly: { name: "Pexels (monthly)", icon: "📸" },
+};
+
+const STATUS_COLORS = {
+  ok: "bg-green-500",
+  warning: "bg-yellow-500",
+  critical: "bg-red-500",
+};
+
+export function ApiUsageDashboard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "api-usage"],
+    queryFn: () => apiClient.get<{ apis: ApiUsage[] }>("/api/admin/api-usage/summary"),
+    refetchInterval: 60_000, // Auto-refresh every 60s
+  });
+
+  if (isLoading) return <div className="animate-pulse">Loading API usage...</div>;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {data?.apis.map((api) => {
+        const label = API_LABELS[api.api] ?? { name: api.api, icon: "🔗" };
+        return (
+          <div key={api.api} className="bg-[#1a1a2e] rounded-xl p-4 border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-lg">{label.icon} {label.name}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full text-white ${STATUS_COLORS[api.status]}`}>
+                {api.status.toUpperCase()}
+              </span>
+            </div>
+            {/* Progress bar */}
+            <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
+              <div
+                className={`h-3 rounded-full ${STATUS_COLORS[api.status]}`}
+                style={{ width: `${Math.min(api.pct_used, 100)}%` }}
+              />
+            </div>
+            <div className="text-sm text-gray-300">
+              {api.used.toLocaleString()} / {api.limit.toLocaleString()} used ({api.pct_used}%)
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {api.remaining.toLocaleString()} remaining • Resets {api.reset_cycle} ({api.reset_at})
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+```
+
+#### Auto-Refresh
+
+The dashboard auto-refreshes every 60 seconds via `refetchInterval`. For more urgent monitoring, the user can manually refresh.
+
+### Alert Threshold Rules
+
+When any API reaches ≥90% usage:
+- Log `[API_MONITOR] CRITICAL: {api} at {pct}% usage ({remaining} remaining)` 
+- If Toby is running, it should check API budget BEFORE making calls (Section 30.3 rate limit strategy already covers this)
+- Admin dashboard shows red `CRITICAL` badge
+
+When any API reaches ≥70% usage:
+- Log `[API_MONITOR] WARNING: {api} at {pct}% usage`
+- Admin dashboard shows yellow `WARNING` badge
+
+### Files Summary
+
+| File | Purpose | New/Modified |
+|---|---|---|
+| `app/services/monitoring/__init__.py` | Package init | New |
+| `app/services/monitoring/api_usage_tracker.py` | Usage tracking + summary logic | New |
+| `app/models/api_usage.py` | SQLAlchemy model for api_usage_log | New |
+| `migrations/api_usage_tracking.sql` | Create api_usage_log table | New |
+| `app/api/admin/api_usage_routes.py` | Admin endpoint for usage summary | New |
+| `src/features/admin/ApiUsageDashboard.tsx` | Admin UI component | New |
+| `app/main.py` | Register admin api-usage router | Modified |
+| `app/services/discovery/story_discoverer.py` | Add `record_call()` after each API call | Modified |
+| `app/services/media/image_sourcer.py` | Add `record_call()` after each API call | Modified |
+| `scripts/validate_api.py` | Add new modules to CRITICAL_MODULES + endpoint test | Modified |
+
+---
+
 ## Appendix A: Existing Codebase Reference
 
 ### Key Files the AI Coder Must Understand
@@ -6032,19 +6356,24 @@ To keep costs minimal, the prompt is deliberately short and `max_tokens` is capp
 # In requirements.txt, append:
 google-genai>=1.0.0            # Gemini Developer API (Imagen 3 image gen) — NOT google-generativeai (EOL)
 tavily-python>=0.3.0           # Tavily AI search
-newsapi-python>=0.2.7          # NewsAPI client
+newsdataapi>=0.6.0             # NewsData.io client (replaces newsapi-python — NewsAPI requires institutional email)
 yt-dlp>=2024.0.0               # YouTube video frame extraction
 ```
 
 ### Environment Variables to Set (Railway)
 
+**All keys are already set in Railway production environment.** Do NOT re-set them. For reference:
+
 ```bash
-railway variables set NEWSAPI_KEY=<key>
-railway variables set TAVILY_API_KEY=<key>
-railway variables set GEMINI_API_KEY=<key>
-railway variables set PEXELS_API_KEY=<key>
-railway variables set SERPAPI_KEY=<key>  # optional
+# ALREADY SET — do not run these again:
+# railway variables set NEWSDATA_API_KEY=<key>    # NewsData.io (replaces NewsAPI)
+# railway variables set TAVILY_API_KEY=<key>       # Tavily AI search
+# railway variables set GEMINI_API_KEY=<key>       # Google Gemini
+# railway variables set PEXELS_API_KEY=<key>       # Pexels stock media
+# railway variables set SERPAPI_KEY=<key>           # SerpAPI Google Search
 ```
+
+Access in code via `os.environ.get("KEY_NAME")`. If a NEW key is needed in the future, set via `railway variables set KEY_NAME=value`.
 
 ---
 
