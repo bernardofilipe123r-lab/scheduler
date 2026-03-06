@@ -67,7 +67,7 @@ export async function fetchOverview(params: {
   const sp = new URLSearchParams()
   if (params.brand) sp.set('brand', params.brand)
   if (params.platform) sp.set('platform', params.platform)
-  if (params.days) sp.set('days', params.days.toString())
+  if (params.days !== undefined) sp.set('days', params.days.toString())
   const q = sp.toString()
   return get<OverviewResponse>(`/api/analytics/v2/overview${q ? `?${q}` : ''}`)
 }
