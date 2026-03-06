@@ -144,6 +144,8 @@ CRITICAL_MODULES = [
     ("app.api.content.music_routes", "Music routes"),
     ("app.api.content.trending_music_routes", "Trending music routes"),
     ("app.api.content.manual_routes", "Manual content routes"),
+    ("app.api.content.text_video_routes", "Text-video routes"),
+    ("app.api.content.text_video_design_routes", "Text-video design routes"),
     ("app.api.auth.middleware", "Auth middleware"),
     ("app.api.auth.routes", "Auth routes"),
     ("app.api.auth.user_routes", "User routes"),
@@ -164,6 +166,7 @@ CRITICAL_MODULES = [
     ("app.api.system.settings_routes", "Settings routes"),
     ("app.api.system.logs_routes", "Logs routes"),
     ("app.api.system.legal_routes", "Legal/data-deletion routes"),
+    ("app.api.system.api_usage_routes", "API usage routes"),
     # ── Toby ──
     ("app.api.toby.routes", "Toby routes"),
     ("app.api.toby.schemas", "Toby schemas"),
