@@ -208,10 +208,19 @@ function OverviewTab({
 
   // Group channels by brand, sorted by total views desc
   const brandGroups = useMemo(() => {
-    const brs = data?.brands ?? []
-    if (!brs.length) return [] as [string, typeof brs[0]][]
-    return [...brs].sort((a, b) => b.views - a.views).map(b => [b.brand, b] as [string, typeof b])
-  }, [data?.brands])
+    const chs = data?.channels ?? []
+    if (!chs.length) return [] as [string, typeof chs][]
+    const grouped: Record<string, typeof chs> = {}
+    for (const ch of chs) {
+      if (!grouped[ch.brand]) grouped[ch.brand] = []
+      grouped[ch.brand].push(ch)
+    }
+    return Object.entries(grouped).sort((a, b) => {
+      const aViews = a[1].reduce((s, c) => s + c.views, 0)
+      const bViews = b[1].reduce((s, c) => s + c.views, 0)
+      return bViews - aViews
+    })
+  }, [data?.channels])
 
   // Platform totals for side panel
   const platformTotals = useMemo(() => {
@@ -246,15 +255,16 @@ function OverviewTab({
       {days > 0 && data.period.data_available_days > 0 && data.period.data_available_days < days && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
           <span className="text-amber-600 text-xs font-semibold">
-            Only {data.period.data_available_days} days of tracking data available — numbers below reflect what we have, not the full {days}-day window.
+            Only {data.period.data_available_days} days of tracking data available — numbers reflect what we have, not the full {days}-day window.
           </span>
         </div>
       )}
+
       {/* 4 Stat cards with colored top accent */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {(() => {
           const isAllTime = days === 0
-          const periodLabel = isAllTime ? 'all time' : `${days}d`
+          const periodLabel = isAllTime ? 'All Time' : `${days}d`
           return [
             {
               label: isAllTime ? 'Followers' : `Followers (${periodLabel})`,
@@ -271,7 +281,7 @@ function OverviewTab({
               change: data.changes.views_pct,
               color: '#10B981',
               icon: <Eye className="w-4 h-4" />,
-              sub: isAllTime ? 'total reach' : 'total reach',
+              sub: isAllTime ? 'lifetime total' : 'total reach',
               isGrowth: false,
             },
             {
@@ -280,12 +290,13 @@ function OverviewTab({
               change: data.changes.likes_pct,
               color: '#EC4899',
               icon: <Heart className="w-4 h-4" />,
-              sub: isAllTime ? 'total engagement' : 'total engagement',
+              sub: isAllTime ? 'lifetime total' : 'total engagement',
               isGrowth: false,
             },
             {
               label: 'Eng. Rate',
               value: null,
+              change: undefined,
               color: '#F59E0B',
               icon: <Zap className="w-4 h-4" />,
               sub: 'likes / views',
@@ -366,8 +377,7 @@ function OverviewTab({
             <h3 className="text-sm font-bold text-gray-900 mb-4">By Platform</h3>
             <div className="space-y-4">
               {platformTotals.map((p) => {
-                const totalPlatViews = platformTotals.reduce((s, pt) => s + pt.views, 0)
-                const pct = totalPlatViews > 0 ? (p.views / totalPlatViews) * 100 : 0
+                const pct = data.current.views > 0 ? (p.views / data.current.views) * 100 : 0
                 const pColor = PLATFORM_COLORS[p.platform] || '#6B7280'
                 return (
                   <div key={p.platform}>
@@ -407,17 +417,19 @@ function OverviewTab({
             <span className="text-[11px] text-gray-400">sorted by views · click to expand</span>
           </div>
           <div className="space-y-2">
-            {brandGroups.map(([brandId, brandData]) => {
+            {brandGroups.map(([brandId, channels]) => {
               const bColor = brandColorMap[brandId] || '#6B7280'
               const label = brandLabels[brandId] || brandId
+              // Use period-aware brand data when available, fall back to channel sums
+              const brandData = data?.brands?.find(b => b.brand === brandId)
               const isAllTime = days === 0
-              const displayFollowers = isAllTime ? brandData.followers : brandData.followers_growth
-              const displayViews = brandData.views
-              const displayLikes = brandData.likes
-              const brandChannels = (data?.channels ?? []).filter(c => c.brand === brandId)
-              const activePlatforms = brandChannels.filter(c => c.followers > 0 || c.views > 0)
-              const inactivePlatforms = brandChannels.filter(c => c.followers === 0 && c.views === 0)
-              const brandEngRate = displayViews > 0 ? ((displayLikes / displayViews) * 100).toFixed(2) : '0.00'
+              const totalFollowers = brandData ? brandData.followers : channels.reduce((s, c) => s + c.followers, 0)
+              const totalViews = brandData ? brandData.views : channels.reduce((s, c) => s + c.views, 0)
+              const totalLikes = brandData ? brandData.likes : channels.reduce((s, c) => s + c.likes, 0)
+              const followerGrowth = brandData?.followers_growth ?? 0
+              const activePlatforms = channels.filter(c => c.followers > 0 || c.views > 0)
+              const inactivePlatforms = channels.filter(c => c.followers === 0 && c.views === 0)
+              const brandEngRate = totalViews > 0 ? ((totalLikes / totalViews) * 100).toFixed(2) : '0.00'
               const isExpanded = expandedBrand === brandId
 
               return (
@@ -470,19 +482,21 @@ function OverviewTab({
 
                     {/* Followers */}
                     <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">{isAllTime ? fmt(displayFollowers) : fmtGrowth(displayFollowers)}</p>
-                      <p className="text-[10px] text-gray-400">followers</p>
+                      <p className="text-sm font-bold text-gray-900">
+                        {isAllTime ? fmt(totalFollowers) : fmtGrowth(followerGrowth)}
+                      </p>
+                      <p className="text-[10px] text-gray-400">{isAllTime ? 'followers' : 'new followers'}</p>
                     </div>
 
                     {/* Views */}
                     <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">{fmt(displayViews)}</p>
+                      <p className="text-sm font-bold text-gray-900">{fmt(totalViews)}</p>
                       <p className="text-[10px] text-gray-400">views</p>
                     </div>
 
                     {/* Likes */}
                     <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">{fmt(displayLikes)}</p>
+                      <p className="text-sm font-bold text-gray-900">{fmt(totalLikes)}</p>
                       <p className="text-[10px] text-gray-400">likes</p>
                     </div>
 
@@ -501,7 +515,7 @@ function OverviewTab({
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {/* Expanded platform breakdown (live data from BrandAnalytics) */}
+                  {/* Expanded platform breakdown */}
                   {isExpanded && (
                     <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-3 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                       {activePlatforms.map((c) => {

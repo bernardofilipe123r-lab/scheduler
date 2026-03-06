@@ -2149,7 +2149,7 @@ export function AdminPage() {
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           {/* Header row */}
-          <div className="grid grid-cols-[1fr_160px_auto_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="grid grid-cols-[1fr_100px_auto_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <span>User</span>
             <span>User ID</span>
             <span>Role</span>
@@ -2168,7 +2168,7 @@ export function AdminPage() {
                 key={u.id}
                 onClick={() => setSelectedUser(u)}
                 className={clsx(
-                  'grid grid-cols-[1fr_160px_auto_140px_120px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center',
+                  'grid grid-cols-[1fr_100px_auto_140px_120px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center',
                   u.is_blocked && 'opacity-60',
                   selectedUser?.id === u.id && 'bg-stone-50',
                 )}

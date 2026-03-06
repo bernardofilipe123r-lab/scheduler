@@ -196,9 +196,12 @@ def _process_user(db: Session, state: TobyState):
         if is_enabled("deliberation_loop") and _should_check(state.last_deliberation_at, 1440):  # 24h
             from app.services.toby.agents.pattern_analyzer import pattern_analysis_loop
             from app.services.toby.agents.experiment_designer import design_experiment
-            pattern_analysis_loop(db, user_id)
-            # After pattern analysis, design experiments per brand
+            # Pattern analysis + experiment design per brand
             for brand in user_brands:
+                try:
+                    pattern_analysis_loop(db, user_id, brand.id)
+                except Exception as pa_err:
+                    print(f"[TOBY] Pattern analysis failed for {brand.id}: {pa_err}", flush=True)
                 try:
                     design_experiment(db, user_id, brand.id, "reel")
                 except Exception as exp_err:
