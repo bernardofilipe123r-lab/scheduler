@@ -60,10 +60,6 @@ def run_migrations():
         ]
         for sql in niche_v2_migrations:
             conn.execute(text(sql))
-        # Performance indexes
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_generation_jobs_status ON generation_jobs(status)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_scheduled_reels_status_time ON scheduled_reels(status, scheduled_time)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_brands_user_id ON brands(user_id)"))
         # Toby: add created_by column to scheduled_reels
         conn.execute(text("ALTER TABLE scheduled_reels ADD COLUMN IF NOT EXISTS created_by VARCHAR(20) DEFAULT 'user'"))
         # Seed global prompt settings if they don't exist
@@ -139,8 +135,6 @@ def run_migrations():
                 used_at TIMESTAMPTZ
             )
         """))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at)"))
-
         conn.commit()
 
 
