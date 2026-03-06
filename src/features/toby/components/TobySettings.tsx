@@ -1,10 +1,20 @@
-import { useState } from 'react'
-import { Save, Loader2, AlertTriangle, Film, LayoutGrid, ChevronRight, ArrowLeft, Globe, Plus } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Save, Loader2, AlertTriangle, Film, LayoutGrid, ChevronRight, ArrowLeft, Globe, Plus, Check } from 'lucide-react'
 import { PlatformIcon } from '@/shared/components'
+import { apiClient } from '@/shared/api/client'
 import { useTobyConfig, useUpdateTobyConfig, useTobyReset, useTobyBrandConfigs, useUpdateTobyBrandConfig } from '../hooks'
 import type { TobyBrandConfig } from '../types'
 import { SUPPORTED_PLATFORMS, PLATFORM_META, SUPPORTED_CONTENT_TYPES, CONTENT_TYPE_META } from '@/shared/constants/platforms'
 import type { Platform, ContentType, EnabledPlatformsConfig } from '@/shared/constants/platforms'
+
+/** Platform brand colors for active state backgrounds. */
+const PLATFORM_COLORS: Record<Platform, string> = {
+  instagram: '#E4405F',
+  facebook: '#1877F2',
+  youtube: '#FF0000',
+  threads: '#000000',
+  tiktok: '#000000',
+}
 
 /** Deep-equal compare two EnabledPlatformsConfig values. */
 function platformConfigsEqual(a: EnabledPlatformsConfig, b: EnabledPlatformsConfig): boolean {
@@ -18,18 +28,26 @@ function platformConfigsEqual(a: EnabledPlatformsConfig, b: EnabledPlatformsConf
   return true
 }
 
-/** Deterministic brand accent colors derived from brand ID hash. */
+/** Fallback brand accent colors derived from brand ID hash. */
 const BRAND_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
   '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6',
 ]
 
-function getBrandColor(brandId: string): string {
+function hashBrandColor(brandId: string): string {
   let hash = 0
   for (let i = 0; i < brandId.length; i++) {
     hash = ((hash << 5) - hash + brandId.charCodeAt(i)) | 0
   }
   return BRAND_COLORS[Math.abs(hash) % BRAND_COLORS.length]
+}
+
+function getBrandColor(brand: TobyBrandConfig): string {
+  return brand.brand_color || hashBrandColor(brand.brand_id)
+}
+
+function getBrandLogoUrl(brand: TobyBrandConfig, logos: Record<string, string>): string | null {
+  return logos[brand.brand_id] || null
 }
 
 export function TobySettings() {
@@ -44,7 +62,29 @@ export function TobySettings() {
   const [form, setForm] = useState<Record<string, number | boolean | string>>({})
   const [brandForms, setBrandForms] = useState<Record<string, Record<string, number | boolean | string>>>({})
   const [platformForms, setPlatformForms] = useState<Record<string, EnabledPlatformsConfig>>({})
+  const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
   const isLoading = configLoading || brandsLoading
+
+  const brandConfigs = brandConfigsData?.brands ?? []
+
+  // Fetch brand logos
+  const brandIdKey = brandConfigs.map(b => b.brand_id).join(',')
+  useEffect(() => {
+    if (!brandConfigs.length) return
+    const fetchLogos = async () => {
+      const logos: Record<string, string> = {}
+      for (const bc of brandConfigs) {
+        try {
+          const data = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${bc.brand_id}/theme`)
+          if (data.theme?.logo) {
+            logos[bc.brand_id] = data.theme.logo.startsWith('http') ? data.theme.logo : `/brand-logos/${data.theme.logo}`
+          }
+        } catch { /* ignore */ }
+      }
+      setBrandLogos(logos)
+    }
+    fetchLogos()
+  }, [brandIdKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading || !config) {
     return (
@@ -60,8 +100,6 @@ export function TobySettings() {
       </div>
     )
   }
-
-  const brandConfigs = brandConfigsData?.brands ?? []
 
   const getVal = (key: string, fallback: number | boolean | string) => form[key] ?? fallback
   const getBrandVal = (brandId: string, key: string, fallback: number | boolean | string) =>
@@ -280,10 +318,12 @@ export function TobySettings() {
           <div className="px-5 pb-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {brandConfigs.map(bc => {
-                const color = getBrandColor(bc.brand_id)
-                const connectedCount = SUPPORTED_PLATFORMS.filter(
+                const color = getBrandColor(bc)
+                const logoUrl = getBrandLogoUrl(bc, brandLogos)
+                const connectedPlatforms = SUPPORTED_PLATFORMS.filter(
                   p => bc[`has_${p}` as keyof TobyBrandConfig] === true,
-                ).length
+                )
+                const connectedCount = connectedPlatforms.length
                 const reelSlots = getBrandVal(bc.brand_id, 'reel_slots_per_day', bc.reel_slots_per_day) as number
                 const postSlots = getBrandVal(bc.brand_id, 'post_slots_per_day', bc.post_slots_per_day) as number
                 const enabled = getBrandVal(bc.brand_id, 'enabled', bc.enabled) as boolean
@@ -292,28 +332,54 @@ export function TobySettings() {
                   <button
                     key={bc.brand_id}
                     onClick={() => setSelectedBrand(bc.brand_id)}
-                    className="relative bg-white border border-gray-200 rounded-xl p-4 text-left hover:border-gray-300 hover:shadow-sm transition-all group overflow-hidden"
+                    className={`relative bg-white border rounded-xl p-4 text-left hover:shadow-md transition-all group overflow-hidden ${
+                      enabled ? 'border-gray-200 hover:border-gray-300' : 'border-gray-100 opacity-60'
+                    }`}
                   >
+                    {/* Top accent bar */}
                     <div className="absolute top-0 left-0 right-0 h-1 rounded-t-xl" style={{ backgroundColor: color }} />
-                    <div className="flex items-start justify-between mt-1">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                          style={{ backgroundColor: color }}
-                        >
-                          {bc.display_name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{bc.display_name}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {!enabled
-                              ? 'Disabled'
-                              : `${reelSlots}r · ${postSlots}c · ${connectedCount}p`
-                            }
-                          </p>
+
+                    <div className="flex items-center gap-3 mt-1">
+                      {/* Brand avatar / logo */}
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
+                        style={{ backgroundColor: color }}
+                      >
+                        {logoUrl ? (
+                          <img src={logoUrl} alt={bc.display_name} className="w-full h-full object-contain" />
+                        ) : (
+                          <span className="text-sm font-bold text-white">
+                            {bc.display_name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{bc.display_name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {!enabled ? (
+                            <span className="text-[11px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Disabled</span>
+                          ) : (
+                            <>
+                              <span className="text-[11px] text-gray-500 font-medium">{reelSlots}r &middot; {postSlots}c</span>
+                              <div className="flex -space-x-1">
+                                {connectedPlatforms.slice(0, 4).map(p => (
+                                  <div key={p} className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center ring-1 ring-white">
+                                    <PlatformIcon platform={p} className="w-2.5 h-2.5 text-gray-500" />
+                                  </div>
+                                ))}
+                                {connectedCount > 4 && (
+                                  <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center ring-1 ring-white text-[8px] font-bold text-gray-500">
+                                    +{connectedCount - 4}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors flex-shrink-0 mt-1" />
+
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                     </div>
                   </button>
                 )
@@ -385,6 +451,7 @@ export function TobySettings() {
               }
               return { ...prev, [selectedBrandConfig.brand_id]: platforms }
             })}
+            logoUrl={getBrandLogoUrl(selectedBrandConfig, brandLogos)}
           />
         )}
       </div>
@@ -405,6 +472,7 @@ function BrandDetailPanel({
   onChange,
   editedPlatforms,
   onPlatformChange,
+  logoUrl,
 }: {
   brand: TobyBrandConfig
   onBack: () => void
@@ -414,11 +482,12 @@ function BrandDetailPanel({
   onChange: (key: string, val: number | boolean | string) => void
   editedPlatforms: EnabledPlatformsConfig | undefined
   onPlatformChange: (platforms: EnabledPlatformsConfig) => void
+  logoUrl: string | null
 }) {
   const enabled = getVal('enabled', brand.enabled) as boolean
   const reelSlots = getVal('reel_slots_per_day', brand.reel_slots_per_day) as number
   const postSlots = getVal('post_slots_per_day', brand.post_slots_per_day) as number
-  const color = getBrandColor(brand.brand_id)
+  const color = getBrandColor(brand)
 
   const connectedPlatforms = SUPPORTED_PLATFORMS.filter(
     (p) => brand[`has_${p}` as keyof TobyBrandConfig] === true,
@@ -458,7 +527,7 @@ function BrandDetailPanel({
 
   return (
     <div className="px-5 pb-5 animate-slide-in">
-      {/* Header */}
+      {/* Header with logo */}
       <div className="flex items-center gap-3 mb-5">
         <button
           onClick={onBack}
@@ -467,16 +536,33 @@ function BrandDetailPanel({
           <ArrowLeft className="w-4 h-4 text-gray-500" />
         </button>
         <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+          className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0"
           style={{ backgroundColor: color }}
         >
-          {brand.display_name.charAt(0).toUpperCase()}
+          {logoUrl ? (
+            <img src={logoUrl} alt={brand.display_name} className="w-full h-full object-contain" />
+          ) : (
+            <span className="text-sm font-bold text-white">
+              {brand.display_name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+            </span>
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900 truncate">{brand.display_name}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {connectedPlatforms.map(p => (
+              <div
+                key={p}
+                className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center"
+                title={PLATFORM_META[p].label}
+              >
+                <PlatformIcon platform={p} className="w-2.5 h-2.5 text-gray-500" />
+              </div>
+            ))}
+          </div>
         </div>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+          enabled ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-gray-100 text-gray-500'
         }`}>
           {enabled ? 'Active' : 'Disabled'}
         </span>
@@ -502,13 +588,13 @@ function BrandDetailPanel({
                   key={val}
                   type="button"
                   onClick={() => onChange('reel_format', val)}
-                  className={`flex-1 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                  className={`flex-1 rounded-lg border px-3 py-2.5 text-left transition-all ${
                     active
-                      ? 'border-primary-500 bg-primary-50'
+                      ? 'border-blue-300 bg-blue-50 shadow-sm shadow-blue-100'
                       : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
                 >
-                  <p className={`text-sm font-medium ${active ? 'text-primary-700' : 'text-gray-700'}`}>{label}</p>
+                  <p className={`text-sm font-medium ${active ? 'text-blue-700' : 'text-gray-700'}`}>{label}</p>
                   <p className="text-[11px] text-gray-400 mt-0.5">{desc}</p>
                 </button>
               )
@@ -545,63 +631,65 @@ function BrandDetailPanel({
         )}
       </div>
 
-      {/* Platform publishing */}
+      {/* Platform publishing — redesigned */}
       {enabled && activeContentTypes.length > 0 && (
         <div className="mt-5">
-          <div className="flex items-center gap-2 mb-2.5">
+          <div className="flex items-center gap-2 mb-3">
             <Globe className="w-4 h-4 text-gray-400" />
-            <p className="text-sm font-medium text-gray-700">Platform Publishing</p>
+            <p className="text-sm font-semibold text-gray-700">Platform Publishing</p>
           </div>
-          <p className="text-xs text-gray-400 mb-3">
-            Choose which platforms Toby publishes to for each content type
-          </p>
 
           <div className="space-y-4">
             {activeContentTypes.map((ct) => {
               const meta = CONTENT_TYPE_META[ct]
               const ctPlatforms = getPlatformsForType(ct)
               return (
-                <div key={ct}>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    {meta.icon} {meta.label}
+                <div key={ct} className="bg-slate-50 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <span>{meta.icon}</span> {meta.label}
                   </p>
-                  <div className="space-y-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {SUPPORTED_PLATFORMS.map((p) => {
                       const connected = connectedPlatforms.includes(p)
                       const active = connected && ctPlatforms.includes(p)
                       const pMeta = PLATFORM_META[p]
+                      const platformColor = PLATFORM_COLORS[p]
                       return (
                         <button
                           key={p}
                           type="button"
                           onClick={() => togglePlatformForType(ct, p)}
                           disabled={!connected}
-                          className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-left transition-colors ${
+                          className={`relative flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl text-center transition-all ${
                             !connected
-                              ? 'opacity-40 cursor-not-allowed bg-gray-50'
+                              ? 'opacity-30 cursor-not-allowed bg-gray-100'
                               : active
-                              ? 'bg-blue-50 border border-blue-200'
-                              : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                              ? 'bg-white shadow-sm ring-2 ring-offset-1'
+                              : 'bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm'
                           }`}
+                          style={active ? { '--tw-ring-color': platformColor } as React.CSSProperties : undefined}
                         >
-                          <PlatformIcon platform={p} className={`w-4 h-4 ${active ? 'text-blue-700' : 'text-gray-500'}`} />
-                          <span className={`text-sm font-medium flex-1 ${active ? 'text-blue-700' : 'text-gray-600'}`}>
+                          {/* Checkmark badge */}
+                          {active && (
+                            <div
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: platformColor }}
+                            >
+                              <Check className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          )}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                            active ? 'text-white' : 'bg-gray-100 text-gray-500'
+                          }`}
+                            style={active ? { backgroundColor: platformColor } : undefined}
+                          >
+                            <PlatformIcon platform={p} className="w-4 h-4" />
+                          </div>
+                          <span className={`text-xs font-medium ${active ? 'text-gray-900' : 'text-gray-500'}`}>
                             {pMeta.label}
                           </span>
-                          {connected ? (
-                            <div
-                              className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-                                active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
-                              }`}
-                            >
-                              {active && (
-                                <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
-                                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">Not connected</span>
+                          {!connected && (
+                            <span className="text-[9px] text-gray-400">Not connected</span>
                           )}
                         </button>
                       )

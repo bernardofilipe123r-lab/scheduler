@@ -49,6 +49,7 @@ export interface DesignSettings {
   thumbnail_title_size: number
   thumbnail_title_max_lines: number
   thumbnail_title_padding: number
+  thumbnail_logo_size: number
   thumbnail_divider_style: string
   thumbnail_overlay_opacity: number
   // Reel text
@@ -60,6 +61,9 @@ export interface DesignSettings {
   reel_text_shadow: boolean
   // Reel frame layout
   reel_section_gap: number
+  reel_gap_header_text: number
+  reel_gap_text_media: number
+  reel_logo_size: number
   reel_padding_top: number
   reel_padding_bottom: number
   reel_padding_left: number

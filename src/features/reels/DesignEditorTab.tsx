@@ -1,16 +1,51 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Loader2, Save, BadgeCheck, Image, Film } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
 import type { DesignSettings } from './types'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
-const FONT_OPTIONS = ['Anton', 'Inter', 'Oswald', 'Montserrat', 'Bebas Neue', 'Roboto Condensed', 'Poppins']
+const FONT_OPTIONS = ['Anton', 'Impact', 'Inter', 'Oswald', 'Montserrat', 'Bebas Neue', 'Roboto Condensed', 'Poppins']
 const DIVIDER_OPTIONS = ['line_with_logo', 'gradient', 'none']
 
-const EXAMPLE_REEL_TEXT = 'Viral Toby is legendary in AI automation, quietly orchestrating autonomous content empires while most creators still schedule posts. Its agents observe, learn, generate, test, and publish across platforms nonstop, turning trends into viral assets at machine speed, with the system expected to scale brands effortlessly through data-driven strategies, adaptive content pipelines, predictive trend scouting, continuous experimentation learning.'
+/* ─── Dynamic example text that stays coherent at any word count ─── */
+const EXAMPLE_SENTENCES = [
+  'Viral Toby is legendary in AI automation.',
+  'It quietly orchestrates autonomous content empires while most creators still schedule posts manually.',
+  'Its agents observe, learn, generate, test, and publish across platforms nonstop.',
+  'Trends become viral assets at machine speed.',
+  'The system scales brands effortlessly through data-driven strategies.',
+  'Adaptive content pipelines discover emerging topics before they peak.',
+  'Predictive trend scouting identifies viral opportunities across every niche.',
+  'Continuous experimentation drives learning and optimization.',
+  'Each piece of content is scored across five quality dimensions.',
+  'Only the highest-scoring content reaches the audience.',
+  'Performance metrics feed back into strategy decisions automatically.',
+  'The platform adapts to any brand identity and tone.',
+  'Content DNA defines every visual and textual choice.',
+  'Publishing happens simultaneously across Instagram, TikTok, YouTube, Threads, and Facebook.',
+  'The entire workflow runs autonomously, requiring zero manual intervention.',
+  'Brands grow while their owners sleep.',
+  'Every caption, hashtag, and visual is optimized for maximum engagement.',
+  'The AI learns from each publish cycle to improve the next.',
+]
 
-// Reusable slider row: label + slider + value badge
+function buildExampleText(targetWords: number): string {
+  const result: string[] = []
+  let count = 0
+  let i = 0
+  while (count < targetWords && i < EXAMPLE_SENTENCES.length * 3) {
+    const sentence = EXAMPLE_SENTENCES[i % EXAMPLE_SENTENCES.length]
+    const words = sentence.split(/\s+/).length
+    if (count + words > targetWords + 5 && count > 0) break
+    result.push(sentence)
+    count += words
+    i++
+  }
+  return result.join(' ')
+}
+
+// Reusable slider row
 function SliderRow({ label, value, min, max, step = 1, unit = 'px', onChange }: {
   label: string; value: number; min: number; max: number; step?: number; unit?: string
   onChange: (v: number) => void
@@ -30,7 +65,7 @@ function SliderRow({ label, value, min, max, step = 1, unit = 'px', onChange }: 
   )
 }
 
-// Color picker row: label + picker + hex
+// Color picker row
 function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -45,75 +80,101 @@ function ColorRow({ label, value, onChange }: { label: string; value: string; on
 
 /* ─────────── PREVIEW SCALE ───────────
  * Real canvas: 1080×1920
- * We render at a scale that fits the sidebar without scrolling.
- * The container is scrollable with overflow-y-auto just in case.
+ * Preview at ~2/3 of previous size (was 340, now 227).
  */
 const CANVAS_W = 1080
 const CANVAS_H = 1920
-// Preview fits within ~340px wide column
-const PREVIEW_W = 340
-const SCALE = PREVIEW_W / CANVAS_W  // ≈ 0.315
+const PREVIEW_W = 227
+const SCALE = PREVIEW_W / CANVAS_W  // ≈ 0.21
 
 /* ──────────────────────────────────────────────
- * THUMBNAIL PREVIEW (1080×1920 scaled)
+ * THUMBNAIL PREVIEW — Gold title, logo-in-divider, dramatic BG
  * ────────────────────────────────────────────── */
 function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
-  const titleColor = form.thumbnail_title_color || '#FFFFFF'
+  const titleColor = form.thumbnail_title_color || '#FFD700'
   const titleSize = form.thumbnail_title_size ?? 72
   const titlePadding = form.thumbnail_title_padding ?? 40
   const dividerStyle = form.thumbnail_divider_style || 'line_with_logo'
   const overlayOpacity = (form.thumbnail_overlay_opacity ?? 60) / 100
   const titleFont = form.thumbnail_title_font || 'Anton'
+  const logoSize = form.thumbnail_logo_size ?? 200
 
   const s = SCALE
   const pw = CANVAS_W * s
   const ph = CANVAS_H * s
+  const scaledLogo = logoSize * s
 
   return (
     <div
       className="rounded-xl overflow-hidden shadow-lg border border-gray-200 relative mx-auto"
       style={{ width: pw, height: ph, fontFamily: titleFont }}
     >
-      {/* Full-height background image */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-500 to-gray-700" />
-
-      {/* Dark gradient overlay from bottom to top */}
+      {/* Dramatic background with Ken Burns panning */}
       <div className="absolute inset-0" style={{
-        background: `linear-gradient(to top, rgba(0,0,0,${overlayOpacity}) 0%, rgba(0,0,0,${overlayOpacity * 0.6}) 40%, rgba(0,0,0,${overlayOpacity * 0.2}) 70%, transparent 100%)`,
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #533483 75%, #1a1a2e 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'thumbKenBurns 8s ease-in-out infinite alternate',
       }} />
 
-      {/* Content positioned at bottom */}
+      {/* Dark gradient overlay from bottom */}
+      <div className="absolute inset-0" style={{
+        background: `linear-gradient(to top, rgba(0,0,0,${overlayOpacity}) 0%, rgba(0,0,0,${overlayOpacity * 0.7}) 35%, rgba(0,0,0,${overlayOpacity * 0.3}) 65%, transparent 100%)`,
+      }} />
+
+      {/* Content pinned to bottom */}
       <div className="absolute inset-x-0 bottom-0 flex flex-col items-center"
         style={{ padding: `${titlePadding * s}px` }}>
-        {/* Logo bar */}
-        <div className="mb-2 flex justify-center">
-          <img src={vaLogo} alt="Logo" className="rounded-md" style={{ width: 30 * s, height: 30 * s }} />
+
+        {/* Brand name with hairlines: ── VIRAL TOBY ── */}
+        <div className="flex items-center w-full" style={{ gap: `${6 * s}px`, marginBottom: `${8 * s}px` }}>
+          <div className="flex-1 h-px" style={{ background: 'rgba(212,160,23,0.4)' }} />
+          <span className="uppercase tracking-widest whitespace-nowrap" style={{
+            color: 'rgba(212,160,23,0.7)',
+            fontSize: `${18 * s}px`,
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            letterSpacing: '0.15em',
+          }}>Viral Toby</span>
+          <div className="flex-1 h-px" style={{ background: 'rgba(212,160,23,0.4)' }} />
         </div>
 
-        {/* Divider */}
+        {/* Divider: logo-in-line — hairline breaks around centered logo */}
         {dividerStyle !== 'none' && (
-          <div className="w-full mb-2">
+          <div className="w-full flex items-center" style={{ gap: `${4 * s}px`, marginBottom: `${8 * s}px` }}>
             {dividerStyle === 'line_with_logo' ? (
-              <div className="h-[1px] bg-white/30 relative flex items-center justify-center">
-                <div className="rounded-full bg-white/40 absolute" style={{ width: 12 * s, height: 12 * s }} />
-              </div>
+              <>
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.3)' }} />
+                <img src={vaLogo} alt="Logo" style={{
+                  width: scaledLogo,
+                  height: scaledLogo,
+                  borderRadius: `${4 * s}px`,
+                }} />
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.3)' }} />
+              </>
             ) : (
-              <div className="h-[1px] bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
             )}
           </div>
         )}
 
-        {/* Title text */}
-        <p className="text-center font-black leading-tight break-words w-full uppercase"
+        {/* Title — gold, ultra-bold condensed caps */}
+        <p className="text-center font-black break-words w-full uppercase"
           style={{
             color: titleColor,
             fontSize: `${titleSize * s}px`,
-            lineHeight: 1.1,
-            textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+            lineHeight: 0.95,
+            letterSpacing: '-0.02em',
+            textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(255,215,0,0.15)',
           }}>
           ELON MUSK{'\n'}JUST BOUGHT{'\n'}TIKTOK
         </p>
       </div>
+
+      <style>{`
+        @keyframes thumbKenBurns {
+          0% { background-position: 0% 0%; transform: scale(1); }
+          100% { background-position: 100% 100%; transform: scale(1.05); }
+        }
+      `}</style>
     </div>
   )
 }

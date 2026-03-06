@@ -26,6 +26,8 @@ export interface TobyBrandConfig {
   has_youtube: boolean
   has_threads: boolean
   has_tiktok: boolean
+  logo_path?: string | null
+  brand_color?: string | null
 }
 
 export interface TobyBufferBrand {

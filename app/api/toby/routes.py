@@ -601,6 +601,8 @@ def get_brand_configs(
             "post_slots_per_day": c.post_slots_per_day,
             "reel_format": c.reel_format or "text_based",
             "enabled_platforms": c.enabled_platforms,  # None = all connected
+            "logo_path": brand.logo_path,
+            "brand_color": brand.colors.get("primary") if isinstance(brand.colors, dict) else None,
             # Dynamic credential checks from platform registry
             **{f"has_{p}": check(brand) for p, check in PLATFORM_CREDENTIAL_CHECKS.items()},
             "has_youtube": brand.id in yt_connected_brands,
@@ -664,6 +666,8 @@ def update_brand_config(
             cleaned = [p for p in platform_list if p in SUPPORTED_PLATFORMS_SET]
             sanitised[ct_key] = cleaned
         cfg.enabled_platforms = sanitised if sanitised else None
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(cfg, "enabled_platforms")
 
     cfg.updated_at = datetime.now(timezone.utc)
     db.commit()

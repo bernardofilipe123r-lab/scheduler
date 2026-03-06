@@ -30,6 +30,9 @@ class DesignUpdate(BaseModel):
 
     # Reel frame layout
     reel_section_gap: Optional[int] = Field(None, ge=0, le=120)
+    reel_gap_header_text: Optional[int] = Field(None, ge=0, le=200)
+    reel_gap_text_media: Optional[int] = Field(None, ge=0, le=200)
+    reel_logo_size: Optional[int] = Field(None, ge=40, le=300)
     reel_padding_top: Optional[int] = Field(None, ge=0, le=600)
     reel_padding_bottom: Optional[int] = Field(None, ge=0, le=200)
     reel_padding_left: Optional[int] = Field(None, ge=0, le=200)
@@ -50,6 +53,7 @@ class DesignUpdate(BaseModel):
     thumbnail_image_ratio: Optional[float] = Field(None, ge=0.3, le=0.8)
     thumbnail_divider_style: Optional[str] = Field(None, max_length=50)
     thumbnail_overlay_opacity: Optional[int] = Field(None, ge=0, le=100)
+    thumbnail_logo_size: Optional[int] = Field(None, ge=40, le=400)
 
 
 @router.get("")

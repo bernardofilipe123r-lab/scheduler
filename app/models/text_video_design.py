@@ -28,6 +28,9 @@ class TextVideoDesign(Base):
 
     # Reel frame layout (brand header + text + image)
     reel_section_gap = Column(Integer, default=40)
+    reel_gap_header_text = Column(Integer, default=40)
+    reel_gap_text_media = Column(Integer, default=40)
+    reel_logo_size = Column(Integer, default=120)
     reel_padding_top = Column(Integer, default=320)
     reel_padding_bottom = Column(Integer, default=40)
     reel_padding_left = Column(Integer, default=85)
@@ -48,6 +51,7 @@ class TextVideoDesign(Base):
     thumbnail_image_ratio = Column(Float, default=0.6)
     thumbnail_divider_style = Column(String(30), default="line_with_logo")
     thumbnail_overlay_opacity = Column(Integer, default=60)
+    thumbnail_logo_size = Column(Integer, default=200)
 
     created_at = Column(TIMESTAMP(timezone=True), server_default="now()")
     updated_at = Column(TIMESTAMP(timezone=True), server_default="now()")
@@ -69,6 +73,9 @@ class TextVideoDesign(Base):
             "reel_total_duration": self.reel_total_duration,
             "black_fade_duration": self.black_fade_duration,
             "reel_section_gap": self.reel_section_gap,
+            "reel_gap_header_text": self.reel_gap_header_text,
+            "reel_gap_text_media": self.reel_gap_text_media,
+            "reel_logo_size": self.reel_logo_size,
             "reel_padding_top": self.reel_padding_top,
             "reel_padding_bottom": self.reel_padding_bottom,
             "reel_padding_left": self.reel_padding_left,
@@ -87,4 +94,5 @@ class TextVideoDesign(Base):
             "thumbnail_image_ratio": self.thumbnail_image_ratio,
             "thumbnail_divider_style": self.thumbnail_divider_style,
             "thumbnail_overlay_opacity": self.thumbnail_overlay_opacity,
+            "thumbnail_logo_size": self.thumbnail_logo_size,
         }
