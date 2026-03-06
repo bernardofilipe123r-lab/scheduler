@@ -95,7 +95,7 @@ function Calendar() {
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('all')
 
   // Upload form state
-  const [selectedBrand, setSelectedBrand] = useState<string>(brands[0]?.id || '')
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
   const [caption, setCaption] = useState('')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -198,7 +198,7 @@ function Calendar() {
   const isTextOnly = selectedPlatforms.length > 0 && selectedPlatforms.every(p => p === 'threads')
 
   const handleUpload = async () => {
-    if (!effectiveBrand || !caption || !scheduledTime || selectedPlatforms.length === 0) {
+    if (effectiveBrands.length === 0 || !caption || !scheduledTime || selectedPlatforms.length === 0) {
       toast.error('Please fill in all required fields')
       return
     }
@@ -211,20 +211,37 @@ function Calendar() {
     try {
       setUploadLoading(true)
 
-      const formData = new FormData()
-      formData.append('brand_id', effectiveBrand)
-      formData.append('caption', caption)
-      formData.append('platforms', JSON.stringify(selectedPlatforms))
-      formData.append('scheduled_time', scheduledTime)
-      if (uploadedFile) {
-        formData.append('file', uploadedFile)
+      const errors: string[] = []
+      let succeeded = 0
+
+      for (const brandId of effectiveBrands) {
+        try {
+          const formData = new FormData()
+          formData.append('brand_id', brandId)
+          formData.append('caption', caption)
+          formData.append('platforms', JSON.stringify(selectedPlatforms))
+          formData.append('scheduled_time', scheduledTime)
+          if (uploadedFile) {
+            formData.append('file', uploadedFile)
+          }
+
+          await apiClient.post('/reels/manual/upload-and-schedule', formData)
+          succeeded++
+        } catch (error: any) {
+          const brandName = getBrandName(brandId)
+          errors.push(`${brandName}: ${error.response?.data?.detail || 'Failed'}`)
+        }
       }
 
-      await apiClient.post('/reels/manual/upload-and-schedule', formData)
+      if (succeeded > 0) {
+        const label = isTextOnly ? 'Text post' : contentType === 'reel' ? 'Reel' : 'Post'
+        const brandWord = succeeded === 1 ? 'brand' : 'brands'
+        toast.success(`${label} scheduled for ${succeeded} ${brandWord}!`)
+      }
+      if (errors.length > 0) {
+        toast.error(`Failed for: ${errors.join('; ')}`)
+      }
 
-      const label = isTextOnly ? 'Text post' : contentType === 'reel' ? 'Reel' : 'Post'
-      toast.success(`${label} scheduled successfully!`)
-      
       // Reset form
       setUploadedFile(null)
       setUploadedFileName('')
@@ -233,6 +250,7 @@ function Calendar() {
       setScheduledTime('')
       setMediaDimensionWarning(null)
       setSelectedPlatforms([])
+      setSelectedBrands([])
       setShowUploadModal(false)
 
       // Refresh calendar data
@@ -326,12 +344,15 @@ function Calendar() {
     })
   }, [brands, selectedPlatforms, connectionsData])
 
-  // Auto-select brand when only one is eligible
-  const effectiveBrand = useMemo(() => {
-    if (eligibleBrands.length === 1) return eligibleBrands[0].id
-    if (eligibleBrands.find(b => b.id === selectedBrand)) return selectedBrand
-    return eligibleBrands[0]?.id || ''
-  }, [eligibleBrands, selectedBrand])
+  // Effective brands: intersection of user picks + eligible brands
+  const effectiveBrands = useMemo(() => {
+    if (eligibleBrands.length === 0) return []
+    // If user hasn't explicitly picked any, auto-select all eligible
+    if (selectedBrands.length === 0) return eligibleBrands.map(b => b.id)
+    // Otherwise keep only the ones that are still eligible
+    const eligible = new Set(eligibleBrands.map(b => b.id))
+    return selectedBrands.filter(id => eligible.has(id))
+  }, [eligibleBrands, selectedBrands])
 
   // Platform toggle handler
   const handlePlatformToggle = useCallback((platform: string) => {
@@ -1110,13 +1131,15 @@ function Calendar() {
                 </div>
               </div>
 
-              {/* Step 2: Brand Selection — filtered by platform */}
+              {/* Step 2: Brand Selection — multi-select, filtered by platform */}
               {selectedPlatforms.length > 0 && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Brand <span className="text-red-500">*</span>
-                    {eligibleBrands.length === 1 && (
-                      <span className="ml-2 text-xs font-normal text-gray-500">(auto-selected — only brand with {selectedPlatforms.join(' + ')})</span>
+                    {eligibleBrands.length > 0 && (
+                      <span className="ml-2 text-xs font-normal text-gray-500">
+                        ({effectiveBrands.length} of {eligibleBrands.length} selected)
+                      </span>
                     )}
                   </label>
                   {eligibleBrands.length === 0 ? (
@@ -1124,28 +1147,50 @@ function Calendar() {
                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
                       <span className="text-sm">No brand has all selected platforms connected.</span>
                     </div>
-                  ) : eligibleBrands.length === 1 ? (
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: eligibleBrands[0].color }} />
-                      <span className="text-sm font-medium text-gray-900">{eligibleBrands[0].label}</span>
-                    </div>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {eligibleBrands.map(brand => (
+                    <div>
+                      {/* Select all / Deselect all toggle */}
+                      {eligibleBrands.length > 1 && (
                         <button
-                          key={brand.id}
-                          onClick={() => setSelectedBrand(brand.id)}
-                          className={clsx(
-                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border-2',
-                            effectiveBrand === brand.id
-                              ? 'border-emerald-500 bg-emerald-50 text-gray-900 shadow-sm'
-                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
-                          )}
+                          type="button"
+                          onClick={() => {
+                            const allSelected = eligibleBrands.every(b => effectiveBrands.includes(b.id))
+                            setSelectedBrands(allSelected ? [] : eligibleBrands.map(b => b.id))
+                          }}
+                          className="text-xs text-emerald-600 hover:text-emerald-700 font-medium mb-2"
                         >
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: brand.color }} />
-                          {brand.label}
+                          {eligibleBrands.every(b => effectiveBrands.includes(b.id)) ? 'Deselect all' : 'Select all'}
                         </button>
-                      ))}
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {eligibleBrands.map(brand => {
+                          const isSelected = effectiveBrands.includes(brand.id)
+                          return (
+                            <button
+                              key={brand.id}
+                              onClick={() => {
+                                setSelectedBrands(prev => {
+                                  // If user hasn't explicitly chosen yet, start from the current effective set
+                                  const base = prev.length === 0 ? eligibleBrands.map(b => b.id) : prev
+                                  return isSelected
+                                    ? base.filter(id => id !== brand.id)
+                                    : [...base, brand.id]
+                                })
+                              }}
+                              className={clsx(
+                                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border-2',
+                                isSelected
+                                  ? 'border-emerald-500 bg-emerald-50 text-gray-900 shadow-sm'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                              )}
+                            >
+                              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: brand.color }} />
+                              {brand.label}
+                              {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1270,12 +1315,15 @@ function Calendar() {
 
             {/* Footer */}
             <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 max-w-[60%] truncate">
                 {selectedPlatforms.length > 0 && (
                   <span>{selectedPlatforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')}</span>
                 )}
-                {effectiveBrand && selectedPlatforms.length > 0 && (
-                  <span> · {getBrandName(effectiveBrand)}</span>
+                {effectiveBrands.length > 0 && selectedPlatforms.length > 0 && (
+                  <span> · {effectiveBrands.length === 1
+                    ? getBrandName(effectiveBrands[0])
+                    : `${effectiveBrands.length} brands`
+                  }</span>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -1291,7 +1339,7 @@ function Calendar() {
                   disabled={
                     uploadLoading ||
                     selectedPlatforms.length === 0 ||
-                    !effectiveBrand ||
+                    effectiveBrands.length === 0 ||
                     !caption ||
                     !scheduledTime ||
                     (!isTextOnly && !uploadedFile)
@@ -1299,7 +1347,12 @@ function Calendar() {
                   className="inline-flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {uploadLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {uploadLoading ? 'Scheduling...' : 'Schedule Post'}
+                  {uploadLoading
+                    ? 'Scheduling...'
+                    : effectiveBrands.length > 1
+                      ? `Schedule for ${effectiveBrands.length} Brands`
+                      : 'Schedule Post'
+                  }
                 </button>
               </div>
             </div>
