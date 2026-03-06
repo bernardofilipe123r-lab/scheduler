@@ -18,9 +18,9 @@ export interface OverviewTotals {
 }
 
 export interface OverviewChanges {
-  followers_pct: number
-  views_pct: number
-  likes_pct: number
+  followers_pct: number | null
+  views_pct: number | null
+  likes_pct: number | null
 }
 
 export interface DailyPoint {

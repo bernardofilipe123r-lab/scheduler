@@ -48,39 +48,108 @@ async def analytics_overview(
     current_start = now - timedelta(days=days)
     prev_start = current_start - timedelta(days=days)
 
-    def _period_totals(start: datetime, end: datetime):
-        """Get latest snapshot per brand/platform/day, then sum."""
-        q = db.query(
-            AnalyticsSnapshot.brand,
-            AnalyticsSnapshot.platform,
+    def _windowed_totals(start: datetime, end: datetime):
+        """
+        Approximate cumulative totals by summing non-overlapping 7-day windows.
+
+        Snapshots store rolling 7-day metrics (views_last_7_days,
+        likes_last_7_days).  Naively summing all snapshots vastly overcounts.
+        Instead we:
+          1. De-duplicate to one row per (brand, platform, day).
+          2. Number the days per (brand, platform) from most-recent.
+          3. Sample every 7th day so the rolling windows don't overlap.
+
+        Returns (totals_dict, brands_list).
+        """
+        has = db.query(AnalyticsSnapshot.id).filter(
+            AnalyticsSnapshot.user_id == user_id,
+            AnalyticsSnapshot.snapshot_at >= start,
+            AnalyticsSnapshot.snapshot_at < end,
+        ).first()
+        if not has:
+            return {"followers": 0, "views": 0, "likes": 0}, []
+
+        # Step 1 — daily dedup: one row per (brand, platform, day)
+        day_expr = func.date_trunc('day', AnalyticsSnapshot.snapshot_at)
+        day_q = db.query(
+            day_expr.label("day"),
+            AnalyticsSnapshot.brand.label("brand"),
+            AnalyticsSnapshot.platform.label("platform"),
             func.max(AnalyticsSnapshot.followers_count).label("followers"),
-            func.sum(AnalyticsSnapshot.views_last_7_days).label("views"),
-            func.sum(AnalyticsSnapshot.likes_last_7_days).label("likes"),
+            func.max(AnalyticsSnapshot.views_last_7_days).label("views"),
+            func.max(AnalyticsSnapshot.likes_last_7_days).label("likes"),
         ).filter(
             AnalyticsSnapshot.user_id == user_id,
             AnalyticsSnapshot.snapshot_at >= start,
             AnalyticsSnapshot.snapshot_at < end,
         )
         if brand:
-            q = q.filter(AnalyticsSnapshot.brand == brand)
+            day_q = day_q.filter(AnalyticsSnapshot.brand == brand)
         if platform:
-            q = q.filter(AnalyticsSnapshot.platform == platform)
-        q = q.group_by(AnalyticsSnapshot.brand, AnalyticsSnapshot.platform)
-        rows = q.all()
+            day_q = day_q.filter(AnalyticsSnapshot.platform == platform)
+        day_sub = day_q.group_by(
+            day_expr, AnalyticsSnapshot.brand, AnalyticsSnapshot.platform,
+        ).subquery()
 
-        totals = {"followers": 0, "views": 0, "likes": 0}
+        # Step 2 — number rows per (brand, platform) from most recent
+        rn = func.row_number().over(
+            partition_by=[day_sub.c.brand, day_sub.c.platform],
+            order_by=day_sub.c.day.desc(),
+        ).label("rn")
+        numbered = db.query(
+            day_sub.c.brand.label("brand"),
+            day_sub.c.platform.label("platform"),
+            day_sub.c.followers.label("followers"),
+            day_sub.c.views.label("views"),
+            day_sub.c.likes.label("likes"),
+            rn,
+        ).subquery()
+
+        # Step 3 — sample every 7th day (rows 1, 8, 15, …)
+        rows = db.query(
+            numbered.c.brand,
+            numbered.c.platform,
+            numbered.c.followers,
+            numbered.c.views,
+            numbered.c.likes,
+        ).filter(func.mod(numbered.c.rn - 1, 7) == 0).all()
+
+        # Aggregate
+        bp_foll: dict = {}    # (brand, platform) → max followers
+        b_views: dict = {}    # brand → cumulative views
+        b_likes: dict = {}    # brand → cumulative likes
         for r in rows:
-            totals["followers"] += r.followers or 0
-            totals["views"] += r.views or 0
-            totals["likes"] += r.likes or 0
-        return totals
+            key = (r.brand, r.platform)
+            bp_foll[key] = max(bp_foll.get(key, 0), r.followers or 0)
+            b_views[r.brand] = b_views.get(r.brand, 0) + (r.views or 0)
+            b_likes[r.brand] = b_likes.get(r.brand, 0) + (r.likes or 0)
 
-    current = _period_totals(current_start, now)
-    previous = _period_totals(prev_start, current_start)
+        b_foll: dict = {}
+        for (b, _p), foll in bp_foll.items():
+            b_foll[b] = b_foll.get(b, 0) + foll
+
+        totals = {
+            "followers": sum(bp_foll.values()),
+            "views": sum(b_views.values()),
+            "likes": sum(b_likes.values()),
+        }
+        brands_list = [
+            {
+                "brand": b,
+                "followers": b_foll.get(b, 0),
+                "views": b_views.get(b, 0),
+                "likes": b_likes.get(b, 0),
+            }
+            for b in set(b_foll) | set(b_views)
+        ]
+        return totals, brands_list
+
+    current, current_brands = _windowed_totals(current_start, now)
+    previous, _ = _windowed_totals(prev_start, current_start)
 
     def pct_change(curr, prev):
         if prev == 0:
-            return 0.0  # No comparison data available
+            return None  # No comparison data for previous period
         return round((curr - prev) / prev * 100, 1)
 
     # Daily chart data — for followers, sum the MAX per (brand, platform)
@@ -143,23 +212,8 @@ async def analytics_overview(
             "last_fetched_at": ba.last_fetched_at.isoformat() if ba.last_fetched_at else None,
         })
 
-    # Per-brand breakdown — derive from BrandAnalytics (consistent with channels)
-    brand_map: dict = {}
-    for ch in channels:
-        b = ch["brand"]
-        if b not in brand_map:
-            brand_map[b] = {"brand": b, "followers": 0, "views": 0, "likes": 0}
-        brand_map[b]["followers"] += ch["followers"] or 0
-        brand_map[b]["views"] += ch["views"] or 0
-        brand_map[b]["likes"] += ch["likes"] or 0
-    brands = list(brand_map.values())
-
-    # Override current totals with BrandAnalytics (authoritative live data).
-    # Snapshots inflate views/likes because each stores a 7-day rolling window
-    # and there are ~7-8 snapshots per brand/platform/day, so SUM vastly overcounts.
-    current["followers"] = sum(ch["followers"] or 0 for ch in channels)
-    current["views"] = sum(ch["views"] or 0 for ch in channels)
-    current["likes"] = sum(ch["likes"] or 0 for ch in channels)
+    # Per-brand breakdown — derived from windowed snapshot data (period-aware)
+    brands = current_brands
 
     return {
         "period": {"days": days, "start": current_start.isoformat(), "end": now.isoformat()},
@@ -895,10 +949,11 @@ def _fetch_ig_comments_for_brand(
         }
         media_resp = http_requests.get(media_url, params=media_params, timeout=10)
         if media_resp.status_code != 200:
-            logger.debug(f"IG media list failed for {ig_account_id}: {media_resp.status_code}")
+            logger.warning(f"[COMMENTS] IG media list failed for {ig_account_id}: HTTP {media_resp.status_code} — {media_resp.text[:300]}")
             return comments
 
         media_items = media_resp.json().get("data", [])
+        logger.info(f"[COMMENTS] IG media list for {ig_account_id}: {len(media_items)} items")
 
         # Step 2: For each media item, fetch its comments
         for item in media_items:
@@ -914,12 +969,15 @@ def _fetch_ig_comments_for_brand(
                 }
                 cmt_resp = http_requests.get(cmt_url, params=cmt_params, timeout=10)
                 if cmt_resp.status_code != 200:
+                    logger.info(f"[COMMENTS] IG comments for media {media_id}: HTTP {cmt_resp.status_code}")
                     continue
 
                 caption = item.get("caption") or ""
                 post_title = (caption[:60] + "…") if len(caption) > 60 else caption
+                cmt_data = cmt_resp.json().get("data", [])
+                logger.info(f"[COMMENTS] IG media {media_id}: {len(cmt_data)} comments")
 
-                for c in cmt_resp.json().get("data", []):
+                for c in cmt_data:
                     comments.append({
                         "id": c.get("id", ""),
                         "platform": "instagram",
@@ -1034,28 +1092,37 @@ async def analytics_comments(
         brands_q = brands_q.filter(Brand.id == brand)
 
     brand_rows = brands_q.all()
+    logger.info(f"[COMMENTS] user={user_id}, brands={len(brand_rows)}, brand_filter={brand}, platform_filter={platform}")
 
     all_comments: list[dict] = []
 
     for b in brand_rows:
         token = b.meta_access_token or b.instagram_access_token
+        has_ig = bool(b.instagram_business_account_id)
+        has_fb = bool(b.facebook_page_id)
+        has_token = bool(token)
+        fb_token = b.meta_access_token or b.facebook_access_token
+        has_fb_token = bool(fb_token)
+        logger.info(
+            f"[COMMENTS] brand={b.id}: ig_account={has_ig} ({b.instagram_business_account_id}), "
+            f"fb_page={has_fb} ({b.facebook_page_id}), token={has_token}, fb_token={has_fb_token}"
+        )
 
         # Instagram comments
         if (platform in (None, "instagram")) and b.instagram_business_account_id and token:
-            all_comments.extend(
-                _fetch_ig_comments_for_brand(
-                    b.id, b.display_name, b.instagram_business_account_id, token, http_requests,
-                )
+            ig_comments = _fetch_ig_comments_for_brand(
+                b.id, b.display_name, b.instagram_business_account_id, token, http_requests,
             )
+            logger.info(f"[COMMENTS] brand={b.id} IG → {len(ig_comments)} comments")
+            all_comments.extend(ig_comments)
 
         # Facebook comments
-        fb_token = b.meta_access_token or b.facebook_access_token
         if (platform in (None, "facebook")) and b.facebook_page_id and fb_token:
-            all_comments.extend(
-                _fetch_fb_comments_for_brand(
-                    b.id, b.facebook_page_id, fb_token, http_requests,
-                )
+            fb_comments = _fetch_fb_comments_for_brand(
+                b.id, b.facebook_page_id, fb_token, http_requests,
             )
+            logger.info(f"[COMMENTS] brand={b.id} FB → {len(fb_comments)} comments")
+            all_comments.extend(fb_comments)
 
     # Sort all comments by created_at descending
     all_comments.sort(key=lambda x: x.get("created_at", ""), reverse=True)

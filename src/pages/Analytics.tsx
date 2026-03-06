@@ -40,7 +40,12 @@ function pctColor(pct: number) {
   return 'text-gray-400'
 }
 
-function PctBadge({ value }: { value: number }) {
+function PctBadge({ value }: { value: number | null }) {
+  if (value === null) return (
+    <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-gray-300">
+      <Minus className="w-3 h-3" /> —
+    </span>
+  )
   const Icon = value > 0 ? ArrowUpRight : value < 0 ? ArrowDownRight : Minus
   return (
     <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${pctColor(value)}`}>
@@ -258,7 +263,7 @@ function OverviewTab({
               <p className="text-2xl font-extrabold text-gray-900 leading-none tracking-tight">
                 {card.value !== null ? fmt(card.value) : engRate + '%'}
               </p>
-              {card.change !== undefined && <PctBadge value={card.change} />}
+              {card.change !== undefined && <PctBadge value={card.change ?? null} />}
             </div>
             <p className="text-[11px] text-gray-400 mt-1">{card.sub}</p>
           </div>
