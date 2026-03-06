@@ -38,6 +38,7 @@ class AnalyticsService:
     """Service for fetching and managing brand analytics."""
     
     META_API_BASE = "https://graph.instagram.com/v21.0"
+    FB_API_BASE = "https://graph.facebook.com/v21.0"
     YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
     
     def __init__(self, db: Session):
@@ -348,7 +349,7 @@ class AnalyticsService:
         
         Fetches:
         - followers_count: Total followers
-        - views_last_7_days: Account-level impressions from insights (time_series)
+        - views_last_7_days: Account-level views from insights (time_series)
         - likes_last_7_days: From recent media
         
         Uses the Instagram Graph API User Insights endpoint with date range.
@@ -383,16 +384,16 @@ class AnalyticsService:
             # Try the time_series approach first (most accurate for views)
             insights_url = f"{self.META_API_BASE}/{account_id}/insights"
             
-            # Method 1: time_series with impressions (best for views)
+            # Method 1: time_series with views (impressions deprecated in v21+)
             insights_params = {
-                "metric": "impressions",
+                "metric": "views",
                 "metric_type": "time_series",
                 "since": since_ts,
                 "until": until_ts,
                 "access_token": access_token
             }
             
-            logger.info(f"Fetching IG insights: metric=impressions, since={since_ts}, until={until_ts}")
+            logger.info(f"Fetching IG insights: metric=views, since={since_ts}, until={until_ts}")
             insights_resp = requests.get(insights_url, params=insights_params)
             
             if insights_resp.status_code == 200:
@@ -401,17 +402,17 @@ class AnalyticsService:
                 
                 if "data" in insights_data and len(insights_data["data"]) > 0:
                     for metric in insights_data["data"]:
-                        if metric.get("name") == "impressions":
+                        if metric.get("name") == "views":
                             for v in metric.get("values", []):
                                 views += v.get("value", 0)
-                            logger.info(f"Instagram impressions (time_series): {views}")
+                            logger.info(f"Instagram views (time_series): {views}")
                             break
             else:
                 logger.warning(f"IG time_series failed ({insights_resp.status_code}): {insights_resp.text}")
                 
                 # Method 2: Fallback to period=day approach
                 fallback_params = {
-                    "metric": "impressions,reach",
+                    "metric": "views,reach",
                     "period": "day",
                     "access_token": access_token
                 }
@@ -424,7 +425,7 @@ class AnalyticsService:
                     logger.info(f"Instagram fallback data: {fallback_data}")
                     
                     for metric in fallback_data.get("data", []):
-                        if metric.get("name") == "impressions":
+                        if metric.get("name") == "views":
                             values = metric.get("values", [])[-7:]
                             for v in values:
                                 views += v.get("value", 0)
@@ -432,9 +433,9 @@ class AnalyticsService:
                 else:
                     logger.error(f"IG fallback also failed: {fallback_resp.text}")
                     
-                    # Method 3: Try total_value for lifetime impressions (less ideal but works)
+                    # Method 3: Try total_value for views (less ideal but works)
                     total_params = {
-                        "metric": "impressions",
+                        "metric": "views",
                         "metric_type": "total_value",
                         "since": since_ts,
                         "until": until_ts,
@@ -447,7 +448,7 @@ class AnalyticsService:
                         logger.info(f"Instagram total_value data: {total_data}")
                         
                         for metric in total_data.get("data", []):
-                            if metric.get("name") == "impressions":
+                            if metric.get("name") == "views":
                                 total_value = metric.get("total_value", {})
                                 views = total_value.get("value", 0)
                                 break
@@ -612,7 +613,7 @@ class AnalyticsService:
         Fetch Facebook Page analytics from Meta Graph API.
         """
         # Get page info including followers
-        page_url = f"{self.META_API_BASE}/{page_id}"
+        page_url = f"{self.FB_API_BASE}/{page_id}"
         params = {
             "fields": "followers_count,fan_count,name",
             "access_token": access_token
@@ -625,7 +626,7 @@ class AnalyticsService:
         followers = page_data.get("followers_count", page_data.get("fan_count", 0))
         
         # Get page insights
-        insights_url = f"{self.META_API_BASE}/{page_id}/insights"
+        insights_url = f"{self.FB_API_BASE}/{page_id}/insights"
         insights_params = {
             "metric": "page_impressions,page_views_total",
             "period": "day",
@@ -648,7 +649,7 @@ class AnalyticsService:
         # Get likes from recent posts
         likes = 0
         try:
-            posts_url = f"{self.META_API_BASE}/{page_id}/posts"
+            posts_url = f"{self.FB_API_BASE}/{page_id}/posts"
             posts_params = {
                 "fields": "id,created_time,likes.summary(true)",
                 "limit": 25,
@@ -1023,9 +1024,9 @@ class AnalyticsService:
         
         insights_url = f"{self.META_API_BASE}/{account_id}/insights"
         
-        # Fetch impressions time series (ACTUAL DATA)
+        # Fetch views time series (ACTUAL DATA) — impressions deprecated in v21+
         insights_params = {
-            "metric": "impressions",
+            "metric": "views",
             "metric_type": "time_series",
             "since": since_ts,
             "until": until_ts,
@@ -1037,14 +1038,14 @@ class AnalyticsService:
         if insights_resp.status_code == 200:
             insights_data = insights_resp.json()
             for metric in insights_data.get("data", []):
-                if metric.get("name") == "impressions":
+                if metric.get("name") == "views":
                     for value in metric.get("values", []):
                         end_time = value.get("end_time")
                         if end_time:
                             date = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
                             impressions_by_date[date.date()] = value.get("value", 0)
         else:
-            logger.warning(f"Failed to fetch impressions: {insights_resp.status_code}")
+            logger.warning(f"Failed to fetch views: {insights_resp.status_code}")
             # Try reach as fallback
             reach_params = {
                 "metric": "reach",

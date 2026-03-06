@@ -1,11 +1,12 @@
 """API routes for TEXT-VIDEO reel generation."""
 
 import logging
+import uuid
 from dataclasses import asdict
 from typing import Optional, List
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -65,6 +66,34 @@ class TextVideoGenerateRequest(BaseModel):
 
 
 # --- Endpoints ---
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@router.post("/upload-images")
+async def upload_images(
+    files: List[UploadFile] = File(...),
+    user: dict = Depends(get_current_user),
+):
+    """Upload images for manual text-video reel creation. Returns local file paths."""
+    user_id = user["id"]
+    upload_dir = Path("output/posts/uploads") / user_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    paths: list[str] = []
+    for f in files:
+        if f.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {f.content_type}")
+        data = await f.read()
+        if len(data) > MAX_IMAGE_SIZE:
+            raise HTTPException(status_code=400, detail=f"File too large: {f.filename} (max 10 MB)")
+        ext = Path(f.filename or "img.jpg").suffix or ".jpg"
+        dest = upload_dir / f"{uuid.uuid4().hex}{ext}"
+        dest.write_bytes(data)
+        paths.append(str(dest))
+
+    return {"paths": paths}
 
 
 @router.post("/discover")

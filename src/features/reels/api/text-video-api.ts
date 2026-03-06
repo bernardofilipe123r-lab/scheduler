@@ -53,6 +53,13 @@ export const textVideoApi = {
     return res.image_urls
   },
 
+  uploadImages: async (files: File[]): Promise<string[]> => {
+    const fd = new FormData()
+    files.forEach(f => fd.append('files', f))
+    const res = await post<{ paths: string[] }>(`${BASE}/upload-images`, fd)
+    return res.paths
+  },
+
   generate: async (data: TextVideoGenerateRequest): Promise<TextVideoJob> => {
     const res = await post<GenerateResponse>(`${BASE}/generate`, data)
     return res as unknown as TextVideoJob

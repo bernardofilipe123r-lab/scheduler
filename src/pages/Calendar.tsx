@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,6 +15,10 @@ import {
   SlidersHorizontal,
   ShieldCheck,
   Trash2,
+  Image as ImageIcon,
+  Video,
+  FileText,
+  AlertTriangle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
@@ -92,13 +96,77 @@ function Calendar() {
 
   // Upload form state
   const [selectedBrand, setSelectedBrand] = useState<string>(brands[0]?.id || '')
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram'])
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
   const [caption, setCaption] = useState('')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [uploadedFileName, setUploadedFileName] = useState('')
-  const [contentType, setContentType] = useState<'reel' | 'carousel' | null>(null)
+  const [contentType, setContentType] = useState<'reel' | 'carousel' | 'text' | null>(null)
   const [scheduledTime, setScheduledTime] = useState<string>('')
-  const [socialMedia, setSocialMedia] = useState('')
+  const [mediaDimensionWarning, setMediaDimensionWarning] = useState<string | null>(null)
+
+  // Platform dimension specs
+  const PLATFORM_DIMENSIONS: Record<string, { label: string; specs: { w: number; h: number; ratio: string }[] }> = {
+    instagram: { label: 'Instagram Reels', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+    instagram_carousel: { label: 'Instagram Carousel', specs: [{ w: 1080, h: 1350, ratio: '4:5' }] },
+    tiktok: { label: 'TikTok', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+    tiktok_carousel: { label: 'TikTok Carousel', specs: [
+      { w: 1080, h: 1920, ratio: '9:16' },
+      { w: 1080, h: 1350, ratio: '4:5' },
+      { w: 1080, h: 1080, ratio: '1:1' },
+    ]},
+    youtube: { label: 'YouTube Shorts', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+    facebook: { label: 'Facebook Reels', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+  }
+
+  // Check media dimensions against selected platform specs
+  const checkMediaDimensions = useCallback((file: File, platforms: string[], isCarousel: boolean) => {
+    const isVideo = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'flv'].includes(
+      file.name.split('.').pop()?.toLowerCase() || ''
+    )
+    const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(
+      file.name.split('.').pop()?.toLowerCase() || ''
+    )
+
+    if (isImage) {
+      const img = new window.Image()
+      img.onload = () => {
+        const warnings: string[] = []
+        for (const platform of platforms) {
+          if (platform === 'threads') continue // threads is text-only
+          const key = isCarousel ? `${platform}_carousel` : platform
+          const spec = PLATFORM_DIMENSIONS[key] || PLATFORM_DIMENSIONS[platform]
+          if (!spec) continue
+          const matchesAny = spec.specs.some(s => img.width === s.w && img.height === s.h)
+          if (!matchesAny) {
+            const expected = spec.specs.map(s => `${s.w}x${s.h} (${s.ratio})`).join(' or ')
+            warnings.push(`${spec.label}: expected ${expected}, got ${img.width}x${img.height}`)
+          }
+        }
+        setMediaDimensionWarning(warnings.length > 0 ? warnings.join('\n') : null)
+        URL.revokeObjectURL(img.src)
+      }
+      img.src = URL.createObjectURL(file)
+    } else if (isVideo) {
+      const video = document.createElement('video')
+      video.preload = 'metadata'
+      video.onloadedmetadata = () => {
+        const warnings: string[] = []
+        for (const platform of platforms) {
+          if (platform === 'threads') continue
+          const spec = PLATFORM_DIMENSIONS[platform]
+          if (!spec) continue
+          const matchesAny = spec.specs.some(s => video.videoWidth === s.w && video.videoHeight === s.h)
+          if (!matchesAny) {
+            const expected = spec.specs.map(s => `${s.w}x${s.h} (${s.ratio})`).join(' or ')
+            warnings.push(`${spec.label}: expected ${expected}, got ${video.videoWidth}x${video.videoHeight}`)
+          }
+        }
+        setMediaDimensionWarning(warnings.length > 0 ? warnings.join('\n') : null)
+        URL.revokeObjectURL(video.src)
+      }
+      video.src = URL.createObjectURL(file)
+    }
+  }, [])
 
   // Auto-detect content type when file is selected
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,6 +175,7 @@ function Calendar() {
 
     setUploadedFile(file)
     setUploadedFileName(file.name)
+    setMediaDimensionWarning(null)
 
     // Detect content type from extension
     const ext = file.name.split('.').pop()?.toLowerCase()
@@ -118,11 +187,24 @@ function Calendar() {
     } else if (imageExts.includes(ext!)) {
       setContentType('carousel')
     }
+
+    // Check dimensions against selected platforms
+    if (selectedPlatforms.length > 0) {
+      checkMediaDimensions(file, selectedPlatforms, imageExts.includes(ext!))
+    }
   }
 
+  // Is this a text-only post (only Threads selected, no file)?
+  const isTextOnly = selectedPlatforms.length > 0 && selectedPlatforms.every(p => p === 'threads')
+
   const handleUpload = async () => {
-    if (!uploadedFile || !selectedBrand || !caption || !scheduledTime || selectedPlatforms.length === 0) {
+    if (!effectiveBrand || !caption || !scheduledTime || selectedPlatforms.length === 0) {
       toast.error('Please fill in all required fields')
+      return
+    }
+    // File required unless text-only (Threads)
+    if (!isTextOnly && !uploadedFile) {
+      toast.error('Please upload a file (image or video)')
       return
     }
 
@@ -130,18 +212,18 @@ function Calendar() {
       setUploadLoading(true)
 
       const formData = new FormData()
-      formData.append('brand_id', selectedBrand)
+      formData.append('brand_id', effectiveBrand)
       formData.append('caption', caption)
       formData.append('platforms', JSON.stringify(selectedPlatforms))
       formData.append('scheduled_time', scheduledTime)
-      if (socialMedia) {
-        formData.append('social_media', socialMedia)
+      if (uploadedFile) {
+        formData.append('file', uploadedFile)
       }
-      formData.append('file', uploadedFile)
 
       await apiClient.post('/reels/manual/upload-and-schedule', formData)
 
-      toast.success(`${contentType === 'reel' ? 'Reel' : 'Carousel'} scheduled successfully!`)
+      const label = isTextOnly ? 'Text post' : contentType === 'reel' ? 'Reel' : 'Post'
+      toast.success(`${label} scheduled successfully!`)
       
       // Reset form
       setUploadedFile(null)
@@ -149,7 +231,8 @@ function Calendar() {
       setCaption('')
       setContentType(null)
       setScheduledTime('')
-      setSocialMedia('')
+      setMediaDimensionWarning(null)
+      setSelectedPlatforms([])
       setShowUploadModal(false)
 
       // Refresh calendar data
@@ -210,17 +293,61 @@ function Calendar() {
     return brand?.shortName || brand?.label || brandId
   }
 
-  const currentBrandPlatforms = useMemo(() => {
-    const brandConn = connectionsData?.brands.find(b => b.brand === selectedBrand)
-    if (!brandConn) return []
-    const platforms: { name: string; handle: string; connected: boolean }[] = []
-    if (brandConn.instagram?.connected) platforms.push({ name: 'instagram', handle: brandConn.instagram.account_name || '', connected: true })
-    if (brandConn.facebook?.connected) platforms.push({ name: 'facebook', handle: brandConn.facebook.account_name || '', connected: true })
-    if (brandConn.youtube?.connected) platforms.push({ name: 'youtube', handle: brandConn.youtube.account_name || '', connected: true })
-    if (brandConn.threads?.connected) platforms.push({ name: 'threads', handle: brandConn.threads.account_name || '', connected: true })
-    if (brandConn.tiktok?.connected) platforms.push({ name: 'tiktok', handle: brandConn.tiktok.account_name || '', connected: true })
-    return platforms
-  }, [connectionsData, selectedBrand])
+  // All available platforms across all brands
+  const allAvailablePlatforms = useMemo(() => {
+    if (!connectionsData?.brands) return []
+    const platformMap: Record<string, { brandCount: number; brandIds: string[] }> = {}
+    const platformOrder = ['instagram', 'tiktok', 'youtube', 'facebook', 'threads']
+    for (const brand of connectionsData.brands) {
+      for (const pName of platformOrder) {
+        const conn = brand[pName as keyof typeof brand] as { connected?: boolean } | undefined
+        if (conn && typeof conn === 'object' && 'connected' in conn && conn.connected) {
+          if (!platformMap[pName]) platformMap[pName] = { brandCount: 0, brandIds: [] }
+          platformMap[pName].brandCount++
+          platformMap[pName].brandIds.push(brand.brand)
+        }
+      }
+    }
+    return platformOrder
+      .filter(p => platformMap[p])
+      .map(p => ({ name: p, ...platformMap[p]! }))
+  }, [connectionsData])
+
+  // Brands that have ALL selected platforms connected
+  const eligibleBrands = useMemo(() => {
+    if (selectedPlatforms.length === 0 || !connectionsData?.brands) return brands
+    return brands.filter(brand => {
+      const brandConn = connectionsData.brands.find(b => b.brand === brand.id)
+      if (!brandConn) return false
+      return selectedPlatforms.every(pName => {
+        const conn = brandConn[pName as keyof typeof brandConn] as { connected?: boolean } | undefined
+        return conn && typeof conn === 'object' && 'connected' in conn && conn.connected
+      })
+    })
+  }, [brands, selectedPlatforms, connectionsData])
+
+  // Auto-select brand when only one is eligible
+  const effectiveBrand = useMemo(() => {
+    if (eligibleBrands.length === 1) return eligibleBrands[0].id
+    if (eligibleBrands.find(b => b.id === selectedBrand)) return selectedBrand
+    return eligibleBrands[0]?.id || ''
+  }, [eligibleBrands, selectedBrand])
+
+  // Platform toggle handler
+  const handlePlatformToggle = useCallback((platform: string) => {
+    setSelectedPlatforms(prev => {
+      const next = prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]
+      // Re-check dimensions if file already uploaded
+      if (uploadedFile && next.length > 0) {
+        const ext = uploadedFile.name.split('.').pop()?.toLowerCase() || ''
+        const isImg = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)
+        checkMediaDimensions(uploadedFile, next, isImg)
+      } else {
+        setMediaDimensionWarning(null)
+      }
+      return next
+    })
+  }, [uploadedFile, checkMediaDimensions])
 
   if (postsLoading) {
     return (
@@ -899,16 +1026,19 @@ function Calendar() {
         </div>
       )}
 
-      {/* Upload Modal */}
+      {/* Upload Modal — Buffer-inspired Composer */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="max-w-2xl w-full bg-white rounded-xl border border-gray-200 overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
             {/* Header */}
             <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Upload className="h-5 w-5 text-emerald-600" />
-                Upload & Schedule Content
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-emerald-600" />
+                  Create Post
+                </h2>
+                <p className="text-sm text-gray-500 mt-0.5">Schedule content across your platforms</p>
+              </div>
               <button
                 onClick={() => setShowUploadModal(false)}
                 className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
@@ -918,154 +1048,260 @@ function Calendar() {
             </div>
 
             {/* Body */}
-            <div className="p-6 space-y-6 overflow-y-auto flex-1">
-              {/* Brand Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Brand <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={selectedBrand}
-                  onChange={(e) => {
-                    setSelectedBrand(e.target.value)
-                    setSelectedPlatforms(['instagram'])
-                  }}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
-                >
-                  {brands.map(brand => (
-                    <option key={brand.id} value={brand.id}>
-                      {brand.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* File Upload */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Upload File ({contentType ? contentType.toUpperCase() : 'Video or Image'})
-                  <span className="text-red-500"> *</span>
-                </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-emerald-400 transition-colors cursor-pointer bg-gray-50">
-                  <input
-                    type="file"
-                    accept={contentType ? (contentType === 'reel' ? 'video/*' : 'image/*') : 'video/*,image/*'}
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label htmlFor="file-upload" className="cursor-pointer block">
-                    {uploadedFileName ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="text-emerald-600">✓</span>
-                        <span className="text-gray-900 font-medium">{uploadedFileName}</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-8 w-8 text-gray-400 mx-auto" />
-                        <span className="text-gray-600">Click to upload or drag and drop</span>
-                        <span className="text-xs text-gray-500">Video or Images</span>
-                      </div>
-                    )}
-                  </label>
-                </div>
-              </div>
-
-              {/* Platform Selection */}
+            <div className="p-6 space-y-5 overflow-y-auto flex-1">
+              {/* Step 1: Platform Selection */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Platforms <span className="text-red-500">*</span>
                 </label>
-                <div className="space-y-2">
-                  {currentBrandPlatforms.length > 0 ? (
-                    currentBrandPlatforms.map(platform => (
-                      <label key={platform.name} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedPlatforms.includes(platform.name)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedPlatforms([...selectedPlatforms, platform.name])
-                            } else {
-                              setSelectedPlatforms(selectedPlatforms.filter(p => p !== platform.name))
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span className="text-gray-900">
-                          {getPlatformLabel(platform.name)} ({platform.handle})
+                <p className="text-xs text-gray-500 mb-3">Select where you want to publish. Brands will be filtered to match.</p>
+                <div className="flex flex-wrap gap-2">
+                  {allAvailablePlatforms.map(platform => {
+                    const selected = selectedPlatforms.includes(platform.name)
+                    const platformColors: Record<string, string> = {
+                      instagram: 'bg-gradient-to-r from-purple-500 to-pink-500',
+                      tiktok: 'bg-black',
+                      youtube: 'bg-red-600',
+                      facebook: 'bg-blue-600',
+                      threads: 'bg-gray-900',
+                    }
+                    return (
+                      <button
+                        key={platform.name}
+                        onClick={() => handlePlatformToggle(platform.name)}
+                        className={clsx(
+                          'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border-2',
+                          selected
+                            ? `${platformColors[platform.name]} text-white border-transparent shadow-md`
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                        )}
+                      >
+                        {platform.name === 'instagram' && (
+                          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                        )}
+                        {platform.name === 'tiktok' && (
+                          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.48v-7.1a8.16 8.16 0 005.58 2.18v-3.45a4.85 4.85 0 01-3.59-1.62z"/></svg>
+                        )}
+                        {platform.name === 'youtube' && (
+                          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                        )}
+                        {platform.name === 'facebook' && (
+                          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        )}
+                        {platform.name === 'threads' && (
+                          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.773.779c-1.005-3.575-3.473-5.51-6.97-5.46-2.819.043-4.678 1.181-5.598 2.362-1.076 1.38-1.636 3.48-1.666 6.246v.503c.046 4.96 2.267 8.12 7.246 8.169 2.477-.024 4.218-.854 5.32-2.54.73-1.118.94-2.431.583-3.69-.308-1.103-1.018-1.927-1.993-2.31-.3 1.6-.876 2.945-1.759 3.98-1.186 1.392-2.87 2.13-5.016 2.196-1.936-.053-3.508-.682-4.675-1.87-1.136-1.155-1.737-2.695-1.787-4.581.06-2.184.86-3.95 2.377-5.25 1.373-1.177 3.22-1.789 5.492-1.822 2.358.033 4.245.63 5.605 1.775l-1.87 2.098c-.877-.748-2.22-1.156-3.735-1.138-2.888.043-4.535 1.482-4.623 4.045.034 1.093.351 1.976.943 2.625.615.674 1.572 1.033 2.845 1.066 1.278-.034 2.23-.414 2.834-1.129.438-.52.762-1.237.953-2.126-1.088-.082-2.07-.44-2.67-1.118-.706-.798-1.047-1.92-1.012-3.331l.003-.073v-.008c.076-2.5 1.394-4.385 3.621-5.178.595-.212 1.254-.333 1.963-.364l.197-.004c2.13 0 3.764.818 4.862 2.43.836 1.228 1.194 2.759 1.062 4.553-.186 2.52-1.274 4.453-3.233 5.75-1.71 1.132-3.887 1.728-6.47 1.773z"/></svg>
+                        )}
+                        <span className="capitalize">{platform.name}</span>
+                        <span className={clsx(
+                          'text-xs px-1.5 py-0.5 rounded-full',
+                          selected ? 'bg-white/20' : 'bg-gray-100'
+                        )}>
+                          {platform.brandCount} brand{platform.brandCount !== 1 ? 's' : ''}
                         </span>
-                      </label>
-                    ))
-                  ) : (
-                    <div className="flex items-center gap-2 text-yellow-700 bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+                      </button>
+                    )
+                  })}
+                  {allAvailablePlatforms.length === 0 && (
+                    <div className="flex items-center gap-2 text-yellow-700 bg-yellow-50 border border-yellow-200 p-3 rounded-lg w-full">
                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                      <span className="text-sm">No platforms connected for this brand. Connect platforms in Brands settings.</span>
+                      <span className="text-sm">No platforms connected. Go to Brands to connect your social accounts.</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Schedule Time */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Schedule Time <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="datetime-local"
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
-                />
-              </div>
+              {/* Step 2: Brand Selection — filtered by platform */}
+              {selectedPlatforms.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Brand <span className="text-red-500">*</span>
+                    {eligibleBrands.length === 1 && (
+                      <span className="ml-2 text-xs font-normal text-gray-500">(auto-selected — only brand with {selectedPlatforms.join(' + ')})</span>
+                    )}
+                  </label>
+                  {eligibleBrands.length === 0 ? (
+                    <div className="flex items-center gap-2 text-yellow-700 bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <span className="text-sm">No brand has all selected platforms connected.</span>
+                    </div>
+                  ) : eligibleBrands.length === 1 ? (
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: eligibleBrands[0].color }} />
+                      <span className="text-sm font-medium text-gray-900">{eligibleBrands[0].label}</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {eligibleBrands.map(brand => (
+                        <button
+                          key={brand.id}
+                          onClick={() => setSelectedBrand(brand.id)}
+                          className={clsx(
+                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border-2',
+                            effectiveBrand === brand.id
+                              ? 'border-emerald-500 bg-emerald-50 text-gray-900 shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                          )}
+                        >
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: brand.color }} />
+                          {brand.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {/* Caption */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Caption <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Enter caption for your content..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
-                />
-              </div>
+              {/* Step 3: Caption */}
+              {selectedPlatforms.length > 0 && eligibleBrands.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Caption <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    placeholder={isTextOnly ? 'Write your Threads post...' : 'Write your caption...'}
+                    rows={4}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors resize-none"
+                  />
+                  {isTextOnly && (
+                    <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                      <span className="text-xs text-blue-700">Threads posts are text-only. No media upload needed.</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {/* Social Media Account (Optional) */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Specific Account (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={socialMedia}
-                  onChange={(e) => setSocialMedia(e.target.value)}
-                  placeholder="Leave empty to use default"
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
-                />
-              </div>
+              {/* Step 4: Media Upload (skip for text-only) */}
+              {selectedPlatforms.length > 0 && eligibleBrands.length > 0 && !isTextOnly && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Media <span className="text-red-500">*</span>
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-emerald-400 transition-colors cursor-pointer bg-gray-50">
+                    <input
+                      type="file"
+                      accept="video/*,image/*"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label htmlFor="file-upload" className="cursor-pointer block">
+                      {uploadedFileName ? (
+                        <div className="flex items-center justify-center gap-2">
+                          {contentType === 'reel' ? (
+                            <Video className="h-5 w-5 text-emerald-600" />
+                          ) : (
+                            <ImageIcon className="h-5 w-5 text-emerald-600" />
+                          )}
+                          <span className="text-gray-900 font-medium">{uploadedFileName}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setUploadedFile(null)
+                              setUploadedFileName('')
+                              setContentType(null)
+                              setMediaDimensionWarning(null)
+                            }}
+                            className="p-0.5 hover:bg-gray-200 rounded"
+                          >
+                            <X className="h-4 w-4 text-gray-500" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Upload className="h-8 w-8 text-gray-400 mx-auto" />
+                          <span className="text-gray-600">Click to upload or drag and drop</span>
+                          <span className="text-xs text-gray-500">Video (MP4, MOV) or Image (JPG, PNG, WebP)</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+
+                  {/* Dimension Warning */}
+                  {mediaDimensionWarning && (
+                    <div className="mt-2 flex items-start gap-2 px-3 py-2.5 bg-amber-50 border border-amber-300 rounded-lg">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div className="text-xs text-amber-800 space-y-0.5">
+                        <p className="font-semibold">Media dimensions don't match platform requirements:</p>
+                        {mediaDimensionWarning.split('\n').map((line, i) => (
+                          <p key={i}>{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dimension guidelines */}
+                  {!uploadedFile && (
+                    <div className="mt-2 text-xs text-gray-500 space-y-0.5">
+                      {selectedPlatforms.some(p => ['instagram', 'tiktok', 'youtube', 'facebook'].includes(p)) && (
+                        <p>Reels/Shorts: <span className="font-medium text-gray-700">1080 x 1920</span> (9:16)</p>
+                      )}
+                      {selectedPlatforms.includes('instagram') && (
+                        <p>IG Carousel: <span className="font-medium text-gray-700">1080 x 1350</span> (4:5)</p>
+                      )}
+                      {selectedPlatforms.includes('tiktok') && (
+                        <p>TikTok Carousel: <span className="font-medium text-gray-700">1080x1920</span>, 1080x1350, or 1080x1080</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 5: Schedule Time */}
+              {selectedPlatforms.length > 0 && eligibleBrands.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Schedule Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-colors"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Footer */}
-            <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3 bg-gray-50">
-              <button
-                onClick={() => setShowUploadModal(false)}
-                disabled={uploadLoading}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={uploadLoading || !uploadedFile || !selectedBrand || !caption || !scheduledTime || selectedPlatforms.length === 0}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {uploadLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {uploadLoading ? 'Uploading...' : 'Schedule'}
-              </button>
+            <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
+              <div className="text-xs text-gray-500">
+                {selectedPlatforms.length > 0 && (
+                  <span>{selectedPlatforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')}</span>
+                )}
+                {effectiveBrand && selectedPlatforms.length > 0 && (
+                  <span> · {getBrandName(effectiveBrand)}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowUploadModal(false)}
+                  disabled={uploadLoading}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpload}
+                  disabled={
+                    uploadLoading ||
+                    selectedPlatforms.length === 0 ||
+                    !effectiveBrand ||
+                    !caption ||
+                    !scheduledTime ||
+                    (!isTextOnly && !uploadedFile)
+                  }
+                  className="inline-flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {uploadLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {uploadLoading ? 'Scheduling...' : 'Schedule Post'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

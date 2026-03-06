@@ -1,19 +1,24 @@
-import { useState, useEffect } from 'react'
-import { Loader2, Upload, Plus, X } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Loader2, Upload, X, ImagePlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands } from '@/features/brands'
-import { useGenerateTextVideo } from './api/use-text-video'
+import { useGenerateTextVideo, useUploadImages } from './api/use-text-video'
 import type { BrandName } from '@/shared/types'
+
+const MAX_IMAGES = 10
 
 export function TextVideoManual() {
   const { brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const generateMutation = useGenerateTextVideo()
+  const uploadMutation = useUploadImages()
 
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [thumbnailTitle, setThumbnailTitle] = useState('')
   const [reelText, setReelText] = useState('')
-  const [imageQueries, setImageQueries] = useState<string[]>(['', '', ''])
+  const [images, setImages] = useState<File[]>([])
+  const [previews, setPreviews] = useState<string[]>([])
   const [platforms] = useState<string[]>(['instagram'])
+  const fileRef = useRef<HTMLInputElement>(null)
 
   // Auto-select all brands on load
   useEffect(() => {
@@ -22,9 +27,40 @@ export function TextVideoManual() {
     }
   }, [brandIds, selectedBrands.length])
 
+  // Generate preview URLs
+  useEffect(() => {
+    const urls = images.map(f => URL.createObjectURL(f))
+    setPreviews(urls)
+    return () => urls.forEach(u => URL.revokeObjectURL(u))
+  }, [images])
+
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const arr = Array.from(files).filter(f => f.type.startsWith('image/'))
+    if (arr.length === 0) return
+    setImages(prev => {
+      const combined = [...prev, ...arr]
+      if (combined.length > MAX_IMAGES) {
+        toast.error(`Maximum ${MAX_IMAGES} images`)
+        return combined.slice(0, MAX_IMAGES)
+      }
+      return combined
+    })
+  }, [])
+
+  const removeImage = (idx: number) => setImages(prev => prev.filter((_, i) => i !== idx))
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    addFiles(e.dataTransfer.files)
+  }, [addFiles])
+
   const handleGenerate = async () => {
     if (!thumbnailTitle.trim() || !reelText.trim()) {
       toast.error('Title and reel text are required')
+      return
+    }
+    if (images.length === 0) {
+      toast.error('Upload at least one image')
       return
     }
     if (selectedBrands.length === 0) {
@@ -32,33 +68,30 @@ export function TextVideoManual() {
       return
     }
 
-    const reel_lines = reelText.split('\n').filter(l => l.trim())
-    const queries = imageQueries.filter(q => q.trim())
-
     try {
+      // 1. Upload images to server
+      const paths = await uploadMutation.mutateAsync(images)
+
+      // 2. Generate reel with the returned paths
       await generateMutation.mutateAsync({
         mode: 'manual',
         brands: selectedBrands,
         platforms,
         thumbnail_title: thumbnailTitle,
-        reel_lines,
-        image_queries: queries.length > 0 ? queries : undefined,
+        reel_lines: reelText.split('\n').filter(l => l.trim()),
+        image_paths: paths,
       })
       toast.success('Text-video reel generation started!')
       setThumbnailTitle('')
       setReelText('')
-      setImageQueries(['', '', ''])
+      setImages([])
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Generation failed'
       toast.error(message)
     }
   }
 
-  const addImageQuery = () => setImageQueries(prev => [...prev, ''])
-  const removeImageQuery = (idx: number) => setImageQueries(prev => prev.filter((_, i) => i !== idx))
-  const updateImageQuery = (idx: number, val: string) => {
-    setImageQueries(prev => prev.map((q, i) => i === idx ? val : q))
-  }
+  const busy = uploadMutation.isPending || generateMutation.isPending
 
   if (brandsLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
@@ -92,32 +125,49 @@ export function TextVideoManual() {
         <p className="text-xs text-gray-500 mt-1">One line per row. Each line shows as a text overlay on the slideshow.</p>
       </div>
 
-      {/* Image Queries */}
+      {/* Image Upload */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700">Image Search Queries</label>
-          <button onClick={addImageQuery} className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1">
-            <Plus className="w-3 h-3" /> Add
-          </button>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Images <span className="text-gray-400 font-normal">({images.length}/{MAX_IMAGES})</span>
+        </label>
+
+        {/* Drop zone */}
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={handleDrop}
+          className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-colors"
+        >
+          <ImagePlus className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-600">Click or drag images here</p>
+          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP — up to 10 images, 10 MB each</p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={e => e.target.files && addFiles(e.target.files)}
+          />
         </div>
-        <div className="space-y-2">
-          {imageQueries.map((q, i) => (
-            <div key={i} className="flex gap-2">
-              <input
-                value={q}
-                onChange={e => updateImageQuery(i, e.target.value)}
-                placeholder={`Image ${i + 1} search query...`}
-                className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 outline-none text-sm"
-              />
-              {imageQueries.length > 1 && (
-                <button onClick={() => removeImageQuery(i)} className="text-gray-400 hover:text-red-500">
-                  <X className="w-4 h-4" />
+
+        {/* Thumbnails */}
+        {previews.length > 0 && (
+          <div className="grid grid-cols-5 gap-2 mt-3">
+            {previews.map((url, i) => (
+              <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                <img src={url} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
+                <button
+                  onClick={() => removeImage(i)}
+                  className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3 h-3 text-white" />
                 </button>
-              )}
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-gray-500 mt-1">We'll search for images matching these queries. Leave empty for AI-generated images.</p>
+                <span className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white px-1 rounded">{i + 1}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Brand Selection */}
@@ -145,11 +195,11 @@ export function TextVideoManual() {
       {/* Generate Button */}
       <button
         onClick={handleGenerate}
-        disabled={generateMutation.isPending || !thumbnailTitle.trim() || !reelText.trim()}
+        disabled={busy || !thumbnailTitle.trim() || !reelText.trim() || images.length === 0}
         className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
       >
-        {generateMutation.isPending ? (
-          <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+        {busy ? (
+          <><Loader2 className="w-4 h-4 animate-spin" /> {uploadMutation.isPending ? 'Uploading images...' : 'Generating...'}</>
         ) : (
           <><Upload className="w-4 h-4" /> Generate Text-Video Reel</>
         )}

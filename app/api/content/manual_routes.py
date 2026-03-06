@@ -199,18 +199,18 @@ async def upload_and_schedule(
     platforms: str = Form(...),  # JSON array as string
     scheduled_time: str = Form(...),
     social_media: Optional[str] = Form(None),
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user)
 ):
     """
-    Upload a reel or carousel image and schedule for publishing.
+    Upload a reel/carousel image and schedule for publishing, or schedule
+    a text-only post (for Threads).
     
     Flow:
-    1. Detect content type from file extension (reel vs carousel)
-    2. Upload file to Supabase storage
-    3. Create ScheduledReel entry with created_by="user"
-    4. Return schedule_id for frontend reference
+    1. If file provided: detect content type, upload to storage, create entry
+    2. If no file: create text-only entry (only valid for Threads-only posts)
+    3. Return schedule_id for frontend reference
     
     Args:
         brand_id: Brand to publish as
@@ -218,7 +218,7 @@ async def upload_and_schedule(
         platforms: JSON array of platforms ["instagram", "facebook", ...]
         scheduled_time: ISO datetime string (must be in future)
         social_media: Optional specific social media handle to use
-        file: The video or image file to upload
+        file: The video or image file to upload (optional for text-only Threads)
     """
     import json
     
@@ -265,40 +265,54 @@ async def upload_and_schedule(
                 detail=str(e)
             )
         
-        # Detect content type
-        try:
-            content_type = _detect_content_type(file.filename)
-        except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)
-            )
+        # Determine if text-only (Threads-only, no file)
+        is_text_only = file is None or (file.filename is None or file.filename == "")
         
-        # Read file content
-        file_content = await file.read()
-        if not file_content:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File is empty"
+        if is_text_only:
+            # Text-only posts are only valid for Threads
+            non_threads = [p for p in platforms_list if p != "threads"]
+            if non_threads:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Text-only posts are only supported for Threads. These platforms require media: {', '.join(non_threads)}"
+                )
+            content_type = "text"
+            file_url = None
+        else:
+            # Detect content type
+            try:
+                content_type = _detect_content_type(file.filename)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(e)
+                )
+            
+            # Read file content
+            file_content = await file.read()
+            if not file_content:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="File is empty"
+                )
+            
+            # Upload to Supabase storage
+            file_ext = Path(file.filename).suffix.lower()
+            upload_path = storage_path(
+                user["id"],
+                brand_id,
+                "manual-content",
+                f"{str(uuid.uuid4())}{file_ext}"
             )
-        
-        # Upload to Supabase storage
-        file_ext = Path(file.filename).suffix.lower()
-        upload_path = storage_path(
-            user["id"],
-            brand_id,
-            "manual-content",
-            f"{str(uuid.uuid4())}{file_ext}"
-        )
-        
-        mime_type = "video/mp4" if content_type == "reel" else "image/png"
-        try:
-            file_url = upload_bytes("media", upload_path, file_content, mime_type)
-        except StorageError as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload file to storage: {str(e)}"
-            )
+            
+            mime_type = "video/mp4" if content_type == "reel" else "image/png"
+            try:
+                file_url = upload_bytes("media", upload_path, file_content, mime_type)
+            except StorageError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to upload file to storage: {str(e)}"
+                )
         
         # Create ScheduledReel entry with created_by="user"
         schedule_id = str(uuid.uuid4())
@@ -327,11 +341,12 @@ async def upload_and_schedule(
         )
         
         # Save to database
-        if content_type == "reel":
+        if content_type == "reel" and file_url:
             scheduled_entry.extra_data["video_path"] = file_url
-        else:
+        elif content_type == "carousel" and file_url:
             scheduled_entry.extra_data["carousel_paths"] = [file_url]
             scheduled_entry.extra_data["thumbnail_path"] = file_url
+        # text-only posts have no file paths
         
         db.add(scheduled_entry)
         db.commit()

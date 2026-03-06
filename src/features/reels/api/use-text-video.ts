@@ -33,6 +33,12 @@ export function useSourceImages() {
   })
 }
 
+export function useUploadImages() {
+  return useMutation({
+    mutationFn: (files: File[]) => textVideoApi.uploadImages(files),
+  })
+}
+
 export function useGenerateTextVideo() {
   const qc = useQueryClient()
   return useMutation({
