@@ -39,39 +39,35 @@ async def analytics_overview(
     user: dict = Depends(get_current_user),
 ):
     """
-    Overview with current vs previous period comparison.
-    Returns totals for current period + % change vs same-length previous period.
-    Also returns daily data points for charting.
+    Overview showing **progress** within the selected period.
+
+    All headline numbers represent how much was GAINED/EARNED in that window:
+      • Followers → growth (end − start), NOT absolute count
+      • Views     → estimated views earned in the period (non-overlapping 7-d windows)
+      • Likes     → same approach as views
+
+    Percentage badges compare the current period with the previous equal-length
+    period.  Returns `null` if there's no data for the previous period.
+
+    Also returns:
+      • followers_total — absolute current follower count (for reference)
+      • data_available_days — number of days we actually have snapshots for
+      • daily[] — chart data (followers here IS cumulative for chart lines)
+      • brands[] — per-brand breakdown (period-aware)
+      • channels[] — per platform+brand live data from BrandAnalytics
     """
+    from sqlalchemy import literal_column
+
     user_id = user.get("id")
     now = datetime.now(timezone.utc)
     current_start = now - timedelta(days=days)
     prev_start = current_start - timedelta(days=days)
 
-    def _windowed_totals(start: datetime, end: datetime):
-        """
-        Approximate cumulative totals by summing non-overlapping 7-day windows.
-
-        Snapshots store rolling 7-day metrics (views_last_7_days,
-        likes_last_7_days).  Naively summing all snapshots vastly overcounts.
-        Instead we:
-          1. De-duplicate to one row per (brand, platform, day).
-          2. Number the days per (brand, platform) from most-recent.
-          3. Sample every 7th day so the rolling windows don't overlap.
-
-        Returns (totals_dict, brands_list).
-        """
-        has = db.query(AnalyticsSnapshot.id).filter(
-            AnalyticsSnapshot.user_id == user_id,
-            AnalyticsSnapshot.snapshot_at >= start,
-            AnalyticsSnapshot.snapshot_at < end,
-        ).first()
-        if not has:
-            return {"followers": 0, "views": 0, "likes": 0}, []
-
-        # Step 1 — daily dedup: one row per (brand, platform, day)
+    # ── Helper: build a de-duplicated daily snapshot subquery ─────────
+    def _daily_sub(start: datetime, end: datetime):
+        """One row per (brand, platform, day) with MAX of each metric."""
         day_expr = func.date_trunc('day', AnalyticsSnapshot.snapshot_at)
-        day_q = db.query(
+        q = db.query(
             day_expr.label("day"),
             AnalyticsSnapshot.brand.label("brand"),
             AnalyticsSnapshot.platform.label("platform"),
@@ -84,99 +80,139 @@ async def analytics_overview(
             AnalyticsSnapshot.snapshot_at < end,
         )
         if brand:
-            day_q = day_q.filter(AnalyticsSnapshot.brand == brand)
+            q = q.filter(AnalyticsSnapshot.brand == brand)
         if platform:
-            day_q = day_q.filter(AnalyticsSnapshot.platform == platform)
-        day_sub = day_q.group_by(
+            q = q.filter(AnalyticsSnapshot.platform == platform)
+        return q.group_by(
             day_expr, AnalyticsSnapshot.brand, AnalyticsSnapshot.platform,
         ).subquery()
 
-        # Step 2 — number rows per (brand, platform) from most recent
-        rn = func.row_number().over(
-            partition_by=[day_sub.c.brand, day_sub.c.platform],
-            order_by=day_sub.c.day.desc(),
-        ).label("rn")
-        numbered = db.query(
-            day_sub.c.brand.label("brand"),
-            day_sub.c.platform.label("platform"),
-            day_sub.c.followers.label("followers"),
-            day_sub.c.views.label("views"),
-            day_sub.c.likes.label("likes"),
-            rn,
+    # ── Compute period progress ───────────────────────────────────────
+    def _period_progress(start: datetime, end: datetime):
+        """
+        Returns dict with:
+          followers_growth — how many followers gained in the period
+          followers_total  — absolute follower count at end of period
+          views            — estimated views earned (non-overlapping 7-d sampling)
+          likes            — estimated likes earned
+          brands           — per-brand breakdown
+        """
+        sub = _daily_sub(start, end)
+
+        # Check if any data exists
+        has = db.query(sub.c.day).limit(1).first()
+        if not has:
+            return {
+                "followers_growth": 0, "followers_total": 0,
+                "views": 0, "likes": 0,
+            }, []
+
+        # ── Followers: growth = latest day − earliest day ─────────
+        # Get earliest and latest follower counts per (brand, platform)
+        rn_asc = func.row_number().over(
+            partition_by=[sub.c.brand, sub.c.platform],
+            order_by=sub.c.day.asc(),
+        ).label("rn_asc")
+        rn_desc = func.row_number().over(
+            partition_by=[sub.c.brand, sub.c.platform],
+            order_by=sub.c.day.desc(),
+        ).label("rn_desc")
+
+        ranked = db.query(
+            sub.c.brand, sub.c.platform, sub.c.day,
+            sub.c.followers, sub.c.views, sub.c.likes,
+            rn_asc, rn_desc,
         ).subquery()
 
-        # Step 3 — sample every 7th day (rows 1, 8, 15, …)
-        rows = db.query(
+        # Earliest (rn_asc=1) and latest (rn_desc=1) per (brand, platform)
+        edges = db.query(
+            ranked.c.brand,
+            ranked.c.platform,
+            func.max(case(
+                (ranked.c.rn_desc == 1, ranked.c.followers), else_=None
+            )).label("end_foll"),
+            func.max(case(
+                (ranked.c.rn_asc == 1, ranked.c.followers), else_=None
+            )).label("start_foll"),
+        ).filter(
+            (ranked.c.rn_asc == 1) | (ranked.c.rn_desc == 1)
+        ).group_by(ranked.c.brand, ranked.c.platform).all()
+
+        bp_growth: dict = {}
+        bp_end: dict = {}
+        for e in edges:
+            key = (e.brand, e.platform)
+            s = e.start_foll or 0
+            en = e.end_foll or 0
+            bp_growth[key] = en - s
+            bp_end[key] = en
+
+        total_growth = sum(bp_growth.values())
+        total_followers = sum(bp_end.values())
+
+        # ── Views/Likes: non-overlapping 7-day window sampling ────
+        numbered = db.query(
+            ranked.c.brand, ranked.c.platform,
+            ranked.c.views, ranked.c.likes,
+            ranked.c.rn_desc.label("rn"),
+        ).subquery()
+
+        vl_rows = db.query(
             numbered.c.brand,
             numbered.c.platform,
-            numbered.c.followers,
             numbered.c.views,
             numbered.c.likes,
         ).filter(func.mod(numbered.c.rn - 1, 7) == 0).all()
 
-        # Aggregate
-        bp_foll: dict = {}    # (brand, platform) → max followers
-        b_views: dict = {}    # brand → cumulative views
-        b_likes: dict = {}    # brand → cumulative likes
-        for r in rows:
-            key = (r.brand, r.platform)
-            bp_foll[key] = max(bp_foll.get(key, 0), r.followers or 0)
+        b_views: dict = {}
+        b_likes: dict = {}
+        b_foll_growth: dict = {}
+        b_foll_total: dict = {}
+        for r in vl_rows:
             b_views[r.brand] = b_views.get(r.brand, 0) + (r.views or 0)
             b_likes[r.brand] = b_likes.get(r.brand, 0) + (r.likes or 0)
 
-        b_foll: dict = {}
-        for (b, _p), foll in bp_foll.items():
-            b_foll[b] = b_foll.get(b, 0) + foll
+        for (b, _p), g in bp_growth.items():
+            b_foll_growth[b] = b_foll_growth.get(b, 0) + g
+        for (b, _p), e in bp_end.items():
+            b_foll_total[b] = b_foll_total.get(b, 0) + e
 
-        totals = {
-            "followers": sum(bp_foll.values()),
-            "views": sum(b_views.values()),
-            "likes": sum(b_likes.values()),
-        }
+        all_brands = set(b_views) | set(b_foll_growth)
         brands_list = [
             {
                 "brand": b,
-                "followers": b_foll.get(b, 0),
+                "followers": b_foll_total.get(b, 0),
+                "followers_growth": b_foll_growth.get(b, 0),
                 "views": b_views.get(b, 0),
                 "likes": b_likes.get(b, 0),
             }
-            for b in set(b_foll) | set(b_views)
+            for b in all_brands
         ]
+
+        totals = {
+            "followers_growth": total_growth,
+            "followers_total": total_followers,
+            "views": sum(b_views.values()),
+            "likes": sum(b_likes.values()),
+        }
         return totals, brands_list
 
-    current, current_brands = _windowed_totals(current_start, now)
-    previous, _ = _windowed_totals(prev_start, current_start)
+    current, current_brands = _period_progress(current_start, now)
+    previous, _ = _period_progress(prev_start, current_start)
 
     def pct_change(curr, prev):
         if prev == 0:
-            return None  # No comparison data for previous period
+            return None
         return round((curr - prev) / prev * 100, 1)
 
-    # Daily chart data — for followers, sum the MAX per (brand, platform)
-    # per day to avoid inflating counts from multiple snapshots.
-    # Use a subquery to get the latest snapshot per (brand, platform, day).
-    # views_last_7_days and likes_last_7_days are rolling-window values, so we
-    # take MAX (≈latest) per group instead of SUM to avoid duplicating overlapping windows.
-    from sqlalchemy import literal_column
-    day_sub = db.query(
-        func.date_trunc('day', AnalyticsSnapshot.snapshot_at).label("day"),
-        AnalyticsSnapshot.brand,
-        AnalyticsSnapshot.platform,
-        func.max(AnalyticsSnapshot.followers_count).label("followers"),
-        func.max(AnalyticsSnapshot.views_last_7_days).label("views"),
-        func.max(AnalyticsSnapshot.likes_last_7_days).label("likes"),
-    ).filter(
-        AnalyticsSnapshot.user_id == user_id,
-        AnalyticsSnapshot.snapshot_at >= current_start,
-    )
-    if brand:
-        day_sub = day_sub.filter(AnalyticsSnapshot.brand == brand)
-    if platform:
-        day_sub = day_sub.filter(AnalyticsSnapshot.platform == platform)
-    day_sub = day_sub.group_by(
-        literal_column("day"), AnalyticsSnapshot.brand, AnalyticsSnapshot.platform
-    ).subquery()
+    # ── How many days of snapshot data do we actually have? ───────
+    first_snapshot = db.query(
+        func.min(AnalyticsSnapshot.snapshot_at)
+    ).filter(AnalyticsSnapshot.user_id == user_id).scalar()
+    data_available_days = (now - first_snapshot).days if first_snapshot else 0
 
+    # ── Daily chart data ──────────────────────────────────────────
+    day_sub = _daily_sub(current_start, now)
     day_q = db.query(
         day_sub.c.day,
         func.sum(day_sub.c.followers).label("followers"),
@@ -194,38 +230,50 @@ async def analytics_overview(
         for r in day_q.all()
     ]
 
-    # Social channels table (per brand+platform latest data) — must come before
-    # brand breakdown since brands are now derived from channels.
+    # ── Social channels (live BrandAnalytics data) ────────────────
     channels_q = db.query(BrandAnalytics).filter(BrandAnalytics.user_id == user_id)
     if brand:
         channels_q = channels_q.filter(BrandAnalytics.brand == brand)
     if platform:
         channels_q = channels_q.filter(BrandAnalytics.platform == platform)
-    channels = []
-    for ba in channels_q.all():
-        channels.append({
+    channels = [
+        {
             "brand": ba.brand,
             "platform": ba.platform,
             "followers": ba.followers_count,
             "views": ba.views_last_7_days,
             "likes": ba.likes_last_7_days,
             "last_fetched_at": ba.last_fetched_at.isoformat() if ba.last_fetched_at else None,
-        })
-
-    # Per-brand breakdown — derived from windowed snapshot data (period-aware)
-    brands = current_brands
+        }
+        for ba in channels_q.all()
+    ]
 
     return {
-        "period": {"days": days, "start": current_start.isoformat(), "end": now.isoformat()},
-        "current": current,
-        "previous": previous,
+        "period": {
+            "days": days,
+            "start": current_start.isoformat(),
+            "end": now.isoformat(),
+            "data_available_days": data_available_days,
+        },
+        "current": {
+            "followers": current["followers_growth"],
+            "followers_total": current["followers_total"],
+            "views": current["views"],
+            "likes": current["likes"],
+        },
+        "previous": {
+            "followers": previous["followers_growth"],
+            "followers_total": previous.get("followers_total", 0),
+            "views": previous["views"],
+            "likes": previous["likes"],
+        },
         "changes": {
-            "followers_pct": pct_change(current["followers"], previous["followers"]),
+            "followers_pct": pct_change(current["followers_growth"], previous["followers_growth"]),
             "views_pct": pct_change(current["views"], previous["views"]),
             "likes_pct": pct_change(current["likes"], previous["likes"]),
         },
         "daily": daily,
-        "brands": brands,
+        "brands": current_brands,
         "channels": channels,
     }
 

@@ -2149,8 +2149,9 @@ export function AdminPage() {
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           {/* Header row */}
-          <div className="grid grid-cols-[1fr_auto_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="grid grid-cols-[1fr_160px_auto_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <span>User</span>
+            <span>User ID</span>
             <span>Role</span>
             <span>Last Sign In</span>
             <span>Joined</span>
@@ -2167,7 +2168,7 @@ export function AdminPage() {
                 key={u.id}
                 onClick={() => setSelectedUser(u)}
                 className={clsx(
-                  'grid grid-cols-[1fr_auto_140px_120px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center',
+                  'grid grid-cols-[1fr_160px_auto_140px_120px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center',
                   u.is_blocked && 'opacity-60',
                   selectedUser?.id === u.id && 'bg-stone-50',
                 )}
@@ -2178,6 +2179,16 @@ export function AdminPage() {
                   </p>
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
                 </div>
+                <button
+                  title="Click to copy full ID"
+                  onClick={e => {
+                    e.stopPropagation()
+                    navigator.clipboard.writeText(u.id)
+                  }}
+                  className="text-xs text-gray-400 font-mono truncate hover:text-gray-600 text-left"
+                >
+                  {u.id.slice(0, 8)}…
+                </button>
                 <RoleBadge user={u} />
                 <span className="text-xs text-gray-400 flex items-center gap-1 whitespace-nowrap">
                   <Clock className="w-3 h-3" />

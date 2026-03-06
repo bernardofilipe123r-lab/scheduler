@@ -34,6 +34,11 @@ function fmt(num: number): string {
   return num.toLocaleString()
 }
 
+function fmtGrowth(num: number): string {
+  const prefix = num > 0 ? '+' : ''
+  return prefix + fmt(num)
+}
+
 function pctColor(pct: number) {
   if (pct > 0) return 'text-green-600'
   if (pct < 0) return 'text-red-500'
@@ -245,13 +250,21 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
+      {/* Data availability warning */}
+      {data.period.data_available_days > 0 && data.period.data_available_days < days && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+          <span className="text-amber-600 text-xs font-semibold">
+            Only {data.period.data_available_days} days of data available — numbers below reflect the actual data we have, not the full {days}-day window.
+          </span>
+        </div>
+      )}
       {/* 4 Stat cards with colored top accent */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Followers', value: data.current.followers, change: data.changes.followers_pct, color: '#3B82F6', icon: <Users className="w-4 h-4" />, sub: 'across all brands' },
-          { label: `Views (${days}d)`, value: data.current.views, change: data.changes.views_pct, color: '#10B981', icon: <Eye className="w-4 h-4" />, sub: 'total reach' },
-          { label: `Likes (${days}d)`, value: data.current.likes, change: data.changes.likes_pct, color: '#EC4899', icon: <Heart className="w-4 h-4" />, sub: 'total engagement' },
-          { label: 'Eng. Rate', value: null, color: '#F59E0B', icon: <Zap className="w-4 h-4" />, sub: 'likes / views' },
+          { label: `Followers (${days}d)`, value: data.current.followers, change: data.changes.followers_pct, color: '#3B82F6', icon: <Users className="w-4 h-4" />, sub: `${fmt(data.current.followers_total)} total across all brands`, isGrowth: true },
+          { label: `Views (${days}d)`, value: data.current.views, change: data.changes.views_pct, color: '#10B981', icon: <Eye className="w-4 h-4" />, sub: 'total reach', isGrowth: false },
+          { label: `Likes (${days}d)`, value: data.current.likes, change: data.changes.likes_pct, color: '#EC4899', icon: <Heart className="w-4 h-4" />, sub: 'total engagement', isGrowth: false },
+          { label: 'Eng. Rate', value: null, color: '#F59E0B', icon: <Zap className="w-4 h-4" />, sub: 'likes / views', isGrowth: false },
         ].map((card, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: card.color, opacity: 0.7 }} />
@@ -261,7 +274,7 @@ function OverviewTab({
             </div>
             <div className="flex items-end gap-2">
               <p className="text-2xl font-extrabold text-gray-900 leading-none tracking-tight">
-                {card.value !== null ? fmt(card.value) : engRate + '%'}
+                {card.value !== null ? (card.isGrowth ? fmtGrowth(card.value) : fmt(card.value)) : engRate + '%'}
               </p>
               {card.change !== undefined && <PctBadge value={card.change ?? null} />}
             </div>
@@ -326,7 +339,8 @@ function OverviewTab({
             <h3 className="text-sm font-bold text-gray-900 mb-4">By Platform</h3>
             <div className="space-y-4">
               {platformTotals.map((p) => {
-                const pct = data.current.views > 0 ? (p.views / data.current.views) * 100 : 0
+                const totalPlatViews = platformTotals.reduce((s, pt) => s + pt.views, 0)
+                const pct = totalPlatViews > 0 ? (p.views / totalPlatViews) * 100 : 0
                 const pColor = PLATFORM_COLORS[p.platform] || '#6B7280'
                 return (
                   <div key={p.platform}>

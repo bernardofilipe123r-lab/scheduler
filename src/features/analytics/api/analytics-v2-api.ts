@@ -9,10 +9,12 @@ export interface OverviewPeriod {
   days: number
   start: string
   end: string
+  data_available_days: number
 }
 
 export interface OverviewTotals {
   followers: number
+  followers_total: number
   views: number
   likes: number
 }
@@ -33,6 +35,7 @@ export interface DailyPoint {
 export interface BrandTotal {
   brand: string
   followers: number
+  followers_growth: number
   views: number
   likes: number
 }
