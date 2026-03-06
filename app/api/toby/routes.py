@@ -656,17 +656,22 @@ def update_brand_config(
         cfg.post_slots_per_day = body.post_slots_per_day
     if body.reel_format is not None:
         cfg.reel_format = body.reel_format
-    if body.enabled_platforms is not None:
-        from app.core.platforms import SUPPORTED_PLATFORMS_SET, SUPPORTED_CONTENT_TYPES
-        # Sanitise: dict keyed by content-type → list of valid platform names
-        sanitised: dict[str, list[str]] = {}
-        for ct_key, platform_list in body.enabled_platforms.items():
-            if ct_key not in SUPPORTED_CONTENT_TYPES:
-                continue
-            cleaned = [p for p in platform_list if p in SUPPORTED_PLATFORMS_SET]
-            sanitised[ct_key] = cleaned
-        cfg.enabled_platforms = sanitised if sanitised else None
+    # enabled_platforms: distinguish "field absent" (no change) from "field sent as null" (all connected)
+    if "enabled_platforms" in body.model_fields_set:
         from sqlalchemy.orm.attributes import flag_modified
+        if body.enabled_platforms is not None:
+            from app.core.platforms import SUPPORTED_PLATFORMS_SET, SUPPORTED_CONTENT_TYPES
+            # Sanitise: dict keyed by content-type → list of valid platform names
+            sanitised: dict[str, list[str]] = {}
+            for ct_key, platform_list in body.enabled_platforms.items():
+                if ct_key not in SUPPORTED_CONTENT_TYPES:
+                    continue
+                cleaned = [p for p in platform_list if p in SUPPORTED_PLATFORMS_SET]
+                sanitised[ct_key] = cleaned
+            cfg.enabled_platforms = sanitised if sanitised else None
+        else:
+            # Explicitly null → reset to "all connected for all types"
+            cfg.enabled_platforms = None
         flag_modified(cfg, "enabled_platforms")
 
     cfg.updated_at = datetime.now(timezone.utc)
