@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
-from app.api.auth.middleware import get_current_user
+from app.api.auth.middleware import get_current_user, is_admin_user
 
 router = APIRouter(prefix="/api/admin/api-usage", tags=["admin-api-usage"])
 
@@ -16,8 +16,7 @@ async def get_api_usage(
 ):
     """Get API usage summary across all external services."""
     # Admin-only check
-    user_tag = user.get("tag", "")
-    if user_tag not in ("admin", "super_admin"):
+    if not is_admin_user(user):
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Admin access required")
 
