@@ -1,12 +1,48 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Loader2, Save, BadgeCheck, Image, Film } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Loader2, Save, BadgeCheck, Image, Film, RotateCcw, Music } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
 import type { DesignSettings } from './types'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
-const FONT_OPTIONS = ['Anton', 'Impact', 'Inter', 'Oswald', 'Montserrat', 'Bebas Neue', 'Roboto Condensed', 'Poppins']
+const FONT_OPTIONS = ['Anton', 'Inter', 'Oswald', 'Montserrat', 'Bebas Neue', 'Roboto Condensed', 'Poppins']
 const DIVIDER_OPTIONS = ['line_with_logo', 'gradient', 'none']
+
+/* ─── Base sizes for the header scale system ─── */
+const BASE_NAME_SIZE = 42
+const BASE_HANDLE_SIZE = 32
+const BASE_LOGO_SIZE = 96
+
+/* ─── Default values for reset ─── */
+const DEFAULTS: Partial<DesignSettings> = {
+  // Thumbnail
+  thumbnail_title_color: '#FFD700',
+  thumbnail_title_font: 'Anton',
+  thumbnail_title_size: 72,
+  thumbnail_title_padding: 40,
+  thumbnail_logo_size: 200,
+  thumbnail_overlay_opacity: 60,
+  thumbnail_divider_style: 'line_with_logo',
+  // Reel
+  reel_text_color: '#FFFFFF',
+  reel_text_font: 'Inter',
+  reel_text_size: 48,
+  reel_text_font_bold: false,
+  reel_brand_name_color: '#FFFFFF',
+  reel_handle_color: '#AAAAAA',
+  reel_header_scale: 1.0,
+  reel_brand_name_size: BASE_NAME_SIZE,
+  reel_handle_size: BASE_HANDLE_SIZE,
+  reel_logo_size: BASE_LOGO_SIZE,
+  show_logo: true,
+  show_handle: true,
+  reel_padding_top: 320,
+  reel_section_gap: 40,
+  reel_image_height: 660,
+  image_duration: 3,
+  black_fade_duration: 1.0,
+  reel_music_enabled: true,
+}
 
 /* ─── Dynamic example text that stays coherent at any word count ─── */
 const EXAMPLE_SENTENCES = [
@@ -65,15 +101,16 @@ function SliderRow({ label, value, min, max, step = 1, unit = 'px', onChange }: 
   )
 }
 
-// Color picker row
+// Compact color picker — small circle swatch only
 function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">{label}</span>
-      <input type="color" value={value} onChange={e => onChange(e.target.value)}
-        className="w-7 h-7 rounded border border-gray-200 cursor-pointer bg-transparent flex-shrink-0" />
-      <input value={value} onChange={e => onChange(e.target.value)}
-        className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-900 text-xs outline-none focus:border-primary-500" />
+      <div className="relative w-7 h-7 flex-shrink-0">
+        <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: value }} />
+        <input type="color" value={value} onChange={e => onChange(e.target.value)}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+      </div>
     </div>
   )
 }
@@ -186,22 +223,22 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
   const textColor = form.reel_text_color || '#FFFFFF'
   const textSize = form.reel_text_size ?? 48
   const textFont = form.reel_text_font || 'Inter'
-  const textShadow = form.reel_text_shadow ?? true
+  const fontBold = form.reel_text_font_bold ?? false
   const showLogo = form.show_logo ?? true
   const showHandle = form.show_handle ?? true
-  const gapHeaderText = form.reel_gap_header_text ?? 40
-  const gapTextMedia = form.reel_gap_text_media ?? 40
+  const gap = form.reel_section_gap ?? 40
   const paddingTop = form.reel_padding_top ?? 320
-  const paddingBottom = form.reel_padding_bottom ?? 40
-  const paddingLeft = form.reel_padding_left ?? 85
-  const paddingRight = form.reel_padding_right ?? 85
-  const imageHeight = form.reel_image_height ?? 600
+  const paddingLeft = 85 // hardcoded
+  const paddingRight = 85 // hardcoded
+  const paddingBottom = 40 // hardcoded
+  const imageHeight = form.reel_image_height ?? 660
   const brandNameColor = form.reel_brand_name_color || '#FFFFFF'
-  const brandNameSize = form.reel_brand_name_size ?? 16
   const handleColor = form.reel_handle_color || '#AAAAAA'
-  const handleSize = form.reel_handle_size ?? 14
-  const logoSizePx = form.reel_logo_size ?? 120
-  const avgWords = form.reel_avg_word_count ?? 50
+  const scale = form.reel_header_scale ?? 1.0
+  const brandNameSize = Math.round(BASE_NAME_SIZE * scale)
+  const handleSize = Math.round(BASE_HANDLE_SIZE * scale)
+  const logoSizePx = Math.round(BASE_LOGO_SIZE * scale)
+  const avgWords = 50 // hardcoded
 
   const exampleText = useMemo(() => buildExampleText(avgWords), [avgWords])
 
@@ -249,14 +286,15 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
         </div>
 
         {/* Gap: Header → Text */}
-        <div className="flex-shrink-0" style={{ height: `${gapHeaderText * s}px` }} />
+        <div className="flex-shrink-0" style={{ height: `${gap * s}px` }} />
 
         {/* DIV 2: Text Content — auto height, adapts to font size & word count */}
         <div className="flex-shrink-0 overflow-hidden" style={{ fontFamily: textFont }}>
           <p className="leading-snug" style={{
             color: textColor,
             fontSize: `${textSize * s}px`,
-            textShadow: textShadow ? '0 1px 3px rgba(0,0,0,0.7)' : 'none',
+            fontWeight: fontBold ? 700 : 400,
+            textShadow: '0 1px 3px rgba(0,0,0,0.7)',
             lineHeight: 1.45,
             display: '-webkit-box',
             WebkitLineClamp: 20,
@@ -268,7 +306,7 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
         </div>
 
         {/* Gap: Text → Media */}
-        <div className="flex-shrink-0" style={{ height: `${gapTextMedia * s}px` }} />
+        <div className="flex-shrink-0" style={{ height: `${gap * s}px` }} />
 
         {/* DIV 3: Image/Video Area — animated video simulation */}
         <div className="relative flex-shrink-0 rounded-lg overflow-hidden"
@@ -329,14 +367,40 @@ export function DesignEditorTab() {
     setForm((prev: Partial<DesignSettings>) => ({ ...prev, [key]: value }))
   }
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
+    // When saving, compute derived values from scale and unified gap
+    const scale = form.reel_header_scale ?? 1.0
+    const gap = form.reel_section_gap ?? 40
+    const payload: Partial<DesignSettings> = {
+      ...form,
+      // Compute sizes from scale
+      reel_brand_name_size: Math.round(BASE_NAME_SIZE * scale),
+      reel_handle_size: Math.round(BASE_HANDLE_SIZE * scale),
+      reel_logo_size: Math.round(BASE_LOGO_SIZE * scale),
+      // Sync both gaps
+      reel_gap_header_text: gap,
+      reel_gap_text_media: gap,
+      // Hardcoded values
+      reel_padding_bottom: 40,
+      reel_padding_left: 85,
+      reel_padding_right: 85,
+      reel_avg_word_count: 50,
+      image_fade_duration: 0.2,
+      reel_text_bg_opacity: 85,
+      reel_text_shadow: true,
+    }
     try {
-      await updateMutation.mutateAsync(form)
+      await updateMutation.mutateAsync(payload)
       toast.success('Design settings saved')
     } catch {
       toast.error('Failed to save design settings')
     }
-  }
+  }, [form, updateMutation])
+
+  const handleReset = useCallback(() => {
+    setForm(prev => ({ ...prev, ...DEFAULTS }))
+    toast.success('Reset to defaults — click Save to apply')
+  }, [])
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
@@ -360,11 +424,18 @@ export function DesignEditorTab() {
               </button>
             ))}
           </div>
-          <button onClick={handleSave} disabled={updateMutation.isPending}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors">
-            {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            Save
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleReset}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset
+            </button>
+            <button onClick={handleSave} disabled={updateMutation.isPending}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors">
+              {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Save
+            </button>
+          </div>
         </div>
       </div>
 
@@ -446,16 +517,28 @@ function ContentSettings({ form, update }: {
   form: Partial<DesignSettings>
   update: (key: keyof DesignSettings, value: unknown) => void
 }) {
+  const headerScale = form.reel_header_scale ?? 1.0
+
   return (
     <div className="space-y-4">
       {/* Brand Header */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand Header</h4>
         <ColorRow label="Name Color" value={form.reel_brand_name_color || '#FFFFFF'} onChange={v => update('reel_brand_name_color', v)} />
-        <SliderRow label="Name Size" value={form.reel_brand_name_size ?? 16} min={10} max={40} onChange={v => update('reel_brand_name_size', v)} />
         <ColorRow label="Handle Color" value={form.reel_handle_color || '#AAAAAA'} onChange={v => update('reel_handle_color', v)} />
-        <SliderRow label="Handle Size" value={form.reel_handle_size ?? 14} min={8} max={30} onChange={v => update('reel_handle_size', v)} />
-        <SliderRow label="Logo Size" value={form.reel_logo_size ?? 120} min={40} max={300} onChange={v => update('reel_logo_size', v)} />
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">Scale</span>
+          <input
+            type="range" min={0.5} max={1.5} step={0.05}
+            value={headerScale}
+            onChange={e => update('reel_header_scale', +e.target.value)}
+            className="flex-1 h-1.5 accent-primary-600 cursor-pointer"
+          />
+          <span className="text-xs text-gray-700 font-mono w-14 text-right flex-shrink-0">×{headerScale.toFixed(2)}</span>
+        </div>
+        <p className="text-[10px] text-gray-400 pl-[7.5rem]">
+          Name {Math.round(BASE_NAME_SIZE * headerScale)}px · Handle {Math.round(BASE_HANDLE_SIZE * headerScale)}px · Logo {Math.round(BASE_LOGO_SIZE * headerScale)}px
+        </p>
         <div className="flex items-center gap-4 pt-1">
           <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
             <input type="checkbox" checked={form.show_logo ?? true} onChange={e => update('show_logo', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
@@ -479,34 +562,45 @@ function ContentSettings({ form, update }: {
             {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
-        <SliderRow label="Font Size" value={form.reel_text_size ?? 48} min={24} max={96} onChange={v => update('reel_text_size', v)} />
-        <SliderRow label="Avg Words" value={form.reel_avg_word_count ?? 50} min={10} max={200} unit="" onChange={v => update('reel_avg_word_count', v)} />
-        <SliderRow label="BG Opacity" value={form.reel_text_bg_opacity ?? 50} min={0} max={100} unit="%" onChange={v => update('reel_text_bg_opacity', v)} />
-        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer pt-1">
-          <input type="checkbox" checked={form.reel_text_shadow ?? true} onChange={e => update('reel_text_shadow', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
-          Text Shadow
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+          <input type="checkbox" checked={form.reel_text_font_bold ?? false} onChange={e => update('reel_text_font_bold', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
+          Bold
         </label>
+        <SliderRow label="Font Size" value={form.reel_text_size ?? 48} min={24} max={96} onChange={v => update('reel_text_size', v)} />
       </section>
 
       {/* Layout */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Layout</h4>
         <SliderRow label="Padding Top" value={form.reel_padding_top ?? 320} min={0} max={600} onChange={v => update('reel_padding_top', v)} />
-        <SliderRow label="Padding Bottom" value={form.reel_padding_bottom ?? 40} min={0} max={200} onChange={v => update('reel_padding_bottom', v)} />
-        <SliderRow label="Padding Left" value={form.reel_padding_left ?? 85} min={0} max={200} onChange={v => update('reel_padding_left', v)} />
-        <SliderRow label="Padding Right" value={form.reel_padding_right ?? 85} min={0} max={200} onChange={v => update('reel_padding_right', v)} />
-        <SliderRow label="Header → Text" value={form.reel_gap_header_text ?? 40} min={0} max={200} onChange={v => update('reel_gap_header_text', v)} />
-        <SliderRow label="Text → Media" value={form.reel_gap_text_media ?? 40} min={0} max={200} onChange={v => update('reel_gap_text_media', v)} />
-        <SliderRow label="Image Height" value={form.reel_image_height ?? 600} min={200} max={1200} onChange={v => update('reel_image_height', v)} />
+        <SliderRow label="Gap" value={form.reel_section_gap ?? 40} min={0} max={200} onChange={v => update('reel_section_gap', v)} />
+        <SliderRow label="Image Height" value={form.reel_image_height ?? 660} min={400} max={730} onChange={v => update('reel_image_height', v)} />
       </section>
 
-      {/* Slideshow Timing */}
+      {/* Slideshow */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Slideshow</h4>
         <SliderRow label="Image Duration" value={form.image_duration ?? 3} min={1} max={10} step={0.5} unit="s" onChange={v => update('image_duration', v)} />
-        <SliderRow label="Fade Duration" value={form.image_fade_duration ?? 0.2} min={0} max={2} step={0.1} unit="s" onChange={v => update('image_fade_duration', v)} />
-        <SliderRow label="Total Duration" value={form.reel_total_duration ?? 15} min={5} max={60} unit="s" onChange={v => update('reel_total_duration', v)} />
-        <SliderRow label="Black Fade In" value={form.black_fade_duration ?? 1} min={0} max={5} step={0.5} unit="s" onChange={v => update('black_fade_duration', v)} />
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+          <input type="checkbox"
+            checked={(form.black_fade_duration ?? 1) > 0}
+            onChange={e => update('black_fade_duration', e.target.checked ? 1.0 : 0)}
+            className="w-3.5 h-3.5 accent-primary-600" />
+          Black Fade In
+        </label>
+      </section>
+
+      {/* Music */}
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Music className="w-3.5 h-3.5" />
+          Music
+        </h4>
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+          <input type="checkbox" checked={form.reel_music_enabled ?? true} onChange={e => update('reel_music_enabled', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
+          Enable background music
+        </label>
+        <p className="text-[10px] text-gray-400">Toby picks a random trending track. In manual mode, you choose the track or let it be random.</p>
       </section>
     </div>
   )

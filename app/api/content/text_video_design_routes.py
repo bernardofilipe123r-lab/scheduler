@@ -29,20 +29,23 @@ class DesignUpdate(BaseModel):
     instagram_handle: Optional[str] = Field(None, max_length=100)
 
     # Reel frame layout
-    reel_section_gap: Optional[int] = Field(None, ge=0, le=120)
+    reel_section_gap: Optional[int] = Field(None, ge=0, le=200)
     reel_gap_header_text: Optional[int] = Field(None, ge=0, le=200)
     reel_gap_text_media: Optional[int] = Field(None, ge=0, le=200)
-    reel_logo_size: Optional[int] = Field(None, ge=40, le=300)
+    reel_logo_size: Optional[int] = Field(None, ge=20, le=300)
     reel_padding_top: Optional[int] = Field(None, ge=0, le=600)
     reel_padding_bottom: Optional[int] = Field(None, ge=0, le=200)
     reel_padding_left: Optional[int] = Field(None, ge=0, le=200)
     reel_padding_right: Optional[int] = Field(None, ge=0, le=200)
-    reel_image_height: Optional[int] = Field(None, ge=200, le=1200)
+    reel_image_height: Optional[int] = Field(None, ge=400, le=730)
     reel_avg_word_count: Optional[int] = Field(None, ge=10, le=200)
     reel_brand_name_color: Optional[str] = Field(None, max_length=20)
-    reel_brand_name_size: Optional[int] = Field(None, ge=10, le=40)
+    reel_brand_name_size: Optional[int] = Field(None, ge=10, le=80)
     reel_handle_color: Optional[str] = Field(None, max_length=20)
-    reel_handle_size: Optional[int] = Field(None, ge=8, le=30)
+    reel_handle_size: Optional[int] = Field(None, ge=8, le=60)
+    reel_header_scale: Optional[float] = Field(None, ge=0.5, le=1.5)
+    reel_text_font_bold: Optional[bool] = None
+    reel_music_enabled: Optional[bool] = None
 
     # Thumbnail settings
     thumbnail_title_color: Optional[str] = Field(None, max_length=20)
@@ -89,6 +92,13 @@ async def update_design(
         db.add(design)
 
     update_data = request.model_dump(exclude_unset=True)
+
+    # Map show_logo/show_handle to actual model column names
+    if "show_logo" in update_data:
+        update_data["reel_show_logo"] = update_data.pop("show_logo")
+    if "show_handle" in update_data:
+        update_data["reel_show_handle"] = update_data.pop("show_handle")
+
     for field_name, value in update_data.items():
         if value is not None:
             setattr(design, field_name, value)

@@ -158,8 +158,8 @@ export function CommunityPage() {
           <MessageSquare className="w-14 h-14 text-gray-200 mb-4" />
           <h3 className="text-lg font-semibold text-gray-700">No comments yet</h3>
           <p className="text-sm text-gray-400 mt-1 max-w-md">
-            Comments from your published content will appear here once the community endpoint is available.
-            This feature requires collecting comments via the Meta Graph API and YouTube Data API.
+            Comments from your Instagram and Facebook posts will appear here.
+            Make sure you have at least one brand with a connected social account.
           </p>
         </div>
       ) : (

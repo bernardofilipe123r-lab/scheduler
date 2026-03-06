@@ -3,7 +3,6 @@
 from sqlalchemy import Column, String, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from app.models.base import Base
-from datetime import datetime
 
 
 class TextVideoDesign(Base):
@@ -30,17 +29,20 @@ class TextVideoDesign(Base):
     reel_section_gap = Column(Integer, default=40)
     reel_gap_header_text = Column(Integer, default=40)
     reel_gap_text_media = Column(Integer, default=40)
-    reel_logo_size = Column(Integer, default=120)
+    reel_logo_size = Column(Integer, default=96)
     reel_padding_top = Column(Integer, default=320)
     reel_padding_bottom = Column(Integer, default=40)
     reel_padding_left = Column(Integer, default=85)
     reel_padding_right = Column(Integer, default=85)
-    reel_image_height = Column(Integer, default=600)
+    reel_image_height = Column(Integer, default=660)
     reel_avg_word_count = Column(Integer, default=50)
     reel_brand_name_color = Column(String(20), default="#FFFFFF")
-    reel_brand_name_size = Column(Integer, default=16)
+    reel_brand_name_size = Column(Integer, default=42)
     reel_handle_color = Column(String(20), default="#AAAAAA")
-    reel_handle_size = Column(Integer, default=14)
+    reel_handle_size = Column(Integer, default=32)
+    reel_header_scale = Column(Float, default=1.0)
+    reel_text_font_bold = Column(Boolean, default=False)
+    reel_music_enabled = Column(Boolean, default=True)
 
     # Thumbnail settings
     thumbnail_title_color = Column(String(10), default="#FFD700")
@@ -65,8 +67,8 @@ class TextVideoDesign(Base):
             "reel_line_spacing": self.reel_line_spacing,
             "reel_text_region_pct": self.reel_text_region_pct,
             "reel_text_bg_opacity": self.reel_text_bg_opacity,
-            "reel_show_logo": self.reel_show_logo,
-            "reel_show_handle": self.reel_show_handle,
+            "show_logo": self.reel_show_logo,
+            "show_handle": self.reel_show_handle,
             "reel_handle_text": self.reel_handle_text,
             "image_duration": self.image_duration,
             "image_fade_duration": self.image_fade_duration,
@@ -86,6 +88,9 @@ class TextVideoDesign(Base):
             "reel_brand_name_size": self.reel_brand_name_size,
             "reel_handle_color": self.reel_handle_color,
             "reel_handle_size": self.reel_handle_size,
+            "reel_header_scale": self.reel_header_scale,
+            "reel_text_font_bold": self.reel_text_font_bold,
+            "reel_music_enabled": self.reel_music_enabled,
             "thumbnail_title_color": self.thumbnail_title_color,
             "thumbnail_title_font": self.thumbnail_title_font,
             "thumbnail_title_size": self.thumbnail_title_size,

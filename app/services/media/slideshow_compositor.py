@@ -33,6 +33,7 @@ DEFAULTS = {
     "black_fade_duration": 1.0,
     "show_logo": True,
     "show_handle": True,
+    "reel_music_enabled": True,
 }
 
 
@@ -116,8 +117,8 @@ class SlideshowCompositor:
         font_name = self._get(design, "reel_text_font")
         font_size = self._get(design, "reel_text_size")
         line_spacing = self._get(design, "reel_line_spacing")
-        show_logo = self._get(design, "show_logo")
-        show_handle = self._get(design, "show_handle")
+        show_logo = self._get(design, "reel_show_logo") if (design and hasattr(design, "reel_show_logo")) else self._get(design, "show_logo")
+        show_handle = self._get(design, "reel_show_handle") if (design and hasattr(design, "reel_show_handle")) else self._get(design, "show_handle")
 
         overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)

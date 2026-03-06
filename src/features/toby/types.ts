@@ -15,7 +15,7 @@ export interface TobyConfig {
 export interface TobyBrandConfig {
   brand_id: string
   display_name: string
-  enabled: boolean
+   enabled: boolean
   reel_slots_per_day: number
   post_slots_per_day: number
   reel_format: 'text_based' | 'text_video'

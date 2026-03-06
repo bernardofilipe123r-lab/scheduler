@@ -870,8 +870,143 @@ async def run_aggregation(
 
 
 # ────────────────────────────────────────────────────────────
-# 7.  COMMENTS — fetch from IG Graph API on-demand
+# 7.  COMMENTS — fetch from IG/FB Graph API on-demand
+#     Fetches comments from ALL recent media on the account,
+#     not just posts published through ViralToby.  This lets
+#     users see comments on pre-existing content (like Buffer).
 # ────────────────────────────────────────────────────────────
+
+def _fetch_ig_comments_for_brand(
+    brand_id: str,
+    brand_display_name: str,
+    ig_account_id: str,
+    token: str,
+    http_requests,
+) -> list[dict]:
+    """Fetch recent IG media directly from Graph API, then get their comments."""
+    comments: list[dict] = []
+    try:
+        # Step 1: List recent media from the IG business account
+        media_url = f"https://graph.instagram.com/v21.0/{ig_account_id}/media"
+        media_params = {
+            "fields": "id,caption,timestamp,media_type",
+            "limit": "15",
+            "access_token": token,
+        }
+        media_resp = http_requests.get(media_url, params=media_params, timeout=10)
+        if media_resp.status_code != 200:
+            logger.debug(f"IG media list failed for {ig_account_id}: {media_resp.status_code}")
+            return comments
+
+        media_items = media_resp.json().get("data", [])
+
+        # Step 2: For each media item, fetch its comments
+        for item in media_items:
+            media_id = item.get("id")
+            if not media_id:
+                continue
+            try:
+                cmt_url = f"https://graph.instagram.com/v21.0/{media_id}/comments"
+                cmt_params = {
+                    "fields": "id,text,username,timestamp,like_count",
+                    "limit": "25",
+                    "access_token": token,
+                }
+                cmt_resp = http_requests.get(cmt_url, params=cmt_params, timeout=10)
+                if cmt_resp.status_code != 200:
+                    continue
+
+                caption = item.get("caption") or ""
+                post_title = (caption[:60] + "…") if len(caption) > 60 else caption
+
+                for c in cmt_resp.json().get("data", []):
+                    comments.append({
+                        "id": c.get("id", ""),
+                        "platform": "instagram",
+                        "brand": brand_id,
+                        "post_id": media_id,
+                        "post_title": post_title or None,
+                        "author_name": c.get("username", "Unknown"),
+                        "author_username": c.get("username"),
+                        "author_avatar": None,
+                        "text": c.get("text", ""),
+                        "like_count": c.get("like_count", 0),
+                        "reply_count": 0,
+                        "created_at": c.get("timestamp", ""),
+                        "permalink": None,
+                    })
+            except Exception as e:
+                logger.debug(f"Error fetching comments for IG media {media_id}: {e}")
+                continue
+    except Exception as e:
+        logger.warning(f"Error listing IG media for {ig_account_id}: {e}")
+    return comments
+
+
+def _fetch_fb_comments_for_brand(
+    brand_id: str,
+    page_id: str,
+    token: str,
+    http_requests,
+) -> list[dict]:
+    """Fetch recent Facebook page posts, then get their comments."""
+    comments: list[dict] = []
+    try:
+        feed_url = f"https://graph.facebook.com/v21.0/{page_id}/feed"
+        feed_params = {
+            "fields": "id,message,created_time",
+            "limit": "15",
+            "access_token": token,
+        }
+        feed_resp = http_requests.get(feed_url, params=feed_params, timeout=10)
+        if feed_resp.status_code != 200:
+            logger.debug(f"FB feed list failed for {page_id}: {feed_resp.status_code}")
+            return comments
+
+        posts = feed_resp.json().get("data", [])
+
+        for post in posts:
+            post_id = post.get("id")
+            if not post_id:
+                continue
+            try:
+                cmt_url = f"https://graph.facebook.com/v21.0/{post_id}/comments"
+                cmt_params = {
+                    "fields": "id,message,from,created_time,like_count",
+                    "limit": "25",
+                    "access_token": token,
+                }
+                cmt_resp = http_requests.get(cmt_url, params=cmt_params, timeout=10)
+                if cmt_resp.status_code != 200:
+                    continue
+
+                msg = post.get("message") or ""
+                post_title = (msg[:60] + "…") if len(msg) > 60 else msg
+
+                for c in cmt_resp.json().get("data", []):
+                    from_obj = c.get("from") or {}
+                    comments.append({
+                        "id": c.get("id", ""),
+                        "platform": "facebook",
+                        "brand": brand_id,
+                        "post_id": post_id,
+                        "post_title": post_title or None,
+                        "author_name": from_obj.get("name", "Unknown"),
+                        "author_username": from_obj.get("id"),
+                        "author_avatar": None,
+                        "text": c.get("message", ""),
+                        "like_count": c.get("like_count", 0),
+                        "reply_count": 0,
+                        "created_at": c.get("created_time", ""),
+                        "permalink": None,
+                    })
+            except Exception as e:
+                logger.debug(f"Error fetching comments for FB post {post_id}: {e}")
+                continue
+    except Exception as e:
+        logger.warning(f"Error listing FB feed for {page_id}: {e}")
+    return comments
+
 
 @router.get("/comments")
 async def analytics_comments(
@@ -882,86 +1017,45 @@ async def analytics_comments(
     user: dict = Depends(get_current_user),
 ):
     """
-    Fetch recent comments from IG Graph API for the user's published posts.
-    Queries the most recent posts (up to 15) and fetches their comments.
+    Fetch recent comments from IG / FB Graph API on-demand.
+    Queries media directly from each connected account so that
+    pre-existing posts (published before ViralToby) are included.
     """
     import requests as http_requests
 
     user_id = user.get("id")
 
-    # Get brands with valid IG tokens
+    # Get user's active brands
     brands_q = db.query(Brand).filter(
         Brand.user_id == user_id,
         Brand.active == True,
-        Brand.instagram_business_account_id.isnot(None),
     )
     if brand:
         brands_q = brands_q.filter(Brand.id == brand)
 
     brand_rows = brands_q.all()
-    brand_tokens = {}
-    brand_names = {}
+
+    all_comments: list[dict] = []
+
     for b in brand_rows:
         token = b.meta_access_token or b.instagram_access_token
-        if token:
-            brand_tokens[b.id] = token
-            brand_names[b.id] = b.display_name
 
-    if not brand_tokens:
-        return {"comments": [], "total": 0, "has_more": False}
+        # Instagram comments
+        if (platform in (None, "instagram")) and b.instagram_business_account_id and token:
+            all_comments.extend(
+                _fetch_ig_comments_for_brand(
+                    b.id, b.display_name, b.instagram_business_account_id, token, http_requests,
+                )
+            )
 
-    # Get recent posts that have IG media IDs
-    posts_q = db.query(PostPerformance).filter(
-        PostPerformance.user_id == user_id,
-        PostPerformance.ig_media_id.isnot(None),
-        PostPerformance.brand.in_(list(brand_tokens.keys())),
-    ).order_by(desc(PostPerformance.published_at)).limit(15)
-
-    posts = posts_q.all()
-    if not posts:
-        return {"comments": [], "total": 0, "has_more": False}
-
-    all_comments = []
-
-    for post in posts:
-        token = brand_tokens.get(post.brand)
-        if not token:
-            continue
-
-        try:
-            url = f"https://graph.instagram.com/v21.0/{post.ig_media_id}/comments"
-            params = {
-                "fields": "id,text,username,timestamp,like_count",
-                "limit": "25",
-                "access_token": token,
-            }
-            resp = http_requests.get(url, params=params, timeout=10)
-            if resp.status_code != 200:
-                logger.debug(f"Comments fetch failed for {post.ig_media_id}: {resp.status_code}")
-                continue
-
-            comments_data = resp.json().get("data", [])
-            post_title = post.title or (post.caption[:60] + "…" if post.caption and len(post.caption) > 60 else post.caption)
-
-            for c in comments_data:
-                all_comments.append({
-                    "id": c.get("id", ""),
-                    "platform": "instagram",
-                    "brand": post.brand,
-                    "post_id": post.ig_media_id,
-                    "post_title": post_title,
-                    "author_name": c.get("username", "Unknown"),
-                    "author_username": c.get("username"),
-                    "author_avatar": None,
-                    "text": c.get("text", ""),
-                    "like_count": c.get("like_count", 0),
-                    "reply_count": 0,
-                    "created_at": c.get("timestamp", ""),
-                    "permalink": None,
-                })
-        except Exception as e:
-            logger.warning(f"Error fetching comments for post {post.ig_media_id}: {e}")
-            continue
+        # Facebook comments
+        fb_token = b.meta_access_token or b.facebook_access_token
+        if (platform in (None, "facebook")) and b.facebook_page_id and fb_token:
+            all_comments.extend(
+                _fetch_fb_comments_for_brand(
+                    b.id, b.facebook_page_id, fb_token, http_requests,
+                )
+            )
 
     # Sort all comments by created_at descending
     all_comments.sort(key=lambda x: x.get("created_at", ""), reverse=True)

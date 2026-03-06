@@ -59,11 +59,13 @@ export interface DesignSettings {
   reel_text_position: string
   reel_text_bg_opacity: number
   reel_text_shadow: boolean
+  reel_text_font_bold: boolean
   // Reel frame layout
   reel_section_gap: number
   reel_gap_header_text: number
   reel_gap_text_media: number
   reel_logo_size: number
+  reel_header_scale: number
   reel_padding_top: number
   reel_padding_bottom: number
   reel_padding_left: number
@@ -81,6 +83,8 @@ export interface DesignSettings {
   black_fade_duration: number
   show_logo: boolean
   show_handle: boolean
+  // Music
+  reel_music_enabled: boolean
 }
 
 export interface DiscoverRequest {
