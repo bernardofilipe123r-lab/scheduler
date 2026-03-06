@@ -26,14 +26,25 @@ class TextVideoDesign(Base):
     reel_total_duration = Column(Integer, default=15)
     black_fade_duration = Column(Float, default=1.0)
 
+    # Reel frame layout (brand header + text + image)
+    reel_section_gap = Column(Integer, default=16)
+    reel_padding_top = Column(Integer, default=24)
+    reel_padding_bottom = Column(Integer, default=16)
+    reel_avg_word_count = Column(Integer, default=50)
+    reel_brand_name_color = Column(String(20), default="#FFFFFF")
+    reel_brand_name_size = Column(Integer, default=16)
+    reel_handle_color = Column(String(20), default="#AAAAAA")
+    reel_handle_size = Column(Integer, default=14)
+
     # Thumbnail settings
     thumbnail_title_color = Column(String(10), default="#FFD700")
-    thumbnail_title_font = Column(String(100), default="Poppins-Bold.ttf")
+    thumbnail_title_font = Column(String(100), default="Anton-Regular.ttf")
     thumbnail_title_size = Column(Integer, default=72)
     thumbnail_title_max_lines = Column(Integer, default=4)
     thumbnail_title_padding_x = Column(Integer, default=40)
     thumbnail_image_ratio = Column(Float, default=0.6)
     thumbnail_divider_style = Column(String(30), default="line_with_logo")
+    thumbnail_overlay_opacity = Column(Integer, default=60)
 
     created_at = Column(TIMESTAMP(timezone=True), server_default="now()")
     updated_at = Column(TIMESTAMP(timezone=True), server_default="now()")
@@ -54,6 +65,14 @@ class TextVideoDesign(Base):
             "image_fade_duration": self.image_fade_duration,
             "reel_total_duration": self.reel_total_duration,
             "black_fade_duration": self.black_fade_duration,
+            "reel_section_gap": self.reel_section_gap,
+            "reel_padding_top": self.reel_padding_top,
+            "reel_padding_bottom": self.reel_padding_bottom,
+            "reel_avg_word_count": self.reel_avg_word_count,
+            "reel_brand_name_color": self.reel_brand_name_color,
+            "reel_brand_name_size": self.reel_brand_name_size,
+            "reel_handle_color": self.reel_handle_color,
+            "reel_handle_size": self.reel_handle_size,
             "thumbnail_title_color": self.thumbnail_title_color,
             "thumbnail_title_font": self.thumbnail_title_font,
             "thumbnail_title_size": self.thumbnail_title_size,
@@ -61,4 +80,5 @@ class TextVideoDesign(Base):
             "thumbnail_title_padding_x": self.thumbnail_title_padding_x,
             "thumbnail_image_ratio": self.thumbnail_image_ratio,
             "thumbnail_divider_style": self.thumbnail_divider_style,
+            "thumbnail_overlay_opacity": self.thumbnail_overlay_opacity,
         }

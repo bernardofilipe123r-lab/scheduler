@@ -28,6 +28,16 @@ class DesignUpdate(BaseModel):
     show_handle: Optional[bool] = None
     instagram_handle: Optional[str] = Field(None, max_length=100)
 
+    # Reel frame layout
+    reel_section_gap: Optional[int] = Field(None, ge=0, le=60)
+    reel_padding_top: Optional[int] = Field(None, ge=0, le=100)
+    reel_padding_bottom: Optional[int] = Field(None, ge=0, le=100)
+    reel_avg_word_count: Optional[int] = Field(None, ge=10, le=200)
+    reel_brand_name_color: Optional[str] = Field(None, max_length=20)
+    reel_brand_name_size: Optional[int] = Field(None, ge=10, le=40)
+    reel_handle_color: Optional[str] = Field(None, max_length=20)
+    reel_handle_size: Optional[int] = Field(None, ge=8, le=30)
+
     # Thumbnail settings
     thumbnail_title_color: Optional[str] = Field(None, max_length=20)
     thumbnail_title_font: Optional[str] = Field(None, max_length=100)
@@ -36,6 +46,7 @@ class DesignUpdate(BaseModel):
     thumbnail_title_padding: Optional[int] = Field(None, ge=0, le=100)
     thumbnail_image_ratio: Optional[float] = Field(None, ge=0.3, le=0.8)
     thumbnail_divider_style: Optional[str] = Field(None, max_length=50)
+    thumbnail_overlay_opacity: Optional[int] = Field(None, ge=0, le=100)
 
 
 @router.get("")

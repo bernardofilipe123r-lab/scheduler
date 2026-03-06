@@ -50,6 +50,7 @@ export interface DesignSettings {
   thumbnail_title_max_lines: number
   thumbnail_title_padding: number
   thumbnail_divider_style: string
+  thumbnail_overlay_opacity: number
   // Reel text
   reel_text_color: string
   reel_text_font: string
@@ -57,6 +58,15 @@ export interface DesignSettings {
   reel_text_position: string
   reel_text_bg_opacity: number
   reel_text_shadow: boolean
+  // Reel frame layout
+  reel_section_gap: number
+  reel_padding_top: number
+  reel_padding_bottom: number
+  reel_avg_word_count: number
+  reel_brand_name_color: string
+  reel_brand_name_size: number
+  reel_handle_color: string
+  reel_handle_size: number
   // Slideshow
   image_duration: number
   image_fade_duration: number
