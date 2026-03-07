@@ -26,6 +26,7 @@ engine = create_engine(
     pool_timeout=30,
     pool_recycle=1800,
     pool_pre_ping=True,
+    connect_args={"connect_timeout": 10},
 )
 
 # Create session factory
@@ -33,10 +34,26 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
-    """Initialize database tables via SQLAlchemy metadata."""
-    Base.metadata.create_all(bind=engine)
-    run_migrations()
-    print("✅ Database tables created/verified")
+    """Initialize database tables via SQLAlchemy metadata.
+    
+    Wrapped with a timeout to prevent hanging startup if DB is unreachable.
+    """
+    import concurrent.futures
+    INIT_TIMEOUT = 30  # seconds
+
+    def _do_init():
+        Base.metadata.create_all(bind=engine)
+        run_migrations()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_do_init)
+        try:
+            future.result(timeout=INIT_TIMEOUT)
+            print("✅ Database tables created/verified")
+        except concurrent.futures.TimeoutError:
+            print(f"⚠️ Database init timed out after {INIT_TIMEOUT}s — continuing startup (tables likely already exist)")
+        except Exception as e:
+            print(f"⚠️ Database init failed: {e} — continuing startup")
 
 
 def run_migrations():
