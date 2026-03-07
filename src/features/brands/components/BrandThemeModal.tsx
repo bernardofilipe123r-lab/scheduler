@@ -242,33 +242,8 @@ export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeMo
 
         {/* ── Content: preview LEFT, settings RIGHT ── */}
         <div className="flex gap-6 items-start">
-          {/* LEFT: Previews stacked vertically */}
-          <div className="flex-shrink-0 space-y-4">
-            {/* Preview text inputs */}
-            <div className="space-y-2" style={{ width: PREVIEW_W * 2 + 12 }}>
-              <div>
-                <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-0.5 block">Preview Title</label>
-                <input
-                  type="text"
-                  value={previewTitle}
-                  onChange={e => setPreviewTitle(e.target.value)}
-                  className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent"
-                  placeholder="Title text…"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-0.5 block">Preview Content (one per line)</label>
-                <textarea
-                  value={previewContentText}
-                  onChange={e => setPreviewContentText(e.target.value)}
-                  rows={4}
-                  className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent resize-none leading-snug"
-                  placeholder="Line 1&#10;Line 2&#10;Line 3"
-                />
-              </div>
-            </div>
-
-            {/* Two previews side by side */}
+          {/* LEFT: Previews side by side */}
+          <div className="flex-shrink-0">
             <div style={{ display: 'flex', gap: 12 }}>
               {/* Thumbnail Preview */}
               <div>
@@ -345,61 +320,81 @@ export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeMo
           </div>
 
           {/* RIGHT: Settings */}
-          <div className="flex-1 min-w-0 space-y-4">
-            {/* Abbreviation */}
-            <section className="space-y-2">
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Abbreviation</h4>
+          <div className="flex-1 min-w-0 space-y-3">
+            {/* Preview text inputs */}
+            <section className="space-y-1.5">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Preview Text</h4>
               <input
                 type="text"
-                value={shortName}
-                onChange={e => setShortName(e.target.value.toUpperCase().slice(0, 5))}
-                placeholder="e.g. HCO"
-                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
-                maxLength={5}
+                value={previewTitle}
+                onChange={e => setPreviewTitle(e.target.value)}
+                className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent"
+                placeholder="Title text…"
               />
-              <p className="text-[10px] text-gray-400">Short code used on rendered posts & reels (max 5 chars).</p>
+              <textarea
+                value={previewContentText}
+                onChange={e => setPreviewContentText(e.target.value)}
+                rows={3}
+                className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent resize-none leading-snug"
+                placeholder="Line 1&#10;Line 2&#10;Line 3"
+              />
             </section>
 
-            {/* Logo Upload */}
-            <section className="space-y-2">
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Logo</h4>
-              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 transition-colors">
-                {logoPreview ? (
-                  <img src={logoPreview} alt="Logo" className="w-8 h-8 object-contain" />
-                ) : (
-                  <Upload className="w-4 h-4 text-gray-400" />
-                )}
-                <span className="text-xs text-gray-500">{logoFile ? logoFile.name : 'Upload logo'}</span>
-                <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
-              </label>
-            </section>
+            {/* Abbreviation + Logo — side by side */}
+            <div className="flex gap-3">
+              <section className="space-y-1">
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Abbreviation</h4>
+                <input
+                  type="text"
+                  value={shortName}
+                  onChange={e => setShortName(e.target.value.toUpperCase().slice(0, 5))}
+                  placeholder="e.g. HCO"
+                  className="w-24 px-2 py-1.5 text-xs font-mono border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
+                  maxLength={5}
+                />
+              </section>
+              <section className="space-y-1 flex-1 min-w-0">
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Logo</h4>
+                <label className="flex items-center gap-2 px-2 py-1.5 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 transition-colors">
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Logo" className="w-6 h-6 object-contain" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-gray-400" />
+                  )}
+                  <span className="text-xs text-gray-500 truncate">{logoFile ? logoFile.name : 'Upload'}</span>
+                  <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
+                </label>
+              </section>
+            </div>
 
             {/* Brand Color */}
-            <section className="space-y-2">
+            <section className="space-y-1">
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand Color</h4>
               <ColorPicker label="" value={brandColor} onChange={setBrandColor} compact />
             </section>
 
             {/* Mode-specific rendering colors */}
-            <section className="space-y-2 border-t border-gray-200 pt-3">
+            <section className="space-y-1.5 border-t border-gray-200 pt-2">
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Colors
               </h4>
               {mode === 'light' ? (
-                <div className="space-y-3">
+                <div className="space-y-1.5">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Thumbnail</p>
-                  <ColorPicker label="Text Color" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-3">Content Title</p>
-                  <ColorPicker label="Text Color" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
-                  <ColorPicker label="Bar Background" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
+                  <ColorPicker label="Text" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-1.5">Content Title</p>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    <ColorPicker label="Text" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
+                    <ColorPicker label="Bar BG" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-1.5">
                   <p className="text-[10px] text-gray-400 leading-relaxed">
                     Text is always white. Background is AI-generated with fixed dark overlays.
                   </p>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Content Title</p>
-                  <ColorPicker label="Bar Background" value={darkContentTitleBgColor} onChange={setDarkContentTitleBgColor} compact />
+                  <ColorPicker label="Bar BG" value={darkContentTitleBgColor} onChange={setDarkContentTitleBgColor} compact />
                 </div>
               )}
             </section>
@@ -797,9 +792,9 @@ export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeMo
 function ColorPicker({ label, value, onChange, compact }: { label: string; value: string; onChange: (v: string) => void; compact?: boolean }) {
   if (compact) {
     return (
-      <div className="flex items-center gap-2">
-        {label && <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">{label}</span>}
-        <div className="relative w-7 h-7 flex-shrink-0">
+      <div className="flex items-center gap-1.5">
+        {label && <span className="text-xs text-gray-500 flex-shrink-0">{label}</span>}
+        <div className="relative w-6 h-6 flex-shrink-0">
           <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: value }} />
           <input type="color" value={value} onChange={e => onChange(e.target.value)}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -807,7 +802,7 @@ function ColorPicker({ label, value, onChange, compact }: { label: string; value
         <input
           type="text" value={value}
           onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v) }}
-          className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
+          className="w-[4.5rem] px-1.5 py-0.5 text-[11px] font-mono border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
           maxLength={7}
         />
       </div>
