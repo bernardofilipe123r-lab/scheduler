@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Loader2, Save, BadgeCheck, Image, Film, RotateCcw, Music } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
@@ -42,6 +42,19 @@ const DEFAULTS: Partial<DesignSettings> = {
   image_duration: 3,
   black_fade_duration: 1.0,
   reel_music_enabled: true,
+}
+
+/* Keys we compare for dirty/changed detection */
+const COMPARE_KEYS = Object.keys(DEFAULTS) as (keyof DesignSettings)[]
+
+function formsDiffer(a: Partial<DesignSettings>, b: Partial<DesignSettings>): boolean {
+  return COMPARE_KEYS.some(k => {
+    const va = a[k]
+    const vb = b[k]
+    if (va === undefined && vb === undefined) return false
+    if (typeof va === 'number' && typeof vb === 'number') return Math.abs(va - vb) > 0.001
+    return va !== vb
+  })
 }
 
 /* ─── Dynamic example text that stays coherent at any word count ─── */
@@ -358,29 +371,31 @@ export function DesignEditorTab() {
   const updateMutation = useUpdateDesign()
   const [form, setForm] = useState<Partial<DesignSettings>>({})
   const [tab, setTab] = useState<DesignTab>('thumbnail')
+  const savedRef = useRef<Partial<DesignSettings>>({})
 
   useEffect(() => {
-    if (design) setForm(design)
+    if (design) {
+      setForm(design)
+      savedRef.current = design
+    }
   }, [design])
+
+  const hasChanges = useMemo(() => formsDiffer(form, savedRef.current), [form])
 
   const update = (key: keyof DesignSettings, value: unknown) => {
     setForm((prev: Partial<DesignSettings>) => ({ ...prev, [key]: value }))
   }
 
-  const handleSave = useCallback(async () => {
-    // When saving, compute derived values from scale and unified gap
-    const scale = form.reel_header_scale ?? 1.15
-    const gap = form.reel_section_gap ?? 40
-    const payload: Partial<DesignSettings> = {
-      ...form,
-      // Compute sizes from scale
+  const buildPayload = useCallback((source: Partial<DesignSettings>) => {
+    const scale = source.reel_header_scale ?? 1.15
+    const gap = source.reel_section_gap ?? 40
+    return {
+      ...source,
       reel_brand_name_size: Math.round(BASE_NAME_SIZE * scale),
       reel_handle_size: Math.round(BASE_HANDLE_SIZE * scale),
       reel_logo_size: Math.round(BASE_LOGO_SIZE * scale),
-      // Sync both gaps
       reel_gap_header_text: gap,
       reel_gap_text_media: gap,
-      // Hardcoded values
       reel_padding_bottom: 40,
       reel_padding_left: 85,
       reel_padding_right: 85,
@@ -388,19 +403,34 @@ export function DesignEditorTab() {
       image_fade_duration: 0.2,
       reel_text_bg_opacity: 85,
       reel_text_shadow: true,
-    }
+    } as Partial<DesignSettings>
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    const payload = buildPayload(form)
     try {
       await updateMutation.mutateAsync(payload)
+      savedRef.current = { ...form }
+      setForm(f => ({ ...f })) // trigger re-render for hasChanges
       toast.success('Design settings saved')
     } catch {
       toast.error('Failed to save design settings')
     }
-  }, [form, updateMutation])
+  }, [form, updateMutation, buildPayload])
 
-  const handleReset = useCallback(() => {
-    setForm(prev => ({ ...prev, ...DEFAULTS }))
-    toast.success('Reset to defaults — click Save to apply')
-  }, [])
+  const handleReset = useCallback(async () => {
+    const resetForm = { ...form, ...DEFAULTS }
+    setForm(resetForm)
+    const payload = buildPayload(resetForm)
+    try {
+      await updateMutation.mutateAsync(payload)
+      savedRef.current = { ...resetForm }
+      setForm(f => ({ ...f })) // trigger re-render for hasChanges
+      toast.success('Reset to defaults and saved')
+    } catch {
+      toast.error('Failed to save after reset')
+    }
+  }, [form, updateMutation, buildPayload])
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
@@ -425,13 +455,13 @@ export function DesignEditorTab() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handleReset}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+            <button onClick={handleReset} disabled={updateMutation.isPending || !hasChanges}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
               <RotateCcw className="w-3.5 h-3.5" />
               Reset
             </button>
-            <button onClick={handleSave} disabled={updateMutation.isPending}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors">
+            <button onClick={handleSave} disabled={updateMutation.isPending || !hasChanges}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
               {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Save
             </button>
