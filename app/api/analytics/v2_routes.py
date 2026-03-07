@@ -6,7 +6,7 @@ and tiered aggregation for 1-year cumulative data.
 import logging
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, case, extract, text
 
@@ -32,6 +32,7 @@ router = APIRouter(prefix="/analytics/v2", tags=["analytics-v2"])
 
 @router.get("/overview")
 async def analytics_overview(
+    response: Response,
     brand: Optional[str] = None,
     platform: Optional[str] = None,
     days: int = Query(30, ge=0, le=365),
@@ -55,6 +56,7 @@ async def analytics_overview(
       channels[] — per brand+platform live data
       period   — { days, start, end, data_available_days }
     """
+    response.headers["Cache-Control"] = "private, max-age=120"
     from sqlalchemy import literal_column
 
     user_id = user.get("id")

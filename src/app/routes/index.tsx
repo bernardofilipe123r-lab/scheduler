@@ -1,31 +1,35 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '../layout'
 import { useAuth } from '@/features/auth'
 import { useOnboardingStatus } from '@/features/onboarding/use-onboarding-status'
-import { LoginPage } from '@/pages/Login'
-import { OnboardingPage } from '@/pages/Onboarding'
-import { ProfilePage } from '@/pages/Profile'
-import { HomePage } from '@/pages/Home'
-import { ReelsPage } from '@/pages/Reels'
-import { HistoryPage } from '@/pages/History'
-import { JobDetailPage } from '@/pages/JobDetail'
-import { ScheduledPage } from '@/pages/Scheduled'
-import { CalendarPage } from '@/pages/Calendar'
-// Connected page merged into Brands page tabs
-import { BrandsPage } from '@/pages/Brands'
-import { PostsPage } from '@/pages/Posts'
-import { AnalyticsPage } from '@/pages/Analytics'
-import { AboutPage } from '@/pages/About'
-import { LogsPage } from '@/pages/Logs'
-import { AdminPage } from '@/pages/Admin'
-import { CreateBrandPage } from '@/pages/CreateBrand'
-import { TobyPage } from '@/pages/Toby'
-import { BillingPage } from '@/pages/Billing'
-import { PrivacyPolicyPage } from '@/pages/PrivacyPolicy'
-import { DataDeletionPage } from '@/pages/DataDeletion'
-import { TermsPage } from '@/pages/Terms'
 import { AppLoader, ErrorBoundary } from '@/shared/components'
+
+// ── Eagerly loaded (always needed on first paint) ──────────────────────────
+import { LoginPage } from '@/pages/Login'
 import { WelcomePage } from '@/pages/Welcome'
+import { OnboardingPage } from '@/pages/Onboarding'
+
+// ── Lazy-loaded pages (split into separate chunks) ─────────────────────────
+const HomePage = lazy(() => import('@/pages/Home').then(m => ({ default: m.HomePage })))
+const ReelsPage = lazy(() => import('@/pages/Reels').then(m => ({ default: m.ReelsPage })))
+const HistoryPage = lazy(() => import('@/pages/History').then(m => ({ default: m.HistoryPage })))
+const JobDetailPage = lazy(() => import('@/pages/JobDetail').then(m => ({ default: m.JobDetailPage })))
+const CalendarPage = lazy(() => import('@/pages/Calendar').then(m => ({ default: m.CalendarPage })))
+const ScheduledPage = lazy(() => import('@/pages/Scheduled').then(m => ({ default: m.ScheduledPage })))
+const BrandsPage = lazy(() => import('@/pages/Brands').then(m => ({ default: m.BrandsPage })))
+const CreateBrandPage = lazy(() => import('@/pages/CreateBrand').then(m => ({ default: m.CreateBrandPage })))
+const PostsPage = lazy(() => import('@/pages/Posts').then(m => ({ default: m.PostsPage })))
+const AnalyticsPage = lazy(() => import('@/pages/Analytics').then(m => ({ default: m.AnalyticsPage })))
+const TobyPage = lazy(() => import('@/pages/Toby').then(m => ({ default: m.TobyPage })))
+const BillingPage = lazy(() => import('@/pages/Billing').then(m => ({ default: m.BillingPage })))
+const ProfilePage = lazy(() => import('@/pages/Profile').then(m => ({ default: m.ProfilePage })))
+const AboutPage = lazy(() => import('@/pages/About').then(m => ({ default: m.AboutPage })))
+const LogsPage = lazy(() => import('@/pages/Logs').then(m => ({ default: m.LogsPage })))
+const AdminPage = lazy(() => import('@/pages/Admin').then(m => ({ default: m.AdminPage })))
+const PrivacyPolicyPage = lazy(() => import('@/pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicyPage })))
+const DataDeletionPage = lazy(() => import('@/pages/DataDeletion').then(m => ({ default: m.DataDeletionPage })))
+const TermsPage = lazy(() => import('@/pages/Terms').then(m => ({ default: m.TermsPage })))
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -96,6 +100,7 @@ function OnboardingPageGuard() {
 export function AppRoutes() {
   return (
     <ErrorBoundary>
+    <Suspense fallback={<AppLoader />}>
       <Routes>
         <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
@@ -126,6 +131,7 @@ export function AppRoutes() {
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>
+    </Suspense>
     </ErrorBoundary>
   )
 }

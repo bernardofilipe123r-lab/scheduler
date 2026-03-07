@@ -18,6 +18,7 @@ from app.api.auth.middleware import get_current_user
 from app.models.niche_config import NicheConfig
 from app.models.brands import Brand
 from app.services.content.niche_config_service import get_niche_config_service
+from app.utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -507,6 +508,7 @@ async def get_ai_understanding(
     - An example reel title & an example post title it would generate
     """
     user_id = user["id"]
+    rate_limit(user_id, "ai-understanding", max_requests=5, window_seconds=60)
     service = get_niche_config_service()
     ctx = service.get_context(user_id=user_id, db=db)
 
@@ -705,6 +707,7 @@ async def generate_post_examples_batch(
 ) -> Dict[str, Any]:
     """Generate multiple post examples via DeepSeek in a single call."""
     user_id = user["id"]
+    rate_limit(user_id, "generate-post-examples-batch", max_requests=3, window_seconds=60)
     service = get_niche_config_service()
     ctx = service.get_context(user_id=user_id, db=db)
 
@@ -841,6 +844,7 @@ async def generate_reel_examples_batch(
 ) -> Dict[str, Any]:
     """Generate reel examples via DeepSeek using seed Health & Wellness examples + user's brand config."""
     user_id = user["id"]
+    rate_limit(user_id, "generate-reel-examples-batch", max_requests=3, window_seconds=60)
     service = get_niche_config_service()
     ctx = service.get_context(user_id=user_id, db=db)
 
@@ -950,6 +954,7 @@ async def suggest_yt_titles(
 ) -> Dict[str, Any]:
     """Generate suggested YouTube title examples based on brand config."""
     user_id = user["id"]
+    rate_limit(user_id, "suggest-yt-titles", max_requests=5, window_seconds=60)
     service = get_niche_config_service()
     ctx = service.get_context(user_id=user_id, db=db)
 

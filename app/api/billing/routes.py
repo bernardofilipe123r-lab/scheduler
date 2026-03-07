@@ -31,6 +31,7 @@ from app.services.billing_utils import (
     recalculate_user_billing_status,
     unlock_user_if_needed,
 )
+from app.models.processed_webhook import ProcessedWebhook
 
 log = logging.getLogger(__name__)
 
@@ -304,8 +305,18 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(400, "Invalid signature")
 
     event_type = event["type"]
+    event_id = event.get("id")
     data = event["data"]["object"]
-    log.info(f"BILLING WEBHOOK: {event_type} | event_id={event.get('id')}")
+    log.info(f"BILLING WEBHOOK: {event_type} | event_id={event_id}")
+
+    # ── Idempotency: skip already-processed events ──
+    if event_id:
+        existing = db.query(ProcessedWebhook).filter_by(event_id=event_id).first()
+        if existing:
+            log.info(f"BILLING WEBHOOK: Duplicate event {event_id}, skipping")
+            return {"status": "ok"}
+        db.add(ProcessedWebhook(event_id=event_id, event_type=event_type))
+        db.flush()
 
     if event_type == "checkout.session.completed":
         _handle_checkout_completed(data, db)

@@ -9,7 +9,7 @@ Provides endpoints for:
 """
 import threading
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -132,7 +132,7 @@ def format_analytics_response(analytics_list: List[Dict], db: Session) -> List[B
 
 
 @router.get("", response_model=AnalyticsResponse)
-async def get_analytics(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def get_analytics(response: Response, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Get cached analytics data for all brands.
     
@@ -141,6 +141,7 @@ async def get_analytics(db: Session = Depends(get_db), user: dict = Depends(get_
     
     Data is cached and only refreshed when the user clicks refresh.
     """
+    response.headers["Cache-Control"] = "private, max-age=120"
     service = AnalyticsService(db)
     user_id = user.get("id")
     

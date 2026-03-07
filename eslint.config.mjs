@@ -10,6 +10,9 @@ export default tseslint.config(
       // CRITICAL: catch hooks called after early returns (React error #310)
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // Prevent accidental debug artifacts in production
+      'no-debugger': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
       // Relax rules that clash with existing codebase style
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-empty-object-type': 'off',

@@ -1043,6 +1043,26 @@ async def startup_event():
     scheduler.add_job(cleanup_old_logs, 'interval', hours=24, id='log_cleanup')
     scheduler.add_job(cleanup_published_jobs, 'interval', hours=6, id='published_cleanup')
 
+    # Auto-cleanup old processed webhook records (keep 7 days)
+    def cleanup_old_webhooks():
+        """Delete processed_webhooks older than 7 days."""
+        from app.db_connection import SessionLocal
+        from app.models.processed_webhook import ProcessedWebhook
+        db = SessionLocal()
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            deleted = db.query(ProcessedWebhook).filter(ProcessedWebhook.processed_at < cutoff).delete()
+            if deleted:
+                db.commit()
+                print(f"🧹 Cleaned up {deleted} old webhook records", flush=True)
+        except Exception as e:
+            db.rollback()
+            print(f"⚠️ Webhook cleanup failed: {e}", flush=True)
+        finally:
+            db.close()
+
+    scheduler.add_job(cleanup_old_webhooks, 'interval', hours=24, id='webhook_cleanup')
+
     # ── Auto-refresh Instagram tokens (every 12 hours) ──────
     def refresh_instagram_tokens():
         """
