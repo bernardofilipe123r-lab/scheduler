@@ -72,18 +72,6 @@ const EXAMPLE_SENTENCES = [
   'Trends become viral assets at machine speed.',
   'The system scales brands effortlessly through data-driven strategies.',
   'Adaptive content pipelines discover emerging topics before they peak.',
-  'Predictive trend scouting identifies viral opportunities across every niche.',
-  'Continuous experimentation drives learning and optimization.',
-  'Each piece of content is scored across five quality dimensions.',
-  'Only the highest-scoring content reaches the audience.',
-  'Performance metrics feed back into strategy decisions automatically.',
-  'The platform adapts to any brand identity and tone.',
-  'Content DNA defines every visual and textual choice.',
-  'Publishing happens simultaneously across Instagram, TikTok, YouTube, Threads, and Facebook.',
-  'The entire workflow runs autonomously, requiring zero manual intervention.',
-  'Brands grow while their owners sleep.',
-  'Every caption, hashtag, and visual is optimized for maximum engagement.',
-  'The AI learns from each publish cycle to improve the next.',
 ]
 
 function buildExampleText(targetWords: number): string {
@@ -147,7 +135,7 @@ const SCALE = PREVIEW_W / CANVAS_W  // ≈ 0.21
 /* ──────────────────────────────────────────────
  * THUMBNAIL PREVIEW — Gold title, logo-in-divider, dramatic BG
  * ────────────────────────────────────────────── */
-const THUMB_TITLE = 'THE FUTURE OF CONTENT CREATION IS HERE'
+const THUMB_TITLE = 'HOW VIRAL TOBY AUTOMATES YOUR ENTIRE CONTENT STRATEGY'
 
 /**
  * Auto-fit title into 2 or 3 lines at the largest possible font size.
@@ -547,7 +535,6 @@ function ThumbnailSettings({ form, update }: {
             {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
-        <SliderRow label="Max Title Size" value={form.thumbnail_title_size ?? 120} min={100} max={140} onChange={v => update('thumbnail_title_size', v)} />
         <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 150} min={10} max={400} onChange={v => update('thumbnail_title_padding', v)} />
       </section>
 
