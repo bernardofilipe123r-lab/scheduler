@@ -3,7 +3,7 @@ import { Loader2, Save, BadgeCheck, Image, Film, RotateCcw, Music } from 'lucide
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
 import type { DesignSettings } from './types'
-import vaLogo from '@/assets/icons/va-logo.svg'
+import vaLogo from '@/assets/icons/vt-logo.png'
 import testBg from '@/assets/images/test-viral-toby.jpg'
 import previewSlide1 from '@/assets/images/preview/slide-1.jpg'
 import previewSlide2 from '@/assets/images/preview/slide-2.jpg'
