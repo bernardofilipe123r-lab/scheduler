@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { PageLoader } from '@/shared/components'
 import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
   Bot, Layers, User, LogOut,
@@ -158,6 +159,27 @@ const NAV_ITEMS = [
   { to: '/toby', icon: Bot, label: 'Toby', end: false },
 ]
 
+// ── Route chunk prefetch map ──────────────────────────────
+const PREFETCH_MAP: Record<string, () => Promise<unknown>> = {
+  '/': () => import('@/pages/Home'),
+  '/reels': () => import('@/pages/Reels'),
+  '/posts': () => import('@/pages/Posts'),
+  '/jobs': () => import('@/pages/History'),
+  '/calendar': () => import('@/pages/Calendar'),
+  '/analytics': () => import('@/pages/Analytics'),
+  '/toby': () => import('@/pages/Toby'),
+  '/brands': () => import('@/pages/Brands'),
+  '/billing': () => import('@/pages/Billing'),
+  '/admin': () => import('@/pages/Admin'),
+  '/profile': () => import('@/pages/Profile'),
+}
+const _prefetched = new Set<string>()
+function prefetchRoute(to: string) {
+  if (_prefetched.has(to)) return
+  _prefetched.add(to)
+  PREFETCH_MAP[to]?.()
+}
+
 const SETTINGS_ITEMS = [
   { to: '/brands', icon: Layers, label: 'Brands' },
   { to: '/billing', icon: CreditCard, label: 'Billing', billingOnly: true },
@@ -246,6 +268,8 @@ export function AppLayout() {
               key={to}
               to={to}
               end={end}
+              onMouseEnter={() => prefetchRoute(to)}
+              onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
                 `group flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors relative ${
                   isActive
@@ -277,6 +301,8 @@ export function AppLayout() {
             <NavLink
               key={to}
               to={to}
+              onMouseEnter={() => prefetchRoute(to)}
+              onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
                 `group flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors relative ${
                   isActive
@@ -370,7 +396,9 @@ export function AppLayout() {
         {isLocked && <LockedBanner />}
         {/* Page content */}
         <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 min-w-0">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

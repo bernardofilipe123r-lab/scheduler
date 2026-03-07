@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles, useImportFromInstagram } from '../api/use-niche-config'
 import { useBrands } from '../api/use-brands'
 import { apiClient } from '@/shared/api/client'
-import { ConfigStrengthMeter } from './ConfigStrengthMeter'
+import { getConfigStrength } from '../types/niche-config'
 import { ContentExamplesSection } from './ContentExamplesSection'
 import type { NicheConfig } from '../types/niche-config'
 import { PostCanvas, DEFAULT_GENERAL_SETTINGS, getBrandConfig } from '@/shared/components/PostCanvas'
@@ -443,17 +443,18 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ general: false, reels: false, posts: false, ai: false })
   const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
+  const [dnaTab, setDnaTab] = useState<'general' | 'reels' | 'posts'>('general')
 
   if (isLoading) return <NicheConfigSkeleton />
 
   const showAll = !section
-  const showGeneral = showAll || section === 'general'
-  const showReels = showAll || section === 'reels'
-  const showPosts = showAll || section === 'posts'
+  const showGeneral = section ? section === 'general' : dnaTab === 'general'
+  const showReels = section ? section === 'reels' : dnaTab === 'reels'
+  const showPosts = section ? section === 'posts' : dnaTab === 'posts'
 
   return (
     <div className="space-y-4 min-w-0">
-      {/* Sticky Save Bar — only in full mode */}
+      {/* Sticky Save Bar + Config Strength + Sub-tabs — only in full mode */}
       {showAll && <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm">
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -463,25 +464,54 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
               <p className="text-xs text-gray-500">These settings control every reel, post, and visual.</p>
             </div>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={!dirty || updateMutation.isPending}
-            className="flex items-center gap-2 px-5 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
-          >
-            {updateMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            Save
-          </button>
+          <div className="flex items-center gap-3">
+            {(() => {
+              const strength = getConfigStrength(values)
+              return (
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  strength === 'basic' ? 'bg-red-100 text-red-700' :
+                  strength === 'good' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-green-100 text-green-700'
+                }`}>
+                  {strength}
+                </span>
+              )
+            })()}
+            <button
+              onClick={handleSave}
+              disabled={!dirty || updateMutation.isPending}
+              className="flex items-center gap-2 px-5 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+            >
+              {updateMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Save
+            </button>
+          </div>
         </div>
-      </div>}
-
-      {/* Config Strength — only in full mode */}
-      {showAll && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4">
-          <ConfigStrengthMeter config={values} />
+        <div className="px-6 border-t border-gray-100">
+          <nav className="flex gap-1">
+            {([
+              { key: 'general' as const, label: '🧬 General', complete: generalComplete },
+              { key: 'reels' as const, label: '🎬 Reels', complete: reelsComplete },
+              { key: 'posts' as const, label: '📱 Carousel', complete: postsComplete },
+            ]).map(({ key, label, complete }) => (
+              <button
+                key={key}
+                onClick={() => setDnaTab(key)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  dnaTab === key
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {label}
+                {complete && <Check className="w-3 h-3 text-emerald-500" />}
+              </button>
+            ))}
+          </nav>
         </div>
       </div>}
 
@@ -489,19 +519,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
           BLOCK 1: GENERAL
          ═══════════════════════════════════════════════════════════════════ */}
       {showGeneral && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('general')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${generalComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
-          <div className="text-left flex items-center gap-2">
-            <div>
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-                🧬 General
-                {generalComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Core identity and visual style shared across all content types.</p>
-            </div>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.general ? '-rotate-90' : ''}`} />
-        </button>
-        {!collapsed.general && <div className="px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-5">
           {/* Import from Instagram */}
           {igBrand && (
             <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg px-4 py-3">
@@ -562,26 +580,14 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             </p>
           </div>
 
-        </div>}
+        </div>
       </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 2: REELS
          ═══════════════════════════════════════════════════════════════════ */}
       {showReels && <div className="bg-white rounded-xl border border-gray-200">
-        <button type="button" onClick={() => toggleSection('reels')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors rounded-t-xl ${reelsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
-          <div className="text-left flex items-center gap-2">
-            <div>
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-                🎬 Reels
-                {reelsComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Reel examples, CTAs, and YouTube title style for short-form video content.</p>
-            </div>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.reels ? '-rotate-90' : ''}`} />
-        </button>
-        {!collapsed.reels && <div className="px-6 py-5 space-y-6">
+        <div className="px-6 py-5 space-y-6">
           {!generalFilled && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-center">
               <p className="text-sm text-amber-700 font-medium">Fill in the General section first</p>
@@ -801,26 +807,14 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             )}
           </div>
           )}
-        </div>}
+        </div>
       </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
           BLOCK 3: CAROUSEL POSTS
          ═══════════════════════════════════════════════════════════════════ */}
       {showPosts && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('posts')} className={`w-full px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer transition-colors ${postsComplete ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
-          <div className="text-left flex items-center gap-2">
-            <div>
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
-                📱 Carousel Posts
-                {postsComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Post examples, citation style, and weighted CTAs for carousel content.</p>
-            </div>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.posts ? '-rotate-90' : ''}`} />
-        </button>
-        {!collapsed.posts && <div className="px-6 py-5 space-y-6">
+        <div className="px-6 py-5 space-y-6">
           {!generalFilled && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-center">
               <p className="text-sm text-amber-700 font-medium">Fill in the General section first</p>
@@ -1002,7 +996,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
               })()}
             </div>
           </div>
-        </div>}
+        </div>
       </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
