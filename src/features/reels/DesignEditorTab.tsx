@@ -142,22 +142,22 @@ const THUMB_TITLE = 'HOW VIRAL TOBY AUTOMATES YOUR ENTIRE CONTENT STRATEGY'
  * Auto-fit title into 2 or 3 lines at the largest possible font size.
  * Prefers 3 lines; if title can't split into 3, falls back to 2.
  */
-function useAutoTitleLines(title: string, maxFontSize: number, font: string, containerWidthPx: number) {
+function useAutoTitleLines(title: string, _maxFontSize: number, font: string, containerWidthPx: number) {
   return useMemo(() => {
     const words = title.split(/\s+/)
-    if (words.length <= 1) return { lines: [title], fontSize: maxFontSize }
+    if (words.length <= 1) return { lines: [title], fontSize: 300 }
 
-    // Create an off-screen canvas to measure text width
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')!
+    const letterSpacing = 2 // matches the 2px letter-spacing in the render
 
     function measureLine(text: string, size: number): number {
       ctx.font = `900 ${size}px ${font}, sans-serif`
-      return ctx.measureText(text).width
+      // Account for letter-spacing: adds (charCount - 1) * letterSpacing
+      return ctx.measureText(text).width + Math.max(0, text.length - 1) * letterSpacing
     }
 
-    function splitIntoN(n: number, size: number): string[] | null {
-      // Greedy line-break: fill each line as much as possible
+    function greedySplit(size: number): string[] {
       const lines: string[] = []
       let current = ''
       for (const word of words) {
@@ -170,22 +170,24 @@ function useAutoTitleLines(title: string, maxFontSize: number, font: string, con
         }
       }
       if (current) lines.push(current)
-      return lines.length === n ? lines : null
+      return lines
     }
 
-    // Try 3 lines first (biggest font), then 2 lines
-    // Search from a high ceiling (300) down to maximize font size
-    const ceiling = Math.max(maxFontSize, 300)
-    for (const targetLines of [3, 2]) {
-      for (let size = ceiling; size >= 60; size -= 2) {
-        const result = splitIntoN(targetLines, size)
-        if (result) return { lines: result, fontSize: size }
-      }
+    // Find largest font size that fits in exactly 3 lines (step 1px for precision)
+    for (let size = 300; size >= 60; size--) {
+      const lines = greedySplit(size)
+      if (lines.length <= 3) return { lines, fontSize: size }
     }
 
-    // Fallback: just use max size, single line
-    return { lines: [title], fontSize: ceiling }
-  }, [title, maxFontSize, font, containerWidthPx])
+    // If even at 60px it's more than 3 lines, try 2 lines
+    for (let size = 300; size >= 60; size--) {
+      const lines = greedySplit(size)
+      if (lines.length <= 2) return { lines, fontSize: size }
+    }
+
+    // Fallback
+    return { lines: [title], fontSize: 60 }
+  }, [title, _maxFontSize, font, containerWidthPx])
 }
 
 function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
