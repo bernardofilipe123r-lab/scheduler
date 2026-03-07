@@ -24,6 +24,7 @@ import { BillingPage } from '@/pages/Billing'
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicy'
 import { DataDeletionPage } from '@/pages/DataDeletion'
 import { TermsPage } from '@/pages/Terms'
+import { WelcomePage } from '@/pages/Welcome'
 import { AppLoader, ErrorBoundary } from '@/shared/components'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -96,6 +97,7 @@ export function AppRoutes() {
   return (
     <ErrorBoundary>
       <Routes>
+        <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsPage />} />
