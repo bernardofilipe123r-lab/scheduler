@@ -26,7 +26,7 @@ const DEFAULTS: Partial<DesignSettings> = {
   thumbnail_title_color: '#FFD700',
   thumbnail_title_font: 'Anton',
   thumbnail_title_size: 120,
-  thumbnail_title_padding: 200,
+  thumbnail_title_padding: 150,
   thumbnail_logo_size: 100,
   thumbnail_overlay_opacity: 60,
   thumbnail_divider_style: 'line_with_logo',
@@ -147,7 +147,7 @@ const SCALE = PREVIEW_W / CANVAS_W  // ≈ 0.21
 /* ──────────────────────────────────────────────
  * THUMBNAIL PREVIEW — Gold title, logo-in-divider, dramatic BG
  * ────────────────────────────────────────────── */
-const THUMB_TITLE = 'ELON MUSK JUST BOUGHT TIKTOK'
+const THUMB_TITLE = 'THE FUTURE OF CONTENT CREATION IS HERE'
 
 /**
  * Auto-fit title into 2 or 3 lines at the largest possible font size.
@@ -210,7 +210,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const pw = CANVAS_W * s
   const ph = CANVAS_H * s
   const scaledLogo = logoSize * s
-  const lineThickness = 2 * s
+  const lineThickness = dividerStyle === 'gradient' ? Math.max(4 * s, 2) : Math.max(2 * s, 1)
   const lineLogoGap = 20 * s
   const dividerTitleGap = 24 * s
   const sidePadding = 40 // real px
@@ -226,7 +226,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
       style={{ width: pw, height: ph, fontFamily: titleFont }}
     >
       {/* Background image — object-fit cover preserves aspect ratio */}
-      <img src={testBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <img src={testBg} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center' }} />
 
       {/* Dark gradient overlay from bottom */}
       <div className="absolute inset-0" style={{
@@ -243,7 +243,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
             <div className="flex-1" style={{
               height: `${lineThickness}px`,
               background: dividerStyle === 'gradient'
-                ? 'linear-gradient(to right, transparent, rgba(255,255,255,0.5))'
+                ? 'linear-gradient(to right, transparent, rgba(255,255,255,0.7))'
                 : '#FFFFFF',
             }} />
             <div style={{ paddingLeft: `${lineLogoGap}px`, paddingRight: `${lineLogoGap}px` }}>
@@ -256,7 +256,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
             <div className="flex-1" style={{
               height: `${lineThickness}px`,
               background: dividerStyle === 'gradient'
-                ? 'linear-gradient(to left, transparent, rgba(255,255,255,0.5))'
+                ? 'linear-gradient(to left, transparent, rgba(255,255,255,0.7))'
                 : '#FFFFFF',
             }} />
           </div>
@@ -548,7 +548,7 @@ function ThumbnailSettings({ form, update }: {
           </select>
         </div>
         <SliderRow label="Max Title Size" value={form.thumbnail_title_size ?? 120} min={100} max={140} onChange={v => update('thumbnail_title_size', v)} />
-        <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 200} min={10} max={400} onChange={v => update('thumbnail_title_padding', v)} />
+        <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 150} min={10} max={400} onChange={v => update('thumbnail_title_padding', v)} />
       </section>
 
       <section className="space-y-2">
