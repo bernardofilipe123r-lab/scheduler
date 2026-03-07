@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, ArrowRight, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Instagram } from 'lucide-react'
+import { Plus, ArrowRight, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Instagram, HelpCircle, ChevronDown } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
 import { useBrands, useUpdateBrand } from '@/features/brands/api/use-brands'
 import { connectInstagram, fetchFacebookPages, selectFacebookPage, type FacebookPage } from '@/features/brands'
@@ -31,6 +31,7 @@ export function MyBrandsTab() {
   const [deletingBrandId, setDeletingBrandId] = useState<string | null>(null)
   const [deletingBrandName, setDeletingBrandName] = useState<string | null>(null)
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({})
+  const [showHelp, setShowHelp] = useState(false)
 
   // Handle OAuth redirect params
   useEffect(() => {
@@ -403,21 +404,30 @@ export function MyBrandsTab() {
         </div>
       )}
 
-      {/* Refresh + Summary */}
-      <div className="flex justify-end">
-        <button
-          onClick={() => refetch()}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
-      </div>
-
       <ConnectionSummaryBar data={connectionsData} />
 
+      {/* Collapsible help section */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowHelp(!showHelp)}
+          className="w-full px-5 py-3 flex items-center gap-2 text-left hover:bg-blue-100/50 transition-colors"
+        >
+          <HelpCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />
+          <span className="text-sm font-medium text-blue-900">About Platform Connections</span>
+          <ChevronDown className={`w-4 h-4 text-blue-400 ml-auto transition-transform ${showHelp ? 'rotate-180' : ''}`} />
+        </button>
+        {showHelp && (
+          <div className="px-5 pb-4 space-y-2 text-sm text-blue-800 border-t border-blue-200 pt-3">
+            <p><strong>Instagram:</strong> Connected via Meta OAuth. Long-lived tokens (60 days) are refreshed automatically every 6 hours.</p>
+            <p><strong>Facebook:</strong> Connected via Facebook Login. Stores a Page access token for posting on your behalf.</p>
+            <p><strong>YouTube:</strong> Connected via Google OAuth. Stores a permanent refresh token — persists until you revoke access in Google settings.</p>
+            <p className="text-blue-600 mt-3">💡 Each brand can have different social accounts. No account can be shared between brands.</p>
+          </div>
+        )}
+      </div>
+
       {/* Brand cards */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {sortedConnections.map((brand) => (
           <ConnectionCard
             key={brand.brand}
@@ -448,25 +458,6 @@ export function MyBrandsTab() {
           </div>
           <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
         </button>
-      </div>
-
-      {/* Info box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-        <h3 className="font-semibold text-blue-900 mb-2">About Platform Connections</h3>
-        <div className="space-y-2 text-sm text-blue-800">
-          <p>
-            <strong>Instagram:</strong> Connected via Meta OAuth. Long-lived tokens (60 days) are refreshed automatically every 6 hours — you should never need to reconnect manually.
-          </p>
-          <p>
-            <strong>Facebook:</strong> Connected via Facebook Login. Stores a Page access token that lets the app post on behalf of your Facebook Page.
-          </p>
-          <p>
-            <strong>YouTube:</strong> Connected via Google OAuth. Stores a permanent refresh token — the connection persists until you revoke access in your Google account settings. Token validity is checked every 24 hours.
-          </p>
-          <p className="text-blue-600 mt-3">
-            💡 Each brand can have different social accounts connected. No account can be shared between brands — if you try to connect an account that's already linked elsewhere, you'll see an error.
-          </p>
-        </div>
       </div>
 
       {/* Delete confirmation */}

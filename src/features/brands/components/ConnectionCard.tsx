@@ -6,13 +6,12 @@ import {
   RefreshCw,
   Unlink,
   AlertTriangle,
-  HelpCircle,
   Clock,
   Trash2,
   Save,
   Loader2,
+  ChevronDown,
 } from 'lucide-react'
-import { Modal } from '@/shared/components/Modal'
 import { PlatformIcon } from '@/shared/components'
 import {
   useDisconnectYouTube,
@@ -74,19 +73,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showPageSelector, setShowPageSelector] = useState(false)
   const [selectingPage, setSelectingPage] = useState(false)
-  const [showConnectionHelp, setShowConnectionHelp] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const disconnectYouTube = useDisconnectYouTube()
-
-  const HELP_DISMISSED_KEY = 'viraltoby_connection_help_dismissed'
-
-  const hasSeenHelp = useCallback(() => {
-    try { return localStorage.getItem(HELP_DISMISSED_KEY) === '1' } catch { return false }
-  }, [])
-
-  const dismissHelp = useCallback(() => {
-    try { localStorage.setItem(HELP_DISMISSED_KEY, '1') } catch { /* noop */ }
-    setShowConnectionHelp(false)
-  }, [])
 
   // Schedule editing state
   const [editingSchedule, setEditingSchedule] = useState(false)
@@ -529,60 +517,73 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
     )
   }
 
+  const connectedCount = [brand.instagram, brand.facebook, brand.youtube, brand.threads, brand.tiktok].filter((p) => p?.connected).length
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      {/* Brand header */}
-      <div
-        className="px-6 py-4 flex items-center justify-between"
-        style={{ backgroundColor: brand.color + '15' }}
+      {/* Collapsed brand header — click to expand */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors text-left"
+        style={{ backgroundColor: brand.color + '08' }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"
+            className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
             style={{ backgroundColor: brand.color }}
           >
             {brandLogo ? (
               <img src={brandLogo} alt={brand.display_name} className="w-full h-full object-contain" />
             ) : (
-              <span className="text-white font-bold text-lg">{brand.display_name.charAt(0)}</span>
+              <span className="text-white font-bold text-sm">{brand.display_name.charAt(0)}</span>
             )}
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">{brand.display_name}</h3>
-            <p className="text-sm text-gray-500">
-              {[brand.instagram, brand.facebook, brand.youtube, brand.threads, brand.tiktok].filter((p) => p?.connected).length}/5 platforms connected
+          <div className="min-w-0">
+            <h3 className="font-semibold text-gray-900 text-sm truncate">{brand.display_name}</h3>
+            <p className="text-xs text-gray-500">
+              <span className={connectedCount > 0 ? 'text-green-600' : 'text-gray-400'}>{connectedCount}/5 connected</span>
               {schedule && <span className="ml-1 text-gray-400">· +{schedule.offset}h · {schedule.postsPerDay}/day</span>}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShowConnectionHelp(true)}
-            className="p-1.5 rounded-lg hover:bg-white/50 transition-colors"
-            title="Help with connections"
-          >
-            <HelpCircle className="w-5 h-5 text-gray-400" />
-          </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Quick platform status dots */}
+          <div className="flex items-center gap-1 mr-2">
+            {(['instagram', 'facebook', 'youtube', 'threads', 'tiktok'] as Platform[]).map((p) => {
+              const conn = brand[p]
+              return conn ? (
+                <div
+                  key={p}
+                  className={`w-2 h-2 rounded-full ${conn.connected ? 'bg-green-500' : conn.status === 'revoked' ? 'bg-orange-400' : 'bg-gray-300'}`}
+                  title={`${p}: ${conn.connected ? 'connected' : conn.status === 'revoked' ? 'revoked' : 'not connected'}`}
+                />
+              ) : null
+            })}
+          </div>
           {onDelete && (
             <button
-              onClick={onDelete}
-              className="p-1.5 rounded-lg hover:bg-red-100/50 transition-colors"
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              className="p-1 rounded hover:bg-red-100/80 transition-colors"
               title="Delete brand"
             >
-              <Trash2 className="w-5 h-5 text-red-400 hover:text-red-500" />
+              <Trash2 className="w-4 h-4 text-red-400 hover:text-red-500" />
             </button>
           )}
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </div>
-      </div>
+      </button>
 
-      {/* Platform connections */}
-      <div className="divide-y divide-gray-100">
-        {renderPlatformRow('instagram', brand.instagram)}
-        {renderPlatformRow('facebook', brand.facebook)}
-        {renderPlatformRow('youtube', brand.youtube)}
-        {brand.threads && renderPlatformRow('threads', brand.threads)}
-        {brand.tiktok && renderPlatformRow('tiktok', brand.tiktok)}
-      </div>
+      {/* Expandable content */}
+      {expanded && (
+        <>
+          {/* Platform connections */}
+          <div className="divide-y divide-gray-100 border-t border-gray-100">
+            {renderPlatformRow('instagram', brand.instagram)}
+            {renderPlatformRow('facebook', brand.facebook)}
+            {renderPlatformRow('youtube', brand.youtube)}
+            {brand.threads && renderPlatformRow('threads', brand.threads)}
+            {brand.tiktok && renderPlatformRow('tiktok', brand.tiktok)}
+          </div>
 
       {/* Schedule section */}
       {schedule && (
@@ -748,30 +749,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
         </div>
       )}
 
-      {/* Connection Help Modal */}
-      <Modal isOpen={showConnectionHelp} onClose={() => setShowConnectionHelp(false)} title="About Connecting Accounts" size="sm">
-        <div className="space-y-3 text-sm text-gray-700">
-          <p>
-            When you click <strong>Connect</strong>, you'll be redirected to log in on that platform.
-          </p>
-          <p>
-            <strong>Make sure you log into the correct account</strong> for this brand. Each social account can only be connected to one brand at a time.
-          </p>
-          <p className="text-gray-500">
-            If an account is already connected to another brand, you'll need to disconnect it there first.
-          </p>
-        </div>
-        <div className="flex justify-end mt-4">
-          {!hasSeenHelp() && (
-            <button
-              onClick={dismissHelp}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-            >
-              Got it, don't show again
-            </button>
-          )}
-        </div>
-      </Modal>
+        </>
+      )}
     </div>
   )
 }
