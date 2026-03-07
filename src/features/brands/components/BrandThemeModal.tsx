@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Upload, Loader2 } from 'lucide-react'
+import { Upload, Loader2, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { apiClient } from '@/shared/api/client'
 import { supabase } from '@/shared/api/supabase'
@@ -208,6 +208,208 @@ export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeMo
     PX.barStartY + titleLines.length * PX.barHeight + PX.titleContentGap
 
   /* ──────────────────────── RENDER ──────────────────────── */
+
+  /* ── Inline layout (Design Editor page) ── */
+  if (inline) {
+    return (
+      <div className="space-y-4">
+        {/* ── Sticky top bar: mode toggle + save/reset ── */}
+        <div className="sticky top-0 z-20 bg-gray-50 -mx-1 px-1 pb-3 pt-1 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5">
+              <button onClick={() => setMode('light')}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  mode === 'light' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                ☀️ Light
+              </button>
+              <button onClick={() => setMode('dark')}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  mode === 'dark' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                🌙 Dark
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={handleSave} disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Content: preview LEFT, settings RIGHT ── */}
+        <div className="flex gap-6 items-start">
+          {/* LEFT: Previews stacked vertically */}
+          <div className="flex-shrink-0 space-y-4">
+            {/* Preview text inputs */}
+            <div className="space-y-2" style={{ width: PREVIEW_W * 2 + 12 }}>
+              <div>
+                <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-0.5 block">Preview Title</label>
+                <input
+                  type="text"
+                  value={previewTitle}
+                  onChange={e => setPreviewTitle(e.target.value)}
+                  className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent"
+                  placeholder="Title text…"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-0.5 block">Preview Content (one per line)</label>
+                <textarea
+                  value={previewContentText}
+                  onChange={e => setPreviewContentText(e.target.value)}
+                  rows={4}
+                  className="w-full px-2 py-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded focus:ring-1 focus:ring-indigo-400 focus:border-transparent resize-none leading-snug"
+                  placeholder="Line 1&#10;Line 2&#10;Line 3"
+                />
+              </div>
+            </div>
+
+            {/* Two previews side by side */}
+            <div style={{ display: 'flex', gap: 12 }}>
+              {/* Thumbnail Preview */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1.5">Thumbnail</p>
+                <div style={{
+                  width: PREVIEW_W, height: PREVIEW_H, position: 'relative',
+                  borderRadius: 8, overflow: 'hidden', border: '1px solid #e5e7eb',
+                  backgroundColor: mode === 'light' ? '#f4f4f4' : undefined,
+                  background: mode === 'dark' ? DARK_BG : undefined,
+                }}>
+                  {mode === 'dark' && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)' }} />}
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                    <div style={{ paddingLeft: PX.thumbSideMargin, paddingRight: PX.thumbSideMargin, textAlign: 'center', position: 'relative' }}>
+                      <div style={{
+                        fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.thumbTitleFont,
+                        lineHeight: `${PX.thumbTitleFont + PX.thumbLineSpacing}px`, color: thumbnailTextColor,
+                        textTransform: 'uppercase', wordBreak: 'break-word',
+                      }}>{previewTitle}</div>
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, marginTop: PX.thumbBrandGap,
+                        fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.thumbBrandFont,
+                        color: thumbnailTextColor, textTransform: 'uppercase', letterSpacing: '0.05em',
+                        textAlign: 'center', whiteSpace: 'nowrap',
+                      }}>{brand.name}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Preview */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1.5">Content</p>
+                <div style={{
+                  width: PREVIEW_W, height: PREVIEW_H, position: 'relative',
+                  borderRadius: 8, overflow: 'hidden', border: '1px solid #e5e7eb',
+                  backgroundColor: mode === 'light' ? '#f4f4f4' : undefined,
+                  background: mode === 'dark' ? DARK_BG : undefined,
+                }}>
+                  {mode === 'dark' && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)' }} />}
+                  <div style={{
+                    position: 'absolute', top: PX.barStartY, left: 0, right: 0,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1,
+                  }}>
+                    {titleLines.map((line, i) => (
+                      <div key={i} style={{
+                        height: PX.barHeight, paddingLeft: PX.hPadding, paddingRight: PX.hPadding,
+                        backgroundColor: hexToRgba(contentTitleBgColor, 200 / 255),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap',
+                      }}>
+                        <span style={{
+                          fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.barTitleFont,
+                          color: contentTitleTextColor, textTransform: 'uppercase', lineHeight: 1,
+                        }}>{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ position: 'absolute', top: contentStartY, left: PX.contentSidePad, right: PX.contentSidePad, zIndex: 1 }}>
+                    {previewContentLines.map((line, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 3, marginBottom: PX.bulletSpacing, lineHeight: `${PX.contentLineH}px` }}>
+                        <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: PX.contentFont, color: contentTextColor, flexShrink: 0 }}>{i + 1}.</span>
+                        <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: PX.contentFont, color: contentTextColor }}>{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ position: 'absolute', bottom: PX.brandBottom, left: 0, right: 0, textAlign: 'center', zIndex: 1 }}>
+                    <span style={{
+                      fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: PX.brandFont,
+                      color: brandNameColor, textTransform: 'uppercase', letterSpacing: '0.03em',
+                    }}>{brand.name}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Settings */}
+          <div className="flex-1 min-w-0 space-y-4">
+            {/* Abbreviation */}
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Abbreviation</h4>
+              <input
+                type="text"
+                value={shortName}
+                onChange={e => setShortName(e.target.value.toUpperCase().slice(0, 5))}
+                placeholder="e.g. HCO"
+                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
+                maxLength={5}
+              />
+              <p className="text-[10px] text-gray-400">Short code used on rendered posts & reels (max 5 chars).</p>
+            </section>
+
+            {/* Logo Upload */}
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Logo</h4>
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 transition-colors">
+                {logoPreview ? (
+                  <img src={logoPreview} alt="Logo" className="w-8 h-8 object-contain" />
+                ) : (
+                  <Upload className="w-4 h-4 text-gray-400" />
+                )}
+                <span className="text-xs text-gray-500">{logoFile ? logoFile.name : 'Upload logo'}</span>
+                <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
+              </label>
+            </section>
+
+            {/* Brand Color */}
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand Color</h4>
+              <ColorPicker label="" value={brandColor} onChange={setBrandColor} compact />
+            </section>
+
+            {/* Mode-specific rendering colors */}
+            <section className="space-y-2 border-t border-gray-200 pt-3">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Colors
+              </h4>
+              {mode === 'light' ? (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Thumbnail</p>
+                  <ColorPicker label="Text Color" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-3">Content Title</p>
+                  <ColorPicker label="Text Color" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
+                  <ColorPicker label="Bar Background" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-[10px] text-gray-400 leading-relaxed">
+                    Text is always white. Background is AI-generated with fixed dark overlays.
+                  </p>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Content Title</p>
+                  <ColorPicker label="Bar Background" value={darkContentTitleBgColor} onChange={setDarkContentTitleBgColor} compact />
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  /* ── Modal layout (Onboarding) ── */
   return (
     <div className="flex flex-col gap-5">
       {/* ── Mode Toggle ── */}
@@ -592,7 +794,25 @@ export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeMo
 }
 
 /* ── Reusable color picker ───────────────────────────────────── */
-function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorPicker({ label, value, onChange, compact }: { label: string; value: string; onChange: (v: string) => void; compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2">
+        {label && <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">{label}</span>}
+        <div className="relative w-7 h-7 flex-shrink-0">
+          <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: value }} />
+          <input type="color" value={value} onChange={e => onChange(e.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+        </div>
+        <input
+          type="text" value={value}
+          onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v) }}
+          className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
+          maxLength={7}
+        />
+      </div>
+    )
+  }
   return (
     <div>
       <label className="text-sm font-medium text-gray-600 mb-1.5 block">{label}</label>

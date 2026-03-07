@@ -146,6 +146,11 @@ const THUMB_TITLE = 'HOW VIRAL TOBY AUTOMATES YOUR ENTIRE CONTENT STRATEGY'
  * Prefers 3 lines; if title can't split into 3, falls back to 2.
  */
 function useAutoTitleLines(title: string, _maxFontSize: number, font: string, containerWidthPx: number) {
+  const [fontReady, setFontReady] = useState(false)
+  useEffect(() => {
+    document.fonts.ready.then(() => setFontReady(true))
+  }, [])
+
   return useMemo(() => {
     const words = title.split(/\s+/)
     if (words.length <= 1) return { lines: [title], fontSize: 300 }
@@ -192,7 +197,7 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
 
     // Fallback
     return { lines: [title], fontSize: 60 }
-  }, [title, _maxFontSize, font, containerWidthPx])
+  }, [title, _maxFontSize, font, containerWidthPx, fontReady])
 }
 
 function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
