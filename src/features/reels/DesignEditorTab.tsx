@@ -4,6 +4,13 @@ import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
 import type { DesignSettings } from './types'
 import vaLogo from '@/assets/icons/va-logo.svg'
+import testBg from '@/assets/images/test-viral-toby.jpg'
+import previewSlide1 from '@/assets/images/preview/slide-1.jpg'
+import previewSlide2 from '@/assets/images/preview/slide-2.jpg'
+import previewSlide3 from '@/assets/images/preview/slide-3.jpg'
+import previewSlide4 from '@/assets/images/preview/slide-4.jpg'
+
+const PREVIEW_SLIDES = [previewSlide1, previewSlide2, previewSlide3, previewSlide4]
 
 const FONT_OPTIONS = ['Anton', 'Inter', 'Oswald', 'Montserrat', 'Bebas Neue', 'Roboto Condensed', 'Poppins']
 const DIVIDER_OPTIONS = ['line_with_logo', 'gradient', 'none']
@@ -19,7 +26,7 @@ const DEFAULTS: Partial<DesignSettings> = {
   thumbnail_title_color: '#FFD700',
   thumbnail_title_font: 'Anton',
   thumbnail_title_size: 72,
-  thumbnail_title_padding: 40,
+  thumbnail_title_padding: 200,
   thumbnail_logo_size: 200,
   thumbnail_overlay_opacity: 60,
   thumbnail_divider_style: 'line_with_logo',
@@ -143,7 +150,7 @@ const SCALE = PREVIEW_W / CANVAS_W  // ≈ 0.21
 function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const titleColor = form.thumbnail_title_color || '#FFD700'
   const titleSize = form.thumbnail_title_size ?? 72
-  const titlePadding = form.thumbnail_title_padding ?? 40
+  const titlePadding = form.thumbnail_title_padding ?? 200
   const dividerStyle = form.thumbnail_divider_style || 'line_with_logo'
   const overlayOpacity = (form.thumbnail_overlay_opacity ?? 60) / 100
   const titleFont = form.thumbnail_title_font || 'Anton'
@@ -153,18 +160,17 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const pw = CANVAS_W * s
   const ph = CANVAS_H * s
   const scaledLogo = logoSize * s
+  const lineThickness = 2 * s
+  const lineLogoGap = 20 * s
+  const dividerTitleGap = 24 * s
 
   return (
     <div
       className="rounded-xl overflow-hidden shadow-lg border border-gray-200 relative mx-auto"
       style={{ width: pw, height: ph, fontFamily: titleFont }}
     >
-      {/* Dramatic background with Ken Burns panning */}
-      <div className="absolute inset-0" style={{
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #533483 75%, #1a1a2e 100%)',
-        backgroundSize: '200% 200%',
-        animation: 'thumbKenBurns 8s ease-in-out infinite alternate',
-      }} />
+      {/* Background image */}
+      <img src={testBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
 
       {/* Dark gradient overlay from bottom */}
       <div className="absolute inset-0" style={{
@@ -173,35 +179,25 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
 
       {/* Content pinned to bottom */}
       <div className="absolute inset-x-0 bottom-0 flex flex-col items-center"
-        style={{ padding: `${titlePadding * s}px` }}>
+        style={{ paddingBottom: `${titlePadding * s}px`, paddingLeft: `${40 * s}px`, paddingRight: `${40 * s}px` }}>
 
-        {/* Brand name with hairlines: ── VIRAL TOBY ── */}
-        <div className="flex items-center w-full" style={{ gap: `${6 * s}px`, marginBottom: `${8 * s}px` }}>
-          <div className="flex-1 h-px" style={{ background: 'rgba(212,160,23,0.4)' }} />
-          <span className="uppercase tracking-widest whitespace-nowrap" style={{
-            color: 'rgba(212,160,23,0.7)',
-            fontSize: `${18 * s}px`,
-            fontFamily: 'Georgia, "Times New Roman", serif',
-            letterSpacing: '0.15em',
-          }}>Viral Toby</span>
-          <div className="flex-1 h-px" style={{ background: 'rgba(212,160,23,0.4)' }} />
-        </div>
-
-        {/* Divider: logo-in-line — hairline breaks around centered logo */}
+        {/* Divider: single line with logo in center */}
         {dividerStyle !== 'none' && (
-          <div className="w-full flex items-center" style={{ gap: `${4 * s}px`, marginBottom: `${8 * s}px` }}>
+          <div className="w-full flex items-center" style={{ marginBottom: `${dividerTitleGap}px` }}>
             {dividerStyle === 'line_with_logo' ? (
               <>
-                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.3)' }} />
-                <img src={vaLogo} alt="Logo" style={{
-                  width: scaledLogo,
-                  height: scaledLogo,
-                  borderRadius: `${4 * s}px`,
-                }} />
-                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.3)' }} />
+                <div className="flex-1" style={{ height: `${lineThickness}px`, background: '#FFFFFF' }} />
+                <div style={{ paddingLeft: `${lineLogoGap}px`, paddingRight: `${lineLogoGap}px` }}>
+                  <img src={vaLogo} alt="Logo" style={{
+                    width: scaledLogo,
+                    height: scaledLogo,
+                    borderRadius: `${4 * s}px`,
+                  }} />
+                </div>
+                <div className="flex-1" style={{ height: `${lineThickness}px`, background: '#FFFFFF' }} />
               </>
             ) : (
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+              <div className="flex-1" style={{ height: `${lineThickness}px`, background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.5), transparent)' }} />
             )}
           </div>
         )}
@@ -218,13 +214,6 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
           ELON MUSK{'\n'}JUST BOUGHT{'\n'}TIKTOK
         </p>
       </div>
-
-      <style>{`
-        @keyframes thumbKenBurns {
-          0% { background-position: 0% 0%; transform: scale(1); }
-          100% { background-position: 100% 100%; transform: scale(1.05); }
-        }
-      `}</style>
     </div>
   )
 }
@@ -321,39 +310,26 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
         {/* Gap: Text → Media */}
         <div className="flex-shrink-0" style={{ height: `${gap * s}px` }} />
 
-        {/* DIV 3: Image/Video Area — animated video simulation */}
+        {/* DIV 3: Image/Video Area — cycling slideshow */}
         <div className="relative flex-shrink-0 rounded-lg overflow-hidden"
           style={{ height: `${imageHeight * s}px` }}>
-          <div className="absolute inset-0" style={{
-            background: 'linear-gradient(120deg, #0f2027, #203a43, #2c5364, #203a43, #0f2027)',
-            backgroundSize: '300% 300%',
-            animation: 'reelVideoShift 6s ease-in-out infinite',
-          }} />
-          {/* Film grain overlay */}
-          <div className="absolute inset-0 opacity-20" style={{
-            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px)',
-            backgroundSize: `${4 * s}px ${4 * s}px`,
-          }} />
-          {/* Play button */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm"
-              style={{ width: 48 * s, height: 48 * s }}>
-              <div style={{
-                width: 0, height: 0, marginLeft: `${2 * s}px`,
-                borderLeft: `${12 * s}px solid rgba(255,255,255,0.85)`,
-                borderTop: `${7 * s}px solid transparent`,
-                borderBottom: `${7 * s}px solid transparent`,
+          {PREVIEW_SLIDES.map((slide, i) => (
+            <img key={i} src={slide} alt="" className="absolute inset-0 w-full h-full object-cover"
+              style={{
+                animation: `reelSlideFade ${PREVIEW_SLIDES.length * 3}s ${i * 3}s infinite`,
+                opacity: 0,
               }} />
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
       <style>{`
-        @keyframes reelVideoShift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        @keyframes reelSlideFade {
+          0% { opacity: 0; }
+          5% { opacity: 1; }
+          ${100 / PREVIEW_SLIDES.length - 2}% { opacity: 1; }
+          ${100 / PREVIEW_SLIDES.length}% { opacity: 0; }
+          100% { opacity: 0; }
         }
       `}</style>
     </div>
@@ -513,7 +489,7 @@ function ThumbnailSettings({ form, update }: {
           </select>
         </div>
         <SliderRow label="Title Size" value={form.thumbnail_title_size ?? 72} min={36} max={120} onChange={v => update('thumbnail_title_size', v)} />
-        <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 40} min={10} max={200} onChange={v => update('thumbnail_title_padding', v)} />
+        <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 200} min={10} max={400} onChange={v => update('thumbnail_title_padding', v)} />
       </section>
 
       <section className="space-y-2">
