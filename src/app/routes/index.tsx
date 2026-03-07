@@ -25,16 +25,17 @@ import { PrivacyPolicyPage } from '@/pages/PrivacyPolicy'
 import { DataDeletionPage } from '@/pages/DataDeletion'
 import { TermsPage } from '@/pages/Terms'
 import { AppLoader, ErrorBoundary } from '@/shared/components'
+import { WelcomePage } from '@/pages/Welcome'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
-  
+
   if (isLoading) return <AppLoader />
-  
+
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/welcome" replace />
   }
-  
+
   return <>{children}</>
 }
 
@@ -96,6 +97,7 @@ export function AppRoutes() {
   return (
     <ErrorBoundary>
       <Routes>
+        <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsPage />} />
