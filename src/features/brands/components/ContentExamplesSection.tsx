@@ -411,12 +411,10 @@ export function ContentExamplesSection({
   const generateReelBatch = async () => {
     if (onBeforeGenerate) await onBeforeGenerate()
     setReelBatchGenerating(true)
-    console.log('[ReelBatch] Starting batch generation of 10 reels...')
     reelBatchMutation.mutate(
       { count: 10 },
       {
         onSuccess: (data) => {
-          console.log(`[ReelBatch] Success — received ${data.reels.length} reels`)
           const newReels = data.reels.map(r => ({ title: r.title, content_lines: r.content_lines }))
           onReelExamplesChange([...reelExamples, ...newReels])
           setReelBatchGenerating(false)

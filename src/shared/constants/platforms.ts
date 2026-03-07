@@ -63,6 +63,21 @@ export const CONTENT_TYPE_META: Record<
 }
 
 /**
+ * Platforms that cannot publish a given content type.
+ * TikTok's API does not support image carousel publishing.
+ */
+export const CONTENT_TYPE_EXCLUDED_PLATFORMS: Partial<Record<ContentType, readonly Platform[]>> = {
+  posts: ['tiktok'],
+}
+
+/** Helper: platforms eligible for a given content type (excludes unsupported ones). */
+export function getPlatformsForContentType(ct: ContentType): readonly Platform[] {
+  const excluded = CONTENT_TYPE_EXCLUDED_PLATFORMS[ct]
+  if (!excluded) return SUPPORTED_PLATFORMS
+  return SUPPORTED_PLATFORMS.filter(p => !(excluded as readonly string[]).includes(p))
+}
+
+/**
  * Per-content-type platform selection dict.
  * `null` means "all connected platforms for all content types" (default).
  * Missing key = all connected platforms for that content type.

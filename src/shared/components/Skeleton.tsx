@@ -43,24 +43,10 @@ export function Spinner({ size = 28, className = '' }: SpinnerProps) {
 }
 
 // ── Full-page loader (replaces old emoji PageLoader) ────────
-interface PageLoaderProps {
-  /** Legacy prop kept for compat — now just controls the label */
-  page?: 'videos' | 'posts' | 'calendar' | 'analytics' | 'brands' | 'jobs' | 'connections' | 'default'
-}
-const LABELS: Record<string, string> = {
-  videos: 'Loading videos',
-  posts: 'Loading posts',
-  calendar: 'Loading calendar',
-  analytics: 'Loading analytics',
-  brands: 'Loading brands',
-  jobs: 'Loading jobs',
-  connections: 'Loading connections',
-  default: 'Loading',
-}
-export function PageLoader({ page = 'default' }: PageLoaderProps) {
+export function PageLoader() {
   return (
-    <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-8">
+    <div className="flex-1 flex items-center justify-center w-full" style={{ minHeight: 'calc(100vh - 10rem)' }}>
+      <div className="flex flex-col items-center gap-6">
         {/* Logo + spinning ring */}
         <motion.div
           className="relative flex items-center justify-center"
@@ -81,7 +67,7 @@ export function PageLoader({ page = 'default' }: PageLoaderProps) {
             transition={{ duration: 1.65, repeat: Infinity, ease: 'linear' }}
           />
           {/* Logo */}
-          <svg width="44" height="44" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="36" height="36" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="8" y="8" width="112" height="112" rx="28" fill="#F5EDD8"/>
             <path d="M29 34L48 94H61L42 34H29Z" fill="#1A1A1A"/>
             <path d="M67 94H80L99 34H86L73.5 73.5L61 34H48L67 94Z" fill="#1A1A1A"/>
@@ -89,15 +75,6 @@ export function PageLoader({ page = 'default' }: PageLoaderProps) {
             <circle cx="107" cy="40" r="3" fill="#1A1A1A" fillOpacity="0.18"/>
           </svg>
         </motion.div>
-        {/* Label */}
-        <motion.p
-          className="text-xs text-gray-400 font-medium tracking-widest uppercase"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.3 }}
-        >
-          {LABELS[page]}
-        </motion.p>
       </div>
     </div>
   )

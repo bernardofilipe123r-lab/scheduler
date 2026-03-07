@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Save, Loader2, AlertTriangle, Film, LayoutGrid, ChevronRight, ArrowLeft, Globe, Plus, Check } from 'lucide-react'
+import { Save, Loader2, AlertTriangle, Film, LayoutGrid, ChevronRight, ArrowLeft, Globe, Plus } from 'lucide-react'
 import { PlatformIcon } from '@/shared/components'
 import { apiClient } from '@/shared/api/client'
 import { useTobyConfig, useUpdateTobyConfig, useTobyReset, useTobyBrandConfigs, useUpdateTobyBrandConfig } from '../hooks'
 import type { TobyBrandConfig } from '../types'
-import { SUPPORTED_PLATFORMS, PLATFORM_META, SUPPORTED_CONTENT_TYPES, CONTENT_TYPE_META } from '@/shared/constants/platforms'
+import { SUPPORTED_PLATFORMS, PLATFORM_META, SUPPORTED_CONTENT_TYPES, CONTENT_TYPE_META, getPlatformsForContentType } from '@/shared/constants/platforms'
 import type { Platform, ContentType, EnabledPlatformsConfig } from '@/shared/constants/platforms'
 
 /** Platform brand colors for active state backgrounds. */
@@ -631,7 +631,7 @@ function BrandDetailPanel({
         )}
       </div>
 
-      {/* Platform publishing — redesigned */}
+      {/* Platform publishing — compact inline rows */}
       {enabled && activeContentTypes.length > 0 && (
         <div className="mt-5">
           <div className="flex items-center gap-2 mb-3">
@@ -639,20 +639,19 @@ function BrandDetailPanel({
             <p className="text-sm font-semibold text-gray-700">Platform Publishing</p>
           </div>
 
-          <div className="space-y-4">
+          <div className="bg-slate-50 rounded-xl divide-y divide-gray-200/60">
             {activeContentTypes.map((ct) => {
               const meta = CONTENT_TYPE_META[ct]
               const ctPlatforms = getPlatformsForType(ct)
               return (
-                <div key={ct} className="bg-slate-50 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <div key={ct} className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap flex items-center gap-1.5 w-24 shrink-0">
                     <span>{meta.icon}</span> {meta.label}
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {SUPPORTED_PLATFORMS.map((p) => {
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(getPlatformsForContentType(ct) as Platform[]).map((p) => {
                       const connected = connectedPlatforms.includes(p)
                       const active = connected && ctPlatforms.includes(p)
-                      const pMeta = PLATFORM_META[p]
                       const platformColor = PLATFORM_COLORS[p]
                       return (
                         <button
@@ -660,37 +659,23 @@ function BrandDetailPanel({
                           type="button"
                           onClick={() => togglePlatformForType(ct, p)}
                           disabled={!connected}
-                          className={`relative flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl text-center transition-all ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                             !connected
-                              ? 'opacity-30 cursor-not-allowed bg-gray-100'
+                              ? 'opacity-30 cursor-not-allowed bg-gray-100 text-gray-400'
                               : active
-                              ? 'bg-white shadow-sm ring-2 ring-offset-1'
-                              : 'bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                              ? 'bg-white shadow-sm ring-1 text-gray-900'
+                              : 'bg-white/60 border border-gray-200 text-gray-400 hover:border-gray-300'
                           }`}
-                          style={active ? { '--tw-ring-color': platformColor } as React.CSSProperties : undefined}
+                          style={active ? { '--tw-ring-color': platformColor, borderColor: platformColor } as React.CSSProperties : undefined}
                         >
-                          {/* Checkmark badge */}
-                          {active && (
-                            <div
-                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-                              style={{ backgroundColor: platformColor }}
-                            >
-                              <Check className="w-2.5 h-2.5 text-white" />
-                            </div>
-                          )}
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                            active ? 'text-white' : 'bg-gray-100 text-gray-500'
+                          <div className={`w-4 h-4 rounded flex items-center justify-center ${
+                            active ? 'text-white' : 'text-gray-400'
                           }`}
                             style={active ? { backgroundColor: platformColor } : undefined}
                           >
-                            <PlatformIcon platform={p} className="w-4 h-4" />
+                            <PlatformIcon platform={p} className="w-2.5 h-2.5" />
                           </div>
-                          <span className={`text-xs font-medium ${active ? 'text-gray-900' : 'text-gray-500'}`}>
-                            {pMeta.label}
-                          </span>
-                          {!connected && (
-                            <span className="text-[9px] text-gray-400">Not connected</span>
-                          )}
+                          {PLATFORM_META[p].label}
                         </button>
                       )
                     })}

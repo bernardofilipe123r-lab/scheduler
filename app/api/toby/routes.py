@@ -660,13 +660,14 @@ def update_brand_config(
     if "enabled_platforms" in body.model_fields_set:
         from sqlalchemy.orm.attributes import flag_modified
         if body.enabled_platforms is not None:
-            from app.core.platforms import SUPPORTED_PLATFORMS_SET, SUPPORTED_CONTENT_TYPES
+            from app.core.platforms import SUPPORTED_PLATFORMS_SET, SUPPORTED_CONTENT_TYPES, CONTENT_TYPE_EXCLUDED_PLATFORMS
             # Sanitise: dict keyed by content-type → list of valid platform names
             sanitised: dict[str, list[str]] = {}
             for ct_key, platform_list in body.enabled_platforms.items():
                 if ct_key not in SUPPORTED_CONTENT_TYPES:
                     continue
-                cleaned = [p for p in platform_list if p in SUPPORTED_PLATFORMS_SET]
+                excluded = CONTENT_TYPE_EXCLUDED_PLATFORMS.get(ct_key, frozenset())
+                cleaned = [p for p in platform_list if p in SUPPORTED_PLATFORMS_SET and p not in excluded]
                 sanitised[ct_key] = cleaned
             cfg.enabled_platforms = sanitised if sanitised else None
         else:

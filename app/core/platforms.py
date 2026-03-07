@@ -65,6 +65,12 @@ CONTENT_TYPE_KEY_MAP: dict[str, str] = {
     "text_video_reel": "reels",
 }
 
+# Platforms that cannot publish a given content type.
+# TikTok's API does not support image carousel publishing.
+CONTENT_TYPE_EXCLUDED_PLATFORMS: dict[str, frozenset[str]] = {
+    "posts": frozenset({"tiktok"}),
+}
+
 
 # ── Credential checks ────────────────────────────────────────────────
 # Each entry maps a platform ID → a callable(brand) → bool.
@@ -216,20 +222,23 @@ def get_platforms_for_content_type(
     -------
     Sorted list of platform IDs to publish to.
     """
+    # Determine the content-type key for exclusion lookup
+    ct_key = CONTENT_TYPE_KEY_MAP.get(content_type, content_type) if content_type else None
+    excluded = CONTENT_TYPE_EXCLUDED_PLATFORMS.get(ct_key, frozenset()) if ct_key else frozenset()
+
     if user_enabled is None:
-        return sorted(connected)
+        return sorted(connected - excluded)
 
     # Legacy flat list — same for every content type
     if isinstance(user_enabled, (list, set)):
-        return sorted(connected & set(user_enabled))
+        return sorted((connected & set(user_enabled)) - excluded)
 
     # Dict format — look up the sub-list for this content type
     if isinstance(user_enabled, dict) and content_type:
-        ct_key = CONTENT_TYPE_KEY_MAP.get(content_type, content_type)
         sub_list = user_enabled.get(ct_key)
         if sub_list is not None and isinstance(sub_list, list):
-            return sorted(connected & set(sub_list))
+            return sorted((connected & set(sub_list)) - excluded)
         # Key missing from dict → all connected platforms for this type
-        return sorted(connected)
+        return sorted(connected - excluded)
 
-    return sorted(connected)
+    return sorted(connected - excluded)

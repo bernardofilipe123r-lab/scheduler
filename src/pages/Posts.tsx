@@ -34,12 +34,11 @@ import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanv
 import { useLayoutSettings, useUpdateLayoutSettings } from '@/shared/api/use-layout-settings'
 import type { BrandName } from '@/shared/types'
 import igIcon from '@/assets/icons/instagram.png'
-import ttIcon from '@/assets/icons/tiktok.png'
 
 // Preload platform icons
-;[igIcon, ttIcon].forEach(src => { const i = new Image(); i.src = src })
+;[igIcon].forEach(src => { const i = new Image(); i.src = src })
 
-type PostPlatform = 'instagram' | 'threads' | 'tiktok'
+type PostPlatform = 'instagram' | 'threads'
 
 function ThreadsLogo({ className = 'h-5 w-5' }: { className?: string }) {
   return (
@@ -52,7 +51,6 @@ function ThreadsLogo({ className = 'h-5 w-5' }: { className?: string }) {
 const POST_PLATFORMS: { id: PostPlatform; label: string; icon: string | 'threads' }[] = [
   { id: 'instagram', label: 'Instagram', icon: igIcon },
   { id: 'threads', label: 'Threads', icon: 'threads' },
-  { id: 'tiktok', label: 'TikTok', icon: ttIcon },
 ]
 
 const POSTS_PREVIEW_SCALE = 0.2
@@ -74,10 +72,8 @@ export function PostsPage() {
 
   // Derive which platforms have at least one connected brand
   const hasThreads = connectionsData?.brands.some(b => b.threads?.connected) ?? true
-  const hasTikTok = connectionsData?.brands.some(b => b.tiktok?.connected) ?? true
   const availablePostPlatforms = POST_PLATFORMS.filter(({ id }) => {
     if (id === 'threads') return hasThreads
-    if (id === 'tiktok') return hasTikTok
     return true // always show instagram
   })
 
@@ -100,8 +96,8 @@ export function PostsPage() {
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [settings, setSettings] = useState<GeneralSettings>(loadGeneralSettings)
   const [showSettings, setShowSettings] = useState(false)
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>(['instagram', 'threads', 'tiktok'])
-  const [autoPlatforms, setAutoPlatforms] = useState<PostPlatform[]>(['instagram', 'threads', 'tiktok'])
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>(['instagram', 'threads'])
+  const [autoPlatforms, setAutoPlatforms] = useState<PostPlatform[]>(['instagram', 'threads'])
 
   // Loading state
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
@@ -116,7 +112,6 @@ export function PostsPage() {
     if (!connectionsData) return
     const isConnected = (p: PostPlatform) => {
       if (p === 'threads') return connectionsData.brands.some(b => b.threads?.connected)
-      if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
       return true
     }
     const keep = (p: PostPlatform) => isConnected(p) && isPostPlatformEnabledForBrands(p, selectedBrands)
@@ -130,7 +125,6 @@ export function PostsPage() {
     if (!connectionsData) return
     const isConnected = (p: PostPlatform) => {
       if (p === 'threads') return connectionsData.brands.some(b => b.threads?.connected)
-      if (p === 'tiktok') return connectionsData.brands.some(b => b.tiktok?.connected)
       return true
     }
     const keep = (p: PostPlatform) => isConnected(p) && isPostPlatformEnabledForBrands(p, autoBrands)

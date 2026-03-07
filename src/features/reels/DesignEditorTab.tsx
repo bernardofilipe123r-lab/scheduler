@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Loader2, Save, BadgeCheck, Image, Film, RotateCcw, Music } from 'lucide-react'
+import { Loader2, Save, Image, Film, RotateCcw, Music } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
 import type { DesignSettings } from './types'
@@ -7,6 +7,7 @@ import { useDynamicBrands } from '@/features/brands/hooks/use-dynamic-brands'
 import { BrandThemeModal } from '@/features/brands/components/BrandThemeModal'
 import type { BrandInfo } from '@/features/brands/constants'
 import vaLogo from '@/assets/icons/vt-logo.png'
+import verifiedIcon from '@/assets/icons/verified.png'
 import testBg from '@/assets/images/test-viral-toby.jpg'
 import previewSlide1 from '@/assets/images/preview/slide-1.jpg'
 import previewSlide2 from '@/assets/images/preview/slide-2.jpg'
@@ -315,8 +316,6 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
   return (
     <div className="rounded-xl overflow-hidden shadow-lg border border-gray-200 relative bg-black mx-auto"
       style={{ width: pw, height: ph }}>
-      {/* Dark background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-black" />
 
       {/* 3-div column — text div auto-heights */}
       <div className="absolute inset-0 flex flex-col" style={{
@@ -338,8 +337,8 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
               <span className="font-semibold truncate" style={{
                 color: brandNameColor, fontSize: `${brandNameSize * s}px`, lineHeight: 1.2,
               }}>Viral Toby</span>
-              <BadgeCheck className="flex-shrink-0" style={{
-                width: `${brandNameSize * s * 0.85}px`, height: `${brandNameSize * s * 0.85}px`, color: '#3B82F6',
+              <img src={verifiedIcon} alt="verified" className="flex-shrink-0" style={{
+                width: `${brandNameSize * s * 0.85}px`, height: `${brandNameSize * s * 0.85}px`,
               }} />
             </div>
             {showHandle && (

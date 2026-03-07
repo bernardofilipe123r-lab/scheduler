@@ -146,8 +146,24 @@ app.include_router(api_usage_router)  # API usage monitoring (admin)
 
 @app.get("/health", tags=["system"])
 async def health_check():
-    """Simple health check endpoint for Railway."""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    """Health check with DB ping for Railway."""
+    from app.db_connection import SessionLocal
+    from sqlalchemy import text as sa_text
+    db_ok = False
+    try:
+        db = SessionLocal()
+        db.execute(sa_text("SELECT 1"))
+        db.close()
+        db_ok = True
+    except Exception:
+        pass
+    status = "healthy" if db_ok else "degraded"
+    code = 200 if db_ok else 503
+    return Response(
+        content='{"status":"' + status + '","db":' + str(db_ok).lower() + ',"timestamp":"' + datetime.utcnow().isoformat() + '"}',
+        status_code=code,
+        media_type="application/json",
+    )
 
 
 # Serve React frontend (SPA catch-all) — MUST be the LAST route group
