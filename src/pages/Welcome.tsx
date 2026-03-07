@@ -1,672 +1,789 @@
 /**
- * Welcome / Marketing Landing Page
- * Public route: /welcome
- * Accessible to everyone. Shows "Go to Dashboard" if authenticated.
+ * Welcome / Landing Page — viraltoby.com/welcome
+ * Design: Ocoya-inspired — minimalist, centered, warm neutrals, Inter font,
+ * frosted glass nav, smooth framer-motion reveals, generous whitespace.
+ * Platform-safe copy: frames AI as content partner, emphasizes human control.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, X, Check, ArrowRight, Sparkles, Calendar, BarChart3, Zap, ChevronRight } from 'lucide-react'
+import { motion, useInView, AnimatePresence } from 'framer-motion'
+import {
+  ArrowRight, Calendar, BarChart3, Palette,
+  Sparkles, ChevronDown, Layers, Send,
+  CheckCircle2, X, Menu, Shield, Zap, Target,
+} from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { PlatformIcon } from '@/shared/components/PlatformIcon'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
-// ─── Scroll-reveal hook ───────────────────────────────────────────────────────
-function useScrollReveal() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect() } },
-      { threshold: 0.12 }
-    )
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [])
-  return { ref, visible }
-}
-
-function RevealSection({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
-  const { ref, visible } = useScrollReveal()
+/* ─── Scroll reveal ─── */
+function Reveal({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, margin: '-60px' })
   return (
-    <div
+    <motion.div
       ref={ref}
+      initial={{ opacity: 0, y: 24 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
       className={className}
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(24px)',
-        transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
-      }}
     >
       {children}
+    </motion.div>
+  )
+}
+
+/* ─── Animated counter ─── */
+function Counter({ end, suffix = '', prefix = '' }: { end: number; suffix?: string; prefix?: string }) {
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true })
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!isInView) return
+    const duration = 2000
+    const startTime = performance.now()
+    const ease = (t: number) => 1 - Math.pow(1 - t, 4)
+    function animate(now: number) {
+      const progress = Math.min((now - startTime) / duration, 1)
+      setCount(Math.round(ease(progress) * end))
+      if (progress < 1) requestAnimationFrame(animate)
+    }
+    requestAnimationFrame(animate)
+  }, [isInView, end])
+
+  return <span ref={ref}>{prefix}{count}{suffix}</span>
+}
+
+/* ─── FAQ Item ─── */
+function FaqItem({ question, answer, defaultOpen = false }: { question: string; answer: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="border-b border-zinc-200/60 last:border-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between py-5 sm:py-6 text-left group"
+      >
+        <span className="text-[15px] sm:text-[17px] font-medium text-zinc-900 pr-8 group-hover:text-zinc-600 transition-colors">{question}</span>
+        <ChevronDown className={`w-5 h-5 text-zinc-400 flex-shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <p className="pb-6 text-[14px] sm:text-[15px] text-zinc-500 leading-[1.7]">{answer}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-// ─── Count-up animation ───────────────────────────────────────────────────────
-function CountUp({ to, suffix = '' }: { to: number; suffix?: string }) {
-  const [count, setCount] = useState(0)
-  const { ref, visible } = useScrollReveal()
-  useEffect(() => {
-    if (!visible) return
-    const duration = 1400
-    const step = 16
-    const steps = duration / step
-    let current = 0
-    const inc = to / steps
-    const timer = setInterval(() => {
-      current += inc
-      if (current >= to) { setCount(to); clearInterval(timer) }
-      else setCount(Math.floor(current))
-    }, step)
-    return () => clearInterval(timer)
-  }, [visible, to])
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>
-}
-
-// ─── Platform icons strip ─────────────────────────────────────────────────────
-const PLATFORMS = [
-  { id: 'instagram', label: 'Instagram', color: '#E1306C' },
-  { id: 'facebook',  label: 'Facebook',  color: '#1877F2' },
-  { id: 'youtube',   label: 'YouTube',   color: '#FF0000' },
-  { id: 'tiktok',    label: 'TikTok',    color: '#010101' },
-  { id: 'threads',   label: 'Threads',   color: '#000000' },
-]
-
-// ─── Comparison table data ────────────────────────────────────────────────────
-const COMPARISON_ROWS = [
-  { label: 'Monthly cost',     agency: '$2,000–$5,000+', toby: 'From $0',    tobyBold: true },
-  { label: 'Content per month', agency: '15–30 posts',    toby: 'Unlimited',  tobyBold: true },
-  { label: 'Platforms covered', agency: '2–3',            toby: '5',          tobyBold: true },
-  { label: 'Brand voice match', agency: 'Hit or miss',    toby: 'DNA-driven', tobyBold: true },
-  { label: 'Response time',    agency: '24–48 hours',     toby: 'Instant',    tobyBold: true },
-  { label: 'Analytics',        agency: 'Monthly report',  toby: 'Real-time',  tobyBold: true },
-  { label: 'Setup time',       agency: 'Weeks',           toby: 'Minutes',    tobyBold: true },
-]
-
-// ─── Feature sections ─────────────────────────────────────────────────────────
-const FEATURES = [
-  {
-    tag: 'Content Creation',
-    heading: 'Smart Content That Sounds Like You',
-    body: 'Toby learns your brand voice, topics, and visual style — then creates content that actually matches who you are. Not generic. Not robotic. Yours.',
-    bullets: ['Reels & Shorts', 'Carousel posts', 'Branded visuals', 'Quality-scored before publishing'],
-    icon: Sparkles,
-    reversed: false,
-    bg: 'bg-gradient-to-br from-[#00435c]/5 to-[#006d8f]/5',
-    iconBg: 'bg-[#00435c]/10',
-    iconColor: 'text-[#00435c]',
-  },
-  {
-    tag: 'Scheduling',
-    heading: 'One Calendar. Every Platform.',
-    body: 'Schedule and publish across Instagram, Facebook, YouTube, TikTok, and Threads — all from one dashboard. Visual calendar, drag-to-reschedule, optimal timing built in.',
-    bullets: ['Visual drag-and-drop calendar', 'Multi-platform publishing', 'Optimal posting times', 'Reschedule in one click'],
-    icon: Calendar,
-    reversed: true,
-    bg: 'bg-gradient-to-br from-violet-50 to-indigo-50/50',
-    iconBg: 'bg-violet-100',
-    iconColor: 'text-violet-600',
-  },
-  {
-    tag: 'Analytics',
-    heading: 'Know What\'s Working',
-    body: 'Track performance across every brand and platform in real time. See what content drives growth and let Toby adapt its strategy automatically.',
-    bullets: ['Engagement metrics', 'Follower growth tracking', 'Per-platform breakdown', 'AI-driven content insights'],
-    icon: BarChart3,
-    reversed: false,
-    bg: 'bg-gradient-to-br from-emerald-50 to-teal-50/50',
-    iconBg: 'bg-emerald-100',
-    iconColor: 'text-emerald-600',
-  },
-]
-
-// ─── How it works steps ───────────────────────────────────────────────────────
-const STEPS = [
-  {
-    num: '01',
-    icon: '🎨',
-    title: 'Define Your Brand',
-    desc: 'Set your brand voice, colors, topics, and target audience. Toby learns your identity — not a template.',
-  },
-  {
-    num: '02',
-    icon: '✍️',
-    title: 'AI Creates Content',
-    desc: 'Toby generates drafts aligned with your Content DNA — ready to review, customize, and approve.',
-  },
-  {
-    num: '03',
-    icon: '🚀',
-    title: 'Publish Everywhere',
-    desc: 'Schedule and publish across all your platforms. Your strategy, your schedule, your brand — everywhere.',
-  },
-]
-
-// ─── Main component ───────────────────────────────────────────────────────────
-export function WelcomePage() {
-  const { isAuthenticated } = useAuth()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
-
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 60)
-    window.addEventListener('scroll', handler, { passive: true })
-    return () => window.removeEventListener('scroll', handler)
-  }, [])
-
-  // Set white overscroll background
-  useEffect(() => {
-    const prev = document.documentElement.style.backgroundColor
-    document.documentElement.style.backgroundColor = '#ffffff'
-    return () => { document.documentElement.style.backgroundColor = prev }
-  }, [])
-
+/* ─── Dashboard mockup (hero visual) ─── */
+function DashboardMockup() {
   return (
-    <div className="min-h-screen bg-white text-[#111827] font-['Inter',_sans-serif]">
-
-      {/* ── Nav ── */}
-      <header
-        className="fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300"
-        style={{ borderBottom: '1px solid #f0f0f0', boxShadow: scrolled ? '0 1px 3px rgba(0,0,0,0.05)' : 'none' }}
-      >
-        <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <img src={vaLogo} alt="ViralToby" className="w-7 h-7" />
-            <span className="font-['Poppins',_sans-serif] font-600 text-[15px] text-[#111827] tracking-tight">ViralToby</span>
-          </Link>
-
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-8">
-            <a href="#how-it-works" className="text-[14px] font-medium text-[#374151] hover:text-[#00435c] transition-colors">How it works</a>
-            <a href="#features" className="text-[14px] font-medium text-[#374151] hover:text-[#00435c] transition-colors">Features</a>
-            <a href="#pricing" className="text-[14px] font-medium text-[#374151] hover:text-[#00435c] transition-colors">Pricing</a>
-          </nav>
-
-          {/* CTA */}
-          <div className="hidden md:flex items-center gap-3">
-            {isAuthenticated ? (
-              <Link
-                to="/"
-                className="flex items-center gap-1.5 text-[14px] font-medium text-white bg-[#00435c] hover:bg-[#002d3f] px-5 py-2 rounded-lg transition-colors"
-              >
-                Dashboard <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            ) : (
-              <>
-                <Link to="/login" className="text-[14px] font-medium text-[#374151] hover:text-[#00435c] transition-colors">
-                  Log in
-                </Link>
-                <Link
-                  to="/login"
-                  className="flex items-center gap-1.5 text-[14px] font-medium text-white bg-[#00435c] hover:bg-[#002d3f] px-5 py-2 rounded-lg transition-colors"
-                >
-                  Get started <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </>
-            )}
+    <div className="relative w-full max-w-[720px] mx-auto">
+      <div className="rounded-[20px] overflow-hidden border border-zinc-200/80" style={{ boxShadow: '0 20px 60px -15px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.02)' }}>
+        {/* Browser bar */}
+        <div className="bg-zinc-100/80 px-4 py-2.5 flex items-center gap-2 border-b border-zinc-200/60">
+          <div className="flex gap-1.5">
+            <div className="w-[10px] h-[10px] rounded-full bg-[#ec6a5e]" />
+            <div className="w-[10px] h-[10px] rounded-full bg-[#f4bf4f]" />
+            <div className="w-[10px] h-[10px] rounded-full bg-[#61c554]" />
           </div>
-
-          {/* Mobile hamburger */}
-          <button
-            className="md:hidden p-2 rounded-lg text-[#374151] hover:bg-gray-100 transition-colors"
-            onClick={() => setMenuOpen(!menuOpen)}
-          >
-            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          <div className="flex-1 flex justify-center">
+            <div className="bg-white rounded-md px-6 py-1 text-[11px] text-zinc-400 border border-zinc-200/60 w-52 text-center font-mono">viraltoby.com</div>
+          </div>
         </div>
 
-        {/* Mobile menu */}
-        {menuOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white px-6 py-4 flex flex-col gap-4">
-            <a href="#how-it-works" onClick={() => setMenuOpen(false)} className="text-[14px] font-medium text-[#374151]">How it works</a>
-            <a href="#features" onClick={() => setMenuOpen(false)} className="text-[14px] font-medium text-[#374151]">Features</a>
-            <a href="#pricing" onClick={() => setMenuOpen(false)} className="text-[14px] font-medium text-[#374151]">Pricing</a>
-            <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
+        {/* Dashboard content */}
+        <div className="bg-[#f9fafb] p-5 sm:p-6">
+          <div className="flex gap-4">
+            {/* Mini sidebar */}
+            <div className="hidden sm:flex flex-col gap-2 w-10">
+              <div className="w-8 h-8 rounded-lg bg-[#F5EDD8] flex items-center justify-center mb-2">
+                <img src={vaLogo} alt="" className="w-5 h-5" />
+              </div>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className={`w-8 h-8 rounded-lg ${i === 0 ? 'bg-zinc-800' : 'bg-zinc-200/60'}`} />
+              ))}
+            </div>
+
+            {/* Main content */}
+            <div className="flex-1 space-y-3">
+              {/* Stat row */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'Scheduled', value: '24', color: '#3b82f6' },
+                  { label: 'Published', value: '156', color: '#10b981' },
+                  { label: 'Engagement', value: '8.2%', color: '#8b5cf6' },
+                ].map((s) => (
+                  <div key={s.label} className="bg-white rounded-xl p-3 border border-zinc-100">
+                    <div className="w-2 h-2 rounded-full mb-2" style={{ backgroundColor: s.color }} />
+                    <div className="text-[15px] font-bold text-zinc-900">{s.value}</div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Schedule preview */}
+              <div className="bg-white rounded-xl p-3 border border-zinc-100">
+                <div className="text-[11px] font-medium text-zinc-500 mb-2">Today's Schedule</div>
+                <div className="space-y-1.5">
+                  {[
+                    { time: '09:00', platform: 'Instagram', color: 'bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045]' },
+                    { time: '12:00', platform: 'YouTube', color: 'bg-[#ff0000]' },
+                    { time: '15:00', platform: 'TikTok', color: 'bg-zinc-900' },
+                    { time: '18:00', platform: 'Facebook', color: 'bg-[#1877F2]' },
+                  ].map((item) => (
+                    <div key={item.time} className="flex items-center gap-2">
+                      <span className="text-[10px] text-zinc-400 w-9 font-mono flex-shrink-0">{item.time}</span>
+                      <div className={`${item.color} h-7 rounded-lg flex-1 flex items-center px-2.5`}>
+                        <span className="text-[10px] text-white font-medium">{item.platform}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+/* ═══════════════════════════════════════════  DATA  ═══════════════════════════ */
+
+const PLATFORMS = [
+  { id: 'instagram', name: 'Instagram' },
+  { id: 'facebook',  name: 'Facebook' },
+  { id: 'youtube',   name: 'YouTube' },
+  { id: 'tiktok',    name: 'TikTok' },
+  { id: 'threads',   name: 'Threads' },
+]
+
+const FAQS = [
+  {
+    question: 'How does Toby create content for my brand?',
+    answer: 'You define your brand\'s Content DNA — niche, tone, target audience, topic categories, and visual style. Toby uses this as the foundation for every piece of content, ensuring everything stays on-brand and aligned with your voice.',
+  },
+  {
+    question: 'Do I need to approve content before it goes live?',
+    answer: 'You\'re always in control. Content is generated based on your brand rules and quality-scored across 5 dimensions before reaching your schedule. You can review, edit, reschedule, or regenerate anything at any time.',
+  },
+  {
+    question: 'Which platforms are supported?',
+    answer: 'ViralToby supports Instagram (Reels & Posts), Facebook (Reels & Posts), YouTube Shorts, TikTok, and Threads. Connect any combination of platforms per brand — publish everywhere from one dashboard.',
+  },
+  {
+    question: 'Can I manage multiple brands?',
+    answer: 'Yes. ViralToby is built for multi-brand management. Each brand has its own Content DNA, connected platforms, color scheme, and publishing schedule. Add as many brands as you need.',
+  },
+  {
+    question: 'What kind of content does it create?',
+    answer: 'Short-form video content (Reels, Shorts, TikToks) with text overlays and branded visuals, plus carousel posts with auto-fit typography. All visuals match your brand colors and style automatically.',
+  },
+  {
+    question: 'How is this different from Hootsuite or Buffer?',
+    answer: 'Traditional tools require you to create content yourself — they only handle posting. ViralToby handles the entire pipeline: content creation, quality scoring, scheduling, and publishing. It\'s like having a content team, not just a calendar.',
+  },
+]
+
+const COMPARISON_ROWS = [
+  { label: 'Monthly cost',     agency: '$2K — $5K+',  toby: '$50 / brand' },
+  { label: 'Content / month',  agency: '15 — 30',     toby: 'Unlimited' },
+  { label: 'Platforms',        agency: '2 — 3',       toby: 'All 5' },
+  { label: 'Brand voice',      agency: 'Hit or miss',  toby: 'DNA-driven' },
+  { label: 'Turnaround',       agency: '24 — 48h',    toby: 'Minutes' },
+  { label: 'Analytics',        agency: 'Monthly PDF',  toby: 'Real-time' },
+  { label: 'Setup time',       agency: 'Weeks',        toby: '5 minutes' },
+]
+
+
+/* ═══════════════════════════════════════  WELCOME PAGE  ══════════════════════ */
+
+export function WelcomePage() {
+  const { isAuthenticated } = useAuth()
+  const [scrolled, setScrolled] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const prev = document.documentElement.style.backgroundColor
+    document.documentElement.style.backgroundColor = '#fafafa'
+    document.body.style.background = '#fafafa'
+    return () => {
+      document.documentElement.style.backgroundColor = prev
+      document.body.style.background = ''
+    }
+  }, [])
+
+  const scrollTo = useCallback((id: string) => {
+    setMobileMenuOpen(false)
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+  }, [])
+
+  const ctaLink = isAuthenticated ? '/' : '/login'
+  const ctaLabel = isAuthenticated ? 'Go to Dashboard' : 'Get Started'
+
+  return (
+    <div className="min-h-screen bg-[#fafafa]" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+
+      {/* ═══ NAV ═══ */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? 'bg-white/70 backdrop-blur-2xl border-b border-zinc-200/40'
+          : 'bg-transparent'
+      }`}>
+        <div className="max-w-[1200px] mx-auto px-5 sm:px-8">
+          <div className="flex items-center justify-between h-[60px]">
+            <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2.5 group">
+              <img src={vaLogo} alt="ViralToby" className="w-[30px] h-[30px] rounded-[8px] transition-transform duration-200 group-hover:scale-105" />
+              <span className="text-[15px] font-semibold text-zinc-900 tracking-[-0.01em]">ViralToby</span>
+            </button>
+
+            {/* Desktop links */}
+            <div className="hidden md:flex items-center gap-8">
+              {['features', 'how-it-works', 'pricing', 'faq'].map((id) => (
+                <button key={id} onClick={() => scrollTo(id)} className="text-[13px] text-zinc-500 hover:text-zinc-900 transition-colors duration-200 capitalize">
+                  {id === 'how-it-works' ? 'How It Works' : id === 'faq' ? 'FAQ' : id.charAt(0).toUpperCase() + id.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Desktop CTAs */}
+            <div className="hidden md:flex items-center gap-3">
               {isAuthenticated ? (
-                <Link to="/" className="text-center text-[14px] font-medium text-white bg-[#00435c] px-5 py-2.5 rounded-lg">
-                  Go to Dashboard
+                <Link to="/" className="bg-zinc-900 hover:bg-zinc-800 text-white text-[13px] font-medium px-5 py-2 rounded-full transition-all duration-200 hover:shadow-sm">
+                  Dashboard
                 </Link>
               ) : (
                 <>
-                  <Link to="/login" className="text-center text-[14px] font-medium text-[#374151] border border-gray-200 px-5 py-2.5 rounded-lg">
-                    Log in
+                  <Link to="/login" className="text-[13px] font-medium text-zinc-600 hover:text-zinc-900 transition-colors px-4 py-2">
+                    Sign In
                   </Link>
-                  <Link to="/login" className="text-center text-[14px] font-medium text-white bg-[#00435c] px-5 py-2.5 rounded-lg">
-                    Get started free
+                  <Link to="/login" className="bg-zinc-900 hover:bg-zinc-800 text-white text-[13px] font-medium px-5 py-2 rounded-full transition-all duration-200 hover:shadow-sm">
+                    Get Started
                   </Link>
                 </>
               )}
             </div>
+
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 transition-colors">
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
-        )}
-      </header>
+        </div>
 
-      <main>
-
-        {/* ── Hero ── */}
-        <section className="pt-32 pb-20 md:pt-40 md:pb-28 px-6 bg-gradient-to-b from-white to-[#f8fafc]">
-          <div className="max-w-[1200px] mx-auto">
-            <div className="grid lg:grid-cols-[55fr_45fr] gap-12 items-center">
-
-              {/* Text */}
-              <div>
-                <div
-                  className="inline-flex items-center gap-2 bg-[#00435c]/8 text-[#00435c] text-[12px] font-medium px-3 py-1.5 rounded-full mb-6"
-                  style={{ opacity: 0, animation: 'fadeSlideUp 0.6s ease 0.1s forwards' }}
-                >
-                  <Zap className="w-3 h-3" />
-                  AI-powered content partner
+        {/* Mobile menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25 }}
+              className="md:hidden bg-white/90 backdrop-blur-xl border-t border-zinc-200/40 overflow-hidden"
+            >
+              <div className="px-5 py-4 space-y-1">
+                {['features', 'how-it-works', 'pricing', 'faq'].map((id) => (
+                  <button key={id} onClick={() => scrollTo(id)} className="block w-full text-left px-3 py-2.5 text-[14px] text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 rounded-lg transition-colors capitalize">
+                    {id === 'how-it-works' ? 'How It Works' : id === 'faq' ? 'FAQ' : id.charAt(0).toUpperCase() + id.slice(1)}
+                  </button>
+                ))}
+                <div className="pt-3 space-y-2">
+                  {isAuthenticated ? (
+                    <Link to="/" className="block w-full text-center px-4 py-2.5 text-[13px] font-medium text-white bg-zinc-900 rounded-full">Dashboard</Link>
+                  ) : (
+                    <>
+                      <Link to="/login" className="block w-full text-center px-4 py-2.5 text-[13px] font-medium text-zinc-600 border border-zinc-200 rounded-full">Sign In</Link>
+                      <Link to="/login" className="block w-full text-center px-4 py-2.5 text-[13px] font-medium text-white bg-zinc-900 rounded-full">Get Started</Link>
+                    </>
+                  )}
                 </div>
-                <h1
-                  className="font-['Poppins',_sans-serif] font-bold text-[40px] md:text-[52px] leading-[1.15] tracking-tight text-[#09090b] mb-6"
-                  style={{ opacity: 0, animation: 'fadeSlideUp 0.6s ease 0.2s forwards' }}
-                >
-                  Your AI-Powered<br />Content Team
-                </h1>
-                <p
-                  className="text-[17px] md:text-[18px] text-[#6b7280] leading-relaxed mb-8 max-w-[480px]"
-                  style={{ opacity: 0, animation: 'fadeSlideUp 0.6s ease 0.3s forwards' }}
-                >
-                  Create, schedule, and publish content across every platform — powered by your brand voice. Save 20+ hours a week without losing what makes your brand unique.
-                </p>
-                <div
-                  className="flex flex-wrap gap-3 mb-8"
-                  style={{ opacity: 0, animation: 'fadeSlideUp 0.6s ease 0.4s forwards' }}
-                >
-                  <Link
-                    to="/login"
-                    className="inline-flex items-center gap-2 bg-[#00435c] hover:bg-[#002d3f] text-white font-medium text-[15px] px-7 py-3.5 rounded-lg transition-colors duration-150"
-                  >
-                    Get Started Free <ArrowRight className="w-4 h-4" />
-                  </Link>
-                  <a
-                    href="#how-it-works"
-                    className="inline-flex items-center gap-2 border border-[#00435c] text-[#00435c] hover:bg-[#00435c]/5 font-medium text-[15px] px-7 py-3.5 rounded-lg transition-colors duration-150"
-                  >
-                    See How It Works
-                  </a>
-                </div>
-                <p
-                  className="text-[13px] text-[#9ca3af]"
-                  style={{ opacity: 0, animation: 'fadeSlideUp 0.6s ease 0.5s forwards' }}
-                >
-                  No credit card required · Free plan available
-                </p>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </nav>
 
-              {/* Visual */}
-              <div
-                className="hidden lg:flex items-center justify-center"
-                style={{ opacity: 0, animation: 'fadeSlideUp 0.7s ease 0.35s forwards' }}
-              >
-                <div
-                  className="w-full max-w-[420px] bg-white rounded-2xl p-6 relative"
-                  style={{
-                    boxShadow: '0 8px 40px rgba(0,0,0,0.10)',
-                    animation: 'float 3s ease-in-out infinite',
-                  }}
-                >
-                  {/* Mock dashboard card */}
-                  <div className="flex items-center gap-3 mb-5">
-                    <div className="w-8 h-8 rounded-lg bg-[#00435c] flex items-center justify-center">
-                      <img src={vaLogo} alt="" className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[12px] font-semibold text-[#111827]">ViralToby Dashboard</p>
-                      <p className="text-[10px] text-[#9ca3af]">3 brands · 5 platforms</p>
-                    </div>
-                    <div className="ml-auto flex items-center gap-1 bg-emerald-50 text-emerald-600 text-[10px] font-medium px-2 py-0.5 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Toby active
-                    </div>
+
+      {/* ═══ HERO ═══ */}
+      <section className="relative pt-32 sm:pt-40 pb-8 sm:pb-12 px-5 sm:px-8 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#f4f4f5] via-[#fafafa] to-[#fafafa]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-gradient-radial from-[#00435c]/[0.04] to-transparent rounded-full blur-3xl" />
+
+        <div className="relative max-w-[1200px] mx-auto text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-100 border border-zinc-200/60 mb-8">
+              <Sparkles className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="text-[12px] font-medium text-zinc-600 tracking-wide">Content creation. Powered by AI.</span>
+            </div>
+
+            <h1 className="text-[36px] sm:text-[48px] lg:text-[60px] font-bold text-zinc-900 leading-[1.08] tracking-[-0.025em] max-w-[800px] mx-auto">
+              Create, schedule,<br className="hidden sm:block" /> and publish — <span className="text-[#00435c]">automatically</span>.
+            </h1>
+
+            <p className="mt-5 sm:mt-6 text-[16px] sm:text-[18px] text-zinc-500 leading-[1.6] max-w-[520px] mx-auto">
+              Define your brand voice. Toby creates content that sounds like you,
+              schedules it, and publishes across every platform.
+            </p>
+
+            <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link to={ctaLink} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white text-[14px] font-medium px-7 py-3 rounded-full transition-all duration-200 hover:shadow-md">
+                {ctaLabel}
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <button onClick={() => scrollTo('how-it-works')} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-zinc-600 hover:text-zinc-900 text-[14px] font-medium px-7 py-3 rounded-full border border-zinc-200 hover:border-zinc-300 hover:bg-white transition-all duration-200">
+                See How It Works
+              </button>
+            </div>
+
+            <p className="mt-4 text-[12px] text-zinc-400">No credit card required</p>
+          </motion.div>
+        </div>
+      </section>
+
+
+      {/* ═══ HERO VISUAL ═══ */}
+      <section className="pb-16 sm:pb-24 px-5 sm:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 40, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.9, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          className="max-w-[900px] mx-auto"
+        >
+          <DashboardMockup />
+        </motion.div>
+      </section>
+
+
+      {/* ═══ PLATFORM STRIP ═══ */}
+      <section className="py-12 sm:py-16 px-5 sm:px-8 border-y border-zinc-200/40">
+        <div className="max-w-[1200px] mx-auto">
+          <Reveal>
+            <p className="text-center text-[13px] text-zinc-400 mb-8 tracking-wide">Publish across every platform</p>
+            <div className="flex flex-wrap justify-center items-center gap-8 sm:gap-14">
+              {PLATFORMS.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-zinc-400 hover:text-zinc-700 transition-colors duration-300 group">
+                  <PlatformIcon platform={p.id} className="w-5 h-5" />
+                  <span className="text-[13px] font-medium">{p.name}</span>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+
+      {/* ═══ STATS ═══ */}
+      <section className="py-20 sm:py-28 px-5 sm:px-8">
+        <div className="max-w-[1000px] mx-auto">
+          <Reveal>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-8">
+              {[
+                { value: 99, suffix: '%', label: 'Lower cost vs. agencies', desc: 'Agency-level content for a fraction of the price.' },
+                { value: 40, suffix: '+', label: 'Hours saved monthly', desc: 'Per brand, compared to manual creation.' },
+                { value: 5, suffix: '', label: 'Platforms supported', desc: 'Instagram, Facebook, YouTube, TikTok, Threads.' },
+              ].map((stat, i) => (
+                <div key={i} className="text-center">
+                  <div className="text-[44px] sm:text-[52px] font-bold text-zinc-900 tracking-[-0.03em] leading-none">
+                    <Counter end={stat.value} suffix={stat.suffix} />
                   </div>
+                  <div className="mt-2 text-[14px] font-semibold text-zinc-700">{stat.label}</div>
+                  <div className="mt-1 text-[13px] text-zinc-400">{stat.desc}</div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
 
-                  {/* Mock content queue */}
-                  {[
-                    { platform: 'instagram', title: '5 habits that transformed my sleep...', time: 'Today 9:00 AM', status: 'scheduled' },
-                    { platform: 'youtube',   title: 'How we grew 10K in 30 days (breakdown)', time: 'Today 2:00 PM', status: 'scheduled' },
-                    { platform: 'tiktok',    title: 'POV: you finally have a system that works', time: 'Tomorrow 11:00 AM', status: 'draft' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{
-                          background: item.platform === 'instagram' ? '#fce4ec' : item.platform === 'youtube' ? '#ffebee' : '#f3e5f5',
-                          color: item.platform === 'instagram' ? '#E1306C' : item.platform === 'youtube' ? '#FF0000' : '#9c27b0',
-                        }}
-                      >
-                        <PlatformIcon platform={item.platform} className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-medium text-[#111827] truncate">{item.title}</p>
-                        <p className="text-[10px] text-[#9ca3af]">{item.time}</p>
-                      </div>
-                      <span
-                        className="text-[9px] font-medium px-1.5 py-0.5 rounded"
-                        style={{
-                          background: item.status === 'scheduled' ? '#e8f5e9' : '#fff3e0',
-                          color: item.status === 'scheduled' ? '#2e7d32' : '#e65100',
-                        }}
-                      >
-                        {item.status}
-                      </span>
+
+      {/* ═══ HOW IT WORKS ═══ */}
+      <section id="how-it-works" className="py-20 sm:py-28 px-5 sm:px-8">
+        <div className="max-w-[1000px] mx-auto">
+          <Reveal>
+            <div className="text-center mb-16">
+              <p className="text-[13px] font-medium text-[#00435c] tracking-wide uppercase mb-3">How it works</p>
+              <h2 className="text-[28px] sm:text-[40px] font-bold text-zinc-900 tracking-[-0.02em]">Up and running in minutes.</h2>
+              <p className="mt-3 text-[16px] text-zinc-500 max-w-[460px] mx-auto leading-relaxed">Three steps to turn your brand identity into a content engine.</p>
+            </div>
+          </Reveal>
+
+          <div className="grid sm:grid-cols-3 gap-5 sm:gap-6">
+            {[
+              { step: '01', icon: Palette, title: 'Define your brand', desc: 'Set your niche, tone, audience, topics, and visual style. This becomes your Content DNA.', time: '5 min' },
+              { step: '02', icon: Sparkles, title: 'AI creates content', desc: 'Toby generates branded reels, shorts, carousels, and posts — all quality-scored before they reach your calendar.', time: 'Instant' },
+              { step: '03', icon: Send, title: 'Review and publish', desc: 'Content lands on your calendar. Review, tweak if you want, and publish across all platforms.', time: 'Ongoing' },
+            ].map((item, i) => (
+              <Reveal key={i} delay={i * 0.1}>
+                <div className="relative p-6 sm:p-8 rounded-[20px] border border-zinc-200/60 bg-white hover:border-zinc-300/60 transition-all duration-300 h-full group">
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="w-10 h-10 rounded-[12px] bg-zinc-100 flex items-center justify-center group-hover:bg-[#00435c]/[0.06] transition-colors duration-300">
+                      <item.icon className="w-[18px] h-[18px] text-zinc-500 group-hover:text-[#00435c] transition-colors duration-300" />
                     </div>
-                  ))}
+                    <span className="text-[11px] font-mono text-zinc-400">{item.time}</span>
+                  </div>
+                  <h3 className="text-[17px] font-semibold text-zinc-900 mb-2">{item.title}</h3>
+                  <p className="text-[14px] text-zinc-500 leading-[1.6]">{item.desc}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
 
-                  {/* Platform icons at bottom */}
-                  <div className="mt-4 flex items-center gap-2">
-                    <p className="text-[10px] text-[#9ca3af]">Publishing to</p>
-                    {PLATFORMS.map(p => (
-                      <div key={p.id} className="w-5 h-5 rounded flex items-center justify-center" style={{ background: `${p.color}15`, color: p.color }}>
-                        <PlatformIcon platform={p.id} className="w-3 h-3" />
+
+      {/* ═══ FEATURES ═══ */}
+      <section id="features" className="py-20 sm:py-28 px-5 sm:px-8 bg-white">
+        <div className="max-w-[1000px] mx-auto">
+          <Reveal>
+            <div className="text-center mb-16 sm:mb-20">
+              <p className="text-[13px] font-medium text-[#00435c] tracking-wide uppercase mb-3">Features</p>
+              <h2 className="text-[28px] sm:text-[40px] font-bold text-zinc-900 tracking-[-0.02em]">Everything you need to grow.</h2>
+            </div>
+          </Reveal>
+
+          <div className="space-y-16 sm:space-y-24">
+
+            {/* Feature 1: Content Creation */}
+            <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+              <Reveal className="order-2 lg:order-1">
+                <div className="rounded-[20px] border border-zinc-200/60 bg-[#fafafa] p-5 sm:p-6">
+                  <div className="space-y-2.5">
+                    {[
+                      { title: 'The secret behind consistent brands', platform: 'Instagram Reel', score: 92, color: 'bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045]' },
+                      { title: 'Why most content strategies fail', platform: 'YouTube Short', score: 88, color: 'bg-[#ff0000]' },
+                      { title: '3 things your audience actually wants', platform: 'TikTok', score: 85, color: 'bg-zinc-900' },
+                    ].map((c) => (
+                      <div key={c.title} className="flex items-center gap-3 p-3 rounded-[14px] bg-white border border-zinc-100">
+                        <div className={`w-9 h-9 ${c.color} rounded-[10px] flex-shrink-0`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] font-medium text-zinc-800 truncate">{c.title}</div>
+                          <div className="text-[11px] text-zinc-400">{c.platform}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="text-[12px] font-semibold text-emerald-600">{c.score}</div>
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
+              </Reveal>
 
-        {/* ── Stats strip ── */}
-        <section className="py-12 bg-[#f9fafb] border-y border-gray-100">
-          <div className="max-w-[1200px] mx-auto px-6">
-            <p className="text-center text-[13px] font-medium text-[#9ca3af] mb-6 uppercase tracking-wide">
-              Trusted by brands growing their social presence
-            </p>
-            <div className="flex flex-wrap justify-center gap-8 md:gap-16">
-              {[
-                { label: 'Posts created',     value: 12000,  suffix: '+' },
-                { label: 'Platforms supported', value: 5,   suffix: '' },
-                { label: 'Hours saved / brand / mo', value: 40, suffix: '+' },
-              ].map(({ label, value, suffix }) => (
-                <div key={label} className="text-center">
-                  <p className="font-['Poppins',_sans-serif] font-bold text-[28px] text-[#00435c]">
-                    <CountUp to={value} suffix={suffix} />
-                  </p>
-                  <p className="text-[13px] text-[#6b7280] mt-0.5">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── How it works ── */}
-        <section id="how-it-works" className="py-20 md:py-28 px-6">
-          <div className="max-w-[1200px] mx-auto">
-            <RevealSection className="text-center mb-16">
-              <p className="text-[12px] font-medium text-[#00435c] uppercase tracking-widest mb-3">How it works</p>
-              <h2 className="font-['Poppins',_sans-serif] font-bold text-[32px] md:text-[38px] text-[#111827] leading-tight">
-                How Toby Works For You
-              </h2>
-              <p className="mt-4 text-[16px] text-[#6b7280] max-w-[520px] mx-auto leading-relaxed">
-                Three simple steps. You stay in control. Toby handles the heavy lifting.
-              </p>
-            </RevealSection>
-
-            <div className="grid md:grid-cols-3 gap-6 relative">
-              {/* Connecting dashed line on desktop */}
-              <div className="hidden md:block absolute top-[52px] left-[calc(16.67%+16px)] right-[calc(16.67%+16px)] h-px border-t-2 border-dashed border-gray-200" />
-
-              {STEPS.map(({ num, icon, title, desc }, i) => (
-                <RevealSection key={num} delay={i * 100}>
-                  <div className="bg-white rounded-2xl p-8 relative" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' }}>
-                    <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[#00435c] text-white font-['Poppins',_sans-serif] font-bold text-[11px] tracking-widest mb-6 relative z-10 shadow-sm">
-                      <span className="text-2xl leading-none">{icon}</span>
-                    </div>
-                    <div className="absolute top-8 right-8 font-['Poppins',_sans-serif] font-bold text-[48px] text-gray-50 leading-none select-none">
-                      {num}
-                    </div>
-                    <h3 className="font-['Poppins',_sans-serif] font-semibold text-[17px] text-[#111827] mb-3">{title}</h3>
-                    <p className="text-[14px] text-[#6b7280] leading-relaxed">{desc}</p>
+              <Reveal className="order-1 lg:order-2" delay={0.1}>
+                <div>
+                  <div className="w-9 h-9 rounded-[10px] bg-zinc-100 flex items-center justify-center mb-5">
+                    <Layers className="w-[18px] h-[18px] text-zinc-500" />
                   </div>
-                </RevealSection>
-              ))}
+                  <h3 className="text-[22px] sm:text-[28px] font-bold text-zinc-900 tracking-[-0.02em] leading-tight">Content that sounds like you.</h3>
+                  <p className="mt-3 text-[15px] text-zinc-500 leading-[1.7]">Every piece of content is shaped by your Content DNA — your brand identity. Quality-scored across 5 dimensions before it reaches your calendar.</p>
+                  <ul className="mt-5 space-y-2.5">
+                    {['Reels, Shorts & TikToks', 'Carousel posts', 'Branded visuals', 'Quality scoring'].map((f) => (
+                      <li key={f} className="flex items-center gap-2.5 text-[14px] text-zinc-600">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Reveal>
             </div>
-          </div>
-        </section>
 
-        {/* ── Feature showcase ── */}
-        <section id="features" className="px-6">
-          {FEATURES.map(({ tag, heading, body, bullets, icon: Icon, reversed, bg, iconBg, iconColor }, i) => (
-            <div key={tag} className={`py-16 md:py-24 ${i % 2 === 1 ? 'bg-[#f9fafb]' : 'bg-white'}`}>
-              <div className="max-w-[1200px] mx-auto">
-                <RevealSection>
-                  <div className={`grid lg:grid-cols-2 gap-12 lg:gap-20 items-center ${reversed ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+            {/* Feature 2: Scheduling */}
+            <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+              <Reveal delay={0.1}>
+                <div>
+                  <div className="w-9 h-9 rounded-[10px] bg-zinc-100 flex items-center justify-center mb-5">
+                    <Calendar className="w-[18px] h-[18px] text-zinc-500" />
+                  </div>
+                  <h3 className="text-[22px] sm:text-[28px] font-bold text-zinc-900 tracking-[-0.02em] leading-tight">One calendar. Every platform.</h3>
+                  <p className="mt-3 text-[15px] text-zinc-500 leading-[1.7]">Visualize your entire content pipeline. Drag to reschedule, click to edit, publish everywhere with one tap.</p>
+                  <ul className="mt-5 space-y-2.5">
+                    {['Week & month views', 'Drag-and-drop', 'Multi-platform publishing', 'Smart scheduling'].map((f) => (
+                      <li key={f} className="flex items-center gap-2.5 text-[14px] text-zinc-600">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Reveal>
 
-                    {/* Visual placeholder */}
-                    <div className={`rounded-2xl ${bg} p-8 aspect-[4/3] flex items-center justify-center`} style={{ border: '1px solid rgba(0,0,0,0.04)' }}>
-                      <div className="text-center">
-                        <div className={`w-20 h-20 rounded-2xl ${iconBg} flex items-center justify-center mx-auto mb-4`}>
-                          <Icon className={`w-10 h-10 ${iconColor}`} />
+              <Reveal>
+                <div className="rounded-[20px] border border-zinc-200/60 bg-[#fafafa] p-5 sm:p-6">
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                      <div key={d} className="text-[10px] font-medium text-zinc-400 text-center py-1">{d}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: 28 }, (_, i) => {
+                      const hasContent = [2, 4, 7, 9, 11, 14, 16, 18, 21, 23, 25].includes(i)
+                      const colors = ['bg-pink-400', 'bg-red-400', 'bg-blue-500', 'bg-zinc-800', 'bg-purple-500']
+                      return (
+                        <div key={i} className="aspect-square rounded-[8px] bg-white border border-zinc-100 flex flex-col items-center justify-center gap-0.5 p-0.5">
+                          <span className="text-[10px] text-zinc-400">{i + 1}</span>
+                          {hasContent && (
+                            <div className="flex gap-[2px]">
+                              <div className={`w-[4px] h-[4px] rounded-full ${colors[i % colors.length]}`} />
+                              {i % 3 === 0 && <div className={`w-[4px] h-[4px] rounded-full ${colors[(i + 1) % colors.length]}`} />}
+                            </div>
+                          )}
                         </div>
-                        <p className="text-[13px] font-medium text-[#9ca3af]">App screenshot coming soon</p>
-                      </div>
-                    </div>
-
-                    {/* Text */}
-                    <div>
-                      <p className="text-[11px] font-semibold text-[#00435c] uppercase tracking-widest mb-3">{tag}</p>
-                      <h2 className="font-['Poppins',_sans-serif] font-bold text-[28px] md:text-[34px] text-[#111827] leading-tight mb-5">
-                        {heading}
-                      </h2>
-                      <p className="text-[16px] text-[#6b7280] leading-relaxed mb-7">
-                        {body}
-                      </p>
-                      <ul className="space-y-3">
-                        {bullets.map(b => (
-                          <li key={b} className="flex items-center gap-3 text-[14px] font-medium text-[#374151]">
-                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
-                              <Check className="w-3 h-3 text-emerald-600" strokeWidth={2.5} />
-                            </span>
-                            {b}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                      )
+                    })}
                   </div>
-                </RevealSection>
-              </div>
+                </div>
+              </Reveal>
             </div>
-          ))}
-        </section>
 
-        {/* ── Platform strip ── */}
-        <section className="py-20 px-6 bg-[#00435c]">
-          <div className="max-w-[900px] mx-auto text-center">
-            <RevealSection>
-              <h2 className="font-['Poppins',_sans-serif] font-bold text-[28px] md:text-[34px] text-white mb-3">
-                One Dashboard. Every Platform.
-              </h2>
-              <p className="text-[16px] text-white/60 mb-12">
-                Connect any combination. Publish everywhere.
-              </p>
-              <div className="flex flex-wrap justify-center gap-6 md:gap-10">
-                {PLATFORMS.map(({ id, label }, i) => (
-                  <RevealSection key={id} delay={i * 80}>
-                    <div className="group flex flex-col items-center gap-3">
-                      <div className="w-16 h-16 rounded-2xl bg-white/10 hover:bg-white/20 transition-colors duration-200 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <PlatformIcon platform={id} className="w-8 h-8 text-white" />
+            {/* Feature 3: Analytics */}
+            <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+              <Reveal className="order-2 lg:order-1">
+                <div className="rounded-[20px] border border-zinc-200/60 bg-[#fafafa] p-5 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-[12px] font-medium text-zinc-600">Growth</div>
+                    <div className="text-[11px] text-zinc-400">Last 30 days</div>
+                  </div>
+                  <div className="flex items-end gap-[3px] h-28 mb-4">
+                    {[30, 42, 28, 55, 48, 62, 38, 72, 65, 85, 70, 90, 78, 95, 88].map((h, i) => (
+                      <div key={i} className="flex-1 rounded-t-[3px] bg-[#00435c] transition-all" style={{ height: `${h}%`, opacity: 0.25 + (h / 100) * 0.75 }} />
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: 'Followers', value: '+1,247', trend: '+12%' },
+                      { label: 'Engagement', value: '8.2%', trend: '+3.1%' },
+                      { label: 'Views', value: '48.5K', trend: '+28%' },
+                    ].map((s) => (
+                      <div key={s.label} className="text-center bg-white rounded-[10px] py-2 px-1 border border-zinc-100">
+                        <div className="text-[13px] font-bold text-zinc-900">{s.value}</div>
+                        <div className="text-[10px] text-emerald-600 font-medium">{s.trend}</div>
+                        <div className="text-[10px] text-zinc-400">{s.label}</div>
                       </div>
-                      <span className="text-[12px] font-medium text-white/60 group-hover:text-white/90 transition-colors">{label}</span>
-                    </div>
-                  </RevealSection>
-                ))}
-              </div>
-            </RevealSection>
-          </div>
-        </section>
-
-        {/* ── Comparison table ── */}
-        <section id="pricing" className="py-20 md:py-28 px-6 bg-white">
-          <div className="max-w-[860px] mx-auto">
-            <RevealSection className="text-center mb-14">
-              <p className="text-[12px] font-medium text-[#00435c] uppercase tracking-widest mb-3">Why Toby?</p>
-              <h2 className="font-['Poppins',_sans-serif] font-bold text-[32px] md:text-[38px] text-[#111827]">
-                Why Brands Choose Toby
-              </h2>
-              <p className="mt-4 text-[16px] text-[#6b7280]">
-                Compare Toby to hiring an agency or virtual assistant.
-              </p>
-            </RevealSection>
-
-            <RevealSection>
-              <div className="rounded-2xl overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb' }}>
-                {/* Header */}
-                <div className="grid grid-cols-[2fr_1fr_1fr] bg-[#f9fafb]">
-                  <div className="px-6 py-4 text-[13px] font-semibold text-[#6b7280]">Feature</div>
-                  <div className="px-4 py-4 text-[13px] font-semibold text-[#6b7280] text-center border-l border-gray-200">Agency / VA</div>
-                  <div className="px-4 py-4 text-[13px] font-semibold text-[#00435c] text-center border-l border-gray-200 bg-[#00435c]/[0.04]">Toby</div>
-                </div>
-                {/* Rows */}
-                {COMPARISON_ROWS.map(({ label, agency, toby }, i) => (
-                  <div key={label} className={`grid grid-cols-[2fr_1fr_1fr] ${i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]'}`}>
-                    <div className="px-6 py-4 text-[14px] font-medium text-[#374151] border-t border-gray-100">{label}</div>
-                    <div className="px-4 py-4 text-[14px] text-[#9ca3af] text-center border-t border-gray-100 border-l border-gray-100">{agency}</div>
-                    <div className="px-4 py-4 text-[14px] font-semibold text-[#00435c] text-center border-t border-gray-100 border-l border-gray-100 bg-[#00435c]/[0.03]">{toby}</div>
-                  </div>
-                ))}
-              </div>
-            </RevealSection>
-          </div>
-        </section>
-
-        {/* ── Testimonial ── */}
-        <section className="py-20 px-6 bg-[#f9fafb]">
-          <div className="max-w-[720px] mx-auto">
-            <RevealSection>
-              <div className="bg-white rounded-2xl p-10 md:p-14 text-center" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.04)' }}>
-                <div className="text-3xl mb-6 select-none">"</div>
-                <p className="font-['Poppins',_sans-serif] font-medium text-[18px] md:text-[20px] text-[#111827] leading-relaxed italic mb-8">
-                  Toby handles our content across multiple brands and platforms. We went from spending 20+ hours a week on content to under 2 — without losing our brand voice.
-                </p>
-                <div className="flex items-center justify-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#00435c]/10 flex items-center justify-center text-[#00435c] font-bold text-[14px]">F</div>
-                  <div className="text-left">
-                    <p className="text-[13px] font-semibold text-[#111827]">Early adopter</p>
-                    <p className="text-[12px] text-[#9ca3af]">Multi-brand creator</p>
+                    ))}
                   </div>
                 </div>
-                <div className="mt-6 flex justify-center gap-2">
-                  {['90K followers gained', '3 brands managed', '5 platforms'].map(badge => (
-                    <span key={badge} className="text-[11px] font-medium text-[#00435c] bg-[#00435c]/8 px-2.5 py-1 rounded-full">
-                      {badge}
-                    </span>
+              </Reveal>
+
+              <Reveal className="order-1 lg:order-2" delay={0.1}>
+                <div>
+                  <div className="w-9 h-9 rounded-[10px] bg-zinc-100 flex items-center justify-center mb-5">
+                    <BarChart3 className="w-[18px] h-[18px] text-zinc-500" />
+                  </div>
+                  <h3 className="text-[22px] sm:text-[28px] font-bold text-zinc-900 tracking-[-0.02em] leading-tight">Know what's working.</h3>
+                  <p className="mt-3 text-[15px] text-zinc-500 leading-[1.7]">Track followers, engagement, and views across every platform. Real-time insights that help you grow.</p>
+                  <ul className="mt-5 space-y-2.5">
+                    {['Real-time metrics', 'Per-platform breakdown', 'Growth trends', 'Content insights'].map((f) => (
+                      <li key={f} className="flex items-center gap-2.5 text-[14px] text-zinc-600">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Reveal>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ═══ CONTROL SECTION ═══ */}
+      <section className="py-20 sm:py-28 px-5 sm:px-8">
+        <div className="max-w-[1000px] mx-auto">
+          <Reveal>
+            <div className="text-center mb-14">
+              <h2 className="text-[28px] sm:text-[40px] font-bold text-zinc-900 tracking-[-0.02em]">Complete control. Full customization.</h2>
+              <p className="mt-3 text-[16px] text-zinc-500 max-w-[480px] mx-auto leading-relaxed">Built to power your creativity, not replace it.</p>
+            </div>
+          </Reveal>
+
+          <div className="grid sm:grid-cols-3 gap-5">
+            {[
+              { icon: Shield, title: 'Your rules, always', desc: 'Every piece of content follows your brand guidelines. Tone, topics, audience, visuals — nothing goes out without your approval.' },
+              { icon: Target, title: 'Content your way', desc: 'Control captions, visuals, cadence, and platform preferences. Customize everything per brand.' },
+              { icon: Zap, title: 'Quality scoring', desc: 'Content is scored across 5 dimensions. Only content that meets your quality threshold gets published.' },
+            ].map((item, i) => (
+              <Reveal key={i} delay={i * 0.1}>
+                <div className="p-6 sm:p-8 rounded-[20px] border border-zinc-200/60 bg-white hover:border-zinc-300/60 transition-all duration-300 h-full">
+                  <div className="w-9 h-9 rounded-[10px] bg-zinc-100 flex items-center justify-center mb-5">
+                    <item.icon className="w-[18px] h-[18px] text-zinc-500" />
+                  </div>
+                  <h3 className="text-[16px] font-semibold text-zinc-900 mb-2">{item.title}</h3>
+                  <p className="text-[14px] text-zinc-500 leading-[1.6]">{item.desc}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+
+      {/* ═══ PRICING COMPARISON ═══ */}
+      <section id="pricing" className="py-20 sm:py-28 px-5 sm:px-8 bg-white">
+        <div className="max-w-[800px] mx-auto">
+          <Reveal>
+            <div className="text-center mb-14">
+              <p className="text-[13px] font-medium text-[#00435c] tracking-wide uppercase mb-3">Pricing</p>
+              <h2 className="text-[28px] sm:text-[40px] font-bold text-zinc-900 tracking-[-0.02em]">Why brands choose Toby.</h2>
+              <p className="mt-3 text-[16px] text-zinc-500 max-w-[440px] mx-auto">Agency-level content creation for a fraction of the cost.</p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <div className="rounded-[20px] border border-zinc-200/60 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-zinc-50/80">
+                    <th className="text-left py-4 px-5 sm:px-6 text-[12px] font-medium text-zinc-400 uppercase tracking-wider"></th>
+                    <th className="text-center py-4 px-4 sm:px-6 text-[12px] font-medium text-zinc-400 uppercase tracking-wider">Agency / VA</th>
+                    <th className="text-center py-4 px-4 sm:px-6 text-[12px] font-semibold text-[#00435c] uppercase tracking-wider bg-[#00435c]/[0.03]">Toby</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARISON_ROWS.map((row, i) => (
+                    <tr key={row.label} className={i < COMPARISON_ROWS.length - 1 ? 'border-t border-zinc-100' : 'border-t border-zinc-100'}>
+                      <td className="py-3.5 px-5 sm:px-6 text-[14px] font-medium text-zinc-700">{row.label}</td>
+                      <td className="py-3.5 px-4 sm:px-6 text-[14px] text-zinc-400 text-center">{row.agency}</td>
+                      <td className="py-3.5 px-4 sm:px-6 text-[14px] font-semibold text-zinc-900 text-center bg-[#00435c]/[0.02]">{row.toby}</td>
+                    </tr>
                   ))}
-                </div>
-              </div>
-            </RevealSection>
-          </div>
-        </section>
+                </tbody>
+              </table>
+            </div>
+          </Reveal>
 
-        {/* ── Final CTA ── */}
-        <section className="py-20 md:py-28 px-6 bg-gradient-to-br from-[#00435c] to-[#006d8f]">
-          <div className="max-w-[640px] mx-auto text-center">
-            <RevealSection>
-              <h2 className="font-['Poppins',_sans-serif] font-bold text-[32px] md:text-[40px] text-white leading-tight mb-5">
-                Ready to Grow Your Brand?
-              </h2>
-              <p className="text-[16px] text-white/70 mb-10 leading-relaxed">
-                Start creating content in minutes, not hours. Set your brand voice — Toby does the rest.
-              </p>
-              {isAuthenticated ? (
-                <Link
-                  to="/"
-                  className="inline-flex items-center gap-2 bg-white text-[#00435c] hover:bg-gray-50 font-semibold text-[16px] px-10 py-4 rounded-xl transition-colors duration-150"
-                >
-                  Go to Dashboard <ArrowRight className="w-4 h-4" />
-                </Link>
-              ) : (
-                <Link
-                  to="/login"
-                  className="inline-flex items-center gap-2 bg-white text-[#00435c] hover:bg-gray-50 font-semibold text-[16px] px-10 py-4 rounded-xl transition-colors duration-150"
-                >
-                  Get Started Free <ArrowRight className="w-4 h-4" />
-                </Link>
-              )}
-              <p className="mt-5 text-[13px] text-white/40">
-                No credit card required · Free plan available
-              </p>
-            </RevealSection>
-          </div>
-        </section>
-      </main>
+          <Reveal delay={0.2}>
+            <div className="mt-10 text-center">
+              <Link to={ctaLink} className="inline-flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white text-[14px] font-medium px-8 py-3 rounded-full transition-all duration-200 hover:shadow-md">
+                {ctaLabel}
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <p className="mt-3 text-[13px] text-zinc-400">$50/month per brand. Cancel anytime.</p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
 
-      {/* ── Footer ── */}
-      <footer className="bg-[#111827] px-6 pt-14 pb-8">
-        <div className="max-w-[1200px] mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+
+      {/* ═══ FAQ ═══ */}
+      <section id="faq" className="py-20 sm:py-28 px-5 sm:px-8">
+        <div className="max-w-[640px] mx-auto">
+          <Reveal>
+            <div className="text-center mb-12">
+              <h2 className="text-[28px] sm:text-[36px] font-bold text-zinc-900 tracking-[-0.02em]">Questions & answers</h2>
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <div>
+              {FAQS.map((faq, i) => (
+                <FaqItem key={i} question={faq.question} answer={faq.answer} defaultOpen={i === 0} />
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+
+      {/* ═══ FINAL CTA ═══ */}
+      <section className="py-20 sm:py-28 px-5 sm:px-8 bg-white">
+        <div className="max-w-[600px] mx-auto text-center">
+          <Reveal>
+            <h2 className="text-[28px] sm:text-[44px] font-bold text-zinc-900 tracking-[-0.02em] leading-tight">
+              Ready to grow<br className="hidden sm:block" /> your brand?
+            </h2>
+            <p className="mt-4 text-[16px] sm:text-[18px] text-zinc-500 leading-relaxed max-w-[400px] mx-auto">Start creating content in minutes, not hours.</p>
+            <div className="mt-8">
+              <Link to={ctaLink} className="inline-flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white text-[15px] font-medium px-10 py-3.5 rounded-full transition-all duration-200 hover:shadow-md">
+                {ctaLabel}
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+            <p className="mt-4 text-[12px] text-zinc-400">No credit card required. Set up in 5 minutes.</p>
+          </Reveal>
+        </div>
+      </section>
+
+
+      {/* ═══ FOOTER ═══ */}
+      <footer className="bg-zinc-950 text-zinc-400 pt-14 pb-8 px-5 sm:px-8">
+        <div className="max-w-[1000px] mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 pb-10 border-b border-zinc-800/60">
             {/* Brand */}
-            <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-2.5 mb-4">
-                <img src={vaLogo} alt="ViralToby" className="w-6 h-6 opacity-80" />
-                <span className="font-['Poppins',_sans-serif] font-semibold text-[14px] text-white/80">ViralToby</span>
+            <div className="col-span-2 sm:col-span-1">
+              <div className="flex items-center gap-2 mb-4">
+                <img src={vaLogo} alt="ViralToby" className="w-7 h-7 rounded-[6px]" />
+                <span className="text-[14px] font-semibold text-white tracking-tight">ViralToby</span>
               </div>
-              <p className="text-[13px] text-[#6b7280] leading-relaxed max-w-[200px]">
-                AI-powered content for growing brands.
-              </p>
+              <p className="text-[13px] text-zinc-500 leading-relaxed">AI-powered content creation<br />for growing brands.</p>
             </div>
 
             {/* Product */}
             <div>
-              <p className="text-[12px] font-semibold text-[#9ca3af] uppercase tracking-widest mb-4">Product</p>
-              <ul className="space-y-2.5">
-                {['Features', 'Pricing', 'Log in'].map(link => (
-                  <li key={link}>
-                    <Link to="/login" className="text-[13px] text-[#6b7280] hover:text-white transition-colors">{link}</Link>
-                  </li>
-                ))}
+              <h4 className="text-[12px] font-medium text-zinc-400 uppercase tracking-wider mb-4">Product</h4>
+              <ul className="space-y-2">
+                <li><button onClick={() => scrollTo('features')} className="text-[13px] text-zinc-500 hover:text-white transition-colors">Features</button></li>
+                <li><button onClick={() => scrollTo('pricing')} className="text-[13px] text-zinc-500 hover:text-white transition-colors">Pricing</button></li>
+                <li><button onClick={() => scrollTo('faq')} className="text-[13px] text-zinc-500 hover:text-white transition-colors">FAQ</button></li>
               </ul>
             </div>
 
             {/* Legal */}
             <div>
-              <p className="text-[12px] font-semibold text-[#9ca3af] uppercase tracking-widest mb-4">Legal</p>
-              <ul className="space-y-2.5">
-                <li><Link to="/terms" className="text-[13px] text-[#6b7280] hover:text-white transition-colors">Terms of Service</Link></li>
-                <li><Link to="/privacy" className="text-[13px] text-[#6b7280] hover:text-white transition-colors">Privacy Policy</Link></li>
-                <li><Link to="/data-deletion" className="text-[13px] text-[#6b7280] hover:text-white transition-colors">Data Deletion</Link></li>
+              <h4 className="text-[12px] font-medium text-zinc-400 uppercase tracking-wider mb-4">Legal</h4>
+              <ul className="space-y-2">
+                <li><Link to="/terms" className="text-[13px] text-zinc-500 hover:text-white transition-colors">Terms</Link></li>
+                <li><Link to="/privacy" className="text-[13px] text-zinc-500 hover:text-white transition-colors">Privacy</Link></li>
+                <li><Link to="/data-deletion" className="text-[13px] text-zinc-500 hover:text-white transition-colors">Data Deletion</Link></li>
               </ul>
             </div>
 
             {/* Connect */}
             <div>
-              <p className="text-[12px] font-semibold text-[#9ca3af] uppercase tracking-widest mb-4">Connect</p>
-              <ul className="space-y-2.5">
-                <li><a href="mailto:hello@viraltoby.com" className="text-[13px] text-[#6b7280] hover:text-white transition-colors">hello@viraltoby.com</a></li>
+              <h4 className="text-[12px] font-medium text-zinc-400 uppercase tracking-wider mb-4">Connect</h4>
+              <ul className="space-y-2">
+                <li>
+                  <a href="https://www.instagram.com/viraltoby" target="_blank" rel="noopener noreferrer" className="text-[13px] text-zinc-500 hover:text-white transition-colors inline-flex items-center gap-1.5">
+                    <PlatformIcon platform="instagram" className="w-3.5 h-3.5" /> Instagram
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:viraltobyapp@gmail.com" className="text-[13px] text-zinc-500 hover:text-white transition-colors inline-flex items-center gap-1.5">
+                    <Send className="w-3.5 h-3.5" /> Contact
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
 
-          <div className="border-t border-white/[0.06] pt-8 flex flex-col md:flex-row items-center justify-between gap-3">
-            <p className="text-[12px] text-[#4b5563]">
-              © 2026 ViralToby. All rights reserved.
-            </p>
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-[11px] text-zinc-600">&copy; {new Date().getFullYear()} ViralToby. All rights reserved.</p>
             <div className="flex items-center gap-4">
-              {PLATFORMS.map(({ id }) => (
-                <div key={id} className="text-[#4b5563] hover:text-[#9ca3af] transition-colors cursor-default">
-                  <PlatformIcon platform={id} className="w-4 h-4" />
-                </div>
-              ))}
+              <a href="https://www.instagram.com/viraltoby" target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-white transition-colors">
+                <PlatformIcon platform="instagram" className="w-4 h-4" />
+              </a>
             </div>
           </div>
         </div>
       </footer>
-
-      {/* ── CSS animations ── */}
-      <style>{`
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50%       { transform: translateY(-8px); }
-        }
-      `}</style>
     </div>
   )
 }
