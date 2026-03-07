@@ -26,11 +26,11 @@ const DEFAULTS: Partial<DesignSettings> = {
   // Reel
   reel_text_color: '#FFFFFF',
   reel_text_font: 'Inter',
-  reel_text_size: 48,
+  reel_text_size: 38,
   reel_text_font_bold: false,
   reel_brand_name_color: '#FFFFFF',
   reel_handle_color: '#AAAAAA',
-  reel_header_scale: 1.0,
+  reel_header_scale: 1.15,
   reel_brand_name_size: BASE_NAME_SIZE,
   reel_handle_size: BASE_HANDLE_SIZE,
   reel_logo_size: BASE_LOGO_SIZE,
@@ -234,11 +234,11 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
   const imageHeight = form.reel_image_height ?? 660
   const brandNameColor = form.reel_brand_name_color || '#FFFFFF'
   const handleColor = form.reel_handle_color || '#AAAAAA'
-  const scale = form.reel_header_scale ?? 1.0
+  const scale = form.reel_header_scale ?? 1.15
   const brandNameSize = Math.round(BASE_NAME_SIZE * scale)
   const handleSize = Math.round(BASE_HANDLE_SIZE * scale)
   const logoSizePx = Math.round(BASE_LOGO_SIZE * scale)
-  const avgWords = 50 // hardcoded
+  const avgWords = 55 // hardcoded
 
   const exampleText = useMemo(() => buildExampleText(avgWords), [avgWords])
 
@@ -263,9 +263,9 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
         {/* DIV 1: Brand Header */}
         <div className="flex items-center flex-shrink-0" style={{ gap: `${12 * s}px` }}>
           {showLogo && (
-            <div className="rounded-full border-white flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-800"
-              style={{ width: scaledLogo, height: scaledLogo, borderWidth: `${Math.max(1, 2 * s)}px`, borderStyle: 'solid' }}>
-              <img src={vaLogo} alt="Logo" className="rounded-sm" style={{ width: scaledLogo * 0.7, height: scaledLogo * 0.7 }} />
+            <div className="rounded-full border-white flex items-center justify-center flex-shrink-0 overflow-hidden"
+              style={{ width: scaledLogo, height: scaledLogo, borderWidth: `${Math.max(1, 1 * s)}px`, borderStyle: 'solid' }}>
+              <img src={vaLogo} alt="Logo" className="rounded-[1px] object-cover" style={{ width: scaledLogo, height: scaledLogo }} />
             </div>
           )}
           <div className="flex flex-col min-w-0">
@@ -369,7 +369,7 @@ export function DesignEditorTab() {
 
   const handleSave = useCallback(async () => {
     // When saving, compute derived values from scale and unified gap
-    const scale = form.reel_header_scale ?? 1.0
+    const scale = form.reel_header_scale ?? 1.15
     const gap = form.reel_section_gap ?? 40
     const payload: Partial<DesignSettings> = {
       ...form,
@@ -384,7 +384,7 @@ export function DesignEditorTab() {
       reel_padding_bottom: 40,
       reel_padding_left: 85,
       reel_padding_right: 85,
-      reel_avg_word_count: 50,
+      reel_avg_word_count: 55,
       image_fade_duration: 0.2,
       reel_text_bg_opacity: 85,
       reel_text_shadow: true,
@@ -517,7 +517,7 @@ function ContentSettings({ form, update }: {
   form: Partial<DesignSettings>
   update: (key: keyof DesignSettings, value: unknown) => void
 }) {
-  const headerScale = form.reel_header_scale ?? 1.0
+  const headerScale = form.reel_header_scale ?? 1.15
 
   return (
     <div className="space-y-4">
@@ -566,7 +566,7 @@ function ContentSettings({ form, update }: {
           <input type="checkbox" checked={form.reel_text_font_bold ?? false} onChange={e => update('reel_text_font_bold', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
           Bold
         </label>
-        <SliderRow label="Font Size" value={form.reel_text_size ?? 48} min={24} max={96} onChange={v => update('reel_text_size', v)} />
+        <SliderRow label="Font Size" value={form.reel_text_size ?? 38} min={24} max={42} onChange={v => update('reel_text_size', v)} />
       </section>
 
       {/* Layout */}

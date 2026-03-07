@@ -80,6 +80,7 @@ Style reference: @execute, @factsdailyy, @luxurylife on Instagram.
 RULES:
 - Opening line MUST be a bold, attention-grabbing statement
 - Use short sentences. Max 15 words per line.
+- Total reel text MUST be 50-60 words. Never exceed 60 words.
 - End with an insight, lesson, or thought-provoking closer
 - Thumbnail title: 3-5 words per line, max 4 lines, ALL CAPS
 - Image queries must be specific enough to find relevant photos

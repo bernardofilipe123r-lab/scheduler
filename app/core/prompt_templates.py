@@ -76,6 +76,7 @@ CORE RULES:
 - Keep language {ctx.tone_string}
 - Avoid {ctx.tone_avoid_string} language
 - Each content line must be under 18 words
+- Total content MUST be 50-60 words across all lines. Never exceed 60 words.
 
 CONTENT PHILOSOPHY:
 - {ctx.content_philosophy}
@@ -130,6 +131,7 @@ TITLE PATTERN (modify as needed):
 FORMAT RULES:
 - Structure: {format_info['structure']}
 - Max words per line: {format_info['word_limit']}
+- Total content MUST be 50-60 words across all lines. NEVER exceed 60 words.
 
 HOOK LANGUAGE TO USE:
 {', '.join(hook_language[:4])}

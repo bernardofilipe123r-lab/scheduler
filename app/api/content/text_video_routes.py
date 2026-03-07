@@ -266,6 +266,11 @@ async def generate_text_video_reel(
         if not request.reel_text:
             raise HTTPException(status_code=400, detail="reel_text required for manual mode")
 
+        # Enforce max 60 words for layout stability
+        word_count = len(request.reel_text.split())
+        if word_count > 60:
+            raise HTTPException(status_code=400, detail=f"Reel text exceeds 60 words ({word_count}). Shorten it to maintain layout quality.")
+
         polished_data = {
             "reel_text": request.reel_text,
             "reel_lines": request.reel_text.split("\n"),

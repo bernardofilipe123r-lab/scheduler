@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/content/text-video/design", tags=["text-video-de
 class DesignUpdate(BaseModel):
     # Reel body settings
     reel_text_font: Optional[str] = None
-    reel_text_size: Optional[int] = Field(None, ge=20, le=100)
+    reel_text_size: Optional[int] = Field(None, ge=20, le=42)
     reel_line_spacing: Optional[int] = Field(None, ge=0, le=60)
     reel_text_region_pct: Optional[float] = Field(None, ge=0.3, le=0.8)
     reel_text_bg_opacity: Optional[int] = Field(None, ge=0, le=100)
@@ -38,7 +38,7 @@ class DesignUpdate(BaseModel):
     reel_padding_left: Optional[int] = Field(None, ge=0, le=200)
     reel_padding_right: Optional[int] = Field(None, ge=0, le=200)
     reel_image_height: Optional[int] = Field(None, ge=400, le=730)
-    reel_avg_word_count: Optional[int] = Field(None, ge=10, le=200)
+    reel_avg_word_count: Optional[int] = Field(None, ge=10, le=80)
     reel_brand_name_color: Optional[str] = Field(None, max_length=20)
     reel_brand_name_size: Optional[int] = Field(None, ge=10, le=80)
     reel_handle_color: Optional[str] = Field(None, max_length=20)

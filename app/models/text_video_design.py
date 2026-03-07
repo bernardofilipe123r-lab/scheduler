@@ -13,7 +13,7 @@ class TextVideoDesign(Base):
 
     # Reel body settings
     reel_text_font = Column(String(100), default="Poppins-Bold.ttf")
-    reel_text_size = Column(Integer, default=52)
+    reel_text_size = Column(Integer, default=38)
     reel_line_spacing = Column(Integer, default=20)
     reel_text_region_pct = Column(Float, default=0.55)
     reel_text_bg_opacity = Column(Integer, default=85)
@@ -35,12 +35,12 @@ class TextVideoDesign(Base):
     reel_padding_left = Column(Integer, default=85)
     reel_padding_right = Column(Integer, default=85)
     reel_image_height = Column(Integer, default=660)
-    reel_avg_word_count = Column(Integer, default=50)
+    reel_avg_word_count = Column(Integer, default=55)
     reel_brand_name_color = Column(String(20), default="#FFFFFF")
     reel_brand_name_size = Column(Integer, default=42)
     reel_handle_color = Column(String(20), default="#AAAAAA")
     reel_handle_size = Column(Integer, default=32)
-    reel_header_scale = Column(Float, default=1.0)
+    reel_header_scale = Column(Float, default=1.15)
     reel_text_font_bold = Column(Boolean, default=False)
     reel_music_enabled = Column(Boolean, default=True)
 
