@@ -158,11 +158,13 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
     }
 
     function greedySplit(size: number): string[] {
+      // Use 98% of container width as safety margin for CSS vs canvas rendering differences
+      const maxWidth = containerWidthPx * 0.98
       const lines: string[] = []
       let current = ''
       for (const word of words) {
         const test = current ? `${current} ${word}` : word
-        if (current && measureLine(test, size) > containerWidthPx) {
+        if (current && measureLine(test, size) > maxWidth) {
           lines.push(current)
           current = word
         } else {
@@ -264,7 +266,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
           letterSpacing: `${2 * s}px`,
           textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(255,215,0,0.15)',
         }}>
-          {titleLines.map((line, i) => <div key={i}>{line}</div>)}
+          {titleLines.map((line, i) => <div key={i} style={{ whiteSpace: 'nowrap' }}>{line}</div>)}
         </div>
       </div>
     </div>
