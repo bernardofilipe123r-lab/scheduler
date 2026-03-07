@@ -14,6 +14,7 @@ export interface BrandThemeModalProps {
   onClose: () => void
   onSave?: () => void
   inline?: boolean
+  brandSelector?: React.ReactNode
 }
 
 /* ── Proportional scale: 1080px canvas → 240px preview ────────── */
@@ -74,7 +75,7 @@ function hexToRgba(hex: string, opacity: number): string {
 
 /* ═══════════════════════════════════════════════════════════════ */
 
-export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeModalProps) {
+export function BrandThemeModal({ brand, onClose, onSave, inline, brandSelector }: BrandThemeModalProps) {
   const [mode, setMode] = useState<'light' | 'dark'>('light')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -213,9 +214,10 @@ export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeMo
   if (inline) {
     return (
       <div className="space-y-4">
-        {/* ── Sticky top bar: mode toggle + save/reset ── */}
+        {/* ── Sticky top bar: brand selector + mode toggle + save ── */}
         <div className="sticky top-0 z-20 bg-gray-50 -mx-1 px-1 pb-3 pt-1 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {brandSelector}
             <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5">
               <button onClick={() => setMode('light')}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
@@ -230,7 +232,7 @@ export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeMo
                 🌙 Dark
               </button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="ml-auto">
               <button onClick={handleSave} disabled={saving}
                 className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}

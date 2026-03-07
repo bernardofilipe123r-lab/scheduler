@@ -457,29 +457,26 @@ function TextReelsDesign() {
     logo: '',
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Brand selector */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-gray-600">Brand</span>
-        <select
-          value={selectedBrandId}
-          onChange={e => setSelectedBrandId(e.target.value)}
-          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 font-medium outline-none focus:border-primary-500 cursor-pointer"
-        >
-          {brands.map(b => (
-            <option key={b.id} value={b.id}>{b.label}</option>
-          ))}
-        </select>
-      </div>
+  const brandSelector = (
+    <select
+      value={selectedBrandId}
+      onChange={e => setSelectedBrandId(e.target.value)}
+      className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 font-medium outline-none focus:border-primary-500 cursor-pointer"
+    >
+      {brands.map(b => (
+        <option key={b.id} value={b.id}>{b.label}</option>
+      ))}
+    </select>
+  )
 
-      <BrandThemeModal
-        key={selectedBrandId}
-        brand={brandInfo}
-        onClose={() => {}}
-        inline
-      />
-    </div>
+  return (
+    <BrandThemeModal
+      key={selectedBrandId}
+      brand={brandInfo}
+      onClose={() => {}}
+      inline
+      brandSelector={brandSelector}
+    />
   )
 }
 
