@@ -1,7 +1,7 @@
 import { Shield, Mail, Trash2, Database, Eye, RefreshCw, Server } from 'lucide-react'
 
 const APP_NAME = 'ViralToby'
-const COMPANY_NAME = 'HealthyCollege'
+const COMPANY_NAME = 'Viral Toby'
 const CONTACT_EMAIL = 'viraltobyapp@gmail.com'
 const DOMAIN = 'viraltoby.com'
 

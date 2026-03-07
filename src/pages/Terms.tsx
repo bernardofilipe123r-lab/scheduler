@@ -1,7 +1,7 @@
 import { FileText, Shield, AlertTriangle, Scale, Ban, RefreshCw, Mail } from 'lucide-react'
 
 const APP_NAME = 'ViralToby'
-const COMPANY_NAME = 'HealthyCollege'
+const COMPANY_NAME = 'Viral Toby'
 const CONTACT_EMAIL = 'viraltobyapp@gmail.com'
 const DOMAIN = 'viraltoby.com'
 
