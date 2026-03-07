@@ -756,14 +756,25 @@ function ContentSettings({ form, update }: {
       {/* Slideshow */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Slideshow</h4>
-        <SliderRow label="Image Duration" value={form.image_duration ?? 3} min={1} max={10} step={0.5} unit="s" onChange={v => update('image_duration', v)} />
-        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-          <input type="checkbox"
-            checked={(form.black_fade_duration ?? 1) > 0}
-            onChange={e => update('black_fade_duration', e.target.checked ? 1.0 : 0)}
-            className="w-3.5 h-3.5 accent-primary-600" />
-          Black Fade In
-        </label>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">Image Duration</span>
+            <input
+              type="range" min={1} max={10} step={0.5}
+              value={form.image_duration ?? 3}
+              onChange={e => update('image_duration', +e.target.value)}
+              className="flex-1 h-1.5 accent-primary-600 cursor-pointer"
+            />
+            <span className="text-xs text-gray-700 font-mono w-14 text-right flex-shrink-0">{form.image_duration ?? 3}s</span>
+          </div>
+          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer flex-shrink-0">
+            <input type="checkbox"
+              checked={(form.black_fade_duration ?? 1) > 0}
+              onChange={e => update('black_fade_duration', e.target.checked ? 1.0 : 0)}
+              className="w-3.5 h-3.5 accent-primary-600" />
+            Black Fade In
+          </label>
+        </div>
       </section>
 
       {/* Music */}
