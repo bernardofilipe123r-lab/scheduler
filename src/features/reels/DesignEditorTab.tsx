@@ -28,8 +28,9 @@ const DEFAULTS: Partial<DesignSettings> = {
   thumbnail_title_size: 120,
   thumbnail_title_padding: 150,
   thumbnail_logo_size: 100,
-  thumbnail_overlay_opacity: 60,
+  thumbnail_overlay_opacity: 90,
   thumbnail_divider_style: 'line_with_logo',
+  thumbnail_divider_thickness: 4,
   // Reel
   reel_text_color: '#FFFFFF',
   reel_text_font: 'Inter',
@@ -173,32 +174,35 @@ function useAutoTitleLines(title: string, maxFontSize: number, font: string, con
     }
 
     // Try 3 lines first (biggest font), then 2 lines
+    // Search from a high ceiling (300) down to maximize font size
+    const ceiling = Math.max(maxFontSize, 300)
     for (const targetLines of [3, 2]) {
-      for (let size = maxFontSize; size >= 60; size -= 2) {
+      for (let size = ceiling; size >= 60; size -= 2) {
         const result = splitIntoN(targetLines, size)
         if (result) return { lines: result, fontSize: size }
       }
     }
 
     // Fallback: just use max size, single line
-    return { lines: [title], fontSize: maxFontSize }
+    return { lines: [title], fontSize: ceiling }
   }, [title, maxFontSize, font, containerWidthPx])
 }
 
 function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const titleColor = form.thumbnail_title_color || '#FFD700'
   const titleSize = form.thumbnail_title_size ?? 120
-  const titlePadding = form.thumbnail_title_padding ?? 200
+  const titlePadding = form.thumbnail_title_padding ?? 150
   const dividerStyle = form.thumbnail_divider_style || 'line_with_logo'
-  const overlayOpacity = (form.thumbnail_overlay_opacity ?? 60) / 100
+  const overlayOpacity = (form.thumbnail_overlay_opacity ?? 90) / 100
   const titleFont = form.thumbnail_title_font || 'Anton'
   const logoSize = form.thumbnail_logo_size ?? 100
+  const dividerThickness = form.thumbnail_divider_thickness ?? 4
 
   const s = SCALE
   const pw = CANVAS_W * s
   const ph = CANVAS_H * s
   const scaledLogo = logoSize * s
-  const lineThickness = dividerStyle === 'gradient' ? Math.max(4 * s, 2) : Math.max(2 * s, 1)
+  const lineThickness = Math.max(dividerThickness * s, 1)
   const lineLogoGap = 20 * s
   const dividerTitleGap = 24 * s
   const sidePadding = 40 // real px
@@ -545,7 +549,7 @@ function ThumbnailSettings({ form, update }: {
 
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Overlay</h4>
-        <SliderRow label="Dark Intensity" value={form.thumbnail_overlay_opacity ?? 60} min={0} max={100} unit="%" onChange={v => update('thumbnail_overlay_opacity', v)} />
+        <SliderRow label="Dark Intensity" value={form.thumbnail_overlay_opacity ?? 90} min={60} max={100} unit="%" onChange={v => update('thumbnail_overlay_opacity', v)} />
       </section>
 
       <section className="space-y-2">
@@ -557,6 +561,7 @@ function ThumbnailSettings({ form, update }: {
             {DIVIDER_OPTIONS.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
           </select>
         </div>
+        <SliderRow label="Thickness" value={form.thumbnail_divider_thickness ?? 4} min={1} max={10} onChange={v => update('thumbnail_divider_thickness', v)} />
       </section>
     </div>
   )

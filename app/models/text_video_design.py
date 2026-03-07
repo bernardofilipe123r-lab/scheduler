@@ -52,7 +52,8 @@ class TextVideoDesign(Base):
     thumbnail_title_padding_x = Column(Integer, default=150)
     thumbnail_image_ratio = Column(Float, default=0.6)
     thumbnail_divider_style = Column(String(30), default="line_with_logo")
-    thumbnail_overlay_opacity = Column(Integer, default=60)
+    thumbnail_divider_thickness = Column(Integer, default=4)
+    thumbnail_overlay_opacity = Column(Integer, default=90)
     thumbnail_logo_size = Column(Integer, default=100)
 
     created_at = Column(TIMESTAMP(timezone=True), server_default="now()")
@@ -98,6 +99,7 @@ class TextVideoDesign(Base):
             "thumbnail_title_padding_x": self.thumbnail_title_padding_x,
             "thumbnail_image_ratio": self.thumbnail_image_ratio,
             "thumbnail_divider_style": self.thumbnail_divider_style,
+            "thumbnail_divider_thickness": self.thumbnail_divider_thickness,
             "thumbnail_overlay_opacity": self.thumbnail_overlay_opacity,
             "thumbnail_logo_size": self.thumbnail_logo_size,
         }
