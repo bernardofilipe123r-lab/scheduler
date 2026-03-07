@@ -589,15 +589,22 @@ function TextVideoDesign() {
         </div>
       </div>
 
-      {/* ── Tab content: preview LEFT — settings RIGHT ── */}
+      {/* ── Tab content: 2 previews LEFT — settings RIGHT ── */}
       <div className="flex gap-6 items-start">
-        {/* LEFT: Preview */}
-        <div className="flex-shrink-0">
-          {tab === 'thumbnail' ? (
+        {/* LEFT: Both previews side by side */}
+        <div className="flex gap-3 flex-shrink-0">
+          <div
+            className={`cursor-pointer transition-opacity ${tab === 'thumbnail' ? 'ring-2 ring-primary-400 rounded-xl' : 'opacity-60 hover:opacity-80'}`}
+            onClick={() => setTab('thumbnail')}
+          >
             <ThumbnailPreview form={form} />
-          ) : (
+          </div>
+          <div
+            className={`cursor-pointer transition-opacity ${tab === 'content' ? 'ring-2 ring-primary-400 rounded-xl' : 'opacity-60 hover:opacity-80'}`}
+            onClick={() => setTab('content')}
+          >
             <ReelFramePreview form={form} />
-          )}
+          </div>
         </div>
 
         {/* RIGHT: Settings */}
@@ -674,8 +681,22 @@ function ContentSettings({ form, update }: {
       {/* Brand Header */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand Header</h4>
-        <ColorRow label="Name Color" value={form.reel_brand_name_color || '#FFFFFF'} onChange={v => update('reel_brand_name_color', v)} />
-        <ColorRow label="Handle Color" value={form.reel_handle_color || '#AAAAAA'} onChange={v => update('reel_handle_color', v)} />
+        <div className="grid grid-cols-2 gap-x-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 flex-shrink-0">Name</span>
+            <div className="relative w-6 h-6 flex-shrink-0">
+              <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: form.reel_brand_name_color || '#FFFFFF' }} />
+              <input type="color" value={form.reel_brand_name_color || '#FFFFFF'} onChange={e => update('reel_brand_name_color', e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 flex-shrink-0">Handle</span>
+            <div className="relative w-6 h-6 flex-shrink-0">
+              <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: form.reel_handle_color || '#AAAAAA' }} />
+              <input type="color" value={form.reel_handle_color || '#AAAAAA'} onChange={e => update('reel_handle_color', e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+            </div>
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">Scale</span>
           <input
@@ -704,18 +725,23 @@ function ContentSettings({ form, update }: {
       {/* Text */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Text</h4>
-        <ColorRow label="Text Color" value={form.reel_text_color || '#FFFFFF'} onChange={v => update('reel_text_color', v)} />
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Font</span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-xs text-gray-500">Color</span>
+            <div className="relative w-6 h-6 flex-shrink-0">
+              <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: form.reel_text_color || '#FFFFFF' }} />
+              <input type="color" value={form.reel_text_color || '#FFFFFF'} onChange={e => update('reel_text_color', e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+            </div>
+          </div>
           <select value={form.reel_text_font || 'Inter'} onChange={e => update('reel_text_font', e.target.value)}
-            className="flex-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-900 text-xs outline-none focus:border-primary-500">
+            className="flex-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-900 text-xs outline-none focus:border-primary-500 min-w-0">
             {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
+          <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer flex-shrink-0">
+            <input type="checkbox" checked={form.reel_text_font_bold ?? false} onChange={e => update('reel_text_font_bold', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
+            Bold
+          </label>
         </div>
-        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-          <input type="checkbox" checked={form.reel_text_font_bold ?? false} onChange={e => update('reel_text_font_bold', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
-          Bold
-        </label>
         <SliderRow label="Font Size" value={form.reel_text_size ?? 38} min={24} max={42} onChange={v => update('reel_text_size', v)} />
       </section>
 

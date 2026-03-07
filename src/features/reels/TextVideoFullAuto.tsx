@@ -20,12 +20,6 @@ export function TextVideoFullAuto() {
     }
   }, [brandIds, selectedBrands.length])
 
-  useEffect(() => {
-    if (nicheConfig?.niche_name && !niche) {
-      setNiche(nicheConfig.niche_name)
-    }
-  }, [nicheConfig, niche])
-
   const handleGenerate = async () => {
     if (selectedBrands.length === 0) {
       toast.error('Select at least one brand')
@@ -59,15 +53,16 @@ export function TextVideoFullAuto() {
         </p>
       </div>
 
-      {/* Niche Override */}
+      {/* Niche */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Niche (optional override)</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Niche</label>
         <input
           value={niche}
           onChange={e => setNiche(e.target.value)}
-          placeholder="Uses your Content DNA niche by default"
+          placeholder={nicheConfig?.niche_name || 'Your Content DNA niche'}
           className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 outline-none text-sm"
         />
+        <p className="mt-1 text-xs text-gray-400">Leave empty to use your Content DNA niche.</p>
       </div>
 
       {/* Brand Selection */}

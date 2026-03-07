@@ -27,20 +27,14 @@ export function TextVideoSemiAuto() {
     }
   }, [brandIds, selectedBrands.length])
 
-  // Set niche from config
-  useEffect(() => {
-    if (nicheConfig?.niche_name && !niche) {
-      setNiche(nicheConfig.niche_name)
-    }
-  }, [nicheConfig, niche])
-
   const handleDiscover = async () => {
-    if (!niche.trim()) {
+    const effectiveNiche = niche.trim() || nicheConfig?.niche_name || ''
+    if (!effectiveNiche) {
       toast.error('Enter a niche/topic to discover stories')
       return
     }
     try {
-      const results = await discoverMutation.mutateAsync({ niche, count: 5 })
+      const results = await discoverMutation.mutateAsync({ niche: effectiveNiche, count: 5 })
       setStories(results)
       setSelectedStory(null)
       setPolished(null)
@@ -53,7 +47,7 @@ export function TextVideoSemiAuto() {
   const handleSelectStory = async (story: RawStory) => {
     setSelectedStory(story)
     try {
-      const result = await polishMutation.mutateAsync({ raw_story: story, niche })
+      const result = await polishMutation.mutateAsync({ raw_story: story, niche: niche || nicheConfig?.niche_name || '' })
       setPolished(result)
     } catch {
       toast.error('Failed to polish story')
@@ -92,7 +86,7 @@ export function TextVideoSemiAuto() {
           <input
             value={niche}
             onChange={e => setNiche(e.target.value)}
-            placeholder="e.g., business, tech, fitness, finance..."
+            placeholder={nicheConfig?.niche_name || 'e.g., business, tech, fitness, finance...'}
             className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 outline-none text-sm"
             onKeyDown={e => e.key === 'Enter' && handleDiscover()}
           />
