@@ -112,14 +112,14 @@ export function AppRoutes() {
         <Route path="job/:jobId" element={<JobDetailPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="scheduled" element={<ScheduledPage />} />
-        <Route path="connected" element={<Navigate to="/brands?tab=connections" replace />} />
+        <Route path="connected" element={<Navigate to="/brands" replace />} />
         <Route path="brands" element={<BrandsPage />} />
         <Route path="brands/new" element={<CreateBrandPage />} />
         <Route path="posts" element={<PostsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="toby" element={<TobyPage />} />
         <Route path="billing" element={<BillingPage />} />
-        <Route path="settings" element={<Navigate to="/brands?tab=connections" replace />} />
+        <Route path="settings" element={<Navigate to="/brands" replace />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="logs" element={<AdminGuard><LogsPage /></AdminGuard>} />
         <Route path="admin" element={<SuperAdminGuard><AdminPage /></SuperAdminGuard>} />

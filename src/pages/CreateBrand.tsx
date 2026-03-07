@@ -340,7 +340,7 @@ export function CreateBrandPage() {
       toast.success(`Brand "${displayName}" created successfully!`)
       if (connectionMode === 'oauth-later') {
         // Redirect to connections tab so user can immediately connect IG via OAuth
-        navigate(`/brands?tab=connections&new_brand=${brandId}`)
+        navigate(`/brands?new_brand=${brandId}`)
       } else {
         navigate('/brands')
       }

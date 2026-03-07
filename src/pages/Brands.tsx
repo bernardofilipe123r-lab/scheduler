@@ -4,7 +4,6 @@ import { Layers, Plus } from 'lucide-react'
 import { BrandsTabBar, type BrandsTab } from '@/features/brands/components/BrandsTabBar'
 import { MyBrandsTab } from '@/features/brands/components/MyBrandsTab'
 import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
-import { ConnectionsTab } from '@/features/brands/components/ConnectionsTab'
 
 export function BrandsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -55,7 +54,6 @@ export function BrandsPage() {
       {/* Tab content */}
       {activeTab === 'brands' && <MyBrandsTab />}
       {activeTab === 'prompts' && <NicheConfigForm />}
-      {activeTab === 'connections' && <ConnectionsTab />}
     </div>
   )
 }

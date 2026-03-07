@@ -116,16 +116,16 @@ def threads_callback(
 
     if error:
         logger.warning(f"Threads OAuth denied: {error} — {error_description}")
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&threads_error=denied")
+        return RedirectResponse(url=f"{frontend_base}/brands?threads_error=denied")
 
     if not code or not state:
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&threads_error=invalid")
+        return RedirectResponse(url=f"{frontend_base}/brands?threads_error=invalid")
 
     state_data = OAuthStateStore.validate(db, state, "threads")
     if not state_data:
         print(f"[THREADS] OAuth callback: invalid or expired state token for state={state[:10]}...")
         logger.warning("Threads OAuth callback: invalid or expired state token")
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&threads_error=expired")
+        return RedirectResponse(url=f"{frontend_base}/brands?threads_error=expired")
 
     brand_id = state_data["brand_id"]
     user_id = state_data["user_id"]
@@ -164,7 +164,7 @@ def threads_callback(
             error_msg = f"duplicate&threads_duplicate_account={handle}&threads_duplicate_brand={existing.display_name or existing.id}"
             if return_to == "onboarding":
                 return RedirectResponse(url=f"{frontend_base}/onboarding?threads_error={error_msg}")
-            return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&threads_error={error_msg}")
+            return RedirectResponse(url=f"{frontend_base}/brands?threads_error={error_msg}")
 
         # 5. Store credentials in Brand record
         brand = db.query(Brand).filter(
@@ -172,7 +172,7 @@ def threads_callback(
             Brand.user_id == user_id,
         ).first()
         if not brand:
-            return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&threads_error=brand_not_found")
+            return RedirectResponse(url=f"{frontend_base}/brands?threads_error=brand_not_found")
 
         now = datetime.now(timezone.utc)
         brand.threads_access_token = long_token
@@ -190,7 +190,7 @@ def threads_callback(
         if return_to == "onboarding":
             redirect_url = f"{frontend_base}/onboarding?threads_connected={brand_id}"
         else:
-            redirect_url = f"{frontend_base}/brands?tab=connections&threads_connected={brand_id}"
+            redirect_url = f"{frontend_base}/brands?threads_connected={brand_id}"
 
         return RedirectResponse(url=redirect_url)
 
@@ -207,7 +207,7 @@ def threads_callback(
         if return_to == "onboarding":
             redirect_url = f"{frontend_base}/onboarding?threads_error=failed"
         else:
-            redirect_url = f"{frontend_base}/brands?tab=connections&threads_error=failed"
+            redirect_url = f"{frontend_base}/brands?threads_error=failed"
         return RedirectResponse(url=redirect_url)
 
 

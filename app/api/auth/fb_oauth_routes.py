@@ -116,15 +116,15 @@ def facebook_callback(
 
     if error:
         logger.warning(f"Facebook OAuth denied: {error} — {error_description}")
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&fb_error=denied")
+        return RedirectResponse(url=f"{frontend_base}/brands?fb_error=denied")
 
     if not code or not state:
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&fb_error=invalid")
+        return RedirectResponse(url=f"{frontend_base}/brands?fb_error=invalid")
 
     state_data = OAuthStateStore.validate(db, state, "facebook")
     if not state_data:
         logger.warning("Facebook OAuth callback: invalid or expired state token")
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&fb_error=expired")
+        return RedirectResponse(url=f"{frontend_base}/brands?fb_error=expired")
 
     brand_id = state_data["brand_id"]
     user_id = state_data["user_id"]
@@ -147,7 +147,7 @@ def facebook_callback(
         if not pages:
             logger.warning(f"No Facebook Pages found for brand={brand_id}")
             return RedirectResponse(
-                url=f"{frontend_base}/brands?tab=connections&fb_error=no_pages"
+                url=f"{frontend_base}/brands?fb_error=no_pages"
             )
 
         # If only one page, auto-select it
@@ -168,7 +168,7 @@ def facebook_callback(
                 error_msg = f"duplicate&fb_duplicate_account={page_name}&fb_duplicate_brand={fb_existing.display_name or fb_existing.id}"
                 if return_to == "onboarding":
                     return RedirectResponse(url=f"{frontend_base}/onboarding?fb_error={error_msg}")
-                return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&fb_error={error_msg}")
+                return RedirectResponse(url=f"{frontend_base}/brands?fb_error={error_msg}")
 
             brand = db.query(Brand).filter(
                 Brand.id == brand_id,
@@ -176,7 +176,7 @@ def facebook_callback(
             ).first()
             if not brand:
                 return RedirectResponse(
-                    url=f"{frontend_base}/brands?tab=connections&fb_error=brand_not_found"
+                    url=f"{frontend_base}/brands?fb_error=brand_not_found"
                 )
 
             brand.facebook_page_id = page["id"]
@@ -194,7 +194,7 @@ def facebook_callback(
                     url=f"{frontend_base}/onboarding?fb_connected={brand_id}"
                 )
             return RedirectResponse(
-                url=f"{frontend_base}/brands?tab=connections&fb_connected={brand_id}"
+                url=f"{frontend_base}/brands?fb_connected={brand_id}"
             )
 
         # Multiple pages — store token temporarily and redirect to page selector
@@ -214,7 +214,7 @@ def facebook_callback(
             _pending_tokens.pop(k, None)
 
         redirect_url = (
-            f"{frontend_base}/brands?tab=connections"
+            f"{frontend_base}/brands"
             f"&fb_select_page={brand_id}"
         )
         return RedirectResponse(url=redirect_url)
@@ -223,7 +223,7 @@ def facebook_callback(
         logger.exception(f"Facebook OAuth callback failed for brand {brand_id}: {e}")
         if return_to == "onboarding":
             return RedirectResponse(url=f"{frontend_base}/onboarding?fb_error=failed")
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&fb_error=failed")
+        return RedirectResponse(url=f"{frontend_base}/brands?fb_error=failed")
 
 
 # ---------------------------------------------------------------------------

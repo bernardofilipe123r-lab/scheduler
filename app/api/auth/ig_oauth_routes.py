@@ -119,16 +119,16 @@ def instagram_callback(
     # User denied or error
     if error:
         logger.warning(f"Instagram OAuth denied: {error} — {error_description}")
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error=denied")
+        return RedirectResponse(url=f"{frontend_base}/brands?ig_error=denied")
 
     if not code or not state:
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error=invalid")
+        return RedirectResponse(url=f"{frontend_base}/brands?ig_error=invalid")
 
     # Validate state token (DB-backed, single-use)
     state_data = OAuthStateStore.validate(db, state, "instagram")
     if not state_data:
         logger.warning("Instagram OAuth callback: invalid or expired state token")
-        return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error=expired")
+        return RedirectResponse(url=f"{frontend_base}/brands?ig_error=expired")
 
     brand_id = state_data["brand_id"]
     user_id = state_data["user_id"]
@@ -166,7 +166,7 @@ def instagram_callback(
             error_msg = f"duplicate&ig_duplicate_account={handle}&ig_duplicate_brand={existing.display_name or existing.id}"
             if return_to == "onboarding":
                 return RedirectResponse(url=f"{frontend_base}/onboarding?ig_error={error_msg}")
-            return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error={error_msg}")
+            return RedirectResponse(url=f"{frontend_base}/brands?ig_error={error_msg}")
 
         # 5. Store credentials in Brand record
         brand = db.query(Brand).filter(
@@ -174,7 +174,7 @@ def instagram_callback(
             Brand.user_id == user_id,
         ).first()
         if not brand:
-            return RedirectResponse(url=f"{frontend_base}/brands?tab=connections&ig_error=brand_not_found")
+            return RedirectResponse(url=f"{frontend_base}/brands?ig_error=brand_not_found")
 
         now = datetime.now(timezone.utc)
         brand.instagram_access_token = long_token
@@ -197,7 +197,7 @@ def instagram_callback(
         if return_to == "onboarding":
             redirect_url = f"{frontend_base}/onboarding?ig_connected={brand_id}"
         else:
-            redirect_url = f"{frontend_base}/brands?tab=connections&ig_connected={brand_id}"
+            redirect_url = f"{frontend_base}/brands?ig_connected={brand_id}"
 
         return RedirectResponse(url=redirect_url)
 
@@ -206,7 +206,7 @@ def instagram_callback(
         if return_to == "onboarding":
             redirect_url = f"{frontend_base}/onboarding?ig_error=failed"
         else:
-            redirect_url = f"{frontend_base}/brands?tab=connections&ig_error=failed"
+            redirect_url = f"{frontend_base}/brands?ig_error=failed"
         return RedirectResponse(url=redirect_url)
 
 

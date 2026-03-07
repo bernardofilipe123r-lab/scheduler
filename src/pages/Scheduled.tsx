@@ -498,7 +498,7 @@ export function ScheduledPage() {
             {disconnectedBrands.length > 0 && (
               <p className={clsx('text-sm mt-1', hasRealFailures ? 'text-red-700' : 'text-amber-700')}>
                 ⚠️ <strong>{disconnectedBrands.map(b => b.label).join(', ')}</strong> {disconnectedBrands.length === 1 ? 'has' : 'have'} no Instagram connected.
-                {' '}<a href="/brands?tab=connections" className="underline font-medium">Reconnect in Brands → Connections</a>
+                {' '}<a href="/brands" className="underline font-medium">Reconnect in Brands</a>
               </p>
             )}
           </div>
@@ -520,7 +520,7 @@ export function ScheduledPage() {
             <p className="text-sm text-amber-700 mt-1">
               <strong>{disconnectedBrands.map(b => b.label).join(', ')}</strong> {disconnectedBrands.length === 1 ? 'has' : 'have'} no active Instagram connection.
               Scheduled posts for {disconnectedBrands.length === 1 ? 'this brand' : 'these brands'} will fail to publish.
-              {' '}<a href="/brands?tab=connections" className="underline font-medium">Reconnect in Brands → Connections</a>
+              {' '}<a href="/brands" className="underline font-medium">Reconnect in Brands</a>
             </p>
           </div>
           <button
@@ -1635,7 +1635,7 @@ export function ScheduledPage() {
                           <span className="text-red-600 block text-right">
                             ✗ {result.error || 'Failed'}
                             {(result.error || '').toLowerCase().includes('access token') && (
-                              <a href="/brands?tab=connections" className="block mt-1 text-red-700 underline font-medium">
+                              <a href="/brands" className="block mt-1 text-red-700 underline font-medium">
                                 🔑 Reconnect Instagram
                               </a>
                             )}
@@ -1652,7 +1652,7 @@ export function ScheduledPage() {
                     <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-yellow-800">
                       <strong>Facebook is not connected for this brand.</strong> This reel was published to the connected platforms only.
-                      {' '}To publish to Facebook in the future, <a href="/brands?tab=connections" className="underline font-semibold">connect a Facebook account</a>.
+                      {' '}To publish to Facebook in the future, <a href="/brands" className="underline font-semibold">connect a Facebook account</a>.
                     </p>
                   </div>
                 )}
@@ -1709,7 +1709,7 @@ export function ScheduledPage() {
                       <p className="text-xs text-yellow-800">
                         <strong>{notConfigured.map(e => e.platform.charAt(0).toUpperCase() + e.platform.slice(1)).join(', ')} {notConfigured.length === 1 ? 'is' : 'are'} not connected for this brand.</strong>
                         {' '}To publish to {notConfigured.map(e => e.platform.charAt(0).toUpperCase() + e.platform.slice(1)).join(' and ')} in the future,{' '}
-                        <a href="/brands?tab=connections" className="underline font-semibold">connect your accounts</a>.
+                        <a href="/brands" className="underline font-semibold">connect your accounts</a>.
                       </p>
                     </div>
                   )}

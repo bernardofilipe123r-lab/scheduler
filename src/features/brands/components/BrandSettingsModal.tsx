@@ -151,7 +151,7 @@ export function BrandSettingsModal({ brand, connections, allBrands, onClose }: B
           </div>
         </div>
         <button
-          onClick={() => { onClose(); navigate('/connected'); }}
+          onClick={() => { onClose(); navigate('/brands'); }}
           className="mt-3 w-full py-2 text-sm font-medium text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
         >
           Manage Connections →
