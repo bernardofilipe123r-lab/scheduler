@@ -25,9 +25,9 @@ const DEFAULTS: Partial<DesignSettings> = {
   // Thumbnail
   thumbnail_title_color: '#FFD700',
   thumbnail_title_font: 'Anton',
-  thumbnail_title_size: 72,
+  thumbnail_title_size: 120,
   thumbnail_title_padding: 200,
-  thumbnail_logo_size: 200,
+  thumbnail_logo_size: 100,
   thumbnail_overlay_opacity: 60,
   thumbnail_divider_style: 'line_with_logo',
   // Reel
@@ -147,14 +147,64 @@ const SCALE = PREVIEW_W / CANVAS_W  // ≈ 0.21
 /* ──────────────────────────────────────────────
  * THUMBNAIL PREVIEW — Gold title, logo-in-divider, dramatic BG
  * ────────────────────────────────────────────── */
+const THUMB_TITLE = 'ELON MUSK JUST BOUGHT TIKTOK'
+
+/**
+ * Auto-fit title into 2 or 3 lines at the largest possible font size.
+ * Prefers 3 lines; if title can't split into 3, falls back to 2.
+ */
+function useAutoTitleLines(title: string, maxFontSize: number, font: string, containerWidthPx: number) {
+  return useMemo(() => {
+    const words = title.split(/\s+/)
+    if (words.length <= 1) return { lines: [title], fontSize: maxFontSize }
+
+    // Create an off-screen canvas to measure text width
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')!
+
+    function measureLine(text: string, size: number): number {
+      ctx.font = `900 ${size}px ${font}, sans-serif`
+      return ctx.measureText(text).width
+    }
+
+    function splitIntoN(n: number, size: number): string[] | null {
+      // Greedy line-break: fill each line as much as possible
+      const lines: string[] = []
+      let current = ''
+      for (const word of words) {
+        const test = current ? `${current} ${word}` : word
+        if (current && measureLine(test, size) > containerWidthPx) {
+          lines.push(current)
+          current = word
+        } else {
+          current = test
+        }
+      }
+      if (current) lines.push(current)
+      return lines.length === n ? lines : null
+    }
+
+    // Try 3 lines first (biggest font), then 2 lines
+    for (const targetLines of [3, 2]) {
+      for (let size = maxFontSize; size >= 60; size -= 2) {
+        const result = splitIntoN(targetLines, size)
+        if (result) return { lines: result, fontSize: size }
+      }
+    }
+
+    // Fallback: just use max size, single line
+    return { lines: [title], fontSize: maxFontSize }
+  }, [title, maxFontSize, font, containerWidthPx])
+}
+
 function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const titleColor = form.thumbnail_title_color || '#FFD700'
-  const titleSize = form.thumbnail_title_size ?? 72
+  const titleSize = form.thumbnail_title_size ?? 120
   const titlePadding = form.thumbnail_title_padding ?? 200
   const dividerStyle = form.thumbnail_divider_style || 'line_with_logo'
   const overlayOpacity = (form.thumbnail_overlay_opacity ?? 60) / 100
   const titleFont = form.thumbnail_title_font || 'Anton'
-  const logoSize = form.thumbnail_logo_size ?? 200
+  const logoSize = form.thumbnail_logo_size ?? 100
 
   const s = SCALE
   const pw = CANVAS_W * s
@@ -163,13 +213,19 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const lineThickness = 2 * s
   const lineLogoGap = 20 * s
   const dividerTitleGap = 24 * s
+  const sidePadding = 40 // real px
+  const titleAreaWidth = CANVAS_W - sidePadding * 2
+
+  const { lines: titleLines, fontSize: autoFontSize } = useAutoTitleLines(
+    THUMB_TITLE, titleSize, titleFont, titleAreaWidth
+  )
 
   return (
     <div
       className="rounded-xl overflow-hidden shadow-lg border border-gray-200 relative mx-auto"
       style={{ width: pw, height: ph, fontFamily: titleFont }}
     >
-      {/* Background image */}
+      {/* Background image — object-fit cover preserves aspect ratio */}
       <img src={testBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
 
       {/* Dark gradient overlay from bottom */}
@@ -179,40 +235,43 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
 
       {/* Content pinned to bottom */}
       <div className="absolute inset-x-0 bottom-0 flex flex-col items-center"
-        style={{ paddingBottom: `${titlePadding * s}px`, paddingLeft: `${40 * s}px`, paddingRight: `${40 * s}px` }}>
+        style={{ paddingBottom: `${titlePadding * s}px`, paddingLeft: `${sidePadding * s}px`, paddingRight: `${sidePadding * s}px` }}>
 
-        {/* Divider: single line with logo in center */}
+        {/* Divider: line with logo in center (both styles show logo) */}
         {dividerStyle !== 'none' && (
           <div className="w-full flex items-center" style={{ marginBottom: `${dividerTitleGap}px` }}>
-            {dividerStyle === 'line_with_logo' ? (
-              <>
-                <div className="flex-1" style={{ height: `${lineThickness}px`, background: '#FFFFFF' }} />
-                <div style={{ paddingLeft: `${lineLogoGap}px`, paddingRight: `${lineLogoGap}px` }}>
-                  <img src={vaLogo} alt="Logo" style={{
-                    width: scaledLogo,
-                    height: scaledLogo,
-                    borderRadius: `${4 * s}px`,
-                  }} />
-                </div>
-                <div className="flex-1" style={{ height: `${lineThickness}px`, background: '#FFFFFF' }} />
-              </>
-            ) : (
-              <div className="flex-1" style={{ height: `${lineThickness}px`, background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.5), transparent)' }} />
-            )}
+            <div className="flex-1" style={{
+              height: `${lineThickness}px`,
+              background: dividerStyle === 'gradient'
+                ? 'linear-gradient(to right, transparent, rgba(255,255,255,0.5))'
+                : '#FFFFFF',
+            }} />
+            <div style={{ paddingLeft: `${lineLogoGap}px`, paddingRight: `${lineLogoGap}px` }}>
+              <img src={vaLogo} alt="Logo" style={{
+                width: scaledLogo,
+                height: scaledLogo,
+                borderRadius: `${4 * s}px`,
+              }} />
+            </div>
+            <div className="flex-1" style={{
+              height: `${lineThickness}px`,
+              background: dividerStyle === 'gradient'
+                ? 'linear-gradient(to left, transparent, rgba(255,255,255,0.5))'
+                : '#FFFFFF',
+            }} />
           </div>
         )}
 
-        {/* Title — gold, ultra-bold condensed caps */}
-        <p className="text-center font-black break-words w-full uppercase"
-          style={{
-            color: titleColor,
-            fontSize: `${titleSize * s}px`,
-            lineHeight: 0.95,
-            letterSpacing: '-0.02em',
-            textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(255,215,0,0.15)',
-          }}>
-          ELON MUSK{'\n'}JUST BOUGHT{'\n'}TIKTOK
-        </p>
+        {/* Title — auto-sized to 2 or 3 lines */}
+        <div className="text-center font-black w-full uppercase" style={{
+          color: titleColor,
+          fontSize: `${autoFontSize * s}px`,
+          lineHeight: 1.05,
+          letterSpacing: `${2 * s}px`,
+          textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(255,215,0,0.15)',
+        }}>
+          {titleLines.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
       </div>
     </div>
   )
@@ -488,13 +547,13 @@ function ThumbnailSettings({ form, update }: {
             {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
-        <SliderRow label="Title Size" value={form.thumbnail_title_size ?? 72} min={36} max={120} onChange={v => update('thumbnail_title_size', v)} />
+        <SliderRow label="Max Title Size" value={form.thumbnail_title_size ?? 120} min={100} max={140} onChange={v => update('thumbnail_title_size', v)} />
         <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 200} min={10} max={400} onChange={v => update('thumbnail_title_padding', v)} />
       </section>
 
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Logo</h4>
-        <SliderRow label="Logo Size" value={form.thumbnail_logo_size ?? 200} min={40} max={400} onChange={v => update('thumbnail_logo_size', v)} />
+        <SliderRow label="Logo Size" value={form.thumbnail_logo_size ?? 100} min={80} max={120} onChange={v => update('thumbnail_logo_size', v)} />
       </section>
 
       <section className="space-y-2">

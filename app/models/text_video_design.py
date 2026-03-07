@@ -47,13 +47,13 @@ class TextVideoDesign(Base):
     # Thumbnail settings
     thumbnail_title_color = Column(String(10), default="#FFD700")
     thumbnail_title_font = Column(String(100), default="Anton-Regular.ttf")
-    thumbnail_title_size = Column(Integer, default=72)
+    thumbnail_title_size = Column(Integer, default=120)
     thumbnail_title_max_lines = Column(Integer, default=4)
     thumbnail_title_padding_x = Column(Integer, default=200)
     thumbnail_image_ratio = Column(Float, default=0.6)
     thumbnail_divider_style = Column(String(30), default="line_with_logo")
     thumbnail_overlay_opacity = Column(Integer, default=60)
-    thumbnail_logo_size = Column(Integer, default=200)
+    thumbnail_logo_size = Column(Integer, default=100)
 
     created_at = Column(TIMESTAMP(timezone=True), server_default="now()")
     updated_at = Column(TIMESTAMP(timezone=True), server_default="now()")
