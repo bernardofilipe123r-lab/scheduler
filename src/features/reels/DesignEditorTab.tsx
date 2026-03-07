@@ -3,6 +3,9 @@ import { Loader2, Save, BadgeCheck, Image, Film, RotateCcw, Music } from 'lucide
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
 import type { DesignSettings } from './types'
+import { useDynamicBrands } from '@/features/brands/hooks/use-dynamic-brands'
+import { BrandThemeModal } from '@/features/brands/components/BrandThemeModal'
+import type { BrandInfo } from '@/features/brands/constants'
 import vaLogo from '@/assets/icons/vt-logo.png'
 import testBg from '@/assets/images/test-viral-toby.jpg'
 import previewSlide1 from '@/assets/images/preview/slide-1.jpg'
@@ -392,12 +395,96 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
 }
 
 /* ──────────────────────────────────────────────
- * MAIN COMPONENT — Two tabs: Thumbnail / Content
- * Each tab: preview LEFT, settings RIGHT
+ * MAIN COMPONENT — Two top-level tabs: Text Reels / Text-Video
+ * ────────────────────────────────────────────── */
+type TopTab = 'text-reels' | 'text-video'
+
+export function DesignEditorTab() {
+  const [topTab, setTopTab] = useState<TopTab>('text-reels')
+
+  return (
+    <div className="space-y-4">
+      {/* ── Top-level design type selector ── */}
+      <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5 w-fit">
+        {([
+          { id: 'text-reels' as TopTab, label: 'Text Reels', icon: <Image className="w-4 h-4" /> },
+          { id: 'text-video' as TopTab, label: 'Text-Video', icon: <Film className="w-4 h-4" /> },
+        ]).map(t => (
+          <button key={t.id} onClick={() => setTopTab(t.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              topTab === t.id ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            {t.icon}{t.label}
+          </button>
+        ))}
+      </div>
+
+      {topTab === 'text-reels' && <TextReelsDesign />}
+      {topTab === 'text-video' && <TextVideoDesign />}
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────
+ * TEXT REELS DESIGN — Per-brand theme editor (inline)
+ * ────────────────────────────────────────────── */
+function TextReelsDesign() {
+  const { brands, isLoading: brandsLoading } = useDynamicBrands()
+  const [selectedBrandId, setSelectedBrandId] = useState<string>('')
+
+  useEffect(() => {
+    if (brands.length > 0 && !selectedBrandId) {
+      setSelectedBrandId(brands[0].id)
+    }
+  }, [brands, selectedBrandId])
+
+  if (brandsLoading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+  }
+
+  const selectedBrand = brands.find(b => b.id === selectedBrandId)
+  if (!selectedBrand) return null
+
+  const brandInfo: BrandInfo = {
+    id: selectedBrand.id,
+    name: selectedBrand.label,
+    color: selectedBrand.color,
+    logo: '',
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Brand selector */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-gray-600">Brand</span>
+        <select
+          value={selectedBrandId}
+          onChange={e => setSelectedBrandId(e.target.value)}
+          className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 font-medium outline-none focus:border-primary-500 cursor-pointer"
+        >
+          {brands.map(b => (
+            <option key={b.id} value={b.id}>{b.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <BrandThemeModal
+        key={selectedBrandId}
+        brand={brandInfo}
+        onClose={() => {}}
+        inline
+      />
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────
+ * TEXT-VIDEO DESIGN — Thumbnail & Content settings
+ * Each sub-tab: preview LEFT, settings RIGHT
  * ────────────────────────────────────────────── */
 type DesignTab = 'thumbnail' | 'content'
 
-export function DesignEditorTab() {
+function TextVideoDesign() {
   const { data: design, isLoading } = useDesignSettings()
   const updateMutation = useUpdateDesign()
   const [form, setForm] = useState<Partial<DesignSettings>>({})

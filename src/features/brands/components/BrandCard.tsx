@@ -1,4 +1,4 @@
-import { Settings, Palette, Trash2, Check } from 'lucide-react'
+import { Settings, Trash2, Check } from 'lucide-react'
 import type { BrandInfo } from '@/features/brands/constants'
 import { generateSchedule, formatHour } from '@/features/brands/constants'
 
@@ -9,7 +9,6 @@ interface BrandCardProps {
   connectionCount: number
   logoUrl?: string
   onSettings: () => void
-  onTheme: () => void
   onDelete: () => void
 }
 
@@ -20,7 +19,6 @@ export function BrandCard({
   connectionCount,
   logoUrl,
   onSettings,
-  onTheme,
   onDelete,
 }: BrandCardProps) {
   const previewSlots = generateSchedule(schedule.offset, schedule.postsPerDay)
@@ -100,13 +98,6 @@ export function BrandCard({
           >
             <Settings className="w-4 h-4" />
             Settings
-          </button>
-          <button
-            onClick={onTheme}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            <Palette className="w-4 h-4" />
-            Theme
           </button>
           <button
             onClick={onDelete}

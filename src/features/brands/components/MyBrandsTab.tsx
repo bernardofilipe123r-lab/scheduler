@@ -6,7 +6,6 @@ import { useBrands } from '@/features/brands/api/use-brands'
 import { apiClient } from '@/shared/api/client'
 import { BrandsSkeleton, Modal } from '@/shared/components'
 import { BrandSettingsModal } from './BrandSettingsModal'
-import { BrandThemeModal } from './BrandThemeModal'
 import { DeleteBrandDialog } from './DeleteBrandDialog'
 import { BrandCard } from './BrandCard'
 import { type BrandInfo } from '@/features/brands/constants'
@@ -21,7 +20,6 @@ export function MyBrandsTab(_props: MyBrandsTabProps) {
   const { data: connectionsData, isLoading: connectionsLoading } = useBrandConnections()
 
   const [selectedBrandForSettings, setSelectedBrandForSettings] = useState<BrandInfo | null>(null)
-  const [selectedBrandForTheme, setSelectedBrandForTheme] = useState<BrandInfo | null>(null)
   const [deletingBrand, setDeletingBrand] = useState<BrandInfo | null>(null)
 
   // Store logos loaded from backend
@@ -57,18 +55,6 @@ export function MyBrandsTab(_props: MyBrandsTabProps) {
     }
     if (brands.length) fetchBrandThemes()
   }, [brands])
-
-  const refreshBrandLogo = async (brandId: string) => {
-    try {
-      const data = await apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${brandId}/theme`)
-      if (data.theme?.logo) {
-        const logoUrl = data.theme.logo.startsWith('http') ? `${data.theme.logo}?t=${Date.now()}` : `/brand-logos/${data.theme.logo}?t=${Date.now()}`
-        setBrandLogos((prev) => ({ ...prev, [brandId]: logoUrl }))
-      }
-    } catch {
-      // ignore
-    }
-  }
 
   const getBrandScheduleData = (brandId: string) => {
     const v2Brand = v2Brands?.find((b) => b.id === brandId)
@@ -113,7 +99,6 @@ export function MyBrandsTab(_props: MyBrandsTabProps) {
             connectionCount={getConnectionCount(brand.id)}
             logoUrl={brandLogos[brand.id]}
             onSettings={() => setSelectedBrandForSettings(brand)}
-            onTheme={() => setSelectedBrandForTheme(brand)}
             onDelete={() => setDeletingBrand(brand)}
           />
         ))}
@@ -146,22 +131,6 @@ export function MyBrandsTab(_props: MyBrandsTabProps) {
             connections={getConnectionStatus(selectedBrandForSettings.id)}
             allBrands={sortedBrands}
             onClose={() => setSelectedBrandForSettings(null)}
-          />
-        )}
-      </Modal>
-
-      {/* Theme Modal */}
-      <Modal
-        isOpen={!!selectedBrandForTheme}
-        onClose={() => setSelectedBrandForTheme(null)}
-        title={`${selectedBrandForTheme?.name} Theme`}
-        size="xl"
-      >
-        {selectedBrandForTheme && (
-          <BrandThemeModal
-            brand={selectedBrandForTheme}
-            onClose={() => setSelectedBrandForTheme(null)}
-            onSave={() => refreshBrandLogo(selectedBrandForTheme.id)}
           />
         )}
       </Modal>

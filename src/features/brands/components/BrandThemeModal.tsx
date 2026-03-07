@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Upload, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { apiClient } from '@/shared/api/client'
 import { supabase } from '@/shared/api/supabase'
 import {
@@ -12,6 +13,7 @@ export interface BrandThemeModalProps {
   brand: BrandInfo
   onClose: () => void
   onSave?: () => void
+  inline?: boolean
 }
 
 /* ── Proportional scale: 1080px canvas → 240px preview ────────── */
@@ -72,7 +74,7 @@ function hexToRgba(hex: string, opacity: number): string {
 
 /* ═══════════════════════════════════════════════════════════════ */
 
-export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps) {
+export function BrandThemeModal({ brand, onClose, onSave, inline }: BrandThemeModalProps) {
   const [mode, setMode] = useState<'light' | 'dark'>('light')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -180,9 +182,13 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
       )
       if (!resp.ok) throw new Error('Save failed')
       onSave?.()
-      onClose()
+      if (inline) {
+        toast.success('Theme saved')
+      } else {
+        onClose()
+      }
     } catch {
-      // save error handled silently
+      if (inline) toast.error('Failed to save theme')
     }
     setSaving(false)
   }
@@ -564,12 +570,14 @@ export function BrandThemeModal({ brand, onClose, onSave }: BrandThemeModalProps
 
       {/* ── Actions ── */}
       <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-        >
-          Cancel
-        </button>
+        {!inline && (
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+          >
+            Cancel
+          </button>
+        )}
         <button
           onClick={handleSave}
           disabled={saving}
