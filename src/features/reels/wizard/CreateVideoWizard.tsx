@@ -152,7 +152,7 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
 
     try {
       if (selectedFormat === 'text_based') {
-        const job = await createJob.mutateAsync({
+        await createJob.mutateAsync({
           title: 'Auto-generating...',
           content_lines: [],
           brands,
@@ -160,22 +160,21 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
           platforms: selectedPlatforms,
           music_source: 'trending_random',
         })
-        navigate(`/job/${job.id}`)
       } else if (selectedFormat === 'text_video') {
         if (!niche) {
           toast.error('Set up your Content DNA first (niche is required for auto mode)')
           return
         }
-        // Backend creates job instantly and returns job_id — discovery happens in background
-        const result = await generateTextVideo.mutateAsync({
+        await generateTextVideo.mutateAsync({
           mode: 'full_auto',
           brands,
           platforms: selectedPlatforms,
           niche,
         })
-        navigate(`/job/${result.job_id}`)
       }
       resetWizard()
+      toast.success('Job created — generating in the background', { icon: '🚀' })
+      navigate('/reels')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Generation failed')
     }
@@ -403,34 +402,13 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
        */}
       {step === 'mode' && (() => {
         const currentFormat = REEL_FORMATS.find(f => f.id === selectedFormat)
-        const FormatIcon = currentFormat?.icon || Zap
         return (
         <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-          {/* Format-aware header with mini video preview */}
-          <div className="relative rounded-xl overflow-hidden">
-            <div className={`h-28 bg-gradient-to-br ${currentFormat?.previewGradient || 'from-stone-700 to-stone-900'}`}>
-              <video
-                src={currentFormat?.previewVideo}
-                muted
-                autoPlay
-                loop
-                playsInline
-                className="absolute inset-0 w-full h-full object-cover opacity-30"
-              />
-            </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
-              <div className="flex items-center gap-2 mb-1">
-                <FormatIcon className="w-5 h-5 text-white/90" />
-                <span className="text-sm font-bold text-white">{currentFormat?.label}</span>
-              </div>
-              <p className="text-xs text-white/70">
-                {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-          </div>
-
-          <div className="text-center">
+          <div className="text-center space-y-1">
             <h2 className="text-xl font-bold text-gray-900">How do you want to create?</h2>
+            <p className="text-sm text-gray-500">
+              {currentFormat?.label} · {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -439,16 +417,17 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
               <div className="space-y-2">
                 <button
                   onClick={handleAutoGenerate}
-                  className="w-full relative flex items-center gap-4 px-5 py-5 rounded-xl border-2 border-stone-800 bg-stone-900 text-white hover:bg-stone-800 transition-all text-left group overflow-hidden"
+                  disabled={generateTextVideo.isPending || createJob.isPending}
+                  className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-stone-900 text-white font-semibold text-sm shadow-lg hover:bg-stone-800 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
-                    <Zap className="w-6 h-6 text-amber-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold">100% Automatic</span>
-                    <p className="text-xs text-stone-300 mt-0.5">{currentFormat?.autoDescription || 'AI handles everything'}</p>
-                  </div>
+                  {(generateTextVideo.isPending || createJob.isPending) ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Zap className="w-5 h-5 text-amber-400" />
+                  )}
+                  {(generateTextVideo.isPending || createJob.isPending) ? 'Creating job…' : '100% Automatic'}
                 </button>
+                <p className="text-xs text-gray-400 text-center">{currentFormat?.autoDescription || 'AI handles everything'}</p>
                 {/* Auto workflow steps — shows what the pipeline actually does for THIS format */}
                 <div className="flex items-center gap-1.5 px-2 overflow-x-auto">
                   {currentFormat?.autoSteps?.map((s, i) => (
