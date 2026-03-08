@@ -64,6 +64,12 @@ from app.services.content.tracker import (
 from app.core.viral_ideas import get_random_ideas, VIRAL_IDEAS
 
 
+class ContentGenerationError(Exception):
+    """Raised when content generation fails (API down, no API key, quality loop exhausted).
+    Callers must handle this — never produce fallback/placeholder content."""
+    pass
+
+
 class ContentGeneratorV2:
     """
     Viral content generator using 3-layer architecture.
@@ -139,7 +145,7 @@ class ContentGeneratorV2:
             ctx = PromptContext()
         
         if not self.api_key:
-            return self._fallback_content()
+            raise ContentGenerationError("DEEPSEEK_API_KEY not configured — cannot generate content")
         
         self._generation_stats["total_attempts"] += 1
         
@@ -176,7 +182,7 @@ class ContentGeneratorV2:
             return content
         else:
             self._generation_stats["fallbacks"] += 1
-            return self._fallback_content()
+            raise ContentGenerationError("Content quality loop exhausted — all attempts failed")
     
     def _generate_with_quality_loop(
         self,
@@ -425,23 +431,8 @@ class ContentGeneratorV2:
     # ============================================================
     
     def _fallback_content(self) -> Dict:
-        """Generic fallback content if AI fails. Uses neutral, niche-agnostic content."""
-        fallback = {
-            "title": "CONTENT GENERATION TEMPORARILY UNAVAILABLE",
-            "content_lines": [
-                "Our content engine is experiencing a brief delay",
-                "Your next piece of content will be generated shortly",
-                "Check back in a few minutes for fresh content"
-            ],
-            "image_prompt": "A cinematic lifestyle scene with soft golden sunlight and premium objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting. No text, no letters, no numbers, no symbols, no logos.",
-            "generated_at": datetime.now().isoformat(),
-            "success": True,
-            "is_fallback": True,
-            "format_style": "SHORT_FRAGMENT",
-            "topic_category": "general",
-            "generator_version": "v2_fallback"
-        }
-        return fallback
+        """REMOVED: Fallback content is forbidden. Always raise instead."""
+        raise ContentGenerationError("Content generation failed — no fallback content allowed")
     
     # ============================================================
     # STRATEGIC EXAMPLE INJECTION (RARE)
@@ -531,7 +522,7 @@ class ContentGeneratorV2:
             ctx = PromptContext()
         
         if not self.api_key:
-            return self._fallback_post_title()
+            raise ContentGenerationError("DEEPSEEK_API_KEY not configured — cannot generate post")
         
         # Phase 2: Use ContentTracker for persistent anti-repetition
         history_context = self.content_tracker.build_history_context("post")
@@ -746,25 +737,18 @@ Generate now:"""
                     
                     return result
                 except json.JSONDecodeError as e:
-                    print(f"⚠️ JSON parse error in post title generation: {e}")
-                    return self._fallback_post_title()
+                    raise ContentGenerationError(f"JSON parse error in post title generation: {e}")
             else:
-                print(f"⚠️ DeepSeek API error: {response.status_code}")
-                return self._fallback_post_title()
+                raise ContentGenerationError(f"DeepSeek API error: {response.status_code}")
                 
+        except ContentGenerationError:
+            raise
         except Exception as e:
-            print(f"⚠️ Post title generation error: {e}")
-            return self._fallback_post_title()
+            raise ContentGenerationError(f"Post title generation error: {e}")
     
     def _fallback_post_title(self) -> Dict:
-        """Generic fallback when AI generation fails."""
-        return {
-            "title": "Content generation temporarily unavailable",
-            "caption": "Our AI content engine is experiencing a brief delay. Your content will be generated shortly.\n\nPlease try again in a few minutes.",
-            "image_prompt": "A cinematic lifestyle scene with soft golden sunlight and premium objects arranged artistically. Bright, clean, optimistic mood with studio-quality lighting. No text, no letters, no numbers, no symbols, no logos.",
-            "is_fallback": True,
-            "slide_texts": [],
-        }
+        """REMOVED: Fallback content is forbidden. Always raise instead."""
+        raise ContentGenerationError("Post generation failed — no fallback content allowed")
 
     # ============================================================
     # BATCH POST GENERATION (unique post per brand)
@@ -866,9 +850,7 @@ Generate now:"""
             )
             self._add_to_history({"title": title})
             processed.append(r)
-        # Pad with fallbacks if needed
-        while len(processed) < count:
-            processed.append(self._fallback_post_title())
+        # Return whatever was successfully generated (no fallback padding)
         return processed[:count]
 
     def generate_post_titles_batch(self, count: int, topic_hint: str = None, ctx: PromptContext = None) -> List[Dict]:
@@ -889,7 +871,7 @@ Generate now:"""
             ctx = PromptContext()
 
         if not self.api_key or count <= 0:
-            return [self._fallback_post_title() for _ in range(max(count, 1))]
+            raise ContentGenerationError("DEEPSEEK_API_KEY not configured or invalid count — cannot generate posts")
 
         history_context = self.content_tracker.build_history_context("post")
 
@@ -953,7 +935,7 @@ Generate now:"""
                 r.pop("_quality_total", None)
             return self._process_post_results(best_results, count)
 
-        return [self._fallback_post_title() for _ in range(count)]
+        raise ContentGenerationError(f"Post batch generation failed after {self.max_regeneration_attempts} attempts — all returned nothing")
 
     # ============================================================
     # IMAGE PROMPT GENERATION (standalone, from title only)

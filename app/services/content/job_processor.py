@@ -849,7 +849,11 @@ class JobProcessor:
 
                     # Store unique content per brand in brand_outputs
                     for i, brand in enumerate(job.brands):
-                        post_data = batch_posts[i] if i < len(batch_posts) else cg._fallback_post_title()
+                        if i >= len(batch_posts):
+                            print(f"   ⚠️ No content generated for {brand} — skipping", flush=True)
+                            self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": "Content generation produced fewer results than brands"})
+                            continue
+                        post_data = batch_posts[i]
                         self._manager.update_brand_output(job_id, brand, {
                             "title": post_data.get("title", job.title),
                             "caption": post_data.get("caption", ""),
