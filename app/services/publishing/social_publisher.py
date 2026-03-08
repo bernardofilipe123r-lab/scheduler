@@ -1995,36 +1995,31 @@ class SocialPublisher:
             print(f"   📱 TikTok: Downloaded {video_size} bytes", flush=True)
 
             # Step 2: Initialize video publish with FILE_UPLOAD
-            print(f"   📱 TikTok: Initializing video publish (FILE_UPLOAD)...", flush=True)
-            init_resp = requests.post(
-                f"{tiktok_api}/post/publish/video/init/",
-                headers={
-                    "Authorization": f"Bearer {fresh_token}",
-                    "Content-Type": "application/json; charset=UTF-8",
-                },
-                json={
-                    "post_info": {
-                        "title": caption[:150],
-                        "privacy_level": "PUBLIC_TO_EVERYONE",
-                        "disable_duet": False,
-                        "disable_comment": False,
-                        "disable_stitch": False,
-                        "video_cover_timestamp_ms": 1000,
-                    },
-                    "source_info": {
-                        "source": "FILE_UPLOAD",
-                        "video_size": video_size,
-                        "chunk_size": video_size,
-                        "total_chunk_count": 1,
-                    },
-                },
-                timeout=30,
+            # Try PUBLIC_TO_EVERYONE first; fall back to SELF_ONLY if app is unaudited
+            privacy_level = "PUBLIC_TO_EVERYONE"
+            init_data = self._tiktok_init_publish(
+                fresh_token, tiktok_api, caption, video_size, privacy_level
             )
-            init_resp.raise_for_status()
-            init_data = init_resp.json()
 
             error_block = init_data.get("error", {})
-            if error_block.get("code") != "ok":
+            error_code = error_block.get("code", "")
+            error_msg_raw = error_block.get("message", "")
+
+            # Handle unaudited app: TikTok blocks PUBLIC posting until app is reviewed
+            if (error_code != "ok" and
+                    "unaudited_client" in str(error_msg_raw).lower()):
+                print(f"   ⚠️ TikTok app is UNAUDITED — cannot post publicly. "
+                      f"Retrying with SELF_ONLY privacy. "
+                      f"Submit your app for audit at https://developers.tiktok.com/",
+                      flush=True)
+                privacy_level = "SELF_ONLY"
+                init_data = self._tiktok_init_publish(
+                    fresh_token, tiktok_api, caption, video_size, privacy_level
+                )
+                error_block = init_data.get("error", {})
+                error_code = error_block.get("code", "")
+
+            if error_code != "ok":
                 error_msg = f"TikTok init failed: {error_block.get('message', init_data)}"
                 print(f"   ❌ {error_msg}", flush=True)
                 return {"success": False, "error": error_msg, "platform": "tiktok"}
@@ -2070,8 +2065,17 @@ class SocialPublisher:
                     error_body = e.response.json()
                 except Exception:
                     error_body = e.response.text[:500]
-            error_msg = f"TikTok API error: {e} — {error_body}"
-            print(f"   ❌ {error_msg}", flush=True)
+
+            # Detect unaudited app error from HTTP-level failures too
+            error_str = str(error_body).lower()
+            if "unaudited_client" in error_str:
+                error_msg = (f"TikTok UNAUDITED APP: Cannot post to public accounts. "
+                             f"Submit app for audit at https://developers.tiktok.com/ — "
+                             f"unaudited_client_can_only_post_to_private_accounts")
+                print(f"   ⚠️ {error_msg}", flush=True)
+            else:
+                error_msg = f"TikTok API error: {e.response.status_code} — {error_body}"
+                print(f"   ❌ {error_msg}", flush=True)
             return {"success": False, "error": error_msg, "platform": "tiktok"}
         except TimeoutError as e:
             error_msg = f"TikTok publish timed out: {e}"
@@ -2081,6 +2085,38 @@ class SocialPublisher:
             error_msg = f"TikTok publish failed: {e}"
             print(f"   ❌ {error_msg}", flush=True)
             return {"success": False, "error": error_msg, "platform": "tiktok"}
+
+    def _tiktok_init_publish(self, token: str, tiktok_api: str,
+                             caption: str, video_size: int,
+                             privacy_level: str) -> dict:
+        """Initialize a TikTok video publish with FILE_UPLOAD. Returns the JSON response."""
+        print(f"   📱 TikTok: Initializing video publish (FILE_UPLOAD, privacy={privacy_level})...", flush=True)
+        init_resp = requests.post(
+            f"{tiktok_api}/post/publish/video/init/",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json; charset=UTF-8",
+            },
+            json={
+                "post_info": {
+                    "title": caption[:150],
+                    "privacy_level": privacy_level,
+                    "disable_duet": False,
+                    "disable_comment": False,
+                    "disable_stitch": False,
+                    "video_cover_timestamp_ms": 1000,
+                },
+                "source_info": {
+                    "source": "FILE_UPLOAD",
+                    "video_size": video_size,
+                    "chunk_size": video_size,
+                    "total_chunk_count": 1,
+                },
+            },
+            timeout=30,
+        )
+        init_resp.raise_for_status()
+        return init_resp.json()
 
     def _poll_tiktok_status(self, publish_id: str, token: str, timeout_s: int = 180):
         """Poll TikTok video processing status until PUBLISH_COMPLETE."""

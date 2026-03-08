@@ -367,22 +367,23 @@ class DatabaseSchedulerService:
             
             # IMMEDIATELY mark all as "publishing" to prevent duplicate picks
             #
-            # Pre-publish safety check (2026-03-08):
-            # Load every (brand, title) published in the last 7 days so we
-            # never publish any title that already went out for the same brand.
-            # This is the SINGLE gatekeeper — catches everything regardless of
-            # how or when the duplicate was scheduled.
+            # Pre-publish safety check (2026-03-08, updated 2026-03-08):
+            # Load every (brand, title, caption_prefix) published in the last 7 days
+            # so we never publish content that already went out for the same brand.
+            # Requires BOTH title AND caption to match — title alone is not enough,
+            # because different content can legitimately share the same title.
             from sqlalchemy import text as _text
             already_published_rows = db.execute(_text("""
                 SELECT LOWER(COALESCE(extra_data->>'brand', '')) as brand,
-                       LOWER(COALESCE(extra_data->>'title', '')) as title
+                       LOWER(COALESCE(extra_data->>'title', '')) as title,
+                       LOWER(COALESCE(LEFT(caption, 100), '')) as caption_prefix
                 FROM scheduled_reels
                 WHERE status IN ('published', 'partial', 'publishing')
                 AND scheduled_time > :cutoff
                 AND extra_data->>'title' IS NOT NULL
             """), {"cutoff": now - timedelta(days=7)}).fetchall()
             already_published: set[tuple] = {
-                (r.brand, r.title) for r in already_published_rows
+                (r.brand, r.title, r.caption_prefix) for r in already_published_rows
                 if r.brand and r.title
             }
 
@@ -402,22 +403,25 @@ class DatabaseSchedulerService:
                     continue
 
                 # Check against ALREADY PUBLISHED content (the real safety net)
-                dedup_key = (brand_key, title_key)
+                # Requires both title AND caption prefix to match — same title
+                # with different content is allowed.
+                caption_key = (reel.caption or "")[:100].strip().lower()
+                dedup_key = (brand_key, title_key, caption_key)
                 if title_key and dedup_key in already_published:
                     print(f"      🚫 ALREADY PUBLISHED: {reel.schedule_id} — "
-                          f"'{title_key[:50]}' was already published for {brand_key}")
+                          f"'{title_key[:50]}' + same caption already published for {brand_key}")
                     reel.status = "failed"
                     reel.publish_error = (
-                        f"Skipped: title already published for {brand_key} in last 7 days"
+                        f"Skipped: title+caption already published for {brand_key} in last 7 days"
                     )
                     continue
 
                 # Check against other items in THIS batch
                 if title_key and dedup_key in seen_brand_titles:
                     print(f"      🚫 DEDUP at publish: {reel.schedule_id} is duplicate of "
-                          f"{seen_brand_titles[dedup_key]} (same title for {brand_key})")
+                          f"{seen_brand_titles[dedup_key]} (same title+caption for {brand_key})")
                     reel.status = "failed"
-                    reel.publish_error = f"Duplicate of {seen_brand_titles[dedup_key]} (same title)"
+                    reel.publish_error = f"Duplicate of {seen_brand_titles[dedup_key]} (same title+caption)"
                     continue
 
                 if title_key:
@@ -928,6 +932,9 @@ class DatabaseSchedulerService:
         TRANSIENT_KEYWORDS = ["timeout", "rate limit", "429", "500", "502", "503",
                               "connection", "temporarily", "unavailable",
                               "unexpected", "retry your request", "retry later"]
+        # Permanent errors that will never resolve by retrying — don't waste cycles
+        PERMANENT_KEYWORDS = ["unaudited_client", "unauthorized_scope",
+                              "token has been revoked", "invalid_grant"]
         MAX_AUTO_RETRIES = 3
 
         with get_db_session() as db:
@@ -954,12 +961,29 @@ class DatabaseSchedulerService:
                 if auto_retries >= MAX_AUTO_RETRIES:
                     continue
 
-                # Check if error is transient
+                # Check if error is transient (worth retrying)
                 error = (reel.publish_error or "").lower()
+
+                # Never retry permanent errors (e.g., TikTok app not audited)
+                is_permanent = any(kw in error for kw in PERMANENT_KEYWORDS)
+                if is_permanent:
+                    print(f"[TOBY] Skipping permanent error for {reel.schedule_id}: {error[:120]}", flush=True)
+                    continue
+
                 is_transient = any(kw in error for kw in TRANSIENT_KEYWORDS)
 
-                # For partial failures, always retry (the failed platforms only)
+                # For partial failures, retry the failed platforms only
                 if reel.status == "partial":
+                    # Check if the failed platform's error is permanent
+                    publish_results = (reel.extra_data or {}).get('publish_results', {})
+                    has_permanent_failure = any(
+                        any(pk in str(r.get('error', '')).lower() for pk in PERMANENT_KEYWORDS)
+                        for r in publish_results.values()
+                        if isinstance(r, dict) and not r.get('success')
+                    )
+                    if has_permanent_failure:
+                        print(f"[TOBY] Skipping partial retry for {reel.schedule_id}: platform has permanent error", flush=True)
+                        continue
                     is_transient = True
 
                 if not is_transient:
