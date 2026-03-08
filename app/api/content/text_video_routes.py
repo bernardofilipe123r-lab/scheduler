@@ -1,8 +1,6 @@
 """API routes for TEXT-VIDEO reel generation."""
 
 import logging
-import uuid
-from dataclasses import asdict
 from typing import Optional, List
 from pathlib import Path
 
@@ -12,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
 from app.api.auth.middleware import get_current_user
+from app.models.jobs import GenerationJob
 from app.models.story_pool import StoryPool
 from app.models.text_video_design import TextVideoDesign
 
@@ -50,7 +49,7 @@ class SourceImagesRequest(BaseModel):
 
 class TextVideoGenerateRequest(BaseModel):
     mode: str = Field(..., pattern="^(manual|semi_auto|full_auto)$")
-    brand_ids: List[str] = Field(default_factory=list)
+    brands: List[str] = Field(default_factory=list)
     platforms: List[str] = Field(default_factory=list)
     niche: Optional[str] = None
     category: Optional[str] = None
@@ -313,16 +312,16 @@ async def generate_text_video_reel(
         raise HTTPException(status_code=500, detail="Video composition failed")
 
     # Create generation job
-    from app.models.jobs import GenerationJob
-    import uuid
+    from app.services.content.job_manager import generate_job_id
 
     job = GenerationJob(
-        job_id=str(uuid.uuid4()),
+        job_id=generate_job_id(),
         user_id=user_id,
         title=polished_data.get("thumbnail_title", "Text-Video Reel"),
         content_lines=polished_data.get("reel_lines", []),
-        brands=request.brand_ids,
+        brands=request.brands,
         platforms=request.platforms,
+        variant="text_video",
         content_format="text_video",
         text_video_data=polished_data,
         status="completed",
