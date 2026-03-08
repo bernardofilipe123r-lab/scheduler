@@ -575,17 +575,42 @@ class JobProcessor:
             from app.services.media.slideshow_compositor import SlideshowCompositor
             from app.services.discovery.story_polisher import ImagePlan
             from app.models.text_video_design import TextVideoDesign
+            from app.models.brands import Brand
             from app.services.media.music_picker import resolve_music_url
             from app.db_connection import SessionLocal
 
-            # Load user's design preferences
+            # Load user's design preferences + brand info
             design_db = SessionLocal()
             try:
                 design = design_db.query(TextVideoDesign).filter(
                     TextVideoDesign.user_id == user_id
                 ).first()
+                brand_obj = design_db.query(Brand).filter(
+                    Brand.id == brand, Brand.user_id == user_id
+                ).first()
             finally:
                 design_db.close()
+
+            # Extract brand info for compositor
+            brand_display_name = brand_obj.display_name if brand_obj else brand
+            brand_handle = brand_obj.instagram_handle if brand_obj else None
+            brand_logo_url = brand_obj.logo_path if brand_obj else None
+
+            # Download brand logo to temp file if it's a URL
+            brand_logo_local = None
+            if brand_logo_url and brand_logo_url.startswith("http"):
+                try:
+                    import httpx
+                    tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    tmp_logo.close()
+                    resp = httpx.get(brand_logo_url, timeout=15, follow_redirects=True)
+                    if resp.status_code == 200:
+                        with open(tmp_logo.name, 'wb') as f:
+                            f.write(resp.content)
+                        brand_logo_local = Path(tmp_logo.name)
+                        print(f"   ✓ Brand logo downloaded: {brand_logo_local}", flush=True)
+                except Exception as e:
+                    print(f"   ⚠️ Brand logo download failed: {e}", flush=True)
 
             # ── Step 1: Source images ──────────────────────────
             sourcer = ImageSourcer(db=self.db)
@@ -634,6 +659,7 @@ class JobProcessor:
             thumbnail_path = compositor.compose_thumbnail(
                 main_image_path=thumb_image_path,
                 title_lines=title_lines,
+                logo_path=brand_logo_local,
                 design=design,
             )
             print(f"   ✓ Thumbnail composed: {thumbnail_path}", flush=True)
@@ -680,6 +706,9 @@ class JobProcessor:
                 output_path=video_output,
                 design=design,
                 music_path=music_path,
+                logo_path=brand_logo_local,
+                brand_name=brand_display_name,
+                handle=brand_handle,
             )
             if not result_path:
                 raise ValueError("Slideshow composition failed (FFmpeg error)")
@@ -695,6 +724,8 @@ class JobProcessor:
             all_tmp = list(image_paths) + [thumbnail_path, video_output]
             if music_path:
                 all_tmp.append(music_path)
+            if brand_logo_local:
+                all_tmp.append(brand_logo_local)
 
             def _cleanup():
                 for p in all_tmp:

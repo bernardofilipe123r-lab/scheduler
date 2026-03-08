@@ -94,11 +94,13 @@ async def update_design(
 
     update_data = request.model_dump(exclude_unset=True)
 
-    # Map show_logo/show_handle to actual model column names
+    # Map API field names to actual model column names
     if "show_logo" in update_data:
         update_data["reel_show_logo"] = update_data.pop("show_logo")
     if "show_handle" in update_data:
         update_data["reel_show_handle"] = update_data.pop("show_handle")
+    if "thumbnail_title_padding" in update_data:
+        update_data["thumbnail_title_padding_x"] = update_data.pop("thumbnail_title_padding")
 
     for field_name, value in update_data.items():
         if value is not None:

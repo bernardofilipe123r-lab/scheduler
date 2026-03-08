@@ -21,7 +21,7 @@ W, H = 1080, 1920
 DEFAULTS = {
     "thumbnail_image_ratio": 0.6,
     "thumbnail_title_color": "#FFD700",
-    "thumbnail_title_font": "Anton-Regular.ttf",
+    "thumbnail_title_font": "Anton",
     "thumbnail_title_size": 120,
     "thumbnail_title_max_lines": 4,
     "thumbnail_title_padding_x": 150,
@@ -29,6 +29,17 @@ DEFAULTS = {
     "thumbnail_divider_thickness": 4,
     "thumbnail_overlay_opacity": 90,
     "thumbnail_logo_size": 100,
+}
+
+# Font display name → TTF file mapping
+FONT_MAP = {
+    "Anton": "Anton-Regular.ttf",
+    "Inter": "Inter/static/Inter_18pt-Bold.ttf",
+    "Poppins": "Poppins-Bold.ttf",
+    "Oswald": "Poppins-Bold.ttf",
+    "Montserrat": "Poppins-Bold.ttf",
+    "Bebas Neue": "Anton-Regular.ttf",
+    "Roboto Condensed": "Inter/static/Inter_18pt-Bold.ttf",
 }
 
 
@@ -144,13 +155,22 @@ class ThumbnailCompositor:
         return img.crop((left, top, left + target_w, top + target_h))
 
     def _load_font(self, name: str, size: int) -> ImageFont.FreeTypeFont:
-        """Load a font from assets/fonts/, falling back to default."""
+        """Load a font from assets/fonts/, mapping display names to TTF files."""
+        # Try mapped font name first
+        mapped = FONT_MAP.get(name)
+        if mapped:
+            font_path = Path("assets/fonts") / mapped
+            try:
+                return ImageFont.truetype(str(font_path), size)
+            except Exception:
+                pass
+
+        # Try direct filename (e.g., "Anton-Regular.ttf")
         font_path = Path("assets/fonts") / name
         try:
             return ImageFont.truetype(str(font_path), size)
         except Exception:
-            # Try common system fonts
-            for fallback in ["assets/fonts/Poppins-Bold.ttf", "assets/fonts/Inter/Inter_18pt-Bold.ttf"]:
+            for fallback in ["assets/fonts/Anton-Regular.ttf", "assets/fonts/Poppins-Bold.ttf"]:
                 try:
                     return ImageFont.truetype(fallback, size)
                 except Exception:

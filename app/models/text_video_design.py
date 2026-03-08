@@ -96,7 +96,7 @@ class TextVideoDesign(Base):
             "thumbnail_title_font": self.thumbnail_title_font,
             "thumbnail_title_size": self.thumbnail_title_size,
             "thumbnail_title_max_lines": self.thumbnail_title_max_lines,
-            "thumbnail_title_padding_x": self.thumbnail_title_padding_x,
+            "thumbnail_title_padding": self.thumbnail_title_padding_x,
             "thumbnail_image_ratio": self.thumbnail_image_ratio,
             "thumbnail_divider_style": self.thumbnail_divider_style,
             "thumbnail_divider_thickness": self.thumbnail_divider_thickness,

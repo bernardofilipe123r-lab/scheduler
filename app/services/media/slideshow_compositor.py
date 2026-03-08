@@ -1,13 +1,20 @@
 """
-Slideshow Compositor — creates TEXT-VIDEO reel MP4s.
+Slideshow Compositor — creates TEXT-VIDEO (Format B) reel MP4s.
+
+Layout matches the design editor preview:
+  - Black background
+  - Brand header at top (logo + name + verified + handle)
+  - Text content (word-wrapped paragraph)
+  - Image area at bottom (crossfade slideshow)
 
 Pipeline:
-  1. Render text overlay as transparent PNG (Pillow)
-  2. Build crossfade slideshow from 3-4 images (FFmpeg)
-  3. Overlay text on slideshow
-  4. Add 1s black fade-in
-  5. Add music with fadeout
-  6. Export as 1080x1920 MP4
+  1. Pre-process each image into the image-box area on a black canvas
+  2. Render brand header + text as transparent overlay PNG (Pillow)
+  3. Build crossfade slideshow from pre-processed frames (FFmpeg)
+  4. Overlay header+text on slideshow
+  5. Add black fade-in
+  6. Add music with fadeout
+  7. Export as 1080x1920 MP4
 """
 import logging
 import subprocess
@@ -21,24 +28,60 @@ logger = logging.getLogger(__name__)
 
 W, H = 1080, 1920
 
+# Font display name → TTF file mapping
+FONT_MAP = {
+    "Anton": "Anton-Regular.ttf",
+    "Inter": "Inter/static/Inter_18pt-Regular.ttf",
+    "Poppins": "Poppins-Regular.ttf",
+    "Oswald": "Poppins-Regular.ttf",
+    "Montserrat": "Poppins-Regular.ttf",
+    "Bebas Neue": "Anton-Regular.ttf",
+    "Roboto Condensed": "Inter/static/Inter_18pt-Regular.ttf",
+}
+
+FONT_MAP_BOLD = {
+    "Anton": "Anton-Regular.ttf",
+    "Inter": "Inter/static/Inter_18pt-Bold.ttf",
+    "Poppins": "Poppins-Bold.ttf",
+    "Oswald": "Poppins-Bold.ttf",
+    "Montserrat": "Poppins-Bold.ttf",
+    "Bebas Neue": "Anton-Regular.ttf",
+    "Roboto Condensed": "Inter/static/Inter_18pt-Bold.ttf",
+}
+
+# Default design values — aligned with TextVideoDesign model defaults
 DEFAULTS = {
-    "reel_text_font": "Poppins-Bold.ttf",
-    "reel_text_size": 52,
+    "reel_text_font": "Inter",
+    "reel_text_size": 38,
     "reel_line_spacing": 20,
-    "reel_text_region_pct": 0.55,
-    "reel_text_bg_opacity": 85,
+    "reel_text_font_bold": False,
     "image_duration": 3.0,
     "image_fade_duration": 0.2,
     "reel_total_duration": 15,
     "black_fade_duration": 1.0,
-    "show_logo": True,
-    "show_handle": True,
+    "reel_show_logo": True,
+    "reel_show_handle": True,
     "reel_music_enabled": True,
+    # Frame layout
+    "reel_padding_top": 320,
+    "reel_padding_bottom": 40,
+    "reel_padding_left": 85,
+    "reel_padding_right": 85,
+    "reel_section_gap": 40,
+    "reel_image_height": 660,
+    "reel_logo_size": 96,
+    "reel_brand_name_color": "#FFFFFF",
+    "reel_brand_name_size": 42,
+    "reel_handle_color": "#AAAAAA",
+    "reel_handle_size": 32,
+    "reel_header_scale": 1.15,
 }
+
+VERIFIED_BADGE_PATH = Path("assets/reel_video/logo/verified.png")
 
 
 class SlideshowCompositor:
-    """Composes the TEXT-VIDEO reel: image slideshow + text overlay + music."""
+    """Composes the TEXT-VIDEO reel: brand header + text + image slideshow + music."""
 
     def compose_reel(
         self,
@@ -48,19 +91,21 @@ class SlideshowCompositor:
         design=None,
         music_path: Optional[Path] = None,
         logo_path: Optional[Path] = None,
+        brand_name: Optional[str] = None,
         handle: Optional[str] = None,
     ) -> Optional[Path]:
         """
-        Compose the final reel video.
+        Compose the final reel video matching the design editor layout.
 
         Args:
-            image_paths: 3-4 background images (already processed to 1080x1920)
-            reel_lines: Text lines to overlay
+            image_paths: 3-4 source images for the slideshow area
+            reel_lines: Text content lines (will be joined + word-wrapped)
             output_path: Where to save the MP4
             design: TextVideoDesign model instance (optional)
             music_path: Path to background music
-            logo_path: Path to brand logo
-            handle: Instagram handle for footer
+            logo_path: Path to brand logo image
+            brand_name: Brand display name for the header
+            handle: Instagram handle for the header
 
         Returns:
             Path to output MP4, or None on failure.
@@ -71,21 +116,59 @@ class SlideshowCompositor:
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Step 1: Render text overlay PNG
+        # Calculate layout positions
+        padding_top = self._get(design, "reel_padding_top")
+        padding_left = self._get(design, "reel_padding_left")
+        padding_right = self._get(design, "reel_padding_right")
+        gap = self._get(design, "reel_section_gap")
+        image_height = self._get(design, "reel_image_height")
+        header_scale = self._get(design, "reel_header_scale")
+        logo_size = int(self._get(design, "reel_logo_size") * header_scale)
+
+        # Measure header height
+        show_logo = self._get(design, "reel_show_logo")
+        show_handle = self._get(design, "reel_show_handle")
+        brand_name_size = int(self._get(design, "reel_brand_name_size") * header_scale)
+        handle_size_val = int(self._get(design, "reel_handle_size") * header_scale)
+
+        header_height = max(logo_size, brand_name_size + (handle_size_val + 4 if show_handle else 0))
+
+        # Calculate image box Y position (after header + gap + text + gap)
+        # Text area gets whatever space is left between header and image
+        content_width = W - padding_left - padding_right
+        image_box_y = H - self._get(design, "reel_padding_bottom") - image_height
+
+        # Step 1: Pre-process images into the image-box area on black canvas
+        prepared_paths = []
+        for img_path in image_paths:
+            prepared = self._prepare_frame_image(
+                img_path, content_width, image_height,
+                padding_left, image_box_y
+            )
+            prepared_paths.append(prepared)
+
+        # Step 2: Render header + text overlay PNG
         overlay_path = self.render_text_overlay(
-            reel_lines, design=design, logo_path=logo_path, handle=handle
+            reel_lines, design=design, logo_path=logo_path,
+            brand_name=brand_name, handle=handle,
+            image_box_y=image_box_y,
         )
 
-        # Step 2-5: Compose with FFmpeg
+        # Step 3-6: Compose with FFmpeg
         success = self._compose_with_ffmpeg(
-            image_paths=image_paths,
+            image_paths=prepared_paths,
             text_overlay_path=overlay_path,
             music_path=music_path,
             output_path=output_path,
             design=design,
         )
 
-        # Cleanup overlay temp file
+        # Cleanup temp files
+        for p in prepared_paths:
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
         try:
             overlay_path.unlink(missing_ok=True)
         except Exception:
@@ -100,98 +183,147 @@ class SlideshowCompositor:
         reel_lines: list[str],
         design=None,
         logo_path: Optional[Path] = None,
+        brand_name: Optional[str] = None,
         handle: Optional[str] = None,
+        image_box_y: int = 1220,
     ) -> Path:
         """
-        Render the text overlay as a transparent PNG.
+        Render the header + text overlay as a transparent PNG.
 
-        Layout:
-        - Small logo at top center
-        - Main text centered in upper 50-60% of frame
-        - Semi-transparent black background
-        - Gradient fade at bottom of text area
-        - Divider line + @handle at bottom
+        Layout (matches design editor preview):
+        - Brand header at padding_top: [logo] [name + verified] / [handle]
+        - Gap
+        - Text content: word-wrapped paragraph
+        - (Image area is handled separately via pre-processed frame images)
         """
-        text_region_pct = self._get(design, "reel_text_region_pct")
-        bg_opacity = self._get(design, "reel_text_bg_opacity")
+        padding_top = self._get(design, "reel_padding_top")
+        padding_left = self._get(design, "reel_padding_left")
+        padding_right = self._get(design, "reel_padding_right")
+        gap = self._get(design, "reel_section_gap")
+        header_scale = self._get(design, "reel_header_scale")
+        show_logo = self._get(design, "reel_show_logo")
+        show_handle = self._get(design, "reel_show_handle")
+        font_bold = self._get(design, "reel_text_font_bold")
+
+        # Scaled header sizes
+        logo_size = int(self._get(design, "reel_logo_size") * header_scale)
+        brand_name_size = int(self._get(design, "reel_brand_name_size") * header_scale)
+        handle_size_val = int(self._get(design, "reel_handle_size") * header_scale)
+        brand_name_color = self._get(design, "reel_brand_name_color")
+        handle_color = self._get(design, "reel_handle_color")
+
+        # Text settings
         font_name = self._get(design, "reel_text_font")
         font_size = self._get(design, "reel_text_size")
-        line_spacing = self._get(design, "reel_line_spacing")
-        logo_size_val = self._get(design, "reel_logo_size") or 80
-        handle_color = self._get(design, "reel_handle_color") or "#AAAAAA"
-        handle_size = self._get(design, "reel_handle_size") or 32
-        show_logo = self._get(design, "reel_show_logo") if (design and hasattr(design, "reel_show_logo")) else self._get(design, "show_logo")
-        show_handle = self._get(design, "reel_show_handle") if (design and hasattr(design, "reel_show_handle")) else self._get(design, "show_handle")
 
         overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
+        content_width = W - padding_left - padding_right
+        cursor_y = padding_top
 
-        # Semi-transparent black region for text area
-        text_area_h = int(H * text_region_pct)
-        bg_alpha = int(255 * bg_opacity / 100)
-        text_bg = Image.new("RGBA", (W, text_area_h), (0, 0, 0, bg_alpha))
-        overlay.paste(text_bg, (0, 0), text_bg)
+        # ── Brand Header ──────────────────────────────────────
+        header_x = padding_left
+        logo_bottom = cursor_y
 
-        # Gradient fade at bottom of text area
-        gradient_h = 100
-        for y in range(gradient_h):
-            alpha = int(bg_alpha * (1 - y / gradient_h))
-            for x in range(W):
-                overlay.putpixel((x, text_area_h + y), (0, 0, 0, alpha))
-
-        # Logo
-        logo_y_end = 120
         if show_logo and logo_path and Path(logo_path).exists():
             try:
                 logo = Image.open(logo_path).convert("RGBA")
-                logo = logo.resize((logo_size_val, logo_size_val), Image.LANCZOS)
-                overlay.paste(logo, ((W - logo_size_val) // 2, 120), logo)
-                logo_y_end = 120 + logo_size_val + 20
+                logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
+                # Circular mask
+                mask = Image.new("L", (logo_size, logo_size), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.ellipse((0, 0, logo_size, logo_size), fill=255)
+                # White circle border
+                border_w = max(1, logo_size // 40)
+                draw.ellipse(
+                    (header_x - border_w, cursor_y - border_w,
+                     header_x + logo_size + border_w, cursor_y + logo_size + border_w),
+                    outline=(255, 255, 255), width=border_w
+                )
+                overlay.paste(logo, (header_x, cursor_y), mask)
+                logo_bottom = cursor_y + logo_size
+                header_x += logo_size + int(12 * header_scale)
             except Exception as e:
                 logger.warning(f"[SlideshowCompositor] Logo load failed: {e}")
 
-        # Main text
-        font = self._load_font(font_name, font_size)
-        text_y = logo_y_end + 30
+        # Brand name + verified badge
+        if brand_name:
+            name_color = self._hex_to_rgb(brand_name_color)
+            name_font = self._resolve_font(font_name, brand_name_size, bold=True)
+            name_bbox = draw.textbbox((0, 0), brand_name, font=name_font)
+            name_h = name_bbox[3] - name_bbox[1]
+            name_w = name_bbox[2] - name_bbox[0]
 
-        for line in reel_lines:
-            bbox = draw.textbbox((0, 0), line, font=font)
-            tw = bbox[2] - bbox[0]
-            th = bbox[3] - bbox[1]
-            x = (W - tw) // 2
-            draw.text((x, text_y), line, fill="white", font=font)
-            text_y += th + line_spacing
+            # Vertically-center name within logo height if logo is shown
+            name_y = cursor_y + (max(0, logo_size - name_h - (handle_size_val + 4 if show_handle and handle else 0)) // 2) if show_logo else cursor_y
+            draw.text((header_x, name_y), brand_name, fill=name_color, font=name_font)
 
-        # Handle / footer text
-        if show_handle and handle:
-            handle_font = self._load_font(font_name, handle_size)
-            handle_text = f"@{handle}"
-            hbbox = draw.textbbox((0, 0), handle_text, font=handle_font)
-            hw = hbbox[2] - hbbox[0]
+            # Verified badge
+            badge_size = int(brand_name_size * 0.85)
+            badge_x = header_x + name_w + int(4 * header_scale)
+            if VERIFIED_BADGE_PATH.exists():
+                try:
+                    badge = Image.open(VERIFIED_BADGE_PATH).convert("RGBA")
+                    badge = badge.resize((badge_size, badge_size), Image.LANCZOS)
+                    badge_y = name_y + (name_h - badge_size) // 2
+                    overlay.paste(badge, (badge_x, badge_y), badge)
+                except Exception:
+                    pass
 
-            # Parse handle color (hex string → RGB tuple)
-            try:
-                hc = handle_color.lstrip("#")
-                handle_rgb = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
-            except Exception:
-                handle_rgb = (180, 180, 180)
+            # Handle below name
+            if show_handle and handle:
+                h_color = self._hex_to_rgb(handle_color)
+                h_font = self._resolve_font(font_name, handle_size_val, bold=False)
+                handle_text = handle if handle.startswith("@") else f"@{handle}"
+                draw.text((header_x, name_y + name_h + 4), handle_text, fill=h_color, font=h_font)
 
-            # Divider line above handle
-            divider_y = text_y + 25
-            draw.line(
-                [(W // 2 - 120, divider_y), (W // 2 + 120, divider_y)],
-                fill=(100, 100, 100),
-                width=1,
-            )
-            draw.text(
-                ((W - hw) // 2, divider_y + 15),
-                handle_text,
-                fill=handle_rgb,
-                font=handle_font,
-            )
+        cursor_y = max(logo_bottom, cursor_y + int(brand_name_size * 1.5)) + gap
+
+        # ── Text Content (word-wrapped paragraph) ─────────────
+        text_font = self._resolve_font(font_name, font_size, bold=font_bold)
+        text_color = (255, 255, 255)
+        line_height = int(font_size * 1.45)
+
+        # Join lines into a single paragraph, then word-wrap
+        paragraph = " ".join(line.strip() for line in reel_lines if line.strip())
+        wrapped_lines = self._word_wrap(draw, paragraph, text_font, content_width)
+
+        # Only draw text up to the image box area
+        max_text_y = image_box_y - gap
+        for line in wrapped_lines:
+            if cursor_y + line_height > max_text_y:
+                break
+            draw.text((padding_left, cursor_y), line, fill=text_color, font=text_font)
+            cursor_y += line_height
 
         output = Path(tempfile.mktemp(suffix="_overlay.png"))
         overlay.save(str(output), "PNG")
+        return output
+
+    def _prepare_frame_image(
+        self,
+        image_path: Path,
+        box_width: int,
+        box_height: int,
+        box_x: int,
+        box_y: int,
+    ) -> Path:
+        """
+        Place an image in the correct box position on a black 1080x1920 canvas.
+        This preprocesses each slideshow image so FFmpeg crossfade works on full frames.
+        """
+        canvas = Image.new("RGB", (W, H), (0, 0, 0))
+        try:
+            img = Image.open(image_path).convert("RGB")
+            img = self._cover_fit(img, box_width, box_height)
+            # Round corners
+            img = self._round_corners(img, radius=20)
+            canvas.paste(img, (box_x, box_y))
+        except Exception as e:
+            logger.error(f"[SlideshowCompositor] Failed to load image {image_path}: {e}")
+
+        output = Path(tempfile.mktemp(suffix="_frame.jpg"))
+        canvas.save(str(output), "JPEG", quality=95)
         return output
 
     def _compose_with_ffmpeg(
@@ -297,21 +429,87 @@ class SlideshowCompositor:
             logger.error(f"[SlideshowCompositor] FFmpeg error: {e}")
             return False
 
-    def _load_font(self, name: str, size: int) -> ImageFont.FreeTypeFont:
-        """Load font from assets/fonts/ with fallback."""
+    def _resolve_font(self, name: str, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+        """Resolve a font display name to a TTF file and load it."""
+        lookup = FONT_MAP_BOLD if bold else FONT_MAP
+        ttf_name = lookup.get(name)
+
+        if ttf_name:
+            font_path = Path("assets/fonts") / ttf_name
+            try:
+                return ImageFont.truetype(str(font_path), size)
+            except Exception:
+                pass
+
+        # Try direct filename (legacy: "Poppins-Bold.ttf")
         font_path = Path("assets/fonts") / name
         try:
             return ImageFont.truetype(str(font_path), size)
         except Exception:
-            for fallback in [
-                "assets/fonts/Poppins-Bold.ttf",
-                "assets/fonts/Inter/Inter_18pt-Bold.ttf",
-            ]:
-                try:
-                    return ImageFont.truetype(fallback, size)
-                except Exception:
-                    continue
-            return ImageFont.load_default()
+            pass
+
+        # Fallback chain
+        for fallback in [
+            "assets/fonts/Inter/static/Inter_18pt-Bold.ttf" if bold else "assets/fonts/Inter/static/Inter_18pt-Regular.ttf",
+            "assets/fonts/Poppins-Bold.ttf",
+        ]:
+            try:
+                return ImageFont.truetype(fallback, size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    def _word_wrap(self, draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+        """Word-wrap text to fit within max_width pixels."""
+        words = text.split()
+        lines = []
+        current_line = ""
+
+        for word in words:
+            test = f"{current_line} {word}".strip()
+            bbox = draw.textbbox((0, 0), test, font=font)
+            if bbox[2] - bbox[0] <= max_width:
+                current_line = test
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+
+        if current_line:
+            lines.append(current_line)
+
+        return lines
+
+    def _cover_fit(self, img: Image.Image, target_w: int, target_h: int) -> Image.Image:
+        """Scale image to cover target dimensions, then center-crop."""
+        ratio_w = target_w / img.width
+        ratio_h = target_h / img.height
+        scale = max(ratio_w, ratio_h)
+        new_w = int(img.width * scale)
+        new_h = int(img.height * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        left = (new_w - target_w) // 2
+        top = (new_h - target_h) // 2
+        return img.crop((left, top, left + target_w, top + target_h))
+
+    def _round_corners(self, img: Image.Image, radius: int = 20) -> Image.Image:
+        """Apply rounded corners to an image."""
+        img = img.convert("RGBA")
+        mask = Image.new("L", img.size, 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.rounded_rectangle((0, 0, img.width, img.height), radius=radius, fill=255)
+        result = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        result.paste(img, mask=mask)
+        return result.convert("RGB")
+
+    @staticmethod
+    def _hex_to_rgb(hex_color: str) -> tuple:
+        """Convert hex color string to RGB tuple."""
+        try:
+            hc = hex_color.lstrip("#")
+            return tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
+        except Exception:
+            return (255, 255, 255)
 
     def _get(self, design, key: str):
         """Get a design value with fallback to defaults."""
