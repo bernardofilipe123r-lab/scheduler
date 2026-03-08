@@ -68,7 +68,7 @@ CONTENT_TYPE_KEY_MAP: dict[str, str] = {
 # Platforms that cannot publish a given content type.
 # TikTok's API does not support image carousel publishing.
 CONTENT_TYPE_EXCLUDED_PLATFORMS: dict[str, frozenset[str]] = {
-    "posts": frozenset({"tiktok"}),
+    "posts": frozenset({"youtube", "tiktok"}),
 }
 
 

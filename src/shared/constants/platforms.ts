@@ -67,7 +67,7 @@ export const CONTENT_TYPE_META: Record<
  * TikTok's API does not support image carousel publishing.
  */
 export const CONTENT_TYPE_EXCLUDED_PLATFORMS: Partial<Record<ContentType, readonly Platform[]>> = {
-  posts: ['tiktok'],
+  posts: ['youtube', 'tiktok'],
 }
 
 /** Helper: platforms eligible for a given content type (excludes unsupported ones). */
