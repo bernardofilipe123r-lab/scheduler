@@ -122,7 +122,7 @@ class ImageSourcer:
 
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
-                "imagen-3.0-generate-002:predict"
+                "imagen-4.0-generate-001:predict"
                 f"?key={self._gemini_key}"
             )
             payload = {
