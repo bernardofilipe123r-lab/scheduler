@@ -456,8 +456,8 @@ export function JobDetailPage() {
     return (
       <div className="text-center py-12">
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Job not found</h2>
-        <button onClick={() => navigate('/history')} className="btn btn-primary mt-4">
+        <h2 className="text-xl font-semibold text-gray-200 mb-2">Job not found</h2>
+        <button onClick={() => navigate('/history')} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors mt-4">
           Back to Jobs
         </button>
       </div>
@@ -478,7 +478,7 @@ export function JobDetailPage() {
   const scheduleButtonLabel = completedCount === 1 ? 'Schedule Reel' : scheduledCount > 0 ? `Schedule ${completedCount} Remaining` : `Schedule All (${completedCount})`
   
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto min-h-screen">
       {/* Header */}
       <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-6 border border-gray-700/50 shadow-xl">
         <div className="flex items-start justify-between">
@@ -539,9 +539,9 @@ export function JobDetailPage() {
                 
                 {/* AI Prompt - show if dark mode */}
                 {job.variant === 'dark' && job.ai_prompt && (
-                  <div className="mt-2 text-sm text-gray-600 bg-purple-50 rounded-lg p-3">
-                    <p className="font-medium text-purple-700 mb-1">AI Background Prompt:</p>
-                    <p className="text-purple-600 italic">{job.ai_prompt}</p>
+                  <div className="mt-2 text-sm bg-purple-900/30 rounded-lg p-3 border border-purple-500/20">
+                    <p className="font-medium text-purple-300 mb-1">AI Background Prompt:</p>
+                    <p className="text-purple-400 italic">{job.ai_prompt}</p>
                   </div>
                 )}
               </>
@@ -549,12 +549,12 @@ export function JobDetailPage() {
             
             {/* Job-level error message */}
             {job.error_message && (
-              <div className="mt-3 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="mt-3 text-sm bg-red-900/30 border border-red-500/30 rounded-lg p-3">
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="font-medium text-red-700">Error:</p>
-                    <p className="text-red-600">{job.error_message}</p>
+                    <p className="font-medium text-red-300">Error:</p>
+                    <p className="text-red-400">{job.error_message}</p>
                   </div>
                   {job.status === 'failed' && (
                     <button
@@ -565,7 +565,7 @@ export function JobDetailPage() {
                         })
                       }}
                       disabled={retryJob.isPending}
-                      className="btn btn-primary btn-sm flex-shrink-0"
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors flex-shrink-0 flex items-center gap-1.5"
                     >
                       {retryJob.isPending ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -624,13 +624,13 @@ export function JobDetailPage() {
       
       {/* Quick Schedule Section */}
       {completedCount > 0 && (
-        <div className="rounded-xl p-4 bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/20 backdrop-blur-sm">
+        <div className="rounded-xl p-4 bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-500/20 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-purple-600" />
+              <Calendar className="w-5 h-5 text-purple-400" />
               <div>
-                <span className="font-semibold text-gray-900">Quick Schedule</span>
-                <span className="text-gray-500 ml-2">
+                <span className="font-semibold text-white">Quick Schedule</span>
+                <span className="text-gray-400 ml-2">
                   {completedCount} brand{completedCount !== 1 ? 's' : ''} ready
                 </span>
               </div>
@@ -639,7 +639,7 @@ export function JobDetailPage() {
               <button
                 onClick={handleScheduleAll}
                 disabled={schedulingAll || schedulingCustom || isGenerating || allScheduled}
-                className="btn btn-primary"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
                 title={allScheduled ? "All brands already scheduled" : "Schedule to next available slots"}
               >
                 {schedulingAll ? (
@@ -656,7 +656,7 @@ export function JobDetailPage() {
                 <button
                   onClick={openCustomScheduleModal}
                   disabled={schedulingAll || schedulingCustom || isGenerating}
-                  className="btn btn-secondary"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
                   title="Pick a custom date and time"
                 >
                   <CalendarClock className="w-4 h-4" />
@@ -670,13 +670,13 @@ export function JobDetailPage() {
       
       {/* Music Section */}
       {!isGenerating && (
-        <div className="card p-4 bg-gray-50 border-gray-200">
+        <div className="rounded-xl p-4 bg-gray-900/60 border border-gray-700/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Music className="w-5 h-5 text-gray-500" />
+              <Music className="w-5 h-5 text-purple-400" />
               <div>
-                <span className="font-semibold text-gray-900 text-sm">Background Music</span>
-                <span className="text-gray-500 text-sm ml-2">
+                <span className="font-semibold text-white text-sm">Background Music</span>
+                <span className="text-gray-400 text-sm ml-2">
                   {job.music_source === 'trending_random' ? '🎲 Random Trending' :
                    job.music_source === 'trending_pick' ? '🎵 Trending Track' :
                    '🔇 No Music'}
@@ -697,7 +697,7 @@ export function JobDetailPage() {
                   )
                 }}
                 disabled={changeMusic.isPending || allScheduled}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white"
+                className="px-3 py-1.5 text-sm border border-gray-600 rounded-lg bg-gray-800 text-gray-200"
               >
                 <option value="none">🔇 No Music</option>
                 <option value="trending_random">🎲 Random Trending</option>
@@ -715,7 +715,7 @@ export function JobDetailPage() {
                     )
                   }
                   disabled={changeMusic.isPending || allScheduled}
-                  className="btn btn-secondary btn-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
                   title="Re-roll random trending music"
                 >
                   {changeMusic.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shuffle className="w-3.5 h-3.5" />}
@@ -741,11 +741,11 @@ export function JobDetailPage() {
           return (
             <div
               key={brand}
-              className={`rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm ${isDismissed ? 'opacity-50' : ''}`}
+              className={`rounded-xl overflow-hidden bg-gray-900/70 border border-gray-700/50 shadow-lg backdrop-blur-sm ${isDismissed ? 'opacity-50' : ''}`}
               style={{ borderTopColor: getBrandColor(brand), borderTopWidth: '3px' }}
             >
               {/* Brand Header */}
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <BrandBadge brand={brand} size="md" />
                   <StatusBadge status={isDismissed ? 'dismissed' : output.status} />
@@ -753,7 +753,7 @@ export function JobDetailPage() {
                 
                 <div className="flex items-center gap-2">
                   {slot && !isScheduled && !isDismissed && (
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
                       <Clock className="w-4 h-4" />
                       <span>Next slot: {slot.formatted}</span>
                     </div>
@@ -762,7 +762,7 @@ export function JobDetailPage() {
                   {isDismissed ? (
                     <button
                       onClick={() => handleRestoreBrand(brand)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-400 bg-blue-900/30 border border-blue-500/30 rounded-lg hover:bg-blue-900/50 transition-colors"
                       title="Restore this brand"
                     >
                       <RefreshCw className="w-3 h-3" />
@@ -771,7 +771,7 @@ export function JobDetailPage() {
                   ) : (isCompleted && !isGenerating) ? (
                     <button
                       onClick={() => handleDismissBrand(brand)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-400 bg-red-900/30 border border-red-500/30 rounded-lg hover:bg-red-900/50 transition-colors"
                       title="Remove this brand from scheduling"
                     >
                       <X className="w-3 h-3" />
@@ -784,23 +784,23 @@ export function JobDetailPage() {
               {/* Content */}
               <div className="p-4">
                 {isDismissed ? (
-                  <div className="text-center py-6 text-gray-400">
-                    <X className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <div className="text-center py-6 text-gray-500">
+                    <X className="w-8 h-8 mx-auto mb-2 text-gray-600" />
                     <p className="text-sm">Brand dismissed — won't be included in Schedule All</p>
                   </div>
                 ) : isBrandGenerating ? (
                   <div className="flex flex-col items-center justify-center py-12">
                     <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
-                    <p className="text-gray-700 font-medium mb-2">
+                    <p className="text-gray-300 font-medium mb-2">
                       {output.progress_message || `Generating ${getBrandLabel(brand)}...`}
                     </p>
                     {typeof output.progress_percent === 'number' && (
                       <div className="w-full max-w-xs">
-                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
                           <span>Progress</span>
                           <span>{output.progress_percent}%</span>
                         </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-orange-500 transition-all duration-500 ease-out"
                             style={{ width: `${output.progress_percent}%` }}
@@ -812,11 +812,11 @@ export function JobDetailPage() {
                 ) : isFailed ? (
                   <div className="text-center py-8">
                     <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">{output.error || 'Generation failed'}</p>
+                    <p className="text-gray-400 mb-4">{output.error || 'Generation failed'}</p>
                     <button
                       onClick={() => handleRegenerateBrand(brand)}
                       disabled={regenerateBrand.isPending}
-                      className="btn btn-primary"
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Retry
@@ -826,9 +826,9 @@ export function JobDetailPage() {
                   <div className="space-y-4">
                     {/* Per-brand AI prompt (auto-generated jobs) */}
                     {isAutoGenerated && output.ai_prompt && (
-                      <div className="text-sm bg-purple-50 rounded-lg p-3 border border-purple-100">
-                        <p className="font-medium text-purple-700 mb-1 text-xs">AI Prompt:</p>
-                        <p className="text-purple-600 italic text-xs">{output.ai_prompt}</p>
+                      <div className="text-sm bg-purple-900/30 rounded-lg p-3 border border-purple-500/20">
+                        <p className="font-medium text-purple-300 mb-1 text-xs">AI Prompt:</p>
+                        <p className="text-purple-400 italic text-xs">{output.ai_prompt}</p>
                       </div>
                     )}
                     
@@ -840,7 +840,7 @@ export function JobDetailPage() {
                         <div>
                           <p className="text-xs text-gray-500 mb-1 text-center">IG/FB</p>
                           {output.thumbnail_path ? (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
+                            <div className="aspect-[9/16] bg-gray-800 rounded-lg overflow-hidden">
                               <img
                                 src={output.thumbnail_path}
                                 alt={`${brand} thumbnail`}
@@ -848,7 +848,7 @@ export function JobDetailPage() {
                               />
                             </div>
                           ) : (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 p-2">
+                            <div className="aspect-[9/16] bg-gray-800 rounded-lg flex flex-col items-center justify-center text-gray-500 p-2">
                               <AlertCircle className="w-8 h-8 mb-1" />
                               <p className="text-xs text-center">No thumbnail</p>
                             </div>
@@ -859,7 +859,7 @@ export function JobDetailPage() {
                         <div>
                           <p className="text-xs text-gray-500 mb-1 text-center">YouTube</p>
                           {output.yt_thumbnail_path ? (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
+                            <div className="aspect-[9/16] bg-gray-800 rounded-lg overflow-hidden">
                               <img
                                 src={output.yt_thumbnail_path}
                                 alt={`${brand} YouTube thumbnail`}
@@ -867,7 +867,7 @@ export function JobDetailPage() {
                               />
                             </div>
                           ) : (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 p-2">
+                            <div className="aspect-[9/16] bg-gray-800 rounded-lg flex flex-col items-center justify-center text-gray-500 p-2">
                               <Youtube className="w-8 h-8 mb-1" />
                               <p className="text-xs text-center">No YT thumb</p>
                             </div>
@@ -903,16 +903,16 @@ export function JobDetailPage() {
                       </div>
                       
                       {/* Right side: Title + Content Lines for this brand */}
-                      <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="bg-gray-800/60 rounded-lg p-4 border border-gray-700/50">
                         {/* Per-brand title */}
-                        <div className="mb-3 pb-3 border-b border-gray-200">
+                        <div className="mb-3 pb-3 border-b border-gray-700/50">
                           {editingTitleBrand === brand ? (
                             <div className="flex items-start gap-2">
                               <textarea
                                 value={editingTitleValue}
                                 onChange={(e) => setEditingTitleValue(e.target.value)}
                                 rows={2}
-                                className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                className="flex-1 px-2 py-1.5 text-sm border border-gray-600 rounded-lg bg-gray-800 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                                 autoFocus
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -925,7 +925,7 @@ export function JobDetailPage() {
                               <button
                                 onClick={saveBrandTitle}
                                 disabled={savingTitle}
-                                className="p-1.5 rounded hover:bg-green-100 text-green-600"
+                                className="p-1.5 rounded hover:bg-green-900/30 text-green-400"
                                 title="Save title"
                               >
                                 {savingTitle ? (
@@ -936,7 +936,7 @@ export function JobDetailPage() {
                               </button>
                               <button
                                 onClick={() => setEditingTitleBrand(null)}
-                                className="p-1.5 rounded hover:bg-gray-200 text-gray-400"
+                                className="p-1.5 rounded hover:bg-gray-700 text-gray-500"
                                 title="Cancel"
                               >
                                 <X className="w-4 h-4" />
@@ -944,13 +944,13 @@ export function JobDetailPage() {
                             </div>
                           ) : (
                             <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-semibold text-gray-900 flex-1">
+                              <p className="text-sm font-semibold text-gray-200 flex-1">
                                 {formatDisplayTitle(output.title || job.title)}
                               </p>
                               {(isCompleted || isScheduled) && (
                                 <button
                                   onClick={() => startEditingTitle(brand)}
-                                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 flex-shrink-0"
+                                  className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 flex-shrink-0"
                                   title="Edit title for this brand"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
@@ -961,13 +961,13 @@ export function JobDetailPage() {
                         </div>
                         
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-gray-700">Content (this brand)</span>
+                          <span className="text-sm font-medium text-gray-400">Content (this brand)</span>
                           <button
                             onClick={() => copyToClipboard(
                               (output.content_lines || job.content_lines || []).join('\n'), 
                               'Content'
                             )}
-                            className="p-1.5 rounded hover:bg-gray-200"
+                            className="p-1.5 rounded hover:bg-gray-700"
                             title="Copy content"
                           >
                             <Copy className="w-4 h-4 text-gray-500" />
@@ -976,14 +976,14 @@ export function JobDetailPage() {
                         <div className="space-y-2 max-h-[400px] overflow-y-auto">
                           {isTextVideo ? (
                             /* Text-video: display as flowing paragraph, no numbering */
-                            <div className="text-sm text-gray-700 py-2 px-3 bg-white rounded border-l-2 border-gray-300 whitespace-pre-line">
+                            <div className="text-sm text-gray-300 py-2 px-3 bg-gray-900/60 rounded border-l-2 border-gray-600 whitespace-pre-line">
                               {(output.content_lines || job.content_lines || []).join('\n')}
                             </div>
                           ) : (
                             (output.content_lines || job.content_lines || []).map((line, idx) => (
                               <div 
                                 key={idx} 
-                                className="text-sm text-gray-700 py-1.5 px-2 bg-white rounded border-l-2 border-gray-300"
+                                className="text-sm text-gray-300 py-1.5 px-2 bg-gray-900/60 rounded border-l-2 border-gray-600"
                               >
                                 <span className="font-medium text-gray-500 mr-2">{idx + 1}.</span>
                                 {line}
@@ -1050,69 +1050,69 @@ export function JobDetailPage() {
                     {output.caption && (
                       <div className="space-y-4">
                         {/* Instagram Caption */}
-                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-100">
+                        <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-lg p-4 border border-purple-500/20">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="text-lg">📸</span>
-                              <span className="text-sm font-medium text-purple-700">Instagram Caption</span>
+                              <span className="text-sm font-medium text-purple-300">Instagram Caption</span>
                             </div>
                             <button
                               onClick={() => copyToClipboard(output.caption!, 'Instagram Caption')}
-                              className="p-1.5 rounded hover:bg-purple-100"
+                              className="p-1.5 rounded hover:bg-purple-900/40"
                             >
-                              <Copy className="w-4 h-4 text-purple-500" />
+                              <Copy className="w-4 h-4 text-purple-400" />
                             </button>
                           </div>
                           <div className="max-h-[300px] overflow-y-auto">
-                            <p className="text-sm text-gray-600 whitespace-pre-line">
+                            <p className="text-sm text-gray-300 whitespace-pre-line">
                               {output.caption}
                             </p>
                           </div>
                         </div>
                         
                         {/* Facebook Caption */}
-                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                        <div className="bg-gradient-to-r from-blue-900/30 to-indigo-900/30 rounded-lg p-4 border border-blue-500/20">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="text-lg">📘</span>
-                              <span className="text-sm font-medium text-blue-700">Facebook Caption</span>
-                              <span className="text-xs text-blue-400">(shorter)</span>
+                              <span className="text-sm font-medium text-blue-300">Facebook Caption</span>
+                              <span className="text-xs text-blue-500">(shorter)</span>
                             </div>
                             <button
                               onClick={() => copyToClipboard(createFacebookCaption(output.caption!), 'Facebook Caption')}
-                              className="p-1.5 rounded hover:bg-blue-100"
+                              className="p-1.5 rounded hover:bg-blue-900/40"
                             >
-                              <Copy className="w-4 h-4 text-blue-500" />
+                              <Copy className="w-4 h-4 text-blue-400" />
                             </button>
                           </div>
                           <div className="max-h-[200px] overflow-y-auto">
-                            <p className="text-sm text-gray-600 whitespace-pre-line">
+                            <p className="text-sm text-gray-300 whitespace-pre-line">
                               {createFacebookCaption(output.caption!)}
                             </p>
                           </div>
                         </div>
                         
                         {/* YouTube Title & Description */}
-                        <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-4 border border-red-100">
+                        <div className="bg-gradient-to-r from-red-900/30 to-orange-900/30 rounded-lg p-4 border border-red-500/20">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="text-lg">📺</span>
-                              <span className="text-sm font-medium text-red-700">YouTube Shorts</span>
+                              <span className="text-sm font-medium text-red-300">YouTube Shorts</span>
                             </div>
                           </div>
                           
                           {/* YouTube Title */}
                           <div className="mb-3">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium text-red-600">Title</span>
+                              <span className="text-xs font-medium text-red-400">Title</span>
                               <button
                                 onClick={() => copyToClipboard(output.yt_title || job.title, 'YouTube Title')}
-                                className="p-1 rounded hover:bg-red-100"
+                                className="p-1 rounded hover:bg-red-900/40"
                               >
-                                <Copy className="w-3.5 h-3.5 text-red-500" />
+                                <Copy className="w-3.5 h-3.5 text-red-400" />
                               </button>
                             </div>
-                            <p className="text-sm font-medium text-gray-800 bg-white/50 rounded px-2 py-1.5">
+                            <p className="text-sm font-medium text-gray-200 bg-gray-800/50 rounded px-2 py-1.5">
                               {output.yt_title || job.title}
                             </p>
                           </div>
@@ -1120,16 +1120,16 @@ export function JobDetailPage() {
                           {/* YouTube Description (same as Facebook) */}
                           <div>
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium text-red-600">Description</span>
+                              <span className="text-xs font-medium text-red-400">Description</span>
                               <button
                                 onClick={() => copyToClipboard(createFacebookCaption(output.caption!), 'YouTube Description')}
-                                className="p-1 rounded hover:bg-red-100"
+                                className="p-1 rounded hover:bg-red-900/40"
                               >
-                                <Copy className="w-3.5 h-3.5 text-red-500" />
+                                <Copy className="w-3.5 h-3.5 text-red-400" />
                               </button>
                             </div>
-                            <div className="max-h-[120px] overflow-y-auto bg-white/50 rounded px-2 py-1.5">
-                              <p className="text-sm text-gray-600 whitespace-pre-line">
+                            <div className="max-h-[120px] overflow-y-auto bg-gray-800/50 rounded px-2 py-1.5">
+                              <p className="text-sm text-gray-300 whitespace-pre-line">
                                 {createFacebookCaption(output.caption!)}
                               </p>
                             </div>
@@ -1140,11 +1140,11 @@ export function JobDetailPage() {
                     
                     {/* Scheduled Info */}
                     {isScheduled && output.scheduled_time && (
-                      <div className="bg-purple-50 rounded-lg p-4 flex items-center gap-3">
-                        <Check className="w-5 h-5 text-purple-600" />
+                      <div className="bg-purple-900/30 rounded-lg p-4 flex items-center gap-3 border border-purple-500/20">
+                        <Check className="w-5 h-5 text-purple-400" />
                         <div>
-                          <p className="font-medium text-purple-900">Scheduled</p>
-                          <p className="text-sm text-purple-700">
+                          <p className="font-medium text-purple-300">Scheduled</p>
+                          <p className="text-sm text-purple-400">
                             {format(new Date(output.scheduled_time), 'MMMM d, yyyy h:mm a')}
                           </p>
                         </div>
@@ -1155,7 +1155,7 @@ export function JobDetailPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleDownload(brand, output)}
-                        className="btn btn-secondary flex-1"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
                       >
                         <Download className="w-4 h-4" />
                         Download
@@ -1166,7 +1166,7 @@ export function JobDetailPage() {
                           <button
                             onClick={() => openBrandScheduleModal(brand)}
                             disabled={schedulingBrand === brand || isGenerating}
-                            className="btn btn-success flex-1"
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-green-300 bg-green-900/40 border border-green-500/30 rounded-lg hover:bg-green-900/60 transition-colors disabled:opacity-50"
                           >
                             {schedulingBrand === brand ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1179,7 +1179,7 @@ export function JobDetailPage() {
                           <button
                             onClick={() => handleRegenerateBrand(brand)}
                             disabled={regenerateBrand.isPending || isGenerating}
-                            className="btn btn-secondary"
+                            className="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
                           >
                             <RefreshCw className="w-4 h-4" />
                           </button>
@@ -1190,14 +1190,14 @@ export function JobDetailPage() {
                         <>
                           <button
                             onClick={() => copyToClipboard(output.caption || '', 'Caption')}
-                            className="btn btn-secondary flex-1"
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
                           >
                             <Copy className="w-4 h-4" />
                             Copy Caption
                           </button>
                           <button
                             onClick={() => copyToClipboard(job.title || '', 'Title')}
-                            className="btn btn-secondary flex-1"
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
                           >
                             <Copy className="w-4 h-4" />
                             Copy Title
@@ -1225,20 +1225,20 @@ export function JobDetailPage() {
         size="sm"
       >
         <div className="space-y-4">
-          <p className="text-gray-600">
+          <p className="text-gray-400">
             Are you sure you want to delete this job? This will also delete all generated media.
           </p>
           <div className="flex gap-3">
             <button
               onClick={() => setDeleteModalOpen(false)}
-              className="btn btn-secondary flex-1"
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
               disabled={deleteJob.isPending}
-              className="btn btn-danger flex-1"
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
             >
               {deleteJob.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1259,14 +1259,14 @@ export function JobDetailPage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               New Title
             </label>
             <textarea
               value={editedTitle}
               onChange={(e) => setEditedTitle(e.target.value)}
               rows={4}
-              className="input resize-none"
+              className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               placeholder="Enter new title..."
             />
           </div>
@@ -1276,14 +1276,14 @@ export function JobDetailPage() {
           <div className="flex gap-3">
             <button
               onClick={() => setEditTitleModalOpen(false)}
-              className="btn btn-secondary flex-1"
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveTitle}
               disabled={updateJob.isPending || !editedTitle.trim()}
-              className="btn btn-primary flex-1"
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
             >
               {updateJob.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1310,29 +1310,29 @@ export function JobDetailPage() {
                 onClick={() => setBrandScheduleMode('auto')}
                 className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
                   brandScheduleMode === 'auto'
-                    ? 'border-purple-500 bg-purple-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-purple-500 bg-purple-900/40'
+                    : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'
                 }`}
               >
-                <Calendar className={`w-5 h-5 ${brandScheduleMode === 'auto' ? 'text-purple-600' : 'text-gray-400'}`} />
-                <span className={`text-sm font-medium ${brandScheduleMode === 'auto' ? 'text-purple-700' : 'text-gray-600'}`}>
+                <Calendar className={`w-5 h-5 ${brandScheduleMode === 'auto' ? 'text-purple-400' : 'text-gray-500'}`} />
+                <span className={`text-sm font-medium ${brandScheduleMode === 'auto' ? 'text-purple-300' : 'text-gray-400'}`}>
                   Schedule Now
                 </span>
-                <span className="text-[10px] text-gray-400 text-center">Next available time</span>
+                <span className="text-[10px] text-gray-500 text-center">Next available time</span>
               </button>
               <button
                 onClick={() => setBrandScheduleMode('custom')}
                 className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
                   brandScheduleMode === 'custom'
-                    ? 'border-purple-500 bg-purple-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-purple-500 bg-purple-900/40'
+                    : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'
                 }`}
               >
-                <Clock className={`w-5 h-5 ${brandScheduleMode === 'custom' ? 'text-purple-600' : 'text-gray-400'}`} />
-                <span className={`text-sm font-medium ${brandScheduleMode === 'custom' ? 'text-purple-700' : 'text-gray-600'}`}>
+                <Clock className={`w-5 h-5 ${brandScheduleMode === 'custom' ? 'text-purple-400' : 'text-gray-500'}`} />
+                <span className={`text-sm font-medium ${brandScheduleMode === 'custom' ? 'text-purple-300' : 'text-gray-400'}`}>
                   Custom Time
                 </span>
-                <span className="text-[10px] text-gray-400 text-center">Pick date & time</span>
+                <span className="text-[10px] text-gray-500 text-center">Pick date & time</span>
               </button>
             </div>
 
@@ -1340,22 +1340,22 @@ export function JobDetailPage() {
             {brandScheduleMode === 'custom' && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Date</label>
                   <input
                     type="date"
                     value={brandCustomDate}
                     min={new Date().toISOString().split('T')[0]}
                     onChange={(e) => setBrandCustomDate(e.target.value)}
-                    className="input"
+                    className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Time</label>
                   <input
                     type="time"
                     value={brandCustomTime}
                     onChange={(e) => setBrandCustomTime(e.target.value)}
-                    className="input"
+                    className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -1365,14 +1365,14 @@ export function JobDetailPage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setBrandScheduleModalBrand(null)}
-                className="btn btn-secondary flex-1"
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmBrandSchedule}
                 disabled={brandScheduleMode === 'custom' && (!brandCustomDate || !brandCustomTime)}
-                className="btn btn-primary flex-1"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
               >
                 <Calendar className="w-4 h-4" />
                 {brandScheduleMode === 'auto' ? 'Schedule Now' : 'Schedule'}
@@ -1390,14 +1390,14 @@ export function JobDetailPage() {
         size="md"
       >
         <div className="space-y-4">
-          <p className="text-gray-600">
+          <p className="text-gray-400">
             Choose a date and time to schedule {completedCount === 1 ? 'this brand' : scheduledCount > 0 ? `the ${completedCount} remaining brands` : `all ${completedCount} brands`}.
             {completedCount > 1 && 'Brands will be staggered by 1 hour each.'}
           </p>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Date
               </label>
               <input
@@ -1405,18 +1405,18 @@ export function JobDetailPage() {
                 value={customScheduleDate}
                 onChange={(e) => setCustomScheduleDate(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
-                className="input"
+                className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Start Time
               </label>
               <input
                 type="time"
                 value={customScheduleTime}
                 onChange={(e) => setCustomScheduleTime(e.target.value)}
-                className="input"
+                className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -1426,8 +1426,8 @@ export function JobDetailPage() {
           )}
 
           {customScheduleDate && customScheduleTime && !isCustomScheduleInPast && completedCount > 0 && (
-            <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
-              <p className="font-medium mb-1">Schedule Preview:</p>
+            <div className="bg-gray-800/60 p-3 rounded-lg text-sm text-gray-300 border border-gray-700/50">
+              <p className="font-medium mb-1 text-gray-200">Schedule Preview:</p>
               <ul className="space-y-1">
                 {Object.entries(job?.brand_outputs || {})
                   .filter(([_, output]) => output.status === 'completed')
@@ -1437,7 +1437,7 @@ export function JobDetailPage() {
                     return (
                       <li key={brand} className="flex items-center gap-2">
                         <span className="capitalize">{brand}</span>
-                        <span className="text-gray-400">→</span>
+                        <span className="text-gray-500">→</span>
                         <span>{format(baseTime, 'MMM d, h:mm a')}</span>
                       </li>
                     )
@@ -1449,14 +1449,14 @@ export function JobDetailPage() {
           <div className="flex gap-3">
             <button
               onClick={() => setCustomScheduleModalOpen(false)}
-              className="btn btn-secondary flex-1"
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleCustomScheduleAll}
               disabled={schedulingCustom || !customScheduleDate || !customScheduleTime || isCustomScheduleInPast}
-              className="btn btn-primary flex-1"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
             >
               {schedulingCustom ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
