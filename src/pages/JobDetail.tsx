@@ -1008,7 +1008,8 @@ export function JobDetailPage() {
                     {/* Caption */}
                     {output.caption && (
                       <div className="space-y-4">
-                        {/* Instagram Caption */}
+                        {/* Instagram Caption — only if instagram in platforms */}
+                        {(!job.platforms || job.platforms.includes('instagram')) && (
                         <div className="bg-white rounded-[7px] p-4 border border-gray-100">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -1028,8 +1029,10 @@ export function JobDetailPage() {
                             </p>
                           </div>
                         </div>
+                        )}
                         
-                        {/* Facebook Caption */}
+                        {/* Facebook Caption — only if facebook in platforms */}
+                        {(!job.platforms || job.platforms.includes('facebook')) && (
                         <div className="bg-white rounded-[7px] p-4 border border-gray-100">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -1050,8 +1053,10 @@ export function JobDetailPage() {
                             </p>
                           </div>
                         </div>
+                        )}
                         
-                        {/* YouTube Title & Description */}
+                        {/* YouTube Title & Description — only if youtube in platforms */}
+                        {(!job.platforms || job.platforms.includes('youtube')) && (
                         <div className="bg-white rounded-[7px] p-4 border border-gray-100">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -1094,6 +1099,7 @@ export function JobDetailPage() {
                             </div>
                           </div>
                         </div>
+                        )}
                       </div>
                     )}
                     

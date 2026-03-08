@@ -24,6 +24,7 @@ interface BackendJob {
   created_by?: string
   music_track_id?: string | null
   music_source?: string | null
+  platforms?: string[]
 }
 
 interface JobsListResponse {
