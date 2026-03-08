@@ -83,9 +83,19 @@ RULES:
 - Total reel text MUST be 50-60 words. Never exceed 60 words.
 - End with an insight, lesson, or thought-provoking closer
 - Thumbnail title: 3-5 words per line, max 4 lines, ALL CAPS
-- Image queries must be specific enough to find relevant photos
-- For real people/places: use "web_search" source type
-- For abstract concepts: use "ai_generate" source type"""
+
+IMAGE QUERY RULES (CRITICAL — READ CAREFULLY):
+- Each image MUST visually relate to the specific reel line it accompanies
+- web_search queries: Use real-world terms like "woman scientist lab coat", NOT abstract concepts like "health funding graph"
+- NEVER query for charts, graphs, statistics, infographics, or bar charts — these look terrible as reel backgrounds
+- Good query examples: "tech CEO speaking stage", "modern hospital interior", "athlete training gym", "luxury skyscraper night"
+- Bad query examples: "funding crash chart", "investment growth", "statistics women health" 
+- For people: include descriptive physical context ("woman doctor white coat stethoscope")
+- For places/things: include atmosphere ("futuristic city skyline sunset cinematic")
+- For ai_generate: write a detailed visual scene description, NOT a concept ("A photorealistic close-up of a scientist examining DNA strands under blue laboratory lighting")
+- fallback_query should be a broader version of the main query, not a rephrased concept
+- Use "web_search" for real people, real places, real objects
+- Use "ai_generate" ONLY for abstract/conceptual visuals that can't be photographed"""
 
 TEXT_VIDEO_POLISH_PROMPT = """Given this story:
 HEADLINE: {headline}

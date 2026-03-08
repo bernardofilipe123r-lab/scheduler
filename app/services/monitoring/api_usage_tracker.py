@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 # Known free tier limits
 API_LIMITS = {
+    "unsplash": {"hourly": 50, "label": "Unsplash"},
+    "pixabay": {"monthly": 100000, "label": "Pixabay"},
     "serpapi": {"monthly": 250, "label": "SerpAPI (Google Images)"},
     "pexels": {"monthly": 20000, "hourly": 200, "label": "Pexels"},
     "newsdata": {"daily": 200, "label": "NewsData.io"},

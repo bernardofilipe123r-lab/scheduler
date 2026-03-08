@@ -1,10 +1,12 @@
 """
 Image Sourcer — downloads or generates images for TEXT-VIDEO reels.
 
-Sources:
-  - SerpAPI Google Images (web search, SERPAPI_KEY)
-  - Gemini Imagen 3 (AI generation, GEMINI_API_KEY)
-  - Pexels (fallback, PEXELS_API_KEY)
+Sources (priority order for web_search):
+  1. Unsplash (free, no watermarks, UNSPLASH_ACCESS_KEY)
+  2. Pixabay (free, no watermarks, PIXABAY_API_KEY)
+  3. SerpAPI Google Images (web scraping, SERPAPI_KEY)
+  4. Pexels (fallback, PEXELS_API_KEY)
+  5. Gemini Imagen 4 (AI generation, GEMINI_API_KEY)
 """
 import logging
 import os
@@ -22,6 +24,15 @@ logger = logging.getLogger(__name__)
 TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 
+# Stock photo sites that serve watermarked images — block these domains
+BLOCKED_DOMAINS = {
+    "dreamstime.com", "shutterstock.com", "istockphoto.com", "gettyimages.com",
+    "alamy.com", "123rf.com", "depositphotos.com", "bigstockphoto.com",
+    "adobestock.com", "stock.adobe.com", "thinkstockphotos.com",
+    "vectorstock.com", "canstockphoto.com", "photospin.com", "pond5.com",
+    "stockfresh.com", "agefotostock.com", "superstock.com",
+}
+
 
 class ImageSourcer:
     """Sources images from web search APIs and AI generators."""
@@ -31,37 +42,48 @@ class ImageSourcer:
         self._serpapi_key = os.environ.get("SERPAPI_KEY")
         self._gemini_key = os.environ.get("GEMINI_API_KEY")
         self._pexels_key = os.environ.get("PEXELS_API_KEY")
+        self._unsplash_key = os.environ.get("UNSPLASH_ACCESS_KEY")
+        self._pixabay_key = os.environ.get("PIXABAY_API_KEY")
 
     def source_image(self, plan: ImagePlan) -> Optional[Path]:
         """
         Source a single image based on the plan.
 
-        Tries primary query, then fallback, then Pexels.
+        For ai_generate: Gemini → web fallback chain.
+        For web_search: Unsplash → Pixabay → SerpAPI → Pexels.
         Returns path to processed image (1080x1920) or None.
         """
         path = None
 
-        # Primary attempt
         if plan.source_type == "ai_generate":
             path = self._generate_ai_image(plan.query)
-        elif plan.source_type == "web_search":
-            path = self._search_and_download(plan.query)
+            # If AI fails, fall through to web search chain
+            if not path:
+                path = self._web_search_chain(plan.query)
+        else:
+            path = self._web_search_chain(plan.query)
 
-        # Fallback query
+        # Fallback query through the full web chain
         if not path and plan.fallback_query:
-            if plan.source_type == "ai_generate":
-                path = self._search_and_download(plan.fallback_query)
-            else:
-                path = self._search_and_download(plan.fallback_query)
-
-        # Last resort: Pexels
-        if not path:
-            path = self._search_pexels(plan.query)
+            path = self._web_search_chain(plan.fallback_query)
 
         # Process to target dimensions
         if path:
             return self._process_image(path)
 
+        return None
+
+    def _web_search_chain(self, query: str) -> Optional[Path]:
+        """Try all web image sources in priority order: Unsplash → Pixabay → SerpAPI → Pexels."""
+        for search_fn in [
+            self._search_unsplash,
+            self._search_pixabay,
+            self._search_and_download,
+            self._search_pexels,
+        ]:
+            path = search_fn(query)
+            if path:
+                return path
         return None
 
     def source_images_batch(self, plans: list[ImagePlan]) -> list[Optional[Path]]:
@@ -74,14 +96,18 @@ class ImageSourcer:
             logger.warning("[ImageSourcer] SERPAPI_KEY not set, skipping web search")
             return None
 
+        # Exclude stock photo sites from search results
+        exclusions = " ".join(f"-site:{d}" for d in list(BLOCKED_DOMAINS)[:5])
+        filtered_query = f"{query} -watermark -stock photo {exclusions}"
+
         try:
             resp = requests.get(
                 "https://serpapi.com/search",
                 params={
                     "engine": "google_images",
-                    "q": query,
+                    "q": filtered_query,
                     "api_key": self._serpapi_key,
-                    "num": 5,
+                    "num": 10,
                     "ijn": "0",
                     "safe": "active",
                 },
@@ -91,14 +117,16 @@ class ImageSourcer:
             self._record_api_call("serpapi", "google_images")
 
             results = resp.json().get("images_results", [])
-            # Filter for minimum resolution
+            # Filter: min resolution + block stock photo domains
             candidates = [
                 r for r in results
                 if r.get("original_width", 0) >= 800
                 and r.get("original_height", 0) >= 600
+                and not self._is_blocked_domain(r.get("original", ""))
+                and not self._is_blocked_domain(r.get("link", ""))
             ]
 
-            for candidate in candidates[:3]:
+            for candidate in candidates[:5]:
                 url = candidate.get("original")
                 if url:
                     path = self._download_image(url)
@@ -109,6 +137,14 @@ class ImageSourcer:
             logger.error(f"[ImageSourcer] SerpAPI search error: {e}")
 
         return None
+
+    @staticmethod
+    def _is_blocked_domain(url: str) -> bool:
+        """Check if a URL belongs to a blocked stock photo domain."""
+        if not url:
+            return False
+        url_lower = url.lower()
+        return any(domain in url_lower for domain in BLOCKED_DOMAINS)
 
     def _generate_ai_image(self, prompt: str) -> Optional[Path]:
         """Generate image using Google Gemini Developer API (Imagen 3) via REST."""
@@ -151,6 +187,78 @@ class ImageSourcer:
 
         except Exception as e:
             logger.error(f"[ImageSourcer] Gemini Imagen error: {e}")
+
+        return None
+
+    def _search_unsplash(self, query: str) -> Optional[Path]:
+        """Search Unsplash for free, watermark-free photos."""
+        if not self._unsplash_key:
+            return None
+
+        try:
+            resp = requests.get(
+                "https://api.unsplash.com/search/photos",
+                params={
+                    "query": query,
+                    "per_page": 5,
+                    "orientation": "portrait",
+                    "content_filter": "high",
+                },
+                headers={"Authorization": f"Client-ID {self._unsplash_key}"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            self._record_api_call("unsplash", "search_photos")
+
+            results = resp.json().get("results", [])
+            for photo in results:
+                urls = photo.get("urls", {})
+                # Use 'regular' (1080w) for good quality without being huge
+                url = urls.get("regular") or urls.get("full")
+                if url:
+                    path = self._download_image(url)
+                    if path:
+                        return path
+
+        except Exception as e:
+            logger.error(f"[ImageSourcer] Unsplash error: {e}")
+
+        return None
+
+    def _search_pixabay(self, query: str) -> Optional[Path]:
+        """Search Pixabay for free, royalty-free photos."""
+        if not self._pixabay_key:
+            return None
+
+        try:
+            resp = requests.get(
+                "https://pixabay.com/api/",
+                params={
+                    "key": self._pixabay_key,
+                    "q": query,
+                    "per_page": 5,
+                    "orientation": "vertical",
+                    "image_type": "photo",
+                    "safesearch": "true",
+                    "min_width": 800,
+                    "min_height": 1000,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            self._record_api_call("pixabay", "search")
+
+            hits = resp.json().get("hits", [])
+            for hit in hits:
+                # largeImageURL is the highest-res available without approval
+                url = hit.get("largeImageURL") or hit.get("webformatURL")
+                if url:
+                    path = self._download_image(url)
+                    if path:
+                        return path
+
+        except Exception as e:
+            logger.error(f"[ImageSourcer] Pixabay error: {e}")
 
         return None
 

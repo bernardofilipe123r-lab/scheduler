@@ -6,7 +6,11 @@
  *   2. Add a ManualPanel component in ../wizard/
  *   3. Add auto-generate handler in ../wizard/CreateVideoWizard.tsx (autoGenerateHandlers map)
  *   4. If the format needs design settings, add a design tab in DesignEditorTab.tsx
- *   5. Everything else (wizard flow, brand/platform/mode selection) updates automatically
+ *   5. Design the "mode" step (auto vs manual) in CreateVideoWizard.tsx Step 4 to
+ *      visually match the new format — use the previewGradient, previewVideo, and
+ *      format-specific descriptions (autoDescription, manualDescription) to give
+ *      users a clear visual connection between what they chose and what they'll get.
+ *   6. Everything else (wizard flow, brand/platform/mode selection) updates automatically
  */
 import { Film, Image, type LucideIcon } from 'lucide-react'
 import textBasedVideo from '@/assets/videos/text-based-preview.mp4'
@@ -35,6 +39,10 @@ export interface ReelFormat {
   features: string[]
   /** Card preview: video URL to play on hover (imported asset) */
   previewVideo: string
+  /** Mode step: description for auto mode */
+  autoDescription: string
+  /** Mode step: description for manual mode */
+  manualDescription: string
 }
 
 export const REEL_FORMATS: ReelFormat[] = [
@@ -50,6 +58,8 @@ export const REEL_FORMATS: ReelFormat[] = [
     tagline: 'Kinetic text on AI art',
     features: ['AI backgrounds', 'Animated text', 'Music sync'],
     previewVideo: textBasedVideo,
+    autoDescription: 'AI picks the topic, writes text, generates background art, and composes the video with music',
+    manualDescription: 'You write the text, pick a variant and music — AI generates the background',
   },
   {
     id: 'text_video',
@@ -63,6 +73,8 @@ export const REEL_FORMATS: ReelFormat[] = [
     tagline: 'Photos meet story',
     features: ['Real images', 'Text overlays', 'Slideshow'],
     previewVideo: videoBasedVideo,
+    autoDescription: 'AI discovers trending stories, writes reel script, sources real images, and renders the slideshow',
+    manualDescription: 'You provide the script, upload or search images — AI renders the final video',
   },
 ]
 

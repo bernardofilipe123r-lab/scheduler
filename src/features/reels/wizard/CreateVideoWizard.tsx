@@ -162,14 +162,7 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
           platforms: selectedPlatforms,
           music_source: 'trending_random',
         })
-        toast.success(
-          (t) => (
-            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${job.id}`) }}>
-              Text reel generating for {brands.length} brand{brands.length > 1 ? 's' : ''}! <u>View Job →</u>
-            </span>
-          ),
-          { duration: 6000 }
-        )
+        navigate(`/job/${job.id}`)
       } else if (selectedFormat === 'text_video') {
         if (!niche) {
           toast.error('Set up your Content DNA first (niche is required for auto mode)')
@@ -182,14 +175,7 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
           platforms: selectedPlatforms,
           niche,
         })
-        toast.success(
-          (t) => (
-            <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${result.job_id}`) }}>
-              Text-video generating for {brands.length} brand{brands.length > 1 ? 's' : ''}! <u>View Job →</u>
-            </span>
-          ),
-          { duration: 6000 }
-        )
+        navigate(`/job/${result.job_id}`)
       }
       resetWizard()
     } catch (err) {
@@ -396,19 +382,49 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
         </div>
       )}
 
-      {/* ─── Step 4: Mode ─── */}
-      {step === 'mode' && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="text-center space-y-1">
+      {/* ─── Step 4: Mode ───
+       *  NOTE FOR FUTURE FORMATS:
+       *  When adding a new reel format, this step should be visually adapted
+       *  to match the format's identity. Use the format's previewGradient,
+       *  previewVideo, autoDescription, and manualDescription from the registry.
+       *  The header area shows a mini preview of the selected format video.
+       *  See the registry comment block for the full checklist.
+       */}
+      {step === 'mode' && (() => {
+        const currentFormat = REEL_FORMATS.find(f => f.id === selectedFormat)
+        const FormatIcon = currentFormat?.icon || Zap
+        return (
+        <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+          {/* Format-aware header with mini video preview */}
+          <div className="relative rounded-xl overflow-hidden">
+            <div className={`h-28 bg-gradient-to-br ${currentFormat?.previewGradient || 'from-stone-700 to-stone-900'}`}>
+              <video
+                src={currentFormat?.previewVideo}
+                muted
+                autoPlay
+                loop
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover opacity-30"
+              />
+            </div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+              <div className="flex items-center gap-2 mb-1">
+                <FormatIcon className="w-5 h-5 text-white/90" />
+                <span className="text-sm font-bold text-white">{currentFormat?.label}</span>
+              </div>
+              <p className="text-xs text-white/70">
+                {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+
+          <div className="text-center">
             <h2 className="text-xl font-bold text-gray-900">How do you want to create?</h2>
-            <p className="text-sm text-gray-500">
-              {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} · {REEL_FORMATS.find(f => f.id === selectedFormat)?.label}
-            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
             {/* Auto */}
-            {REEL_FORMATS.find(f => f.id === selectedFormat)?.supportsAuto && (
+            {currentFormat?.supportsAuto && (
               <button
                 onClick={handleAutoGenerate}
                 disabled={isGenerating}
@@ -418,7 +434,7 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
                   <div className="absolute inset-0 bg-stone-900/90 flex items-center justify-center z-10">
                     <div className="flex items-center gap-2">
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      <span className="text-sm font-medium">Creating your reel...</span>
+                      <span className="text-sm font-medium">Launching generation...</span>
                     </div>
                   </div>
                 )}
@@ -427,13 +443,13 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-semibold">100% Automatic</span>
-                  <p className="text-xs text-stone-300 mt-0.5">AI handles everything — content, images, and video creation</p>
+                  <p className="text-xs text-stone-300 mt-0.5">{currentFormat?.autoDescription || 'AI handles everything'}</p>
                 </div>
               </button>
             )}
 
             {/* Manual */}
-            {REEL_FORMATS.find(f => f.id === selectedFormat)?.supportsManual && (
+            {currentFormat?.supportsManual && (
               <button
                 onClick={() => setStep('manual')}
                 disabled={isGenerating}
@@ -444,21 +460,22 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-semibold text-gray-900">Manual Control</span>
-                  <p className="text-xs text-gray-500 mt-0.5">You provide the content, images, and details</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{currentFormat?.manualDescription || 'You provide the content and details'}</p>
                 </div>
                 <ArrowLeft className="w-4 h-4 text-gray-300 rotate-180 group-hover:text-stone-500 transition-colors" />
               </button>
             )}
           </div>
 
-          {/* Niche warning for auto mode */}
-          {REEL_FORMATS.find(f => f.id === selectedFormat)?.requiresNiche && !niche && (
+          {/* Niche warning */}
+          {currentFormat?.requiresNiche && !niche && (
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center">
-              ⚠️ Content DNA (niche) not configured — auto mode will use generic content. <span className="font-medium">Set it up in Brands → Content DNA</span>
+              ⚠️ Content DNA not configured — auto mode will use generic content. <span className="font-medium">Set it up in Brands → Content DNA</span>
             </p>
           )}
         </div>
-      )}
+        )
+      })()}
 
       {/* ─── Step 5: Manual Panel ─── */}
       {step === 'manual' && (
