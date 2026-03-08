@@ -22,6 +22,8 @@ When you make a code change that affects documented patterns, you MUST update th
 | Change Toby Score formula | `.github/skills/analytics-metrics/SKILL.md` |
 | Change media rendering pipeline | `.github/skills/media-rendering/SKILL.md` |
 | Change quality score threshold | `.github/skills/content-pipeline/SKILL.md` |
+| Change dedup logic or scheduling guards | `.github/skills/toby-agent/SKILL.md` (Anti-Duplicate Safeguards section) + `.github/instructions/toby-agents.instructions.md` |
+| Re-enable parallel content execution | **FORBIDDEN** — see 2026-03-08 duplicate content incident in toby-agent SKILL |
 | Add new React hook pattern | `.github/instructions/react-components.instructions.md` |
 | Change auth pattern in routes | `.github/instructions/api-routes.instructions.md` |
 | Change migration workflow | `.github/instructions/migration-sql.instructions.md` + `.github/skills/database-migrations/SKILL.md` |

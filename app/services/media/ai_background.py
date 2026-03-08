@@ -322,6 +322,17 @@ class AIBackgroundGenerator:
                 data = response.json()
                 prompt_text = data["choices"][0]["message"]["content"].strip()
 
+                # Track cost
+                usage = data.get("usage", {})
+                try:
+                    from app.services.monitoring.cost_tracker import record_deepseek_call
+                    record_deepseek_call(
+                        input_tokens=usage.get("prompt_tokens", 0),
+                        output_tokens=usage.get("completion_tokens", 0),
+                    )
+                except Exception:
+                    pass
+
                 # Clean markdown fences if DeepSeek wrapped in ```
                 if prompt_text.startswith("```"):
                     prompt_text = prompt_text.split("```")[1]
@@ -372,9 +383,12 @@ class AIBackgroundGenerator:
             "4. Use SPECIFIC concrete nouns — name exact objects, materials, foods, "
             "textures. Never say 'wellness items' or 'healthy objects'.\n"
             "5. Always include: camera angle, lighting type, depth of field, color mood.\n"
-            "6. End every prompt with: 'No text, no letters, no numbers, no symbols, no logos.'\n"
-            "7. Keep prompts 2-3 sentences, 50-100 words.\n"
-            "8. Output ONLY the prompt. No explanation, no JSON, no markdown.\n\n"
+            "6. COLOR MANDATE: EVERY image MUST be vibrant and colorful. NEVER generate monochrome, "
+            "black-and-white, grayscale, or desaturated prompts. Always describe specific vivid colors "
+            "(e.g. 'rich crimson', 'golden amber', 'deep emerald'). This is non-negotiable.\n"
+            "7. End every prompt with: 'No text, no letters, no numbers, no symbols, no logos.'\n"
+            "8. Keep prompts 2-3 sentences, 50-100 words.\n"
+            "9. Output ONLY the prompt. No explanation, no JSON, no markdown.\n\n"
             "EXAMPLES OF GOOD PROMPTS:\n"
             "- Topic 'Morning Routine': Aerial flat-lay of a wooden breakfast tray with "
             "black coffee, sliced avocado, a small alarm clock, and a folded newspaper. "
@@ -427,7 +441,7 @@ class AIBackgroundGenerator:
 
         return (
             f"{scene}{detail}. Dramatic studio lighting, shallow depth of field, "
-            f"rich colors, magazine-quality composition. "
+            f"rich vibrant colors with warm and vivid tones, magazine-quality composition. "
             f"No text, no letters, no numbers, no words, no symbols, no logos, no watermarks."
         )
 
@@ -558,6 +572,14 @@ class AIBackgroundGenerator:
 
                     print(f"✅ {target_width}x{target_height} background for {brand_name}")
                     print(f"⏱️  Total: {total_dur:.1f}s (API: {api_dur:.1f}s)", flush=True)
+
+                    # Track DeAPI cost
+                    try:
+                        from app.services.monitoring.cost_tracker import record_deapi_call
+                        record_deapi_call()
+                    except Exception:
+                        pass
+
                     return image
 
                 elif st == "failed":
@@ -629,7 +651,7 @@ class AIBackgroundGenerator:
             content_data = self._extract_content(content_context, _ctx, brand_name)
             prompt = self._generate_prompt_via_deepseek(content_data)
         elif _ctx.image_style_description:
-            prompt = f"{_ctx.image_style_description}. Premium close-up photography style."
+            prompt = "Premium close-up photography with rich, vibrant colors and dramatic lighting."
         else:
             prompt = (
                 "Soft cinematic premium still-life with elegant contemporary objects "

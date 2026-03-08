@@ -312,6 +312,17 @@ class ContentGeneratorV2:
                 result = response.json()
                 content_text = result["choices"][0]["message"]["content"].strip()
                 
+                # Track cost
+                usage = result.get("usage", {})
+                try:
+                    from app.services.monitoring.cost_tracker import record_deepseek_call
+                    record_deepseek_call(
+                        input_tokens=usage.get("prompt_tokens", 0),
+                        output_tokens=usage.get("completion_tokens", 0),
+                    )
+                except Exception:
+                    pass
+                
                 # Parse response
                 return self._parse_response(content_text)
             else:
@@ -590,7 +601,7 @@ class ContentGeneratorV2:
             f"Paragraph 2-3: Explain the core mechanism in accessible, {niche_label}-appropriate language. "
             f"Be specific about how and why this works in the context of {niche_mechanism}."
         )
-        image_style = ctx.image_style_description or "High-end professional photography style"
+        image_style = "High-end professional photography with rich, vibrant colors"
         composition_hint = "Close-up, full-frame where the subject fills the entire frame"
 
         from app.core.cta import get_carousel_cta_line
@@ -628,6 +639,7 @@ Generate a SINGLE carousel post that is {title_style_note}.
 ### IMAGE:
 - {image_style}
 - CRITICAL: {composition_hint}
+- COLOR MANDATE: The image MUST be vibrant and colorful. NEVER monochrome, black-and-white, or desaturated. Always describe specific vivid colors in the prompt.
 - 2-3 sentence cinematic description
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 
@@ -672,6 +684,17 @@ Generate now:"""
             if response.status_code == 200:
                 data = response.json()
                 content_text = data["choices"][0]["message"]["content"].strip()
+                
+                # Track cost
+                usage = data.get("usage", {})
+                try:
+                    from app.services.monitoring.cost_tracker import record_deepseek_call
+                    record_deepseek_call(
+                        input_tokens=usage.get("prompt_tokens", 0),
+                        output_tokens=usage.get("completion_tokens", 0),
+                    )
+                except Exception:
+                    pass
                 
                 # Clean up markdown if present
                 if content_text.startswith("```"):
@@ -770,6 +793,17 @@ Generate now:"""
             if response.status_code == 200:
                 data = response.json()
                 content_text = data["choices"][0]["message"]["content"].strip()
+
+                # Track cost
+                usage = data.get("usage", {})
+                try:
+                    from app.services.monitoring.cost_tracker import record_deepseek_call
+                    record_deepseek_call(
+                        input_tokens=usage.get("prompt_tokens", 0),
+                        output_tokens=usage.get("completion_tokens", 0),
+                    )
+                except Exception:
+                    pass
 
                 # Clean up markdown if present
                 if content_text.startswith("```"):
@@ -946,7 +980,7 @@ Generate now:"""
             return self._fallback_image_prompt(title)
         
         niche_label = ctx.niche_name if ctx.niche_name else "lifestyle"
-        image_style = ctx.image_style_description if ctx.image_style_description else "High-end lifestyle photography style"
+        image_style = "High-end lifestyle photography with rich, vibrant colors"
 
         prompt = f"""You are a visual prompt engineer specializing in {niche_label.lower()} imagery for Instagram.
 
@@ -959,6 +993,7 @@ Given the following title, generate a DETAILED cinematic image prompt suitable f
 - {image_style}
 - CRITICAL: Generate CLOSE-UP, full-frame images where the subject fills the ENTIRE frame with minimal background
 - Think macro photography or tightly-cropped food/product shots — NO wide shots, NO large empty backgrounds
+- COLOR MANDATE: The image MUST be vibrant and colorful. NEVER monochrome, black-and-white, grayscale, or desaturated. Always include specific vivid color descriptions.
 - Must end with "No text, no letters, no numbers, no symbols, no logos."
 - Should be 2-3 sentences long
 
@@ -990,6 +1025,17 @@ Generate now:"""
             if response.status_code == 200:
                 data = response.json()
                 content_text = data["choices"][0]["message"]["content"].strip()
+                
+                # Track cost
+                usage = data.get("usage", {})
+                try:
+                    from app.services.monitoring.cost_tracker import record_deepseek_call
+                    record_deepseek_call(
+                        input_tokens=usage.get("prompt_tokens", 0),
+                        output_tokens=usage.get("completion_tokens", 0),
+                    )
+                except Exception:
+                    pass
                 
                 # Clean up markdown if present
                 if content_text.startswith("```"):

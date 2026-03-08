@@ -42,6 +42,7 @@ from app.models.trending_music import TrendingMusic, TrendingMusicFetch
 from app.models.text_video_design import TextVideoDesign
 from app.models.story_pool import StoryPool
 from app.models.api_usage import APIUsageLog
+from app.models.user_costs import UserCostDaily, UserCostMonthly
 
 __all__ = [
     "Base",
@@ -80,4 +81,6 @@ __all__ = [
     "TextVideoDesign",
     "StoryPool",
     "APIUsageLog",
+    "UserCostDaily",
+    "UserCostMonthly",
 ]

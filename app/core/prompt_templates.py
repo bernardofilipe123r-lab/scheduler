@@ -140,7 +140,7 @@ OUTPUT (JSON only):
 {{
     "title": "YOUR TITLE IN ALL CAPS",
     "content_lines": ["line 1", "line 2", ...],
-    "image_prompt": "Cinematic image description ending with: No text, no letters, no numbers, no symbols, no logos.",
+    "image_prompt": "Cinematic image description with VIBRANT COLORS (never B&W/monochrome) ending with: No text, no letters, no numbers, no symbols, no logos.",
     "format_style": "{selection.format_style}",
     "topic_category": "{selection.topic}",
     "hook_type": "{selection.primary_hook}"
@@ -342,26 +342,15 @@ POST_QUALITY_SUFFIX = (
 
 def build_reel_base_style(ctx: PromptContext = None) -> str:
     """
-    Build the deAPI visual style directive from NicheConfig.
-    Replaces the hardcoded REEL_BASE_STYLE constant.
-    No niche-specific defaults — all style comes from ctx or is completely generic.
+    Build the deAPI visual style directive.
+    100% content-driven — NEVER uses brand style, brand colors, or NicheConfig image_style_description.
+    Images must ALWAYS be vibrant and colorful.
     """
-    if ctx is None:
-        ctx = PromptContext()
-
-    # Priority 1: image style description from NicheConfig
-    if ctx.image_style_description:
-        return (
-            f"{ctx.image_style_description} "
-            "Full-frame composition filling the entire frame. "
-            "Professional studio-quality lighting. Sharp focus. Magazine-quality output."
-        )
-
-    # Priority 3: truly generic — imposes NOTHING niche-specific
     return (
         "Premium studio photography. Clean, full-frame composition. "
         "Professional lighting with sharp focus and high-quality textures. "
-        "Polished surfaces. Magazine-quality output with vivid clarity."
+        "Polished surfaces. Magazine-quality output with vivid clarity. "
+        "MUST use rich, vibrant colors. NEVER monochrome, black and white, or desaturated."
     )
 
 # Backward-compatible alias
@@ -376,8 +365,9 @@ def build_image_prompt_system(ctx: PromptContext = None) -> str:
 Given a title, generate a DETAILED cinematic image prompt suitable for AI image generation (DALL-E / Flux).
 
 ### REQUIREMENTS:
-- {ctx.image_style_description}
+- High-quality cinematic photography with rich, vivid colors
 - CRITICAL: {composition_hint}
+- COLOR MANDATE: Images MUST be vibrant and colorful. NEVER generate monochrome, black-and-white, grayscale, or desaturated prompts. Always include specific vivid color descriptions.
 - Must end with "No text, no letters, no numbers, no symbols, no logos."
 - Should be 2-3 sentences long
 """
@@ -569,7 +559,7 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
 
     # Image composition hint — from ctx, never a niche-specific fallback
     composition_hint = "Close-up, full-frame where subject fills the entire frame with minimal background"
-    image_style_hint = ctx.image_style_description or "High-quality studio photography style"
+    image_style_hint = "High-quality studio photography with rich, vibrant colors"
 
     # Post examples from user (few-shot, highest quality signal)
     examples_block = format_post_examples(ctx.post_examples) if ctx.has_post_examples else ""
@@ -682,6 +672,7 @@ Do NOT include the post title or a cover slide in slide_texts — the cover is h
 ### IMAGE REQUIREMENTS:
 - {image_style_hint}
 - CRITICAL: {composition_hint}
+- COLOR MANDATE: The image MUST be vibrant and colorful. NEVER monochrome, black-and-white, or desaturated. Always describe specific vivid colors.
 - Generate a full cinematic image prompt, 2-3 sentences
 - Must end with: "No text, no letters, no numbers, no symbols, no logos."
 

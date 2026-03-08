@@ -35,6 +35,7 @@ Toby is an autonomous multi-agent system running on a **5-minute APScheduler tic
 | `app/services/toby/analysis_engine.py` | Toby Score calculation, metrics update |
 | `app/services/toby/budget_manager.py` | Daily per-user budget enforcement |
 | `app/services/toby/agents/*.py` | All specialized agents |
+| `app/services/toby/agents/quality_guard.py` | Self-monitoring: dedup, fallback rejection, content integrity |
 | `app/services/toby/memory/*.py` | Memory subsystem |
 | `app/models/toby.py` | TobyState, TobyStrategyScore, TobyExperiment, TobyContentTag, TobyActivityLog |
 | `app/models/toby_cognitive.py` | TobyEpisodicMemory, TobySemanticMemory, TobyProceduralMemory, TobyWorldModel |
@@ -43,6 +44,7 @@ Toby is an autonomous multi-agent system running on a **5-minute APScheduler tic
 
 Each check runs independently with its own DB commit scope (failures don't cascade):
 
+0. **Quality Guard** (every tick) → Self-monitoring: cancels fallbacks, title dupes, slot collisions, caption near-dupes
 1. **Buffer Check** (5 min interval) → Fills empty slots for next 2 days
 2. **Metrics Check** (6h interval) → Collects Instagram analytics via MetricsCollector
 3. **Analysis Check** (6h interval) → Scores posts, updates strategy priors, runs cognitive loops
@@ -65,7 +67,10 @@ Bootstrap Mode (first 2 days):
   BOOTSTRAP_MAX_PARALLEL_WORKERS = 3
 ```
 
-Bootstrap uses `ThreadPoolExecutor` with parallel workers; steady-state is sequential.
+**CRITICAL:** Parallel execution is DISABLED (2026-03-08 incident). All content generation
+is sequential regardless of mode. The parallel codepath caused duplicate content because
+separate DB sessions couldn't see each other's uncommitted inserts, resulting in identical
+reels being scheduled 4-6 times per brand. See "Anti-Duplicate Safeguards" section below.
 
 ## Phase State Machine
 
@@ -172,10 +177,46 @@ Posts use `reach` instead of `views`. Metrics flagged unreliable if views < 5 or
 - **Billing guard:** Skips locked users entirely
 - **Budget guard:** Skips users who exceeded daily budget (feature-flagged)
 
+## Anti-Duplicate Safeguards (CRITICAL — added 2026-03-08)
+
+On 2026-03-08, a race condition caused identical reels to be scheduled 4-6 times per brand.
+Root cause: parallel DB sessions in `_execute_plans_parallel()` couldn't see each other's
+uncommitted inserts, so the dedup guard in `schedule_reel()` passed for all threads.
+
+### Architectural Philosophy
+
+These safeguards are NOT external band-aids — they are part of **Toby's cognitive architecture**.
+Toby is self-monitoring: he inspects his own output before every tick and self-corrects.
+This makes him resilient by design, not by patch. The Quality Guard agent scales with Toby —
+new content types, platforms, and patterns are automatically covered without external scripts.
+
+### 5 layers of protection (all must remain active)
+
+| Layer | Where | What |
+|-------|-------|------|
+| 0. Quality Guard agent | `agents/quality_guard.py` (step 0 of every tick) | Toby self-monitors: detects fallbacks, title dupes, slot collisions, caption dupes — cancels them |
+| 1. Sequential execution | `orchestrator.py` `_run_buffer_check()` | Eliminates the root race condition — never re-enable parallel execution |
+| 2. Scheduler 3-layer dedup | `scheduler.py` `schedule_reel()` | L1: time-slot ±30min, L2: same title in 5 days, L3: same caption start in 3 days (all with `FOR UPDATE`) |
+| 3. Fallback rejection | `orchestrator.py` `_execute_content_plan()` + `scheduler.py` | Titles matching "content generation temporarily unavailable" are NEVER scheduled |
+| 4. Pre-publish dedup | `scheduler.py` `get_pending_publications()` | Catches duplicates in the batch about to publish (same brand+title → keep first, fail rest) |
+
+**External backup:** `scripts/dedup_sweeper.py` exists as a manual tool for incident response,
+but the primary mechanism is Toby's own Quality Guard agent.
+
+**DB indexes supporting dedup:**
+- `ix_sched_reels_brand_time_status` — fast brand+time+status lookups
+- `ix_sched_reels_brand_title` — fast brand+title lookups
+
 ## Common Mistakes to Avoid
-1. Never modify tick priority order without understanding cascade effects
-2. Always check `feature_flags` before using v3 cognitive features
-3. Memory retrieval must handle `None` embeddings (graceful fallback to recency sort)
-4. Strategy score updates must use proper weight correction for 48h → 7d transition
-5. Experiments need ≥2 options — single-arm creation returns None
-6. Phase regression check compares 14-day vs 90-day — ensure sufficient data exists
+1. **NEVER re-enable parallel content execution** — this was the root cause of the 2026-03-08 duplicate incident
+2. **NEVER schedule fallback content** — raise an exception instead of using placeholder titles
+3. **NEVER bypass the Quality Guard agent** — it must run as step 0 of every tick
+4. Never modify tick priority order without understanding cascade effects
+4. Always check `feature_flags` before using v3 cognitive features
+5. Memory retrieval must handle `None` embeddings (graceful fallback to recency sort)
+6. Strategy score updates must use proper weight correction for 48h → 7d transition
+7. Experiments need ≥2 options — single-arm creation returns None
+8. Phase regression check compares 14-day vs 90-day — ensure sufficient data exists
+9. Any new content scheduling path MUST go through `schedule_reel()` which has the 3-layer dedup guard
+10. The Quality Guard agent must always run as step 0 in `_process_user()` — before buffer check
+11. Self-monitoring is Toby's responsibility — external scripts are backups, not primary mechanisms

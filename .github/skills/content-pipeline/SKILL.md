@@ -133,7 +133,7 @@ For multi-brand generation:
 1. First brand (baseline) gets original content
 2. Other brands get unique variations via DeepSeek (temp=0.9)
 3. Rules: position shuffle mandatory, different wording/synonyms, remove 1-2 items + add 1-2 new items
-4. Fallback: original content if DeepSeek fails
+4. Fallback: original content if DeepSeek fails (NOTE: fallback/placeholder content is NEVER scheduled as publishable — if generation fails entirely, an exception is raised and the slot is left empty. See Quality Guard agent and anti-duplicate safeguards in toby-agent SKILL)
 
 ## Job Lifecycle
 

@@ -98,6 +98,34 @@ def _process_user(db: Session, state: TobyState):
     from app.models.brands import Brand
     user_brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
 
+    # 0. QUALITY GUARD — Toby's self-monitoring agent (2026-03-08)
+    # Runs BEFORE buffer check. Toby inspects his own scheduled output and
+    # cancels duplicates, fallback content, and slot collisions. This is not
+    # an external script — it's part of Toby's cognitive loop, making him
+    # self-aware and self-correcting by design.
+    try:
+        from app.services.toby.agents.quality_guard import quality_guard_sweep
+        qg_result = quality_guard_sweep(db, user_id)
+        if qg_result.get("total_cancelled", 0) > 0:
+            print(f"[TOBY] Quality Guard cancelled {qg_result['total_cancelled']} issue(s) for {user_id}", flush=True)
+            db.add(TobyActivityLog(
+                user_id=user_id,
+                action_type="quality_guard",
+                description=(
+                    f"Quality Guard self-check: cancelled {qg_result['total_cancelled']} problematic post(s) "
+                    f"(fallbacks={qg_result['fallbacks_cancelled']}, "
+                    f"title_dupes={qg_result['title_dupes_cancelled']}, "
+                    f"slot_dupes={qg_result['slot_dupes_cancelled']}, "
+                    f"caption_dupes={qg_result['caption_dupes_cancelled']})"
+                ),
+                level="warning",
+                action_metadata=qg_result,
+                created_at=datetime.now(timezone.utc),
+            ))
+            db.commit()
+    except Exception as e:
+        print(f"[TOBY] Quality Guard error (non-fatal): {e}", flush=True)
+
     # 1. BUFFER CHECK — isolated commit
     if _should_check(state.last_buffer_check_at, BUFFER_CHECK_INTERVAL):
         try:
@@ -350,11 +378,13 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState, brands=None):
     if not eligible_plans:
         return
 
-    # Execute plans — parallel in aggressive mode, sequential otherwise
-    if is_aggressive and len(eligible_plans) > 1:
-        generated, job_details = _execute_plans_parallel(eligible_plans, user_id, state)
-    else:
-        generated, job_details = _execute_plans_sequential(db, eligible_plans, user_id, state)
+    # CRITICAL FIX (2026-03-08): Always execute sequentially to prevent
+    # duplicate content from race conditions in parallel DB sessions.
+    # The old _execute_plans_parallel() used separate SessionLocal() per thread,
+    # so concurrent dedup checks couldn't see each other's uncommitted inserts,
+    # resulting in identical content being scheduled 4-6x per brand.
+    # See: https://github.com/... (duplicate-content-incident)
+    generated, job_details = _execute_plans_sequential(db, eligible_plans, user_id, state)
 
     if generated > 0:
         db.add(TobyActivityLog(
@@ -461,13 +491,25 @@ def _execute_content_plan(db: Session, plan):
         )
         result = results[0] if results else None
 
-    # D2: Detect fallback content and tag it
+    # D2: Detect fallback content and REJECT it — never schedule placeholder content.
+    # CRITICAL FIX (2026-03-08): Fallback content like "CONTENT GENERATION TEMPORARILY
+    # UNAVAILABLE" was being scheduled and published, which is unacceptable.
     if not result or not result.get("title"):
-        if plan.content_type == "post":
-            result = generator._fallback_post_title()
-        if not result or not result.get("title"):
-            raise ValueError("Content generation returned empty result")
-        plan.used_fallback = True
+        raise ValueError("Content generation returned empty result — refusing to schedule fallback")
+
+    # Also reject content flagged as fallback by the generator
+    if result.get("is_fallback"):
+        raise ValueError(f"Content generation produced fallback content — refusing to schedule")
+
+    # Reject known fallback title patterns
+    title_lower = (result.get("title") or "").strip().lower()
+    FORBIDDEN_TITLES = [
+        "content generation temporarily unavailable",
+        "temporarily unavailable",
+        "check back",
+    ]
+    if any(forbidden in title_lower for forbidden in FORBIDDEN_TITLES):
+        raise ValueError(f"Content generation returned forbidden fallback title: {result['title']}")
 
     # ── Step 3: Determine variant from slot pattern ──────────
     if plan.content_type == "text_video_reel":
@@ -641,6 +683,11 @@ def _execute_content_plan(db: Session, plan):
     # Deduplication: if scheduler detected a duplicate, skip remaining steps
     if sched_result.get("deduplicated"):
         print(f"[TOBY] Skipping duplicate slot for {plan.brand_id} at {plan.scheduled_time}", flush=True)
+        return None
+
+    # Fallback content guard: never schedule fallback/error content
+    if sched_result.get("rejected_fallback"):
+        print(f"[TOBY] Rejected fallback content for {plan.brand_id} — not scheduling", flush=True)
         return None
 
     # ── Step 8: Mark brand as scheduled + Toby-created + record tags ──

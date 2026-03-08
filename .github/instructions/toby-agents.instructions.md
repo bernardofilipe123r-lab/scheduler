@@ -21,3 +21,17 @@ applyTo: "app/services/toby/**/*.py"
 - **Error logging:** Use debounced logging (`_error_log_timestamps` dict) for repeated errors. Don't spam logs with the same error every 5 minutes.
 
 - **Budget check:** If `budget_enforcement` flag is on, check `spent_today_cents < daily_budget_cents` before generating.
+
+- **NEVER use parallel execution for content generation.** The `_execute_plans_parallel()` function caused a critical duplicate content incident (2026-03-08) because separate DB sessions can't see each other's uncommitted inserts. Always use `_execute_plans_sequential()`. The parallel codepath is kept for reference but must never be re-enabled.
+
+- **Anti-duplicate safeguards (CRITICAL — 5 layers, Toby-native):**
+  Toby is self-monitoring by design. He doesn't need external supervision to avoid mistakes.
+  1. **Quality Guard agent** (step 0 of every tick) — Toby inspects his own scheduled output: cancels fallbacks, title dupes, slot collisions, caption dupes
+  2. **Sequential execution only** — eliminates the root race condition
+  3. **Scheduler 3-layer dedup** — time-slot + title + caption checks with `FOR UPDATE` locking
+  4. **Fallback content rejection** — titles matching "content generation temporarily unavailable" are NEVER scheduled
+  5. **Pre-publish dedup guard** — `get_pending_publications()` catches any remaining duplicates before publishing
+
+- **Never schedule fallback content.** If AI generation fails, raise an exception instead of using fallback titles. Empty buffer slots are preferable to publishing placeholder content.
+
+- **Self-monitoring philosophy:** Dedup and quality checks are Toby's cognitive responsibility, not external patches. The Quality Guard agent (`agents/quality_guard.py`) runs as step 0 of every tick — before buffer fill. `scripts/dedup_sweeper.py` exists as a manual backup for incident response only.

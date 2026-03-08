@@ -55,35 +55,26 @@ export function TextVideoFullAuto() {
 
   return (
     <div className="space-y-5">
-      {/* Hero banner — compact horizontal layout */}
+      {/* Full Auto + Niche — single compact banner */}
       <div className={`rounded-xl border p-4 flex items-start gap-4 ${nicheReady ? 'bg-stone-50 border-stone-200' : 'bg-gray-50 border-gray-200'}`}>
         <div className={`p-2.5 rounded-lg flex-shrink-0 ${nicheReady ? 'bg-stone-900' : 'bg-gray-300'}`}>
           <Zap className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900">Full Auto Mode</h3>
-          <p className="text-sm text-gray-500 mt-0.5">
-            We'll discover a trending story in your niche, polish it into viral format, source images, compose the slideshow, and create the reel — all automatically.
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold text-gray-900">Full Auto Mode</h3>
+            {nicheReady ? (
+              <span className="text-xs text-gray-500">· {niche}</span>
+            ) : (
+              <span className="text-xs text-amber-600 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> No niche — set up <span className="font-medium">Content DNA</span> first
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Trending story → viral format → images → slideshow → reel, all automatically.
           </p>
         </div>
-      </div>
-
-      {/* Niche — read-only, derived from Content DNA */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Niche</label>
-        {nicheReady ? (
-          <div className="flex items-center gap-2 px-3 py-2.5 bg-white border border-gray-200 rounded-lg">
-            <span className="text-sm text-gray-900 font-medium">{niche}</span>
-            <span className="text-[10px] text-gray-400 ml-auto">from Content DNA</span>
-          </div>
-        ) : (
-          <div className="flex items-start gap-3 px-3 py-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-700">
-              No niche configured. Go to <span className="font-medium">Brands → Content DNA</span> to set it up before using Full Auto mode.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Brand Selection — dimmed when niche is not configured */}

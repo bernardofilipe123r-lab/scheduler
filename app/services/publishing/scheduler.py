@@ -173,12 +173,34 @@ class DatabaseSchedulerService:
                 }
                 print(f"   ✅ Metadata prepared: {metadata}")
                 
-                # ── DEDUPLICATION GUARD ──────────────────────────────
-                # Prevent scheduling duplicate content for the same brand
-                # in the same time slot (±30 min window). This catches
-                # races between parallel Toby ticks and auto-retries.
+                # ── FALLBACK CONTENT REJECTION ────────────────────────
+                # CRITICAL (2026-03-08): Never schedule fallback/placeholder content.
+                # This was a root cause of the duplicate content incident.
+                if post_title:
+                    _title_lower = post_title.strip().lower()
+                    _FORBIDDEN_TITLES = [
+                        "content generation temporarily unavailable",
+                        "temporarily unavailable",
+                    ]
+                    if any(ft in _title_lower for ft in _FORBIDDEN_TITLES):
+                        print(f"   🚫 REJECTED: Fallback content title '{post_title}' — not scheduling")
+                        return {"schedule_id": None, "rejected_fallback": True}
+
+                # ── DEDUPLICATION GUARD (3 layers) ────────────────────
+                # CRITICAL FIX (2026-03-08): Three-layer dedup to prevent
+                # the duplicate content incident from recurring.
+                #
+                # Layer 1: Time-slot dedup (same brand + same time window ±30min)
+                # Layer 2: Title dedup (same brand + same title in last 5 days)
+                # Layer 3: Caption dedup (same brand + same caption start in last 5 days)
+                #
+                # All queries use FOR UPDATE to prevent race conditions
+                # when multiple threads/processes schedule concurrently.
+
                 if brand and scheduled_time:
                     from datetime import timedelta as _td
+
+                    # LAYER 1: Time-slot dedup (±30 min window)
                     window_start = scheduled_time - _td(minutes=30)
                     window_end = scheduled_time + _td(minutes=30)
                     existing = db.query(ScheduledReel).filter(
@@ -186,7 +208,7 @@ class DatabaseSchedulerService:
                         ScheduledReel.scheduled_time >= window_start,
                         ScheduledReel.scheduled_time <= window_end,
                         ScheduledReel.status.in_(["scheduled", "publishing", "partial", "published"]),
-                    ).all()
+                    ).with_for_update(skip_locked=True).all()
                     for ex in existing:
                         ex_brand = (ex.extra_data or {}).get("brand", "")
                         ex_variant = (ex.extra_data or {}).get("variant", "")
@@ -194,11 +216,51 @@ class DatabaseSchedulerService:
                         is_same_type = (
                             (variant in ("light", "dark") and ex_variant in ("light", "dark"))
                             or (variant == "post" and ex_variant == "post")
+                            or (variant == "text_video" and ex_variant == "text_video")
                         )
                         if ex_brand == brand and is_same_type:
-                            print(f"   ⚠️ DEDUP: Slot already filled for {brand} "
+                            print(f"   ⚠️ DEDUP-L1: Slot already filled for {brand} "
                                   f"at {scheduled_time} (existing: {ex.schedule_id})")
                             return {"schedule_id": ex.schedule_id, "deduplicated": True}
+
+                    # LAYER 2: Title dedup (same brand + same title in last 5 days)
+                    if post_title and post_title.strip():
+                        title_window_start = scheduled_time - _td(days=5)
+                        title_window_end = scheduled_time + _td(days=5)
+                        title_dupes = db.query(ScheduledReel).filter(
+                            ScheduledReel.user_id == user_id,
+                            ScheduledReel.scheduled_time >= title_window_start,
+                            ScheduledReel.scheduled_time <= title_window_end,
+                            ScheduledReel.status.in_(["scheduled", "publishing", "partial", "published"]),
+                        ).all()
+                        for ex in title_dupes:
+                            ex_brand = (ex.extra_data or {}).get("brand", "")
+                            ex_title = (ex.extra_data or {}).get("title", "")
+                            if (ex_brand == brand
+                                    and ex_title
+                                    and ex_title.strip().lower() == post_title.strip().lower()):
+                                print(f"   ⚠️ DEDUP-L2: Same title already scheduled for {brand}: "
+                                      f"'{post_title[:60]}' (existing: {ex.schedule_id} at {ex.scheduled_time})")
+                                return {"schedule_id": ex.schedule_id, "deduplicated": True}
+
+                    # LAYER 3: Caption dedup (same brand + same caption start in last 3 days)
+                    if caption and len(caption) > 50:
+                        caption_prefix = caption[:100].strip().lower()
+                        caption_window_start = scheduled_time - _td(days=3)
+                        caption_window_end = scheduled_time + _td(days=3)
+                        caption_dupes = db.query(ScheduledReel).filter(
+                            ScheduledReel.user_id == user_id,
+                            ScheduledReel.scheduled_time >= caption_window_start,
+                            ScheduledReel.scheduled_time <= caption_window_end,
+                            ScheduledReel.status.in_(["scheduled", "publishing", "partial", "published"]),
+                        ).all()
+                        for ex in caption_dupes:
+                            ex_brand = (ex.extra_data or {}).get("brand", "")
+                            ex_caption = (ex.caption or "")[:100].strip().lower()
+                            if ex_brand == brand and ex_caption == caption_prefix:
+                                print(f"   ⚠️ DEDUP-L3: Same caption already scheduled for {brand} "
+                                      f"(existing: {ex.schedule_id} at {ex.scheduled_time})")
+                                return {"schedule_id": ex.schedule_id, "deduplicated": True}
 
                 # Create scheduled reel
                 print("   🔄 Creating ScheduledReel object...")
@@ -304,8 +366,36 @@ class DatabaseSchedulerService:
             print(f"\n   ✅ Found {len(pending)} pending post(s) to publish NOW")
             
             # IMMEDIATELY mark all as "publishing" to prevent duplicate picks
+            # CRITICAL FIX (2026-03-08): Pre-publish dedup guard.
+            # Before marking as "publishing", check for title duplicates that
+            # somehow slipped through scheduling. If we find two pending posts
+            # for the same brand with the same title, cancel all but the first.
             result = []
+            seen_brand_titles: dict[tuple, str] = {}  # (brand, title_lower) -> schedule_id
             for reel in pending:
+                ed = reel.extra_data or {}
+                brand_key = ed.get("brand", "")
+                title_key = (ed.get("title") or "").strip().lower()
+                fallback_check = title_key
+
+                # Reject fallback content at publish time (last line of defense)
+                if "content generation temporarily unavailable" in fallback_check:
+                    print(f"      🚫 REJECTED at publish: fallback content {reel.schedule_id}")
+                    reel.status = "failed"
+                    reel.publish_error = "Rejected: fallback/placeholder content"
+                    continue
+
+                dedup_key = (brand_key, title_key)
+                if title_key and dedup_key in seen_brand_titles:
+                    print(f"      🚫 DEDUP at publish: {reel.schedule_id} is duplicate of "
+                          f"{seen_brand_titles[dedup_key]} (same title for {brand_key})")
+                    reel.status = "failed"
+                    reel.publish_error = f"Duplicate of {seen_brand_titles[dedup_key]} (same title)"
+                    continue
+
+                if title_key:
+                    seen_brand_titles[dedup_key] = reel.schedule_id
+
                 print(f"      → Marking {reel.schedule_id} ({reel.reel_id}) as 'publishing'")
                 reel.status = "publishing"
                 result.append(reel.to_dict())
