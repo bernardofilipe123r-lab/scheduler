@@ -257,7 +257,7 @@ function UserDetail({
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
   const isSelf = currentUser?.id === user.id
-  const [activeTab, setActiveTab] = useState<'brands' | 'logs' | 'toby'>('brands')
+  const [activeTab, setActiveTab] = useState<'brands' | 'logs' | 'toby' | 'costs'>('brands')
   const [logPage, setLogPage] = useState(1)
   const [logOrder, setLogOrder] = useState<'desc' | 'asc'>('desc')
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null)
@@ -310,6 +310,50 @@ function UserDetail({
     queryKey: ['admin-toby-activity', user.id],
     queryFn: () => apiClient.get(`/api/toby/activity?user_id=${user.id}&limit=20`),
     enabled: activeTab === 'toby',
+  })
+
+  // Cost tracking
+  const [costPeriod, setCostPeriod] = useState<'day' | 'week' | 'month' | 'all'>('month')
+  const costsQuery = useQuery<{
+    user_id: string
+    period: string
+    totals: {
+      deepseek_calls: number
+      deepseek_input_tokens: number
+      deepseek_output_tokens: number
+      deepseek_cost_usd: number
+      deapi_calls: number
+      deapi_cost_usd: number
+      reels_generated: number
+      carousels_generated: number
+      total_cost_usd: number
+    }
+    daily: Array<{
+      date: string
+      deepseek_calls: number
+      deepseek_input_tokens: number
+      deepseek_output_tokens: number
+      deepseek_cost_usd: number
+      deapi_calls: number
+      deapi_cost_usd: number
+      reels_generated: number
+      carousels_generated: number
+      total_cost_usd: number
+    }>
+    monthly: Array<{
+      month: string
+      deepseek_calls: number
+      deepseek_cost_usd: number
+      deapi_calls: number
+      deapi_cost_usd: number
+      reels_generated: number
+      carousels_generated: number
+      total_cost_usd: number
+    }>
+  }>({
+    queryKey: ['admin-user-costs', user.id, costPeriod],
+    queryFn: () => apiClient.get(`/api/admin/users/${user.id}/costs?period=${costPeriod}`),
+    enabled: activeTab === 'costs',
   })
 
   // Toby enable/disable
@@ -502,6 +546,17 @@ function UserDetail({
             )}
           >
             <Bot className="w-4 h-4" /> Toby AI
+          </button>
+          <button
+            onClick={() => setActiveTab('costs')}
+            className={clsx(
+              'flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors',
+              activeTab === 'costs'
+                ? 'border-stone-900 text-stone-900'
+                : 'border-transparent text-gray-500 hover:text-gray-700',
+            )}
+          >
+            <BarChart3 className="w-4 h-4" /> Usage & Costs
           </button>
         </div>
 
@@ -1059,6 +1114,181 @@ function UserDetail({
                         </div>
                       )}
                     </div>
+                  </>
+                )
+              })() : null}
+            </div>
+          )}
+
+          {activeTab === 'costs' && (
+            <div className="p-6 space-y-5">
+              {/* Period filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 font-medium">Period:</span>
+                {(['day', 'week', 'month', 'all'] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setCostPeriod(p)}
+                    className={clsx(
+                      'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                      costPeriod === p
+                        ? 'bg-stone-900 text-white border-stone-900'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50',
+                    )}
+                  >
+                    {p === 'day' ? 'Today' : p === 'week' ? 'This Week' : p === 'month' ? 'This Month' : 'All Time'}
+                  </button>
+                ))}
+              </div>
+
+              {costsQuery.isLoading ? (
+                <div className="flex justify-center py-10"><Spinner size={24} className="text-gray-400" /></div>
+              ) : costsQuery.isError ? (
+                <div className="text-center py-10 text-gray-400">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-300" />
+                  <p className="text-sm text-red-600">Failed to load cost data</p>
+                </div>
+              ) : costsQuery.data ? (() => {
+                const { totals, daily, monthly } = costsQuery.data
+                return (
+                  <>
+                    {/* Summary cards */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-gray-200 bg-white p-4">
+                        <p className="text-xs text-gray-500 font-medium">Total Spent</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">${totals.total_cost_usd.toFixed(4)}</p>
+                        <p className="text-[10px] text-gray-400 mt-1">DeepSeek + DeAPI combined</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-white p-4">
+                        <p className="text-xs text-gray-500 font-medium">Content Generated</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{totals.reels_generated + totals.carousels_generated}</p>
+                        <p className="text-[10px] text-gray-400 mt-1">{totals.reels_generated} reels · {totals.carousels_generated} carousels</p>
+                      </div>
+                    </div>
+
+                    {/* DeepSeek breakdown */}
+                    <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                          <Brain className="w-3.5 h-3.5" /> DeepSeek (Text AI)
+                        </h4>
+                        <span className="text-sm font-bold text-gray-900">${totals.deepseek_cost_usd.toFixed(4)}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-gray-50 rounded-lg p-2.5">
+                          <p className="text-[10px] text-gray-400">API Calls</p>
+                          <p className="text-sm font-semibold text-gray-800">{totals.deepseek_calls.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2.5">
+                          <p className="text-[10px] text-gray-400">Input Tokens</p>
+                          <p className="text-sm font-semibold text-gray-800">{totals.deepseek_input_tokens.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2.5">
+                          <p className="text-[10px] text-gray-400">Output Tokens</p>
+                          <p className="text-sm font-semibold text-gray-800">{totals.deepseek_output_tokens.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* DeAPI breakdown */}
+                    <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                          <Image className="w-3.5 h-3.5" /> DeAPI (Image Generation)
+                        </h4>
+                        <span className="text-sm font-bold text-gray-900">${totals.deapi_cost_usd.toFixed(4)}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-lg p-2.5">
+                          <p className="text-[10px] text-gray-400">Images Generated</p>
+                          <p className="text-sm font-semibold text-gray-800">{totals.deapi_calls.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2.5">
+                          <p className="text-[10px] text-gray-400">Cost per Image</p>
+                          <p className="text-sm font-semibold text-gray-800">
+                            {totals.deapi_calls > 0 ? `$${(totals.deapi_cost_usd / totals.deapi_calls).toFixed(4)}` : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Daily breakdown table */}
+                    {daily.length > 0 && (
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                        <div className="px-4 py-3 border-b border-gray-100">
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Daily Breakdown</h4>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead className="bg-gray-50 sticky top-0">
+                              <tr>
+                                <th className="text-left px-3 py-2 text-gray-500 font-medium">Date</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">Reels</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">Carousels</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">DeepSeek</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">DeAPI</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {daily.map(d => (
+                                <tr key={d.date} className="hover:bg-gray-50">
+                                  <td className="px-3 py-2 text-gray-700 font-medium">{d.date}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">{d.reels_generated}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">{d.carousels_generated}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">${d.deepseek_cost_usd.toFixed(4)}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">${d.deapi_cost_usd.toFixed(4)}</td>
+                                  <td className="px-3 py-2 text-right font-semibold text-gray-800">${d.total_cost_usd.toFixed(4)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Monthly aggregated data */}
+                    {monthly.length > 0 && (
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                        <div className="px-4 py-3 border-b border-gray-100">
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Monthly History (Aggregated)</h4>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead className="bg-gray-50 sticky top-0">
+                              <tr>
+                                <th className="text-left px-3 py-2 text-gray-500 font-medium">Month</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">Reels</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">Carousels</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">DeepSeek</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">DeAPI</th>
+                                <th className="text-right px-3 py-2 text-gray-500 font-medium">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {monthly.map(m => (
+                                <tr key={m.month} className="hover:bg-gray-50">
+                                  <td className="px-3 py-2 text-gray-700 font-medium">{m.month}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">{m.reels_generated}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">{m.carousels_generated}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">${m.deepseek_cost_usd.toFixed(4)}</td>
+                                  <td className="px-3 py-2 text-right text-gray-600">${m.deapi_cost_usd.toFixed(4)}</td>
+                                  <td className="px-3 py-2 text-right font-semibold text-gray-800">${m.total_cost_usd.toFixed(4)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {daily.length === 0 && monthly.length === 0 && (
+                      <div className="text-center py-10 text-gray-400">
+                        <BarChart3 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No cost data recorded yet</p>
+                        <p className="text-xs text-gray-400 mt-1">Cost tracking starts from now — data will appear after content is generated</p>
+                      </div>
+                    )}
                   </>
                 )
               })() : null}

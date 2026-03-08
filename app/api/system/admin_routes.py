@@ -641,3 +641,28 @@ async def get_supabase_usage(
         result["error"] = str(exc)
 
     return result
+
+
+# ─── User Cost Tracking ──────────────────────────────────────────────────────
+
+@router.get("/api/admin/users/{user_id}/costs", summary="Get per-user cost data (super admin only)")
+async def get_user_costs_endpoint(
+    user_id: str,
+    period: str = Query("month", regex="^(day|week|month|all)$"),
+    user: dict = Depends(get_current_user),
+):
+    """Get cost tracking data for a specific user."""
+    _require_super_admin(user)
+
+    from app.services.monitoring.cost_tracker import get_user_costs
+    return get_user_costs(user_id, period)
+
+
+@router.post("/api/admin/costs/aggregate", summary="Aggregate old daily cost records (super admin only)")
+async def aggregate_costs_endpoint(user: dict = Depends(get_current_user)):
+    """Aggregate daily cost records older than 30 days into monthly summaries."""
+    _require_super_admin(user)
+
+    from app.services.monitoring.cost_tracker import aggregate_old_daily_records
+    archived = aggregate_old_daily_records()
+    return {"archived": archived, "message": f"Aggregated {archived} daily records into monthly summaries"}

@@ -82,6 +82,19 @@ def toby_tick():
     finally:
         db.close()
 
+    # Cost aggregation: run once daily (check cheaply each tick)
+    try:
+        from app.services.monitoring.cost_tracker import aggregate_old_daily_records
+        from datetime import date
+        _agg_key = f"_cost_agg_{date.today().isoformat()}"
+        if not getattr(toby_tick, _agg_key, False):
+            archived = aggregate_old_daily_records()
+            if archived > 0:
+                print(f"[TOBY] Cost aggregation: archived {archived} old daily records", flush=True)
+            setattr(toby_tick, _agg_key, True)
+    except Exception:
+        pass
+
 
 def _process_user(db: Session, state: TobyState):
     """Process one user's Toby tick — runs the highest-priority action.
@@ -93,6 +106,13 @@ def _process_user(db: Session, state: TobyState):
     """
     now = datetime.now(timezone.utc)
     user_id = state.user_id
+
+    # Set user context for cost tracking
+    try:
+        from app.services.monitoring.cost_tracker import set_current_user
+        set_current_user(user_id)
+    except Exception:
+        pass
 
     # Query brands ONCE per tick — reused by buffer, metrics, analysis, deliberation
     from app.models.brands import Brand

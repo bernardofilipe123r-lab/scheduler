@@ -377,6 +377,13 @@ class JobProcessor:
             print(f"{'='*60}\n", flush=True)
             sys.stdout.flush()
 
+            # Track reel generation
+            try:
+                from app.services.monitoring.cost_tracker import record_content_generated
+                record_content_generated("reel")
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "brand": brand,
@@ -519,6 +526,14 @@ class JobProcessor:
             })
 
             print(f"   ✅ {brand} post background completed", flush=True)
+
+            # Track content generation
+            try:
+                from app.services.monitoring.cost_tracker import record_content_generated
+                record_content_generated("carousel")
+            except Exception:
+                pass
+
             return {"success": True, "brand": brand, "reel_id": reel_id}
 
         except Exception as e:
@@ -758,6 +773,14 @@ class JobProcessor:
             error_msg = f"Job not found: {job_id}"
             print(f"❌ {error_msg}", flush=True)
             return {"success": False, "error": error_msg}
+
+        # Set user context for cost tracking
+        try:
+            from app.services.monitoring.cost_tracker import set_current_user
+            if job.user_id:
+                set_current_user(job.user_id)
+        except Exception:
+            pass
 
         print(f"   Job found - brands: {job.brands}, variant: {job.variant}", flush=True)
         print(f"   Title: {job.title[:50] if job.title else 'None'}...", flush=True)
