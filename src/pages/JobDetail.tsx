@@ -469,7 +469,7 @@ export function JobDetailPage() {
   const scheduleButtonLabel = completedCount === 1 ? 'Schedule Reel' : scheduledCount > 0 ? `Schedule ${completedCount} Remaining` : `Schedule All (${completedCount})`
   
   return (
-    <div className="space-y-3 max-w-[1060px] mx-auto">
+    <div className="space-y-3">
       {/* Top bar */}
       <div className="flex items-center justify-between mb-1">
         <button
@@ -589,55 +589,51 @@ export function JobDetailPage() {
         )}
       </div>
       
-      {/* Quick Schedule Section */}
+      {/* Quick Schedule */}
       {completedCount > 0 && (
-        <div className="rounded-xl p-4 bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-500/20 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-purple-400" />
-              <div>
-                <span className="font-semibold text-white">Quick Schedule</span>
-                <span className="text-gray-400 ml-2">
-                  {completedCount} brand{completedCount !== 1 ? 's' : ''} ready
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleScheduleAll}
-                disabled={schedulingAll || schedulingCustom || isGenerating || allScheduled}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-                title={allScheduled ? "All brands already scheduled" : "Schedule to next available slots"}
-              >
-                {schedulingAll ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : allScheduled ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Calendar className="w-4 h-4" />
-                )}
-                {allScheduled ? 'All Scheduled' : scheduleButtonLabel}
-              </button>
-              
-              {!allScheduled && (
-                <button
-                  onClick={openCustomScheduleModal}
-                  disabled={schedulingAll || schedulingCustom || isGenerating}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-gray-500 bg-white border border-gray-200 rounded-[7px] hover:bg-gray-50 hover:text-gray-700 transition-colors disabled:opacity-50"
-                  title="Pick a custom date and time"
-                >
-                  <CalendarClock className="w-4 h-4" />
-                  Custom
-                </button>
+        <div className="bg-white rounded-[10px] border border-gray-200 p-3 px-4 flex items-center justify-between flex-wrap gap-2.5">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-[17px] h-[17px] text-teal-600" />
+            <span className="font-semibold text-sm text-gray-900">Quick Schedule</span>
+            <span className="text-sm text-gray-400">
+              · {completedCount} brand{completedCount !== 1 ? 's' : ''} ready
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleScheduleAll}
+              disabled={schedulingAll || schedulingCustom || isGenerating || allScheduled}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold text-white bg-teal-600 rounded-[7px] hover:brightness-110 transition disabled:opacity-50"
+              title={allScheduled ? "All brands already scheduled" : "Schedule to next available slots"}
+            >
+              {schedulingAll ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : allScheduled ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Calendar className="w-4 h-4" />
               )}
-            </div>
+              {allScheduled ? 'All Scheduled' : scheduleButtonLabel}
+            </button>
+            
+            {!allScheduled && (
+              <button
+                onClick={openCustomScheduleModal}
+                disabled={schedulingAll || schedulingCustom || isGenerating}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-gray-500 bg-white border border-gray-200 rounded-[7px] hover:bg-gray-50 hover:text-gray-700 transition-colors disabled:opacity-50"
+                title="Pick a custom date and time"
+              >
+                <CalendarClock className="w-4 h-4" />
+                Custom
+              </button>
+            )}
           </div>
         </div>
       )}
       
       {/* Music bar */}
       {!isGenerating && (
-        <div className="bg-white rounded-[10px] border border-gray-200 shadow-sm border-l-[3px] border-l-gray-300 flex items-center justify-between p-3 px-4 flex-wrap gap-2.5">
+        <div className="bg-white rounded-[10px] border border-gray-200 p-3 px-4 flex items-center justify-between flex-wrap gap-2.5">
           <div className="flex items-center gap-2">
             <Music className="w-[17px] h-[17px] text-teal-600" />
             <span className="font-semibold text-sm text-gray-900">Background Music</span>
