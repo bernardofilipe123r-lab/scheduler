@@ -780,6 +780,7 @@ async def get_brand_theme(
         "dark_content_title_text_color": colors.get("dark_content_title_text_color"),
         "dark_content_title_bg_color": colors.get("dark_content_title_bg_color"),
         "logo": brand.get("logo_path"),
+        "reel_divider_logo": brand.get("reel_divider_logo_path"),
         "short_name": brand.get("short_name", ""),
     }
     
@@ -807,6 +808,7 @@ async def update_brand_theme(
     dark_content_title_bg_color: Optional[str] = Form(None),
     short_name: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
+    reel_divider_logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -873,6 +875,22 @@ async def update_brand_theme(
         
         updates["logo_path"] = logo_url
     
+    # Handle reel divider logo upload (logo shown in the divider line of reel thumbnails)
+    if reel_divider_logo and reel_divider_logo.filename:
+        extension = Path(reel_divider_logo.filename).suffix.lower() or '.png'
+        ext = extension.lstrip('.')
+        divider_logo_filename = f"{brand_id}_reel_divider_logo.{ext}"
+        content = await reel_divider_logo.read()
+        
+        user_id = user["id"]
+        remote_path = storage_path(user_id, brand_id, "logos", divider_logo_filename)
+        try:
+            divider_logo_url = upload_bytes("brand-assets", remote_path, content, f"image/{ext}")
+        except StorageError as e:
+            print(f"Reel divider logo upload failed: {e}"); divider_logo_url = divider_logo_filename
+        
+        updates["reel_divider_logo_path"] = divider_logo_url
+    
     # Update brand
     updated_brand = manager.update_brand(brand_id, updates, user_id=user["id"])
     
@@ -891,6 +909,7 @@ async def update_brand_theme(
             "dark_thumbnail_text_color": updated_colors.get("dark_thumbnail_text_color"),
             "dark_content_title_text_color": updated_colors.get("dark_content_title_text_color"),
             "dark_content_title_bg_color": updated_colors.get("dark_content_title_bg_color"),
-            "logo": updates.get("logo_path", brand.get("logo_path"))
+            "logo": updates.get("logo_path", brand.get("logo_path")),
+            "reel_divider_logo": updates.get("reel_divider_logo_path", brand.get("reel_divider_logo_path"))
         }
     }

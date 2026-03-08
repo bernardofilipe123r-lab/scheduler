@@ -184,16 +184,22 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
       return lines
     }
 
-    // Find largest font size that fits in exactly 3 lines (step 1px for precision)
+    // Find largest font size that fits in exactly 3 lines, then shave 2px for breathing room
     for (let size = 300; size >= 60; size--) {
       const lines = greedySplit(size)
-      if (lines.length <= 3) return { lines, fontSize: size }
+      if (lines.length <= 3) {
+        const final = Math.max(60, size - 2)
+        return { lines: greedySplit(final), fontSize: final }
+      }
     }
 
     // If even at 60px it's more than 3 lines, try 2 lines
     for (let size = 300; size >= 60; size--) {
       const lines = greedySplit(size)
-      if (lines.length <= 2) return { lines, fontSize: size }
+      if (lines.length <= 2) {
+        const final = Math.max(60, size - 2)
+        return { lines: greedySplit(final), fontSize: final }
+      }
     }
 
     // Fallback

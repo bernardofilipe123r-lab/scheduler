@@ -41,6 +41,7 @@ export interface Brand {
   baseline_for_content: boolean
   colors: BrandColors
   logo_path?: string
+  reel_divider_logo_path?: string
   active: boolean
   has_instagram: boolean
   has_facebook: boolean

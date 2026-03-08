@@ -76,6 +76,9 @@ class Brand(Base):
     # Logo path (relative to assets/logos/)
     logo_path = Column(String(255), nullable=True)
     
+    # Per-brand logo for the divider line in video reel thumbnails
+    reel_divider_logo_path = Column(String(255), nullable=True)
+    
     # Status
     active = Column(Boolean, default=True, nullable=False)
     
@@ -97,6 +100,7 @@ class Brand(Base):
             "baseline_for_content": self.baseline_for_content,
             "colors": self.colors or {},
             "logo_path": self.logo_path,
+            "reel_divider_logo_path": self.reel_divider_logo_path,
             "active": self.active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
