@@ -249,48 +249,70 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
             onClick={selectAllBrands}
             className={`w-full flex items-center justify-between px-5 py-4 rounded-xl border-2 transition-all ${
               allBrands
-                ? 'border-stone-800 bg-stone-50'
+                ? 'border-stone-800 bg-stone-50 shadow-sm'
                 : 'border-gray-200 hover:border-gray-300 bg-white'
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
                 allBrands ? 'bg-stone-800' : 'bg-gray-100'
               }`}>
                 <Check className={`w-4 h-4 ${allBrands ? 'text-white' : 'text-gray-400'}`} />
               </div>
               <div className="text-left">
                 <span className="text-sm font-semibold text-gray-900">All Brands</span>
-                <p className="text-xs text-gray-500">{brandIds.length} brand{brandIds.length !== 1 ? 's' : ''} selected</p>
+                <p className="text-xs text-gray-500">{brandIds.length} brand{brandIds.length !== 1 ? 's' : ''}</p>
               </div>
             </div>
+            {allBrands && (
+              <span className="text-xs font-semibold text-stone-600 bg-stone-200 px-2.5 py-1 rounded-full">
+                {brandIds.length} selected
+              </span>
+            )}
           </button>
 
           {/* Individual brands */}
           <div className="grid grid-cols-2 gap-2">
             {dynamicBrands.map(brand => {
               const active = !allBrands && selectedBrands.includes(brand.id)
+              const brandColor = brand.color || '#999'
               return (
                 <button
                   key={brand.id}
                   onClick={() => toggleBrand(brand.id)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${
+                  className={`relative flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
                     active
-                      ? 'border-stone-300 bg-stone-50'
+                      ? 'bg-white shadow-sm'
                       : allBrands
                         ? 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-white'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
+                  style={active ? { borderColor: brandColor } : undefined}
                 >
                   <div
-                    className="w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-offset-1"
-                    style={{ backgroundColor: brand.color || '#999' }}
-                  />
-                  <span className="text-sm font-medium text-gray-800 truncate">{brand.label}</span>
+                    className={`w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center transition-all ${
+                      active ? 'scale-110' : ''
+                    }`}
+                    style={{ backgroundColor: active ? brandColor : 'transparent', border: active ? 'none' : `2px solid ${brandColor}` }}
+                  >
+                    {active && <Check className="w-3.5 h-3.5 text-white" />}
+                  </div>
+                  <span className={`text-sm font-medium truncate transition-colors ${
+                    active ? 'text-gray-900' : 'text-gray-600'
+                  }`}>{brand.label}</span>
                 </button>
               )
             })}
           </div>
+
+          {/* Selected count indicator */}
+          {!allBrands && selectedBrands.length > 0 && (
+            <div className="flex items-center justify-center">
+              <span className="text-xs font-semibold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-full">
+                {selectedBrands.length} brand{selectedBrands.length !== 1 ? 's' : ''} selected
+              </span>
+            </div>
+          )}
 
           {/* Continue */}
           <button

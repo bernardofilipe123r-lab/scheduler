@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Play } from 'lucide-react'
 import { REEL_FORMATS, type ReelFormat } from '../formats'
 
 interface FormatCarouselProps {
@@ -27,18 +27,16 @@ export function FormatCarousel({ onSelect }: FormatCarouselProps) {
     return () => el.removeEventListener('scroll', updateScrollState)
   }, [updateScrollState])
 
-  // Track which card is centered after scroll
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const handler = () => {
-      const cardWidth = el.firstElementChild?.getBoundingClientRect().width ?? 280
+      const cardWidth = el.firstElementChild?.getBoundingClientRect().width ?? 180
       const gap = 16
       const idx = Math.round(el.scrollLeft / (cardWidth + gap))
       setActiveIndex(Math.min(idx, REEL_FORMATS.length - 1))
     }
     el.addEventListener('scrollend', handler, { passive: true })
-    // Fallback for browsers without scrollend
     let timeout: ReturnType<typeof setTimeout>
     const scrollHandler = () => {
       clearTimeout(timeout)
@@ -55,7 +53,7 @@ export function FormatCarousel({ onSelect }: FormatCarouselProps) {
   const scrollTo = (direction: 'left' | 'right') => {
     const el = scrollRef.current
     if (!el) return
-    const cardWidth = el.firstElementChild?.getBoundingClientRect().width ?? 280
+    const cardWidth = el.firstElementChild?.getBoundingClientRect().width ?? 180
     const gap = 16
     const offset = direction === 'left' ? -(cardWidth + gap) : (cardWidth + gap)
     el.scrollBy({ left: offset, behavior: 'smooth' })
@@ -63,7 +61,6 @@ export function FormatCarousel({ onSelect }: FormatCarouselProps) {
 
   return (
     <div className="relative">
-      {/* Scroll arrows */}
       {canScrollLeft && (
         <button
           onClick={() => scrollTo('left')}
@@ -81,20 +78,18 @@ export function FormatCarousel({ onSelect }: FormatCarouselProps) {
         </button>
       )}
 
-      {/* Scrollable card row */}
+      {/* Scrollable card row — centered */}
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 -mx-1 px-1"
+        className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 justify-center"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        <style>{`[data-format-carousel]::-webkit-scrollbar { display: none; }`}</style>
         {REEL_FORMATS.map((format) => (
           <FormatCard key={format.id} format={format} onSelect={onSelect} />
         ))}
       </div>
 
-      {/* Dot indicators */}
-      {REEL_FORMATS.length > 1 && (
+      {REEL_FORMATS.length > 2 && (
         <div className="flex items-center justify-center gap-1.5 mt-4">
           {REEL_FORMATS.map((_, i) => (
             <div
@@ -113,56 +108,82 @@ export function FormatCarousel({ onSelect }: FormatCarouselProps) {
 }
 
 function FormatCard({ format, onSelect }: { format: ReelFormat; onSelect: (id: string) => void }) {
-  const Icon = format.icon
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isHovering, setIsHovering] = useState(false)
+
+  const handleMouseEnter = () => {
+    setIsHovering(true)
+    const v = videoRef.current
+    if (v) {
+      v.currentTime = 0
+      v.play().catch(() => {})
+    }
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovering(false)
+    const v = videoRef.current
+    if (v) {
+      v.pause()
+      v.currentTime = 0
+    }
+  }
 
   return (
     <button
       onClick={() => onSelect(format.id)}
-      className="flex-shrink-0 snap-center w-[280px] group cursor-pointer"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className="flex-shrink-0 snap-center group cursor-pointer focus:outline-none"
     >
-      {/* Card */}
-      <div className="rounded-2xl overflow-hidden border-2 border-gray-200 hover:border-gray-400 transition-all duration-200 hover:shadow-lg hover:-translate-y-1 bg-white">
-        {/* Visual preview area */}
-        <div className={`relative h-44 bg-gradient-to-br ${format.previewGradient} flex items-center justify-center overflow-hidden`}>
-          {/* Decorative elements */}
-          <div className="absolute inset-0 opacity-20">
-            <div className="absolute top-4 left-4 w-20 h-3 rounded-full bg-white/60" />
-            <div className="absolute top-10 left-4 w-32 h-3 rounded-full bg-white/40" />
-            <div className="absolute top-16 left-4 w-24 h-3 rounded-full bg-white/30" />
-            <div className="absolute bottom-6 right-4 w-16 h-16 rounded-xl bg-white/20 rotate-12" />
-            <div className="absolute bottom-14 right-20 w-10 h-10 rounded-lg bg-white/15 -rotate-6" />
-          </div>
+      <div className="rounded-2xl overflow-hidden border-2 border-gray-200 hover:border-gray-400 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 bg-white w-[180px]">
+        {/* 9:16 video preview area */}
+        <div className="relative w-full overflow-hidden rounded-t-2xl" style={{ aspectRatio: '9/16' }}>
+          {/* Gradient fallback */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${format.previewGradient}`} />
 
-          {/* Phone mockup */}
-          <div className="relative w-24 h-40 rounded-xl bg-black/30 backdrop-blur-sm border border-white/30 flex flex-col items-center justify-center gap-2 shadow-xl group-hover:scale-105 transition-transform duration-200">
-            <Icon className="w-8 h-8 text-white/90" />
-            <div className="space-y-1 w-full px-3">
-              <div className="h-1.5 w-full rounded-full bg-white/40" />
-              <div className="h-1.5 w-3/4 rounded-full bg-white/30" />
-              <div className="h-1.5 w-1/2 rounded-full bg-white/20" />
+          {/* Video element */}
+          <video
+            ref={videoRef}
+            src={format.previewVideo}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+              isHovering ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+
+          {/* Play hint overlay (shown when not hovering) */}
+          {!isHovering && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
+              </div>
+              <span className="text-[10px] font-semibold text-white/80 tracking-wider uppercase">Hover to preview</span>
             </div>
-          </div>
+          )}
 
-          {/* Sparkle badge */}
-          <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-full bg-white/20 backdrop-blur-sm">
-            <Sparkles className="w-3 h-3 text-white" />
-            <span className="text-[10px] font-semibold text-white tracking-wide uppercase">{format.tagline}</span>
+          {/* Tagline badge */}
+          <div className="absolute top-2.5 left-2.5 right-2.5">
+            <span className="inline-block text-[9px] font-bold text-white tracking-wider uppercase bg-black/30 backdrop-blur-sm px-2 py-1 rounded-md">
+              {format.tagline}
+            </span>
           </div>
         </div>
 
-        {/* Info area */}
-        <div className="p-4 space-y-2.5">
+        {/* Info area below the video */}
+        <div className="p-3 space-y-2">
           <div>
-            <h3 className="text-sm font-bold text-gray-900">{format.label}</h3>
-            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{format.description}</p>
+            <h3 className="text-xs font-bold text-gray-900 leading-tight">{format.label}</h3>
+            <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed line-clamp-2">{format.description}</p>
           </div>
-
-          {/* Feature pills */}
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1">
             {format.features.map(f => (
               <span
                 key={f}
-                className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"
               >
                 {f}
               </span>

@@ -9,6 +9,8 @@
  *   5. Everything else (wizard flow, brand/platform/mode selection) updates automatically
  */
 import { Film, Image, type LucideIcon } from 'lucide-react'
+import textBasedVideo from '@/assets/videos/text-based-preview.mp4'
+import videoBasedVideo from '@/assets/videos/video-based-preview.mp4'
 
 export interface ReelFormat {
   /** Unique identifier — matches backend content_format / variant values */
@@ -31,6 +33,8 @@ export interface ReelFormat {
   tagline: string
   /** Card preview: list of visual features for the card */
   features: string[]
+  /** Card preview: video URL to play on hover (imported asset) */
+  previewVideo: string
 }
 
 export const REEL_FORMATS: ReelFormat[] = [
@@ -45,6 +49,7 @@ export const REEL_FORMATS: ReelFormat[] = [
     previewGradient: 'from-violet-600 via-purple-600 to-indigo-700',
     tagline: 'Kinetic text on AI art',
     features: ['AI backgrounds', 'Animated text', 'Music sync'],
+    previewVideo: textBasedVideo,
   },
   {
     id: 'text_video',
@@ -57,6 +62,7 @@ export const REEL_FORMATS: ReelFormat[] = [
     previewGradient: 'from-amber-500 via-orange-500 to-rose-600',
     tagline: 'Photos meet story',
     features: ['Real images', 'Text overlays', 'Slideshow'],
+    previewVideo: videoBasedVideo,
   },
 ]
 
