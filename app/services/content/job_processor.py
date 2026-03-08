@@ -904,6 +904,52 @@ class JobProcessor:
                 self._manager.update_job_status(job_id, "failed", error_message=str(e))
                 return {"success": False, "error": str(e)}
 
+        # ── TEXT-VIDEO variant: source images + compose slideshow ──
+        if job.variant == "text_video":
+            print(f"📹 TEXT-VIDEO variant — processing per brand", flush=True)
+            results = {}
+            total_brands = len(job.brands)
+            try:
+                for i, brand in enumerate(job.brands):
+                    job = self._manager.get_job(job_id)
+                    if job.status == "cancelled":
+                        return {"success": False, "error": "Job was cancelled", "results": results}
+
+                    progress = int(((i) / max(total_brands, 1)) * 100)
+                    step_msg = f"Processing text-video for {brand}..." if total_brands > 1 else "Processing text-video reel..."
+                    self._manager.update_job_status(job_id, "generating", step_msg, progress)
+
+                    tv_result = {"success": False, "error": "Timeout"}
+                    def _run_tv_brand(b=brand):
+                        nonlocal tv_result
+                        try:
+                            tv_result = self.process_text_video_brand(job_id, b)
+                        except Exception as ex:
+                            tv_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
+
+                    tv_thread = threading.Thread(target=_run_tv_brand, daemon=True)
+                    tv_thread.start()
+                    tv_thread.join(timeout=BRAND_GENERATION_TIMEOUT)
+
+                    if tv_thread.is_alive():
+                        timeout_msg = f"BRAND_TIMEOUT: {brand} text-video exceeded {BRAND_GENERATION_TIMEOUT}s"
+                        print(f"⏱️  TEXT-VIDEO BRAND TIMEOUT: {brand}", flush=True)
+                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg})
+                        tv_result = {"success": False, "error": timeout_msg}
+
+                    results[brand] = tv_result
+
+                all_ok = all(r.get("success") for r in results.values())
+                any_ok = any(r.get("success") for r in results.values())
+                final_status = "completed" if all_ok else ("completed" if any_ok else "failed")
+                self._manager.update_job_status(job_id, final_status, progress_percent=100)
+                return {"success": any_ok, "results": results}
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._manager.update_job_status(job_id, "failed", error_message=str(e))
+                return {"success": False, "error": str(e)}
+
         # ── REEL variants (light / dark) ─────────────────────────────
         results = {}
         total_brands = len(job.brands)

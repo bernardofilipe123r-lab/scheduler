@@ -111,35 +111,42 @@ class ImageSourcer:
         return None
 
     def _generate_ai_image(self, prompt: str) -> Optional[Path]:
-        """Generate image using Google Gemini Developer API (Imagen 3)."""
+        """Generate image using Google Gemini Developer API (Imagen 3) via REST."""
         if not self._gemini_key:
             logger.warning("[ImageSourcer] GEMINI_API_KEY not set, skipping AI generation")
             return None
 
         try:
-            from google import genai
+            import json
+            import base64
 
-            client = genai.Client(api_key=self._gemini_key)
-            response = client.models.generate_images(
-                model="imagen-3.0-generate-001",
-                prompt=prompt,
-                config=genai.types.GenerateImagesConfig(
-                    number_of_images=1,
-                    aspect_ratio="9:16",
-                    safety_filter_level="BLOCK_ONLY_HIGH",
-                ),
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                "imagen-3.0-generate-002:predict"
+                f"?key={self._gemini_key}"
             )
+            payload = {
+                "instances": [{"prompt": prompt}],
+                "parameters": {
+                    "sampleCount": 1,
+                    "aspectRatio": "9:16",
+                    "safetyFilterLevel": "BLOCK_ONLY_HIGH",
+                },
+            }
+            resp = requests.post(url, json=payload, timeout=60)
 
             self._record_api_call("gemini", "generate_images")
 
-            if response.generated_images:
-                img_data = response.generated_images[0].image
+            if resp.status_code != 200:
+                logger.error(f"[ImageSourcer] Gemini Imagen error: {resp.status_code} {resp.text[:300]}")
+                return None
+
+            data = resp.json()
+            predictions = data.get("predictions", [])
+            if predictions and predictions[0].get("bytesBase64Encoded"):
+                img_bytes = base64.b64decode(predictions[0]["bytesBase64Encoded"])
                 path = Path(tempfile.mktemp(suffix=".png"))
-                # img_data is a PIL Image or bytes depending on SDK version
-                if hasattr(img_data, "save"):
-                    img_data.save(str(path))
-                else:
-                    path.write_bytes(img_data)
+                path.write_bytes(img_bytes)
                 return path
 
         except Exception as e:

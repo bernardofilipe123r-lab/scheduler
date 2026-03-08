@@ -4,15 +4,17 @@ import logging
 from typing import Optional, List
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.db_connection import get_db
+from app.db_connection import get_db, get_db_session
 from app.api.auth.middleware import get_current_user
 from app.models.jobs import GenerationJob
 from app.models.story_pool import StoryPool
 from app.models.text_video_design import TextVideoDesign
+from app.services.content.job_manager import JobManager
+from app.services.content.job_processor import JobProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -189,31 +191,29 @@ async def source_images(
 @router.post("/generate")
 async def generate_text_video_reel(
     request: TextVideoGenerateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """
-    Generate a TEXT-VIDEO reel. Supports 3 modes:
+    Generate a TEXT-VIDEO reel. Creates a job and processes in background.
+    Supports 3 modes:
     - manual: user provides text + images
-    - semi_auto: polished story provided, source images + compose
-    - full_auto: discover + polish + source + compose
+    - semi_auto: polished story provided, source images + compose in background
+    - full_auto: discover + polish (sync), then source + compose in background
     """
     user_id = user["id"]
 
-    from app.services.discovery.story_discoverer import StoryDiscoverer, RawStory
-    from app.services.discovery.story_polisher import StoryPolisher, ImagePlan
-    from app.services.media.image_sourcer import ImageSourcer
-    from app.services.media.thumbnail_compositor import ThumbnailCompositor
-    from app.services.media.slideshow_compositor import SlideshowCompositor
-
     polished_data = None
-    image_file_paths: list[Path] = []
 
     if request.mode == "full_auto":
+        from app.services.discovery.story_discoverer import StoryDiscoverer
+        from app.services.discovery.story_polisher import StoryPolisher
+
         niche = request.niche or "business"
         category = request.category or "power_moves"
 
-        # 1. Discover
+        # 1. Discover (fast — just API calls)
         discoverer = StoryDiscoverer(db=db)
         stories = discoverer.discover_stories(
             niche=niche, category=category, recency="mixed", count=5
@@ -221,7 +221,7 @@ async def generate_text_video_reel(
         if not stories:
             raise HTTPException(status_code=404, detail="No stories found")
 
-        # 2. Polish
+        # 2. Polish (fast — single DeepSeek call)
         polisher = StoryPolisher()
         polished = polisher.polish_story(stories[0], niche=niche)
         if not polished:
@@ -229,43 +229,15 @@ async def generate_text_video_reel(
 
         polished_data = polished.to_dict()
 
-        # 3. Source images
-        sourcer = ImageSourcer(db=db)
-        paths = sourcer.source_images_batch(polished.images)
-        image_file_paths = [p for p in paths if p and p.exists()]
-
-        # Source thumbnail image
-        thumb_img = sourcer.source_image(polished.thumbnail_image)
-
     elif request.mode == "semi_auto":
         if not request.polished_data:
             raise HTTPException(status_code=400, detail="polished_data required for semi_auto mode")
-
         polished_data = request.polished_data
-
-        if request.sourced_image_paths:
-            image_file_paths = [Path(p) for p in request.sourced_image_paths if Path(p).exists()]
-        else:
-            # Source images from polished data
-            from app.services.discovery.story_polisher import ImagePlan
-            plans = [
-                ImagePlan(**img) for img in polished_data.get("images", [])
-            ]
-            sourcer = ImageSourcer(db=db)
-            paths = sourcer.source_images_batch(plans)
-            image_file_paths = [p for p in paths if p and p.exists()]
-
-        thumb_data = polished_data.get("thumbnail_image", {})
-        thumb_img = None
-        if thumb_data:
-            sourcer = ImageSourcer(db=db)
-            thumb_img = sourcer.source_image(ImagePlan(**thumb_data))
 
     elif request.mode == "manual":
         if not request.reel_text:
             raise HTTPException(status_code=400, detail="reel_text required for manual mode")
 
-        # Enforce max 60 words for layout stability
         word_count = len(request.reel_text.split())
         if word_count > 60:
             raise HTTPException(status_code=400, detail=f"Reel text exceeds 60 words ({word_count}). Shorten it to maintain layout quality.")
@@ -275,67 +247,85 @@ async def generate_text_video_reel(
             "reel_lines": request.reel_text.split("\n"),
             "thumbnail_title": request.thumbnail_title or "",
             "thumbnail_title_lines": (request.thumbnail_title or "").split("\n"),
+            "images": [{"source_type": "web_search", "query": request.reel_text[:80]}] if not request.image_paths else [],
         }
 
+        # For manual mode with uploaded images, store paths in polished_data
         if request.image_paths:
-            image_file_paths = [Path(p) for p in request.image_paths if Path(p).exists()]
+            polished_data["uploaded_image_paths"] = request.image_paths
 
-        thumb_img = image_file_paths[0] if image_file_paths else None
-
-    if not image_file_paths:
-        raise HTTPException(status_code=400, detail="No images available for reel composition")
-
-    # Get user's design preferences
-    design = db.query(TextVideoDesign).filter(TextVideoDesign.user_id == user_id).first()
-
-    # Compose thumbnail
-    thumb_compositor = ThumbnailCompositor()
-    thumbnail_path = thumb_compositor.compose_thumbnail(
-        main_image_path=thumb_img or image_file_paths[0],
-        title_lines=polished_data.get("thumbnail_title_lines", []),
-        design=design,
-    )
-
-    # Compose reel video
-    reel_lines = polished_data.get("reel_lines", [])
-    output_path = Path(f"output/videos/text_video_{user_id}_{int(__import__('time').time())}.mp4")
-
-    compositor = SlideshowCompositor()
-    result_path = compositor.compose_reel(
-        image_paths=image_file_paths,
-        reel_lines=reel_lines,
-        output_path=output_path,
-        design=design,
-    )
-
-    if not result_path:
-        raise HTTPException(status_code=500, detail="Video composition failed")
-
-    # Create generation job
-    from app.services.content.job_manager import generate_job_id
-
-    job = GenerationJob(
-        job_id=generate_job_id(),
+    # Create job via JobManager (same as text-based reels)
+    manager = JobManager(db)
+    job = manager.create_job(
         user_id=user_id,
         title=polished_data.get("thumbnail_title", "Text-Video Reel"),
         content_lines=polished_data.get("reel_lines", []),
         brands=request.brands,
-        platforms=request.platforms,
         variant="text_video",
+        platforms=request.platforms,
+        fixed_title=True,
+        created_by="user",
+        music_source=request.music_source,
         content_format="text_video",
         text_video_data=polished_data,
-        status="completed",
     )
-    db.add(job)
-    db.commit()
+
+    job_id = job.job_id
+    job_dict = job.to_dict()
+
+    # Process in background (same pattern as text-based reels)
+    background_tasks.add_task(_process_text_video_job_async, job_id)
 
     return {
-        "job_id": job.job_id,
-        "status": "completed",
-        "video_path": str(result_path),
-        "thumbnail_path": str(thumbnail_path),
-        "polished_data": polished_data,
+        "status": "created",
+        "job_id": job_id,
+        "message": "Text-video job created and queued for processing",
+        "job": job_dict,
     }
+
+
+import threading
+_tv_job_semaphore = threading.Semaphore(2)
+
+
+def _process_text_video_job_async(job_id: str):
+    """Background task to process a text-video job."""
+    import traceback
+    import sys
+
+    print(f"\n{'='*60}", flush=True)
+    print(f"📹 TEXT-VIDEO BACKGROUND TASK STARTED", flush=True)
+    print(f"   Job ID: {job_id}", flush=True)
+    print(f"{'='*60}", flush=True)
+    sys.stdout.flush()
+
+    _tv_job_semaphore.acquire()
+    try:
+        with get_db_session() as db:
+            processor = JobProcessor(db)
+            result = processor.process_job(job_id)
+
+            print(f"\n{'='*60}", flush=True)
+            print(f"✅ TEXT-VIDEO JOB COMPLETED", flush=True)
+            print(f"   Job ID: {job_id}", flush=True)
+            print(f"   Result: {result}", flush=True)
+            print(f"{'='*60}\n", flush=True)
+            sys.stdout.flush()
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        print(f"\n❌ TEXT-VIDEO JOB FAILED: {error_msg}", flush=True)
+        traceback.print_exc()
+        sys.stdout.flush()
+
+        try:
+            with get_db_session() as db:
+                manager = JobManager(db)
+                manager.update_job_status(job_id, "failed", error_message=error_msg)
+        except Exception:
+            pass
+    finally:
+        _tv_job_semaphore.release()
 
 
 @router.get("/story-pool")
