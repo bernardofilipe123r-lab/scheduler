@@ -714,18 +714,57 @@ class DatabaseSchedulerService:
             for reel in stuck:
                 extra = reel.extra_data or {}
                 post_ids = extra.get("post_ids", {})
+                publish_results = extra.get("publish_results", {})
 
-                if post_ids.get("instagram"):
-                    # B7: IG API call completed — mark as published, not scheduled
+                # --- CRASH RECOVERY WITH PLATFORM AWARENESS ---
+                # If publish_results exist, some platforms may have already succeeded.
+                # We must scope any retry to only the failed/missing platforms to
+                # prevent duplicate posts on already-succeeded platforms.
+                if publish_results:
+                    succeeded_platforms = []
+                    failed_platforms = []
+                    for platform, result in publish_results.items():
+                        if isinstance(result, dict) and result.get('success'):
+                            succeeded_platforms.append(platform)
+                        else:
+                            failed_platforms.append(platform)
+
+                    if succeeded_platforms and not failed_platforms:
+                        # All platforms succeeded — mark published, don't retry
+                        reel.status = "published"
+                        reel.published_at = reel.published_at or datetime.now(timezone.utc)
+                        reel.publish_error = "Recovered after crash — all platforms already published"
+                        print(f"⚠️ Post {reel.schedule_id} already published to {succeeded_platforms} — marking as published", flush=True)
+                    elif failed_platforms:
+                        # Some platforms failed — scope retry to failed platforms only
+                        reset_count = extra.get("reset_count", 0) + 1
+                        extra["reset_count"] = reset_count
+                        if reset_count >= 3:
+                            reel.status = "failed"
+                            reel.publish_error = f"Failed after {reset_count} reset attempts"
+                            print(f"❌ Post {reel.schedule_id} failed after {reset_count} reset attempts", flush=True)
+                        else:
+                            extra['retry_platforms'] = failed_platforms
+                            extra['succeeded_platforms'] = succeeded_platforms
+                            reel.status = "scheduled"
+                            reel.publish_error = f"Reset #{reset_count} — retrying {failed_platforms} only"
+                            print(f"⚠️ Post {reel.schedule_id} reset — will retry {failed_platforms}, skip {succeeded_platforms}", flush=True)
+                        reel.extra_data = dict(extra)
+                    else:
+                        # No platform results at all, fall through to legacy check
+                        pass
+
+                elif post_ids.get("instagram"):
+                    # Legacy check: IG API call completed — mark as published, not scheduled
                     reel.status = "published"
                     reel.published_at = reel.published_at or datetime.now(timezone.utc)
                     reel.publish_error = f"Recovered after crash — IG post already live (id: {post_ids['instagram']})"
                     print(f"⚠️ Post {reel.schedule_id} already published to IG — marking as published", flush=True)
                 else:
-                    # No post_ids — safe to retry
+                    # No post_ids, no publish_results — safe to full retry
                     reset_count = extra.get("reset_count", 0) + 1
                     extra["reset_count"] = reset_count
-                    reel.extra_data = extra
+                    reel.extra_data = dict(extra)
 
                     if reset_count >= 3:
                         # Escalate to failed after 3 resets
@@ -877,6 +916,13 @@ class DatabaseSchedulerService:
         Only retries posts created by Toby within the last max_age_hours,
         and only if they haven't been retried too many times.
 
+        PLATFORM SCOPING CONTRACT:
+        For "partial" failures (some platforms succeeded, others failed),
+        this function sets retry_platforms and succeeded_platforms in extra_data
+        so that check_and_publish() only retries the failed platforms.
+        Without this, ALL platforms would be re-published — causing duplicates
+        on already-succeeded platforms (e.g., Instagram).
+
         Returns number of posts queued for retry.
         """
         TRANSIENT_KEYWORDS = ["timeout", "rate limit", "429", "500", "502", "503",
@@ -912,16 +958,43 @@ class DatabaseSchedulerService:
                 error = (reel.publish_error or "").lower()
                 is_transient = any(kw in error for kw in TRANSIENT_KEYWORDS)
 
-                # For partial failures, always retry
+                # For partial failures, always retry (the failed platforms only)
                 if reel.status == "partial":
                     is_transient = True
 
                 if not is_transient:
                     continue
 
+                # --- PLATFORM SCOPING FOR PARTIAL FAILURES ---
+                # When a post is "partial", some platforms succeeded and others failed.
+                # We MUST set retry_platforms so check_and_publish() only retries the
+                # failed platforms. Without this, ALL platforms get re-published,
+                # causing duplicates on the already-succeeded platforms.
+                # (Mirrors the logic in retry_failed() for manual retries.)
+                publish_results = extra.get('publish_results', {})
+                if reel.status == "partial" and publish_results:
+                    failed_platforms = []
+                    succeeded_platforms = []
+                    for platform, result in publish_results.items():
+                        if isinstance(result, dict):
+                            if result.get('success'):
+                                succeeded_platforms.append(platform)
+                            else:
+                                failed_platforms.append(platform)
+
+                    if failed_platforms:
+                        extra['retry_platforms'] = failed_platforms
+                        extra['succeeded_platforms'] = succeeded_platforms
+                        print(f"[TOBY] Partial retry: will retry {failed_platforms}, skip {succeeded_platforms}", flush=True)
+                    else:
+                        # All platforms succeeded — shouldn't be "partial", skip
+                        print(f"⚠️ [TOBY] Post {reel.schedule_id} is partial but no failed platforms found — skipping", flush=True)
+                        continue
+
                 # Increment auto_retry_count and queue for retry
                 extra["auto_retry_count"] = auto_retries + 1
-                reel.extra_data = extra
+                # CRITICAL: Create a new dict to force SQLAlchemy to detect the change
+                reel.extra_data = dict(extra)
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(reel, "extra_data")
 

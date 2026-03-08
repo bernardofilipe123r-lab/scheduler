@@ -207,6 +207,21 @@ but the primary mechanism is Toby's own Quality Guard agent.
 - `ix_sched_reels_brand_time_status` — fast brand+time+status lookups
 - `ix_sched_reels_brand_title` — fast brand+title lookups
 
+### Platform-Scoped Retry Contract (CRITICAL — added 2026-06)
+
+When a post has "partial" status (e.g., Instagram succeeded but TikTok failed with 403),
+all three retry paths MUST set `extra_data['retry_platforms']` and `extra_data['succeeded_platforms']`
+so that `check_and_publish()` only retries the failed platforms. Without this, all platforms
+get re-published — causing duplicates on already-succeeded platforms.
+
+**Retry paths that enforce this contract:**
+1. `retry_failed()` — manual retry via API (scheduler.py)
+2. `auto_retry_failed_toby_posts()` — automatic retry on every Toby tick (scheduler.py)
+3. `reset_stuck_publishing()` — crash recovery for stuck "publishing" posts (scheduler.py)
+
+**Consumer:** `check_and_publish()` in `main.py` reads `retry_platforms` — if set, publishes
+only to those platforms; if not set, publishes to all platforms in `metadata['platforms']`.
+
 ## Common Mistakes to Avoid
 1. **NEVER re-enable parallel content execution** — this was the root cause of the 2026-03-08 duplicate incident
 2. **NEVER schedule fallback content** — raise an exception instead of using placeholder titles

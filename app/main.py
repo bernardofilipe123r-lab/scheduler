@@ -501,7 +501,11 @@ async def startup_event():
                         print(f"\n   📋 [PUBLISH] Processing schedule: {schedule_id}", flush=True)
                         print(f"   📋 [PUBLISH] Metadata keys: {list(metadata.keys())}", flush=True)
                         
-                        # Check for retry_platforms (partial retry) or use original platforms
+                        # --- PLATFORM SELECTION (RETRY-AWARE) ---
+                        # retry_platforms is set by retry_failed() and auto_retry_failed_toby_posts()
+                        # when a post has "partial" status (some platforms succeeded, others failed).
+                        # If set, we ONLY publish to the failed platforms to avoid duplicates.
+                        # If not set, this is a fresh publish — use the full platform list.
                         retry_platforms = metadata.get('retry_platforms')
                         succeeded_platforms = metadata.get('succeeded_platforms', [])
                         
