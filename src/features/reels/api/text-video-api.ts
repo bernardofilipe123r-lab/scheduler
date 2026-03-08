@@ -8,7 +8,6 @@ import type {
   PolishedStory,
   DesignSettings,
   StoryPoolEntry,
-  TextVideoJob,
 } from '../types'
 
 const BASE = '/api/content/text-video'
@@ -28,7 +27,13 @@ interface SourceImagesResponse {
 interface GenerateResponse {
   job_id: string
   status: string
-  brand_outputs: Record<string, unknown>
+  message: string
+  job: {
+    job_id: string
+    status: string
+    brands: string[]
+    [key: string]: unknown
+  }
 }
 
 interface StoryPoolResponse {
@@ -60,9 +65,9 @@ export const textVideoApi = {
     return res.paths
   },
 
-  generate: async (data: TextVideoGenerateRequest): Promise<TextVideoJob> => {
+  generate: async (data: TextVideoGenerateRequest): Promise<{ job_id: string; status: string }> => {
     const res = await post<GenerateResponse>(`${BASE}/generate`, data)
-    return res as unknown as TextVideoJob
+    return { job_id: res.job_id, status: res.status }
   },
 
   getStoryPool: async (brandId: string): Promise<StoryPoolEntry[]> => {

@@ -121,7 +121,7 @@ class ImageSourcer:
 
             client = genai.Client(api_key=self._gemini_key)
             response = client.models.generate_images(
-                model="imagen-3.0-generate-001",
+                model="imagen-4.0-generate-001",
                 prompt=prompt,
                 config=genai.types.GenerateImagesConfig(
                     number_of_images=1,

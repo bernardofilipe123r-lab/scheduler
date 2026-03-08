@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Loader2, Zap, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands, useNicheConfig } from '@/features/brands'
@@ -6,6 +7,7 @@ import { useGenerateTextVideo } from './api/use-text-video'
 import type { BrandName } from '@/shared/types'
 
 export function TextVideoFullAuto() {
+  const navigate = useNavigate()
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: nicheConfig, isLoading: nicheLoading } = useNicheConfig()
   const generateMutation = useGenerateTextVideo()
@@ -37,13 +39,20 @@ export function TextVideoFullAuto() {
       return
     }
     try {
-      await generateMutation.mutateAsync({
+      const result = await generateMutation.mutateAsync({
         mode: 'full_auto',
         brands: selectedBrands,
         platforms,
         niche,
       })
-      toast.success('Full auto text-video generation started!')
+      toast.success(
+        (t) => (
+          <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${result.job_id}`) }}>
+            Text-video generation started! <u>View Job →</u>
+          </span>
+        ),
+        { duration: 6000 }
+      )
     } catch {
       toast.error('Generation failed')
     }
