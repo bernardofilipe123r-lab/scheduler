@@ -2150,7 +2150,7 @@ export function AdminPage() {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
           {/* Header row */}
-          <div className="grid grid-cols-[minmax(180px,_280px)_210px_110px_155px_130px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide min-w-[760px]">
+          <div className="grid grid-cols-[minmax(180px,_260px)_300px_110px_155px_130px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide min-w-[840px]">
             <span>User</span>
             <span>User ID</span>
             <span>Role</span>
@@ -2169,7 +2169,7 @@ export function AdminPage() {
                 key={u.id}
                 onClick={() => setSelectedUser(u)}
                 className={clsx(
-                  'grid grid-cols-[minmax(180px,_280px)_210px_110px_155px_130px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center min-w-[760px]',
+                  'grid grid-cols-[minmax(180px,_260px)_300px_110px_155px_130px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center min-w-[840px]',
                   u.is_blocked && 'opacity-60',
                   selectedUser?.id === u.id && 'bg-stone-50',
                 )}
@@ -2186,9 +2186,9 @@ export function AdminPage() {
                     e.stopPropagation()
                     navigator.clipboard.writeText(u.id)
                   }}
-                  className="text-xs text-gray-400 font-mono hover:text-gray-600 text-left overflow-hidden text-ellipsis whitespace-nowrap"
+                  className="text-xs text-gray-400 font-mono hover:text-gray-600 text-left whitespace-nowrap"
                 >
-                  {u.id.slice(0, 20)}…
+                  {u.id}
                 </button>
                 <RoleBadge user={u} />
                 <span className="text-xs text-gray-400 flex items-center gap-1 whitespace-nowrap">
