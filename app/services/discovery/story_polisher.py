@@ -47,6 +47,10 @@ class PolishedStory:
     # Fingerprint for dedup
     story_fingerprint: str
 
+    # Debug: prompts used
+    deepseek_prompt: str = ""
+    deepseek_response: str = ""
+
     def to_dict(self) -> dict:
         return {
             "reel_text": self.reel_text,
@@ -59,6 +63,8 @@ class PolishedStory:
             "hashtags": self.hashtags,
             "story_category": self.story_category,
             "story_fingerprint": self.story_fingerprint,
+            "deepseek_prompt": self.deepseek_prompt,
+            "deepseek_response": self.deepseek_response,
         }
 
 
@@ -185,7 +191,11 @@ class StoryPolisher:
                 logger.error("[StoryPolisher] Empty response from DeepSeek")
                 return None
 
-            return self._parse_response(content)
+            result = self._parse_response(content)
+            if result:
+                result.deepseek_prompt = user_prompt
+                result.deepseek_response = content
+            return result
 
         except Exception as e:
             logger.error(f"[StoryPolisher] DeepSeek error: {e}")

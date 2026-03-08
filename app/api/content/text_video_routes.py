@@ -1,6 +1,7 @@
 """API routes for TEXT-VIDEO reel generation."""
 
 import logging
+import uuid
 from typing import Optional, List
 from pathlib import Path
 
@@ -255,9 +256,12 @@ async def generate_text_video_reel(
 
     # Create job via JobManager (same as text-based reels)
     manager = JobManager(db)
+    # Clean title for display (single line, title case)
+    raw_title = polished_data.get("thumbnail_title", "Text-Video Reel")
+    clean_title = " ".join(raw_title.replace("\n", " ").split()).title()
     job = manager.create_job(
         user_id=user_id,
-        title=polished_data.get("thumbnail_title", "Text-Video Reel"),
+        title=clean_title,
         content_lines=polished_data.get("reel_lines", []),
         brands=request.brands,
         variant="text_video",
@@ -321,7 +325,10 @@ def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
             # Step 2: Update job with real data (title, content, text_video_data)
             job = manager.get_job(job_id)
             if job:
-                job.title = polished_data.get("thumbnail_title", "Text-Video Reel")
+                # Clean title for display (single line, title case)
+                raw_title = polished_data.get("thumbnail_title", "Text-Video Reel")
+                clean_title = " ".join(raw_title.replace("\n", " ").split()).title()
+                job.title = clean_title
                 job.content_lines = polished_data.get("reel_lines", [])
                 job.text_video_data = polished_data
                 job.fixed_title = True

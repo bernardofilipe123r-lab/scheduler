@@ -21,11 +21,14 @@ W, H = 1080, 1920
 DEFAULTS = {
     "thumbnail_image_ratio": 0.6,
     "thumbnail_title_color": "#FFD700",
-    "thumbnail_title_font": "Poppins-Bold.ttf",
-    "thumbnail_title_size": 72,
+    "thumbnail_title_font": "Anton-Regular.ttf",
+    "thumbnail_title_size": 120,
     "thumbnail_title_max_lines": 4,
-    "thumbnail_title_padding": 40,
+    "thumbnail_title_padding_x": 150,
     "thumbnail_divider_style": "line_with_logo",
+    "thumbnail_divider_thickness": 4,
+    "thumbnail_overlay_opacity": 90,
+    "thumbnail_logo_size": 100,
 }
 
 
@@ -59,7 +62,10 @@ class ThumbnailCompositor:
         title_color = self._get(design, "thumbnail_title_color")
         title_font_name = self._get(design, "thumbnail_title_font")
         title_size = self._get(design, "thumbnail_title_size")
-        title_padding = self._get(design, "thumbnail_title_padding")
+        title_padding = self._get(design, "thumbnail_title_padding_x")
+        divider_thickness = self._get(design, "thumbnail_divider_thickness")
+        overlay_opacity = self._get(design, "thumbnail_overlay_opacity")
+        logo_size = self._get(design, "thumbnail_logo_size")
 
         # 1. Place main image in top portion
         image_h = int(H * image_ratio)
@@ -69,39 +75,40 @@ class ThumbnailCompositor:
             canvas.paste(main_img, (0, 0))
         except Exception as e:
             logger.error(f"[ThumbnailCompositor] Failed to load main image: {e}")
-            # Fill with dark gray as fallback
             draw.rectangle([(0, 0), (W, image_h)], fill=(30, 30, 30))
 
         # 2. Bottom gradient on image (blends into divider area)
-        gradient = Image.new("RGBA", (W, 80), (0, 0, 0, 0))
-        for y in range(80):
-            alpha = int(255 * (y / 80))
+        grad_h = max(80, int(image_h * 0.15))
+        gradient = Image.new("RGBA", (W, grad_h), (0, 0, 0, 0))
+        overlay_alpha = int(255 * overlay_opacity / 100)
+        for y in range(grad_h):
+            alpha = int(overlay_alpha * (y / grad_h))
             for x in range(W):
                 gradient.putpixel((x, y), (0, 0, 0, alpha))
         canvas.paste(
             Image.composite(
                 gradient.convert("RGB"),
-                canvas.crop((0, image_h - 80, W, image_h)),
+                canvas.crop((0, image_h - grad_h, W, image_h)),
                 gradient.split()[3],
             ),
-            (0, image_h - 80),
+            (0, image_h - grad_h),
         )
 
         # 3. Divider line + logo
         divider_y = image_h + 10
-        draw.line([(40, divider_y), (W - 40, divider_y)], fill=(80, 80, 80), width=2)
+        draw.line([(40, divider_y), (W - 40, divider_y)], fill=(80, 80, 80), width=divider_thickness)
 
         if logo_path and Path(logo_path).exists():
             try:
                 logo = Image.open(logo_path).convert("RGBA")
-                logo = logo.resize((60, 60), Image.LANCZOS)
-                logo_x = (W - 60) // 2
-                # Clear area behind logo
+                logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
+                logo_x = (W - logo_size) // 2
+                half = logo_size // 2
                 draw.rectangle(
-                    [(logo_x - 10, divider_y - 30), (logo_x + 70, divider_y + 30)],
+                    [(logo_x - 10, divider_y - half), (logo_x + logo_size + 10, divider_y + half)],
                     fill=(0, 0, 0),
                 )
-                canvas.paste(logo, (logo_x, divider_y - 30), logo)
+                canvas.paste(logo, (logo_x, divider_y - half), logo)
             except Exception as e:
                 logger.warning(f"[ThumbnailCompositor] Logo load failed: {e}")
 

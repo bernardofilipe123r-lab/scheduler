@@ -117,6 +117,9 @@ class SlideshowCompositor:
         font_name = self._get(design, "reel_text_font")
         font_size = self._get(design, "reel_text_size")
         line_spacing = self._get(design, "reel_line_spacing")
+        logo_size_val = self._get(design, "reel_logo_size") or 80
+        handle_color = self._get(design, "reel_handle_color") or "#AAAAAA"
+        handle_size = self._get(design, "reel_handle_size") or 32
         show_logo = self._get(design, "reel_show_logo") if (design and hasattr(design, "reel_show_logo")) else self._get(design, "show_logo")
         show_handle = self._get(design, "reel_show_handle") if (design and hasattr(design, "reel_show_handle")) else self._get(design, "show_handle")
 
@@ -141,9 +144,9 @@ class SlideshowCompositor:
         if show_logo and logo_path and Path(logo_path).exists():
             try:
                 logo = Image.open(logo_path).convert("RGBA")
-                logo = logo.resize((80, 80), Image.LANCZOS)
-                overlay.paste(logo, ((W - 80) // 2, 120), logo)
-                logo_y_end = 220
+                logo = logo.resize((logo_size_val, logo_size_val), Image.LANCZOS)
+                overlay.paste(logo, ((W - logo_size_val) // 2, 120), logo)
+                logo_y_end = 120 + logo_size_val + 20
             except Exception as e:
                 logger.warning(f"[SlideshowCompositor] Logo load failed: {e}")
 
@@ -161,10 +164,17 @@ class SlideshowCompositor:
 
         # Handle / footer text
         if show_handle and handle:
-            handle_font = self._load_font(font_name, 28)
+            handle_font = self._load_font(font_name, handle_size)
             handle_text = f"@{handle}"
             hbbox = draw.textbbox((0, 0), handle_text, font=handle_font)
             hw = hbbox[2] - hbbox[0]
+
+            # Parse handle color (hex string → RGB tuple)
+            try:
+                hc = handle_color.lstrip("#")
+                handle_rgb = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
+            except Exception:
+                handle_rgb = (180, 180, 180)
 
             # Divider line above handle
             divider_y = text_y + 25
@@ -176,7 +186,7 @@ class SlideshowCompositor:
             draw.text(
                 ((W - hw) // 2, divider_y + 15),
                 handle_text,
-                fill=(180, 180, 180),
+                fill=handle_rgb,
                 font=handle_font,
             )
 

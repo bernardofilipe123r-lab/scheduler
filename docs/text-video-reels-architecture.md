@@ -2,12 +2,18 @@
 
 > **Purpose:** This document is an AI-coder prompt. It contains every decision, file path, model field, migration, and UI spec needed to implement the TEXT-VIDEO reel format end-to-end in ViralToby. An AI agent reading this document should be able to execute the implementation without asking clarifying questions. All 18 decision points have been resolved — search for `[RESOLVED]` to see each answer.
 
-> **API Keys & Secrets:** This feature requires new external API keys (NewsData.io, Tavily, SerpAPI, Pexels, Gemini). **All keys are already set in Railway production environment** — do NOT hardcode, guess, or generate placeholder keys.
->
-> **Keys already configured (DO NOT re-set these):**
-> - `NEWSDATA_API_KEY` — NewsData.io (replaces NewsAPI which requires institutional email)
-> - `TAVILY_API_KEY` — Tavily AI search (1,000 free credits/month)
-> - `SERPAPI_KEY` — SerpAPI Google Search (250 free searches/month)
+## Naming Conventions
+
+| Internal Name | User-Facing Label | Description |
+|---|---|---|
+| `text_based` / `content_format="text_based"` | **FORMAT A** | Text-over-image reels (Pillow image + FFmpeg static video) |
+| `text_video` / `content_format="text_video"` | **FORMAT B** | Text-over-slideshow reels (DeepSeek content + DeAPI images + FFmpeg slideshow) |
+| DeAPI | **Image Generator** | External API service (deapi.com) that generates images via Flux1schnell model from text prompts |
+| DeepSeek | **Content Generator** | AI model that generates viral post text AND image prompts in a single call |
+
+> **Pipeline (FORMAT B):** DeepSeek generates content + image prompts → DeAPI (Flux1schnell) generates images from those prompts → Compositors render thumbnail + video
+
+> **OUTDATED API REFERENCES:** This doc was written when the pipeline used 7 external APIs (NewsData.io, Tavily, SerpAPI, Pexels, Unsplash, Pixabay, Gemini Imagen). These have ALL been removed. The current pipeline uses only **DeepSeek** (content + image prompt generation) and **DeAPI** (image generation via Flux1schnell). Story discovery is no longer needed — DeepSeek generates content from scratch based on the niche.
 > - `GEMINI_API_KEY` — Google Gemini AI (free tier: ~1000-1500 req/day, flash models)
 > - `PEXELS_API_KEY` — Pexels stock photos/videos (200 req/hour, 20,000 req/month)
 >
