@@ -1951,12 +1951,14 @@ class SocialPublisher:
         caption: str,
     ) -> Dict[str, Any]:
         """
-        Publish a video to TikTok using the PULL_FROM_URL method.
+        Publish a video to TikTok using the FILE_UPLOAD method.
 
         Flow:
           1. Refresh access token (24h expiry)
-          2. POST /v2/post/publish/video/init/  — initialize with video_url + caption
-          3. Poll publish status until complete
+          2. Download video from Supabase URL to memory
+          3. POST /v2/post/publish/video/init/ with FILE_UPLOAD source + video_size
+          4. PUT video bytes to the upload_url returned by TikTok
+          5. Poll publish status until complete
 
         Args:
             video_url: Public Supabase URL for the video
@@ -1984,8 +1986,16 @@ class SocialPublisher:
         tiktok_api = "https://open.tiktokapis.com/v2"
 
         try:
-            # Step 1: Initialize video publish (direct post with PULL_FROM_URL)
-            print(f"   📱 TikTok: Initializing video publish...", flush=True)
+            # Step 1: Download video from Supabase
+            print(f"   📱 TikTok: Downloading video from source URL...", flush=True)
+            dl_resp = requests.get(video_url, timeout=120)
+            dl_resp.raise_for_status()
+            video_bytes = dl_resp.content
+            video_size = len(video_bytes)
+            print(f"   📱 TikTok: Downloaded {video_size} bytes", flush=True)
+
+            # Step 2: Initialize video publish with FILE_UPLOAD
+            print(f"   📱 TikTok: Initializing video publish (FILE_UPLOAD)...", flush=True)
             init_resp = requests.post(
                 f"{tiktok_api}/post/publish/video/init/",
                 headers={
@@ -2002,8 +2012,10 @@ class SocialPublisher:
                         "video_cover_timestamp_ms": 1000,
                     },
                     "source_info": {
-                        "source": "PULL_FROM_URL",
-                        "video_url": video_url,
+                        "source": "FILE_UPLOAD",
+                        "video_size": video_size,
+                        "chunk_size": video_size,
+                        "total_chunk_count": 1,
                     },
                 },
                 timeout=30,
@@ -2018,16 +2030,29 @@ class SocialPublisher:
                 return {"success": False, "error": error_msg, "platform": "tiktok"}
 
             publish_id = init_data.get("data", {}).get("publish_id")
-            if not publish_id:
+            upload_url = init_data.get("data", {}).get("upload_url")
+            if not publish_id or not upload_url:
                 return {
                     "success": False,
-                    "error": f"TikTok init returned no publish_id: {init_data}",
+                    "error": f"TikTok init returned no publish_id/upload_url: {init_data}",
                     "platform": "tiktok",
                 }
 
-            print(f"   📱 TikTok: Got publish_id={publish_id}, polling status...", flush=True)
+            # Step 3: Upload video bytes to TikTok's upload_url
+            print(f"   📱 TikTok: Uploading {video_size} bytes to TikTok...", flush=True)
+            upload_resp = requests.put(
+                upload_url,
+                headers={
+                    "Content-Range": f"bytes 0-{video_size - 1}/{video_size}",
+                    "Content-Type": "video/mp4",
+                },
+                data=video_bytes,
+                timeout=120,
+            )
+            upload_resp.raise_for_status()
+            print(f"   📱 TikTok: Upload complete, polling status...", flush=True)
 
-            # Step 2: Poll for completion
+            # Step 4: Poll for completion
             self._poll_tiktok_status(publish_id, fresh_token)
 
             print(f"   ✅ TikTok: Video published (publish_id={publish_id})", flush=True)
