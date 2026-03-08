@@ -87,7 +87,7 @@ ReactDOM.render(
 | Path | Page | Guard |
 |------|------|-------|
 | `/` | Home (Dashboard) | Auth + Onboarding |
-| `/reels` | Generator | Auth + Onboarding |
+| `/reels` | Reels Studio (wizard landing → Create Video / Design Editor) | Auth + Onboarding |
 | `/jobs`, `/job/:jobId` | History, Job Detail | Auth + Onboarding |
 | `/calendar` | Calendar | Auth + Onboarding |
 | `/scheduled` | Scheduled Queue | Auth + Onboarding |
