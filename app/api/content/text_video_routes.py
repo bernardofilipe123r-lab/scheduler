@@ -12,7 +12,6 @@ from app.db_connection import get_db, get_db_session
 from app.api.auth.middleware import get_current_user
 from app.models.jobs import GenerationJob
 from app.models.story_pool import StoryPool
-from app.models.text_video_design import TextVideoDesign
 from app.services.content.job_manager import JobManager
 from app.services.content.job_processor import JobProcessor
 
@@ -103,31 +102,25 @@ async def discover_stories(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Discover story candidates for the semi-auto mode."""
-    from app.services.discovery.story_discoverer import StoryDiscoverer
+    """Generate story candidates for the semi-auto mode via DeepSeek."""
+    from app.services.discovery.story_polisher import StoryPolisher
 
-    discoverer = StoryDiscoverer(db=db)
-    stories = discoverer.discover_stories(
-        niche=request.niche,
-        category=request.category,
-        recency=request.recency,
-        count=request.count,
-    )
+    polisher = StoryPolisher()
+    stories = []
+    for _ in range(min(request.count, 5)):
+        polished = polisher.generate_content(niche=request.niche)
+        if polished:
+            stories.append({
+                "headline": polished.thumbnail_title,
+                "summary": polished.reel_text,
+                "source_url": "",
+                "source_name": "DeepSeek AI",
+                "published_at": None,
+                "relevance_score": 1.0,
+                "image_urls": [],
+            })
 
-    return {
-        "stories": [
-            {
-                "headline": s.headline,
-                "summary": s.summary,
-                "source_url": s.source_url,
-                "source_name": s.source_name,
-                "published_at": s.published_at.isoformat() if s.published_at else None,
-                "relevance_score": s.relevance_score,
-                "image_urls": s.image_urls,
-            }
-            for s in stories
-        ]
-    }
+    return {"stories": stories}
 
 
 @router.post("/polish")
@@ -136,22 +129,14 @@ async def polish_story(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Polish a selected story into viral reel format."""
-    from app.services.discovery.story_discoverer import RawStory
+    """Generate polished viral reel content via DeepSeek."""
     from app.services.discovery.story_polisher import StoryPolisher
 
-    raw_story = RawStory(
-        headline=request.headline,
-        summary=request.summary,
-        source_url=request.source_url,
-        source_name=request.source_name,
-    )
-
     polisher = StoryPolisher()
-    polished = polisher.polish_story(raw_story, niche=request.niche)
+    polished = polisher.generate_content(niche=request.niche)
 
     if not polished:
-        raise HTTPException(status_code=500, detail="Failed to polish story")
+        raise HTTPException(status_code=500, detail="Failed to generate content")
 
     return {"polished_story": polished.to_dict()}
 
@@ -213,7 +198,7 @@ async def generate_text_video_reel(
         manager = JobManager(db)
         job = manager.create_job(
             user_id=user_id,
-            title="Discovering trending stories...",
+            title="Generating content...",
             content_lines=[],
             brands=request.brands,
             variant="text_video",
@@ -228,7 +213,7 @@ async def generate_text_video_reel(
         job_id = job.job_id
         job_dict = job.to_dict()
 
-        # Everything happens in background — discover, polish, source images, compose
+        # Everything happens in background — generate content, generate images, compose
         background_tasks.add_task(
             _process_full_auto_text_video_async,
             job_id,
@@ -239,7 +224,7 @@ async def generate_text_video_reel(
         return {
             "status": "created",
             "job_id": job_id,
-            "message": "Text-video job created — discovering stories in background",
+            "message": "Text-video job created — generating content in background",
             "job": job_dict,
         }
 
@@ -304,7 +289,7 @@ _tv_job_semaphore = threading.Semaphore(2)
 
 def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
     """
-    Background task for full_auto text-video: discover → polish → update job → compose.
+    Background task for full_auto text-video: generate content via DeepSeek → update job → compose.
     The job was already created with a placeholder title so the user sees it instantly.
     """
     import traceback
@@ -312,7 +297,7 @@ def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
 
     print(f"\n{'='*60}", flush=True)
     print(f"📹 TEXT-VIDEO FULL-AUTO BACKGROUND TASK STARTED", flush=True)
-    print(f"   Job ID: {job_id}  Niche: {niche}  Category: {category}", flush=True)
+    print(f"   Job ID: {job_id}  Niche: {niche}", flush=True)
     print(f"{'='*60}", flush=True)
     sys.stdout.flush()
 
@@ -321,29 +306,19 @@ def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
         with get_db_session() as db:
             manager = JobManager(db)
 
-            # Step 1: Discover stories
+            # Step 1: Generate content + image prompts via DeepSeek
             manager.update_job_status(job_id, "generating")
-            from app.services.discovery.story_discoverer import StoryDiscoverer
             from app.services.discovery.story_polisher import StoryPolisher
 
-            discoverer = StoryDiscoverer(db=db)
-            stories = discoverer.discover_stories(
-                niche=niche, category=category, recency="mixed", count=5
-            )
-            if not stories:
-                manager.update_job_status(job_id, "failed", error_message="No stories found for this niche")
-                return
-
-            # Step 2: Polish
             polisher = StoryPolisher()
-            polished = polisher.polish_story(stories[0], niche=niche)
+            polished = polisher.generate_content(niche=niche)
             if not polished:
-                manager.update_job_status(job_id, "failed", error_message="Failed to polish story")
+                manager.update_job_status(job_id, "failed", error_message="Failed to generate content")
                 return
 
             polished_data = polished.to_dict()
 
-            # Step 3: Update job with real data (title, content, text_video_data)
+            # Step 2: Update job with real data (title, content, text_video_data)
             job = manager.get_job(job_id)
             if job:
                 job.title = polished_data.get("thumbnail_title", "Text-Video Reel")
@@ -352,7 +327,7 @@ def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
                 job.fixed_title = True
                 db.commit()
 
-            # Step 4: Process (source images, compose video, upload)
+            # Step 3: Process (generate images via DeAPI, compose video, upload)
             processor = JobProcessor(db)
             result = processor.process_job(job_id)
 

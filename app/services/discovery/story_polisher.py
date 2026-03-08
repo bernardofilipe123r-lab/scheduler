@@ -1,26 +1,27 @@
 """
-Story Polisher — rewrites raw stories into viral reel format using DeepSeek.
+Story Polisher — generates viral reel content + AI image prompts via DeepSeek.
 
-Takes a RawStory from the discovery pipeline and produces a PolishedStory
-with formatted reel text, thumbnail title, image sourcing plan, and metadata.
+100% self-contained: DeepSeek generates the post text AND image prompts.
+No external story discovery needed. Images are generated via DeAPI from the
+AI prompts returned by DeepSeek.
 """
+import hashlib
 import json
 import logging
 import os
-from dataclasses import dataclass, field, asdict
+import re
+from dataclasses import dataclass, asdict
 from typing import Optional
 
 from openai import OpenAI
-
-from app.services.discovery.story_discoverer import RawStory, compute_story_fingerprint
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ImagePlan:
-    source_type: str  # "web_search" | "ai_generate"
-    query: str
+    source_type: str  # "ai_generate" (always — all images from DeAPI now)
+    query: str  # The AI PROMPT for DeAPI
     fallback_query: Optional[str] = None
 
 
@@ -34,7 +35,7 @@ class PolishedStory:
     thumbnail_title: str
     thumbnail_title_lines: list[str]
 
-    # Image sourcing plan
+    # Image sourcing plan (AI prompts for DeAPI)
     images: list[ImagePlan]
     thumbnail_image: ImagePlan
 
@@ -43,12 +44,11 @@ class PolishedStory:
     hashtags: list[str]
     story_category: str
 
-    # Source attribution
-    source_story: RawStory
+    # Fingerprint for dedup
     story_fingerprint: str
 
     def to_dict(self) -> dict:
-        d = {
+        return {
             "reel_text": self.reel_text,
             "reel_lines": self.reel_lines,
             "thumbnail_title": self.thumbnail_title,
@@ -59,65 +59,89 @@ class PolishedStory:
             "hashtags": self.hashtags,
             "story_category": self.story_category,
             "story_fingerprint": self.story_fingerprint,
-            "source_headline": self.source_story.headline,
-            "source_url": self.source_story.source_url,
-            "source_name": self.source_story.source_name,
         }
-        return d
 
 
-TEXT_VIDEO_SYSTEM_PROMPT = """You are a viral content writer for Instagram Reels.
-You specialize in the "text-over-black + background images" format.
+def _compute_fingerprint(text: str, lines: list[str]) -> str:
+    """Compute dedup fingerprint from reel text + first few lines."""
+    content = text.lower().strip() + "|" + "|".join(
+        sorted(l.lower().strip() for l in lines[:3])
+    )
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
 
-Your job: Take a raw news story or interesting fact and transform it into:
-1. A viral reel script (3-6 punchy lines, shown over images)
-2. A thumbnail title (short, ALL CAPS, designed to stop scrollers)
-3. Image search queries for sourcing relevant background images
-4. A caption with hashtags
 
-Style reference: @execute, @factsdailyy, @luxurylife on Instagram.
+# ── DeepSeek prompt template ───────────────────────────────────────────────
+# Generates BOTH the viral post AND AI image prompts in one call.
 
-RULES:
-- Opening line MUST be a bold, attention-grabbing statement
-- Use short sentences. Max 15 words per line.
-- Total reel text MUST be 50-60 words. Never exceed 60 words.
-- End with an insight, lesson, or thought-provoking closer
-- Thumbnail title: 3-5 words per line, max 4 lines, ALL CAPS
+TEXT_VIDEO_PROMPT = """Niche: {niche}
 
-IMAGE QUERY RULES (CRITICAL — READ CAREFULLY):
-- Each image MUST visually relate to the specific reel line it accompanies
-- web_search queries: Use real-world terms like "woman scientist lab coat", NOT abstract concepts like "health funding graph"
-- NEVER query for charts, graphs, statistics, infographics, or bar charts — these look terrible as reel backgrounds
-- Good query examples: "tech CEO speaking stage", "modern hospital interior", "athlete training gym", "luxury skyscraper night"
-- Bad query examples: "funding crash chart", "investment growth", "statistics women health" 
-- For people: include descriptive physical context ("woman doctor white coat stethoscope")
-- For places/things: include atmosphere ("futuristic city skyline sunset cinematic")
-- For ai_generate: write a detailed visual scene description, NOT a concept ("A photorealistic close-up of a scientist examining DNA strands under blue laboratory lighting")
-- fallback_query should be a broader version of the main query, not a rephrased concept
-- Use "web_search" for real people, real places, real objects
-- Use "ai_generate" ONLY for abstract/conceptual visuals that can't be photographed"""
+Task:
+Write ONE viral-style insight post.
 
-TEXT_VIDEO_POLISH_PROMPT = """Given this story:
-HEADLINE: {headline}
-SUMMARY: {summary}
-SOURCE: {source_name}
+With ~25% probability, instead base the post on a very recent or emerging topic (e.g., a new study, strange health news, unusual trend, or relevant global development related to the niche). Do not mention that it is recent—just write the post normally.
 
-Niche: {niche}
+Length:
+40–70 words maximum.
 
-Return ONLY valid JSON:
-{{
-  "reel_text": "Line 1\\nLine 2\\nLine 3\\n...",
-  "thumbnail_title": "BOLD\\nTHUMB\\nTITLE",
-  "images": [
-    {{"source_type": "web_search", "query": "...", "fallback_query": "..."}},
-    {{"source_type": "web_search", "query": "...", "fallback_query": "..."}},
-    {{"source_type": "ai_generate", "query": "...", "fallback_query": "..."}}
-  ],
-  "thumbnail_image": {{"source_type": "web_search", "query": "...", "fallback_query": "..."}},
-  "caption": "Full caption text with emojis...",
-  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "story_category": "power_moves|controversy|underdog|prediction|shocking_stat|human_moment|industry_shift|failed_bet|hidden_cost|scientific_breakthrough"
-}}"""
+Style:
+• Start with a strong claim.
+• Briefly explain the hidden biological mechanism behind it.
+• Include one concrete fact, number, or scientific detail.
+• End with a sharp insight.
+
+Tone:
+concise, analytical, authoritative.
+
+No fluff, emojis, hashtags, or lists.
+Write it like a short viral insight post on social media.
+
+After the post, recommend 3–4 visuals that would work well with the post.
+
+For each visual provide:
+• IMAGE IDEA: what the image should show
+• AI PROMPT: a prompt someone could use to generate the image with an AI image generator
+• SEARCH QUERY: a phrase someone could use to find similar images on Google, stock sites, or social media
+
+Image rules:
+• Images must be cinematic 4K visuals
+• Use vivid colors, dramatic lighting, and high contrast
+• Prefer realistic photography style rather than illustration
+• Scenes should feel visually striking and engaging for social media
+• Avoid text overlays or infographic-style images
+
+After the visuals, provide:
+• THUMBNAIL TITLE: A bold, attention-grabbing title for the reel thumbnail (3-5 words, ALL CAPS, max 4 lines separated by newlines)
+• CAPTION: A short engaging caption for the social media post (1-2 sentences with emojis)
+• HASHTAGS: 5 relevant hashtags (without # symbol)
+
+Output format:
+POST:
+<viral insight post>
+
+VISUALS:
+1.
+IMAGE IDEA: <description>
+AI PROMPT: <cinematic 4K vivid color prompt>
+SEARCH QUERY: <search phrase>
+
+2.
+IMAGE IDEA: <description>
+AI PROMPT: <cinematic 4K vivid color prompt>
+SEARCH QUERY: <search phrase>
+
+3.
+IMAGE IDEA: <description>
+AI PROMPT: <cinematic 4K vivid color prompt>
+SEARCH QUERY: <search phrase>
+
+THUMBNAIL TITLE:
+<BOLD TITLE>
+
+CAPTION:
+<caption text>
+
+HASHTAGS:
+<tag1, tag2, tag3, tag4, tag5>"""
 
 
 def _get_deepseek_client() -> OpenAI:
@@ -128,37 +152,30 @@ def _get_deepseek_client() -> OpenAI:
 
 
 class StoryPolisher:
-    """Rewrites raw stories into viral reel format using DeepSeek."""
+    """Generates viral reel content + AI image prompts via DeepSeek."""
 
     def __init__(self):
         self.client = _get_deepseek_client()
 
-    def polish_story(
-        self,
-        raw_story: RawStory,
-        niche: str,
-        brand_handle: Optional[str] = None,
-    ) -> Optional[PolishedStory]:
+    def generate_content(self, niche: str) -> Optional[PolishedStory]:
         """
-        Call DeepSeek to rewrite the story and generate all metadata.
+        Generate a complete viral reel (text + image prompts) from scratch.
+
+        DeepSeek generates everything — no external story source needed.
+        The AI PROMPTs in the response are used directly by DeAPI for image generation.
 
         Returns a PolishedStory or None on failure.
         """
         try:
-            user_prompt = TEXT_VIDEO_POLISH_PROMPT.format(
-                headline=raw_story.headline,
-                summary=raw_story.summary[:500],
-                source_name=raw_story.source_name,
-                niche=niche,
-            )
+            user_prompt = TEXT_VIDEO_PROMPT.format(niche=niche)
 
             response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[
-                    {"role": "system", "content": TEXT_VIDEO_SYSTEM_PROMPT},
+                    {"role": "system", "content": "You are a viral content creator. Follow the output format exactly."},
                     {"role": "user", "content": user_prompt},
                 ],
-                temperature=0.7,
+                temperature=0.8,
                 max_tokens=2000,
                 top_p=0.95,
             )
@@ -168,54 +185,53 @@ class StoryPolisher:
                 logger.error("[StoryPolisher] Empty response from DeepSeek")
                 return None
 
-            return self._parse_response(content, raw_story)
+            return self._parse_response(content)
 
         except Exception as e:
             logger.error(f"[StoryPolisher] DeepSeek error: {e}")
             return None
 
-    def _parse_response(self, content: str, raw_story: RawStory) -> Optional[PolishedStory]:
-        """Parse DeepSeek JSON response into PolishedStory."""
+    def _parse_response(self, content: str) -> Optional[PolishedStory]:
+        """Parse DeepSeek structured text response into PolishedStory."""
         try:
-            # Strip markdown code fences if present
-            text = content.strip()
-            if text.startswith("```"):
-                lines = text.split("\n")
-                # Remove first and last lines (fences)
-                text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-                text = text.strip()
+            # Extract POST section
+            post_match = re.search(r'POST:\s*\n(.+?)(?=\nVISUALS:)', content, re.DOTALL)
+            reel_text = post_match.group(1).strip() if post_match else ""
+            reel_lines = [l.strip() for l in reel_text.split("\n") if l.strip()]
 
-            data = json.loads(text)
+            # Extract VISUALS — get AI PROMPTs (these go directly to DeAPI)
+            visuals_match = re.search(r'VISUALS:\s*\n(.+?)(?=\nTHUMBNAIL TITLE:)', content, re.DOTALL)
+            visuals_text = visuals_match.group(1) if visuals_match else ""
 
-            reel_text = data.get("reel_text", "")
-            reel_lines = reel_text.split("\n") if reel_text else []
-
-            thumbnail_title = data.get("thumbnail_title", "")
-            thumbnail_title_lines = thumbnail_title.split("\n") if thumbnail_title else []
-
+            ai_prompts = re.findall(r'AI PROMPT:\s*(.+)', visuals_text)
             images = [
-                ImagePlan(
-                    source_type=img.get("source_type", "web_search"),
-                    query=img.get("query", ""),
-                    fallback_query=img.get("fallback_query"),
-                )
-                for img in data.get("images", [])
+                ImagePlan(source_type="ai_generate", query=prompt.strip())
+                for prompt in ai_prompts
+                if prompt.strip()
             ]
 
-            thumb_data = data.get("thumbnail_image", {})
-            thumbnail_image = ImagePlan(
-                source_type=thumb_data.get("source_type", "web_search"),
-                query=thumb_data.get("query", ""),
-                fallback_query=thumb_data.get("fallback_query"),
-            )
+            # Extract THUMBNAIL TITLE
+            thumb_match = re.search(r'THUMBNAIL TITLE:\s*\n(.+?)(?=\nCAPTION:)', content, re.DOTALL)
+            thumbnail_title = thumb_match.group(1).strip() if thumb_match else ""
+            thumbnail_title_lines = [l.strip() for l in thumbnail_title.split("\n") if l.strip()]
 
-            caption = data.get("caption", "")
-            hashtags = data.get("hashtags", [])
-            story_category = data.get("story_category", "power_moves")
+            # Extract CAPTION
+            caption_match = re.search(r'CAPTION:\s*\n(.+?)(?=\nHASHTAGS:)', content, re.DOTALL)
+            caption = caption_match.group(1).strip() if caption_match else ""
 
-            fingerprint = compute_story_fingerprint(
-                raw_story.headline, reel_lines[:3]
-            )
+            # Extract HASHTAGS
+            hashtags_match = re.search(r'HASHTAGS:\s*\n(.+)', content, re.DOTALL)
+            hashtags_text = hashtags_match.group(1).strip() if hashtags_match else ""
+            hashtags = [t.strip().lstrip("#") for t in hashtags_text.split(",") if t.strip()]
+
+            if not reel_text or not images:
+                logger.error(f"[StoryPolisher] Missing required fields. reel_text={bool(reel_text)}, images={len(images)}")
+                return None
+
+            # Use first image as thumbnail image
+            thumbnail_image = images[0] if images else ImagePlan(source_type="ai_generate", query=reel_text[:100])
+
+            fingerprint = _compute_fingerprint(reel_text, reel_lines)
 
             return PolishedStory(
                 reel_text=reel_text,
@@ -226,11 +242,10 @@ class StoryPolisher:
                 thumbnail_image=thumbnail_image,
                 caption=caption,
                 hashtags=hashtags,
-                story_category=story_category,
-                source_story=raw_story,
+                story_category="insight",
                 story_fingerprint=fingerprint,
             )
 
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.error(f"[StoryPolisher] Parse error: {e}, content: {content[:200]}")
+        except Exception as e:
+            logger.error(f"[StoryPolisher] Parse error: {e}, content: {content[:300]}")
             return None

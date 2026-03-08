@@ -565,7 +565,7 @@ class JobProcessor:
 
         self._manager.update_brand_output(job_id, brand, {
             "status": "generating",
-            "progress_message": "Sourcing images...",
+            "progress_message": "Generating images...",
             "progress_percent": 5,
         })
 
@@ -600,7 +600,7 @@ class JobProcessor:
             image_paths = []
             for i, plan in enumerate(image_plans):
                 self._manager.update_brand_output(job_id, brand, {
-                    "progress_message": f"Sourcing image {i+1}/{len(image_plans)}...",
+                    "progress_message": f"Generating image {i+1}/{len(image_plans)}...",
                     "progress_percent": 5 + int(30 * (i / max(len(image_plans), 1))),
                 })
                 path = sourcer.source_image(plan)

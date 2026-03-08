@@ -1,16 +1,16 @@
 """
-Image Sourcer — downloads or generates images for TEXT-VIDEO reels.
+Image Sourcer — generates images for TEXT-VIDEO reels via DeAPI.
 
-Sources (priority order for web_search):
-  1. Unsplash (free, no watermarks, UNSPLASH_ACCESS_KEY)
-  2. Pixabay (free, no watermarks, PIXABAY_API_KEY)
-  3. SerpAPI Google Images (web scraping, SERPAPI_KEY)
-  4. Pexels (fallback, PEXELS_API_KEY)
-  5. Gemini Imagen 4 (AI generation, GEMINI_API_KEY)
+All images are AI-generated using DeAPI (Flux1schnell model).
+The AI prompts come from DeepSeek via StoryPolisher.
 """
 import logging
 import os
+import random
 import tempfile
+import time
+import threading
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -24,309 +24,187 @@ logger = logging.getLogger(__name__)
 TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 
-# Stock photo sites that serve watermarked images — block these domains
-BLOCKED_DOMAINS = {
-    "dreamstime.com", "shutterstock.com", "istockphoto.com", "gettyimages.com",
-    "alamy.com", "123rf.com", "depositphotos.com", "bigstockphoto.com",
-    "adobestock.com", "stock.adobe.com", "thinkstockphotos.com",
-    "vectorstock.com", "canstockphoto.com", "photospin.com", "pond5.com",
-    "stockfresh.com", "agefotostock.com", "superstock.com",
-}
+# DeAPI concurrency control (shared with ai_background.py's semaphore)
+_sourcer_semaphore = threading.Semaphore(1)
+QUEUE_TIMEOUT = 90
+MAX_RETRIES = 5
+INITIAL_RETRY_DELAY = 5
+MAX_RETRY_DELAY = 60
 
 
 class ImageSourcer:
-    """Sources images from web search APIs and AI generators."""
+    """Generates images via DeAPI for text-video reels."""
 
     def __init__(self, db=None):
         self.db = db
-        self._serpapi_key = os.environ.get("SERPAPI_KEY")
-        self._gemini_key = os.environ.get("GEMINI_API_KEY")
-        self._pexels_key = os.environ.get("PEXELS_API_KEY")
-        self._unsplash_key = os.environ.get("UNSPLASH_ACCESS_KEY")
-        self._pixabay_key = os.environ.get("PIXABAY_API_KEY")
+        self._api_key = os.environ.get("DEAPI_API_KEY")
+        self._base_url = "https://api.deapi.ai/api/v1/client"
 
     def source_image(self, plan: ImagePlan) -> Optional[Path]:
         """
-        Source a single image based on the plan.
+        Generate a single image via DeAPI from the AI prompt.
 
-        For ai_generate: Gemini → web fallback chain.
-        For web_search: Unsplash → Pixabay → SerpAPI → Pexels.
+        The plan.query contains the cinematic AI prompt from DeepSeek.
         Returns path to processed image (1080x1920) or None.
         """
-        path = None
+        if not self._api_key:
+            logger.error("[ImageSourcer] DEAPI_API_KEY not set")
+            return None
 
-        if plan.source_type == "ai_generate":
-            path = self._generate_ai_image(plan.query)
-            # If AI fails, fall through to web search chain
-            if not path:
-                path = self._web_search_chain(plan.query)
-        else:
-            path = self._web_search_chain(plan.query)
+        path = self._generate_via_deapi(plan.query)
 
-        # Fallback query through the full web chain
+        # Try fallback prompt if primary fails
         if not path and plan.fallback_query:
-            path = self._web_search_chain(plan.fallback_query)
+            path = self._generate_via_deapi(plan.fallback_query)
 
-        # Process to target dimensions
         if path:
             return self._process_image(path)
 
         return None
 
-    def _web_search_chain(self, query: str) -> Optional[Path]:
-        """Try all web image sources in priority order: Unsplash → Pixabay → SerpAPI → Pexels."""
-        for search_fn in [
-            self._search_unsplash,
-            self._search_pixabay,
-            self._search_and_download,
-            self._search_pexels,
-        ]:
-            path = search_fn(query)
-            if path:
-                return path
-        return None
-
     def source_images_batch(self, plans: list[ImagePlan]) -> list[Optional[Path]]:
-        """Source multiple images, returning results in order."""
+        """Generate multiple images, returning results in order."""
         return [self.source_image(plan) for plan in plans]
 
-    def _search_and_download(self, query: str) -> Optional[Path]:
-        """Search Google Images via SerpAPI and download best result."""
-        if not self._serpapi_key:
-            logger.warning("[ImageSourcer] SERPAPI_KEY not set, skipping web search")
-            return None
-
-        # Exclude stock photo sites from search results
-        exclusions = " ".join(f"-site:{d}" for d in list(BLOCKED_DOMAINS)[:5])
-        filtered_query = f"{query} -watermark -stock photo {exclusions}"
-
-        try:
-            resp = requests.get(
-                "https://serpapi.com/search",
-                params={
-                    "engine": "google_images",
-                    "q": filtered_query,
-                    "api_key": self._serpapi_key,
-                    "num": 10,
-                    "ijn": "0",
-                    "safe": "active",
-                },
-                timeout=15,
-            )
-            resp.raise_for_status()
-            self._record_api_call("serpapi", "google_images")
-
-            results = resp.json().get("images_results", [])
-            # Filter: min resolution + block stock photo domains
-            candidates = [
-                r for r in results
-                if r.get("original_width", 0) >= 800
-                and r.get("original_height", 0) >= 600
-                and not self._is_blocked_domain(r.get("original", ""))
-                and not self._is_blocked_domain(r.get("link", ""))
-            ]
-
-            for candidate in candidates[:5]:
-                url = candidate.get("original")
-                if url:
-                    path = self._download_image(url)
-                    if path:
-                        return path
-
-        except Exception as e:
-            logger.error(f"[ImageSourcer] SerpAPI search error: {e}")
-
-        return None
-
-    @staticmethod
-    def _is_blocked_domain(url: str) -> bool:
-        """Check if a URL belongs to a blocked stock photo domain."""
-        if not url:
-            return False
-        url_lower = url.lower()
-        return any(domain in url_lower for domain in BLOCKED_DOMAINS)
-
-    def _generate_ai_image(self, prompt: str) -> Optional[Path]:
-        """Generate image using Google Gemini Developer API (Imagen 3) via REST."""
-        if not self._gemini_key:
-            logger.warning("[ImageSourcer] GEMINI_API_KEY not set, skipping AI generation")
-            return None
+    def _generate_via_deapi(self, prompt: str) -> Optional[Path]:
+        """Generate an image via DeAPI using Flux1schnell model in 16:9 format."""
+        acquired = _sourcer_semaphore.acquire(timeout=QUEUE_TIMEOUT)
+        if not acquired:
+            logger.warning("[ImageSourcer] DeAPI queue timeout")
+            try:
+                _sourcer_semaphore.release()
+            except ValueError:
+                pass
+            _sourcer_semaphore.acquire(timeout=10)
 
         try:
-            import json
-            import base64
-
-            url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                "imagen-4.0-generate-001:predict"
-                f"?key={self._gemini_key}"
-            )
-            payload = {
-                "instances": [{"prompt": prompt}],
-                "parameters": {
-                    "sampleCount": 1,
-                    "aspectRatio": "9:16",
-                    "safetyFilterLevel": "BLOCK_ONLY_HIGH",
-                },
+            headers = {
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
             }
-            resp = requests.post(url, json=payload, timeout=60)
 
-            self._record_api_call("gemini", "generate_images")
+            # 16:9 format rounded to 128 for Flux1schnell
+            width = 1280  # 128-aligned
+            height = 768   # 128-aligned (closest to 720 for 16:9)
 
-            if resp.status_code != 200:
-                logger.error(f"[ImageSourcer] Gemini Imagen error: {resp.status_code} {resp.text[:300]}")
+            seed = random.randint(0, 2**31 - 1)
+            payload = {
+                "prompt": prompt,
+                "model": "Flux1schnell",
+                "width": width,
+                "height": height,
+                "seed": seed,
+                "steps": 4,
+                "guidance": 0,
+                "loras": [],
+            }
+
+            logger.info(f"[ImageSourcer] DeAPI generating {width}x{height}, seed={seed}")
+
+            # Submit request with retry
+            response = self._request_with_retry("post", f"{self._base_url}/txt2img", headers, json=payload, timeout=120)
+            result = response.json()
+            request_id = result.get("request_id") or result.get("data", {}).get("request_id")
+
+            if not request_id:
+                logger.error("[ImageSourcer] DeAPI returned no request_id")
                 return None
 
-            data = resp.json()
-            predictions = data.get("predictions", [])
-            if predictions and predictions[0].get("bytesBase64Encoded"):
-                img_bytes = base64.b64decode(predictions[0]["bytesBase64Encoded"])
-                path = Path(tempfile.mktemp(suffix=".png"))
-                path.write_bytes(img_bytes)
-                return path
+            logger.info(f"[ImageSourcer] DeAPI queued — request_id: {request_id}")
 
-        except Exception as e:
-            logger.error(f"[ImageSourcer] Gemini Imagen error: {e}")
+            # Poll for result
+            max_polls = 90
+            for poll in range(1, max_polls + 1):
+                time.sleep(2)
 
-        return None
+                status_resp = self._request_with_retry(
+                    "get",
+                    f"{self._base_url}/request-status/{request_id}",
+                    {"Authorization": f"Bearer {self._api_key}"},
+                    timeout=30,
+                )
+                data = status_resp.json().get("data", {})
+                st = data.get("status")
 
-    def _search_unsplash(self, query: str) -> Optional[Path]:
-        """Search Unsplash for free, watermark-free photos."""
-        if not self._unsplash_key:
+                if st == "done":
+                    result_url = data.get("result_url")
+                    if not result_url:
+                        logger.error("[ImageSourcer] DeAPI completed but no result_url")
+                        return None
+
+                    # Download the image
+                    img_resp = requests.get(result_url, timeout=60)
+                    img_resp.raise_for_status()
+
+                    path = Path(tempfile.mktemp(suffix=".png"))
+                    path.write_bytes(img_resp.content)
+
+                    # Track DeAPI cost
+                    self._record_api_call("deapi", "txt2img")
+                    try:
+                        from app.services.monitoring.cost_tracker import record_deapi_call
+                        record_deapi_call()
+                    except Exception:
+                        pass
+
+                    logger.info(f"[ImageSourcer] DeAPI image generated in {poll * 2}s")
+                    return path
+
+                elif st == "failed":
+                    logger.error(f"[ImageSourcer] DeAPI failed: {data.get('error', 'Unknown')}")
+                    return None
+
+                elif st in ("pending", "processing"):
+                    continue
+                else:
+                    logger.error(f"[ImageSourcer] DeAPI unexpected status: {st}")
+                    return None
+
+            logger.error(f"[ImageSourcer] DeAPI timed out after {max_polls * 2}s")
             return None
 
-        try:
-            resp = requests.get(
-                "https://api.unsplash.com/search/photos",
-                params={
-                    "query": query,
-                    "per_page": 5,
-                    "orientation": "portrait",
-                    "content_filter": "high",
-                },
-                headers={"Authorization": f"Client-ID {self._unsplash_key}"},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            self._record_api_call("unsplash", "search_photos")
-
-            results = resp.json().get("results", [])
-            for photo in results:
-                urls = photo.get("urls", {})
-                # Use 'regular' (1080w) for good quality without being huge
-                url = urls.get("regular") or urls.get("full")
-                if url:
-                    path = self._download_image(url)
-                    if path:
-                        return path
-
         except Exception as e:
-            logger.error(f"[ImageSourcer] Unsplash error: {e}")
-
-        return None
-
-    def _search_pixabay(self, query: str) -> Optional[Path]:
-        """Search Pixabay for free, royalty-free photos."""
-        if not self._pixabay_key:
+            logger.error(f"[ImageSourcer] DeAPI error: {e}")
             return None
+        finally:
+            try:
+                _sourcer_semaphore.release()
+            except ValueError:
+                pass
 
-        try:
-            resp = requests.get(
-                "https://pixabay.com/api/",
-                params={
-                    "key": self._pixabay_key,
-                    "q": query,
-                    "per_page": 5,
-                    "orientation": "vertical",
-                    "image_type": "photo",
-                    "safesearch": "true",
-                    "min_width": 800,
-                    "min_height": 1000,
-                },
-                timeout=10,
-            )
-            resp.raise_for_status()
-            self._record_api_call("pixabay", "search")
+    def _request_with_retry(self, method: str, url: str, headers: dict, **kwargs) -> requests.Response:
+        """HTTP request with retry logic for 429 errors."""
+        retry_delay = INITIAL_RETRY_DELAY
 
-            hits = resp.json().get("hits", [])
-            for hit in hits:
-                # largeImageURL is the highest-res available without approval
-                url = hit.get("largeImageURL") or hit.get("webformatURL")
-                if url:
-                    path = self._download_image(url)
-                    if path:
-                        return path
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                if method.lower() == "get":
+                    response = requests.get(url, headers=headers, **kwargs)
+                else:
+                    response = requests.post(url, headers=headers, **kwargs)
 
-        except Exception as e:
-            logger.error(f"[ImageSourcer] Pixabay error: {e}")
+                if response.status_code == 429:
+                    if attempt < MAX_RETRIES:
+                        logger.warning(f"[ImageSourcer] DeAPI 429, retry {attempt + 1}/{MAX_RETRIES} in {retry_delay}s")
+                        time.sleep(retry_delay)
+                        retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                        continue
+                    else:
+                        raise RuntimeError("DeAPI rate limit exceeded after retries")
 
-        return None
+                response.raise_for_status()
+                return response
 
-    def _search_pexels(self, query: str) -> Optional[Path]:
-        """Search Pexels photos as fallback source."""
-        if not self._pexels_key:
-            logger.warning("[ImageSourcer] PEXELS_API_KEY not set, skipping Pexels")
-            return None
+            except requests.exceptions.RequestException as e:
+                if attempt < MAX_RETRIES:
+                    logger.warning(f"[ImageSourcer] Request error, retry {attempt + 1}: {e}")
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                    continue
+                raise
 
-        try:
-            resp = requests.get(
-                "https://api.pexels.com/v1/search",
-                params={
-                    "query": query,
-                    "per_page": 3,
-                    "orientation": "portrait",
-                    "size": "large",
-                },
-                headers={"Authorization": self._pexels_key},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            self._record_api_call("pexels", "search")
-
-            photos = resp.json().get("photos", [])
-            for photo in photos:
-                url = photo.get("src", {}).get("large2x") or photo.get("src", {}).get("original")
-                if url:
-                    path = self._download_image(url)
-                    if path:
-                        return path
-
-        except Exception as e:
-            logger.error(f"[ImageSourcer] Pexels error: {e}")
-
-        return None
-
-    def _download_image(self, url: str, timeout: int = 15) -> Optional[Path]:
-        """Download an image from URL to a temp file."""
-        try:
-            resp = requests.get(url, timeout=timeout, stream=True)
-            resp.raise_for_status()
-
-            content_type = resp.headers.get("content-type", "")
-            if "image" not in content_type and not url.lower().endswith(
-                (".jpg", ".jpeg", ".png", ".webp")
-            ):
-                return None
-
-            suffix = ".jpg"
-            if "png" in content_type or url.lower().endswith(".png"):
-                suffix = ".png"
-            elif "webp" in content_type or url.lower().endswith(".webp"):
-                suffix = ".webp"
-
-            path = Path(tempfile.mktemp(suffix=suffix))
-            with open(path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-
-            # Validate it's actually an image
-            img = Image.open(path)
-            img.verify()
-            return path
-
-        except Exception as e:
-            logger.debug(f"[ImageSourcer] Download failed for {url[:80]}: {e}")
-            return None
+        raise RuntimeError("DeAPI request failed after all retries")
 
     def _process_image(
         self, raw_path: Path, target_size: tuple[int, int] = (TARGET_WIDTH, TARGET_HEIGHT)

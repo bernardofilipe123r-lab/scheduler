@@ -468,25 +468,14 @@ def _execute_content_plan(db: Session, plan):
     generator = ContentGeneratorV2()
 
     if plan.content_type == "text_video_reel":
-        # TEXT-VIDEO pipeline: discover story → polish → build job
-        from app.services.discovery.story_discoverer import StoryDiscoverer
+        # TEXT-VIDEO pipeline: generate content + image prompts via DeepSeek
         from app.services.discovery.story_polisher import StoryPolisher
         from dataclasses import asdict
 
-        discoverer = StoryDiscoverer(db=db)
-        stories = discoverer.discover_stories(
-            niche=ctx.niche_name or "business",
-            category=getattr(plan, "story_category", None) or plan.topic_bucket,
-            recency="mixed",
-            count=5,
-        )
-        if not stories:
-            raise ValueError("StoryDiscoverer returned no stories")
-
         polisher = StoryPolisher()
-        polished = polisher.polish_story(stories[0], niche=ctx.niche_name or "business")
+        polished = polisher.generate_content(niche=ctx.niche_name or "business")
         if not polished:
-            raise ValueError("StoryPolisher failed to polish story")
+            raise ValueError("StoryPolisher failed to generate content")
 
         result = {
             "title": polished.thumbnail_title,
