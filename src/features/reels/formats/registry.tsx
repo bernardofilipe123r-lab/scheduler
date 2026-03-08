@@ -25,6 +25,12 @@ export interface ReelFormat {
   supportsManual: boolean
   /** Whether auto mode requires Content DNA (niche) to be configured */
   requiresNiche: boolean
+  /** Card preview: gradient background for the visual card */
+  previewGradient: string
+  /** Card preview: short tagline for the card */
+  tagline: string
+  /** Card preview: list of visual features for the card */
+  features: string[]
 }
 
 export const REEL_FORMATS: ReelFormat[] = [
@@ -36,6 +42,9 @@ export const REEL_FORMATS: ReelFormat[] = [
     supportsAuto: true,
     supportsManual: true,
     requiresNiche: true,
+    previewGradient: 'from-violet-600 via-purple-600 to-indigo-700',
+    tagline: 'Kinetic text on AI art',
+    features: ['AI backgrounds', 'Animated text', 'Music sync'],
   },
   {
     id: 'text_video',
@@ -45,6 +54,9 @@ export const REEL_FORMATS: ReelFormat[] = [
     supportsAuto: true,
     supportsManual: true,
     requiresNiche: true,
+    previewGradient: 'from-amber-500 via-orange-500 to-rose-600',
+    tagline: 'Photos meet story',
+    features: ['Real images', 'Text overlays', 'Slideshow'],
   },
 ]
 

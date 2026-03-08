@@ -7,6 +7,7 @@ import { useTobyBrandConfigs } from '@/features/toby'
 import { useCreateJob } from '@/features/jobs'
 import { useGenerateTextVideo } from '../api/use-text-video'
 import { REEL_FORMATS } from '../formats'
+import { FormatCarousel } from './FormatCarousel'
 import { ManualTextBased } from './ManualTextBased'
 import { ManualTextVideo } from './ManualTextVideo'
 import type { BrandName } from '@/shared/types'
@@ -113,7 +114,12 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
 
   // ── Toggle helpers ──
   const toggleBrand = (id: BrandName) => {
-    setAllBrands(false)
+    if (allBrands) {
+      // Switching from "All" to individual — select only the clicked brand
+      setAllBrands(false)
+      setSelectedBrands([id])
+      return
+    }
     setSelectedBrands(prev =>
       prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
     )
@@ -263,19 +269,18 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
           {/* Individual brands */}
           <div className="grid grid-cols-2 gap-2">
             {dynamicBrands.map(brand => {
-              const active = allBrands || selectedBrands.includes(brand.id)
+              const active = !allBrands && selectedBrands.includes(brand.id)
               return (
                 <button
                   key={brand.id}
                   onClick={() => toggleBrand(brand.id)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${
-                    active && !allBrands
+                    active
                       ? 'border-stone-300 bg-stone-50'
                       : allBrands
-                        ? 'border-gray-200 bg-gray-50 opacity-60'
+                        ? 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-white'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
-                  disabled={allBrands}
                 >
                   <div
                     className="w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-offset-1"
@@ -362,30 +367,10 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="text-center space-y-1">
             <h2 className="text-xl font-bold text-gray-900">What type of video?</h2>
-            <p className="text-sm text-gray-500">Choose your content format</p>
+            <p className="text-sm text-gray-500">Swipe to explore — tap to select</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
-            {REEL_FORMATS.map(format => {
-              const Icon = format.icon
-              return (
-                <button
-                  key={format.id}
-                  onClick={() => goToMode(format.id)}
-                  className="flex items-center gap-4 px-5 py-5 rounded-xl border-2 border-gray-200 bg-white hover:border-stone-400 hover:bg-stone-50/50 transition-all text-left group"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center group-hover:bg-stone-200 transition-colors">
-                    <Icon className="w-6 h-6 text-stone-700" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-gray-900">{format.label}</span>
-                    <p className="text-xs text-gray-500 mt-0.5">{format.description}</p>
-                  </div>
-                  <ArrowLeft className="w-4 h-4 text-gray-300 rotate-180 group-hover:text-stone-500 transition-colors" />
-                </button>
-              )
-            })}
-          </div>
+          <FormatCarousel onSelect={goToMode} />
         </div>
       )}
 
