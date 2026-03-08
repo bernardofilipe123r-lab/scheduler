@@ -8,7 +8,7 @@ import type { BrandName } from '@/shared/types'
 const MAX_IMAGES = 10
 
 export function TextVideoManual() {
-  const { brandIds, isLoading: brandsLoading } = useDynamicBrands()
+  const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const generateMutation = useGenerateTextVideo()
   const uploadMutation = useUploadImages()
 
@@ -172,23 +172,33 @@ export function TextVideoManual() {
 
       {/* Brand Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Brands</label>
-        <div className="flex flex-wrap gap-2">
-          {brandIds.map(id => (
-            <button
-              key={id}
-              onClick={() => setSelectedBrands(prev =>
-                prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
-              )}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                selectedBrands.includes(id)
-                  ? 'bg-primary-50 border border-primary-300 text-primary-700'
-                  : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'
-              }`}
-            >
-              {id}
-            </button>
-          ))}
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Brands</label>
+        <div className="grid grid-cols-2 gap-2">
+          {dynamicBrands.map(brand => {
+            const active = selectedBrands.includes(brand.id)
+            return (
+              <label
+                key={brand.id}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all border ${
+                  active ? 'border-stone-300 bg-stone-50' : 'border-gray-100 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={() => setSelectedBrands(prev =>
+                    prev.includes(brand.id) ? prev.filter(b => b !== brand.id) : [...prev, brand.id]
+                  )}
+                  className="accent-stone-800"
+                />
+                <div
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: brand.color || '#999' }}
+                />
+                <span className="text-xs font-medium text-gray-800 truncate">{brand.label}</span>
+              </label>
+            )
+          })}
         </div>
       </div>
 
@@ -196,7 +206,7 @@ export function TextVideoManual() {
       <button
         onClick={handleGenerate}
         disabled={busy || !thumbnailTitle.trim() || !reelText.trim() || images.length === 0}
-        className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+        className="w-full py-3 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors text-sm"
       >
         {busy ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> {uploadMutation.isPending ? 'Uploading images...' : 'Generating...'}</>
