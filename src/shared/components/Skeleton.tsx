@@ -432,7 +432,7 @@ export function JobDetailSkeleton() {
       </div>
 
       {/* Info card */}
-      <div className="bg-gray-900/70 rounded-xl border border-gray-700/50 p-6 space-y-4">
+      <div className="bg-white rounded-[10px] border border-gray-200 shadow-sm p-6 space-y-4">
         <div className="grid grid-cols-3 gap-6">
           {[0, 1, 2].map((i) => (
             <div key={i} className="space-y-2">
@@ -452,8 +452,8 @@ export function JobDetailSkeleton() {
       {/* Brand outputs grid */}
       <div className="grid grid-cols-2 gap-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="bg-gray-900/70 rounded-xl border border-gray-700/50 overflow-hidden">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-700/50">
+          <div key={i} className="bg-white rounded-[10px] border border-gray-200 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
               <Sk className="w-8 h-8 rounded-lg" />
               <div className="flex-1 space-y-1">
                 <Sk className="h-4 w-28 rounded" />
