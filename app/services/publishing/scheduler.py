@@ -366,10 +366,26 @@ class DatabaseSchedulerService:
             print(f"\n   ✅ Found {len(pending)} pending post(s) to publish NOW")
             
             # IMMEDIATELY mark all as "publishing" to prevent duplicate picks
-            # CRITICAL FIX (2026-03-08): Pre-publish dedup guard.
-            # Before marking as "publishing", check for title duplicates that
-            # somehow slipped through scheduling. If we find two pending posts
-            # for the same brand with the same title, cancel all but the first.
+            #
+            # Pre-publish safety check (2026-03-08):
+            # Load every (brand, title) published in the last 7 days so we
+            # never publish any title that already went out for the same brand.
+            # This is the SINGLE gatekeeper — catches everything regardless of
+            # how or when the duplicate was scheduled.
+            from sqlalchemy import text as _text
+            already_published_rows = db.execute(_text("""
+                SELECT LOWER(COALESCE(extra_data->>'brand', '')) as brand,
+                       LOWER(COALESCE(extra_data->>'title', '')) as title
+                FROM scheduled_reels
+                WHERE status IN ('published', 'partial', 'publishing')
+                AND scheduled_time > :cutoff
+                AND extra_data->>'title' IS NOT NULL
+            """), {"cutoff": now - timedelta(days=7)}).fetchall()
+            already_published: set[tuple] = {
+                (r.brand, r.title) for r in already_published_rows
+                if r.brand and r.title
+            }
+
             result = []
             seen_brand_titles: dict[tuple, str] = {}  # (brand, title_lower) -> schedule_id
             for reel in pending:
@@ -385,7 +401,18 @@ class DatabaseSchedulerService:
                     reel.publish_error = "Rejected: fallback/placeholder content"
                     continue
 
+                # Check against ALREADY PUBLISHED content (the real safety net)
                 dedup_key = (brand_key, title_key)
+                if title_key and dedup_key in already_published:
+                    print(f"      🚫 ALREADY PUBLISHED: {reel.schedule_id} — "
+                          f"'{title_key[:50]}' was already published for {brand_key}")
+                    reel.status = "failed"
+                    reel.publish_error = (
+                        f"Skipped: title already published for {brand_key} in last 7 days"
+                    )
+                    continue
+
+                # Check against other items in THIS batch
                 if title_key and dedup_key in seen_brand_titles:
                     print(f"      🚫 DEDUP at publish: {reel.schedule_id} is duplicate of "
                           f"{seen_brand_titles[dedup_key]} (same title for {brand_key})")
