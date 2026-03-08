@@ -52,7 +52,6 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
   const [allBrands, setAllBrands] = useState(true)
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedFormat, setSelectedFormat] = useState<string>('')
-  const [isGenerating, setIsGenerating] = useState(false)
 
   const niche = nicheConfig?.niche_name || ''
 
@@ -146,12 +145,11 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
     setSelectedFormat('')
   }, [])
 
-  // ── Auto-generate handler ──
+  // ── Auto-generate handler — creates job instantly and navigates ──
   const handleAutoGenerate = async () => {
     const brands = effectiveBrands
     if (brands.length === 0) return
 
-    setIsGenerating(true)
     try {
       if (selectedFormat === 'text_based') {
         const job = await createJob.mutateAsync({
@@ -166,9 +164,9 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
       } else if (selectedFormat === 'text_video') {
         if (!niche) {
           toast.error('Set up your Content DNA first (niche is required for auto mode)')
-          setIsGenerating(false)
           return
         }
+        // Backend creates job instantly and returns job_id — discovery happens in background
         const result = await generateTextVideo.mutateAsync({
           mode: 'full_auto',
           brands,
@@ -180,8 +178,6 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
       resetWizard()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Generation failed')
-    } finally {
-      setIsGenerating(false)
     }
   }
 
@@ -383,12 +379,27 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
       )}
 
       {/* ─── Step 4: Mode ───
-       *  NOTE FOR FUTURE FORMATS:
-       *  When adding a new reel format, this step should be visually adapted
-       *  to match the format's identity. Use the format's previewGradient,
-       *  previewVideo, autoDescription, and manualDescription from the registry.
-       *  The header area shows a mini preview of the selected format video.
-       *  See the registry comment block for the full checklist.
+       *  FORMAT-AWARE MODE SELECTION
+       *  --------------------------
+       *  This step MUST visually match the selected format's identity.
+       *  Each format has different properties and pipeline steps:
+       *
+       *  TEXT-BASED REEL (text_based):
+       *    - Pipeline: topic selection → text writing → AI background generation → video composition
+       *    - Key properties: variant (dark/light/neon), AI prompt, music
+       *    - Visual identity: purple gradient, kinetic text feel
+       *
+       *  TEXT-VIDEO REEL (text_video):
+       *    - Pipeline: story discovery → script writing → image sourcing → slideshow rendering
+       *    - Key properties: design settings (fonts, colors, layout), image sources, brand header
+       *    - Visual identity: amber/orange gradient, photo + text feel
+       *
+       *  WHEN ADDING A NEW FORMAT:
+       *    1. Add autoSteps[] and manualSteps[] to the format definition in registry.tsx
+       *    2. These steps are rendered as a numbered pipeline below the mode buttons
+       *    3. The header uses the format's previewGradient and previewVideo
+       *    4. Descriptions come from autoDescription / manualDescription
+       *    5. If the format has unique properties (like design settings), mention them in the steps
        */}
       {step === 'mode' && (() => {
         const currentFormat = REEL_FORMATS.find(f => f.id === selectedFormat)
@@ -425,45 +436,57 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
           <div className="grid grid-cols-1 gap-3">
             {/* Auto */}
             {currentFormat?.supportsAuto && (
-              <button
-                onClick={handleAutoGenerate}
-                disabled={isGenerating}
-                className="relative flex items-center gap-4 px-5 py-5 rounded-xl border-2 border-stone-800 bg-stone-900 text-white hover:bg-stone-800 transition-all text-left group overflow-hidden"
-              >
-                {isGenerating && (
-                  <div className="absolute inset-0 bg-stone-900/90 flex items-center justify-center z-10">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span className="text-sm font-medium">Launching generation...</span>
-                    </div>
+              <div className="space-y-2">
+                <button
+                  onClick={handleAutoGenerate}
+                  className="w-full relative flex items-center gap-4 px-5 py-5 rounded-xl border-2 border-stone-800 bg-stone-900 text-white hover:bg-stone-800 transition-all text-left group overflow-hidden"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-amber-400" />
                   </div>
-                )}
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-amber-400" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold">100% Automatic</span>
+                    <p className="text-xs text-stone-300 mt-0.5">{currentFormat?.autoDescription || 'AI handles everything'}</p>
+                  </div>
+                </button>
+                {/* Auto workflow steps — shows what the pipeline actually does for THIS format */}
+                <div className="flex items-center gap-1.5 px-2 overflow-x-auto">
+                  {currentFormat?.autoSteps?.map((s, i) => (
+                    <div key={i} className="flex items-center gap-1.5 flex-shrink-0">
+                      {i > 0 && <span className="text-[10px] text-gray-300">→</span>}
+                      <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 whitespace-nowrap">{s}</span>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-semibold">100% Automatic</span>
-                  <p className="text-xs text-stone-300 mt-0.5">{currentFormat?.autoDescription || 'AI handles everything'}</p>
-                </div>
-              </button>
+              </div>
             )}
 
             {/* Manual */}
             {currentFormat?.supportsManual && (
-              <button
-                onClick={() => setStep('manual')}
-                disabled={isGenerating}
-                className="flex items-center gap-4 px-5 py-5 rounded-xl border-2 border-gray-200 bg-white hover:border-stone-400 hover:bg-stone-50/50 transition-all text-left group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center group-hover:bg-stone-200 transition-colors">
-                  <Wrench className="w-6 h-6 text-stone-700" />
+              <div className="space-y-2">
+                <button
+                  onClick={() => setStep('manual')}
+                  className="w-full flex items-center gap-4 px-5 py-5 rounded-xl border-2 border-gray-200 bg-white hover:border-stone-400 hover:bg-stone-50/50 transition-all text-left group"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center group-hover:bg-stone-200 transition-colors">
+                    <Wrench className="w-6 h-6 text-stone-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900">Manual Control</span>
+                    <p className="text-xs text-gray-500 mt-0.5">{currentFormat?.manualDescription || 'You provide the content and details'}</p>
+                  </div>
+                  <ArrowLeft className="w-4 h-4 text-gray-300 rotate-180 group-hover:text-stone-500 transition-colors" />
+                </button>
+                {/* Manual workflow steps */}
+                <div className="flex items-center gap-1.5 px-2 overflow-x-auto">
+                  {currentFormat?.manualSteps?.map((s, i) => (
+                    <div key={i} className="flex items-center gap-1.5 flex-shrink-0">
+                      {i > 0 && <span className="text-[10px] text-gray-300">→</span>}
+                      <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 whitespace-nowrap">{s}</span>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-semibold text-gray-900">Manual Control</span>
-                  <p className="text-xs text-gray-500 mt-0.5">{currentFormat?.manualDescription || 'You provide the content and details'}</p>
-                </div>
-                <ArrowLeft className="w-4 h-4 text-gray-300 rotate-180 group-hover:text-stone-500 transition-colors" />
-              </button>
+              </div>
             )}
           </div>
 

@@ -196,38 +196,52 @@ async def generate_text_video_reel(
     user: dict = Depends(get_current_user),
 ):
     """
-    Generate a TEXT-VIDEO reel. Creates a job and processes in background.
+    Generate a TEXT-VIDEO reel. Creates a job IMMEDIATELY and processes in background.
+    The user is navigated to the job page right away — no waiting.
+
     Supports 3 modes:
-    - manual: user provides text + images
-    - semi_auto: polished story provided, source images + compose in background
-    - full_auto: discover + polish (sync), then source + compose in background
+    - manual: user provides text + images → job created with that data → compose in bg
+    - semi_auto: polished story provided → job created → source images + compose in bg
+    - full_auto: job created INSTANTLY → discover + polish + source + compose ALL in bg
     """
     user_id = user["id"]
 
     polished_data = None
 
     if request.mode == "full_auto":
-        from app.services.discovery.story_discoverer import StoryDiscoverer
-        from app.services.discovery.story_polisher import StoryPolisher
-
-        niche = request.niche or "business"
-        category = request.category or "power_moves"
-
-        # 1. Discover (fast — just API calls)
-        discoverer = StoryDiscoverer(db=db)
-        stories = discoverer.discover_stories(
-            niche=niche, category=category, recency="mixed", count=5
+        # full_auto: create job immediately with placeholder, do everything in background
+        manager = JobManager(db)
+        job = manager.create_job(
+            user_id=user_id,
+            title="Discovering trending stories...",
+            content_lines=[],
+            brands=request.brands,
+            variant="text_video",
+            platforms=request.platforms,
+            fixed_title=False,
+            created_by="user",
+            music_source=request.music_source,
+            content_format="text_video",
+            text_video_data={},
         )
-        if not stories:
-            raise HTTPException(status_code=404, detail="No stories found")
 
-        # 2. Polish (fast — single DeepSeek call)
-        polisher = StoryPolisher()
-        polished = polisher.polish_story(stories[0], niche=niche)
-        if not polished:
-            raise HTTPException(status_code=500, detail="Failed to polish story")
+        job_id = job.job_id
+        job_dict = job.to_dict()
 
-        polished_data = polished.to_dict()
+        # Everything happens in background — discover, polish, source images, compose
+        background_tasks.add_task(
+            _process_full_auto_text_video_async,
+            job_id,
+            request.niche or "business",
+            request.category or "power_moves",
+        )
+
+        return {
+            "status": "created",
+            "job_id": job_id,
+            "message": "Text-video job created — discovering stories in background",
+            "job": job_dict,
+        }
 
     elif request.mode == "semi_auto":
         if not request.polished_data:
@@ -286,6 +300,80 @@ async def generate_text_video_reel(
 
 import threading
 _tv_job_semaphore = threading.Semaphore(2)
+
+
+def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
+    """
+    Background task for full_auto text-video: discover → polish → update job → compose.
+    The job was already created with a placeholder title so the user sees it instantly.
+    """
+    import traceback
+    import sys
+
+    print(f"\n{'='*60}", flush=True)
+    print(f"📹 TEXT-VIDEO FULL-AUTO BACKGROUND TASK STARTED", flush=True)
+    print(f"   Job ID: {job_id}  Niche: {niche}  Category: {category}", flush=True)
+    print(f"{'='*60}", flush=True)
+    sys.stdout.flush()
+
+    _tv_job_semaphore.acquire()
+    try:
+        with get_db_session() as db:
+            manager = JobManager(db)
+
+            # Step 1: Discover stories
+            manager.update_job_status(job_id, "generating")
+            from app.services.discovery.story_discoverer import StoryDiscoverer
+            from app.services.discovery.story_polisher import StoryPolisher
+
+            discoverer = StoryDiscoverer(db=db)
+            stories = discoverer.discover_stories(
+                niche=niche, category=category, recency="mixed", count=5
+            )
+            if not stories:
+                manager.update_job_status(job_id, "failed", error_message="No stories found for this niche")
+                return
+
+            # Step 2: Polish
+            polisher = StoryPolisher()
+            polished = polisher.polish_story(stories[0], niche=niche)
+            if not polished:
+                manager.update_job_status(job_id, "failed", error_message="Failed to polish story")
+                return
+
+            polished_data = polished.to_dict()
+
+            # Step 3: Update job with real data (title, content, text_video_data)
+            job = manager.get_job(job_id)
+            if job:
+                job.title = polished_data.get("thumbnail_title", "Text-Video Reel")
+                job.content_lines = polished_data.get("reel_lines", [])
+                job.text_video_data = polished_data
+                job.fixed_title = True
+                db.commit()
+
+            # Step 4: Process (source images, compose video, upload)
+            processor = JobProcessor(db)
+            result = processor.process_job(job_id)
+
+            print(f"\n✅ TEXT-VIDEO FULL-AUTO COMPLETED: {job_id}", flush=True)
+            print(f"   Result: {result}", flush=True)
+            sys.stdout.flush()
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        print(f"\n❌ TEXT-VIDEO FULL-AUTO FAILED: {error_msg}", flush=True)
+        traceback.print_exc()
+        sys.stdout.flush()
+
+        try:
+            with get_db_session() as db:
+                manager = JobManager(db)
+                manager.update_job_status(job_id, "failed", error_message=error_msg)
+        except Exception:
+            pass
+    finally:
+        _tv_job_semaphore.release()
 
 
 def _process_text_video_job_async(job_id: str):
