@@ -2148,8 +2148,9 @@ export function AdminPage() {
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
           {/* Header row */}
-          <div className="grid grid-cols-[1fr_100px_auto_140px_120px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="grid grid-cols-[minmax(180px,1fr)_130px_110px_150px_130px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide min-w-[720px]">
             <span>User</span>
             <span>User ID</span>
             <span>Role</span>
@@ -2168,7 +2169,7 @@ export function AdminPage() {
                 key={u.id}
                 onClick={() => setSelectedUser(u)}
                 className={clsx(
-                  'grid grid-cols-[1fr_100px_auto_140px_120px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center',
+                  'grid grid-cols-[minmax(180px,1fr)_130px_110px_150px_130px] gap-4 px-5 py-3.5 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors items-center min-w-[720px]',
                   u.is_blocked && 'opacity-60',
                   selectedUser?.id === u.id && 'bg-stone-50',
                 )}
@@ -2187,7 +2188,7 @@ export function AdminPage() {
                   }}
                   className="text-xs text-gray-400 font-mono truncate hover:text-gray-600 text-left"
                 >
-                  {u.id.slice(0, 8)}…
+                  {u.id.slice(0, 12)}…
                 </button>
                 <RoleBadge user={u} />
                 <span className="text-xs text-gray-400 flex items-center gap-1 whitespace-nowrap">
@@ -2200,6 +2201,7 @@ export function AdminPage() {
               </div>
             ))
           )}
+          </div>
         </div>
       )}
 
