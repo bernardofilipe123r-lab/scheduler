@@ -1,6 +1,6 @@
 /**
  * Brand API hooks for fetching brands from the backend.
- * 
+ *
  * This replaces hardcoded brand constants with dynamic data from the database.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -42,6 +42,7 @@ export interface Brand {
   colors: BrandColors
   logo_path?: string
   reel_divider_logo_path?: string
+  reel_content_logo_path?: string
   active: boolean
   has_instagram: boolean
   has_facebook: boolean
@@ -191,7 +192,7 @@ export function useBrandColors(id: string) {
  */
 export function useCreateBrand() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: createBrand,
     onSuccess: () => {
@@ -205,7 +206,7 @@ export function useCreateBrand() {
  */
 export function useUpdateBrand() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: ({ id, ...input }: UpdateBrandInput & { id: string }) => updateBrand(id, input),
     onSuccess: (_data, variables) => {
@@ -220,7 +221,7 @@ export function useUpdateBrand() {
  */
 export function useUpdateBrandCredentials() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: ({ id, ...input }: UpdateCredentialsInput & { id: string }) => updateBrandCredentials(id, input),
     onSuccess: (_data, variables) => {
@@ -235,7 +236,7 @@ export function useUpdateBrandCredentials() {
  */
 export function useDeleteBrand() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: deleteBrand,
     onSuccess: () => {
@@ -249,7 +250,7 @@ export function useDeleteBrand() {
  */
 export function useReactivateBrand() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: reactivateBrand,
     onSuccess: () => {

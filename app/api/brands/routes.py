@@ -951,3 +951,41 @@ async def upload_divider_logo(
         "success": True,
         "reel_divider_logo": logo_url,
     }
+
+
+@router.post("/{brand_id}/content-logo")
+async def upload_content_logo(
+    brand_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Upload or replace the content/reel header logo for a brand."""
+    manager = get_brand_manager(db)
+    brand = manager.get_brand(brand_id, user_id=user["id"])
+    if not brand:
+        raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    extension = Path(file.filename).suffix.lower() or ".png"
+    ext = extension.lstrip(".")
+    if ext not in ("png", "jpg", "jpeg", "webp", "svg"):
+        raise HTTPException(status_code=400, detail="Invalid image format")
+
+    content = await file.read()
+    filename = f"{brand_id}_reel_content_logo.{ext}"
+    remote_path = storage_path(user["id"], brand_id, "logos", filename)
+    try:
+        logo_url = upload_bytes("brand-assets", remote_path, content, f"image/{ext}")
+    except StorageError as e:
+        logger.error("Content logo upload failed for %s: %s", brand_id, e)
+        raise HTTPException(status_code=500, detail="Logo upload failed")
+
+    manager.update_brand(brand_id, {"reel_content_logo_path": logo_url}, user_id=user["id"])
+
+    return {
+        "success": True,
+        "reel_content_logo": logo_url,
+    }

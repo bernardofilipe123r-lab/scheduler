@@ -679,6 +679,8 @@ class JobProcessor:
             brand_logo_url = brand_obj.logo_path if brand_obj else None
             # Prefer the dedicated divider logo for thumbnails; fall back to main logo
             brand_divider_logo_url = (brand_obj.reel_divider_logo_path if brand_obj else None) or brand_logo_url
+            # Prefer the dedicated content logo for reel header; fall back to main logo
+            brand_content_logo_url = (brand_obj.reel_content_logo_path if brand_obj else None) or brand_logo_url
 
             # Download brand logo to temp file if it's a URL
             brand_logo_local = None
@@ -711,6 +713,22 @@ class JobProcessor:
                         print(f"   ✓ Divider logo downloaded: {brand_divider_logo_local}", flush=True)
                 except Exception as e:
                     print(f"   ⚠️ Divider logo download failed: {e}", flush=True)
+
+            # Download content logo (for reel header) if different from main logo
+            brand_content_logo_local = brand_logo_local
+            if brand_content_logo_url and brand_content_logo_url != brand_logo_url and brand_content_logo_url.startswith("http"):
+                try:
+                    import httpx
+                    tmp_cont_logo = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    tmp_cont_logo.close()
+                    resp = httpx.get(brand_content_logo_url, timeout=15, follow_redirects=True)
+                    if resp.status_code == 200:
+                        with open(tmp_cont_logo.name, 'wb') as f:
+                            f.write(resp.content)
+                        brand_content_logo_local = Path(tmp_cont_logo.name)
+                        print(f"   ✓ Content logo downloaded: {brand_content_logo_local}", flush=True)
+                except Exception as e:
+                    print(f"   ⚠️ Content logo download failed: {e}", flush=True)
 
             # ── Step 1: Source images ──────────────────────────
             sourcer = ImageSourcer(db=self.db)
@@ -806,7 +824,7 @@ class JobProcessor:
                 output_path=video_output,
                 design=design,
                 music_path=music_path,
-                logo_path=brand_logo_local,
+                logo_path=brand_content_logo_local,
                 brand_name=brand_display_name,
                 handle=brand_handle,
             )

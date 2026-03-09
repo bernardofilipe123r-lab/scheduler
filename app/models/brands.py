@@ -9,32 +9,32 @@ from app.core.platforms import PLATFORM_CREDENTIAL_CHECKS
 class Brand(Base):
     """
     Central source of truth for all brand configuration.
-    
+
     This replaces all hardcoded brand constants throughout the codebase.
     Brands can be created, updated, and deleted via the API.
     """
     __tablename__ = "brands"
-    
+
     # Primary key - lowercase brand identifier (e.g., 'healthycollege')
     id = Column(String(50), primary_key=True)
     user_id = Column(String(100), nullable=False, index=True)
-    
+
     # Display information
     display_name = Column(String(100), nullable=False)  # e.g., 'THE HEALTHY COLLEGE'
     short_name = Column(String(10), nullable=False)  # e.g., 'HCO' - for logo fallback
-    
+
     # Social media handles
     instagram_handle = Column(String(100), nullable=True)  # e.g., '@thehealthycollege'
     facebook_page_name = Column(String(100), nullable=True)
     youtube_channel_name = Column(String(100), nullable=True)
-    
+
     # Scheduling configuration
     schedule_offset = Column(Integer, default=0)  # Hour offset 0-23 for scheduling
     posts_per_day = Column(Integer, default=6)
-    
+
     # Content generation settings
     baseline_for_content = Column(Boolean, default=False)  # Is this the baseline brand for content differentiation?
-    
+
     # Colors - JSON with full color configuration
     # Structure: {
     #   "primary": "#004f00",
@@ -45,7 +45,7 @@ class Brand(Base):
     #   "dark_mode": {"background": "#001f00", "text": "#FFFFFF", ...}
     # }
     colors = Column(JSON, nullable=False, default=dict)
-    
+
     # API Credentials (stored in DB for easy management)
     instagram_access_token = Column(Text, nullable=True)
     instagram_business_account_id = Column(String(100), nullable=True)
@@ -72,20 +72,23 @@ class Brand(Base):
     tiktok_open_id = Column(String(128), nullable=True)
     tiktok_access_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     tiktok_refresh_token_expires_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Logo path (relative to assets/logos/)
     logo_path = Column(String(255), nullable=True)
-    
+
     # Per-brand logo for the divider line in video reel thumbnails
     reel_divider_logo_path = Column(String(255), nullable=True)
-    
+
+    # Per-brand logo for the header of video reel content frames
+    reel_content_logo_path = Column(String(255), nullable=True)
+
     # Status
     active = Column(Boolean, default=True, nullable=False)
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     def to_dict(self, include_credentials=False):
         """Convert to dictionary for API responses."""
         data = {
@@ -101,13 +104,14 @@ class Brand(Base):
             "colors": self.colors or {},
             "logo_path": self.logo_path,
             "reel_divider_logo_path": self.reel_divider_logo_path,
+            "reel_content_logo_path": self.reel_content_logo_path,
             "active": self.active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             # Indicate if credentials are configured (without exposing them)
             **{f"has_{p}": check(self) for p, check in PLATFORM_CREDENTIAL_CHECKS.items()},
         }
-        
+
         if include_credentials:
             data.update({
                 "instagram_access_token": self.instagram_access_token,
@@ -116,5 +120,5 @@ class Brand(Base):
                 "facebook_access_token": self.facebook_access_token,
                 "meta_access_token": self.meta_access_token,
             })
-        
+
         return data

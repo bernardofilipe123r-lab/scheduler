@@ -3,7 +3,7 @@ import { Loader2, Save, Image, Film, RotateCcw, Music, ArrowLeft, Upload } from 
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-format-b'
 import type { DesignSettings } from './types'
-import { useDynamicBrands } from '@/features/brands/hooks/use-dynamic-brands'
+import { useDynamicBrands, type DynamicBrandInfo } from '@/features/brands/hooks/use-dynamic-brands'
 import { BrandThemeModal } from '@/features/brands/components/BrandThemeModal'
 import type { BrandInfo } from '@/features/brands/constants'
 import { supabase } from '@/shared/api/supabase'
@@ -294,7 +294,7 @@ function ThumbnailPreview({ form, brandDividerLogoUrl }: { form: Partial<DesignS
 /* ──────────────────────────────────────────────
  * REEL FRAME PREVIEW — 3 divs with independent gaps
  * ────────────────────────────────────────────── */
-function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
+function ReelFramePreview({ form, brandContentLogoUrl, brandName, brandHandle }: { form: Partial<DesignSettings>; brandContentLogoUrl?: string; brandName?: string; brandHandle?: string }) {
   const textColor = form.reel_text_color || '#FFFFFF'
   const textSize = form.reel_text_size ?? 48
   const textFont = form.reel_text_font || 'Inter'
@@ -338,14 +338,14 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
           {showLogo && (
             <div className="rounded-full border-white flex items-center justify-center flex-shrink-0 overflow-hidden"
               style={{ width: scaledLogo, height: scaledLogo, borderWidth: `${Math.max(1, 1 * s)}px`, borderStyle: 'solid' }}>
-              <img src={vaLogo} alt="Logo" className="rounded-[1px] object-cover" style={{ width: scaledLogo, height: scaledLogo }} />
+              <img src={brandContentLogoUrl || vaLogo} alt="Logo" className="rounded-[1px] object-cover" style={{ width: scaledLogo, height: scaledLogo }} />
             </div>
           )}
           <div className="flex flex-col min-w-0">
             <div className="flex items-center" style={{ gap: `${4 * s}px` }}>
               <span className="font-semibold truncate" style={{
                 color: brandNameColor, fontSize: `${brandNameSize * s}px`, lineHeight: 1.2,
-              }}>Viral Toby</span>
+              }}>{brandName || 'Viral Toby'}</span>
               <img src={verifiedIcon} alt="verified" className="flex-shrink-0" style={{
                 width: `${brandNameSize * s * 0.85}px`, height: `${brandNameSize * s * 0.85}px`,
               }} />
@@ -353,7 +353,7 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
             {showHandle && (
               <span className="truncate" style={{
                 color: handleColor, fontSize: `${handleSize * s}px`, lineHeight: 1.3,
-              }}>@viraltoby</span>
+              }}>{brandHandle || '@viraltoby'}</span>
             )}
           </div>
         </div>
@@ -420,6 +420,14 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
   const formatBRef = useRef<{ save: () => void; reset: () => void; hasChanges: boolean; isPending: boolean } | null>(null)
   const [, forceUpdate] = useState(0)
 
+  // Brand selector (shared between both previews + settings)
+  const { brands } = useDynamicBrands()
+  const [selectedBrandId, setSelectedBrandId] = useState<string>('')
+  useEffect(() => {
+    if (brands.length > 0 && !selectedBrandId) setSelectedBrandId(brands[0].id)
+  }, [brands, selectedBrandId])
+  const selectedBrand = brands.find(b => b.id === selectedBrandId)
+
   return (
     <div className="space-y-4">
       {/* ── Single unified header row ── */}
@@ -463,6 +471,22 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
                 </button>
               ))}
             </div>
+            {/* Brand selector */}
+            <div className="flex items-center gap-2">
+              <div className="w-px h-6 bg-gray-200" />
+              {selectedBrand && (
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-gray-300" style={{ background: selectedBrand.color }} />
+              )}
+              <select
+                value={selectedBrandId}
+                onChange={e => setSelectedBrandId(e.target.value)}
+                className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 font-medium outline-none focus:border-primary-500 cursor-pointer"
+              >
+                {brands.map(b => (
+                  <option key={b.id} value={b.id}>{b.label}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex-1" />
             <div className="flex items-center gap-2">
               <button onClick={() => formatBRef.current?.reset()} disabled={!formatBRef.current?.hasChanges || formatBRef.current?.isPending}
@@ -481,7 +505,7 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
       </div>
 
       {topTab === 'format-a' && <TextReelsDesign />}
-      {topTab === 'format-b' && <FormatBDesign tab={formatBTab} setTab={setFormatBTab} actionsRef={formatBRef} onStateChange={() => forceUpdate(n => n + 1)} />}
+      {topTab === 'format-b' && <FormatBDesign tab={formatBTab} setTab={setFormatBTab} actionsRef={formatBRef} onStateChange={() => forceUpdate(n => n + 1)} selectedBrand={selectedBrand} />}
     </div>
   )
 }
@@ -539,24 +563,23 @@ function TextReelsDesign() {
  * ────────────────────────────────────────────── */
 type DesignTab = 'thumbnail' | 'content'
 
-function FormatBDesign({ tab, setTab, actionsRef, onStateChange }: {
+function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }: {
   tab: DesignTab
   setTab: (t: DesignTab) => void
   actionsRef: React.MutableRefObject<{ save: () => void; reset: () => void; hasChanges: boolean; isPending: boolean } | null>
   onStateChange: () => void
+  selectedBrand?: DynamicBrandInfo
 }) {
   const { data: design, isLoading } = useDesignSettings()
   const updateMutation = useUpdateDesign()
   const [form, setForm] = useState<Partial<DesignSettings>>({})
 
-  // Brand selector for thumbnail divider logo
-  const { brands } = useDynamicBrands()
-  const [selectedBrandId, setSelectedBrandId] = useState<string>('')
-  useEffect(() => {
-    if (brands.length > 0 && !selectedBrandId) setSelectedBrandId(brands[0].id)
-  }, [brands, selectedBrandId])
-  const selectedBrand = brands.find(b => b.id === selectedBrandId)
+  // Derive brand logo URLs from the selected brand
   const brandDividerLogoUrl = selectedBrand?.reel_divider_logo_path || undefined
+  const brandContentLogoUrl = selectedBrand?.reel_content_logo_path || undefined
+  const brandMainLogoUrl = selectedBrand?.logo_path || undefined
+  const brandName = selectedBrand?.label
+  const brandHandle = selectedBrand?.instagram_handle ? `@${selectedBrand.instagram_handle}` : undefined
   const savedRef = useRef<Partial<DesignSettings>>({})
 
   useEffect(() => {
@@ -644,7 +667,7 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange }: {
             className={`cursor-pointer transition-opacity ${tab === 'content' ? 'ring-2 ring-primary-400 rounded-xl' : 'opacity-60 hover:opacity-80'}`}
             onClick={() => setTab('content')}
           >
-            <ReelFramePreview form={form} />
+            <ReelFramePreview form={form} brandContentLogoUrl={brandContentLogoUrl || brandMainLogoUrl} brandName={brandName} brandHandle={brandHandle} />
           </div>
         </div>
 
@@ -654,13 +677,18 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange }: {
             <ThumbnailSettings
               form={form}
               update={update}
-              brands={brands}
-              selectedBrandId={selectedBrandId}
-              onBrandChange={setSelectedBrandId}
+              selectedBrandId={selectedBrand?.id || ''}
               brandDividerLogoUrl={brandDividerLogoUrl}
+              brandMainLogoUrl={brandMainLogoUrl}
             />
           ) : (
-            <ContentSettings form={form} update={update} />
+            <ContentSettings
+              form={form}
+              update={update}
+              selectedBrandId={selectedBrand?.id || ''}
+              brandContentLogoUrl={brandContentLogoUrl}
+              brandMainLogoUrl={brandMainLogoUrl}
+            />
           )}
         </div>
       </div>
@@ -671,16 +699,18 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange }: {
 /* ──────────────────────────────────────────────
  * THUMBNAIL SETTINGS
  * ────────────────────────────────────────────── */
-function ThumbnailSettings({ form, update, brands, selectedBrandId, onBrandChange, brandDividerLogoUrl }: {
+function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl, brandMainLogoUrl }: {
   form: Partial<DesignSettings>
   update: (key: keyof DesignSettings, value: unknown) => void
-  brands: { id: string; label: string }[]
   selectedBrandId: string
-  onBrandChange: (id: string) => void
   brandDividerLogoUrl?: string
+  brandMainLogoUrl?: string
 }) {
   const [uploading, setUploading] = useState(false)
   const qc = useQueryClient()
+
+  const activeLogo = brandDividerLogoUrl || brandMainLogoUrl || vaLogo
+  const logoSource = brandDividerLogoUrl ? 'Custom thumbnail logo' : brandMainLogoUrl ? 'Brand logo (fallback)' : 'Default logo (fallback)'
 
   const handleDividerLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -702,9 +732,9 @@ function ThumbnailSettings({ form, update, brands, selectedBrandId, onBrandChang
       )
       if (!resp.ok) throw new Error('Upload failed')
       qc.invalidateQueries({ queryKey: ['brands'] })
-      toast.success('Divider logo uploaded')
+      toast.success('Thumbnail logo uploaded')
     } catch {
-      toast.error('Failed to upload divider logo')
+      toast.error('Failed to upload logo')
     }
     setUploading(false)
     e.target.value = ''
@@ -726,32 +756,19 @@ function ThumbnailSettings({ form, update, brands, selectedBrandId, onBrandChang
       </section>
 
       <section className="space-y-2">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Divider Logo</h4>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Thumbnail Logo</h4>
+        <p className="text-[10px] text-gray-400">Logo shown in the thumbnail divider line. If not set, falls back to your brand logo.</p>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Brand</span>
-          <select
-            value={selectedBrandId}
-            onChange={e => onBrandChange(e.target.value)}
-            className="flex-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-900 text-xs outline-none focus:border-primary-500"
-          >
-            {brands.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
-          </select>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Logo</span>
           <div className="flex items-center gap-2 flex-1">
-            {brandDividerLogoUrl ? (
-              <img
-                src={`${brandDividerLogoUrl}?t=${Date.now()}`}
-                alt="Divider logo"
-                className="w-8 h-8 object-contain rounded border border-gray-200"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded border border-dashed border-gray-300 flex items-center justify-center">
-                <span className="text-[8px] text-gray-400">None</span>
-              </div>
-            )}
-            <label className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+            <img
+              src={`${activeLogo}${activeLogo !== vaLogo ? `?t=${Date.now()}` : ''}`}
+              alt="Thumbnail logo"
+              className="w-9 h-9 object-contain rounded-lg border border-gray-200 bg-gray-50 p-0.5"
+            />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-400 truncate">{logoSource}</span>
+            </div>
+            <label className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors ml-auto">
               {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
               {uploading ? 'Uploading...' : 'Upload'}
               <input type="file" accept="image/*" onChange={handleDividerLogoUpload} className="hidden" disabled={uploading} />
@@ -784,15 +801,74 @@ function ThumbnailSettings({ form, update, brands, selectedBrandId, onBrandChang
 /* ──────────────────────────────────────────────
  * CONTENT / REEL FRAME SETTINGS
  * ────────────────────────────────────────────── */
-function ContentSettings({ form, update }: {
+function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, brandMainLogoUrl }: {
   form: Partial<DesignSettings>
   update: (key: keyof DesignSettings, value: unknown) => void
+  selectedBrandId: string
+  brandContentLogoUrl?: string
+  brandMainLogoUrl?: string
 }) {
   const headerScale = form.reel_header_scale ?? 1.15
+  const [uploading, setUploading] = useState(false)
+  const qc = useQueryClient()
+
+  const activeLogo = brandContentLogoUrl || brandMainLogoUrl || vaLogo
+  const logoSource = brandContentLogoUrl ? 'Custom content logo' : brandMainLogoUrl ? 'Brand logo (fallback)' : 'Default logo (fallback)'
+
+  const handleContentLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedBrandId) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const resp = await fetch(
+        `${import.meta.env.VITE_API_URL || ''}/api/brands/${selectedBrandId}/content-logo`,
+        {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        }
+      )
+      if (!resp.ok) throw new Error('Upload failed')
+      qc.invalidateQueries({ queryKey: ['brands'] })
+      toast.success('Content logo uploaded')
+    } catch {
+      toast.error('Failed to upload logo')
+    }
+    setUploading(false)
+    e.target.value = ''
+  }
 
   return (
     <div className="space-y-4">
       {/* Brand Header */}
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Content Logo</h4>
+        <p className="text-[10px] text-gray-400">Logo shown in the reel header. If not set, falls back to your brand logo.</p>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-1">
+            <img
+              src={`${activeLogo}${activeLogo !== vaLogo ? `?t=${Date.now()}` : ''}`}
+              alt="Content logo"
+              className="w-9 h-9 object-contain rounded-lg border border-gray-200 bg-gray-50 p-0.5"
+            />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-400 truncate">{logoSource}</span>
+            </div>
+            <label className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors ml-auto">
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {uploading ? 'Uploading...' : 'Upload'}
+              <input type="file" accept="image/*" onChange={handleContentLogoUpload} className="hidden" disabled={uploading} />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      {/* Header Colors & Scale */}
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand Header</h4>
         <div className="grid grid-cols-2 gap-x-4">

@@ -20,6 +20,8 @@ export interface DynamicBrandInfo {
   logo_path?: string
   /** Per-brand logo for the divider line in video reel thumbnails */
   reel_divider_logo_path?: string
+  /** Per-brand logo for the header of video reel content frames */
+  reel_content_logo_path?: string
 }
 
 /**
@@ -51,6 +53,7 @@ export function useDynamicBrands() {
           has_facebook: b.has_facebook,
           logo_path: b.logo_path,
           reel_divider_logo_path: b.reel_divider_logo_path,
+          reel_content_logo_path: b.reel_content_logo_path,
         }))
     }
 
