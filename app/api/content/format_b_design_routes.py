@@ -57,7 +57,7 @@ class DesignUpdate(BaseModel):
     thumbnail_image_ratio: Optional[float] = Field(None, ge=0.3, le=0.8)
     thumbnail_divider_style: Optional[str] = Field(None, max_length=50)
     thumbnail_divider_thickness: Optional[int] = Field(None, ge=1, le=10)
-    thumbnail_overlay_opacity: Optional[int] = Field(None, ge=80, le=120)
+    thumbnail_overlay_opacity: Optional[int] = Field(None, ge=80, le=100)
     thumbnail_logo_size: Optional[int] = Field(None, ge=80, le=120)
 
 

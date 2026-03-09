@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Loader2, Save, Image, Film, RotateCcw, Music } from 'lucide-react'
+import { Loader2, Save, Image, Film, RotateCcw, Music, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-format-b'
 import type { DesignSettings } from './types'
@@ -32,7 +32,7 @@ const DEFAULTS: Partial<DesignSettings> = {
   thumbnail_title_size: 120,
   thumbnail_title_padding: 150,
   thumbnail_logo_size: 100,
-  thumbnail_overlay_opacity: 90,
+  thumbnail_overlay_opacity: 80,
   thumbnail_divider_style: 'line_with_logo',
   thumbnail_divider_thickness: 4,
   // Reel
@@ -212,7 +212,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const titleSize = form.thumbnail_title_size ?? 120
   const titlePadding = form.thumbnail_title_padding ?? 220
   const dividerStyle = form.thumbnail_divider_style || 'line_with_logo'
-  const overlayOpacity = (form.thumbnail_overlay_opacity ?? 90) / 100
+  const overlayOpacity = ((form.thumbnail_overlay_opacity ?? 80) + 20) / 100
   const titleFont = form.thumbnail_title_font || 'Anton'
   const logoSize = form.thumbnail_logo_size ?? 100
   const dividerThickness = form.thumbnail_divider_thickness ?? 4
@@ -409,28 +409,76 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
  * ────────────────────────────────────────────── */
 type TopTab = 'format-a' | 'format-b'
 
-export function DesignEditorTab() {
+export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
   const [topTab, setTopTab] = useState<TopTab>('format-a')
+
+  // Format B sub-tab + action state (lifted here for unified header)
+  const [formatBTab, setFormatBTab] = useState<DesignTab>('thumbnail')
+  const formatBRef = useRef<{ save: () => void; reset: () => void; hasChanges: boolean; isPending: boolean } | null>(null)
+  const [, forceUpdate] = useState(0)
 
   return (
     <div className="space-y-4">
-      {/* ── Top-level design type selector ── */}
-      <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5 w-fit">
-        {([
-          { id: 'format-a' as TopTab, label: 'Format A', icon: <Image className="w-4 h-4" /> },
-          { id: 'format-b' as TopTab, label: 'Format B', icon: <Film className="w-4 h-4" /> },
-        ]).map(t => (
-          <button key={t.id} onClick={() => setTopTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              topTab === t.id ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {t.icon}{t.label}
+      {/* ── Single unified header row ── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Back button */}
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 transition-colors mr-1">
+            <ArrowLeft className="w-4 h-4" />
           </button>
-        ))}
+        )}
+
+        {/* Format A / Format B selector */}
+        <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5">
+          {([
+            { id: 'format-a' as TopTab, label: 'Format A', icon: <Image className="w-4 h-4" /> },
+            { id: 'format-b' as TopTab, label: 'Format B', icon: <Film className="w-4 h-4" /> },
+          ]).map(t => (
+            <button key={t.id} onClick={() => setTopTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                topTab === t.id ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Format B sub-tabs + actions (only when Format B is active) */}
+        {topTab === 'format-b' && (
+          <>
+            <div className="w-px h-6 bg-gray-200" />
+            <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5">
+              {([
+                { id: 'thumbnail' as DesignTab, label: 'Thumbnail', icon: <Image className="w-3.5 h-3.5" /> },
+                { id: 'content' as DesignTab, label: 'Content', icon: <Film className="w-3.5 h-3.5" /> },
+              ]).map(t => (
+                <button key={t.id} onClick={() => setFormatBTab(t.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    formatBTab === t.id ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {t.icon}{t.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center gap-2">
+              <button onClick={() => formatBRef.current?.reset()} disabled={!formatBRef.current?.hasChanges || formatBRef.current?.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset
+              </button>
+              <button onClick={() => formatBRef.current?.save()} disabled={!formatBRef.current?.hasChanges || formatBRef.current?.isPending}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                {formatBRef.current?.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {topTab === 'format-a' && <TextReelsDesign />}
-      {topTab === 'format-b' && <FormatBDesign />}
+      {topTab === 'format-b' && <FormatBDesign tab={formatBTab} setTab={setFormatBTab} actionsRef={formatBRef} onStateChange={() => forceUpdate(n => n + 1)} />}
     </div>
   )
 }
@@ -491,11 +539,15 @@ function TextReelsDesign() {
  * ────────────────────────────────────────────── */
 type DesignTab = 'thumbnail' | 'content'
 
-function FormatBDesign() {
+function FormatBDesign({ tab, setTab, actionsRef, onStateChange }: {
+  tab: DesignTab
+  setTab: (t: DesignTab) => void
+  actionsRef: React.MutableRefObject<{ save: () => void; reset: () => void; hasChanges: boolean; isPending: boolean } | null>
+  onStateChange: () => void
+}) {
   const { data: design, isLoading } = useDesignSettings()
   const updateMutation = useUpdateDesign()
   const [form, setForm] = useState<Partial<DesignSettings>>({})
-  const [tab, setTab] = useState<DesignTab>('thumbnail')
   const savedRef = useRef<Partial<DesignSettings>>({})
 
   useEffect(() => {
@@ -536,7 +588,7 @@ function FormatBDesign() {
     try {
       await updateMutation.mutateAsync(payload)
       savedRef.current = { ...form }
-      setForm(f => ({ ...f })) // trigger re-render for hasChanges
+      setForm(f => ({ ...f }))
       toast.success('Design settings saved')
     } catch {
       toast.error('Failed to save design settings')
@@ -550,12 +602,18 @@ function FormatBDesign() {
     try {
       await updateMutation.mutateAsync(payload)
       savedRef.current = { ...resetForm }
-      setForm(f => ({ ...f })) // trigger re-render for hasChanges
+      setForm(f => ({ ...f }))
       toast.success('Reset to defaults and saved')
     } catch {
       toast.error('Failed to save after reset')
     }
   }, [form, updateMutation, buildPayload])
+
+  // Expose actions to parent header
+  useEffect(() => {
+    actionsRef.current = { save: handleSave, reset: handleReset, hasChanges, isPending: updateMutation.isPending }
+    onStateChange()
+  }, [hasChanges, updateMutation.isPending, handleSave, handleReset])
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
@@ -563,37 +621,6 @@ function FormatBDesign() {
 
   return (
     <div className="space-y-4">
-      {/* ── Sticky top bar: tabs + save ── */}
-      <div className="sticky top-0 z-20 bg-gray-50 -mx-1 px-1 pb-3 pt-1 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5">
-            {([
-              { id: 'thumbnail' as DesignTab, label: 'Thumbnail', icon: <Image className="w-3.5 h-3.5" /> },
-              { id: 'content' as DesignTab, label: 'Content', icon: <Film className="w-3.5 h-3.5" /> },
-            ]).map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  tab === t.id ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}>
-                {t.icon}{t.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={handleReset} disabled={updateMutation.isPending || !hasChanges}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset
-            </button>
-            <button onClick={handleSave} disabled={updateMutation.isPending || !hasChanges}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              {updateMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* ── Tab content: 2 previews LEFT — settings RIGHT ── */}
       <div className="flex gap-6 items-start">
         {/* LEFT: Both previews side by side */}
@@ -654,7 +681,7 @@ function ThumbnailSettings({ form, update }: {
 
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Overlay</h4>
-        <SliderRow label="Dark Intensity" value={form.thumbnail_overlay_opacity ?? 90} min={80} max={120} unit="%" onChange={v => update('thumbnail_overlay_opacity', v)} />
+        <SliderRow label="Dark Intensity" value={form.thumbnail_overlay_opacity ?? 80} min={80} max={100} unit="%" onChange={v => update('thumbnail_overlay_opacity', v)} />
       </section>
 
       <section className="space-y-2">

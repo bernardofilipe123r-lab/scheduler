@@ -29,7 +29,7 @@ DEFAULTS = {
     "thumbnail_title_padding_x": 220,
     "thumbnail_divider_style": "line_with_logo",
     "thumbnail_divider_thickness": 4,
-    "thumbnail_overlay_opacity": 90,
+    "thumbnail_overlay_opacity": 80,
     "thumbnail_logo_size": 100,
 }
 
@@ -90,7 +90,7 @@ class ThumbnailCompositor:
             logger.error(f"[ThumbnailCompositor] Failed to load main image: {e}")
 
         # 2. Dark gradient overlay from bottom
-        overlay_alpha = overlay_opacity / 100
+        overlay_alpha = (overlay_opacity + 20) / 100
         gradient = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         for y in range(H):
             # Progress from bottom (0.0 = top, 1.0 = bottom)

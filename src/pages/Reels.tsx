@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Play, Palette, ArrowLeft } from 'lucide-react'
+import { Play, Palette } from 'lucide-react'
 import { CreateVideoWizard } from '@/features/reels/wizard'
 import { DesignEditorTab } from '@/features/reels/DesignEditorTab'
 
@@ -71,16 +71,7 @@ export function ReelsPage() {
       {/* ─── Design Editor ─── */}
       {view === 'design' && (
         <div className="animate-in fade-in duration-300">
-          <div className="mb-4">
-            <button
-              onClick={() => navigate('landing')}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Reels Studio
-            </button>
-          </div>
-          <DesignEditorTab />
+          <DesignEditorTab onBack={() => navigate('landing')} />
         </div>
       )}
     </div>
