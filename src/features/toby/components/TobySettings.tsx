@@ -362,7 +362,7 @@ export function TobySettings() {
                             <span className="text-[11px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Disabled</span>
                           ) : (
                             <>
-                              <span className="text-[11px] text-gray-500 font-medium">{reelSlots}r &middot; {postSlots}c</span>
+                              <span className="text-[11px] text-gray-500 font-medium">{reelSlots > 0 && `${reelSlots}r`}{reelSlots > 0 && postSlots > 0 && ' · '}{postSlots > 0 && `${postSlots}c`}</span>
                               <div className="flex -space-x-1">
                                 {connectedPlatforms.slice(0, 4).map(p => (
                                   <div key={p} className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center ring-1 ring-white">
