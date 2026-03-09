@@ -139,16 +139,32 @@ def threads_callback(
         # 1. Exchange code for short-lived token
         short_lived = token_service.exchange_code_for_token(code)
         short_token = short_lived["access_token"]
+        # user_id is returned by the initial exchange as fallback
+        fallback_user_id = str(short_lived.get("user_id", ""))
 
         # 2. Exchange for long-lived token (60 days)
         long_lived = token_service.exchange_for_long_lived_token(short_token)
         long_token = long_lived["access_token"]
         expires_in = long_lived.get("expires_in", 5184000)
 
-        # 3. Fetch user profile
-        profile = token_service.get_user_profile(long_token)
-        threads_user_id = str(profile.get("id", ""))
-        threads_username = profile.get("username", "")
+        # 3. Fetch user profile (with fallback if /me fails)
+        try:
+            profile = token_service.get_user_profile(long_token)
+            threads_user_id = str(profile.get("id", ""))
+            threads_username = profile.get("username", "")
+        except Exception as profile_err:
+            logger.warning(f"Threads /me failed with long-lived token: {profile_err}")
+            # Try with short-lived token as fallback
+            try:
+                profile = token_service.get_user_profile(short_token)
+                threads_user_id = str(profile.get("id", ""))
+                threads_username = profile.get("username", "")
+                logger.info(f"Threads /me succeeded with short-lived token")
+            except Exception as profile_err2:
+                logger.warning(f"Threads /me also failed with short-lived token: {profile_err2}")
+                print(f"[THREADS] /me failed with both tokens, falling back to user_id from exchange: {fallback_user_id}")
+                threads_user_id = fallback_user_id
+                threads_username = ""
 
         # 4. Check if this Threads account is already connected to another brand
         existing = db.query(Brand).filter(
