@@ -1,6 +1,6 @@
 ---
 description: "Safe refactoring workflow. Analyze impact, plan incremental changes, verify at each step. Use when: restructuring code, extracting services, consolidating duplicate logic, improving architecture."
-mode: "agent"
+agent: "agent"
 tools: ["codebase", "editFiles", "search", "execute"]
 ---
 

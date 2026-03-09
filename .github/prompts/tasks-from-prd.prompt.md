@@ -1,6 +1,6 @@
 ---
 description: "Break a PRD into actionable development tasks with dependencies and execution order. Reads an existing PRD from /docs/ and produces a task list."
-mode: "agent"
+agent: "agent"
 tools: ["codebase", "editFiles", "search"]
 ---
 
