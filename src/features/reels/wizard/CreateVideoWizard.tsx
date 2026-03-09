@@ -5,11 +5,11 @@ import toast from 'react-hot-toast'
 import { useDynamicBrands, useNicheConfig, useBrandConnections } from '@/features/brands'
 import { useTobyBrandConfigs } from '@/features/toby'
 import { useCreateJob } from '@/features/jobs'
-import { useGenerateTextVideo } from '../api/use-text-video'
+import { useGenerateFormatB } from '../api/use-format-b'
 import { REEL_FORMATS } from '../formats'
 import { FormatCarousel } from './FormatCarousel'
 import { ManualTextBased } from './ManualTextBased'
-import { ManualTextVideo } from './ManualTextVideo'
+import { ManualFormatB } from './ManualFormatB'
 import type { BrandName } from '@/shared/types'
 import type { Platform } from '@/shared/constants/platforms'
 
@@ -44,7 +44,7 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
   const { data: connectionsData } = useBrandConnections()
   const { data: brandConfigsData } = useTobyBrandConfigs()
   const createJob = useCreateJob()
-  const generateTextVideo = useGenerateTextVideo()
+  const generateFormatB = useGenerateFormatB()
 
   // Wizard state
   const [step, setStep] = useState<WizardStep>('brands')
@@ -151,7 +151,7 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
     if (brands.length === 0) return
 
     try {
-      if (selectedFormat === 'text_based') {
+      if (selectedFormat === 'format_a') {
         await createJob.mutateAsync({
           title: 'Auto-generating...',
           content_lines: [],
@@ -160,12 +160,12 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
           platforms: selectedPlatforms,
           music_source: 'trending_random',
         })
-      } else if (selectedFormat === 'text_video') {
+      } else if (selectedFormat === 'format_b') {
         if (!niche) {
           toast.error('Set up your Content DNA first (niche is required for auto mode)')
           return
         }
-        await generateTextVideo.mutateAsync({
+        await generateFormatB.mutateAsync({
           mode: 'full_auto',
           brands,
           platforms: selectedPlatforms,
@@ -383,12 +383,12 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
        *  This step MUST visually match the selected format's identity.
        *  Each format has different properties and pipeline steps:
        *
-       *  TEXT-BASED REEL (text_based):
+       *  TEXT-BASED REEL (format_a):
        *    - Pipeline: topic selection → text writing → AI background generation → video composition
        *    - Key properties: variant (dark/light/neon), AI prompt, music
        *    - Visual identity: purple gradient, kinetic text feel
        *
-       *  TEXT-VIDEO REEL (text_video):
+       *  Format B REEL (format_b):
        *    - Pipeline: story discovery → script writing → image sourcing → slideshow rendering
        *    - Key properties: design settings (fonts, colors, layout), image sources, brand header
        *    - Visual identity: amber/orange gradient, photo + text feel
@@ -417,15 +417,15 @@ export function CreateVideoWizard({ onBack }: CreateVideoWizardProps) {
               <div className="space-y-2">
                 <button
                   onClick={handleAutoGenerate}
-                  disabled={generateTextVideo.isPending || createJob.isPending}
+                  disabled={generateFormatB.isPending || createJob.isPending}
                   className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-stone-900 text-white font-semibold text-sm shadow-lg hover:bg-stone-800 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {(generateTextVideo.isPending || createJob.isPending) ? (
+                  {(generateFormatB.isPending || createJob.isPending) ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <Zap className="w-5 h-5 text-amber-400" />
                   )}
-                  {(generateTextVideo.isPending || createJob.isPending) ? 'Creating job…' : '100% Automatic'}
+                  {(generateFormatB.isPending || createJob.isPending) ? 'Creating job…' : '100% Automatic'}
                 </button>
                 <p className="text-xs text-gray-400 text-center">{currentFormat?.autoDescription || 'AI handles everything'}</p>
                 {/* Auto workflow steps — shows what the pipeline actually does for THIS format */}
@@ -522,11 +522,11 @@ function ManualPanel({ formatId, brands, platforms, onBack, onComplete }: {
       </div>
 
       {/* Format-specific form */}
-      {formatId === 'text_based' && (
+      {formatId === 'format_a' && (
         <ManualTextBased brands={brands} platforms={platforms} onComplete={onComplete} />
       )}
-      {formatId === 'text_video' && (
-        <ManualTextVideo brands={brands} platforms={platforms} onComplete={onComplete} />
+      {formatId === 'format_b' && (
+        <ManualFormatB brands={brands} platforms={platforms} onComplete={onComplete} />
       )}
     </div>
   )

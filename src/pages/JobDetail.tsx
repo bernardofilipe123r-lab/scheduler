@@ -90,7 +90,7 @@ export function JobDetailPage() {
   const [showPromptDetails, setShowPromptDetails] = useState(false)
   
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
-  const isTextVideo = job?.variant === 'text_video'
+  const isFormatB = job?.variant === 'format_b'
 
   // Clean title for display: collapse ALL-CAPS multiline titles to single-line Title Case
   const formatDisplayTitle = (raw: string) => {
@@ -507,7 +507,7 @@ export function JobDetailPage() {
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">#{job.id}</span>
           <StatusBadge status={job.status} size="md" />
-          {isTextVideo && (
+          {isFormatB && (
             <span className="text-xs font-medium bg-violet-50 text-violet-600 px-2.5 py-1 rounded-full">FORMAT B</span>
           )}
         </div>
@@ -536,7 +536,7 @@ export function JobDetailPage() {
             {job.content_lines && job.content_lines.length > 0 && (
               <div className="mt-4 bg-gray-50 rounded-[7px] p-4">
                 <p className="text-[11px] font-mono uppercase tracking-widest text-gray-400 mb-1.5">Source Content</p>
-                {isTextVideo ? (
+                {isFormatB ? (
                   <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">{job.content_lines.join('\n')}</p>
                 ) : (
                   <ul className="list-disc list-inside space-y-0.5 text-sm text-gray-500 leading-relaxed">
@@ -933,7 +933,7 @@ export function JobDetailPage() {
                           </button>
                         </div>
                         <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                          {isTextVideo ? (
+                          {isFormatB ? (
                             /* Text-video: display as flowing paragraph, no numbering */
                             <div className="text-sm text-gray-700 py-2 px-3 bg-white rounded-[5px] border-l-[3px] border-teal-500 whitespace-pre-line">
                               {(output.content_lines || job.content_lines || []).join('\n')}
@@ -953,8 +953,8 @@ export function JobDetailPage() {
                       </div>
                     </div>
                     
-                    {/* AI Prompt Details (text-video only) */}
-                    {isTextVideo && job.text_video_data && (
+                    {/* AI Prompt Details (Format B only) */}
+                    {isFormatB && job.format_b_data && (
                       <div className="bg-gray-50 rounded-[7px] border border-gray-100 overflow-hidden">
                         <button
                           onClick={() => setShowPromptDetails(!showPromptDetails)}
@@ -969,20 +969,20 @@ export function JobDetailPage() {
                         {showPromptDetails && (
                           <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
                             {/* DeepSeek Response */}
-                            {(job.text_video_data as any).deepseek_response && (
+                            {(job.format_b_data as any).deepseek_response && (
                               <div className="mt-3">
                                 <p className="text-xs font-medium text-teal-600 mb-1.5">DeepSeek Full Response:</p>
                                 <pre className="text-xs text-gray-600 bg-white rounded-[5px] p-3 overflow-x-auto whitespace-pre-wrap max-h-[300px] overflow-y-auto font-mono border border-gray-100">
-                                  {(job.text_video_data as any).deepseek_response}
+                                  {(job.format_b_data as any).deepseek_response}
                                 </pre>
                               </div>
                             )}
                             {/* Image AI Prompts (sent to DeAPI) */}
-                            {((job.text_video_data as any).images || []).length > 0 && (
+                            {((job.format_b_data as any).images || []).length > 0 && (
                               <div>
                                 <p className="text-xs font-medium text-green-600 mb-1.5">DeAPI Image Prompts (Flux1schnell):</p>
                                 <div className="space-y-2">
-                                  {((job.text_video_data as any).images as { query: string; source_type: string }[]).map((img, idx) => (
+                                  {((job.format_b_data as any).images as { query: string; source_type: string }[]).map((img, idx) => (
                                     <div key={idx} className="text-xs bg-white rounded-[5px] p-2.5 border-l-[3px] border-green-500 border border-gray-100">
                                       <span className="text-green-600 font-medium">Image {idx + 1}:</span>
                                       <span className="text-gray-600 ml-2">{img.query}</span>
@@ -992,11 +992,11 @@ export function JobDetailPage() {
                               </div>
                             )}
                             {/* Thumbnail Image Prompt */}
-                            {(job.text_video_data as any).thumbnail_image?.query && (
+                            {(job.format_b_data as any).thumbnail_image?.query && (
                               <div>
                                 <p className="text-xs font-medium text-amber-600 mb-1.5">Thumbnail Image Prompt:</p>
                                 <div className="text-xs bg-white rounded-[5px] p-2.5 border-l-[3px] border-amber-500 border border-gray-100 text-gray-600">
-                                  {(job.text_video_data as any).thumbnail_image.query}
+                                  {(job.format_b_data as any).thumbnail_image.query}
                                 </div>
                               </div>
                             )}

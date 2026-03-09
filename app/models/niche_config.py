@@ -80,11 +80,11 @@ class NicheConfig(Base):
     save_section_text = Column(Text, default="")
     disclaimer_text = Column(Text, default="")
 
-    # TEXT-VIDEO format-specific columns (Section 24)
-    text_video_reel_examples = Column(JSONB, default=[])
-    text_video_story_niches = Column(JSONB, default=[])
-    text_video_story_tone = Column(Text, default="")
-    text_video_preferred_categories = Column(JSONB, default=[])
+    # Format B format-specific columns (Section 24)
+    format_b_reel_examples = Column(JSONB, default=[])
+    format_b_story_niches = Column(JSONB, default=[])
+    format_b_story_tone = Column(Text, default="")
+    format_b_preferred_categories = Column(JSONB, default=[])
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

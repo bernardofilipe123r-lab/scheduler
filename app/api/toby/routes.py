@@ -599,7 +599,7 @@ def get_brand_configs(
             "enabled": c.enabled,
             "reel_slots_per_day": c.reel_slots_per_day,
             "post_slots_per_day": c.post_slots_per_day,
-            "reel_format": c.reel_format or "text_based",
+            "reel_format": c.reel_format or "format_a",
             "enabled_platforms": c.enabled_platforms,  # None = all connected
             "logo_path": brand.logo_path,
             "brand_color": brand.colors.get("primary") if isinstance(brand.colors, dict) else None,
@@ -686,7 +686,7 @@ def update_brand_config(
             "enabled": cfg.enabled,
             "reel_slots_per_day": cfg.reel_slots_per_day,
             "post_slots_per_day": cfg.post_slots_per_day,
-            "reel_format": cfg.reel_format or "text_based",
+            "reel_format": cfg.reel_format or "format_a",
             "enabled_platforms": cfg.enabled_platforms,
         },
     }

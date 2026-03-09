@@ -37,8 +37,8 @@ _DEFAULTS = {
     "intelligence_pipeline": False,
     "historical_mining": False,
     "cross_brand_intelligence": False,
-    # ── text-video flags ──
-    "text_video_reels": False,
+    # ── format-b flags ──
+    "format_b_reels": False,
 }
 
 # ── In-memory cache ─────────────────────────────────────────────────────────

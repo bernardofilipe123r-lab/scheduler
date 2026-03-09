@@ -1,4 +1,4 @@
-"""API routes for TEXT-VIDEO reel generation."""
+"""API routes for Format B reel generation."""
 
 import logging
 import uuid
@@ -18,7 +18,7 @@ from app.services.content.job_processor import JobProcessor
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/content/text-video", tags=["text-video"])
+router = APIRouter(prefix="/api/content/format-b", tags=["format-b"])
 
 
 # --- Request/Response Models ---
@@ -49,7 +49,7 @@ class SourceImagesRequest(BaseModel):
     images: List[ImageSourceRequest]
 
 
-class TextVideoGenerateRequest(BaseModel):
+class FormatBGenerateRequest(BaseModel):
     mode: str = Field(..., pattern="^(manual|semi_auto|full_auto)$")
     brands: List[str] = Field(default_factory=list)
     platforms: List[str] = Field(default_factory=list)
@@ -77,7 +77,7 @@ async def upload_images(
     files: List[UploadFile] = File(...),
     user: dict = Depends(get_current_user),
 ):
-    """Upload images for manual text-video reel creation. Returns local file paths."""
+    """Upload images for manual format-b reel creation. Returns local file paths."""
     user_id = user["id"]
     upload_dir = Path("output/posts/uploads") / user_id
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -175,14 +175,14 @@ async def source_images(
 
 
 @router.post("/generate")
-async def generate_text_video_reel(
-    request: TextVideoGenerateRequest,
+async def generate_format_b_reel(
+    request: FormatBGenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """
-    Generate a TEXT-VIDEO reel. Creates a job IMMEDIATELY and processes in background.
+    Generate a Format B reel. Creates a job IMMEDIATELY and processes in background.
     The user is navigated to the job page right away — no waiting.
 
     Supports 3 modes:
@@ -202,13 +202,13 @@ async def generate_text_video_reel(
             title="Generating content...",
             content_lines=[],
             brands=request.brands,
-            variant="text_video",
+            variant="format_b",
             platforms=request.platforms,
             fixed_title=False,
             created_by="user",
             music_source=request.music_source,
-            content_format="text_video",
-            text_video_data={},
+            content_format="format_b",
+            format_b_data={},
         )
 
         job_id = job.job_id
@@ -216,7 +216,7 @@ async def generate_text_video_reel(
 
         # Everything happens in background — generate content, generate images, compose
         background_tasks.add_task(
-            _process_full_auto_text_video_async,
+            _process_full_auto_format_b_async,
             job_id,
             request.niche or "business",
             request.category or "power_moves",
@@ -225,7 +225,7 @@ async def generate_text_video_reel(
         return {
             "status": "created",
             "job_id": job_id,
-            "message": "Text-video job created — generating content in background",
+            "message": "Format B job created — generating content in background",
             "job": job_dict,
         }
 
@@ -254,35 +254,35 @@ async def generate_text_video_reel(
         if request.image_paths:
             polished_data["uploaded_image_paths"] = request.image_paths
 
-    # Create job via JobManager (same as text-based reels)
+    # Create job via JobManager (same as Format A reels)
     manager = JobManager(db)
     # Clean title for display (single line, title case)
-    raw_title = polished_data.get("thumbnail_title", "Text-Video Reel")
+    raw_title = polished_data.get("thumbnail_title", "Format B Reel")
     clean_title = " ".join(raw_title.replace("\n", " ").split()).title()
     job = manager.create_job(
         user_id=user_id,
         title=clean_title,
         content_lines=polished_data.get("reel_lines", []),
         brands=request.brands,
-        variant="text_video",
+        variant="format_b",
         platforms=request.platforms,
         fixed_title=True,
         created_by="user",
         music_source=request.music_source,
-        content_format="text_video",
-        text_video_data=polished_data,
+        content_format="format_b",
+        format_b_data=polished_data,
     )
 
     job_id = job.job_id
     job_dict = job.to_dict()
 
-    # Process in background (same pattern as text-based reels)
-    background_tasks.add_task(_process_text_video_job_async, job_id)
+    # Process in background (same pattern as Format A reels)
+    background_tasks.add_task(_process_format_b_job_async, job_id)
 
     return {
         "status": "created",
         "job_id": job_id,
-        "message": "Text-video job created and queued for processing",
+        "message": "Format B job created and queued for processing",
         "job": job_dict,
     }
 
@@ -291,16 +291,16 @@ import threading
 _tv_job_semaphore = threading.Semaphore(2)
 
 
-def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
+def _process_full_auto_format_b_async(job_id: str, niche: str, category: str):
     """
-    Background task for full_auto text-video: generate content via DeepSeek → update job → compose.
+    Background task for full_auto format-b: generate content via DeepSeek → update job → compose.
     The job was already created with a placeholder title so the user sees it instantly.
     """
     import traceback
     import sys
 
     print(f"\n{'='*60}", flush=True)
-    print(f"📹 TEXT-VIDEO FULL-AUTO BACKGROUND TASK STARTED", flush=True)
+    print(f"📹 Format B FULL-AUTO BACKGROUND TASK STARTED", flush=True)
     print(f"   Job ID: {job_id}  Niche: {niche}", flush=True)
     print(f"{'='*60}", flush=True)
     sys.stdout.flush()
@@ -322,15 +322,15 @@ def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
 
             polished_data = polished.to_dict()
 
-            # Step 2: Update job with real data (title, content, text_video_data)
+            # Step 2: Update job with real data (title, content, format_b_data)
             job = manager.get_job(job_id)
             if job:
                 # Clean title for display (single line, title case)
-                raw_title = polished_data.get("thumbnail_title", "Text-Video Reel")
+                raw_title = polished_data.get("thumbnail_title", "Format B Reel")
                 clean_title = " ".join(raw_title.replace("\n", " ").split()).title()
                 job.title = clean_title
                 job.content_lines = polished_data.get("reel_lines", [])
-                job.text_video_data = polished_data
+                job.format_b_data = polished_data
                 job.fixed_title = True
                 db.commit()
 
@@ -338,13 +338,13 @@ def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
             processor = JobProcessor(db)
             result = processor.process_job(job_id)
 
-            print(f"\n✅ TEXT-VIDEO FULL-AUTO COMPLETED: {job_id}", flush=True)
+            print(f"\n✅ Format B FULL-AUTO COMPLETED: {job_id}", flush=True)
             print(f"   Result: {result}", flush=True)
             sys.stdout.flush()
 
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
-        print(f"\n❌ TEXT-VIDEO FULL-AUTO FAILED: {error_msg}", flush=True)
+        print(f"\n❌ Format B FULL-AUTO FAILED: {error_msg}", flush=True)
         traceback.print_exc()
         sys.stdout.flush()
 
@@ -358,13 +358,13 @@ def _process_full_auto_text_video_async(job_id: str, niche: str, category: str):
         _tv_job_semaphore.release()
 
 
-def _process_text_video_job_async(job_id: str):
-    """Background task to process a text-video job."""
+def _process_format_b_job_async(job_id: str):
+    """Background task to process a format-b job."""
     import traceback
     import sys
 
     print(f"\n{'='*60}", flush=True)
-    print(f"📹 TEXT-VIDEO BACKGROUND TASK STARTED", flush=True)
+    print(f"📹 Format B BACKGROUND TASK STARTED", flush=True)
     print(f"   Job ID: {job_id}", flush=True)
     print(f"{'='*60}", flush=True)
     sys.stdout.flush()
@@ -376,7 +376,7 @@ def _process_text_video_job_async(job_id: str):
             result = processor.process_job(job_id)
 
             print(f"\n{'='*60}", flush=True)
-            print(f"✅ TEXT-VIDEO JOB COMPLETED", flush=True)
+            print(f"✅ Format B JOB COMPLETED", flush=True)
             print(f"   Job ID: {job_id}", flush=True)
             print(f"   Result: {result}", flush=True)
             print(f"{'='*60}\n", flush=True)
@@ -384,7 +384,7 @@ def _process_text_video_job_async(job_id: str):
 
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
-        print(f"\n❌ TEXT-VIDEO JOB FAILED: {error_msg}", flush=True)
+        print(f"\n❌ Format B JOB FAILED: {error_msg}", flush=True)
         traceback.print_exc()
         sys.stdout.flush()
 

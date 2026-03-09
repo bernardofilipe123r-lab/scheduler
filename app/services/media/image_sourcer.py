@@ -1,5 +1,5 @@
 """
-Image Sourcer — generates images for TEXT-VIDEO reels via DeAPI.
+Image Sourcer — generates images for Format B reels via DeAPI.
 
 All images are AI-generated using DeAPI (Flux1schnell model).
 The AI prompts come from DeepSeek via StoryPolisher.
@@ -33,7 +33,7 @@ MAX_RETRY_DELAY = 60
 
 
 class ImageSourcer:
-    """Generates images via DeAPI for text-video reels."""
+    """Generates images via DeAPI for format-b reels."""
 
     def __init__(self, db=None):
         self.db = db

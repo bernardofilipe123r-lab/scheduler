@@ -136,8 +136,8 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         # Normalize variant to content type group
         if variant in ("light", "dark"):
             type_group = "reel"
-        elif variant == "text_video":
-            type_group = "text_video"
+        elif variant == "format_b":
+            type_group = "format_b"
         elif variant == "post":
             type_group = "post"
         else:

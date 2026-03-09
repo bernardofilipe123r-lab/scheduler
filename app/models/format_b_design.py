@@ -1,12 +1,12 @@
-"""TextVideoDesign model — per-user design preferences for TEXT-VIDEO reels."""
+"""FormatBDesign model — per-user design preferences for Format B reels."""
 
 from sqlalchemy import Column, String, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from app.models.base import Base
 
 
-class TextVideoDesign(Base):
-    __tablename__ = "text_video_design"
+class FormatBDesign(Base):
+    __tablename__ = "format_b_design"
 
     id = Column(UUID(as_uuid=False), primary_key=True, server_default="gen_random_uuid()")
     user_id = Column(String(100), nullable=False, unique=True)

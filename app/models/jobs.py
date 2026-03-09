@@ -37,11 +37,11 @@ class GenerationJob(Base):
     # Music source: 'none', 'trending_random', 'trending_pick'
     music_source = Column(Text, default="none", nullable=True)
     
-    # Content format: 'text_based' (default) | 'text_video'
-    content_format = Column(String(30), default="text_based", nullable=True)
+    # Content format: 'format_a' (default) | 'format_b'
+    content_format = Column(String(30), default="format_a", nullable=True)
     
-    # TEXT-VIDEO specific metadata (polished story, source URL, fingerprint, etc.)
-    text_video_data = Column(JSONB, nullable=True)
+    # Format B specific metadata (polished story, source URL, fingerprint, etc.)
+    format_b_data = Column(JSONB, nullable=True)
     
     # Generated outputs per brand
     # Format: {"gymcollege": {"reel_id": "...", "thumbnail": "...", "video": "...", "status": "completed"}, ...}
@@ -97,6 +97,6 @@ class GenerationJob(Base):
             "created_by": getattr(self, 'created_by', None) or "user",
             "music_track_id": getattr(self, 'music_track_id', None),
             "music_source": getattr(self, 'music_source', 'none') or 'none',
-            "content_format": getattr(self, 'content_format', 'text_based') or 'text_based',
-            "text_video_data": getattr(self, 'text_video_data', None),
+            "content_format": getattr(self, 'content_format', 'format_a') or 'format_a',
+            "format_b_data": getattr(self, 'format_b_data', None),
         }

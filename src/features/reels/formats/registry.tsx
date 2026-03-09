@@ -13,7 +13,7 @@
  *   6. Everything else (wizard flow, brand/platform/mode selection) updates automatically
  */
 import { Film, Image, type LucideIcon } from 'lucide-react'
-import textBasedVideo from '@/assets/videos/text-based-preview.mp4'
+import textBasedVideo from '@/assets/videos/format-a-preview.mp4'
 import videoBasedVideo from '@/assets/videos/video-based-preview.mp4'
 
 export interface ReelFormat {
@@ -47,8 +47,8 @@ export interface ReelFormat {
    * Mode step: workflow steps shown to the user for auto mode.
    * Each format has its own pipeline, so the steps should reflect what
    * actually happens in the backend. For example:
-   *   - text_based: generate topic → write text → AI background → compose video
-   *   - text_video: discover stories → write script → source images → render slideshow
+   *   - format_a: generate topic → write text → AI background → compose video
+   *   - format_b: discover stories → write script → source images → render slideshow
    * When adding a NEW FORMAT, define steps that match its actual pipeline.
    */
   autoSteps: string[]
@@ -58,7 +58,7 @@ export interface ReelFormat {
 
 export const REEL_FORMATS: ReelFormat[] = [
   {
-    id: 'text_based',
+    id: 'format_a',
     label: 'Format A Reel',
     description: 'AI-generated background with animated text overlays',
     icon: Film,
@@ -75,7 +75,7 @@ export const REEL_FORMATS: ReelFormat[] = [
     manualSteps: ['You write the text', 'Pick variant & music', 'AI generates background', 'Video rendered'],
   },
   {
-    id: 'text_video',
+    id: 'format_b',
     label: 'Format B Reel',
     description: 'Real images with text overlays as a slideshow video',
     icon: Image,

@@ -3,14 +3,14 @@ import type {
   DiscoverRequest,
   PolishRequest,
   SourceImagesRequest,
-  TextVideoGenerateRequest,
+  FormatBGenerateRequest,
   RawStory,
   PolishedStory,
   DesignSettings,
   StoryPoolEntry,
 } from '../types'
 
-const BASE = '/api/content/text-video'
+const BASE = '/api/content/format-b'
 
 interface DiscoverResponse {
   stories: RawStory[]
@@ -36,7 +36,7 @@ interface StoryPoolResponse {
 
 interface DesignResponse extends DesignSettings {}
 
-export const textVideoApi = {
+export const formatBApi = {
   discover: async (data: DiscoverRequest): Promise<RawStory[]> => {
     const res = await post<DiscoverResponse>(`${BASE}/discover`, data)
     return res.stories
@@ -59,7 +59,7 @@ export const textVideoApi = {
     return res.paths
   },
 
-  generate: async (data: TextVideoGenerateRequest): Promise<{ job_id: string; status: string }> => {
+  generate: async (data: FormatBGenerateRequest): Promise<{ job_id: string; status: string }> => {
     const res = await post<GenerateResponse>(`${BASE}/generate`, data)
     return { job_id: res.job_id, status: res.status }
   },

@@ -1,10 +1,10 @@
 /**
- * Types for TEXT-VIDEO reels feature.
+ * Types for Format B reels feature.
  */
 
-export type ContentFormat = 'text_based' | 'text_video'
+export type ContentFormat = 'format_a' | 'format_b'
 
-export type TextVideoMode = 'manual' | 'semi_auto' | 'full_auto'
+export type FormatBMode = 'manual' | 'semi_auto' | 'full_auto'
 
 export interface ImagePlan {
   source_type: 'web_search' | 'ai_generate'
@@ -104,8 +104,8 @@ export interface SourceImagesRequest {
   image_plans: ImagePlan[]
 }
 
-export interface TextVideoGenerateRequest {
-  mode: TextVideoMode
+export interface FormatBGenerateRequest {
+  mode: FormatBMode
   brands: string[]
   platforms: string[]
   music_source?: string
@@ -123,7 +123,7 @@ export interface TextVideoGenerateRequest {
   ai_image_prompts?: string[]
 }
 
-export interface TextVideoJob {
+export interface FormatBJob {
   job_id: string
   status: string
   brand_outputs: Record<string, {

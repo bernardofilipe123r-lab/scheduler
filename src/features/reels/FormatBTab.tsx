@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Wand2, SplitSquareHorizontal, Zap } from 'lucide-react'
-import { TextVideoManual } from './TextVideoManual'
-import { TextVideoSemiAuto } from './TextVideoSemiAuto'
-import { TextVideoFullAuto } from './TextVideoFullAuto'
+import { FormatBManual } from './FormatBManual'
+import { FormatBSemiAuto } from './FormatBSemiAuto'
+import { FormatBFullAuto } from './FormatBFullAuto'
 
 type SubMode = 'manual' | 'semi_auto' | 'full_auto'
 
@@ -12,7 +12,7 @@ const SUB_MODES: { id: SubMode; label: string; desc: string; icon: React.ReactNo
   { id: 'full_auto', label: 'Full Auto', desc: 'One click, we handle everything', icon: <Zap className="w-4 h-4" /> },
 ]
 
-export function TextVideoTab() {
+export function FormatBTab() {
   const [mode, setMode] = useState<SubMode>('semi_auto')
 
   return (
@@ -39,9 +39,9 @@ export function TextVideoTab() {
       </div>
 
       {/* Sub-mode Content */}
-      {mode === 'manual' && <TextVideoManual />}
-      {mode === 'semi_auto' && <TextVideoSemiAuto />}
-      {mode === 'full_auto' && <TextVideoFullAuto />}
+      {mode === 'manual' && <FormatBManual />}
+      {mode === 'semi_auto' && <FormatBSemiAuto />}
+      {mode === 'full_auto' && <FormatBFullAuto />}
     </div>
   )
 }

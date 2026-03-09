@@ -39,7 +39,7 @@ class ContentPlan:
     """A plan for one piece of content that Toby will create."""
     user_id: str
     brand_id: str
-    content_type: str            # "reel" | "text_video_reel" | "post"
+    content_type: str            # "reel" | "format_b_reel" | "post"
     scheduled_time: str          # ISO datetime
     personality_id: str
     personality_prompt: str      # System prompt modifier
@@ -47,7 +47,7 @@ class ContentPlan:
     hook_strategy: str
     title_format: str
     visual_style: str
-    story_category: Optional[str] = None  # text_video only, drives StoryDiscoverer
+    story_category: Optional[str] = None  # format_b only, drives StoryDiscoverer
     experiment_id: Optional[str] = None
     is_experiment: bool = False
     is_control: bool = False

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Loader2, Save, Image, Film, RotateCcw, Music } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useDesignSettings, useUpdateDesign } from './api/use-text-video'
+import { useDesignSettings, useUpdateDesign } from './api/use-format-b'
 import type { DesignSettings } from './types'
 import { useDynamicBrands } from '@/features/brands/hooks/use-dynamic-brands'
 import { BrandThemeModal } from '@/features/brands/components/BrandThemeModal'
@@ -405,20 +405,20 @@ function ReelFramePreview({ form }: { form: Partial<DesignSettings> }) {
 }
 
 /* ──────────────────────────────────────────────
- * MAIN COMPONENT — Two top-level tabs: Text Reels / Text-Video
+ * MAIN COMPONENT — Two top-level tabs: Format A / Format B
  * ────────────────────────────────────────────── */
-type TopTab = 'text-reels' | 'text-video'
+type TopTab = 'format-a' | 'format-b'
 
 export function DesignEditorTab() {
-  const [topTab, setTopTab] = useState<TopTab>('text-reels')
+  const [topTab, setTopTab] = useState<TopTab>('format-a')
 
   return (
     <div className="space-y-4">
       {/* ── Top-level design type selector ── */}
       <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5 w-fit">
         {([
-          { id: 'text-reels' as TopTab, label: 'Format A', icon: <Image className="w-4 h-4" /> },
-          { id: 'text-video' as TopTab, label: 'Format B', icon: <Film className="w-4 h-4" /> },
+          { id: 'format-a' as TopTab, label: 'Format A', icon: <Image className="w-4 h-4" /> },
+          { id: 'format-b' as TopTab, label: 'Format B', icon: <Film className="w-4 h-4" /> },
         ]).map(t => (
           <button key={t.id} onClick={() => setTopTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -429,8 +429,8 @@ export function DesignEditorTab() {
         ))}
       </div>
 
-      {topTab === 'text-reels' && <TextReelsDesign />}
-      {topTab === 'text-video' && <TextVideoDesign />}
+      {topTab === 'format-a' && <TextReelsDesign />}
+      {topTab === 'format-b' && <FormatBDesign />}
     </div>
   )
 }
@@ -486,12 +486,12 @@ function TextReelsDesign() {
 }
 
 /* ──────────────────────────────────────────────
- * TEXT-VIDEO DESIGN — Thumbnail & Content settings
+ * Format B DESIGN — Thumbnail & Content settings
  * Each sub-tab: preview LEFT, settings RIGHT
  * ────────────────────────────────────────────── */
 type DesignTab = 'thumbnail' | 'content'
 
-function TextVideoDesign() {
+function FormatBDesign() {
   const { data: design, isLoading } = useDesignSettings()
   const updateMutation = useUpdateDesign()
   const [form, setForm] = useState<Partial<DesignSettings>>({})

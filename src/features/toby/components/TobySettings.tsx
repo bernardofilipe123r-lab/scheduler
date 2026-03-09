@@ -581,8 +581,8 @@ function BrandDetailPanel({
         <div className="bg-slate-50 rounded-xl p-4 mt-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Reel Format</p>
           <div className="flex gap-2">
-            {([['text_based', 'Format A', 'Classic caption-overlay reels'], ['text_video', 'Format B', 'Slideshow reels with text overlays']] as const).map(([val, label, desc]) => {
-              const active = (getVal('reel_format', brand.reel_format ?? 'text_based') as string) === val
+            {([['format_a', 'Format A', 'Classic caption-overlay reels'], ['format_b', 'Format B', 'Slideshow reels with text overlays']] as const).map(([val, label, desc]) => {
+              const active = (getVal('reel_format', brand.reel_format ?? 'format_a') as string) === val
               return (
                 <button
                   key={val}

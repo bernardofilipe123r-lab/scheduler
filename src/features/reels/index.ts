@@ -1,3 +1,3 @@
-export * from './api/use-text-video'
-export * from './api/text-video-api'
+export * from './api/use-format-b'
+export * from './api/format-b-api'
 export * from './types'

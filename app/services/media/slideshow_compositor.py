@@ -1,5 +1,5 @@
 """
-Slideshow Compositor — creates TEXT-VIDEO (Format B) reel MP4s.
+Slideshow Compositor — creates Format B (Format B) reel MP4s.
 
 Layout matches the design editor preview:
   - Black background
@@ -49,7 +49,7 @@ FONT_MAP_BOLD = {
     "Roboto Condensed": "Inter/static/Inter_18pt-Bold.ttf",
 }
 
-# Default design values — aligned with TextVideoDesign model defaults
+# Default design values — aligned with FormatBDesign model defaults
 DEFAULTS = {
     "reel_text_font": "Inter",
     "reel_text_size": 38,
@@ -82,7 +82,7 @@ VERIFIED_BADGE_PATH = Path("assets/reel_video/logo/verified.png")
 
 
 class SlideshowCompositor:
-    """Composes the TEXT-VIDEO reel: brand header + text + image slideshow + music."""
+    """Composes the Format B reel: brand header + text + image slideshow + music."""
 
     def compose_reel(
         self,
@@ -102,7 +102,7 @@ class SlideshowCompositor:
             image_paths: 3-4 source images for the slideshow area
             reel_lines: Text content lines (will be joined + word-wrapped)
             output_path: Where to save the MP4
-            design: TextVideoDesign model instance (optional)
+            design: FormatBDesign model instance (optional)
             music_path: Path to background music
             logo_path: Path to brand logo image
             brand_name: Brand display name for the header

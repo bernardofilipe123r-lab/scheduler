@@ -1,4 +1,4 @@
-"""StoryPool model — TEXT-VIDEO story dedup and caching."""
+"""StoryPool model — Format B story dedup and caching."""
 
 from sqlalchemy import Column, String, Text, Index
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
@@ -6,7 +6,7 @@ from app.models.base import Base
 
 
 class StoryPool(Base):
-    __tablename__ = "text_video_story_pool"
+    __tablename__ = "format_b_story_pool"
 
     id = Column(UUID(as_uuid=False), primary_key=True, server_default="gen_random_uuid()")
     user_id = Column(String(100), nullable=False)

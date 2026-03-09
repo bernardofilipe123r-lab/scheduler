@@ -467,8 +467,8 @@ def _execute_content_plan(db: Session, plan):
     # ── Step 2: Generate text content ────────────────────────
     generator = ContentGeneratorV2()
 
-    if plan.content_type == "text_video_reel":
-        # TEXT-VIDEO pipeline: generate content + image prompts via DeepSeek
+    if plan.content_type == "format_b_reel":
+        # Format B pipeline: generate content + image prompts via DeepSeek
         from app.services.discovery.story_polisher import StoryPolisher
         from dataclasses import asdict
 
@@ -483,7 +483,7 @@ def _execute_content_plan(db: Session, plan):
             "slide_texts": polished.reel_lines,
             "caption": polished.caption,
             "image_prompt": "",
-            "text_video_data": polished.to_dict(),
+            "format_b_data": polished.to_dict(),
         }
     elif plan.content_type == "reel":
         result = generator.generate_viral_content(
@@ -521,8 +521,8 @@ def _execute_content_plan(db: Session, plan):
         raise ValueError(f"Content generation returned forbidden fallback title: {result['title']}")
 
     # ── Step 3: Determine variant from slot pattern ──────────
-    if plan.content_type == "text_video_reel":
-        variant = "text_video"
+    if plan.content_type == "format_b_reel":
+        variant = "format_b"
     elif plan.content_type == "reel":
         sched_time = datetime.fromisoformat(plan.scheduled_time)
         slot_index = sched_time.hour // 4  # 0-5 across 24h
@@ -564,8 +564,8 @@ def _execute_content_plan(db: Session, plan):
         fixed_title=True,
         created_by="toby",
         music_source="trending_random",
-        content_format="text_video" if plan.content_type == "text_video_reel" else "text_based",
-        text_video_data=result.get("text_video_data"),
+        content_format="format_b" if plan.content_type == "format_b_reel" else "format_a",
+        format_b_data=result.get("format_b_data"),
     )
     job_id = job.job_id
 
@@ -588,8 +588,8 @@ def _execute_content_plan(db: Session, plan):
     job_manager.update_job_status(job_id, "generating", "Toby generating media...", 5)
 
     try:
-        if variant == "text_video":
-            media_result = processor.process_text_video_brand(job_id, plan.brand_id)
+        if variant == "format_b":
+            media_result = processor.process_format_b_brand(job_id, plan.brand_id)
         elif variant == "post":
             media_result = processor.process_post_brand(job_id, plan.brand_id)
         else:

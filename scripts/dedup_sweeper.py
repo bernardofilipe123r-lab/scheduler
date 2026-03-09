@@ -133,7 +133,7 @@ def sweep_duplicates(dry_run: bool = False) -> dict:
                             extra_data->>'brand',
                             CASE
                                 WHEN extra_data->>'variant' IN ('light', 'dark') THEN 'reel'
-                                WHEN extra_data->>'variant' = 'text_video' THEN 'text_video'
+                                WHEN extra_data->>'variant' = 'format_b' THEN 'format_b'
                                 ELSE extra_data->>'variant'
                             END,
                             date_trunc('hour', scheduled_time)

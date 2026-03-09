@@ -52,8 +52,8 @@ TITLE_FORMATS = ["how_x_does_y", "number_one_mistake", "why_experts_say", "stop_
 
 VISUAL_STYLES = ["dark_cinematic", "light_clean", "vibrant_bold"]
 
-# ── Text-Video personality pool (brain-per-format, Section 22) ──
-TEXT_VIDEO_PERSONALITIES = {
+# ── Format B personality pool (brain-per-format, Section 22) ──
+FORMAT_B_PERSONALITIES = {
     "breaking_news":  "You report just-happened stories with urgency. 'BREAKING:', timely, factual, impactful.",
     "power_moves":    "You narrate bold business and wealth decisions. Confident, awed tone. 'He just sold...'",
     "controversy":    "You present provocative takes and public debates. Two-sided, dramatic. 'Here's what no one is saying...'",
@@ -61,13 +61,13 @@ TEXT_VIDEO_PERSONALITIES = {
     "mind_blowing":   "You reveal shocking facts and statistics. 'This number will change how you think about...'",
 }
 
-TEXT_VIDEO_HOOKS = ["breaking_hook", "statistic_lead", "name_drop", "controversy_opener", "prediction"]
+FORMAT_B_HOOKS = ["breaking_hook", "statistic_lead", "name_drop", "controversy_opener", "prediction"]
 
-TEXT_VIDEO_TITLE_FORMATS = ["name_action", "shocking_number", "versus_outcome", "one_word_punch", "question_reveal"]
+FORMAT_B_TITLE_FORMATS = ["name_action", "shocking_number", "versus_outcome", "one_word_punch", "question_reveal"]
 
-TEXT_VIDEO_VISUAL_STYLES = ["news_dramatic", "cinematic_epic", "minimal_stark"]
+FORMAT_B_VISUAL_STYLES = ["news_dramatic", "cinematic_epic", "minimal_stark"]
 
-TEXT_VIDEO_STORY_CATEGORIES = [
+FORMAT_B_STORY_CATEGORIES = [
     "power_moves", "controversy", "underdog", "prediction", "shocking_stat",
     "human_moment", "industry_shift", "failed_bet", "hidden_cost", "scientific_breakthrough",
 ]
@@ -89,8 +89,8 @@ class StrategyChoice:
 
 def get_personality_prompt(content_type: str, personality_id: str) -> str:
     """Get the system prompt modifier for a personality."""
-    if content_type == "text_video_reel":
-        pool = TEXT_VIDEO_PERSONALITIES
+    if content_type == "format_b_reel":
+        pool = FORMAT_B_PERSONALITIES
     elif content_type == "reel":
         pool = REEL_PERSONALITIES
     else:
@@ -120,11 +120,11 @@ def choose_strategy(
     is_explore = random.random() < effective_explore
 
     # Brain-per-format: route to correct pools based on content_type
-    if content_type == "text_video_reel":
-        personality_pool = list(TEXT_VIDEO_PERSONALITIES.keys())
-        hooks = TEXT_VIDEO_HOOKS
-        titles = TEXT_VIDEO_TITLE_FORMATS
-        visuals = TEXT_VIDEO_VISUAL_STYLES
+    if content_type == "format_b_reel":
+        personality_pool = list(FORMAT_B_PERSONALITIES.keys())
+        hooks = FORMAT_B_HOOKS
+        titles = FORMAT_B_TITLE_FORMATS
+        visuals = FORMAT_B_VISUAL_STYLES
     elif content_type == "reel":
         personality_pool = list(REEL_PERSONALITIES.keys())
         hooks = HOOK_STRATEGIES
@@ -163,12 +163,12 @@ def choose_strategy(
         visuals, is_explore, use_thompson,
     )
 
-    # TEXT-VIDEO also picks story_category via Thompson Sampling
+    # Format B also picks story_category via Thompson Sampling
     story_category = None
-    if content_type == "text_video_reel":
+    if content_type == "format_b_reel":
         story_category = _pick_dimension(
             db, user_id, brand_id, content_type, "story_category",
-            TEXT_VIDEO_STORY_CATEGORIES, is_explore, use_thompson,
+            FORMAT_B_STORY_CATEGORIES, is_explore, use_thompson,
         )
 
     # Check for an active experiment and link to it

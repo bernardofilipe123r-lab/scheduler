@@ -216,7 +216,7 @@ class DatabaseSchedulerService:
                         is_same_type = (
                             (variant in ("light", "dark") and ex_variant in ("light", "dark"))
                             or (variant == "post" and ex_variant == "post")
-                            or (variant == "text_video" and ex_variant == "text_video")
+                            or (variant == "format_b" and ex_variant == "format_b")
                         )
                         if ex_brand == brand and is_same_type:
                             print(f"   ⚠️ DEDUP-L1: Slot already filled for {brand} "

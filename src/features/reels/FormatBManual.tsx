@@ -2,14 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2, Upload, X, ImagePlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands } from '@/features/brands'
-import { useGenerateTextVideo, useUploadImages } from './api/use-text-video'
+import { useGenerateFormatB, useUploadImages } from './api/use-format-b'
 import type { BrandName } from '@/shared/types'
 
 const MAX_IMAGES = 10
 
-export function TextVideoManual() {
+export function FormatBManual() {
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
-  const generateMutation = useGenerateTextVideo()
+  const generateMutation = useGenerateFormatB()
   const uploadMutation = useUploadImages()
 
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])

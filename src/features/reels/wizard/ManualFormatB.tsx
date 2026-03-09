@@ -2,20 +2,20 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, ImagePlus, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useGenerateTextVideo, useUploadImages } from '../api/use-text-video'
+import { useGenerateFormatB, useUploadImages } from '../api/use-format-b'
 import type { BrandName } from '@/shared/types'
 
 const MAX_IMAGES = 10
 
-interface ManualTextVideoProps {
+interface ManualFormatBProps {
   brands: BrandName[]
   platforms: string[]
   onComplete: () => void
 }
 
-export function ManualTextVideo({ brands, platforms, onComplete }: ManualTextVideoProps) {
+export function ManualFormatB({ brands, platforms, onComplete }: ManualFormatBProps) {
   const navigate = useNavigate()
-  const generateMutation = useGenerateTextVideo()
+  const generateMutation = useGenerateFormatB()
   const uploadMutation = useUploadImages()
 
   const [thumbnailTitle, setThumbnailTitle] = useState('')

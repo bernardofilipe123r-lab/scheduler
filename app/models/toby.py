@@ -281,7 +281,7 @@ class TobyBrandConfig(Base):
     # JSON list of enabled platform names, e.g. ["instagram","facebook","youtube","threads","tiktok"]
     # NULL means "all connected platforms" (backwards-compatible default).
     enabled_platforms = Column(JSON, nullable=True)
-    # Reel format: 'text_based' (default) | 'text_video'
-    reel_format = Column(String(30), default="text_based", nullable=True)
+    # Reel format: 'format_a' (default) | 'format_b'
+    reel_format = Column(String(30), default="format_a", nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)

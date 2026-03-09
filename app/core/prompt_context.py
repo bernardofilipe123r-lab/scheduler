@@ -74,11 +74,11 @@ class PromptContext:
     competitor_accounts: List[str] = field(default_factory=list)
     discovery_hashtags: List[str] = field(default_factory=list)
 
-    # Text-Video Reel Configuration
-    text_video_reel_examples: List[dict] = field(default_factory=list)
-    text_video_story_niches: List[str] = field(default_factory=list)
-    text_video_story_tone: str = ""
-    text_video_preferred_categories: List[str] = field(default_factory=list)
+    # Format B Reel Configuration
+    format_b_reel_examples: List[dict] = field(default_factory=list)
+    format_b_story_niches: List[str] = field(default_factory=list)
+    format_b_story_tone: str = ""
+    format_b_preferred_categories: List[str] = field(default_factory=list)
 
     # Toby personality modifier (injected by Toby orchestrator)
     personality_modifier: str = ""

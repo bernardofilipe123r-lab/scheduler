@@ -54,10 +54,92 @@ def _get_brand_type(brand_name: str) -> str:
 class JobProcessor:
     """Processing pipeline — generates images, videos, and captions for jobs."""
 
+    # ── Format Registry ───────────────────────────────────────────────
+    # Maps job variant → brand processor method name.
+    # To add a new format: add one entry here + implement the method.
+    # Everything else (process_job, resume_job, regenerate) routes through this.
+    VARIANT_PROCESSORS = {
+        "light": "regenerate_brand",
+        "dark": "regenerate_brand",
+        "format_b": "process_format_b_brand",
+        "post": "process_post_brand",
+    }
+
     def __init__(self, db):
         from app.services.content.job_manager import JobManager
         self._manager = JobManager(db)
         self.db = db
+
+    def _get_brand_processor(self, variant: str):
+        """Return the bound brand-processing method for the given variant.
+        
+        Raises ValueError for unknown variants so bugs surface immediately.
+        """
+        method_name = self.VARIANT_PROCESSORS.get(variant)
+        if not method_name:
+            raise ValueError(
+                f"Unknown variant '{variant}'. "
+                f"Registered variants: {list(self.VARIANT_PROCESSORS.keys())}"
+            )
+        return getattr(self, method_name)
+
+    def _run_brands_loop(
+        self,
+        job_id: str,
+        brands: list[str],
+        processor_fn,
+        *,
+        progress_label: str = "Processing",
+        extra_kwargs_per_brand: Optional[Dict[str, dict]] = None,
+    ) -> Dict[str, Any]:
+        """Run a brand processor for each brand with timeout, progress, and cancellation.
+
+        This is the single loop used by process_job, resume_job, and regenerate.
+        It handles: progress updates, cancellation checks, per-brand timeouts,
+        and status rollup.
+
+        Args:
+            job_id: The job being processed
+            brands: List of brand IDs to process
+            processor_fn: Callable(job_id, brand, **kwargs) → dict with 'success' key
+            progress_label: Human-readable label for progress messages
+            extra_kwargs_per_brand: Optional dict of {brand: {kwarg: val}} passed to processor_fn
+        """
+        results = {}
+        total = len(brands)
+
+        for i, brand in enumerate(brands):
+            job = self._manager.get_job(job_id)
+            if job and job.status == "cancelled":
+                return results
+
+            progress = int((i / max(total, 1)) * 100)
+            msg = f"{progress_label} {brand}..." if total > 1 else f"{progress_label}..."
+            self._manager.update_job_status(job_id, "generating", msg, progress)
+
+            extra = (extra_kwargs_per_brand or {}).get(brand, {})
+            result = {"success": False, "error": "Timeout"}
+
+            def _run(b=brand, kw=extra):
+                nonlocal result
+                try:
+                    result = processor_fn(job_id, b, **kw)
+                except Exception as ex:
+                    result = {"success": False, "error": f"{type(ex).__name__}: {ex}"}
+
+            t = threading.Thread(target=_run, daemon=True)
+            t.start()
+            t.join(timeout=BRAND_GENERATION_TIMEOUT)
+
+            if t.is_alive():
+                timeout_msg = f"BRAND_TIMEOUT: {brand} {progress_label.lower()} exceeded {BRAND_GENERATION_TIMEOUT}s"
+                print(f"⏱️  {timeout_msg}", flush=True)
+                self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg})
+                result = {"success": False, "error": timeout_msg}
+
+            results[brand] = result
+
+        return results
 
     def regenerate_brand(
         self,
@@ -547,18 +629,18 @@ class JobProcessor:
             })
             return {"success": False, "error": error_msg}
 
-    def process_text_video_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
+    def process_format_b_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
         """
-        Process a TEXT-VIDEO reel for a single brand.
+        Process a Format B reel for a single brand.
         Sources images, composes thumbnail, composes slideshow video, uploads to Supabase.
         """
-        print(f"\n📹 process_text_video_brand() — {brand}", flush=True)
+        print(f"\n📹 process_format_b_brand() — {brand}", flush=True)
 
         job = self._manager.get_job(job_id)
         if not job:
             return {"success": False, "error": f"Job not found: {job_id}"}
 
-        tv_data = job.text_video_data or {}
+        tv_data = job.format_b_data or {}
         brand_data = (job.brand_outputs or {}).get(brand, {})
         reel_id = f"{job_id}_{brand}"
         user_id = job.user_id
@@ -574,7 +656,7 @@ class JobProcessor:
             from app.services.media.thumbnail_compositor import ThumbnailCompositor
             from app.services.media.slideshow_compositor import SlideshowCompositor
             from app.services.discovery.story_polisher import ImagePlan
-            from app.models.text_video_design import TextVideoDesign
+            from app.models.format_b_design import FormatBDesign
             from app.models.brands import Brand
             from app.services.media.music_picker import resolve_music_url
             from app.db_connection import SessionLocal
@@ -582,8 +664,8 @@ class JobProcessor:
             # Load user's design preferences + brand info
             design_db = SessionLocal()
             try:
-                design = design_db.query(TextVideoDesign).filter(
-                    TextVideoDesign.user_id == user_id
+                design = design_db.query(FormatBDesign).filter(
+                    FormatBDesign.user_id == user_id
                 ).first()
                 brand_obj = design_db.query(Brand).filter(
                     Brand.id == brand, Brand.user_id == user_id
@@ -636,7 +718,7 @@ class JobProcessor:
                     print(f"   ⚠️ Image {i+1} failed to source", flush=True)
 
             if not image_paths:
-                raise ValueError("Failed to source any images for text-video reel")
+                raise ValueError("Failed to source any images for format-b reel")
 
             # ── Step 2: Compose thumbnail ─────────────────────
             self._manager.update_brand_output(job_id, brand, {
@@ -696,7 +778,7 @@ class JobProcessor:
                             with open(tmp_music.name, 'wb') as f:
                                 f.write(resp.content)
                             music_path = Path(tmp_music.name)
-                            print(f"   🎵 Music downloaded for text-video reel", flush=True)
+                            print(f"   🎵 Music downloaded for format-b reel", flush=True)
                 except Exception as e:
                     print(f"   ⚠️ Music resolution failed (continuing without): {e}", flush=True)
 
@@ -743,7 +825,7 @@ class JobProcessor:
                 raise Exception(f"Thumbnail upload failed: {e}")
 
             try:
-                video_remote = storage_path(user_id, brand_slug, "videos", f"{reel_id}_text_video.mp4")
+                video_remote = storage_path(user_id, brand_slug, "videos", f"{reel_id}_format_b.mp4")
                 video_url = upload_from_path("media", video_remote, str(video_output))
                 print(f"   ☁️  Video uploaded: {video_url}", flush=True)
             except StorageError as e:
@@ -764,12 +846,12 @@ class JobProcessor:
                 "thumbnail_url": f"{thumb_url}?t={cache_bust}" if thumb_url else "",
                 "video_path": video_url,
                 "caption": caption,
-                "content_format": "text_video",
+                "content_format": "format_b",
                 "content_lines": reel_lines,
                 "regenerated_at": datetime.utcnow().isoformat(),
             })
 
-            print(f"   ✅ {brand} text-video reel completed", flush=True)
+            print(f"   ✅ {brand} format-b reel completed", flush=True)
             return {
                 "success": True,
                 "brand": brand,
@@ -781,7 +863,7 @@ class JobProcessor:
         except Exception as e:
             import traceback
             error_msg = f"{type(e).__name__}: {str(e)}"
-            print(f"   ❌ Text-video failed: {error_msg}", flush=True)
+            print(f"   ❌ Format B failed: {error_msg}", flush=True)
             traceback.print_exc()
             self._manager.update_brand_output(job_id, brand, {
                 "status": "failed",
@@ -935,9 +1017,9 @@ class JobProcessor:
                 self._manager.update_job_status(job_id, "failed", error_message=str(e))
                 return {"success": False, "error": str(e)}
 
-        # ── TEXT-VIDEO variant: source images + compose slideshow ──
-        if job.variant == "text_video":
-            print(f"📹 TEXT-VIDEO variant — processing per brand", flush=True)
+        # ── Format B variant: source images + compose slideshow ──
+        if job.variant == "format_b":
+            print(f"📹 Format B variant — processing per brand", flush=True)
             results = {}
             total_brands = len(job.brands)
             try:
@@ -947,14 +1029,14 @@ class JobProcessor:
                         return {"success": False, "error": "Job was cancelled", "results": results}
 
                     progress = int(((i) / max(total_brands, 1)) * 100)
-                    step_msg = f"Processing text-video for {brand}..." if total_brands > 1 else "Processing text-video reel..."
+                    step_msg = f"Processing format-b for {brand}..." if total_brands > 1 else "Processing format-b reel..."
                     self._manager.update_job_status(job_id, "generating", step_msg, progress)
 
                     tv_result = {"success": False, "error": "Timeout"}
                     def _run_tv_brand(b=brand):
                         nonlocal tv_result
                         try:
-                            tv_result = self.process_text_video_brand(job_id, b)
+                            tv_result = self.process_format_b_brand(job_id, b)
                         except Exception as ex:
                             tv_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
 
@@ -963,8 +1045,8 @@ class JobProcessor:
                     tv_thread.join(timeout=BRAND_GENERATION_TIMEOUT)
 
                     if tv_thread.is_alive():
-                        timeout_msg = f"BRAND_TIMEOUT: {brand} text-video exceeded {BRAND_GENERATION_TIMEOUT}s"
-                        print(f"⏱️  TEXT-VIDEO BRAND TIMEOUT: {brand}", flush=True)
+                        timeout_msg = f"BRAND_TIMEOUT: {brand} format-b exceeded {BRAND_GENERATION_TIMEOUT}s"
+                        print(f"⏱️  Format B BRAND TIMEOUT: {brand}", flush=True)
                         self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg})
                         tv_result = {"success": False, "error": timeout_msg}
 
@@ -1242,8 +1324,8 @@ class JobProcessor:
             self._finalize_job(job_id, results, all_brands, brand_outputs)
             return {"success": any(r.get("success") for r in results.values()), "results": results}
 
-        # ── TEXT-VIDEO variant ────────────────────────────────────────
-        if job.variant == "text_video":
+        # ── Format B variant ────────────────────────────────────────
+        if job.variant == "format_b":
             results = {}
             try:
                 for i, brand in enumerate(incomplete_brands):
@@ -1252,13 +1334,13 @@ class JobProcessor:
                         return {"success": False, "error": "Cancelled", "results": results}
 
                     progress = int((i / len(incomplete_brands)) * 100)
-                    self._manager.update_job_status(job_id, "generating", f"Resuming text-video {brand}...", progress)
+                    self._manager.update_job_status(job_id, "generating", f"Resuming format-b {brand}...", progress)
 
                     result = {"success": False, "error": "Timeout"}
                     def _run_tv(b=brand):
                         nonlocal result
                         try:
-                            result = self.process_text_video_brand(job_id, b)
+                            result = self.process_format_b_brand(job_id, b)
                         except Exception as ex:
                             result = {"success": False, "error": f"{type(ex).__name__}: {ex}"}
 

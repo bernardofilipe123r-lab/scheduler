@@ -1,4 +1,4 @@
-"""API routes for TEXT-VIDEO design preferences (per-user)."""
+"""API routes for Format B design preferences (per-user)."""
 
 from typing import Optional
 
@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.db_connection import get_db
 from app.api.auth.middleware import get_current_user
-from app.models.text_video_design import TextVideoDesign
+from app.models.format_b_design import FormatBDesign
 
-router = APIRouter(prefix="/api/content/text-video/design", tags=["text-video-design"])
+router = APIRouter(prefix="/api/content/format-b/design", tags=["format-b-design"])
 
 
 class DesignUpdate(BaseModel):
@@ -66,16 +66,16 @@ async def get_design(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Get user's TEXT-VIDEO design preferences."""
+    """Get user's Format B design preferences."""
     user_id = user["id"]
 
-    design = db.query(TextVideoDesign).filter(TextVideoDesign.user_id == user_id).first()
+    design = db.query(FormatBDesign).filter(FormatBDesign.user_id == user_id).first()
 
     if design:
         return design.to_dict()
 
     # Return defaults
-    return TextVideoDesign().to_dict()
+    return FormatBDesign().to_dict()
 
 
 @router.put("")
@@ -84,13 +84,13 @@ async def update_design(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Create or update user's TEXT-VIDEO design preferences."""
+    """Create or update user's Format B design preferences."""
     user_id = user["id"]
 
-    design = db.query(TextVideoDesign).filter(TextVideoDesign.user_id == user_id).first()
+    design = db.query(FormatBDesign).filter(FormatBDesign.user_id == user_id).first()
 
     if not design:
-        design = TextVideoDesign(user_id=user_id)
+        design = FormatBDesign(user_id=user_id)
         db.add(design)
 
     update_data = request.model_dump(exclude_unset=True)

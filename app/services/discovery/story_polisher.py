@@ -79,7 +79,7 @@ def _compute_fingerprint(text: str, lines: list[str]) -> str:
 # ── DeepSeek prompt template ───────────────────────────────────────────────
 # Generates BOTH the viral post AND AI image prompts in one call.
 
-TEXT_VIDEO_PROMPT = """Niche: {niche}
+FORMAT_B_PROMPT = """Niche: {niche}
 
 Task:
 Write ONE viral-style insight post.
@@ -229,7 +229,7 @@ class StoryPolisher:
         Returns a PolishedStory or None on failure.
         """
         try:
-            user_prompt = TEXT_VIDEO_PROMPT.format(niche=niche)
+            user_prompt = FORMAT_B_PROMPT.format(niche=niche)
 
             response = self.client.chat.completions.create(
                 model="deepseek-chat",

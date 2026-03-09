@@ -18,7 +18,7 @@ export interface TobyBrandConfig {
    enabled: boolean
   reel_slots_per_day: number
   post_slots_per_day: number
-  reel_format: 'text_based' | 'text_video'
+  reel_format: 'format_a' | 'format_b'
   enabled_platforms: EnabledPlatformsConfig  // null = all connected for all types
   // Dynamic flags — true when brand has valid credentials for the platform
   has_instagram: boolean

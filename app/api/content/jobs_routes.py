@@ -305,8 +305,8 @@ async def regenerate_brand(
                 processor = JobProcessor(db)
                 manager = JobManager(db)
                 job_obj = manager.get_job(job_id)
-                if job_obj and job_obj.variant == "text_video":
-                    processor.process_text_video_brand(job_id, brand)
+                if job_obj and job_obj.variant == "format_b":
+                    processor.process_format_b_brand(job_id, brand)
                 else:
                     processor.regenerate_brand(
                         job_id=job_id,

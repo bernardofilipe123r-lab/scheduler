@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { Loader2, Zap, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands, useNicheConfig } from '@/features/brands'
-import { useGenerateTextVideo } from './api/use-text-video'
+import { useGenerateFormatB } from './api/use-format-b'
 import type { BrandName } from '@/shared/types'
 
-export function TextVideoFullAuto() {
+export function FormatBFullAuto() {
   const navigate = useNavigate()
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: nicheConfig, isLoading: nicheLoading } = useNicheConfig()
-  const generateMutation = useGenerateTextVideo()
+  const generateMutation = useGenerateFormatB()
 
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [platforms] = useState<string[]>(['instagram'])

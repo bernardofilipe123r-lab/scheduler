@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 W, H = 1080, 1920
 
-# Default design values (used if TextVideoDesign is None)
+# Default design values (used if FormatBDesign is None)
 DEFAULTS = {
     "thumbnail_title_color": "#FFD700",
     "thumbnail_title_font": "Anton",
@@ -66,7 +66,7 @@ class ThumbnailCompositor:
             main_image_path: Path to the main image
             title_lines: Title text split into lines (ALL CAPS)
             logo_path: Path to brand logo (optional)
-            design: TextVideoDesign model instance (optional)
+            design: FormatBDesign model instance (optional)
 
         Returns:
             Path to the composed thumbnail JPEG (1080x1920)
