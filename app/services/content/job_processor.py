@@ -72,7 +72,7 @@ class JobProcessor:
 
     def _get_brand_processor(self, variant: str):
         """Return the bound brand-processing method for the given variant.
-        
+
         Raises ValueError for unknown variants so bugs surface immediately.
         """
         method_name = self.VARIANT_PROCESSORS.get(variant)
@@ -759,7 +759,7 @@ class JobProcessor:
             thumbnail_path = compositor.compose_thumbnail(
                 main_image_path=thumb_image_path,
                 title_lines=title_lines,
-                logo_path=brand_logo_local,
+                logo_path=brand_divider_logo_local,
                 design=design,
             )
             print(f"   ✓ Thumbnail composed: {thumbnail_path}", flush=True)
