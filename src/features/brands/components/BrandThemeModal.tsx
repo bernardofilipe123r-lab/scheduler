@@ -379,10 +379,10 @@ export function BrandThemeModal({ brand, onClose, onSave, inline, brandSelector 
                 {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Colors
               </h4>
               {mode === 'light' ? (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                  <ColorPicker label="Thumbnail Text" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
-                  <ColorPicker label="Title Text" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
-                  <ColorPicker label="Title Bar BG" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
+                <div className="flex items-center gap-x-3">
+                  <ColorPicker label="Thumb" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
+                  <ColorPicker label="Title" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
+                  <ColorPicker label="Bar BG" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -798,7 +798,8 @@ function ColorPicker({ label, value, onChange, compact }: { label: string; value
         <input
           type="text" value={value}
           onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v) }}
-          className="w-[5ch] px-1 py-0.5 text-[11px] font-mono border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
+          className="px-1 py-0.5 text-[11px] font-mono border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
+          style={{ width: '6ch' }}
           maxLength={7}
         />
       </div>
