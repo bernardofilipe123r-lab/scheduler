@@ -134,12 +134,32 @@ class SlideshowCompositor:
 
         header_height = max(logo_size, brand_name_size + (handle_size_val + 4 if show_handle else 0))
 
-        # Calculate image box Y position (after header + gap + text + gap)
-        # Text area gets whatever space is left between header and image
+        # Calculate layout
         content_width = W - padding_left - padding_right
-        image_box_y = H - self._get(design, "reel_padding_bottom") - image_height
+        padding_bottom = self._get(design, "reel_padding_bottom")
 
-        # Step 1: Pre-process images into the image-box area on black canvas
+        # Step 1: Render header + text overlay to find where text ends
+        # First pass: generous clamp (full canvas) to measure actual text height
+        overlay_path, text_end_y = self.render_text_overlay(
+            reel_lines, design=design, logo_path=logo_path,
+            brand_name=brand_name, handle=handle,
+            image_box_y=H,  # no clamp — measure natural text end
+        )
+
+        # Place image right after text + gap (matches frontend flexbox layout)
+        image_box_y = text_end_y + gap
+
+        # If image would overflow bottom, cap it and re-render text with clamp
+        if image_box_y + image_height > H - padding_bottom:
+            image_box_y = H - padding_bottom - image_height
+            overlay_path.unlink(missing_ok=True)
+            overlay_path, _ = self.render_text_overlay(
+                reel_lines, design=design, logo_path=logo_path,
+                brand_name=brand_name, handle=handle,
+                image_box_y=image_box_y,
+            )
+
+        # Step 2: Pre-process images into the image-box area on black canvas
         prepared_paths = []
         for img_path in image_paths:
             prepared = self._prepare_frame_image(
@@ -147,13 +167,6 @@ class SlideshowCompositor:
                 padding_left, image_box_y
             )
             prepared_paths.append(prepared)
-
-        # Step 2: Render header + text overlay PNG
-        overlay_path = self.render_text_overlay(
-            reel_lines, design=design, logo_path=logo_path,
-            brand_name=brand_name, handle=handle,
-            image_box_y=image_box_y,
-        )
 
         # Step 3-6: Compose with FFmpeg
         success = self._compose_with_ffmpeg(
@@ -187,9 +200,11 @@ class SlideshowCompositor:
         brand_name: Optional[str] = None,
         handle: Optional[str] = None,
         image_box_y: int = 1220,
-    ) -> Path:
+    ) -> tuple[Path, int]:
         """
         Render the header + text overlay as a transparent PNG.
+
+        Returns (overlay_path, text_end_y) — the Y position where text ended.
 
         Layout (matches design editor preview):
         - Brand header at padding_top: [logo] [name + verified] / [handle]
@@ -299,7 +314,7 @@ class SlideshowCompositor:
 
         output = Path(tempfile.mktemp(suffix="_overlay.png"))
         overlay.save(str(output), "PNG")
-        return output
+        return output, cursor_y
 
     def _prepare_frame_image(
         self,
