@@ -153,6 +153,32 @@ After making any changes to the codebase, always:
 2. Run `git commit -m "<descriptive commit message>"` with a clear, concise message describing what was changed
 3. Run `git push` to push the changes to the remote repository
 
+## Self-Healing Documentation Pipeline
+
+This is the automated mechanism that keeps agent customization files (skills, instructions, prompts) in sync with code changes. It runs in two phases, every single prompt — no exceptions.
+
+### Phase 1: Skill Auto-Detection (START of every prompt)
+
+Before writing any code, check if an existing skill matches the user's request. If a skill applies, invoke it automatically — don't wait for the user to type `/skill-name`. Available skills:
+
+- `/database-migrations` — Migration-first schema change workflow
+- `/api-validation` — Run validation scripts after code changes
+- `/self-maintenance` — Periodic codebase health audit
+- `/docs-sync` — Self-healing documentation pipeline (this mechanism)
+- `/skill-builder` — Create or audit skills
+
+### Phase 2: Documentation Drift Check (END of every prompt that changes code)
+
+After any code change, spawn a background verification to check whether any customization file needs updating:
+
+1. **Identify what changed**: Which files were modified in this prompt?
+2. **Check the trigger matrix** in `self-maintenance.instructions.md`: Does any code change map to a customization file update?
+3. **Check rule relevance**: Do any `.github/instructions/` or `.github/skills/` files reference patterns that just changed?
+4. **Apply updates**: Edit stale files with surgical, minimal changes.
+5. **Report**: Briefly summarize what was checked and what was updated.
+
+This ensures documentation never drifts from the codebase. The mechanism pairs with `scripts/validate_customization_drift.py` which does the same check in CI.
+
 ## QA Enforcement Model
 
 Enforcement is **layered** — each layer trades speed for thoroughness:

@@ -1516,6 +1516,7 @@ class DatabaseSchedulerService:
         variant: str,
         reference_date: Optional[datetime] = None,
         user_id: str | None = None,
+        slot_variant_label: str | None = None,
     ) -> datetime:
         """
         Get the next available scheduling slot for a brand+variant combo.
@@ -1592,6 +1593,7 @@ class DatabaseSchedulerService:
             schedules = sched_query.all()
             
             # Filter by brand and variant - build set of occupied timestamps
+            check_variant = slot_variant_label or variant
             occupied_slots = set()
             for schedule in schedules:
                 metadata = schedule.extra_data or {}
@@ -1599,7 +1601,7 @@ class DatabaseSchedulerService:
                 schedule_variant = metadata.get("variant", "light")
                 
                 # Match by brand name
-                if schedule_brand == brand_lower and schedule_variant == variant:
+                if schedule_brand == brand_lower and schedule_variant == check_variant:
                     # Store as timestamp for easy comparison
                     ts = schedule.scheduled_time
                     if ts.tzinfo is None:
@@ -1622,7 +1624,8 @@ class DatabaseSchedulerService:
                 
                 # Check if slot is available
                 if candidate.timestamp() not in occupied_slots:
-                    print(f"📅 Found next slot for {brand}/{variant}: {candidate.isoformat()}")
+                    label = slot_variant_label or variant
+                    print(f"📅 Found next slot for {brand}/{label}: {candidate.isoformat()}")
                     return candidate
         
         # Fallback: just return tomorrow at first matching slot
@@ -1648,6 +1651,9 @@ class DatabaseSchedulerService:
         for brand in brands:
             if variant == "post":
                 result[brand] = self.get_next_available_post_slot(brand)
+            elif variant == "format_b":
+                # Format B reels use dark-variant time slots
+                result[brand] = self.get_next_available_slot(brand, "dark", slot_variant_label="format_b")
             else:
                 result[brand] = self.get_next_available_slot(brand, variant)
         return result
