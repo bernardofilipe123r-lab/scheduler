@@ -422,14 +422,15 @@ export function ConnectionsTab() {
       <ConnectionSummaryBar data={data} />
 
       {/* Brand cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className="columns-1 lg:columns-2 gap-6 space-y-6">
         {data.brands.map((brand) => (
-          <ConnectionCard
-            key={brand.brand}
-            brand={brand}
-            brandLogo={brandLogos[brand.brand]}
-            onRefresh={() => refetch()}
-          />
+          <div key={brand.brand} className="break-inside-avoid">
+            <ConnectionCard
+              brand={brand}
+              brandLogo={brandLogos[brand.brand]}
+              onRefresh={() => refetch()}
+            />
+          </div>
         ))}
       </div>
 

@@ -427,37 +427,40 @@ export function MyBrandsTab() {
       </div>
 
       {/* Brand cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className="columns-1 lg:columns-2 gap-4 space-y-4">
         {sortedConnections.map((brand) => (
-          <ConnectionCard
-            key={brand.brand}
-            brand={brand}
-            brandLogo={brandLogos[brand.brand]}
-            onRefresh={() => refetch()}
-            schedule={getSchedule(brand.brand)}
-            allBrandSchedules={allBrandSchedules}
-            onSaveSchedule={(offset, postsPerDay) => handleSaveSchedule(brand.brand, offset, postsPerDay)}
-            onDelete={() => {
-              setDeletingBrandId(brand.brand)
-              setDeletingBrandName(brand.display_name)
-            }}
-          />
+          <div key={brand.brand} className="break-inside-avoid">
+            <ConnectionCard
+              brand={brand}
+              brandLogo={brandLogos[brand.brand]}
+              onRefresh={() => refetch()}
+              schedule={getSchedule(brand.brand)}
+              allBrandSchedules={allBrandSchedules}
+              onSaveSchedule={(offset, postsPerDay) => handleSaveSchedule(brand.brand, offset, postsPerDay)}
+              onDelete={() => {
+                setDeletingBrandId(brand.brand)
+                setDeletingBrandName(brand.display_name)
+              }}
+            />
+          </div>
         ))}
 
         {/* Add new brand card */}
-        <button
-          onClick={() => navigate('/brands/new')}
-          className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-6 flex items-center justify-center gap-3 hover:border-primary-400 hover:bg-primary-50/50 transition-colors"
-        >
-          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-            <Plus className="w-5 h-5 text-gray-500" />
-          </div>
-          <div className="text-left">
-            <span className="font-medium text-gray-600 block">Create New Brand</span>
-            <span className="text-sm text-gray-400">Set up a new brand with custom colors and schedule</span>
-          </div>
-          <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
-        </button>
+        <div className="break-inside-avoid">
+          <button
+            onClick={() => navigate('/brands/new')}
+            className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-6 flex items-center justify-center gap-3 hover:border-primary-400 hover:bg-primary-50/50 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+              <Plus className="w-5 h-5 text-gray-500" />
+            </div>
+            <div className="text-left">
+              <span className="font-medium text-gray-600 block">Create New Brand</span>
+              <span className="text-sm text-gray-400">Set up a new brand with custom colors and schedule</span>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
+          </button>
+        </div>
       </div>
 
       {/* Delete confirmation */}
