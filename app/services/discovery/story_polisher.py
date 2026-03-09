@@ -86,68 +86,115 @@ Write ONE viral-style insight post.
 
 With ~25% probability, instead base the post on a very recent or emerging topic (e.g., a new study, strange health news, unusual trend, or relevant global development related to the niche). Do not mention that it is recent—just write the post normally.
 
+THUMBNAIL TITLE
+
+Write a short, punchy headline suitable for a social media thumbnail like news pages use.
+
+Rules:
+• 4–8 words
+• Bold statement or surprising claim
+• Written in ALL CAPS
+• Designed to attract attention
+
+Examples of style (not topics):
+"AI NOW USES AS MUCH WATER"
+"GEN Z RETIREMENT HOME IS REAL"
+"RUSSIA SEIZES LITHIUM MINE"
+
+POST
+
+Write ONE viral-style insight post explaining the story or phenomenon.
+
 Length:
 40–70 words maximum.
 
 Style:
-• Start with a strong claim.
-• Briefly explain the hidden biological mechanism behind it.
-• Include one concrete fact, number, or scientific detail.
-• End with a sharp insight.
+• Start with a strong claim
+• Briefly explain the hidden mechanism, system, or reason behind it
+• Include one concrete number, statistic, or fact when possible
+• End with a sharp insight
 
 Tone:
-concise, analytical, authoritative.
+concise, analytical, authoritative
 
-No fluff, emojis, hashtags, or lists.
-Write it like a short viral insight post on social media.
+No emojis, hashtags, fluff, or lists.
 
-After the post, recommend 3–4 visuals that would work well with the post.
+VISUALS
+
+Recommend 3–4 visuals that would work well with the post.
 
 For each visual provide:
-• IMAGE IDEA: what the image should show
-• AI PROMPT: a prompt someone could use to generate the image with an AI image generator
-• SEARCH QUERY: a phrase someone could use to find similar images on Google, stock sites, or social media
 
-Image rules:
-• Images must be cinematic 4K visuals
-• Use vivid colors, dramatic lighting, and high contrast
-• Prefer realistic photography style rather than illustration
-• Scenes should feel visually striking and engaging for social media
-• Avoid text overlays or infographic-style images
+IMAGE IDEA
+Describe what the image should show.
 
-After the visuals, provide:
-• THUMBNAIL TITLE: A bold, attention-grabbing title for the reel thumbnail (3-5 words, ALL CAPS, max 4 lines separated by newlines)
-• CAPTION: A short engaging caption for the social media post (1-2 sentences with emojis)
-• HASHTAGS: 5 relevant hashtags (without # symbol)
+AI PROMPT
+A prompt for generating the image with an AI image generator.
 
-Output format:
+SEARCH QUERY
+A phrase someone could search to find similar images online.
+
+IMAGE RULES
+
+Images must be:
+• cinematic 4K
+• vivid colors
+• dramatic lighting
+• high contrast
+• realistic photography style
+• visually striking and engaging for social media
+• no text overlays
+• no infographic style
+
+OUTPUT FORMAT
+
+TITLE:
+<thumbnail headline>
+
 POST:
 <viral insight post>
 
 VISUALS:
+
 1.
-IMAGE IDEA: <description>
-AI PROMPT: <cinematic 4K vivid color prompt>
-SEARCH QUERY: <search phrase>
+IMAGE IDEA:
+...
+
+AI PROMPT:
+...
+
+SEARCH QUERY:
+...
 
 2.
-IMAGE IDEA: <description>
-AI PROMPT: <cinematic 4K vivid color prompt>
-SEARCH QUERY: <search phrase>
+IMAGE IDEA:
+...
+
+AI PROMPT:
+...
+
+SEARCH QUERY:
+...
 
 3.
-IMAGE IDEA: <description>
-AI PROMPT: <cinematic 4K vivid color prompt>
-SEARCH QUERY: <search phrase>
+IMAGE IDEA:
+...
 
-THUMBNAIL TITLE:
-<BOLD TITLE>
+AI PROMPT:
+...
 
-CAPTION:
-<caption text>
+SEARCH QUERY:
+...
 
-HASHTAGS:
-<tag1, tag2, tag3, tag4, tag5>"""
+4.
+IMAGE IDEA:
+...
+
+AI PROMPT:
+...
+
+SEARCH QUERY:
+..."""
 
 
 def _get_deepseek_client() -> OpenAI:
@@ -204,35 +251,26 @@ class StoryPolisher:
     def _parse_response(self, content: str) -> Optional[PolishedStory]:
         """Parse DeepSeek structured text response into PolishedStory."""
         try:
+            # Extract TITLE section (comes before POST in new format)
+            title_match = re.search(r'TITLE:\s*\n(.+?)(?=\nPOST:)', content, re.DOTALL)
+            thumbnail_title = title_match.group(1).strip() if title_match else ""
+            thumbnail_title_lines = [l.strip() for l in thumbnail_title.split("\n") if l.strip()]
+
             # Extract POST section
             post_match = re.search(r'POST:\s*\n(.+?)(?=\nVISUALS:)', content, re.DOTALL)
             reel_text = post_match.group(1).strip() if post_match else ""
             reel_lines = [l.strip() for l in reel_text.split("\n") if l.strip()]
 
             # Extract VISUALS — get AI PROMPTs (these go directly to DeAPI)
-            visuals_match = re.search(r'VISUALS:\s*\n(.+?)(?=\nTHUMBNAIL TITLE:)', content, re.DOTALL)
+            visuals_match = re.search(r'VISUALS:\s*\n(.+)', content, re.DOTALL)
             visuals_text = visuals_match.group(1) if visuals_match else ""
 
-            ai_prompts = re.findall(r'AI PROMPT:\s*(.+)', visuals_text)
+            ai_prompts = re.findall(r'AI PROMPT:\s*\n?(.+)', visuals_text)
             images = [
                 ImagePlan(source_type="ai_generate", query=prompt.strip())
                 for prompt in ai_prompts
                 if prompt.strip()
             ]
-
-            # Extract THUMBNAIL TITLE
-            thumb_match = re.search(r'THUMBNAIL TITLE:\s*\n(.+?)(?=\nCAPTION:)', content, re.DOTALL)
-            thumbnail_title = thumb_match.group(1).strip() if thumb_match else ""
-            thumbnail_title_lines = [l.strip() for l in thumbnail_title.split("\n") if l.strip()]
-
-            # Extract CAPTION
-            caption_match = re.search(r'CAPTION:\s*\n(.+?)(?=\nHASHTAGS:)', content, re.DOTALL)
-            caption = caption_match.group(1).strip() if caption_match else ""
-
-            # Extract HASHTAGS
-            hashtags_match = re.search(r'HASHTAGS:\s*\n(.+)', content, re.DOTALL)
-            hashtags_text = hashtags_match.group(1).strip() if hashtags_match else ""
-            hashtags = [t.strip().lstrip("#") for t in hashtags_text.split(",") if t.strip()]
 
             if not reel_text or not images:
                 logger.error(f"[StoryPolisher] Missing required fields. reel_text={bool(reel_text)}, images={len(images)}")
@@ -250,8 +288,8 @@ class StoryPolisher:
                 thumbnail_title_lines=thumbnail_title_lines,
                 images=images,
                 thumbnail_image=thumbnail_image,
-                caption=caption,
-                hashtags=hashtags,
+                caption="",
+                hashtags=[],
                 story_category="insight",
                 story_fingerprint=fingerprint,
             )
