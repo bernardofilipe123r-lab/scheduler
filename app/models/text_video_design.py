@@ -42,6 +42,7 @@ class TextVideoDesign(Base):
     reel_handle_size = Column(Integer, default=32)
     reel_header_scale = Column(Float, default=1.15)
     reel_text_font_bold = Column(Boolean, default=False)
+    reel_text_color = Column(String(20), default="#FFFFFF")
     reel_music_enabled = Column(Boolean, default=True)
 
     # Thumbnail settings
@@ -91,6 +92,7 @@ class TextVideoDesign(Base):
             "reel_handle_size": self.reel_handle_size,
             "reel_header_scale": self.reel_header_scale,
             "reel_text_font_bold": self.reel_text_font_bold,
+            "reel_text_color": self.reel_text_color,
             "reel_music_enabled": self.reel_music_enabled,
             "thumbnail_title_color": self.thumbnail_title_color,
             "thumbnail_title_font": self.thumbnail_title_font,

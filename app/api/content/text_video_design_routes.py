@@ -45,6 +45,7 @@ class DesignUpdate(BaseModel):
     reel_handle_size: Optional[int] = Field(None, ge=8, le=60)
     reel_header_scale: Optional[float] = Field(None, ge=0.5, le=1.5)
     reel_text_font_bold: Optional[bool] = None
+    reel_text_color: Optional[str] = Field(None, max_length=20)
     reel_music_enabled: Optional[bool] = None
 
     # Thumbnail settings

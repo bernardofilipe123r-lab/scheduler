@@ -75,6 +75,7 @@ DEFAULTS = {
     "reel_handle_color": "#AAAAAA",
     "reel_handle_size": 32,
     "reel_header_scale": 1.15,
+    "reel_text_color": "#FFFFFF",
 }
 
 VERIFIED_BADGE_PATH = Path("assets/reel_video/logo/verified.png")
@@ -281,7 +282,7 @@ class SlideshowCompositor:
 
         # ── Text Content (word-wrapped paragraph) ─────────────
         text_font = self._resolve_font(font_name, font_size, bold=font_bold)
-        text_color = (255, 255, 255)
+        text_color = self._hex_to_rgb(self._get(design, "reel_text_color"))
         line_height = int(font_size * 1.45)
 
         # Join lines into a single paragraph, then word-wrap

@@ -249,7 +249,6 @@ export function BrandThemeModal({ brand, onClose, onSave, inline, brandSelector 
             <div style={{ display: 'flex', gap: 12 }}>
               {/* Thumbnail Preview */}
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1.5">Thumbnail</p>
                 <div style={{
                   width: PREVIEW_W, height: PREVIEW_H, position: 'relative',
                   borderRadius: 8, overflow: 'hidden', border: '1px solid #e5e7eb',
@@ -277,7 +276,6 @@ export function BrandThemeModal({ brand, onClose, onSave, inline, brandSelector 
 
               {/* Content Preview */}
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1.5">Content</p>
                 <div style={{
                   width: PREVIEW_W, height: PREVIEW_H, position: 'relative',
                   borderRadius: 8, overflow: 'hidden', border: '1px solid #e5e7eb',
@@ -800,7 +798,7 @@ function ColorPicker({ label, value, onChange, compact }: { label: string; value
         <input
           type="text" value={value}
           onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v) }}
-          className="w-[4.5rem] px-1.5 py-0.5 text-[11px] font-mono border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
+          className="w-[5ch] px-1 py-0.5 text-[11px] font-mono border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
           maxLength={7}
         />
       </div>
