@@ -303,12 +303,17 @@ async def regenerate_brand(
         def regenerate_async():
             with get_db_session() as db:
                 processor = JobProcessor(db)
-                processor.regenerate_brand(
-                    job_id=job_id,
-                    brand=brand,
-                    title=request.title if request else None,
-                    content_lines=request.content_lines if request else None
-                )
+                manager = JobManager(db)
+                job_obj = manager.get_job(job_id)
+                if job_obj and job_obj.variant == "text_video":
+                    processor.process_text_video_brand(job_id, brand)
+                else:
+                    processor.regenerate_brand(
+                        job_id=job_id,
+                        brand=brand,
+                        title=request.title if request else None,
+                        content_lines=request.content_lines if request else None
+                    )
         
         # Validate brand
         valid_brands = brand_resolver.get_all_brand_ids()

@@ -1242,6 +1242,41 @@ class JobProcessor:
             self._finalize_job(job_id, results, all_brands, brand_outputs)
             return {"success": any(r.get("success") for r in results.values()), "results": results}
 
+        # ── TEXT-VIDEO variant ────────────────────────────────────────
+        if job.variant == "text_video":
+            results = {}
+            try:
+                for i, brand in enumerate(incomplete_brands):
+                    job = self._manager.get_job(job_id)
+                    if job.status == "cancelled":
+                        return {"success": False, "error": "Cancelled", "results": results}
+
+                    progress = int((i / len(incomplete_brands)) * 100)
+                    self._manager.update_job_status(job_id, "generating", f"Resuming text-video {brand}...", progress)
+
+                    result = {"success": False, "error": "Timeout"}
+                    def _run_tv(b=brand):
+                        nonlocal result
+                        try:
+                            result = self.process_text_video_brand(job_id, b)
+                        except Exception as ex:
+                            result = {"success": False, "error": f"{type(ex).__name__}: {ex}"}
+
+                    bt = threading.Thread(target=_run_tv, daemon=True)
+                    bt.start()
+                    bt.join(timeout=BRAND_GENERATION_TIMEOUT)
+                    if bt.is_alive():
+                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": "Timeout on resume"})
+                        result = {"success": False, "error": "Timeout"}
+                    results[brand] = result
+
+                self._finalize_job(job_id, results, all_brands, brand_outputs)
+                return {"success": any(r.get("success") for r in results.values()), "results": results}
+
+            except Exception as e:
+                self._manager.update_job_status(job_id, "failed", error_message=str(e))
+                return {"success": False, "error": str(e)}
+
         # ── REEL variants (light / dark) ─────────────────────────────
         results = {}
 

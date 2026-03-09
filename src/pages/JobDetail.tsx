@@ -1206,7 +1206,10 @@ export function JobDetailPage() {
               className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-rose-600 rounded-[7px] hover:brightness-110 shadow-sm transition disabled:opacity-50"
             >
               {deleteJob.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Deleting...
+                </span>
               ) : (
                 'Delete'
               )}
