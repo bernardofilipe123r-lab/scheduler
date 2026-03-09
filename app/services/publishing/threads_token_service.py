@@ -77,10 +77,13 @@ class ThreadsTokenService:
         resp = httpx.get(
             f"{THREADS_API_BASE}/{API_VERSION}/me",
             params={
-                "fields": "id,username,name,threads_profile_picture_url,threads_biography",
+                "fields": "id,username",
                 "access_token": access_token,
             },
             timeout=30,
         )
-        resp.raise_for_status()
-        return resp.json()  # {"id": "...", "username": "...", "name": "..."}
+        if resp.status_code != 200:
+            logger.error(f"Threads /me failed: status={resp.status_code}, body={resp.text}")
+            print(f"[THREADS] /me failed: status={resp.status_code}, body={resp.text}")
+            resp.raise_for_status()
+        return resp.json()  # {"id": "...", "username": "..."}
