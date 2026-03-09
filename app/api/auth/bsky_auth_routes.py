@@ -51,9 +51,9 @@ def bsky_connect(
         session = token_service.create_session(body.handle, body.app_password)
     except Exception as e:
         error_msg = str(e)
-        if "401" in error_msg:
+        if "401" in error_msg or "Authentication" in error_msg:
             raise HTTPException(
-                status_code=401,
+                status_code=422,
                 detail="Invalid handle or app password. Create an App Password at bsky.app/settings/app-passwords",
             )
         logger.exception(f"Bluesky session creation failed for brand={body.brand_id}: {e}")
