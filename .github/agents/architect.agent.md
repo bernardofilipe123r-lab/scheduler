@@ -1,7 +1,7 @@
 ---
 name: architect
 description: "System design and architecture planning. Use when: designing complex features, evaluating trade-offs, planning multi-service changes, creating ADRs, reviewing system boundaries. Read-only — produces plans, not code."
-tools: [codebase, search, fetch]
+tools: [search/codebase, search, fetch]
 user-invocable: true
 ---
 

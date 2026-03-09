@@ -1,7 +1,7 @@
 ---
 name: pipeline-debugger
 description: "Debug Toby agent, content generation, and publishing pipeline issues. Use when: Toby tick loop stalls, content fails quality scoring, publishing errors, scheduling gaps, platform token failures. Can read logs and execute diagnostic commands."
-tools: [codebase, search, execute]
+tools: [search/codebase, search, execute]
 user-invocable: true
 ---
 

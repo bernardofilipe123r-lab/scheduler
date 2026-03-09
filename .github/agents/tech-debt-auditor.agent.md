@@ -1,7 +1,7 @@
 ---
 name: tech-debt-auditor
 description: "Audit codebase for technical debt, anti-patterns, and maintenance risks. Use when: periodic health checks, pre-refactor analysis, evaluating code quality, identifying high-risk areas. Read-only — produces prioritized remediation plans."
-tools: [codebase, search]
+tools: [search/codebase, search]
 user-invocable: true
 ---
 
