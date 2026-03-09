@@ -1,4 +1,5 @@
 ---
+name: reviewer
 description: "Read-only code reviewer. Use when: reviewing changes for hardcoded brands, hooks violations, missing migrations, billing gates, security issues. Checks for common ViralToby anti-patterns before committing."
 tools: [read, search]
 user-invocable: true

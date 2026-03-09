@@ -83,6 +83,14 @@ TRIGGER_MATRIX = {
         ".claude/skills/database-migrations/SKILL.md",
         ".github/instructions/migration-sql.instructions.md",
     ],
+    ".github/agents/": [
+        ".github/copilot-instructions.md",
+        ".claude/CLAUDE.md",
+    ],
+    ".github/prompts/": [
+        ".github/copilot-instructions.md",
+        ".claude/CLAUDE.md",
+    ],
 }
 
 
@@ -141,12 +149,12 @@ def main():
     if not modified_files:
         sys.exit(0)
 
-    # Only check code files, not docs/config themselves
+    # Only check code files and agent/prompt files, not docs/config themselves
     code_files = [
         f for f in modified_files
         if not f.startswith((".github/", ".claude/", "docs/", "scripts/claude_"))
         and not f.endswith((".md", ".json", ".yaml", ".yml"))
-        or f.startswith(("app/", "src/", "migrations/"))
+        or f.startswith(("app/", "src/", "migrations/", ".github/agents/", ".github/prompts/"))
     ]
 
     if not code_files:

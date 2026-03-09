@@ -167,6 +167,30 @@ Runs automatically when you try to finish your turn. Checks `git diff` for modif
 - `/platform-publishing` — OAuth, multi-platform publishing, token lifecycle
 - `/toby-agent` — Orchestrator tick loop, agents, memory, Thompson Sampling
 
+## Available Agents
+
+| Agent | Purpose | Tools |
+|---|---|---|
+| `reviewer` | Read-only code review for anti-patterns, hooks violations, security | read, search |
+| `architect` | System design, ADRs, trade-off analysis for complex features | codebase, search, fetch |
+| `pipeline-debugger` | Debug Toby tick loop, content generation, publishing failures | codebase, search, execute |
+| `tech-debt-auditor` | Identify and prioritize technical debt across the codebase | codebase, search |
+
+## Available Prompts
+
+| Prompt | Purpose |
+|---|---|
+| `prd-feature` | Create PRD from feature idea (discovery → structure → save) |
+| `tasks-from-prd` | Break PRD into actionable tasks with dependencies |
+| `refactor` | Safe incremental refactoring workflow |
+| `add-nicheconfig-field` | Add Content DNA field (8-step workflow) |
+| `add-platform` | Add social platform (OAuth + legal + publishing) |
+| `debug-production` | Debug Railway production issues |
+| `deploy` | Deploy to Railway |
+| `knowledge-audit` | Audit customization freshness |
+| `pre-commit-qa` | Full pre-commit validation suite |
+| `validate` | Run API validation + fix failures |
+
 ## Scoped Rules (auto-loaded by file path)
 
 - `rules/backend/api-routes.md` — API route conventions (`app/api/**`)
