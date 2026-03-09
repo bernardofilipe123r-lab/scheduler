@@ -52,7 +52,7 @@ class DesignUpdate(BaseModel):
     thumbnail_title_font: Optional[str] = Field(None, max_length=100)
     thumbnail_title_size: Optional[int] = Field(None, ge=100, le=140)
     thumbnail_title_max_lines: Optional[int] = Field(None, ge=1, le=6)
-    thumbnail_title_padding: Optional[int] = Field(None, ge=0, le=100)
+    thumbnail_title_padding: Optional[int] = Field(None, ge=0, le=400)
     thumbnail_image_ratio: Optional[float] = Field(None, ge=0.3, le=0.8)
     thumbnail_divider_style: Optional[str] = Field(None, max_length=50)
     thumbnail_divider_thickness: Optional[int] = Field(None, ge=1, le=10)

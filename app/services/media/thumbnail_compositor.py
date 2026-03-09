@@ -1,10 +1,13 @@
 """
-Thumbnail Compositor — composes Instagram reel thumbnails in @execute style.
+Thumbnail Compositor — composes Instagram reel thumbnails.
 
-Layout:
-  - Top ~60%: main image (cover-fit, bottom gradient)
-  - Divider line with centered logo
-  - Bottom ~40%: black background + bold title text (golden yellow, ALL CAPS)
+Layout (matches design editor preview):
+  - Full-bleed background image (cover-fit, entire frame)
+  - Dark gradient overlay from bottom (strong at bottom, transparent at top)
+  - Content pinned to bottom:
+    - Divider line with centered logo (supports gradient/solid/none styles)
+    - Title text below divider (bold, ALL CAPS, auto-sized to 2-3 lines)
+    - paddingBottom from bottom edge
 """
 import logging
 import tempfile
@@ -19,7 +22,6 @@ W, H = 1080, 1920
 
 # Default design values (used if TextVideoDesign is None)
 DEFAULTS = {
-    "thumbnail_image_ratio": 0.6,
     "thumbnail_title_color": "#FFD700",
     "thumbnail_title_font": "Anton",
     "thumbnail_title_size": 120,
@@ -42,9 +44,13 @@ FONT_MAP = {
     "Roboto Condensed": "Inter/static/Inter_18pt-Bold.ttf",
 }
 
+SIDE_PADDING = 40     # px from left/right edges for title text
+LINE_LOGO_GAP = 20    # px between divider line end and logo
+DIVIDER_TITLE_GAP = 24  # px between divider and title top
+
 
 class ThumbnailCompositor:
-    """Composes Instagram reel thumbnails in the @execute style."""
+    """Composes Instagram reel thumbnails matching the design editor layout."""
 
     def compose_thumbnail(
         self,
@@ -54,7 +60,7 @@ class ThumbnailCompositor:
         design=None,
     ) -> Path:
         """
-        Compose a thumbnail: top image + divider + bottom title text.
+        Compose a thumbnail: full-bleed image + dark bottom gradient + divider + title.
 
         Args:
             main_image_path: Path to the main image
@@ -65,98 +71,211 @@ class ThumbnailCompositor:
         Returns:
             Path to the composed thumbnail JPEG (1080x1920)
         """
-        canvas = Image.new("RGB", (W, H), (0, 0, 0))
-        draw = ImageDraw.Draw(canvas)
-
         # Get design values
-        image_ratio = self._get(design, "thumbnail_image_ratio")
         title_color = self._get(design, "thumbnail_title_color")
         title_font_name = self._get(design, "thumbnail_title_font")
-        title_size = self._get(design, "thumbnail_title_size")
-        title_padding = self._get(design, "thumbnail_title_padding_x")
+        title_padding_bottom = self._get(design, "thumbnail_title_padding_x")
+        divider_style = self._get(design, "thumbnail_divider_style")
         divider_thickness = self._get(design, "thumbnail_divider_thickness")
         overlay_opacity = self._get(design, "thumbnail_overlay_opacity")
         logo_size = self._get(design, "thumbnail_logo_size")
 
-        # 1. Place main image in top portion
-        image_h = int(H * image_ratio)
+        # 1. Full-bleed background image (cover-fit to entire frame)
+        canvas = Image.new("RGB", (W, H), (0, 0, 0))
         try:
             main_img = Image.open(main_image_path).convert("RGB")
-            main_img = self._cover_fit(main_img, W, image_h)
+            main_img = self._cover_fit(main_img, W, H)
             canvas.paste(main_img, (0, 0))
         except Exception as e:
             logger.error(f"[ThumbnailCompositor] Failed to load main image: {e}")
-            draw.rectangle([(0, 0), (W, image_h)], fill=(30, 30, 30))
 
-        # 2. Bottom gradient on image (blends into divider area)
-        grad_h = max(80, int(image_h * 0.15))
-        gradient = Image.new("RGBA", (W, grad_h), (0, 0, 0, 0))
-        overlay_alpha = int(255 * overlay_opacity / 100)
-        for y in range(grad_h):
-            alpha = int(overlay_alpha * (y / grad_h))
-            for x in range(W):
-                gradient.putpixel((x, y), (0, 0, 0, alpha))
-        canvas.paste(
-            Image.composite(
-                gradient.convert("RGB"),
-                canvas.crop((0, image_h - grad_h, W, image_h)),
-                gradient.split()[3],
-            ),
-            (0, image_h - grad_h),
+        # 2. Dark gradient overlay from bottom
+        overlay_alpha = overlay_opacity / 100
+        gradient = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        for y in range(H):
+            # Progress from bottom (0.0 = top, 1.0 = bottom)
+            frac = y / H
+            if frac < 0.35:
+                alpha = 0
+            elif frac < 0.65:
+                # Fade in from 35% to 65%
+                t = (frac - 0.35) / 0.30
+                alpha = int(255 * overlay_alpha * 0.3 * t)
+            else:
+                # Solid from 65% to 100%
+                t = (frac - 0.65) / 0.35
+                alpha = int(255 * overlay_alpha * (0.3 + 0.7 * t))
+            # Draw full row at once (much faster than putpixel)
+            gradient.paste(Image.new("RGBA", (W, 1), (0, 0, 0, alpha)), (0, y))
+        canvas = Image.alpha_composite(canvas.convert("RGBA"), gradient).convert("RGB")
+        draw = ImageDraw.Draw(canvas)
+
+        # 3. Auto-size title to fit 2-3 lines within available width
+        title_area_width = W - SIDE_PADDING * 2
+        raw_title = " ".join(title_lines).upper()
+        auto_lines, auto_font_size = self._auto_fit_title(
+            draw, raw_title, title_font_name, title_area_width
         )
 
-        # 3. Divider line + logo
-        divider_y = image_h + 10
-        draw.line([(40, divider_y), (W - 40, divider_y)], fill=(80, 80, 80), width=divider_thickness)
+        font = self._load_font(title_font_name, auto_font_size)
+        line_height = int(auto_font_size * 1.05)
 
-        if logo_path and Path(logo_path).exists():
-            try:
-                logo = Image.open(logo_path).convert("RGBA")
-                logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
-                logo_x = (W - logo_size) // 2
-                half = logo_size // 2
-                draw.rectangle(
-                    [(logo_x - 10, divider_y - half), (logo_x + logo_size + 10, divider_y + half)],
-                    fill=(0, 0, 0),
-                )
-                canvas.paste(logo, (logo_x, divider_y - half), logo)
-            except Exception as e:
-                logger.warning(f"[ThumbnailCompositor] Logo load failed: {e}")
+        # Calculate total content height (from divider top to title bottom)
+        title_block_height = len(auto_lines) * line_height
+        divider_height = logo_size if (divider_style != "none" and logo_path) else divider_thickness
+        total_content_h = divider_height + DIVIDER_TITLE_GAP + title_block_height
 
-        # 4. Title text in bottom portion
-        title_y_start = divider_y + title_padding
-        font = self._load_font(title_font_name, title_size)
+        # Position content pinned to bottom
+        content_bottom = H - title_padding_bottom
+        title_top_y = content_bottom - title_block_height
+        divider_center_y = title_top_y - DIVIDER_TITLE_GAP - divider_height // 2
 
-        for i, line in enumerate(title_lines):
+        # 4. Divider line + logo
+        if divider_style != "none":
+            self._draw_divider(
+                canvas, draw, divider_center_y, divider_style,
+                divider_thickness, logo_path, logo_size
+            )
+
+        # 5. Title text (centered, ALL CAPS)
+        title_color_rgb = self._hex_to_rgb(title_color)
+        for i, line in enumerate(auto_lines):
             text_bbox = draw.textbbox((0, 0), line, font=font)
             text_w = text_bbox[2] - text_bbox[0]
-            text_h = text_bbox[3] - text_bbox[1]
             x = (W - text_w) // 2
-            y = title_y_start + i * (text_h + 15)
-            draw.text((x, y), line, fill=title_color, font=font)
+            y = title_top_y + i * line_height
+            # Text shadow for depth
+            draw.text((x + 2, y + 2), line, fill=(0, 0, 0), font=font)
+            draw.text((x, y), line, fill=title_color_rgb, font=font)
 
-        # 5. Save
+        # 6. Save
         output = Path(tempfile.mktemp(suffix="_thumb.jpg"))
         canvas.save(str(output), "JPEG", quality=95)
         return output
+
+    def _draw_divider(
+        self, canvas: Image.Image, draw: ImageDraw.ImageDraw,
+        center_y: int, style: str, thickness: int,
+        logo_path: Optional[Path], logo_size: int,
+    ):
+        """Draw divider line with centered logo."""
+        has_logo = logo_path and Path(logo_path).exists()
+        logo_img = None
+
+        if has_logo:
+            try:
+                logo_img = Image.open(logo_path).convert("RGBA")
+                logo_img = logo_img.resize((logo_size, logo_size), Image.LANCZOS)
+            except Exception as e:
+                logger.warning(f"[ThumbnailCompositor] Logo load failed: {e}")
+                logo_img = None
+
+        if logo_img:
+            logo_x = (W - logo_size) // 2
+            logo_y = center_y - logo_size // 2
+            # Lines on each side of logo
+            line_y = center_y
+            left_end = logo_x - LINE_LOGO_GAP
+            right_start = logo_x + logo_size + LINE_LOGO_GAP
+
+            if style == "gradient":
+                self._draw_gradient_line(draw, SIDE_PADDING, left_end, line_y, thickness, from_transparent=True)
+                self._draw_gradient_line(draw, right_start, W - SIDE_PADDING, line_y, thickness, from_transparent=False)
+            else:
+                draw.line([(SIDE_PADDING, line_y), (left_end, line_y)], fill=(255, 255, 255), width=thickness)
+                draw.line([(right_start, line_y), (W - SIDE_PADDING, line_y)], fill=(255, 255, 255), width=thickness)
+
+            # Paste logo
+            canvas_rgba = canvas.convert("RGBA")
+            canvas_rgba.paste(logo_img, (logo_x, logo_y), logo_img)
+            canvas.paste(canvas_rgba.convert("RGB"))
+        else:
+            # No logo — just draw full-width line
+            line_y = center_y
+            if style == "gradient":
+                half = W // 2
+                self._draw_gradient_line(draw, SIDE_PADDING, half, line_y, thickness, from_transparent=True)
+                self._draw_gradient_line(draw, half, W - SIDE_PADDING, line_y, thickness, from_transparent=False)
+            elif style != "none":
+                draw.line([(SIDE_PADDING, line_y), (W - SIDE_PADDING, line_y)], fill=(255, 255, 255), width=thickness)
+
+    def _draw_gradient_line(
+        self, draw: ImageDraw.ImageDraw, x1: int, x2: int,
+        y: int, thickness: int, from_transparent: bool,
+    ):
+        """Draw a horizontal gradient line (transparent→white or white→transparent)."""
+        width = x2 - x1
+        if width <= 0:
+            return
+        for i in range(width):
+            t = i / max(width - 1, 1)
+            if from_transparent:
+                alpha = int(255 * 0.7 * t)
+            else:
+                alpha = int(255 * 0.7 * (1 - t))
+            x = x1 + i
+            color = (alpha, alpha, alpha)
+            draw.line([(x, y - thickness // 2), (x, y + thickness // 2)], fill=color, width=1)
+
+    def _auto_fit_title(
+        self, draw: ImageDraw.ImageDraw, title: str,
+        font_name: str, max_width: int, max_lines: int = 3,
+    ) -> tuple[list[str], int]:
+        """
+        Find the largest font size that fits the title in max_lines lines.
+        Returns (lines, font_size).
+        """
+        for size in range(300, 59, -2):
+            font = self._load_font(font_name, size)
+            lines = self._greedy_wrap(draw, title, font, int(max_width * 0.98))
+            if len(lines) <= max_lines:
+                return lines, max(60, size - 2)
+
+        # Fallback: try 2 extra lines
+        for size in range(300, 59, -2):
+            font = self._load_font(font_name, size)
+            lines = self._greedy_wrap(draw, title, font, int(max_width * 0.98))
+            if len(lines) <= max_lines + 1:
+                return lines, max(60, size - 2)
+
+        font = self._load_font(font_name, 60)
+        return self._greedy_wrap(draw, title, font, max_width), 60
+
+    def _greedy_wrap(
+        self, draw: ImageDraw.ImageDraw, text: str,
+        font: ImageFont.FreeTypeFont, max_width: int,
+    ) -> list[str]:
+        """Word-wrap text greedily to fit within max_width pixels."""
+        words = text.split()
+        lines = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            bbox = draw.textbbox((0, 0), test, font=font)
+            if bbox[2] - bbox[0] <= max_width:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines
 
     def _cover_fit(self, img: Image.Image, target_w: int, target_h: int) -> Image.Image:
         """Scale image to cover target dimensions, then center-crop."""
         ratio_w = target_w / img.width
         ratio_h = target_h / img.height
         scale = max(ratio_w, ratio_h)
-
         new_w = int(img.width * scale)
         new_h = int(img.height * scale)
         img = img.resize((new_w, new_h), Image.LANCZOS)
-
         left = (new_w - target_w) // 2
         top = (new_h - target_h) // 2
         return img.crop((left, top, left + target_w, top + target_h))
 
     def _load_font(self, name: str, size: int) -> ImageFont.FreeTypeFont:
         """Load a font from assets/fonts/, mapping display names to TTF files."""
-        # Try mapped font name first
         mapped = FONT_MAP.get(name)
         if mapped:
             font_path = Path("assets/fonts") / mapped
@@ -164,8 +283,7 @@ class ThumbnailCompositor:
                 return ImageFont.truetype(str(font_path), size)
             except Exception:
                 pass
-
-        # Try direct filename (e.g., "Anton-Regular.ttf")
+        # Try direct filename
         font_path = Path("assets/fonts") / name
         try:
             return ImageFont.truetype(str(font_path), size)
@@ -176,6 +294,15 @@ class ThumbnailCompositor:
                 except Exception:
                     continue
             return ImageFont.load_default()
+
+    @staticmethod
+    def _hex_to_rgb(hex_color: str) -> tuple:
+        """Convert hex color string to RGB tuple."""
+        try:
+            hc = hex_color.lstrip("#")
+            return tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
+        except Exception:
+            return (255, 215, 0)
 
     def _get(self, design, key: str):
         """Get a design value with fallback to defaults."""
