@@ -70,7 +70,7 @@ export function ReelsPage() {
 
       {/* ─── Design Editor ─── */}
       {view === 'design' && (
-        <div className="py-6 animate-in fade-in duration-300">
+        <div className="animate-in fade-in duration-300">
           <div className="mb-4">
             <button
               onClick={() => navigate('landing')}

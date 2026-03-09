@@ -381,13 +381,17 @@ export function BrandThemeModal({ brand, onClose, onSave, inline, brandSelector 
                 {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Colors
               </h4>
               {mode === 'light' ? (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Thumbnail</p>
-                  <ColorPicker label="Text" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-1.5">Content Title</p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    <ColorPicker label="Text" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
-                    <ColorPicker label="Bar BG" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
+                <div className="flex flex-wrap items-end gap-x-4 gap-y-1.5">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Thumbnail</span>
+                    <ColorPicker label="Text" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Content Title</span>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                      <ColorPicker label="Text" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
+                      <ColorPicker label="Bar BG" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
+                    </div>
                   </div>
                 </div>
               ) : (
