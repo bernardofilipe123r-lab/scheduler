@@ -219,27 +219,36 @@ class ThumbnailCompositor:
 
     def _auto_fit_title(
         self, draw: ImageDraw.ImageDraw, title: str,
-        font_name: str, max_width: int, max_lines: int = 3,
+        font_name: str, max_width: int,
     ) -> tuple[list[str], int]:
         """
-        Find the largest font size that fits the title in max_lines lines.
-        Returns (lines, font_size).
+        Auto-fit title text. Prefers 2 lines first (largest font that fits),
+        falls back to 3 lines if text is too long for 2.
+        Subtracts 2px from found size for breathing room, then re-wraps.
         """
+        wrap_width = int(max_width * 0.98)
+
+        # First pass: try to fit in 2 lines
         for size in range(300, 59, -2):
             font = self._load_font(font_name, size)
-            lines = self._greedy_wrap(draw, title, font, int(max_width * 0.98))
-            if len(lines) <= max_lines:
-                return lines, max(60, size - 2)
+            lines = self._greedy_wrap(draw, title, font, wrap_width)
+            if len(lines) <= 2:
+                final = max(60, size - 2)
+                final_font = self._load_font(font_name, final)
+                return self._greedy_wrap(draw, title, final_font, wrap_width), final
 
-        # Fallback: try 2 extra lines
+        # Second pass: text too long for 2 lines, try 3
         for size in range(300, 59, -2):
             font = self._load_font(font_name, size)
-            lines = self._greedy_wrap(draw, title, font, int(max_width * 0.98))
-            if len(lines) <= max_lines + 1:
-                return lines, max(60, size - 2)
+            lines = self._greedy_wrap(draw, title, font, wrap_width)
+            if len(lines) <= 3:
+                final = max(60, size - 2)
+                final_font = self._load_font(font_name, final)
+                return self._greedy_wrap(draw, title, final_font, wrap_width), final
 
+        # Fallback: 4 lines at minimum size
         font = self._load_font(font_name, 60)
-        return self._greedy_wrap(draw, title, font, max_width), 60
+        return self._greedy_wrap(draw, title, font, wrap_width), 60
 
     def _greedy_wrap(
         self, draw: ImageDraw.ImageDraw, text: str,

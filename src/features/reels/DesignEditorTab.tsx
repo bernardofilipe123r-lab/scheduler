@@ -144,7 +144,7 @@ const THUMB_TITLE = 'HOW VIRAL TOBY AUTOMATES YOUR ENTIRE CONTENT STRATEGY'
 
 /**
  * Auto-fit title into 2 or 3 lines at the largest possible font size.
- * Prefers 3 lines; if title can't split into 3, falls back to 2.
+ * Prefers 2 lines first; falls back to 3 if text is too long.
  */
 function useAutoTitleLines(title: string, _maxFontSize: number, font: string, containerWidthPx: number) {
   const [fontReady, setFontReady] = useState(false)
@@ -184,19 +184,19 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
       return lines
     }
 
-    // Find largest font size that fits in exactly 3 lines, then shave 2px for breathing room
+    // First pass: find largest font that fits in 2 lines, then shave 2px
     for (let size = 300; size >= 60; size--) {
       const lines = greedySplit(size)
-      if (lines.length <= 3) {
+      if (lines.length <= 2) {
         const final = Math.max(60, size - 2)
         return { lines: greedySplit(final), fontSize: final }
       }
     }
 
-    // If even at 60px it's more than 3 lines, try 2 lines
+    // Second pass: text too long for 2 lines, try 3
     for (let size = 300; size >= 60; size--) {
       const lines = greedySplit(size)
-      if (lines.length <= 2) {
+      if (lines.length <= 3) {
         const final = Math.max(60, size - 2)
         return { lines: greedySplit(final), fontSize: final }
       }
