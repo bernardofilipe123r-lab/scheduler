@@ -661,7 +661,7 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
             className={`cursor-pointer transition-opacity ${tab === 'thumbnail' ? 'ring-2 ring-primary-400 rounded-xl' : 'opacity-60 hover:opacity-80'}`}
             onClick={() => setTab('thumbnail')}
           >
-            <ThumbnailPreview form={form} brandDividerLogoUrl={brandDividerLogoUrl} />
+            <ThumbnailPreview form={form} brandDividerLogoUrl={brandDividerLogoUrl || brandMainLogoUrl} />
           </div>
           <div
             className={`cursor-pointer transition-opacity ${tab === 'content' ? 'ring-2 ring-primary-400 rounded-xl' : 'opacity-60 hover:opacity-80'}`}
@@ -844,81 +844,63 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
   }
 
   return (
-    <div className="space-y-4">
-      {/* Brand Header */}
-      <section className="space-y-2">
+    <div className="space-y-3">
+      {/* Content Logo — inline row */}
+      <section className="space-y-1">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Content Logo</h4>
-        <p className="text-[10px] text-gray-400">Logo shown in the reel header. If not set, falls back to your brand logo.</p>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 flex-1">
-            <img
-              src={`${activeLogo}${activeLogo !== vaLogo ? `?t=${Date.now()}` : ''}`}
-              alt="Content logo"
-              className="w-9 h-9 object-contain rounded-lg border border-gray-200 bg-gray-50 p-0.5"
-            />
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-gray-400 truncate">{logoSource}</span>
-            </div>
-            <label className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors ml-auto">
-              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              {uploading ? 'Uploading...' : 'Upload'}
-              <input type="file" accept="image/*" onChange={handleContentLogoUpload} className="hidden" disabled={uploading} />
-            </label>
-          </div>
+        <div className="flex items-center gap-2">
+          <img
+            src={`${activeLogo}${activeLogo !== vaLogo ? `?t=${Date.now()}` : ''}`}
+            alt="Content logo"
+            className="w-8 h-8 object-contain rounded-lg border border-gray-200 bg-gray-50 p-0.5 flex-shrink-0"
+          />
+          <span className="text-[10px] text-gray-400 truncate min-w-0">{logoSource}</span>
+          <label className="flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors ml-auto flex-shrink-0">
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            {uploading ? '...' : 'Upload'}
+            <input type="file" accept="image/*" onChange={handleContentLogoUpload} className="hidden" disabled={uploading} />
+          </label>
         </div>
       </section>
 
-      {/* Header Colors & Scale */}
-      <section className="space-y-2">
+      {/* Brand Header — colors + scale + toggles in compact layout */}
+      <section className="space-y-1.5">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Brand Header</h4>
-        <div className="grid grid-cols-2 gap-x-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 flex-shrink-0">Name</span>
-            <div className="relative w-6 h-6 flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500">Name</span>
+            <div className="relative w-5 h-5 flex-shrink-0">
               <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: form.reel_brand_name_color || '#FFFFFF' }} />
               <input type="color" value={form.reel_brand_name_color || '#FFFFFF'} onChange={e => update('reel_brand_name_color', e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 flex-shrink-0">Handle</span>
-            <div className="relative w-6 h-6 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500">Handle</span>
+            <div className="relative w-5 h-5 flex-shrink-0">
               <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: form.reel_handle_color || '#AAAAAA' }} />
               <input type="color" value={form.reel_handle_color || '#AAAAAA'} onChange={e => update('reel_handle_color', e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">Scale</span>
-          <input
-            type="range" min={0.5} max={1.5} step={0.05}
-            value={headerScale}
-            onChange={e => update('reel_header_scale', +e.target.value)}
-            className="flex-1 h-1.5 accent-primary-600 cursor-pointer"
-          />
-          <span className="text-xs text-gray-700 font-mono w-14 text-right flex-shrink-0">×{headerScale.toFixed(2)}</span>
-        </div>
-        <p className="text-[10px] text-gray-400 pl-[7.5rem]">
-          Name {Math.round(BASE_NAME_SIZE * headerScale)}px · Handle {Math.round(BASE_HANDLE_SIZE * headerScale)}px · Logo {Math.round(BASE_LOGO_SIZE * headerScale)}px
-        </p>
-        <div className="flex items-center gap-4 pt-1">
-          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-            <input type="checkbox" checked={form.show_logo ?? true} onChange={e => update('show_logo', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
+          <div className="w-px h-4 bg-gray-200" />
+          <label className="flex items-center gap-1 text-[11px] text-gray-500 cursor-pointer">
+            <input type="checkbox" checked={form.show_logo ?? true} onChange={e => update('show_logo', e.target.checked)} className="w-3 h-3 accent-primary-600" />
             Logo
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-            <input type="checkbox" checked={form.show_handle ?? true} onChange={e => update('show_handle', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
+          <label className="flex items-center gap-1 text-[11px] text-gray-500 cursor-pointer">
+            <input type="checkbox" checked={form.show_handle ?? true} onChange={e => update('show_handle', e.target.checked)} className="w-3 h-3 accent-primary-600" />
             Handle
           </label>
         </div>
+        <SliderRow label="Scale" value={headerScale} min={0.5} max={1.5} step={0.05} unit={`× ${headerScale.toFixed(2)}`} onChange={v => update('reel_header_scale', v)} />
       </section>
 
-      {/* Text */}
-      <section className="space-y-2">
+      {/* Text — color, font, bold, size in 2 rows */}
+      <section className="space-y-1.5">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Text</h4>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <span className="text-xs text-gray-500">Color</span>
-            <div className="relative w-6 h-6 flex-shrink-0">
+            <span className="text-[11px] text-gray-500">Color</span>
+            <div className="relative w-5 h-5 flex-shrink-0">
               <div className="absolute inset-0 rounded-full border border-gray-200 shadow-sm" style={{ background: form.reel_text_color || '#FFFFFF' }} />
               <input type="color" value={form.reel_text_color || '#FFFFFF'} onChange={e => update('reel_text_color', e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
             </div>
@@ -927,57 +909,51 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
             className="flex-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-900 text-xs outline-none focus:border-primary-500 min-w-0">
             {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
-          <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer flex-shrink-0">
-            <input type="checkbox" checked={form.reel_text_font_bold ?? false} onChange={e => update('reel_text_font_bold', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
+          <label className="flex items-center gap-1 text-[11px] text-gray-500 cursor-pointer flex-shrink-0">
+            <input type="checkbox" checked={form.reel_text_font_bold ?? false} onChange={e => update('reel_text_font_bold', e.target.checked)} className="w-3 h-3 accent-primary-600" />
             Bold
           </label>
         </div>
         <SliderRow label="Font Size" value={form.reel_text_size ?? 38} min={24} max={42} onChange={v => update('reel_text_size', v)} />
       </section>
 
-      {/* Layout */}
-      <section className="space-y-2">
+      {/* Layout — 3 sliders */}
+      <section className="space-y-1.5">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Layout</h4>
         <SliderRow label="Padding Top" value={form.reel_padding_top ?? 320} min={0} max={600} onChange={v => update('reel_padding_top', v)} />
         <SliderRow label="Gap" value={form.reel_section_gap ?? 40} min={0} max={200} onChange={v => update('reel_section_gap', v)} />
         <SliderRow label="Image Height" value={form.reel_image_height ?? 660} min={400} max={730} onChange={v => update('reel_image_height', v)} />
       </section>
 
-      {/* Slideshow */}
-      <section className="space-y-2">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Slideshow</h4>
+      {/* Slideshow + Music — combined row */}
+      <section className="space-y-1.5">
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Slideshow & Music</h4>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 flex-1">
-            <span className="text-xs text-gray-500 w-28 flex-shrink-0 truncate">Image Duration</span>
+            <span className="text-[11px] text-gray-500 w-24 flex-shrink-0 truncate">Image Duration</span>
             <input
               type="range" min={1} max={10} step={0.5}
               value={form.image_duration ?? 3}
               onChange={e => update('image_duration', +e.target.value)}
               className="flex-1 h-1.5 accent-primary-600 cursor-pointer"
             />
-            <span className="text-xs text-gray-700 font-mono w-14 text-right flex-shrink-0">{form.image_duration ?? 3}s</span>
+            <span className="text-xs text-gray-700 font-mono w-10 text-right flex-shrink-0">{form.image_duration ?? 3}s</span>
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer flex-shrink-0">
+          <label className="flex items-center gap-1 text-[11px] text-gray-500 cursor-pointer flex-shrink-0">
             <input type="checkbox"
               checked={(form.black_fade_duration ?? 1) > 0}
               onChange={e => update('black_fade_duration', e.target.checked ? 1.0 : 0)}
-              className="w-3.5 h-3.5 accent-primary-600" />
-            Black Fade In
+              className="w-3 h-3 accent-primary-600" />
+            Fade
           </label>
         </div>
-      </section>
-
-      {/* Music */}
-      <section className="space-y-2">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-          <Music className="w-3.5 h-3.5" />
-          Music
-        </h4>
-        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-          <input type="checkbox" checked={form.reel_music_enabled ?? true} onChange={e => update('reel_music_enabled', e.target.checked)} className="w-3.5 h-3.5 accent-primary-600" />
-          Enable background music
-        </label>
-        <p className="text-[10px] text-gray-400">Toby picks a random trending track. In manual mode, you choose the track or let it be random.</p>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+            <input type="checkbox" checked={form.reel_music_enabled ?? true} onChange={e => update('reel_music_enabled', e.target.checked)} className="w-3 h-3 accent-primary-600" />
+            <Music className="w-3 h-3" /> Background music
+          </label>
+          <span className="text-[9px] text-gray-300">Toby picks a random trending track</span>
+        </div>
       </section>
     </div>
   )
