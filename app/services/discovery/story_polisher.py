@@ -89,17 +89,26 @@ With ~25% probability, instead base the post on a very recent or emerging topic 
 THUMBNAIL TITLE
 
 Write a short, punchy headline suitable for a social media thumbnail like news pages use.
+The title MUST be relevant to the niche above.
 
 Rules:
-• 4–8 words
-• Bold statement or surprising claim
+• 4–10 words
+• Bold statement, surprising claim, or dramatic fact
 • Written in ALL CAPS
-• Designed to attract attention
+• Designed to stop the scroll and attract attention
+• Must relate to the niche provided
 
-Examples of style (not topics):
-"AI NOW USES AS MUCH WATER"
-"GEN Z RETIREMENT HOME IS REAL"
-"RUSSIA SEIZES LITHIUM MINE"
+These examples show the STYLE and FORMAT only — your title must match the niche above:
+"ELON MUSK'S WEALTH BREAKS REALITY"
+"GEN Z SAYS WORKING 40 HOURS NO LONGER BUYS A FUTURE"
+"ROBOT WITH AN ARTIFICIAL WOMB COULD DELIVER HUMAN BABY BY 2026"
+"JAPAN RECORDS LOWEST BIRTHS SINCE 1899"
+"NETFLIX SPENT NEARLY $500M ON ONE SEASON"
+"CYBERTRUCK IS THE SAFEST PICKUP EVER TESTED"
+"MCDONALD'S KIOSKS ARE DESIGNED TO MAKE YOU SPEND MORE"
+"BY 2030, A FIT BODY WILL BE RARE LUXURY"
+"PIZZA ORDERS NEAR THE PENTAGON SPIKE BEFORE WAR"
+"DENMARK GIVES PEOPLE COPYRIGHT OVER THEIR OWN FACE AND VOICE"
 
 POST
 
