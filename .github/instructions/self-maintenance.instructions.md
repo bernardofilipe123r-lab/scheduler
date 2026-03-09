@@ -21,6 +21,8 @@ When you make a code change that affects documented patterns, you MUST update th
 | Change billing lifecycle or gates | `.github/skills/billing-stripe/SKILL.md` |
 | Change Toby Score formula | `.github/skills/analytics-metrics/SKILL.md` |
 | Change media rendering pipeline | `.github/skills/media-rendering/SKILL.md` |
+| Add/remove/change a reel format | `.github/instructions/reel-formats.instructions.md` (format tables, routing chain, checklist) |
+| Change Format B layout/compositor | `.github/instructions/reel-formats.instructions.md` (Format B Layout Math section) |
 | Change quality score threshold | `.github/skills/content-pipeline/SKILL.md` |
 | Change dedup logic or scheduling guards | `.github/skills/toby-agent/SKILL.md` (Anti-Duplicate Safeguards section) + `.github/instructions/toby-agents.instructions.md` |
 | Re-enable parallel content execution | **FORBIDDEN** — see 2026-03-08 duplicate content incident in toby-agent SKILL |
