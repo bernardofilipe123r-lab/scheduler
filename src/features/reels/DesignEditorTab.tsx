@@ -417,8 +417,8 @@ export function DesignEditorTab() {
       {/* ── Top-level design type selector ── */}
       <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-0.5 w-fit">
         {([
-          { id: 'text-reels' as TopTab, label: 'Text Reels', icon: <Image className="w-4 h-4" /> },
-          { id: 'text-video' as TopTab, label: 'Text-Video', icon: <Film className="w-4 h-4" /> },
+          { id: 'text-reels' as TopTab, label: 'Format A', icon: <Image className="w-4 h-4" /> },
+          { id: 'text-video' as TopTab, label: 'Format B', icon: <Film className="w-4 h-4" /> },
         ]).map(t => (
           <button key={t.id} onClick={() => setTopTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors ${

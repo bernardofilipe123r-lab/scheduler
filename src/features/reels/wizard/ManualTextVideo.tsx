@@ -78,7 +78,7 @@ export function ManualTextVideo({ brands, platforms, onComplete }: ManualTextVid
       toast.success(
         (t) => (
           <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${result.job_id}`) }}>
-            Text-video reel started! <u>View Job →</u>
+            Format B reel started! <u>View Job →</u>
           </span>
         ),
         { duration: 6000 }
@@ -171,7 +171,7 @@ export function ManualTextVideo({ brands, platforms, onComplete }: ManualTextVid
         {busy ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> {uploadMutation.isPending ? 'Uploading...' : 'Generating...'}</>
         ) : (
-          <>🎬 Generate Text-Video Reel</>
+          <>🎬 Generate Format B Reel</>
         )}
       </button>
     </div>

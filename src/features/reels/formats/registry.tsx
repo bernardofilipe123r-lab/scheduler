@@ -59,7 +59,7 @@ export interface ReelFormat {
 export const REEL_FORMATS: ReelFormat[] = [
   {
     id: 'text_based',
-    label: 'Text-Based Reel',
+    label: 'Format A Reel',
     description: 'AI-generated background with animated text overlays',
     icon: Film,
     supportsAuto: true,
@@ -76,7 +76,7 @@ export const REEL_FORMATS: ReelFormat[] = [
   },
   {
     id: 'text_video',
-    label: 'Text-Video Reel',
+    label: 'Format B Reel',
     description: 'Real images with text overlays as a slideshow video',
     icon: Image,
     supportsAuto: true,

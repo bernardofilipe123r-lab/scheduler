@@ -145,6 +145,8 @@ These URLs are referenced in the TikTok Developer Portal, Meta App Dashboard, an
 
 ## Git Workflow
 
+> **MANDATORY — NO EXCEPTIONS:** After EVERY code change (no matter how small), immediately run all three steps below. Do NOT wait for the user to ask. Do NOT skip push. This is non-negotiable.
+
 After making any changes to the codebase, always:
 
 1. Run `git add -A` to stage all changes

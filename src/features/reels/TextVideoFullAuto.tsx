@@ -47,7 +47,7 @@ export function TextVideoFullAuto() {
       })
       toast.success((t) => (
         <span onClick={() => { toast.dismiss(t.id); navigate(`/job/${result.job_id}`) }} className="cursor-pointer">
-          Text-video generation started! <u>View Job →</u>
+          Format B generation started! <u>View Job →</u>
         </span>
       ), { duration: 6000 })
     } catch {

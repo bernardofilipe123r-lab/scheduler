@@ -81,7 +81,7 @@ export function TextVideoManual() {
         reel_lines: reelText.split('\n').filter(l => l.trim()),
         image_paths: paths,
       })
-      toast.success('Text-video reel generation started!')
+      toast.success('Format B reel generation started!')
       setThumbnailTitle('')
       setReelText('')
       setImages([])
@@ -211,7 +211,7 @@ export function TextVideoManual() {
         {busy ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> {uploadMutation.isPending ? 'Uploading images...' : 'Generating...'}</>
         ) : (
-          <><Upload className="w-4 h-4" /> Generate Text-Video Reel</>
+          <><Upload className="w-4 h-4" /> Generate Format B Reel</>
         )}
       </button>
     </div>

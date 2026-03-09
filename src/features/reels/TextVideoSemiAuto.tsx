@@ -64,7 +64,7 @@ export function TextVideoSemiAuto() {
         platforms,
         raw_story: selectedStory,
       })
-      toast.success('Text-video reel generation started!')
+      toast.success('Format B reel generation started!')
       setStories([])
       setSelectedStory(null)
       setPolished(null)
@@ -206,7 +206,7 @@ export function TextVideoSemiAuto() {
           {generateMutation.isPending ? (
             <><Loader2 className="w-4 h-4 animate-spin" /> Creating Reel...</>
           ) : (
-            <><Sparkles className="w-4 h-4" /> Create Text-Video Reel</>
+            <><Sparkles className="w-4 h-4" /> Create Format B Reel</>
           )}
         </button>
       )}
