@@ -123,7 +123,7 @@ def _ensure_rendering_colors(colors: Dict[str, Any]) -> Dict[str, Any]:
     """
     Populate flat rendering keys (light_thumbnail_text_color, etc.) from
     the nested light_mode / dark_mode sub-dicts when they are absent.
-    
+
     This bridges the gap between the color structure written during brand
     creation (nested) and the flat keys expected by the rendering engine.
     """
@@ -158,13 +158,13 @@ async def list_brands(
 ) -> Dict[str, Any]:
     """
     Get all brands.
-    
+
     Returns a list of all active brands by default.
     Set include_inactive=true to include deactivated brands.
     """
     manager = get_brand_manager(db)
     brands = manager.get_all_brands(include_inactive=include_inactive, user_id=user["id"])
-    
+
     return {
         "brands": brands,
         "count": len(brands)
@@ -175,12 +175,12 @@ async def list_brands(
 async def list_brands_legacy(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Legacy endpoint for listing brands.
-    
+
     Maintains backward compatibility with existing frontend code.
     """
     manager = get_brand_manager(db)
     brands = manager.get_all_brands(user_id=user["id"])
-    
+
     # Format for legacy frontend
     return {
         "brands": [
@@ -199,12 +199,12 @@ async def list_brands_legacy(db: Session = Depends(get_db), user: dict = Depends
 async def get_brand_ids(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Get just the IDs of all active brands.
-    
+
     Useful for validation and quick lookups.
     """
     manager = get_brand_manager(db)
     brand_ids = manager.get_all_brand_ids(user_id=user["id"])
-    
+
     return {
         "brand_ids": brand_ids,
         "count": len(brand_ids)
@@ -220,25 +220,25 @@ async def get_brand_ids(db: Session = Depends(get_db), user: dict = Depends(get_
 async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Get connection status for all platforms for all brands.
-    
+
     Returns Instagram, Facebook, and YouTube connection status.
     """
     manager = get_brand_manager(db)
     brands = manager.get_all_brands(user_id=user["id"])
-    
+
     # Get YouTube channels from database
     youtube_channels = db.query(YouTubeChannel).all()
     youtube_map = {ch.brand: ch for ch in youtube_channels}
-    
+
     brand_connections = []
-    
+
     for brand in brands:
         brand_id = brand["id"]
         brand_with_creds = manager.get_brand_with_credentials(brand_id, user_id=user["id"])
-        
+
         # Check Instagram
         ig_connected = bool(
-            brand_with_creds.get("instagram_business_account_id") and 
+            brand_with_creds.get("instagram_business_account_id") and
             (brand_with_creds.get("instagram_access_token") or brand_with_creds.get("meta_access_token"))
         )
 
@@ -256,7 +256,7 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
             "token_expires_at": _ig_expires,
             "token_last_refreshed_at": _ig_refreshed,
         }
-        
+
         # Check Facebook
         # NOTE: We require facebook_access_token specifically. meta_access_token is the
         # Instagram System User token and should NOT count as a Facebook page connection.
@@ -264,14 +264,14 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
             brand_with_creds.get("facebook_page_id") and
             brand_with_creds.get("facebook_access_token")
         )
-        
+
         facebook = {
             "connected": fb_connected,
             "account_id": brand_with_creds.get("facebook_page_id"),
             "account_name": brand.get("facebook_page_name"),
             "status": "connected" if fb_connected else "not_configured"
         }
-        
+
         # Check YouTube
         yt_channel = youtube_map.get(brand_id)
         if yt_channel:
@@ -287,7 +287,7 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
                 "connected": False,
                 "status": "not_connected"
             }
-        
+
         brand_connections.append({
             "brand": brand_id,
             "display_name": brand["display_name"],
@@ -312,7 +312,7 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
                 "refresh_token_expires_at": _brand_orm.tiktok_refresh_token_expires_at.isoformat() if (_brand_orm and _brand_orm.tiktok_refresh_token_expires_at) else None,
             },
         })
-    
+
     # Check which OAuth is configured
     oauth_configured = {
         "meta": bool(os.getenv("INSTAGRAM_APP_ID")) and bool(os.getenv("INSTAGRAM_APP_SECRET")),
@@ -321,7 +321,7 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
         "threads": bool(os.getenv("META_APP_ID") or os.getenv("INSTAGRAM_APP_ID")),
         "tiktok": bool(os.getenv("TIKTOK_CLIENT_KEY")),
     }
-    
+
     return {
         "brands": brand_connections,
         "oauth_configured": oauth_configured
@@ -332,13 +332,13 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
 async def seed_brands(db: Session = Depends(get_db), user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """
     Seed default brands if none exist.
-    
+
     This is called automatically on app startup, but can also be
     triggered manually.
     """
     manager = get_brand_manager(db)
     count = manager.seed_default_brands(user_id=user["id"])
-    
+
     if count > 0:
         return {
             "success": True,
@@ -506,10 +506,10 @@ async def get_brand(
     """Get a single brand by ID."""
     manager = get_brand_manager(db)
     brand = manager.get_brand(brand_id, user_id=user["id"])
-    
+
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     return brand
 
 
@@ -522,10 +522,10 @@ async def get_brand_colors(
     """Get just the color configuration for a brand."""
     manager = get_brand_manager(db)
     colors = manager.get_brand_colors(brand_id, user_id=user["id"])
-    
+
     if colors is None:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     return {
         "brand_id": brand_id,
         "colors": colors
@@ -540,18 +540,18 @@ async def create_brand(
 ) -> Dict[str, Any]:
     """
     Create a new brand.
-    
+
     The brand ID should be lowercase with no spaces (e.g., "healthycollege").
     """
     manager = get_brand_manager(db)
-    
+
     # Validate brand ID format
     if not request.id.isalnum():
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Brand ID must be alphanumeric (no spaces or special characters)"
         )
-    
+
     # Auto-generate short_name if not provided
     short_name = request.short_name
     if not short_name:
@@ -560,7 +560,7 @@ async def create_brand(
         short_name = "".join(w[0].upper() for w in words if w)[:3]
         if not short_name:
             short_name = request.id[:3].upper()
-    
+
     # Check if brand ID already exists (across all users)
     from app.models.brands import Brand as BrandModel
     existing = db.query(BrandModel).filter(BrandModel.id == request.id.lower()).first()
@@ -590,7 +590,7 @@ async def create_brand(
             "instagram_business_account_id": request.instagram_business_account_id,
             "facebook_page_id": request.facebook_page_id,
         }
-        
+
         brand = manager.create_brand(brand_data, user_id=user["id"])
         brand_resolver.invalidate_cache()
 
@@ -612,24 +612,24 @@ async def update_brand(
 ) -> Dict[str, Any]:
     """Update an existing brand."""
     manager = get_brand_manager(db)
-    
+
     # Build updates dict from non-None fields
     updates = {k: v for k, v in request.dict().items() if v is not None}
-    
+
     # Auto-populate flat rendering keys when colors are updated
     if "colors" in updates and isinstance(updates["colors"], dict):
         updates["colors"] = _ensure_rendering_colors(updates["colors"])
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
-    
+
     brand = manager.update_brand(brand_id, updates, user_id=user["id"])
-    
+
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     brand_resolver.invalidate_cache()
-    
+
     return {
         "success": True,
         "message": f"Brand '{brand_id}' updated successfully",
@@ -646,25 +646,25 @@ async def update_brand_credentials(
 ) -> Dict[str, Any]:
     """
     Update API credentials for a brand.
-    
+
     This allows setting Instagram/Facebook credentials via the UI
     instead of environment variables.
     """
     manager = get_brand_manager(db)
-    
+
     # Build updates dict from non-None fields
     updates = {k: v for k, v in request.dict().items() if v is not None}
-    
+
     if not updates:
         raise HTTPException(status_code=400, detail="No credentials provided")
-    
+
     brand = manager.update_brand(brand_id, updates, user_id=user["id"])
-    
+
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     brand_resolver.invalidate_cache()
-    
+
     return {
         "success": True,
         "message": f"Credentials updated for '{brand_id}'",
@@ -681,7 +681,7 @@ async def delete_brand(
 ) -> Dict[str, Any]:
     """
     Delete a brand (soft delete).
-    
+
     The brand is deactivated rather than permanently deleted,
     preserving historical data.
     Also cancels any active Stripe subscription for this brand.
@@ -704,14 +704,14 @@ async def delete_brand(
             logger.warning(f"Failed to cancel Stripe sub on brand delete: {e}")
 
     manager = get_brand_manager(db)
-    
+
     success = manager.delete_brand(brand_id, user_id=user["id"])
-    
+
     if not success:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     brand_resolver.invalidate_cache()
-    
+
     return {
         "success": True,
         "message": f"Brand '{brand_id}' has been deactivated"
@@ -726,12 +726,12 @@ async def reactivate_brand(
 ) -> Dict[str, Any]:
     """Reactivate a previously deleted brand."""
     manager = get_brand_manager(db)
-    
+
     brand = manager.update_brand(brand_id, {"active": True}, user_id=user["id"])
-    
+
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     return {
         "success": True,
         "message": f"Brand '{brand_id}' has been reactivated",
@@ -751,20 +751,20 @@ async def get_brand_theme(
 ) -> Dict[str, Any]:
     """
     Get a brand's theme settings.
-    
+
     Returns colors from the database.
     """
     manager = get_brand_manager(db)
     brand = manager.get_brand(brand_id, user_id=user["id"])
-    
+
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     colors = brand.get("colors", {})
-    
+
     # Ensure flat rendering keys are populated from nested structure
     colors = _ensure_rendering_colors(colors)
-    
+
     # Format for legacy theme endpoint + rendering colors
     theme = {
         "brand_color": colors.get("primary", "#000000"),
@@ -783,7 +783,7 @@ async def get_brand_theme(
         "reel_divider_logo": brand.get("reel_divider_logo_path"),
         "short_name": brand.get("short_name", ""),
     }
-    
+
     return {
         "brand_id": brand_id,
         "theme": theme,
@@ -814,16 +814,16 @@ async def update_brand_theme(
 ) -> Dict[str, Any]:
     """
     Update a brand's theme settings.
-    
+
     This updates the colors in the database.
     """
     manager = get_brand_manager(db)
-    
+
     # Get current brand
     brand = manager.get_brand(brand_id, user_id=user["id"])
     if not brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
-    
+
     # Update colors structure
     current_colors = brand.get("colors", {})
     updated_colors = {
@@ -840,7 +840,7 @@ async def update_brand_theme(
             "background": dark_bg_color
         }
     }
-    
+
     # Merge rendering colors if provided
     rendering_fields = {
         "light_thumbnail_text_color": light_thumbnail_text_color,
@@ -853,47 +853,47 @@ async def update_brand_theme(
     for key, val in rendering_fields.items():
         if val is not None:
             updated_colors[key] = val
-    
+
     updates = {"colors": updated_colors}
-    
+
     if short_name is not None:
         updates["short_name"] = short_name
-    
+
     # Handle logo upload
     if logo and logo.filename:
         extension = Path(logo.filename).suffix.lower() or '.png'
         ext = extension.lstrip('.')
         logo_filename = f"{brand_id}_logo.{ext}"
         content = await logo.read()
-        
+
         user_id = user["id"]
         remote_path = storage_path(user_id, brand_id, "logos", logo_filename)
         try:
             logo_url = upload_bytes("brand-assets", remote_path, content, f"image/{ext}")
         except StorageError as e:
             print(f"Logo upload failed: {e}"); logo_url = logo_filename
-        
+
         updates["logo_path"] = logo_url
-    
+
     # Handle reel divider logo upload (logo shown in the divider line of reel thumbnails)
     if reel_divider_logo and reel_divider_logo.filename:
         extension = Path(reel_divider_logo.filename).suffix.lower() or '.png'
         ext = extension.lstrip('.')
         divider_logo_filename = f"{brand_id}_reel_divider_logo.{ext}"
         content = await reel_divider_logo.read()
-        
+
         user_id = user["id"]
         remote_path = storage_path(user_id, brand_id, "logos", divider_logo_filename)
         try:
             divider_logo_url = upload_bytes("brand-assets", remote_path, content, f"image/{ext}")
         except StorageError as e:
             print(f"Reel divider logo upload failed: {e}"); divider_logo_url = divider_logo_filename
-        
+
         updates["reel_divider_logo_path"] = divider_logo_url
-    
+
     # Update brand
     updated_brand = manager.update_brand(brand_id, updates, user_id=user["id"])
-    
+
     return {
         "success": True,
         "message": f"Theme updated for {brand_id}",
@@ -912,4 +912,42 @@ async def update_brand_theme(
             "logo": updates.get("logo_path", brand.get("logo_path")),
             "reel_divider_logo": updates.get("reel_divider_logo_path", brand.get("reel_divider_logo_path"))
         }
+    }
+
+
+@router.post("/{brand_id}/divider-logo")
+async def upload_divider_logo(
+    brand_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Upload or replace the divider logo for a brand's thumbnail."""
+    manager = get_brand_manager(db)
+    brand = manager.get_brand(brand_id, user_id=user["id"])
+    if not brand:
+        raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    extension = Path(file.filename).suffix.lower() or ".png"
+    ext = extension.lstrip(".")
+    if ext not in ("png", "jpg", "jpeg", "webp", "svg"):
+        raise HTTPException(status_code=400, detail="Invalid image format")
+
+    content = await file.read()
+    filename = f"{brand_id}_reel_divider_logo.{ext}"
+    remote_path = storage_path(user["id"], brand_id, "logos", filename)
+    try:
+        logo_url = upload_bytes("brand-assets", remote_path, content, f"image/{ext}")
+    except StorageError as e:
+        logger.error("Divider logo upload failed for %s: %s", brand_id, e)
+        raise HTTPException(status_code=500, detail="Logo upload failed")
+
+    manager.update_brand(brand_id, {"reel_divider_logo_path": logo_url}, user_id=user["id"])
+
+    return {
+        "success": True,
+        "reel_divider_logo": logo_url,
     }

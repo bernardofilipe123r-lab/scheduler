@@ -1,7 +1,7 @@
 ---
 description: "Create a Product Requirements Document (PRD) from a feature idea. Runs discovery interview, then produces a structured PRD saved to /docs/."
 agent: "agent"
-tools: ["search/codebase", "editFiles", "search", "fetch"]
+tools: ["search/codebase", "edit/editFiles", "search", "fetch"]
 ---
 
 # Create PRD from Feature Idea

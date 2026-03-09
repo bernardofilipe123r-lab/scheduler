@@ -677,6 +677,8 @@ class JobProcessor:
             brand_display_name = brand_obj.display_name if brand_obj else brand
             brand_handle = brand_obj.instagram_handle if brand_obj else None
             brand_logo_url = brand_obj.logo_path if brand_obj else None
+            # Prefer the dedicated divider logo for thumbnails; fall back to main logo
+            brand_divider_logo_url = (brand_obj.reel_divider_logo_path if brand_obj else None) or brand_logo_url
 
             # Download brand logo to temp file if it's a URL
             brand_logo_local = None
@@ -693,6 +695,22 @@ class JobProcessor:
                         print(f"   ✓ Brand logo downloaded: {brand_logo_local}", flush=True)
                 except Exception as e:
                     print(f"   ⚠️ Brand logo download failed: {e}", flush=True)
+
+            # Download divider logo (for thumbnail) if different from main logo
+            brand_divider_logo_local = brand_logo_local
+            if brand_divider_logo_url and brand_divider_logo_url != brand_logo_url and brand_divider_logo_url.startswith("http"):
+                try:
+                    import httpx
+                    tmp_div_logo = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    tmp_div_logo.close()
+                    resp = httpx.get(brand_divider_logo_url, timeout=15, follow_redirects=True)
+                    if resp.status_code == 200:
+                        with open(tmp_div_logo.name, 'wb') as f:
+                            f.write(resp.content)
+                        brand_divider_logo_local = Path(tmp_div_logo.name)
+                        print(f"   ✓ Divider logo downloaded: {brand_divider_logo_local}", flush=True)
+                except Exception as e:
+                    print(f"   ⚠️ Divider logo download failed: {e}", flush=True)
 
             # ── Step 1: Source images ──────────────────────────
             sourcer = ImageSourcer(db=self.db)
