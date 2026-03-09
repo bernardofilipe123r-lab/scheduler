@@ -14,7 +14,7 @@ import { motion, useInView, AnimatePresence } from 'framer-motion'
 import {
   ArrowRight, ChevronDown, Sparkles, X, Menu,
   Brain, Shield, Send,
-  CheckCircle2, Play, Target, Film,
+  CheckCircle2, Target, Film,
   Calendar, Eye, TrendingUp, Star, Image,
   Check, Repeat, Zap, BarChart3, Users, Heart,
   ArrowUpRight, Clock, Activity, MessageSquare,
@@ -67,46 +67,6 @@ function FaqItem({ q, a, open: defaultOpen = false }: { q: string; a: string; op
         )}
       </AnimatePresence>
     </div>
-  )
-}
-
-/* Fixed-width rotating platform — no layout shift */
-function RotatingPlatform() {
-  const items = [
-    { name: 'TikTok', color: '#000000' },
-    { name: 'YouTube', color: '#FF0000' },
-    { name: 'Instagram', color: '#E1306C' },
-    { name: 'Facebook', color: '#1877F2' },
-    { name: 'Threads', color: '#000000' },
-    { name: 'Bluesky', color: '#0085ff' },
-  ]
-  const [idx, setIdx] = useState(0)
-  useEffect(() => { const i = setInterval(() => setIdx(p => (p + 1) % items.length), 2200); return () => clearInterval(i) }, [])
-
-  /* Measure widest name once and lock the container */
-  const measRef = useRef<HTMLSpanElement>(null)
-  const [minW, setMinW] = useState(0)
-  useEffect(() => {
-    if (!measRef.current) return
-    const el = measRef.current
-    let max = 0
-    items.forEach(it => { el.textContent = it.name; max = Math.max(max, el.offsetWidth) })
-    setMinW(max + 4)
-    el.textContent = ''
-  }, [])
-
-  return (
-    <>
-      {/* Hidden measurer */}
-      <span ref={measRef} className="font-extrabold absolute invisible whitespace-nowrap" style={{ fontSize: 'inherit', fontFamily: FONT }} aria-hidden />
-      <span className="inline-flex justify-center" style={{ minWidth: minW || 280 }}>
-        <AnimatePresence mode="wait">
-          <motion.span key={idx} initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -30, opacity: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} style={{ color: items[idx].color }} className="font-extrabold">
-            {items[idx].name}
-          </motion.span>
-        </AnimatePresence>
-      </span>
-    </>
   )
 }
 
@@ -315,38 +275,70 @@ export function WelcomePage() {
         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/60 via-white to-white" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-gradient-to-b from-blue-100/40 to-transparent rounded-full blur-3xl" />
 
-        <div className="relative max-w-[1200px] mx-auto text-center">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-100 mb-7">
-              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-[12px] font-semibold text-blue-600 tracking-wide">AI-Powered Growth on Autopilot</span>
-            </div>
+        <div className="relative flex flex-col items-center text-center max-w-5xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }} className="w-full">
 
-            <h1 className="text-[40px] sm:text-[56px] lg:text-[72px] font-extrabold text-gray-900 leading-[1.08] tracking-[-0.04em] relative">
-              <span>Go viral on </span><RotatingPlatform /><br />
-              <span className="text-gray-300">while you sleep.</span>
+            <h1 className="text-[40px] sm:text-[56px] md:text-[64px] lg:text-[76px] font-extrabold tracking-[-0.04em] text-gray-900 leading-[1.08]">
+              <span className="relative inline-block">
+                <span className="absolute inset-0 bg-blue-500/10 blur-2xl rounded-full scale-150 pointer-events-none" />
+                <span className="relative inline-block bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 bg-clip-text text-transparent">Grow</span>
+                <span className="absolute -bottom-1 sm:-bottom-2 left-0 right-0 h-1 sm:h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 rounded-full" />
+              </span>{' '}
+              <span className="text-gray-900">on Autopilot</span>
             </h1>
 
-            <p className="mt-6 text-[17px] sm:text-[19px] text-gray-500 leading-[1.6] max-w-[600px] mx-auto">
+            {/* Platform list — inline with icons */}
+            <div className="mt-7 sm:mt-8 max-w-3xl mx-auto">
+              <p className="text-[17px] sm:text-[20px] md:text-[24px] text-gray-500 leading-relaxed flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1.5">
+                <span>Go viral on</span>
+                {[
+                  { id: 'tiktok', name: 'TikTok', color: 'text-black' },
+                  { id: 'youtube', name: 'YouTube', color: 'text-red-600' },
+                  { id: 'instagram', name: 'Instagram', color: 'text-pink-600' },
+                  { id: 'facebook', name: 'Facebook', color: 'text-blue-600' },
+                ].map((p, i, arr) => (
+                  <span key={p.id} className="contents">
+                    <span className="inline-flex items-center gap-1">
+                      <PlatformIcon platform={p.id} className={`h-5 w-5 sm:h-6 sm:w-6 ${p.color}`} />
+                      <span className={`font-semibold ${p.color}`}>{p.name}</span>
+                    </span>
+                    {i < arr.length - 1 && <span className="text-gray-300">,</span>}
+                  </span>
+                ))}
+                <span className="text-gray-300">&amp;</span>
+                <span className="inline-flex items-center gap-1">
+                  <PlatformIcon platform="threads" className="h-5 w-5 sm:h-6 sm:w-6 text-black" />
+                </span>
+              </p>
+              <p className="mt-2 text-[17px] sm:text-[20px] md:text-[24px] text-gray-400">while you sleep.</p>
+            </div>
+
+            <p className="mt-6 text-[16px] sm:text-[17px] text-gray-500 leading-[1.6] max-w-[580px] mx-auto">
               Create branded Reels and Carousels — or let <strong className="text-gray-700">Toby</strong>, your AI agent, handle everything. He ideates, creates, publishes, and <em>learns</em> what goes viral for your niche.
             </p>
 
-            <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link to={ctaLink} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-semibold px-7 py-3.5 rounded-xl shadow-lg shadow-blue-600/25 hover:shadow-xl transition-all hover:-translate-y-0.5">
+            <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+              <Link to={ctaLink} className="w-full sm:w-auto min-w-[180px] sm:min-w-[200px] inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-[15px] sm:text-[17px] font-semibold px-6 py-3 sm:px-8 sm:py-3.5 rounded-xl shadow-[0_0_20px_-5px_rgba(59,130,246,0.5)] hover:shadow-[0_0_30px_-5px_rgba(59,130,246,0.7)] transition-all hover:-translate-y-0.5">
                 {ctaLabel} <ArrowRight className="w-4 h-4" />
               </Link>
-              <button onClick={() => scrollTo('how-it-works')} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 text-[15px] font-medium px-7 py-3.5 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
-                <Play className="w-4 h-4" /> See How It Works
+              <button onClick={() => scrollTo('how-it-works')} className="w-full sm:w-auto min-w-[180px] sm:min-w-[200px] inline-flex items-center justify-center gap-2 text-gray-700 text-[15px] sm:text-[17px] font-semibold px-6 py-3 sm:px-8 sm:py-3.5 rounded-xl border-2 border-gray-200 bg-white/80 backdrop-blur-sm hover:border-blue-200 hover:bg-white hover:shadow-md transition-all hover:-translate-y-0.5">
+                See How It Works <ArrowRight className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="mt-8 flex items-center justify-center gap-3">
+            {/* Real face avatars + social proof */}
+            <div className="mt-10 flex items-center justify-center gap-3">
               <div className="flex -space-x-2.5">
-                {['from-blue-400 to-blue-600', 'from-pink-400 to-pink-600', 'from-emerald-400 to-emerald-600', 'from-amber-400 to-amber-600'].map((g, i) => (
-                  <div key={i} className={`w-8 h-8 rounded-full bg-gradient-to-br ${g} border-[2.5px] border-white flex items-center justify-center text-[10px] font-bold text-white`}>{String.fromCharCode(65 + i)}</div>
+                {['/faces/face1.jpg', '/faces/face2.jpg', '/faces/face3.jpg', '/faces/face4.jpg', '/faces/face5.jpg'].map((src, i) => (
+                  <div key={i} className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border-[3px] border-white bg-gray-200 overflow-hidden shadow-md ring-1 ring-gray-100">
+                    <img src={src} alt="" className="h-full w-full object-cover" />
+                  </div>
                 ))}
               </div>
-              <span className="text-[13px] text-gray-400"><span className="font-semibold text-gray-600">2,917+</span> creators joined</span>
+              <div className="flex flex-col items-start">
+                <span className="text-[14px] sm:text-[15px] font-bold text-gray-900">2,917+</span>
+                <span className="text-[12px] sm:text-[13px] text-gray-500">creators joined</span>
+              </div>
             </div>
           </motion.div>
         </div>
