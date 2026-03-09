@@ -10,6 +10,7 @@ COPY package*.json ./
 RUN npm ci --legacy-peer-deps
 
 # Copy frontend source + config
+COPY public/ public/
 COPY src/ src/
 COPY index.html .
 COPY vite.config.ts .

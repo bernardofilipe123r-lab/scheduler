@@ -191,10 +191,14 @@ if FRONTEND_DIR.exists():
     
     @app.get("/{full_path:path}", tags=["frontend"])
     async def serve_spa(full_path: str):
-        """Catch-all: serve React app for any non-API route (SPA client-side routing)."""
+        """Catch-all: serve static files first, then React app for SPA client-side routing."""
         # Never intercept API or health-check paths — let FastAPI return proper 404s
         if full_path.startswith("api/") or full_path in ("health", "docs", "redoc", "openapi.json"):
             raise HTTPException(status_code=404, detail="Not found")
+        # Serve static files from dist/ (favicons, manifest, robots.txt, etc.)
+        static_file = FRONTEND_DIR / full_path
+        if static_file.is_file():
+            return FileResponse(static_file)
         return _serve_index()
 else:
     print(f"⚠️ React frontend not found at {FRONTEND_DIR}. Run 'npm run build' to build.")
