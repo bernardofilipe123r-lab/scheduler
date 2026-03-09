@@ -8,6 +8,8 @@
       "Bash(python scripts/validate_api.py *)",
       "Bash(python scripts/validate_customization_drift.py *)",
       "Bash(python scripts/reviewer_guardrails.py *)",
+      "Bash(python3 scripts/claude_drift_check.py *)",
+      "Bash(python3 scripts/claude_skill_suggest.py *)",
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
@@ -28,6 +30,29 @@
     "deny": [
       "Read(.env)",
       "Read(.env.*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|CreateFile",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/claude_skill_suggest.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/claude_drift_check.py"
+          }
+        ]
+      }
     ]
   }
 }

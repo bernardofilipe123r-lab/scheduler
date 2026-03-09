@@ -1,4 +1,5 @@
 ---
+name: self-maintenance
 description: "Use when auditing code quality, checking for drift between code and documentation, or performing periodic maintenance tasks on the ViralToby codebase."
 ---
 

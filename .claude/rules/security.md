@@ -1,3 +1,9 @@
+---
+description: 'Security rules — authentication, data scoping, secrets management, OWASP awareness, legal compliance.'
+globs:
+  - "**"
+---
+
 ## Security Rules
 
 ### Authentication

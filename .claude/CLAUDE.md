@@ -1,5 +1,28 @@
 # ViralToby — Project Instructions
 
+## MANDATORY FIRST STEP — Read Before Coding
+
+> **BEFORE writing any code, you MUST identify which skill applies to the user's request and read it.** This is not optional. Do not skip this step. Do not start editing files without first loading the relevant skill.
+
+**Skill matching checklist** (run mentally at the START of every prompt):
+
+| If the request involves... | Read this skill FIRST |
+|---|---|
+| API routes, endpoints, imports | `.claude/skills/api-validation/SKILL.md` |
+| Database columns, models, migrations | `.claude/skills/database-migrations/SKILL.md` |
+| Toby agent, orchestrator, tick loop | `.claude/skills/toby-agent/SKILL.md` |
+| Image/video rendering, reels, carousel | `.claude/skills/media-rendering/SKILL.md` |
+| Content generation, prompts, quality score | `.claude/skills/content-pipeline/SKILL.md` |
+| Billing, Stripe, subscriptions | `.claude/skills/billing-stripe/SKILL.md` |
+| OAuth, publishing, platform tokens | `.claude/skills/platform-publishing/SKILL.md` |
+| Metrics, analytics, dashboards | `.claude/skills/analytics-metrics/SKILL.md` |
+| React components, hooks, routing | `.claude/skills/frontend-patterns/SKILL.md` |
+| Documentation sync, drift check | `.claude/skills/docs-sync/SKILL.md` |
+
+**If you skip this step and dive straight into code, the `Stop` hook will catch documentation drift and force you to go back.**
+
+---
+
 ## What Is This?
 
 **ViralToby** (`viraltoby.com`) is a multi-tenant SaaS platform for social media content scheduling and publishing across Instagram, Facebook, YouTube, Threads, and TikTok. Its core feature is **Toby** — an autonomous AI agent that generates, scores, and publishes content based on each brand's Content DNA.
@@ -97,6 +120,8 @@ When adding/removing a social platform, update all three pages:
 
 | Layer | Trigger | What it checks |
 |---|---|---|
+| **PreToolUse hook** | Before every file edit | Skill suggestion for the file being edited (`scripts/claude_skill_suggest.py`) |
+| **Stop hook** | When Claude finishes turn | Documentation drift against trigger matrix (`scripts/claude_drift_check.py`) |
 | Post-edit hook | After every edit | Python syntax, React hooks lint |
 | Pre-commit hook | `git commit` | TS build, ESLint, API imports |
 | CI pipeline | `git push` / PR | Full validation, drift, guardrails |
@@ -113,9 +138,19 @@ Railway CLI is installed and authenticated. **Execute commands directly — neve
 
 ## Self-Healing Documentation Pipeline
 
-**At the START of every prompt**: Check if any available skill matches the user's request. If a skill applies, invoke it automatically — don't wait for the user to type `/skill-name`.
+This pipeline is **enforced by two Claude Code hooks** in `.claude/settings.json`:
 
-**At the END of every prompt that changes code**: Spawn a background agent to verify whether any `.claude/rules/`, `.claude/skills/`, or this `CLAUDE.md` file needs updating to reflect the changes made. If code patterns, architecture, or conventions changed, update the relevant documentation. This keeps documentation from drifting.
+### Phase 1: Skill Suggestion (PreToolUse Hook — `scripts/claude_skill_suggest.py`)
+Runs automatically before every file edit. Checks the file path being edited and prints a reminder to load the relevant skill. Advisory — does not block the edit, but you MUST read the skill if you haven't already.
+
+### Phase 2: Drift Check (Stop Hook — `scripts/claude_drift_check.py`)
+Runs automatically when you try to finish your turn. Checks `git diff` for modified code files and maps them against the trigger matrix in `self-maintenance.instructions.md`. If documentation drift is detected, **exits non-zero — you cannot stop until you verify and update the affected docs.**
+
+### Manual Phase 1
+**At the START of every prompt**: Check the skill matching table at the top of this file. If a skill applies, read it FIRST — don't wait for the hook to remind you.
+
+### Manual Phase 2
+**At the END of every prompt that changes code**: Verify whether any `.claude/rules/`, `.claude/skills/`, or this `CLAUDE.md` file needs updating. The Stop hook will catch this automatically, but proactive checking is faster.
 
 ## Available Skills
 

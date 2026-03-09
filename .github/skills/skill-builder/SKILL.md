@@ -1,4 +1,5 @@
 ---
+name: skill-builder
 description: "Use when creating new skills, optimizing existing skills, or auditing skill quality for either .github/ (Copilot) or .claude/ (Claude Code). Guides skill development following best practices."
 ---
 
