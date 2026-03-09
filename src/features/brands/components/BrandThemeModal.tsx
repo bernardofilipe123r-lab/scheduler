@@ -381,18 +381,10 @@ export function BrandThemeModal({ brand, onClose, onSave, inline, brandSelector 
                 {mode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'} Colors
               </h4>
               {mode === 'light' ? (
-                <div className="flex flex-wrap items-end gap-x-4 gap-y-1.5">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Thumbnail</span>
-                    <ColorPicker label="Text" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Content Title</span>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-                      <ColorPicker label="Text" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
-                      <ColorPicker label="Bar BG" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
-                    </div>
-                  </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  <ColorPicker label="Thumbnail Text" value={lightThumbnailTextColor} onChange={setLightThumbnailTextColor} compact />
+                  <ColorPicker label="Title Text" value={lightContentTitleTextColor} onChange={setLightContentTitleTextColor} compact />
+                  <ColorPicker label="Title Bar BG" value={lightContentTitleBgColor} onChange={setLightContentTitleBgColor} compact />
                 </div>
               ) : (
                 <div className="space-y-1.5">
