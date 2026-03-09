@@ -12,7 +12,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Body
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -311,6 +311,12 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
                 "access_token_expires_at": _brand_orm.tiktok_access_token_expires_at.isoformat() if (_brand_orm and _brand_orm.tiktok_access_token_expires_at) else None,
                 "refresh_token_expires_at": _brand_orm.tiktok_refresh_token_expires_at.isoformat() if (_brand_orm and _brand_orm.tiktok_refresh_token_expires_at) else None,
             },
+            "bluesky": {
+                "connected": bool(_brand_orm and _brand_orm.bsky_did and _brand_orm.bsky_app_password),
+                "account_id": _brand_orm.bsky_did if _brand_orm else None,
+                "account_name": f"@{_brand_orm.bsky_handle}" if (_brand_orm and _brand_orm.bsky_handle) else None,
+                "status": "connected" if (_brand_orm and _brand_orm.bsky_did and _brand_orm.bsky_app_password) else "not_configured",
+            },
         })
 
     # Check which OAuth is configured
@@ -320,6 +326,7 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
         "youtube": bool(os.getenv("YOUTUBE_CLIENT_ID")) and bool(os.getenv("YOUTUBE_CLIENT_SECRET")),
         "threads": bool(os.getenv("META_APP_ID") or os.getenv("INSTAGRAM_APP_ID")),
         "tiktok": bool(os.getenv("TIKTOK_CLIENT_KEY")),
+        "bluesky": True,  # App Password based - always available
     }
 
     return {
@@ -989,3 +996,26 @@ async def upload_content_logo(
         "success": True,
         "reel_content_logo": logo_url,
     }
+
+
+@router.put("/{brand_id}/divider-logo-text")
+async def set_divider_logo_text(
+    brand_id: str,
+    body: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Set or clear the text abbreviation for the thumbnail divider logo."""
+    manager = get_brand_manager(db)
+    brand = manager.get_brand(brand_id, user_id=user["id"])
+    if not brand:
+        raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
+
+    text = (body.get("text") or "").strip()[:10]  # max 10 chars
+    manager.update_brand(
+        brand_id,
+        {"reel_divider_logo_text": text if text else None},
+        user_id=user["id"],
+    )
+
+    return {"success": True, "reel_divider_logo_text": text if text else None}

@@ -31,6 +31,7 @@ export interface BrandConnectionStatus {
   youtube: PlatformConnection
   threads: PlatformConnection
   tiktok: TikTokConnection
+  bluesky: PlatformConnection
 }
 
 // Response from /api/brands/connections
@@ -42,6 +43,7 @@ export interface BrandConnectionsResponse {
     youtube: boolean
     threads: boolean
     tiktok: boolean
+    bluesky: boolean
   }
 }
 
@@ -166,6 +168,24 @@ export async function connectTikTok(brandId: string, returnTo?: string): Promise
  */
 export async function disconnectTikTok(brandId: string): Promise<{ status: string }> {
   return post<{ status: string }>('/api/auth/tiktok/disconnect', { brand_id: brandId })
+}
+
+/**
+ * Connect Bluesky for a brand (App Password based — no OAuth redirect).
+ */
+export async function connectBluesky(brandId: string, handle: string, appPassword: string): Promise<{ status: string; handle: string; did: string }> {
+  return post<{ status: string; handle: string; did: string }>('/api/auth/bluesky/connect', {
+    brand_id: brandId,
+    handle,
+    app_password: appPassword,
+  })
+}
+
+/**
+ * Disconnect Bluesky for a brand
+ */
+export async function disconnectBluesky(brandId: string): Promise<{ status: string }> {
+  return post<{ status: string }>('/api/auth/bluesky/disconnect', { brand_id: brandId })
 }
 
 /**

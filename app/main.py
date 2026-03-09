@@ -33,6 +33,7 @@ from app.api.auth.ig_oauth_routes import router as ig_oauth_router
 from app.api.auth.fb_oauth_routes import router as fb_oauth_router
 from app.api.auth.threads_oauth_routes import router as threads_oauth_router
 from app.api.auth.tiktok_oauth_routes import router as tiktok_oauth_router
+from app.api.auth.bsky_auth_routes import router as bsky_auth_router
 from app.api.content.music_routes import router as music_router
 from app.api.content.trending_music_routes import router as trending_music_router
 from app.api.content.format_b_routes import router as format_b_router
@@ -136,6 +137,7 @@ app.include_router(ig_oauth_router)  # Instagram Business Login OAuth flow
 app.include_router(fb_oauth_router)  # Facebook Login OAuth flow
 app.include_router(threads_oauth_router)  # Threads OAuth flow
 app.include_router(tiktok_oauth_router)  # TikTok OAuth flow
+app.include_router(bsky_auth_router)  # Bluesky App Password auth
 app.include_router(music_router)  # User music upload/management
 app.include_router(trending_music_router)  # TikTok trending music
 app.include_router(billing_router, prefix="/api/billing")  # Stripe billing

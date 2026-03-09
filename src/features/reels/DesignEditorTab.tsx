@@ -209,7 +209,7 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
   }, [title, _maxFontSize, font, containerWidthPx, fontReady])
 }
 
-function ThumbnailPreview({ form, brandDividerLogoUrl }: { form: Partial<DesignSettings>; brandDividerLogoUrl?: string }) {
+function ThumbnailPreview({ form, brandDividerLogoUrl, brandDividerLogoText }: { form: Partial<DesignSettings>; brandDividerLogoUrl?: string; brandDividerLogoText?: string }) {
   const titleColor = form.thumbnail_title_color || '#FFD700'
   const titleSize = form.thumbnail_title_size ?? 120
   const titlePadding = form.thumbnail_title_padding ?? 220
@@ -260,12 +260,24 @@ function ThumbnailPreview({ form, brandDividerLogoUrl }: { form: Partial<DesignS
                 : '#FFFFFF',
             }} />
             <div style={{ paddingLeft: `${lineLogoGap}px`, paddingRight: `${lineLogoGap}px` }}>
-              <img src={brandDividerLogoUrl || vaLogo} alt="Logo" style={{
-                width: scaledLogo,
-                height: scaledLogo,
-                borderRadius: `${4 * s}px`,
-                objectFit: 'contain',
-              }} />
+              {brandDividerLogoText ? (
+                <span style={{
+                  fontSize: `${scaledLogo * 0.45}px`,
+                  fontWeight: 800,
+                  color: '#FFFFFF',
+                  letterSpacing: `${2 * s}px`,
+                  lineHeight: 1,
+                  fontFamily: 'Inter, sans-serif',
+                  textShadow: '0 1px 6px rgba(0,0,0,0.6)',
+                }}>{brandDividerLogoText}</span>
+              ) : (
+                <img src={brandDividerLogoUrl || vaLogo} alt="Logo" style={{
+                  width: scaledLogo,
+                  height: scaledLogo,
+                  borderRadius: `${4 * s}px`,
+                  objectFit: 'contain',
+                }} />
+              )}
             </div>
             <div className="flex-1" style={{
               height: `${lineThickness}px`,
@@ -578,6 +590,8 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
   const brandDividerLogoUrl = selectedBrand?.reel_divider_logo_path || undefined
   const brandContentLogoUrl = selectedBrand?.reel_content_logo_path || undefined
   const brandMainLogoUrl = selectedBrand?.logo_path || undefined
+  const brandDividerLogoText = selectedBrand?.reel_divider_logo_text || undefined
+  const brandShortName = selectedBrand?.shortName || ''
   const brandName = selectedBrand?.label
   const brandHandle = selectedBrand?.instagram_handle ? `@${selectedBrand.instagram_handle}` : undefined
   const savedRef = useRef<Partial<DesignSettings>>({})
@@ -661,7 +675,7 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
             className={`cursor-pointer transition-opacity ${tab === 'thumbnail' ? 'ring-2 ring-primary-400 rounded-xl' : 'opacity-60 hover:opacity-80'}`}
             onClick={() => setTab('thumbnail')}
           >
-            <ThumbnailPreview form={form} brandDividerLogoUrl={brandDividerLogoUrl || brandMainLogoUrl} />
+            <ThumbnailPreview form={form} brandDividerLogoUrl={brandDividerLogoUrl || brandMainLogoUrl} brandDividerLogoText={brandDividerLogoText} />
           </div>
           <div
             className={`cursor-pointer transition-opacity ${tab === 'content' ? 'ring-2 ring-primary-400 rounded-xl' : 'opacity-60 hover:opacity-80'}`}
@@ -680,6 +694,8 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
               selectedBrandId={selectedBrand?.id || ''}
               brandDividerLogoUrl={brandDividerLogoUrl}
               brandMainLogoUrl={brandMainLogoUrl}
+              brandDividerLogoText={brandDividerLogoText}
+              brandShortName={brandShortName}
             />
           ) : (
             <ContentSettings
@@ -699,16 +715,20 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
 /* ──────────────────────────────────────────────
  * THUMBNAIL SETTINGS
  * ────────────────────────────────────────────── */
-function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl, brandMainLogoUrl }: {
+function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl, brandMainLogoUrl, brandDividerLogoText, brandShortName }: {
   form: Partial<DesignSettings>
   update: (key: keyof DesignSettings, value: unknown) => void
   selectedBrandId: string
   brandDividerLogoUrl?: string
   brandMainLogoUrl?: string
+  brandDividerLogoText?: string
+  brandShortName: string
 }) {
   const [uploading, setUploading] = useState(false)
+  const [savingText, setSavingText] = useState(false)
   const qc = useQueryClient()
 
+  const isTextMode = !!brandDividerLogoText
   const activeLogo = brandDividerLogoUrl || brandMainLogoUrl || vaLogo
   const logoSource = brandDividerLogoUrl ? 'Custom thumbnail logo' : brandMainLogoUrl ? 'Brand logo (fallback)' : 'Default logo (fallback)'
 
@@ -731,6 +751,8 @@ function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl,
         }
       )
       if (!resp.ok) throw new Error('Upload failed')
+      // Clear text mode when uploading an image
+      await saveDividerText('')
       qc.invalidateQueries({ queryKey: ['brands'] })
       toast.success('Thumbnail logo uploaded')
     } catch {
@@ -738,6 +760,41 @@ function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl,
     }
     setUploading(false)
     e.target.value = ''
+  }
+
+  const saveDividerText = async (text: string) => {
+    if (!selectedBrandId) return
+    setSavingText(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const resp = await fetch(
+        `${import.meta.env.VITE_API_URL || ''}/api/brands/${selectedBrandId}/divider-logo-text`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ text }),
+        }
+      )
+      if (!resp.ok) throw new Error('Save failed')
+      qc.invalidateQueries({ queryKey: ['brands'] })
+    } catch {
+      toast.error('Failed to save text logo')
+    }
+    setSavingText(false)
+  }
+
+  const handleSwitchToText = async () => {
+    await saveDividerText(brandShortName || 'LOGO')
+    toast.success('Switched to text logo')
+  }
+
+  const handleSwitchToImage = async () => {
+    await saveDividerText('')
+    toast.success('Switched to image logo')
   }
 
   return (
@@ -757,24 +814,60 @@ function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl,
 
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Thumbnail Logo</h4>
-        <p className="text-[10px] text-gray-400">Logo shown in the thumbnail divider line. If not set, falls back to your brand logo.</p>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 flex-1">
-            <img
-              src={`${activeLogo}${activeLogo !== vaLogo ? `?t=${Date.now()}` : ''}`}
-              alt="Thumbnail logo"
-              className="w-9 h-9 object-contain rounded-lg border border-gray-200 bg-gray-50 p-0.5"
-            />
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-gray-400 truncate">{logoSource}</span>
-            </div>
-            <label className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors ml-auto">
-              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              {uploading ? 'Uploading...' : 'Upload'}
-              <input type="file" accept="image/*" onChange={handleDividerLogoUpload} className="hidden" disabled={uploading} />
-            </label>
-          </div>
+        {/* Mode toggle: Image vs Text */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5 w-fit">
+          <button
+            onClick={isTextMode ? handleSwitchToImage : undefined}
+            disabled={savingText}
+            className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+              !isTextMode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >Image</button>
+          <button
+            onClick={!isTextMode ? handleSwitchToText : undefined}
+            disabled={savingText}
+            className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+              isTextMode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >Text</button>
         </div>
+
+        {isTextMode ? (
+          /* Text mode — editable abbreviation */
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 w-16 flex-shrink-0">Text</span>
+            <input
+              type="text"
+              value={brandDividerLogoText || ''}
+              maxLength={10}
+              onChange={e => {
+                const val = e.target.value.toUpperCase()
+                saveDividerText(val)
+              }}
+              className="flex-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-900 text-xs outline-none focus:border-primary-500 uppercase tracking-wider font-bold"
+              placeholder={brandShortName || 'HCO'}
+            />
+            <span className="text-[10px] text-gray-400">Max 10 chars</span>
+          </div>
+        ) : (
+          /* Image mode — upload + preview */
+          <>
+            <div className="flex items-center gap-2">
+              <img
+                key={selectedBrandId}
+                src={`${activeLogo}${activeLogo !== vaLogo ? `?t=${Date.now()}` : ''}`}
+                alt="Thumbnail logo"
+                className="w-8 h-8 object-contain rounded-lg border border-gray-200 bg-gray-50 p-0.5 flex-shrink-0"
+              />
+              <span className="text-[10px] text-gray-400 truncate min-w-0">{logoSource}</span>
+              <label className="flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors ml-auto flex-shrink-0">
+                {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                {uploading ? '...' : 'Upload'}
+                <input type="file" accept="image/*" onChange={handleDividerLogoUpload} className="hidden" disabled={uploading} />
+              </label>
+            </div>
+          </>
+        )}
         <SliderRow label="Logo Size" value={form.thumbnail_logo_size ?? 100} min={80} max={120} onChange={v => update('thumbnail_logo_size', v)} />
       </section>
 

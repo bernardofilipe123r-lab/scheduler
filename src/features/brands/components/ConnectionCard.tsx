@@ -25,6 +25,8 @@ import {
   disconnectThreads,
   connectTikTok,
   disconnectTikTok,
+  connectBluesky,
+  disconnectBluesky,
   type BrandConnectionStatus,
   type PlatformConnection,
   type FacebookPage,
@@ -32,7 +34,7 @@ import {
 import type { BrandName } from '@/shared/types'
 import { generateSchedule, formatHour } from '@/features/brands/constants'
 
-type Platform = 'instagram' | 'facebook' | 'youtube' | 'threads' | 'tiktok'
+type Platform = 'instagram' | 'facebook' | 'youtube' | 'threads' | 'tiktok' | 'bluesky'
 
 function getPlatformBgColor(platform: Platform): string {
   switch (platform) {
@@ -46,6 +48,8 @@ function getPlatformBgColor(platform: Platform): string {
       return 'bg-black'
     case 'tiktok':
       return 'bg-black'
+    case 'bluesky':
+      return 'bg-sky-500'
   }
 }
 
@@ -65,10 +69,16 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
   const [disconnectingFacebook, setDisconnectingFacebook] = useState(false)
   const [disconnectingThreads, setDisconnectingThreads] = useState(false)
   const [disconnectingTikTok, setDisconnectingTikTok] = useState(false)
+  const [disconnectingBluesky, setDisconnectingBluesky] = useState(false)
   const [connectingYouTube, setConnectingYouTube] = useState(false)
   const [connectingFacebook, setConnectingFacebook] = useState(false)
   const [connectingThreads, setConnectingThreads] = useState(false)
   const [connectingTikTok, setConnectingTikTok] = useState(false)
+  const [connectingBluesky, setConnectingBluesky] = useState(false)
+  const [showBskyModal, setShowBskyModal] = useState(false)
+  const [bskyHandle, setBskyHandle] = useState('')
+  const [bskyAppPassword, setBskyAppPassword] = useState('')
+  const [bskyError, setBskyError] = useState('')
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showPageSelector, setShowPageSelector] = useState(false)
@@ -112,6 +122,9 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
         authUrl = await connectTikTok(brand.brand)
       } else if (platform === 'youtube') {
         authUrl = await connectYouTube(brand.brand as BrandName)
+      } else if (platform === 'bluesky') {
+        handleBlueskyConnect()
+        return
       } else {
         return
       }
@@ -222,6 +235,45 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
     }
   }
 
+  const handleBlueskyConnect = () => {
+    setBskyHandle('')
+    setBskyAppPassword('')
+    setBskyError('')
+    setShowBskyModal(true)
+  }
+
+  const handleBlueskySubmit = async () => {
+    if (!bskyHandle || !bskyAppPassword) {
+      setBskyError('Handle and App Password are required')
+      return
+    }
+    setConnectingBluesky(true)
+    setBskyError('')
+    try {
+      await connectBluesky(brand.brand, bskyHandle, bskyAppPassword)
+      setShowBskyModal(false)
+      onRefresh()
+    } catch (error: any) {
+      const msg = error?.message || 'Failed to connect Bluesky'
+      setBskyError(msg)
+    } finally {
+      setConnectingBluesky(false)
+    }
+  }
+
+  const handleBlueskyDisconnect = async () => {
+    setDisconnectingBluesky(true)
+    try {
+      await disconnectBluesky(brand.brand)
+      setConfirmDisconnect(null)
+      onRefresh()
+    } catch (error) {
+      console.error('Failed to disconnect Bluesky:', error)
+    } finally {
+      setDisconnectingBluesky(false)
+    }
+  }
+
   const handleFacebookSelectPage = async (pageId: string) => {
     setSelectingPage(true)
     try {
@@ -253,6 +305,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
     const isFacebook = platform === 'facebook'
     const isThreads = platform === 'threads'
     const isTikTok = platform === 'tiktok'
+    const isBluesky = platform === 'bluesky'
     const isActionable = true
     const isRevoked = connection.status === 'revoked'
     const hasError = connection.status === 'error'
@@ -293,11 +346,11 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500">Disconnect?</span>
                   <button
-                    onClick={isYouTube ? handleYouTubeDisconnect : isInstagram ? handleInstagramDisconnect : isFacebook ? handleFacebookDisconnect : isThreads ? handleThreadsDisconnect : isTikTok ? handleTikTokDisconnect : undefined}
-                    disabled={disconnectingYouTube || disconnectingInstagram || disconnectingFacebook || disconnectingThreads || disconnectingTikTok || !isActionable}
+                    onClick={isYouTube ? handleYouTubeDisconnect : isInstagram ? handleInstagramDisconnect : isFacebook ? handleFacebookDisconnect : isThreads ? handleThreadsDisconnect : isTikTok ? handleTikTokDisconnect : isBluesky ? handleBlueskyDisconnect : undefined}
+                    disabled={disconnectingYouTube || disconnectingInstagram || disconnectingFacebook || disconnectingThreads || disconnectingTikTok || disconnectingBluesky || !isActionable}
                     className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
                   >
-                    {(disconnectingYouTube || disconnectingInstagram || disconnectingFacebook || disconnectingThreads || disconnectingTikTok) ? '...' : 'Yes'}
+                    {(disconnectingYouTube || disconnectingInstagram || disconnectingFacebook || disconnectingThreads || disconnectingTikTok || disconnectingBluesky) ? '...' : 'Yes'}
                   </button>
                   <button
                     onClick={() => setConfirmDisconnect(null)}
@@ -310,7 +363,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
                 <div className="flex items-center gap-2">
                   {isRevoked ? (
                     <button
-                      onClick={isYouTube ? handleYouTubeConnect : isInstagram ? handleInstagramConnect : isFacebook ? handleFacebookConnect : isThreads ? handleThreadsConnect : isTikTok ? handleTikTokConnect : undefined}
+                      onClick={isYouTube ? handleYouTubeConnect : isInstagram ? handleInstagramConnect : isFacebook ? handleFacebookConnect : isThreads ? handleThreadsConnect : isTikTok ? handleTikTokConnect : isBluesky ? handleBlueskyConnect : undefined}
                       className="px-3 py-1.5 rounded-lg text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-colors"
                     >
                       Reconnect
@@ -333,6 +386,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
                           ? `https://threads.net/${connection.account_name?.replace('@', '')}`
                           : platform === 'tiktok'
                           ? `https://tiktok.com/@${connection.account_name?.replace('@', '')}`
+                          : platform === 'bluesky'
+                          ? `https://bsky.app/profile/${connection.account_name?.replace('@', '')}`
                           : `https://youtube.com/channel/${connection.account_id}`
                       }
                       target="_blank"
@@ -452,6 +507,25 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
                       </button>
                     </>
                   )}
+
+                  {isBluesky && (
+                    <>
+                      <button
+                        onClick={handleBlueskyConnect}
+                        className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                        title="Reconnect"
+                      >
+                        <RefreshCw className="w-4 h-4 text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDisconnect('bluesky')}
+                        className="p-1.5 rounded hover:bg-red-100 transition-colors"
+                        title="Disconnect"
+                      >
+                        <Unlink className="w-4 h-4 text-gray-500 hover:text-red-500" />
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </>
@@ -510,6 +584,16 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
                   {connectingTikTok ? 'Connecting...' : 'Connect'}
                 </button>
               )}
+
+              {isBluesky && (
+                <button
+                  onClick={handleBlueskyConnect}
+                  disabled={connectingBluesky}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-sky-500 text-white hover:bg-sky-600 transition-colors disabled:opacity-50"
+                >
+                  {connectingBluesky ? 'Connecting...' : 'Connect'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -517,7 +601,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
     )
   }
 
-  const connectedCount = [brand.instagram, brand.facebook, brand.youtube, brand.threads, brand.tiktok].filter((p) => p?.connected).length
+  const connectedCount = [brand.instagram, brand.facebook, brand.youtube, brand.threads, brand.tiktok, brand.bluesky].filter((p) => p?.connected).length
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -541,7 +625,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
           <div className="min-w-0">
             <h3 className="font-semibold text-gray-900 text-sm truncate">{brand.display_name}</h3>
             <p className="text-xs text-gray-500">
-              <span className={connectedCount > 0 ? 'text-green-600' : 'text-gray-400'}>{connectedCount}/5 connected</span>
+              <span className={connectedCount > 0 ? 'text-green-600' : 'text-gray-400'}>{connectedCount}/6 connected</span>
               {schedule && <span className="ml-1 text-gray-400">· +{schedule.offset}h · {schedule.postsPerDay}/day</span>}
             </p>
           </div>
@@ -549,7 +633,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {/* Quick platform status dots */}
           <div className="flex items-center gap-1 mr-2">
-            {(['instagram', 'facebook', 'youtube', 'threads', 'tiktok'] as Platform[]).map((p) => {
+            {(['instagram', 'facebook', 'youtube', 'threads', 'tiktok', 'bluesky'] as Platform[]).map((p) => {
               const conn = brand[p]
               return conn ? (
                 <div
@@ -583,6 +667,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
             {renderPlatformRow('youtube', brand.youtube)}
             {brand.threads && renderPlatformRow('threads', brand.threads)}
             {brand.tiktok && renderPlatformRow('tiktok', brand.tiktok)}
+            {brand.bluesky && renderPlatformRow('bluesky', brand.bluesky)}
           </div>
 
       {/* Schedule section */}
@@ -750,6 +835,67 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
       )}
 
         </>
+      )}
+
+      {/* Bluesky App Password Modal */}
+      {showBskyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowBskyModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Connect Bluesky</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Create an App Password at{' '}
+              <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline">
+                bsky.app/settings/app-passwords
+              </a>
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Handle</label>
+                <input
+                  type="text"
+                  value={bskyHandle}
+                  onChange={(e) => setBskyHandle(e.target.value)}
+                  placeholder="yourname.bsky.social"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">App Password</label>
+                <input
+                  type="password"
+                  value={bskyAppPassword}
+                  onChange={(e) => setBskyAppPassword(e.target.value)}
+                  placeholder="xxxx-xxxx-xxxx-xxxx"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                />
+              </div>
+
+              {bskyError && (
+                <p className="text-sm text-red-600 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  {bskyError}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleBlueskySubmit}
+                  disabled={connectingBluesky || !bskyHandle || !bskyAppPassword}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-sky-500 rounded-lg hover:bg-sky-600 disabled:opacity-50 transition-colors"
+                >
+                  {connectingBluesky ? 'Connecting...' : 'Connect'}
+                </button>
+                <button
+                  onClick={() => setShowBskyModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -49,6 +49,12 @@ class BrandConfig:
     tiktok_user_id: Optional[str] = None
     tiktok_username: Optional[str] = None
     tiktok_open_id: Optional[str] = None
+    # Bluesky
+    bsky_handle: Optional[str] = None
+    bsky_did: Optional[str] = None
+    bsky_app_password: Optional[str] = None
+    bsky_access_jwt: Optional[str] = None
+    bsky_refresh_jwt: Optional[str] = None
 
 
 # Default neutral colors used when a brand has no color config in the DB

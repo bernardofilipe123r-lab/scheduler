@@ -1213,6 +1213,10 @@ class DatabaseSchedulerService:
             if not (resolved_config and resolved_config.tiktok_refresh_token):
                 effective_platforms.remove("tiktok")
                 print(f"📱 TikTok not configured for {brand_name or 'unknown'} — skipping (not an error)")
+        if "bluesky" in effective_platforms:
+            if not (resolved_config and resolved_config.bsky_did and resolved_config.bsky_app_password):
+                effective_platforms.remove("bluesky")
+                print(f"🦋 Bluesky not configured for {brand_name or 'unknown'} — skipping (not an error)")
         
         results = {}
         
@@ -1278,7 +1282,15 @@ class DatabaseSchedulerService:
                 video_url=video_url,
                 caption=caption,
             )
-        
+
+        if "bluesky" in effective_platforms:
+            print("🦋 Publishing to Bluesky...", flush=True)
+            results["bluesky"] = publisher.publish_bsky_post(
+                caption=caption,
+                media_url=video_url,
+                media_type="VIDEO",
+            )
+
         return results
     
     def _publish_to_youtube(

@@ -42,6 +42,7 @@ export interface Brand {
   colors: BrandColors
   logo_path?: string
   reel_divider_logo_path?: string
+  reel_divider_logo_text?: string
   reel_content_logo_path?: string
   active: boolean
   has_instagram: boolean

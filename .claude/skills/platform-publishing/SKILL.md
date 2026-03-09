@@ -15,7 +15,9 @@ description: Use when adding a social platform, fixing OAuth flow, debugging pub
 | `app/services/publishing/fb_token_service.py` | Facebook page tokens |
 | `app/services/publishing/threads_token_service.py` | Threads token (60-day) |
 | `app/services/publishing/tiktok_token_service.py` | TikTok PKCE (24h!) |
+| `app/services/publishing/bsky_token_service.py` | Bluesky AT Protocol sessions |
 | `app/api/auth/` | OAuth routes per platform |
+| `app/api/auth/bsky_auth_routes.py` | Bluesky App Password connect/disconnect |
 | `app/api/youtube/routes.py` | YouTube OAuth & channel management |
 
 ## Platform Publishing
@@ -27,6 +29,7 @@ description: Use when adding a social platform, fixing OAuth flow, debugging pub
 | Threads | Container → publish. Carousel: 2-10 items | 60 days (refreshable) |
 | TikTok | `PULL_FROM_URL`. Status polling | **24 hours** (refresh every publish!) |
 | YouTube | Download → upload via API. Quota: 10K units/day | Refresh indefinite |
+| Bluesky | AT Protocol `createRecord`. Upload via `uploadBlob` | accessJwt ~2h (auto-refresh), App Password permanent |
 
 ## OAuth Flow Pattern
 ```
@@ -36,6 +39,7 @@ description: Use when adding a social platform, fixing OAuth flow, debugging pub
 ```
 - Facebook: multi-page selector after callback if user has multiple Pages
 - TikTok: PKCE flow with code_verifier
+- Bluesky: NOT OAuth — uses App Password. POST /api/auth/bluesky/connect with handle + app_password. Frontend shows modal (not redirect).
 
 ## Scheduling
 - Reels: 6 slots/day (every 4h), alternating Light→Dark
@@ -61,3 +65,6 @@ When adding/removing a platform, update:
 4. Instagram rejects PNG carousels
 5. YouTube: `invalid_grant` (revocation) vs `rateLimitExceeded` (quota) are different
 6. OAuth state is single-use and DB-backed
+7. Bluesky: 300-grapheme text limit (not chars). Use `_truncate_to_graphemes()` for safe truncation
+8. Bluesky: accessJwt expires ~2h — always call `_ensure_bsky_session()` before publishing
+9. Bluesky video: upload to video.bsky.app, poll jobStatus, then embed in post (max 3min, 25/day)

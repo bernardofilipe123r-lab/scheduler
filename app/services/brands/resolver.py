@@ -201,6 +201,11 @@ class BrandResolver:
             tiktok_user_id=brand.tiktok_user_id,
             tiktok_username=brand.tiktok_username,
             tiktok_open_id=brand.tiktok_open_id,
+            bsky_handle=brand.bsky_handle,
+            bsky_did=brand.bsky_did,
+            bsky_app_password=brand.bsky_app_password,
+            bsky_access_jwt=brand.bsky_access_jwt,
+            bsky_refresh_jwt=brand.bsky_refresh_jwt,
         )
 
     # ── Convenience accessors ─────────────────────────────────

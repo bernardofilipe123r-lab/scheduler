@@ -73,11 +73,22 @@ class Brand(Base):
     tiktok_access_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     tiktok_refresh_token_expires_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Bluesky (AT Protocol) credentials
+    bsky_handle = Column(String(128), nullable=True)
+    bsky_did = Column(String(128), nullable=True)
+    bsky_app_password = Column(Text, nullable=True)
+    bsky_access_jwt = Column(Text, nullable=True)
+    bsky_refresh_jwt = Column(Text, nullable=True)
+    bsky_access_jwt_expires_at = Column(DateTime(timezone=True), nullable=True)
+
     # Logo path (relative to assets/logos/)
     logo_path = Column(String(255), nullable=True)
 
     # Per-brand logo for the divider line in video reel thumbnails
     reel_divider_logo_path = Column(String(255), nullable=True)
+
+    # Text abbreviation for the divider (e.g., 'HCO') — used instead of image when set
+    reel_divider_logo_text = Column(String(10), nullable=True)
 
     # Per-brand logo for the header of video reel content frames
     reel_content_logo_path = Column(String(255), nullable=True)
@@ -104,6 +115,7 @@ class Brand(Base):
             "colors": self.colors or {},
             "logo_path": self.logo_path,
             "reel_divider_logo_path": self.reel_divider_logo_path,
+            "reel_divider_logo_text": self.reel_divider_logo_text,
             "reel_content_logo_path": self.reel_content_logo_path,
             "active": self.active,
             "created_at": self.created_at.isoformat() if self.created_at else None,

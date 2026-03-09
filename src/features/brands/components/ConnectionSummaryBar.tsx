@@ -13,10 +13,11 @@ export function ConnectionSummaryBar({ data }: ConnectionSummaryBarProps) {
       (brand.facebook.connected ? 1 : 0) +
       (brand.youtube.connected ? 1 : 0) +
       (brand.threads?.connected ? 1 : 0) +
-      (brand.tiktok?.connected ? 1 : 0)
+      (brand.tiktok?.connected ? 1 : 0) +
+      (brand.bluesky?.connected ? 1 : 0)
     )
   }, 0)
-  const totalPossible = data.brands.length * 5
+  const totalPossible = data.brands.length * 6
 
   const platforms = [
     { key: 'instagram' as const, label: 'Instagram', bg: 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500', count: data.brands.filter((b) => b.instagram.connected).length },
@@ -24,6 +25,7 @@ export function ConnectionSummaryBar({ data }: ConnectionSummaryBarProps) {
     { key: 'youtube' as const, label: 'YouTube', bg: 'bg-red-500', count: data.brands.filter((b) => b.youtube.connected).length },
     { key: 'threads' as const, label: 'Threads', bg: 'bg-black', count: data.brands.filter((b) => b.threads?.connected).length },
     { key: 'tiktok' as const, label: 'TikTok', bg: 'bg-black', count: data.brands.filter((b) => b.tiktok?.connected).length },
+    { key: 'bluesky' as const, label: 'Bluesky', bg: 'bg-sky-500', count: data.brands.filter((b) => b.bluesky?.connected).length },
   ]
 
   return (

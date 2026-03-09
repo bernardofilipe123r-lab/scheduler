@@ -14,6 +14,7 @@ export const SUPPORTED_PLATFORMS = [
   'youtube',
   'threads',
   'tiktok',
+  'bluesky',
 ] as const
 
 /** Union type derived from the canonical list. */
@@ -32,6 +33,7 @@ export const PLATFORM_META: Record<
   youtube:   { label: 'YouTube',   emoji: '📺' },
   threads:   { label: 'Threads',   emoji: '🧵' },
   tiktok:    { label: 'TikTok',    emoji: '🎵' },
+  bluesky:   { label: 'Bluesky',  emoji: '🦋' },
 }
 
 /** Type guard: is a string a valid Platform? */

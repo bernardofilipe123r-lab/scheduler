@@ -14,6 +14,7 @@ const PLATFORM_COLORS: Record<Platform, string> = {
   youtube: '#FF0000',
   threads: '#000000',
   tiktok: '#000000',
+  bluesky: '#0085FF',
 }
 
 /** Deep-equal compare two EnabledPlatformsConfig values. */

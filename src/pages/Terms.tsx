@@ -30,7 +30,7 @@ export function TermsPage() {
           <p>
             {APP_NAME} is a social media content scheduling and publishing platform. We help users
             create, schedule, and publish short-form video content (Reels, Shorts) to Instagram,
-            Facebook, YouTube, Threads, and TikTok through their respective APIs.
+            Facebook, YouTube, Threads, TikTok, and Bluesky through their respective APIs.
           </p>
         </Section>
 
@@ -67,7 +67,7 @@ export function TermsPage() {
               Use the service in a way that could damage, disable, or impair our infrastructure.
             </li>
             <li>
-              Violate any platform-specific terms of Instagram, Facebook, YouTube, Threads, or TikTok when publishing
+              Violate any platform-specific terms of Instagram, Facebook, YouTube, Threads, TikTok, or Bluesky when publishing
               through {APP_NAME}.
             </li>
           </ul>
@@ -95,7 +95,7 @@ export function TermsPage() {
         <Section icon={<Shield className="h-5 w-5" />} title="5. Third-Party Platforms">
           <p className="mb-3">
             {APP_NAME} integrates with third-party platforms including Meta (Instagram, Facebook, Threads),
-            Google (YouTube), and TikTok. By connecting these accounts:
+            Google (YouTube), TikTok, and Bluesky. By connecting these accounts:
           </p>
           <ul className="list-disc pl-6 space-y-1.5">
             <li>

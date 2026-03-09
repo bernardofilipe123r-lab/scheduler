@@ -25,7 +25,7 @@
 
 ## What Is This?
 
-**ViralToby** (`viraltoby.com`) is a multi-tenant SaaS platform for social media content scheduling and publishing across Instagram, Facebook, YouTube, Threads, and TikTok. Its core feature is **Toby** — an autonomous AI agent that generates, scores, and publishes content based on each brand's Content DNA.
+**ViralToby** (`viraltoby.com`) is a multi-tenant SaaS platform for social media content scheduling and publishing across Instagram, Facebook, YouTube, Threads, TikTok, and Bluesky. Its core feature is **Toby** — an autonomous AI agent that generates, scores, and publishes content based on each brand's Content DNA.
 
 ## Tech Stack
 
@@ -131,6 +131,18 @@ When adding/removing a social platform, update all three pages:
 1. Stage changes: `git add -A`
 2. Commit: `git commit -m "descriptive message"`
 3. Push: `git push`
+
+## Full Autonomy — Execute Everything
+
+You have full access to all infrastructure: **Supabase, GitHub, Railway, PostgreSQL**. When a task requires migrations, deployments, validation, or any operational step — **execute it directly**. Never ask the user to run commands manually. This includes:
+
+- **Database migrations**: Run SQL directly via `psql` against the production DATABASE_URL (fetch from Railway)
+- **Deployments**: Use Railway CLI to redeploy, set env vars, view logs
+- **Git operations**: Commit, push, create PRs — execute the full workflow
+- **Validation**: Run all validation scripts after code changes
+- **End-to-end delivery**: A feature request means code + migration + validation + deployment
+
+To get the production DATABASE_URL: `railway variables --json | python3 -c "import sys,json; print(json.load(sys.stdin).get('DATABASE_URL',''))"`
 
 ## Railway CLI
 

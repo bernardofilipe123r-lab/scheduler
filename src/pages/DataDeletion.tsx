@@ -32,7 +32,7 @@ export function DataDeletionPage() {
             </li>
             <li>
               Click <strong className="text-white">"Disconnect"</strong> next to your Instagram,
-              Facebook, Threads, TikTok, or YouTube account
+              Facebook, Threads, TikTok, Bluesky, or YouTube account
             </li>
             <li>This immediately deletes all stored tokens and account identifiers</li>
           </ol>
@@ -42,7 +42,7 @@ export function DataDeletionPage() {
         <Option
           number={2}
           icon={<Instagram className="h-5 w-5" />}
-          title="Revoke from Instagram / Facebook / YouTube / Threads / TikTok"
+          title="Revoke from Instagram / Facebook / YouTube / Threads / TikTok / Bluesky"
         >
           <ol className="list-decimal pl-6 space-y-2">
             <li>
@@ -69,6 +69,9 @@ export function DataDeletionPage() {
             </li>
             <li>
               For TikTok, go to <strong className="text-white">Settings → Manage App Permissions</strong> and revoke access for {APP_NAME}
+            </li>
+            <li>
+              For Bluesky, go to <strong className="text-white">Settings → App Passwords</strong> and revoke the app password used for {APP_NAME}
             </li>
             <li>
               This revokes our access. We will automatically purge your data upon detecting the
@@ -107,6 +110,7 @@ export function DataDeletionPage() {
             <li>YouTube channel ID, access tokens, and refresh tokens</li>
             <li>Threads user ID and access tokens</li>
             <li>TikTok open ID, access tokens, and refresh tokens</li>
+            <li>Bluesky DID, app passwords, and session tokens</li>
             <li>Any scheduled or generated content associated with your account</li>
           </ul>
           <p className="mt-4 text-gray-400 text-sm">

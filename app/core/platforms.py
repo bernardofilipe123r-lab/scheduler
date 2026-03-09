@@ -27,6 +27,7 @@ SUPPORTED_PLATFORMS: tuple[str, ...] = (
     "youtube",
     "threads",
     "tiktok",
+    "bluesky",
 )
 
 SUPPORTED_PLATFORMS_SET: frozenset[str] = frozenset(SUPPORTED_PLATFORMS)
@@ -37,6 +38,7 @@ PLATFORM_DISPLAY_NAMES: dict[str, str] = {
     "youtube": "YouTube",
     "threads": "Threads",
     "tiktok": "TikTok",
+    "bluesky": "Bluesky",
 }
 
 # Default platforms used as fallback for legacy jobs created before
@@ -102,6 +104,12 @@ def _has_threads(brand: Any) -> bool:
 def _has_tiktok(brand: Any) -> bool:
     return bool(getattr(brand, "tiktok_refresh_token", None))
 
+def _has_bluesky(brand: Any) -> bool:
+    return bool(
+        getattr(brand, "bsky_did", None)
+        and getattr(brand, "bsky_app_password", None)
+    )
+
 
 # Registry: platform → credential check function.
 # YouTube is omitted because it requires a DB query on a separate table.
@@ -110,6 +118,7 @@ PLATFORM_CREDENTIAL_CHECKS: dict[str, Any] = {
     "facebook": _has_facebook,
     "threads": _has_threads,
     "tiktok": _has_tiktok,
+    "bluesky": _has_bluesky,
     # "youtube" intentionally omitted — uses YouTubeChannel table
 }
 
@@ -121,6 +130,7 @@ PLATFORM_HANDLE_ATTRS: dict[str, str] = {
     "youtube": "channel_name",      # lives on YouTubeChannel model, not Brand
     "threads": "threads_username",
     "tiktok": "tiktok_username",
+    "bluesky": "bsky_handle",
 }
 
 

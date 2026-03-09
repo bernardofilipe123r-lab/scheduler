@@ -23,7 +23,7 @@ export function PrivacyPolicyPage() {
           </a>
           ), operated by <strong className="text-white">{COMPANY_NAME}</strong> ("we", "our", "the
           app"), is a social media scheduling tool that helps users create and publish content to
-          Instagram, Facebook, YouTube, Threads, and TikTok.
+          Instagram, Facebook, YouTube, Threads, TikTok, and Bluesky.
         </p>
 
         {/* 1 */}
@@ -85,6 +85,21 @@ export function PrivacyPolicyPage() {
               <strong className="text-white">Basic profile info</strong> — your TikTok display name, used for display purposes only.
             </li>
           </ul>
+          <p className="font-semibold text-white mt-4 mb-2">Bluesky</p>
+          <ul className="list-disc pl-6 space-y-1.5">
+            <li>
+              <strong className="text-white">Account identifiers</strong> — your Bluesky DID (decentralized
+              identifier).
+            </li>
+            <li>
+              <strong className="text-white">App Password</strong> — stored to create sessions and publish
+              on your behalf.
+            </li>
+            <li>
+              <strong className="text-white">Basic profile info</strong> — your Bluesky handle, used for
+              display purposes only.
+            </li>
+          </ul>
           <p className="mt-3">
             We also collect your <strong className="text-white">email address</strong> when you sign
             up, used solely for authentication and account recovery.
@@ -96,7 +111,7 @@ export function PrivacyPolicyPage() {
           <ul className="list-disc pl-6 space-y-1.5">
             <li>
               <strong className="text-white">Publishing content</strong> — to schedule and publish
-              Reels, posts, carousels, YouTube Shorts, Threads posts, and TikTok videos to your connected accounts.
+              Reels, posts, carousels, YouTube Shorts, Threads posts, TikTok videos, and Bluesky posts to your connected accounts.
             </li>
             <li>
               <strong className="text-white">Analytics</strong> — to fetch and display insights about
@@ -137,7 +152,7 @@ export function PrivacyPolicyPage() {
           <ul className="list-disc pl-6 space-y-1.5">
             <li>
               <strong className="text-white">Disconnect</strong> your Instagram, Facebook, YouTube,
-              Threads, or TikTok account from the app settings, which deletes all stored tokens.
+              Threads, TikTok, or Bluesky account from the app settings, which deletes all stored tokens.
             </li>
             <li>
               <strong className="text-white">Request deletion</strong> of all your data by contacting
@@ -162,7 +177,7 @@ export function PrivacyPolicyPage() {
               >
                 myaccount.google.com/permissions
               </a>
-              ), Threads (Settings → Apps), or TikTok (Settings → Manage App Permissions).
+              ), Threads (Settings → Apps), TikTok (Settings → Manage App Permissions), or Bluesky (Settings → App Passwords).
             </li>
           </ul>
         </Section>
@@ -199,6 +214,10 @@ export function PrivacyPolicyPage() {
             <li>
               <strong className="text-white">TikTok</strong> (TikTok Content Posting API) — for
               publishing TikTok videos.
+            </li>
+            <li>
+              <strong className="text-white">Bluesky</strong> (AT Protocol API) — for publishing posts to
+              Bluesky.
             </li>
             <li>
               <strong className="text-white">Supabase</strong> — for authentication and database
