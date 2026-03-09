@@ -216,8 +216,12 @@ export function WelcomePage() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const heroWords = ['Grow', 'Go Viral', 'Get Reach', 'Scale', 'Dominate', 'Thrive']
+  const [heroWordIdx, setHeroWordIdx] = useState(0)
+
   useEffect(() => { const fn = () => setScrolled(window.scrollY > 10); window.addEventListener('scroll', fn, { passive: true }); return () => window.removeEventListener('scroll', fn) }, [])
   useEffect(() => { document.documentElement.style.backgroundColor = '#ffffff'; document.body.style.background = '#ffffff'; return () => { document.documentElement.style.backgroundColor = ''; document.body.style.background = '' } }, [])
+  useEffect(() => { const id = setInterval(() => setHeroWordIdx(i => (i + 1) % heroWords.length), 2500); return () => clearInterval(id) }, [])
 
   const scrollTo = useCallback((id: string) => { setMobileOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }) }, [])
   const ctaLink = isAuthenticated ? '/' : '/login'
@@ -279,9 +283,20 @@ export function WelcomePage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }} className="w-full">
 
             <h1 className="text-[40px] sm:text-[56px] md:text-[64px] lg:text-[76px] font-extrabold tracking-[-0.04em] text-gray-900 leading-[1.08]">
-              <span className="relative inline-block">
+              <span className="relative inline-block" style={{ minWidth: '3ch' }}>
                 <span className="absolute inset-0 bg-blue-500/10 blur-2xl rounded-full scale-150 pointer-events-none" />
-                <span className="relative inline-block bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 bg-clip-text text-transparent">Grow</span>
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={heroWords[heroWordIdx]}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative inline-block bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 bg-clip-text text-transparent"
+                  >
+                    {heroWords[heroWordIdx]}
+                  </motion.span>
+                </AnimatePresence>
                 <span className="absolute -bottom-1 sm:-bottom-2 left-0 right-0 h-1 sm:h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 rounded-full" />
               </span>{' '}
               <span className="text-gray-900">on Autopilot</span>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Check,
   X,
@@ -86,6 +86,19 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
   const [expanded, setExpanded] = useState(false)
   const disconnectYouTube = useDisconnectYouTube()
 
+  // Auto-refresh connections when user returns from OAuth tab
+  const oauthOpenedRef = useRef(false)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && oauthOpenedRef.current) {
+        oauthOpenedRef.current = false
+        onRefresh()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [onRefresh])
+
   // Schedule editing state
   const [editingSchedule, setEditingSchedule] = useState(false)
   const [editOffset, setEditOffset] = useState(schedule?.offset ?? 0)
@@ -128,7 +141,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
       } else {
         return
       }
-      window.location.href = authUrl
+      oauthOpenedRef.current = true
+      window.open(authUrl, '_blank')
     } catch (error: any) {
       if (platform === 'threads' || platform === 'tiktok') {
         const msg = error?.status === 503
@@ -144,9 +158,11 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
     setConnectingYouTube(true)
     try {
       const authUrl = await connectYouTube(brand.brand as BrandName)
-      window.location.href = authUrl
+      oauthOpenedRef.current = true
+      window.open(authUrl, '_blank')
     } catch (error) {
       console.error('Failed to start YouTube connection:', error)
+    } finally {
       setConnectingYouTube(false)
     }
   }
