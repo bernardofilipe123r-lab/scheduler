@@ -35,6 +35,7 @@ html {
 
 /* CSS Variables - Matching Original Design */
 :root {
+  color-scheme: light;
   /* Brand colors */
   --primary: #00435c;
   --primary-light: #006d8f;
@@ -206,6 +207,7 @@ body {
 @layer base {
   .input-textarea,
   input:not([type="checkbox"]):not([type="radio"]),
+  select,
   textarea {
     border: 1px solid var(--gray-300);
     border-radius: var(--radius);
@@ -218,12 +220,14 @@ body {
 
   .input-textarea:hover,
   input:not([type="checkbox"]):not([type="radio"]):hover,
+  select:hover,
   textarea:hover {
     border-color: var(--gray-400);
   }
 
   .input-textarea:focus,
   input:not([type="checkbox"]):not([type="radio"]):focus,
+  select:focus,
   textarea:focus {
     outline: none;
     border-color: var(--primary);

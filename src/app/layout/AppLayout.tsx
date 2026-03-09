@@ -187,7 +187,17 @@ const SETTINGS_ITEMS = [
 ]
 
 export function AppLayout() {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(() => {
+    const saved = localStorage.getItem('sidebar-expanded')
+    return saved !== null ? saved === 'true' : true
+  })
+  const toggleExpanded = () => {
+    setExpanded(prev => {
+      const next = !prev
+      localStorage.setItem('sidebar-expanded', String(next))
+      return next
+    })
+  }
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
@@ -325,7 +335,7 @@ export function AppLayout() {
         {/* Bottom: Expand toggle + User */}
         <div className="p-2 flex flex-col gap-1">
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={toggleExpanded}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-stone-500 hover:bg-white/[0.07] hover:text-stone-200 transition-colors w-full"
           >
             {expanded ? <ChevronLeft className="w-5 h-5 shrink-0" /> : <ChevronRight className="w-5 h-5 shrink-0" />}

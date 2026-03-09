@@ -198,6 +198,12 @@ def tiktok_callback(
         brand.tiktok_open_id = open_id
         brand.tiktok_access_token_expires_at = now + timedelta(seconds=expires_in)
         brand.tiktok_refresh_token_expires_at = now + timedelta(seconds=refresh_expires_in)
+
+        # Store avatar as default brand image if none set
+        avatar_url = user_info.get("avatar_url")
+        if avatar_url and not brand.profile_image_url:
+            brand.profile_image_url = avatar_url
+
         db.commit()
 
         logger.info(

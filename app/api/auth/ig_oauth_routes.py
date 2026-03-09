@@ -186,6 +186,11 @@ def instagram_callback(
         brand.instagram_token_expires_at = now + timedelta(seconds=expires_in)
         brand.instagram_token_last_refreshed_at = now
 
+        # Store profile picture as default brand image if none set
+        profile_picture = profile.get("profile_picture_url")
+        if profile_picture and not brand.profile_image_url:
+            brand.profile_image_url = profile_picture
+
         db.commit()
 
         logger.info(

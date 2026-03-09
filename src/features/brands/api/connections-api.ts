@@ -26,6 +26,7 @@ export interface BrandConnectionStatus {
   brand: BrandName
   display_name: string
   color: string
+  profile_image_url?: string
   instagram: PlatformConnection
   facebook: PlatformConnection
   youtube: PlatformConnection

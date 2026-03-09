@@ -250,7 +250,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
   const update = <K extends keyof NicheConfig>(key: K, value: NicheConfig[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }))
-    suppressAutoSave.current = false
     setDirty(true)
   }
 
@@ -293,27 +292,9 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
     }
   }, [values.content_brief, values.topic_categories, values.topic_keywords, values.target_audience])
 
-  // Auto-save: debounce 1.5s after any change
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Keep a ref to latest values for flushSave (used by onboarding saveNow)
   const valuesRef = useRef(values)
   valuesRef.current = values
-  // When true, auto-save is suppressed so the user must review & click Save
-  const suppressAutoSave = useRef(false)
-
-  useEffect(() => {
-    if (!dirty) return
-    if (suppressAutoSave.current) return
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-    autoSaveTimer.current = setTimeout(() => {
-      updateMutation.mutateAsync({ ...valuesRef.current }).then(() => {
-        setDirty(false)
-      }).catch(() => {
-        // silent — user can still manually save
-      })
-    }, 1500)
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, values])
 
   const generalFilled = Boolean(values.niche_name?.trim() && values.content_brief?.trim())
 
@@ -349,8 +330,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
     }
     try {
       const result = await importIgMutation.mutateAsync({ brand_id: igBrand.id })
-      // Suppress auto-save — user must review imported data and click Save
-      suppressAutoSave.current = true
       if (result.niche_name || result.content_brief) {
         setValues(prev => ({
           ...prev,
@@ -377,7 +356,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
   const handleSave = async () => {
     try {
-      suppressAutoSave.current = false
       await updateMutation.mutateAsync({ ...values })
       toast.success('Content DNA saved')
       setDirty(false)
@@ -386,10 +364,8 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
     }
   }
 
-  // Flush any pending auto-save immediately (used before AI generation and on step advance)
+  // Save immediately (used before AI generation and by onboarding saveNow)
   const flushSave = useCallback(async () => {
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-    suppressAutoSave.current = false
     if (dirty) {
       await updateMutation.mutateAsync({ ...valuesRef.current })
       setDirty(false)

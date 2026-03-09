@@ -292,6 +292,7 @@ async def get_brand_connections(db: Session = Depends(get_db), user: dict = Depe
             "brand": brand_id,
             "display_name": brand["display_name"],
             "color": brand["colors"].get("primary", "#000000"),
+            "profile_image_url": _brand_orm.profile_image_url if _brand_orm else None,
             "instagram": instagram,
             "facebook": facebook,
             "youtube": youtube,

@@ -620,6 +620,8 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
           >
             {brandLogo ? (
               <img src={brandLogo} alt={brand.display_name} className="w-full h-full object-contain" />
+            ) : brand.profile_image_url ? (
+              <img src={brand.profile_image_url} alt={brand.display_name} className="w-full h-full object-cover" />
             ) : (
               <span className="text-white font-bold text-sm">{brand.display_name.charAt(0)}</span>
             )}

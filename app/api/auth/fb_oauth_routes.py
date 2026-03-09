@@ -182,6 +182,12 @@ def facebook_callback(
             brand.facebook_page_id = page["id"]
             brand.facebook_access_token = page["access_token"]
             brand.facebook_page_name = page.get("name", "")
+
+            # Store page picture as default brand image if none set
+            page_picture = (page.get("picture", {}).get("data", {}).get("url") if isinstance(page.get("picture"), dict) else None)
+            if page_picture and not brand.profile_image_url:
+                brand.profile_image_url = page_picture
+
             db.commit()
 
             logger.info(
@@ -336,6 +342,12 @@ def facebook_select_page(
         brand.facebook_page_id = selected["id"]
         brand.facebook_access_token = selected["access_token"]
         brand.facebook_page_name = selected.get("name", "")
+
+        # Store page picture as default brand image if none set
+        page_picture = (selected.get("picture", {}).get("data", {}).get("url") if isinstance(selected.get("picture"), dict) else None)
+        if page_picture and not brand.profile_image_url:
+            brand.profile_image_url = page_picture
+
         db.commit()
 
         logger.info(

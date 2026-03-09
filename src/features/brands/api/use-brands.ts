@@ -40,6 +40,7 @@ export interface Brand {
   posts_per_day: number
   baseline_for_content: boolean
   colors: BrandColors
+  profile_image_url?: string
   logo_path?: string
   reel_divider_logo_path?: string
   reel_divider_logo_text?: string

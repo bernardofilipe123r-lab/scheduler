@@ -243,10 +243,14 @@ export function HomePage() {
     const logo = getBrandLogo(brandId)
     const color = getBrandColor(brandId)
     const initials = getBrandInitials(brandId)
+    const profileImage = dynamicBrands.find(b => b.id === brandId)?.profile_image_url
     const sizeClasses = size === 'sm' ? 'w-5 h-5 text-[8px]' : 'w-8 h-8 text-xs'
     const roundClasses = size === 'sm' ? 'rounded' : 'rounded-lg'
     if (logo) {
       return <img src={logo} alt={getBrandName(brandId)} className={`${sizeClasses} ${roundClasses} object-cover shrink-0`} />
+    }
+    if (profileImage) {
+      return <img src={profileImage} alt={getBrandName(brandId)} className={`${sizeClasses} ${roundClasses} object-cover shrink-0`} />
     }
     return (
       <div

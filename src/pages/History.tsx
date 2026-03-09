@@ -20,7 +20,7 @@ import { format } from 'date-fns'
 import { useJobs, useDeleteJob, useRegenerateJob, useDeleteJobsByStatus, useDeleteJobsByIds, useUpdateBrandStatus } from '@/features/jobs'
 import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge } from '@/features/brands'
-import { StatusBadge, JobsSkeleton, Modal } from '@/shared/components'
+import { StatusBadge, JobsSkeleton, Modal, PlatformIcon } from '@/shared/components'
 import type { Job, Variant, BrandName } from '@/shared/types'
 
 type ViewFilter = 'all' | 'to-schedule' | 'published' | 'scheduled' | 'in-progress' | 'other'
@@ -43,6 +43,7 @@ export function HistoryPage() {
   const [variantFilter, setVariantFilter] = useState<Variant | 'all'>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'reels' | 'posts'>('all')
   const [creatorFilter, setCreatorFilter] = useState<'all' | 'user' | 'toby'>('all')
+  const [platformFilter, setPlatformFilter] = useState<string>('all')
   
   // Visual-only hidden job IDs (not persisted, not DB deletes)
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
@@ -160,9 +161,15 @@ export function HistoryPage() {
         if (creator !== creatorFilter) return false
       }
       
+      // Platform filter
+      if (platformFilter !== 'all') {
+        const jobPlatforms = job.platforms || []
+        if (!jobPlatforms.includes(platformFilter)) return false
+      }
+      
       return true
     })
-  }, [jobsArray, categorizedJobs, viewFilter, searchQuery, variantFilter, contentTypeFilter, creatorFilter])
+  }, [jobsArray, categorizedJobs, viewFilter, searchQuery, variantFilter, contentTypeFilter, creatorFilter, platformFilter])
   
   // Calculate job progress
   const getProgress = (job: Job) => {
@@ -481,7 +488,7 @@ export function HistoryPage() {
             <select
               value={variantFilter}
               onChange={(e) => setVariantFilter(e.target.value as Variant | 'all')}
-              className="input w-auto"
+              className="input w-auto bg-white text-gray-700"
             >
               <option value="all">All Modes</option>
               <option value="light">Light Mode</option>
@@ -508,6 +515,36 @@ export function HistoryPage() {
                 )}
               >
                 {opt.icon} {opt.label}
+              </button>
+            ))}
+          </div>
+          
+          {/* Platform Filter */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setPlatformFilter('all')}
+              className={clsx(
+                'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                platformFilter === 'all'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              All Platforms
+            </button>
+            {['instagram', 'facebook', 'youtube', 'tiktok', 'threads', 'bluesky'].map(p => (
+              <button
+                key={p}
+                onClick={() => setPlatformFilter(platformFilter === p ? 'all' : p)}
+                className={clsx(
+                  'p-1.5 rounded-md transition-all',
+                  platformFilter === p
+                    ? 'bg-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                )}
+                title={p.charAt(0).toUpperCase() + p.slice(1)}
+              >
+                <PlatformIcon platform={p} className="w-4 h-4" />
               </button>
             ))}
           </div>

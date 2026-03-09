@@ -17,6 +17,7 @@ export interface DynamicBrandInfo {
   instagram_handle?: string
   has_instagram?: boolean
   has_facebook?: boolean
+  profile_image_url?: string
   logo_path?: string
   /** Per-brand logo for the divider line in video reel thumbnails */
   reel_divider_logo_path?: string
@@ -53,6 +54,7 @@ export function useDynamicBrands() {
           instagram_handle: b.instagram_handle,
           has_instagram: b.has_instagram,
           has_facebook: b.has_facebook,
+          profile_image_url: b.profile_image_url,
           logo_path: b.logo_path,
           reel_divider_logo_path: b.reel_divider_logo_path,
           reel_divider_logo_text: b.reel_divider_logo_text,

@@ -81,6 +81,9 @@ class Brand(Base):
     bsky_refresh_jwt = Column(Text, nullable=True)
     bsky_access_jwt_expires_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Profile image URL (from first connected social platform)
+    profile_image_url = Column(Text, nullable=True)
+
     # Logo path (relative to assets/logos/)
     logo_path = Column(String(255), nullable=True)
 
@@ -113,6 +116,7 @@ class Brand(Base):
             "posts_per_day": self.posts_per_day,
             "baseline_for_content": self.baseline_for_content,
             "colors": self.colors or {},
+            "profile_image_url": self.profile_image_url,
             "logo_path": self.logo_path,
             "reel_divider_logo_path": self.reel_divider_logo_path,
             "reel_divider_logo_text": self.reel_divider_logo_text,
