@@ -49,7 +49,7 @@ class TextVideoDesign(Base):
     thumbnail_title_font = Column(String(100), default="Anton-Regular.ttf")
     thumbnail_title_size = Column(Integer, default=120)
     thumbnail_title_max_lines = Column(Integer, default=4)
-    thumbnail_title_padding_x = Column(Integer, default=150)
+    thumbnail_title_padding_x = Column(Integer, default=220)
     thumbnail_image_ratio = Column(Float, default=0.6)
     thumbnail_divider_style = Column(String(30), default="line_with_logo")
     thumbnail_divider_thickness = Column(Integer, default=4)

@@ -26,7 +26,7 @@ DEFAULTS = {
     "thumbnail_title_font": "Anton",
     "thumbnail_title_size": 120,
     "thumbnail_title_max_lines": 4,
-    "thumbnail_title_padding_x": 150,
+    "thumbnail_title_padding_x": 220,
     "thumbnail_divider_style": "line_with_logo",
     "thumbnail_divider_thickness": 4,
     "thumbnail_overlay_opacity": 90,
@@ -44,7 +44,7 @@ FONT_MAP = {
     "Roboto Condensed": "Inter/static/Inter_18pt-Bold.ttf",
 }
 
-SIDE_PADDING = 40     # px from left/right edges for title text
+SIDE_PADDING = 55     # px from left/right edges for title text
 LINE_LOGO_GAP = 20    # px between divider line end and logo
 DIVIDER_TITLE_GAP = 24  # px between divider and title top
 
@@ -105,6 +105,7 @@ class ThumbnailCompositor:
                 # Solid from 65% to 100%
                 t = (frac - 0.65) / 0.35
                 alpha = int(255 * overlay_alpha * (0.3 + 0.7 * t))
+            alpha = min(alpha, 255)  # clamp for >100% intensity
             # Draw full row at once (much faster than putpixel)
             gradient.paste(Image.new("RGBA", (W, 1), (0, 0, 0, alpha)), (0, y))
         canvas = Image.alpha_composite(canvas.convert("RGBA"), gradient).convert("RGB")
@@ -229,26 +230,26 @@ class ThumbnailCompositor:
         wrap_width = int(max_width * 0.98)
 
         # First pass: try to fit in 2 lines
-        for size in range(300, 59, -2):
+        for size in range(300, 19, -2):
             font = self._load_font(font_name, size)
             lines = self._greedy_wrap(draw, title, font, wrap_width)
             if len(lines) <= 2:
-                final = max(60, size - 2)
+                final = max(20, size - 2)
                 final_font = self._load_font(font_name, final)
                 return self._greedy_wrap(draw, title, final_font, wrap_width), final
 
         # Second pass: text too long for 2 lines, try 3
-        for size in range(300, 59, -2):
+        for size in range(300, 19, -2):
             font = self._load_font(font_name, size)
             lines = self._greedy_wrap(draw, title, font, wrap_width)
             if len(lines) <= 3:
-                final = max(60, size - 2)
+                final = max(20, size - 2)
                 final_font = self._load_font(font_name, final)
                 return self._greedy_wrap(draw, title, final_font, wrap_width), final
 
         # Fallback: 4 lines at minimum size
-        font = self._load_font(font_name, 60)
-        return self._greedy_wrap(draw, title, font, wrap_width), 60
+        font = self._load_font(font_name, 20)
+        return self._greedy_wrap(draw, title, font, wrap_width), 20
 
     def _greedy_wrap(
         self, draw: ImageDraw.ImageDraw, text: str,

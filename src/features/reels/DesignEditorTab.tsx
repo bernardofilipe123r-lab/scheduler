@@ -185,32 +185,32 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
     }
 
     // First pass: find largest font that fits in 2 lines, then shave 2px
-    for (let size = 300; size >= 60; size--) {
+    for (let size = 300; size >= 20; size--) {
       const lines = greedySplit(size)
       if (lines.length <= 2) {
-        const final = Math.max(60, size - 2)
+        const final = Math.max(20, size - 2)
         return { lines: greedySplit(final), fontSize: final }
       }
     }
 
     // Second pass: text too long for 2 lines, try 3
-    for (let size = 300; size >= 60; size--) {
+    for (let size = 300; size >= 20; size--) {
       const lines = greedySplit(size)
       if (lines.length <= 3) {
-        const final = Math.max(60, size - 2)
+        const final = Math.max(20, size - 2)
         return { lines: greedySplit(final), fontSize: final }
       }
     }
 
     // Fallback
-    return { lines: [title], fontSize: 60 }
+    return { lines: [title], fontSize: 20 }
   }, [title, _maxFontSize, font, containerWidthPx, fontReady])
 }
 
 function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const titleColor = form.thumbnail_title_color || '#FFD700'
   const titleSize = form.thumbnail_title_size ?? 120
-  const titlePadding = form.thumbnail_title_padding ?? 150
+  const titlePadding = form.thumbnail_title_padding ?? 220
   const dividerStyle = form.thumbnail_divider_style || 'line_with_logo'
   const overlayOpacity = (form.thumbnail_overlay_opacity ?? 90) / 100
   const titleFont = form.thumbnail_title_font || 'Anton'
@@ -224,7 +224,7 @@ function ThumbnailPreview({ form }: { form: Partial<DesignSettings> }) {
   const lineThickness = Math.max(dividerThickness * s, 1)
   const lineLogoGap = 20 * s
   const dividerTitleGap = 24 * s
-  const sidePadding = 40 // real px
+  const sidePadding = 55 // real px
   const titleAreaWidth = CANVAS_W - sidePadding * 2
 
   const { lines: titleLines, fontSize: autoFontSize } = useAutoTitleLines(
@@ -644,7 +644,7 @@ function ThumbnailSettings({ form, update }: {
             {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
-        <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 150} min={10} max={400} onChange={v => update('thumbnail_title_padding', v)} />
+        <SliderRow label="Title Padding" value={form.thumbnail_title_padding ?? 220} min={10} max={400} onChange={v => update('thumbnail_title_padding', v)} />
       </section>
 
       <section className="space-y-2">
@@ -654,7 +654,7 @@ function ThumbnailSettings({ form, update }: {
 
       <section className="space-y-2">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Overlay</h4>
-        <SliderRow label="Dark Intensity" value={form.thumbnail_overlay_opacity ?? 90} min={60} max={100} unit="%" onChange={v => update('thumbnail_overlay_opacity', v)} />
+        <SliderRow label="Dark Intensity" value={form.thumbnail_overlay_opacity ?? 90} min={80} max={120} unit="%" onChange={v => update('thumbnail_overlay_opacity', v)} />
       </section>
 
       <section className="space-y-2">
