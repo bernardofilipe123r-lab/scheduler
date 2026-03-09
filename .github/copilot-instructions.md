@@ -166,6 +166,13 @@ Before writing any code, check if an existing skill matches the user's request. 
 - `/self-maintenance` — Periodic codebase health audit
 - `/docs-sync` — Self-healing documentation pipeline (this mechanism)
 - `/skill-builder` — Create or audit skills
+- `/analytics-metrics` — Metrics collection, Toby Score, TrendScout, dashboards
+- `/billing-stripe` — Stripe billing, subscriptions, soft-lock lifecycle
+- `/content-pipeline` — Content generation, quality scoring, dedup, Content DNA
+- `/frontend-patterns` — React hooks, routing, React Query, dynamic brands
+- `/media-rendering` — Image/video rendering, carousel, caption, fonts
+- `/platform-publishing` — OAuth, multi-platform publishing, token lifecycle
+- `/toby-agent` — Orchestrator tick loop, agents, memory, Thompson Sampling
 
 ### Phase 2: Documentation Drift Check (END of every prompt that changes code)
 

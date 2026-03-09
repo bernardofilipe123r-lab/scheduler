@@ -122,7 +122,15 @@ Railway CLI is installed and authenticated. **Execute commands directly — neve
 - `/database-migrations` — Migration-first schema change workflow
 - `/api-validation` — Run validation scripts after code changes
 - `/self-maintenance` — Periodic codebase health audit
+- `/docs-sync` — Self-healing documentation pipeline
 - `/skill-builder` — Create or audit Claude Code skills
+- `/analytics-metrics` — Metrics collection, Toby Score, TrendScout, dashboards
+- `/billing-stripe` — Stripe billing, subscriptions, soft-lock lifecycle
+- `/content-pipeline` — Content generation, quality scoring, dedup, Content DNA
+- `/frontend-patterns` — React hooks, routing, React Query, dynamic brands
+- `/media-rendering` — Image/video rendering, carousel, caption, fonts
+- `/platform-publishing` — OAuth, multi-platform publishing, token lifecycle
+- `/toby-agent` — Orchestrator tick loop, agents, memory, Thompson Sampling
 
 ## Scoped Rules (auto-loaded by file path)
 
