@@ -6,8 +6,13 @@ FROM node:20-slim AS frontend-build
 WORKDIR /app
 
 # Copy package manifests first for npm cache layer
+# Temporarily remove canvas (needs native libs only in runtime stage)
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN node -e " \
+  const pkg = require('./package.json'); \
+  delete pkg.dependencies['canvas']; \
+  require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));" \
+  && npm ci --legacy-peer-deps
 
 # Copy frontend source + config
 COPY public/ public/

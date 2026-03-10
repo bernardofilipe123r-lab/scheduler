@@ -103,33 +103,6 @@ function MiniAreaChart({ data, color = '#3B82F6', height = 80 }: { data: number[
   )
 }
 
-/* ═══ Reel mockup — looks like a real rendered reel ═══ */
-function ReelMockup({ title, subtitle, brandInitials, brandColor, style = 'dark' }: {
-  title: string; subtitle?: string; brandInitials: string; brandColor: string; style?: 'dark' | 'gradient' | 'cinematic'
-}) {
-  const bg = style === 'dark'
-    ? 'from-gray-900 via-gray-800 to-gray-900'
-    : style === 'gradient'
-      ? 'from-violet-900 via-indigo-900 to-blue-900'
-      : 'from-stone-900 via-neutral-800 to-stone-900'
-  return (
-    <div className={`aspect-[9/16] rounded-xl bg-gradient-to-b ${bg} flex flex-col justify-between p-3 relative overflow-hidden shadow-lg`}>
-      {/* Subtle overlay gradient */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
-      {/* Brand badge top */}
-      <div className="relative z-10 flex items-center gap-1.5">
-        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: brandColor }}>{brandInitials}</div>
-        <div className="h-[1px] flex-1 bg-white/20" />
-      </div>
-      {/* Title bottom */}
-      <div className="relative z-10">
-        <h4 className="text-[10px] sm:text-[11px] font-extrabold text-white leading-tight whitespace-pre-line">{title}</h4>
-        {subtitle && <p className="text-[7px] text-white/60 mt-1">{subtitle}</p>}
-      </div>
-    </div>
-  )
-}
-
 /* ═══ Carousel slide mockup ═══ */
 function CarouselSlideMockup({ title, body, brandName, isTitle = false, brandColor }: {
   title: string; body?: string; brandName: string; isTitle?: boolean; brandColor: string
@@ -359,16 +332,19 @@ export function WelcomePage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.8 }}
-              className="mt-6 sm:mt-8 text-[16px] sm:text-[19px] md:text-[21px] text-gray-500 leading-relaxed max-w-[640px] mx-auto"
+              className="mt-6 sm:mt-8 text-[16px] sm:text-[19px] md:text-[21px] text-gray-500 leading-relaxed max-w-[800px] mx-auto"
             >
-              AI that creates, schedules, publishes, and <em className="text-gray-700 font-medium not-italic">learns</em> — across{' '}
-              <span className="inline-flex items-center gap-1"><PlatformIcon platform="instagram" className="w-4 h-4 sm:w-5 sm:h-5 text-pink-500" /></span>{' '}
-              <span className="inline-flex items-center gap-1"><PlatformIcon platform="tiktok" className="w-4 h-4 sm:w-5 sm:h-5" /></span>{' '}
-              <span className="inline-flex items-center gap-1"><PlatformIcon platform="youtube" className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" /></span>{' '}
-              <span className="inline-flex items-center gap-1"><PlatformIcon platform="facebook" className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" /></span>{' '}
-              <span className="inline-flex items-center gap-1"><PlatformIcon platform="threads" className="w-4 h-4 sm:w-5 sm:h-5" /></span>{' '}
-              <span className="inline-flex items-center gap-1"><PlatformIcon platform="bluesky" className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /></span>
-              {' '}so you don't have to.
+              <span className="block">AI that creates, schedules, publishes, and <em className="text-gray-700 font-medium not-italic">learns</em> —</span>
+              <span className="block mt-1">
+                across{' '}
+                <span className="inline-flex items-center gap-1"><PlatformIcon platform="instagram" className="w-4 h-4 sm:w-5 sm:h-5 text-pink-500" /></span>{' '}
+                <span className="inline-flex items-center gap-1"><PlatformIcon platform="tiktok" className="w-4 h-4 sm:w-5 sm:h-5" /></span>{' '}
+                <span className="inline-flex items-center gap-1"><PlatformIcon platform="youtube" className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" /></span>{' '}
+                <span className="inline-flex items-center gap-1"><PlatformIcon platform="facebook" className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" /></span>{' '}
+                <span className="inline-flex items-center gap-1"><PlatformIcon platform="threads" className="w-4 h-4 sm:w-5 sm:h-5" /></span>{' '}
+                <span className="inline-flex items-center gap-1"><PlatformIcon platform="bluesky" className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /></span>
+                {' '}so you don't have to.
+              </span>
             </motion.p>
 
             {/* CTAs */}
@@ -447,8 +423,8 @@ export function WelcomePage() {
                   </div>
                   {/* User */}
                   <div className="flex items-center gap-2 px-2 py-2 mt-2">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center text-[8px] font-bold text-white">FP</div>
-                    <span className="text-[10px] text-stone-300">Filipe P.</span>
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center text-[8px] font-bold text-white">U</div>
+                    <span className="text-[10px] text-stone-300">User Name</span>
                   </div>
                 </div>
 
@@ -464,7 +440,7 @@ export function WelcomePage() {
 
                   {/* Greeting */}
                   <div className="mb-3">
-                    <h2 className="text-[14px] sm:text-[16px] font-bold text-gray-900">Good morning, Filipe</h2>
+                    <h2 className="text-[14px] sm:text-[16px] font-bold text-gray-900">Good morning, User</h2>
                     <p className="text-[10px] text-gray-400">3 brands · 45.2K followers · 12 scheduled</p>
                   </div>
 
@@ -508,12 +484,16 @@ export function WelcomePage() {
                       <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Brand Health</span>
                       <div className="mt-2 space-y-2">
                         {[
-                          { name: 'The Longevity College', color: '#2e7d32', followers: '100K', views: '1.2M' },
-                          { name: 'The Gym College', color: '#00435c', followers: '450K', views: '3.8M' },
-                          { name: 'Mindset Daily', color: '#6a1b9a', followers: '28K', views: '340K' },
+                          { name: 'The Longevity College', color: '#2e7d32', followers: '100K', views: '1.2M', img: '/images/case-study/longevity-college.jpg' },
+                          { name: 'The Gym College', color: '#00435c', followers: '450K', views: '3.8M', img: '/images/case-study/gym-college.jpg' },
+                          { name: 'Mindset Daily', color: '#6a1b9a', followers: '28K', views: '340K', img: '' },
                         ].map(b => (
                           <div key={b.name} className="flex items-center gap-2">
-                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: b.color }}>{b.name[0]}</div>
+                            {b.img ? (
+                              <img src={b.img} alt="" className="w-5 h-5 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: b.color }}>{b.name[0]}</div>
+                            )}
                             <div className="flex-1 min-w-0">
                               <div className="text-[9px] font-semibold text-gray-700 truncate">{b.name}</div>
                               <div className="text-[8px] text-gray-400">{b.followers} · {b.views}</div>
@@ -735,7 +715,7 @@ export function WelcomePage() {
                     <div className="aspect-[9/16] flex flex-col">
                       {/* Profile header */}
                       <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-[14px]">LC</div>
+                        <img src="/images/case-study/longevity-college.jpg" alt="The Longevity College" className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
                         <div>
                           <div className="text-[12px] font-bold text-gray-900">thelongevitycollege</div>
                           <div className="text-[10px] text-gray-400">Health & Longevity</div>
@@ -747,21 +727,11 @@ export function WelcomePage() {
                         <div><div className="text-[14px] font-extrabold text-gray-900">100K</div><div className="text-[9px] text-gray-400">Followers</div></div>
                         <div><div className="text-[14px] font-extrabold text-gray-900">1.2K</div><div className="text-[9px] text-gray-400">Following</div></div>
                       </div>
-                      {/* Grid of reels — real-looking thumbnails */}
+                      {/* Grid of reels — REAL Instagram thumbnails */}
                       <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
-                        {[
-                          { title: '5 morning\nhabits', bg: 'from-emerald-900 to-emerald-700' },
-                          { title: 'Cortisol\nmyth', bg: 'from-gray-900 to-gray-700' },
-                          { title: 'Sleep\nscience', bg: 'from-blue-900 to-blue-700' },
-                          { title: 'Gut health\ntips', bg: 'from-teal-900 to-teal-700' },
-                          { title: 'Cold\nplunge', bg: 'from-cyan-900 to-cyan-700' },
-                          { title: 'Fasting\nguide', bg: 'from-stone-900 to-stone-700' },
-                          { title: 'Zone 2\ncardio', bg: 'from-green-900 to-green-700' },
-                          { title: 'Magnesium\ntypes', bg: 'from-violet-900 to-violet-700' },
-                          { title: 'Sun\nexposure', bg: 'from-amber-900 to-amber-700' },
-                        ].map((r, i) => (
-                          <div key={i} className={`aspect-square bg-gradient-to-b ${r.bg} flex items-end p-1.5`}>
-                            <span className="text-[7px] font-bold text-white leading-tight whitespace-pre-line">{r.title}</span>
+                        {['DVtiu8cE8so', 'DVtUxxoFLH7', 'DVtHNqnGTbZ', 'DVsrzoykSio', 'DVsQfL0CQB_', 'DVr02IFEw1E', 'DVrZSOFCj3E', 'DVq9sGIjaMr', 'DVqv-tzFCyn'].map((code, i) => (
+                          <div key={i} className="aspect-square overflow-hidden">
+                            <img src={`/images/reels/longevity/${code}.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" />
                           </div>
                         ))}
                       </div>
@@ -781,10 +751,10 @@ export function WelcomePage() {
                     <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
                       <strong className="text-white">@thelongevitycollege</strong> connected their brand, set their Content DNA, and let Toby run. Zero manual content creation.
                     </p>
-                    <div className="mt-5 grid grid-cols-3 gap-3">
-                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">100K</div><div className="text-[9px] text-gray-500">Followers</div></div>
-                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">847</div><div className="text-[9px] text-gray-500">Reels</div></div>
-                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">0hrs</div><div className="text-[9px] text-gray-500">Manual work</div></div>
+                    <div className="mt-5 flex items-start gap-5">
+                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">100K</div><div className="text-[10px] text-gray-500">Followers</div></div>
+                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">847</div><div className="text-[10px] text-gray-500">Reels</div></div>
+                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">0hrs</div><div className="text-[10px] text-gray-500">Manual work</div></div>
                     </div>
                   </div>
                 </div>
@@ -799,7 +769,7 @@ export function WelcomePage() {
                     <div className="aspect-[9/16] flex flex-col">
                       {/* Profile header */}
                       <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white font-bold text-[14px]">GC</div>
+                        <img src="/images/case-study/gym-college.jpg" alt="The Gym College" className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
                         <div>
                           <div className="text-[12px] font-bold text-gray-900">thegymcollege</div>
                           <div className="text-[10px] text-gray-400">Fitness & Training</div>
@@ -811,21 +781,11 @@ export function WelcomePage() {
                         <div><div className="text-[14px] font-extrabold text-gray-900">450K</div><div className="text-[9px] text-gray-400">Followers</div></div>
                         <div><div className="text-[14px] font-extrabold text-gray-900">986</div><div className="text-[9px] text-gray-400">Following</div></div>
                       </div>
-                      {/* Grid of reels */}
+                      {/* Grid of reels — REAL Instagram thumbnails */}
                       <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
-                        {[
-                          { title: 'Chest day\nsplits', bg: 'from-blue-900 to-blue-700' },
-                          { title: 'Creatine\nguide', bg: 'from-gray-900 to-gray-700' },
-                          { title: 'Perfect\ndeadlift', bg: 'from-red-900 to-red-700' },
-                          { title: 'Protein\nmyths', bg: 'from-stone-900 to-stone-700' },
-                          { title: 'Pre-workout\ntiming', bg: 'from-orange-900 to-orange-700' },
-                          { title: 'Rest day\nroutine', bg: 'from-cyan-900 to-cyan-700' },
-                          { title: 'Bulk vs\ncut', bg: 'from-indigo-900 to-indigo-700' },
-                          { title: 'Form\ncheck', bg: 'from-emerald-900 to-emerald-700' },
-                          { title: 'Shoulder\nmobility', bg: 'from-violet-900 to-violet-700' },
-                        ].map((r, i) => (
-                          <div key={i} className={`aspect-square bg-gradient-to-b ${r.bg} flex items-end p-1.5`}>
-                            <span className="text-[7px] font-bold text-white leading-tight whitespace-pre-line">{r.title}</span>
+                        {['DVtAeyPmbAC', 'DVskyXTCafC', 'DVsJYp1DB_c', 'DVrt8DDDRrr', 'DVrWzhyiPpP', 'DVq2-vtClK0', 'DVqb_rfGUJ7', 'DVp_6RdkkU-', 'DVpkdHbj4Md'].map((code, i) => (
+                          <div key={i} className="aspect-square overflow-hidden">
+                            <img src={`/images/reels/gym/${code}.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" />
                           </div>
                         ))}
                       </div>
@@ -845,10 +805,10 @@ export function WelcomePage() {
                     <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
                       <strong className="text-white">@thegymcollege</strong> was already big. Toby scaled them further — 150K new followers with AI-optimized content that kept the brand voice intact.
                     </p>
-                    <div className="mt-5 grid grid-cols-3 gap-3">
-                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">+150K</div><div className="text-[9px] text-gray-500">Followers</div></div>
-                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">1.2K</div><div className="text-[9px] text-gray-500">Reels</div></div>
-                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">3mo</div><div className="text-[9px] text-gray-500">Timeline</div></div>
+                    <div className="mt-5 flex items-start gap-5">
+                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">+150K</div><div className="text-[10px] text-gray-500">Followers</div></div>
+                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">1.2K</div><div className="text-[10px] text-gray-500">Reels</div></div>
+                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">3mo</div><div className="text-[10px] text-gray-500">Timeline</div></div>
                     </div>
                   </div>
                 </div>
@@ -911,11 +871,13 @@ export function WelcomePage() {
                     </div>
                   )}
                   {i === 1 && (
-                    /* Create: mini reels */
+                    /* Create: real reel thumbnails */
                     <div className="flex gap-2">
-                      <ReelMockup title={"5 habits\nthat changed\nmy life"} brandInitials="LC" brandColor="#2e7d32" style="dark" />
-                      <ReelMockup title={"The cortisol\nmorning\nroutine"} brandInitials="LC" brandColor="#2e7d32" style="gradient" />
-                      <ReelMockup title={"Why cold\nplunges\nwork"} brandInitials="LC" brandColor="#2e7d32" style="cinematic" />
+                      {['DVtiu8cE8so', 'DVtUxxoFLH7', 'DVtHNqnGTbZ'].map(code => (
+                        <div key={code} className="flex-1 aspect-[9/16] rounded-lg overflow-hidden shadow-md">
+                          <img src={`/images/reels/longevity/${code}.jpg`} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      ))}
                     </div>
                   )}
                   {i === 2 && (
@@ -1037,19 +999,15 @@ export function WelcomePage() {
                 </div>
                 <p className="text-[14px] text-gray-500 leading-relaxed mb-6">Scroll-stopping vertical videos with custom typography, brand colors, and hook-optimized text overlays.</p>
 
-                {/* Real-looking reel previews */}
+                {/* Real reel thumbnails from Instagram */}
                 <div className="flex gap-3 justify-center">
-                  <div className="w-[90px] sm:w-[100px]">
-                    <ReelMockup title={"5 morning\nhabits that\nchanged my life"} subtitle="@thelongevitycollege" brandInitials="LC" brandColor="#2e7d32" style="dark" />
-                  </div>
-                  <div className="w-[90px] sm:w-[100px]">
-                    <ReelMockup title={"Why you need\nto walk after\nevery meal"} subtitle="@thelongevitycollege" brandInitials="LC" brandColor="#2e7d32" style="gradient" />
-                  </div>
-                  <div className="w-[90px] sm:w-[100px]">
-                    <ReelMockup title={"The cortisol\nmorning\nroutine"} subtitle="@thelongevitycollege" brandInitials="LC" brandColor="#2e7d32" style="cinematic" />
-                  </div>
-                  <div className="hidden sm:block w-[100px]">
-                    <ReelMockup title={"Cold plunges:\nthe science\nexplained"} subtitle="@thegymcollege" brandInitials="GC" brandColor="#00435c" style="dark" />
+                  {['DVtiu8cE8so', 'DVsrzoykSio', 'DVr02IFEw1E'].map(code => (
+                    <div key={code} className="w-[90px] sm:w-[100px] aspect-[9/16] rounded-xl overflow-hidden shadow-lg">
+                      <img src={`/images/reels/longevity/${code}.jpg`} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                  <div className="hidden sm:block w-[100px] aspect-[9/16] rounded-xl overflow-hidden shadow-lg">
+                    <img src="/images/reels/gym/DVtAeyPmbAC.jpg" alt="" className="w-full h-full object-cover" />
                   </div>
                 </div>
 
