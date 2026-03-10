@@ -50,7 +50,7 @@ export const LEGACY_DEFAULT_PLATFORMS: Platform[] = ['instagram', 'facebook', 'y
 // ── Content Types ────────────────────────────────────────────────────
 
 /** Canonical list of supported content-type keys (dict keys in enabled_platforms). */
-export const SUPPORTED_CONTENT_TYPES = ['reels', 'posts'] as const
+export const SUPPORTED_CONTENT_TYPES = ['reels', 'posts', 'threads'] as const
 
 /** Union type derived from the canonical content-type list. */
 export type ContentType = (typeof SUPPORTED_CONTENT_TYPES)[number]
@@ -62,14 +62,19 @@ export const CONTENT_TYPE_META: Record<
 > = {
   reels: { label: 'Reels', icon: '🎬' },
   posts: { label: 'Carousels', icon: '📚' },
+  threads: { label: 'Threads', icon: '🧵' },
 }
 
 /**
  * Platforms that cannot publish a given content type.
+ * Threads & Bluesky are text-only — excluded from reels and carousels.
  * TikTok's API does not support image carousel publishing.
+ * The threads content type only supports text-only platforms.
  */
 export const CONTENT_TYPE_EXCLUDED_PLATFORMS: Partial<Record<ContentType, readonly Platform[]>> = {
-  posts: ['youtube', 'tiktok'],
+  reels: ['threads', 'bluesky'],
+  posts: ['youtube', 'tiktok', 'threads', 'bluesky'],
+  threads: ['instagram', 'facebook', 'youtube', 'tiktok'],
 }
 
 /** Helper: platforms eligible for a given content type (excludes unsupported ones). */

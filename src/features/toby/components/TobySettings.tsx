@@ -498,8 +498,9 @@ function BrandDetailPanel({
     editedPlatforms !== undefined ? editedPlatforms : brand.enabled_platforms
 
   const getPlatformsForType = (ct: ContentType): Platform[] => {
-    if (currentConfig === null) return [...connectedPlatforms]
-    return (currentConfig[ct] ?? connectedPlatforms) as Platform[]
+    const eligible = getPlatformsForContentType(ct) as Platform[]
+    if (currentConfig === null) return connectedPlatforms.filter(p => eligible.includes(p))
+    return ((currentConfig[ct] ?? connectedPlatforms.filter(p => eligible.includes(p))) as Platform[])
   }
 
   const togglePlatformForType = (ct: ContentType, p: Platform) => {
@@ -514,15 +515,22 @@ function BrandDetailPanel({
       nextConfig[otherCt] = otherCt === ct ? nextList : getPlatformsForType(otherCt)
     }
 
-    const allMaxed = connectedPlatforms.length > 0 && SUPPORTED_CONTENT_TYPES.every((c) =>
-      connectedPlatforms.every((cp) => nextConfig[c].includes(cp)),
-    )
+    const allMaxed = connectedPlatforms.length > 0 && SUPPORTED_CONTENT_TYPES.every((c) => {
+      const eligible = getPlatformsForContentType(c) as Platform[]
+      return connectedPlatforms
+        .filter((cp) => eligible.includes(cp))
+        .every((cp) => nextConfig[c].includes(cp))
+    })
     onPlatformChange(allMaxed ? null : nextConfig)
   }
 
   const activeContentTypes = SUPPORTED_CONTENT_TYPES.filter((ct) => {
     if (ct === 'reels') return reelsEnabled && reelSlots > 0
     if (ct === 'posts') return postsEnabled && postSlots > 0
+    if (ct === 'threads') {
+      const eligible = getPlatformsForContentType('threads') as Platform[]
+      return eligible.some(p => connectedPlatforms.includes(p))
+    }
     return false
   })
 

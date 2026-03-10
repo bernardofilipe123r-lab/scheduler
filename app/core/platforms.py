@@ -74,11 +74,13 @@ CONTENT_TYPE_KEY_MAP: dict[str, str] = {
 TEXT_ONLY_PLATFORMS: frozenset[str] = frozenset({"threads"})
 
 # Platforms that cannot publish a given content type.
-# Threads is text-only — exclude from reels and carousel/post content.
+# Threads & Bluesky are text-only — excluded from reels and carousel/post content.
 # TikTok's API does not support image carousel publishing.
+# The threads content type only supports text-only platforms (threads, bluesky).
 CONTENT_TYPE_EXCLUDED_PLATFORMS: dict[str, frozenset[str]] = {
-    "reels": frozenset({"threads"}),
-    "posts": frozenset({"youtube", "tiktok", "threads"}),
+    "reels": frozenset({"threads", "bluesky"}),
+    "posts": frozenset({"youtube", "tiktok", "threads", "bluesky"}),
+    "threads": frozenset({"instagram", "facebook", "youtube", "tiktok"}),
 }
 
 
