@@ -33,6 +33,7 @@ import {
 } from '@/features/brands'
 import type { BrandName } from '@/shared/types'
 import { generateSchedule, formatHour } from '@/features/brands/constants'
+import { FacebookConnectModal } from './FacebookConnectModal'
 
 type Platform = 'instagram' | 'facebook' | 'youtube' | 'threads' | 'tiktok' | 'bluesky'
 
@@ -80,6 +81,7 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
   const [bskyAppPassword, setBskyAppPassword] = useState('')
   const [bskyError, setBskyError] = useState('')
   const [confirmDisconnect, setConfirmDisconnect] = useState<Platform | null>(null)
+  const [showFbConnectModal, setShowFbConnectModal] = useState(false)
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
   const [showPageSelector, setShowPageSelector] = useState(false)
   const [selectingPage, setSelectingPage] = useState(false)
@@ -198,6 +200,11 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
   }
 
   const handleFacebookConnect = () => {
+    setShowFbConnectModal(true)
+  }
+
+  const handleFacebookConnectConfirmed = () => {
+    setShowFbConnectModal(false)
     setConnectingFacebook(true)
     startConnect('facebook').finally(() => setConnectingFacebook(false))
   }
@@ -839,6 +846,15 @@ export function ConnectionCard({ brand, brandLogo, onRefresh, schedule, allBrand
       )}
 
         </>
+      )}
+
+      {/* Facebook Connect Explanation Modal */}
+      {showFbConnectModal && (
+        <FacebookConnectModal
+          brandName={brand.display_name || brand.brand}
+          onConfirm={handleFacebookConnectConfirmed}
+          onClose={() => setShowFbConnectModal(false)}
+        />
       )}
 
       {/* Bluesky App Password Modal */}

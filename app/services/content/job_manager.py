@@ -68,8 +68,9 @@ class JobManager:
         if platforms is None:
             platforms = list(LEGACY_DEFAULT_PLATFORMS)
 
-        # Clamp content_count to 1-3
-        content_count = max(1, min(3, content_count))
+        # Clamp content_count: threads allows up to 10, others 1-3
+        max_count = 10 if variant == "threads" else 3
+        content_count = max(1, min(max_count, content_count))
 
         # Initialize brand_outputs: array for multi-content, dict for single
         if content_count > 1:

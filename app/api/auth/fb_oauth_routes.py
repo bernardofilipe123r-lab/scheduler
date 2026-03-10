@@ -86,7 +86,6 @@ def facebook_connect(
         "response_type": "code",
         "scope": REQUIRED_SCOPES,
         "state": state_token,
-        "auth_type": "reauthenticate",
     }
     auth_url = f"https://www.facebook.com/{os.environ.get('FB_API_VERSION', 'v21.0')}/dialog/oauth?{urlencode(params)}"
 

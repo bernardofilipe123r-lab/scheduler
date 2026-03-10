@@ -63,6 +63,7 @@ class JobProcessor:
         "dark": "regenerate_brand",
         "format_b": "process_format_b_brand",
         "post": "process_post_brand",
+        "threads": "process_threads_brand",
     }
 
     def __init__(self, db):
@@ -937,6 +938,126 @@ class JobProcessor:
             })
             return {"success": False, "error": error_msg}
 
+    def process_threads_brand(
+        self,
+        job_id: str,
+        brand: str,
+        content_index: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Generate thread text content for a single brand.
+
+        Text-only — no media rendering. Uses ThreadsGenerator to produce
+        single posts or thread chains via DeepSeek.
+
+        Args:
+            content_index: For multi-content jobs, which content item to generate.
+        """
+        import sys
+        print(f"\n🧵 process_threads_brand() — brand={brand}, ci={content_index}", flush=True)
+        sys.stdout.flush()
+
+        job = self._manager.get_job(job_id)
+        if not job:
+            return {"success": False, "error": f"Job not found: {job_id}"}
+
+        def _update_output(data: dict):
+            self._manager.update_brand_output(job_id, brand, data, content_index=content_index)
+
+        _update_output({"status": "generating", "progress_message": "Generating thread content..."})
+
+        try:
+            from app.core.prompt_context import PromptContext
+            from app.services.content.threads_generator import ThreadsGenerator
+            from app.models import NicheConfig, Brand
+            from app.database import SessionLocal
+
+            tg = ThreadsGenerator()
+
+            # Build prompt context from brand's Content DNA
+            ctx_db = SessionLocal()
+            try:
+                brand_obj = ctx_db.query(Brand).filter(
+                    Brand.id == brand, Brand.user_id == job.user_id
+                ).first()
+                niche_cfg = ctx_db.query(NicheConfig).filter(
+                    NicheConfig.brand_id == brand, NicheConfig.user_id == job.user_id
+                ).first()
+            finally:
+                ctx_db.close()
+
+            ctx = PromptContext.from_niche_config(niche_cfg) if niche_cfg else PromptContext()
+
+            # Determine mode from job data
+            # cta_type stores thread mode: "chain" for chain, anything else for single post
+            is_chain = (job.cta_type or "").lower() == "chain"
+            # ai_prompt stores format_type preference for auto mode
+            format_type = job.ai_prompt if job.ai_prompt in (
+                "value_list", "controversial", "myth_bust", "thread_chain",
+                "question_hook", "hot_take", "story_micro"
+            ) else None
+            # content_lines: if provided, use as manual content
+            manual_text = job.content_lines[0] if job.content_lines else None
+
+            if manual_text:
+                # Manual mode — user provided the text
+                if is_chain and len(job.content_lines) >= 2:
+                    # Manual chain — content_lines are the chain parts
+                    _update_output({
+                        "status": "completed",
+                        "caption": job.content_lines[0],
+                        "is_chain": True,
+                        "chain_parts": job.content_lines,
+                        "format_type": "thread_chain",
+                    })
+                else:
+                    # Manual single post
+                    _update_output({
+                        "status": "completed",
+                        "caption": manual_text,
+                        "is_chain": False,
+                        "format_type": format_type or "manual",
+                    })
+                print(f"   ✅ {brand} manual thread content stored", flush=True)
+                return {"success": True, "brand": brand}
+
+            # Auto mode — generate via AI
+            if is_chain:
+                result = tg.generate_thread_chain(ctx, num_parts=6)
+                if result and "parts" in result:
+                    _update_output({
+                        "status": "completed",
+                        "caption": result["parts"][0],
+                        "is_chain": True,
+                        "chain_parts": result["parts"],
+                        "format_type": "thread_chain",
+                        "topic": result.get("topic", ""),
+                    })
+                    print(f"   ✅ {brand} thread chain generated ({len(result['parts'])} parts)", flush=True)
+                    return {"success": True, "brand": brand}
+                else:
+                    raise ValueError("Thread chain generation returned no results")
+            else:
+                result = tg.generate_single_post(ctx, format_type=format_type)
+                if result and "text" in result:
+                    _update_output({
+                        "status": "completed",
+                        "caption": result["text"],
+                        "is_chain": False,
+                        "format_type": result.get("format_type", format_type or "auto"),
+                    })
+                    print(f"   ✅ {brand} thread post generated", flush=True)
+                    return {"success": True, "brand": brand}
+                else:
+                    raise ValueError("Thread post generation returned no results")
+
+        except Exception as e:
+            import traceback
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            print(f"   ❌ Threads generation failed: {error_msg}", flush=True)
+            traceback.print_exc()
+            _update_output({"status": "failed", "error": error_msg})
+            return {"success": False, "error": error_msg}
+
     def process_job(self, job_id: str) -> Dict[str, Any]:
         """
         Process a generation job (generate all brands).
@@ -984,6 +1105,57 @@ class JobProcessor:
         print(f"📝 Updating job status to 'generating'...", flush=True)
         self._manager.update_job_status(job_id, "generating", "Starting generation...", 0)
         print(f"   ✓ Status updated", flush=True)
+
+        # ── THREADS variant: text-only generation ──────────────────────
+        if job.variant == "threads":
+            print(f"🧵 THREADS variant — generating text per brand (x{content_count})", flush=True)
+            results = {}
+            work_items = [
+                (brand, ci)
+                for brand in job.brands
+                for ci in range(content_count)
+            ]
+            total_work = len(work_items)
+            try:
+                for wi, (brand, ci) in enumerate(work_items):
+                    job = self._manager.get_job(job_id)
+                    if job.status == "cancelled":
+                        return {"success": False, "error": "Job was cancelled", "results": results}
+
+                    progress = int((wi / max(total_work, 1)) * 100)
+                    step_msg = f"Generating thread for {brand}..." if not is_multi else f"Generating {brand} ({ci+1}/{content_count})..."
+                    self._manager.update_job_status(job_id, "generating", step_msg, progress)
+
+                    thread_result = {"success": False, "error": "Timeout"}
+                    def _run_thread_brand(b=brand, c=ci):
+                        nonlocal thread_result
+                        try:
+                            thread_result = self.process_threads_brand(job_id, b, content_index=c if is_multi else None)
+                        except Exception as ex:
+                            thread_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
+
+                    t = threading.Thread(target=_run_thread_brand, daemon=True)
+                    t.start()
+                    t.join(timeout=BRAND_GENERATION_TIMEOUT)
+
+                    if t.is_alive():
+                        timeout_msg = f"BRAND_TIMEOUT: {brand}[{ci}] thread generation exceeded {BRAND_GENERATION_TIMEOUT}s"
+                        print(f"⏱️  {timeout_msg}", flush=True)
+                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg}, content_index=ci if is_multi else None)
+                        thread_result = {"success": False, "error": timeout_msg}
+
+                    results[f"{brand}_{ci}" if is_multi else brand] = thread_result
+
+                all_ok = all(r.get("success") for r in results.values())
+                any_ok = any(r.get("success") for r in results.values())
+                final_status = "completed" if all_ok else ("completed" if any_ok else "failed")
+                self._manager.update_job_status(job_id, final_status, progress_percent=100)
+                return {"success": any_ok, "results": results}
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._manager.update_job_status(job_id, "failed", error_message=str(e))
+                return {"success": False, "error": str(e)}
 
         # ── POST variant: only generate backgrounds ──────────────────
         if job.variant == "post":
