@@ -82,7 +82,7 @@ def _proactive_refresh_ig_token(brand_name: str) -> Optional[str]:
 
 class DatabaseSchedulerService:
     """Scheduler service using PostgreSQL for multi-user support."""
-    
+
     def __init__(self):
         """Initialize the database scheduler service."""
         # Note: self.publisher is a lazy fallback. Brand-specific publishers
@@ -95,7 +95,7 @@ class DatabaseSchedulerService:
         from app.services.brands.resolver import brand_resolver
         resolved = brand_resolver.resolve_brand_name(schedule_brand)
         return resolved is not None and resolved == brand.lower()
-    
+
     def schedule_reel(
         self,
         user_id: str,
@@ -118,7 +118,7 @@ class DatabaseSchedulerService:
     ) -> Dict[str, Any]:
         """
         Schedule a reel for future publishing.
-        
+
         Args:
             user_id: User identifier (e.g., email or username)
             reel_id: Unique identifier for the reel
@@ -133,12 +133,12 @@ class DatabaseSchedulerService:
             brand: Brand name ("gymcollege" or "healthycollege")
             variant: Variant type ("light", "dark", or "post")
             created_by: "toby" for autonomous content, "user" for manual uploads (default: "toby")
-            
+
         Returns:
             Schedule details with schedule_id
         """
         import uuid
-        
+
         print("\n🔵 DatabaseSchedulerService.schedule_reel() called")
         print(f"   User ID: {user_id}")
         print(f"   Reel ID: {reel_id}")
@@ -147,15 +147,15 @@ class DatabaseSchedulerService:
         print(f"   Brand: {brand}, Variant: {variant}")
         if yt_title:
             print(f"   📺 YouTube title: {yt_title}")
-        
+
         try:
             with get_db_session() as db:
                 print("   ✅ Database session created")
-                
+
                 # Generate schedule ID
                 schedule_id = str(uuid.uuid4())[:8]
                 print(f"   ✅ Generated schedule_id: {schedule_id}")
-                
+
                 # Prepare metadata
                 metadata = {
                     "platforms": platforms,
@@ -172,7 +172,7 @@ class DatabaseSchedulerService:
                     "job_id": job_id,  # Link back to generation job
                 }
                 print(f"   ✅ Metadata prepared: {metadata}")
-                
+
                 # ── FALLBACK CONTENT REJECTION ────────────────────────
                 # CRITICAL (2026-03-08): Never schedule fallback/placeholder content.
                 # This was a root cause of the duplicate content incident.
@@ -276,20 +276,20 @@ class DatabaseSchedulerService:
                     extra_data=metadata  # Store in extra_data column
                 )
                 print("   ✅ ScheduledReel object created")
-                
+
                 print("   🔄 Adding to database session...")
                 db.add(scheduled_reel)
                 print("   ✅ Added to session")
-                
+
                 print("   🔄 Committing to database...")
                 db.commit()
                 print("   ✅ COMMITTED TO DATABASE!")
-                
+
                 result = scheduled_reel.to_dict()
                 print(f"   ✅ Converted to dict: {result}")
-                
+
                 return result
-                
+
         except Exception as e:
             print(f"\n❌ ERROR in DatabaseSchedulerService.schedule_reel()")
             print(f"   Exception type: {type(e).__name__}")
@@ -297,24 +297,24 @@ class DatabaseSchedulerService:
             import traceback
             traceback.print_exc()
             raise
-    
+
     def get_pending_publications(self) -> list[Dict[str, Any]]:
         """
         Get all scheduled reels that are due for publishing.
         Uses atomic locking to prevent duplicate publishing.
-        
+
         Returns:
             List of schedules ready to publish (already marked as 'publishing')
         """
         with get_db_session() as db:
             now = datetime.now(timezone.utc)
-            
+
             print(f"\n🔍 get_pending_publications() check at:")
             print(f"   UTC now: {now}")
-            
+
             # Show ALL posts for debugging (any status)
             all_posts = db.query(ScheduledReel).order_by(ScheduledReel.scheduled_time.asc()).limit(50).all()
-            
+
             # Group by status
             by_status = {}
             for post in all_posts:
@@ -322,7 +322,7 @@ class DatabaseSchedulerService:
                 if status not in by_status:
                     by_status[status] = []
                 by_status[status].append(post)
-            
+
             print(f"   📊 Posts by status:")
             for status, posts in by_status.items():
                 print(f"      {status}: {len(posts)} post(s)")
@@ -333,13 +333,13 @@ class DatabaseSchedulerService:
                         if status == "failed":
                             error = p.publish_error or "No error recorded"
                             print(f"           Error: {error}")
-            
+
             # Get scheduled posts that are DUE
             print(f"\n   📋 Checking for due 'scheduled' posts...")
             all_scheduled = db.query(ScheduledReel).filter(
                 ScheduledReel.status == "scheduled"
             ).order_by(ScheduledReel.scheduled_time.asc()).all()
-            
+
             print(f"   Total 'scheduled' posts: {len(all_scheduled)}")
             due_count = 0
             for sched in all_scheduled[:10]:  # Show first 10
@@ -351,10 +351,10 @@ class DatabaseSchedulerService:
                 else:
                     time_until = scheduled_time - now
                     print(f"      ⏳ {sched.schedule_id}: {sched.reel_id} @ {scheduled_time} (in {time_until})")
-            
+
             if due_count == 0:
                 print(f"   ℹ️ No posts are due yet")
-            
+
             # Use FOR UPDATE to lock rows and prevent race conditions
             pending = db.query(ScheduledReel).filter(
                 and_(
@@ -362,9 +362,9 @@ class DatabaseSchedulerService:
                     ScheduledReel.scheduled_time <= now
                 )
             ).with_for_update(skip_locked=True).all()
-            
+
             print(f"\n   ✅ Found {len(pending)} pending post(s) to publish NOW")
-            
+
             # IMMEDIATELY mark all as "publishing" to prevent duplicate picks
             #
             # Pre-publish safety check (2026-03-08, updated 2026-03-08):
@@ -430,39 +430,39 @@ class DatabaseSchedulerService:
                 print(f"      → Marking {reel.schedule_id} ({reel.reel_id}) as 'publishing'")
                 reel.status = "publishing"
                 result.append(reel.to_dict())
-            
+
             # Commit the status change before returning
             db.commit()
-            
+
             return result
-    
+
     def get_all_scheduled(self, user_id: Optional[str] = None) -> list[Dict[str, Any]]:
         """
         Get all scheduled reels, optionally filtered by user.
-        
+
         Args:
             user_id: Optional user filter
-            
+
         Returns:
             List of all schedules
         """
         with get_db_session() as db:
             query = db.query(ScheduledReel)
-            
+
             if user_id:
                 query = query.filter(ScheduledReel.user_id == user_id)
-            
+
             schedules = query.order_by(ScheduledReel.scheduled_time.desc()).limit(500).all()
             return [reel.to_dict() for reel in schedules]
-    
+
     def delete_scheduled(self, schedule_id: str, user_id: Optional[str] = None) -> bool:
         """
         Delete a scheduled post.
-        
+
         Args:
             schedule_id: ID of the schedule to delete
             user_id: Optional user filter for security
-            
+
         Returns:
             True if deleted, False if not found
         """
@@ -470,22 +470,22 @@ class DatabaseSchedulerService:
             query = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
             )
-            
+
             if user_id:
                 query = query.filter(ScheduledReel.user_id == user_id)
-            
+
             scheduled_reel = query.first()
-            
+
             if not scheduled_reel:
                 return False
-            
+
             db.delete(scheduled_reel)
             db.commit()
             return True
-    
+
     def mark_as_published(self, schedule_id: str, post_ids: Dict[str, str] = None, publish_results: Dict[str, Any] = None) -> None:
         """Mark a schedule as successfully published.
-        
+
         Args:
             schedule_id: The schedule ID
             post_ids: Dict of platform -> post_id for storing results (legacy)
@@ -495,14 +495,14 @@ class DatabaseSchedulerService:
             scheduled_reel = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
             ).first()
-            
+
             if scheduled_reel:
                 # Check if this is a partial success (some platforms failed)
                 has_failures = False
                 has_successes = False
                 success_platforms = []
                 failed_platforms = []
-                
+
                 if publish_results:
                     for platform, data in publish_results.items():
                         if isinstance(data, dict):
@@ -521,7 +521,7 @@ class DatabaseSchedulerService:
                                 if not is_not_configured:
                                     has_failures = True
                                     failed_platforms.append(platform)
-                
+
                 # Set status based on results
                 if has_failures and has_successes:
                     scheduled_reel.status = "partial"
@@ -535,15 +535,15 @@ class DatabaseSchedulerService:
                 else:
                     scheduled_reel.status = "published"
                     scheduled_reel.publish_error = None
-                
+
                 scheduled_reel.published_at = datetime.now(timezone.utc)
-                
+
                 # Store detailed publish results in metadata
                 # CRITICAL: copy first — mutating the original dict also mutates
                 # SQLAlchemy's committed-state snapshot, so change detection
                 # silently sees old == new and skips the UPDATE.
                 metadata = dict(scheduled_reel.extra_data or {})
-                
+
                 if publish_results:
                     metadata['publish_results'] = publish_results
                     # Also extract post_ids for backward compatibility
@@ -554,11 +554,11 @@ class DatabaseSchedulerService:
                     metadata['post_ids'] = post_ids
                 elif post_ids:
                     metadata['post_ids'] = post_ids
-                
+
                 scheduled_reel.extra_data = metadata
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(scheduled_reel, 'extra_data')
-                
+
                 # Sync status back to generation_jobs.brand_outputs
                 self._sync_brand_output_status(
                     db, metadata, scheduled_reel.status
@@ -611,20 +611,20 @@ class DatabaseSchedulerService:
                     ))
                 except Exception as log_err:
                     print(f"⚠️ Failed to write publish activity log for {schedule_id}: {log_err}")
-                
+
                 db.commit()
-    
+
     def mark_as_failed(self, schedule_id: str, error: str) -> None:
         """Mark a schedule as failed with error message."""
         with get_db_session() as db:
             scheduled_reel = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
             ).first()
-            
+
             if scheduled_reel:
                 scheduled_reel.status = "failed"
                 scheduled_reel.publish_error = error
-                
+
                 # Sync status back to generation_jobs.brand_outputs
                 metadata = scheduled_reel.extra_data or {}
                 self._sync_brand_output_status(db, metadata, "failed")
@@ -659,24 +659,24 @@ class DatabaseSchedulerService:
                     ))
                 except Exception as log_err:
                     print(f"⚠️ Failed to write publish failure activity log for {schedule_id}: {log_err}")
-                
+
                 db.commit()
-    
+
     @staticmethod
     def _sync_brand_output_status(db, metadata: dict, new_status: str) -> None:
         """Sync scheduled_reels status back into generation_jobs.brand_outputs.
-        
+
         This prevents desync where brand_outputs says 'scheduled' but the
         scheduled_reels entry has moved to published/partial/failed.
         """
         from app.models.jobs import GenerationJob
         from sqlalchemy.orm.attributes import flag_modified
-        
+
         job_id = metadata.get("job_id")
         brand = metadata.get("brand")
         if not job_id or not brand:
             return
-        
+
         try:
             job = db.query(GenerationJob).filter(
                 GenerationJob.job_id == job_id
@@ -686,7 +686,7 @@ class DatabaseSchedulerService:
                 flag_modified(job, "brand_outputs")
         except Exception as e:
             print(f"⚠️ Failed to sync brand_output status for {job_id}/{brand}: {e}")
-    
+
     def reset_stuck_publishing(self, max_age_minutes: int = 10) -> int:
         """
         Reset any posts stuck in 'publishing' status for too long.
@@ -697,15 +697,15 @@ class DatabaseSchedulerService:
 
         Args:
             max_age_minutes: Max minutes a post can be in 'publishing' before reset
-            
+
         Returns:
             Number of posts reset
         """
         from datetime import timedelta
-        
+
         with get_db_session() as db:
             cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
-            
+
             # Find posts stuck in 'publishing' for too long
             stuck = db.query(ScheduledReel).filter(
                 and_(
@@ -713,7 +713,7 @@ class DatabaseSchedulerService:
                     ScheduledReel.scheduled_time <= cutoff
                 )
             ).all()
-            
+
             count = 0
             for reel in stuck:
                 extra = reel.extra_data or {}
@@ -782,27 +782,27 @@ class DatabaseSchedulerService:
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(reel, "extra_data")
                 count += 1
-            
+
             if count > 0:
                 db.commit()
                 print(f"⚠️ Processed {count} stuck publishing post(s)")
-            
+
             return count
-    
+
     def retry_failed(self, schedule_id: str, user_id: Optional[str] = None) -> bool:
         """
         Reset a failed or partial post to 'scheduled' status for retry.
         For partial failures, only retry the failed platforms.
-        
+
         Args:
             schedule_id: ID of the failed/partial schedule
             user_id: Optional user filter for security
-            
+
         Returns:
             True if reset successfully, False if not found or not retriable
         """
         print(f"\n🔄 [RETRY] retry_failed called for schedule_id: {schedule_id}", flush=True)
-        
+
         with get_db_session() as db:
             query = db.query(ScheduledReel).filter(
                 ScheduledReel.schedule_id == schedule_id
@@ -810,39 +810,39 @@ class DatabaseSchedulerService:
             if user_id:
                 query = query.filter(ScheduledReel.user_id == user_id)
             scheduled_reel = query.first()
-            
+
             if not scheduled_reel:
                 print(f"   ❌ [RETRY] Schedule not found: {schedule_id}", flush=True)
                 return False
-            
+
             print(f"   📋 [RETRY] Current status: {scheduled_reel.status}", flush=True)
-            
+
             if scheduled_reel.status not in ["failed", "publishing", "partial"]:
                 print(f"   ❌ [RETRY] Status '{scheduled_reel.status}' not retriable", flush=True)
                 return False
-            
+
             # For partial failures, determine which platforms to retry
             metadata = scheduled_reel.extra_data or {}
             publish_results = metadata.get('publish_results', {})
-            
+
             print(f"   📊 [RETRY] Current metadata keys: {list(metadata.keys())}", flush=True)
             print(f"   📊 [RETRY] publish_results: {publish_results}", flush=True)
-            
+
             if scheduled_reel.status == "partial" and publish_results:
                 # Only retry platforms that failed
                 failed_platforms = []
                 succeeded_platforms = []
-                
+
                 for platform, result in publish_results.items():
                     if isinstance(result, dict):
                         if result.get('success'):
                             succeeded_platforms.append(platform)
                         else:
                             failed_platforms.append(platform)
-                
+
                 print(f"   📊 [RETRY] Failed platforms: {failed_platforms}", flush=True)
                 print(f"   📊 [RETRY] Succeeded platforms: {succeeded_platforms}", flush=True)
-                
+
                 if failed_platforms:
                     # Store which platforms to retry (only the failed ones)
                     metadata['retry_platforms'] = failed_platforms
@@ -862,27 +862,27 @@ class DatabaseSchedulerService:
                 metadata.pop('succeeded_platforms', None)
                 # CRITICAL: Force SQLAlchemy to detect the change
                 scheduled_reel.extra_data = dict(metadata)
-            
+
             # Reset to scheduled
             scheduled_reel.status = "scheduled"
             scheduled_reel.publish_error = None
-            
+
             # Update scheduled time to now so it gets picked up immediately
             scheduled_reel.scheduled_time = datetime.now(timezone.utc)
-            
+
             db.commit()
             print(f"🔄 Reset post {schedule_id} for retry")
             return True
-    
+
     def reschedule(self, schedule_id: str, new_time: datetime, user_id: Optional[str] = None) -> bool:
         """
         Reschedule a post to a new date/time.
-        
+
         Args:
             schedule_id: ID of the scheduled post
             new_time: New datetime to schedule for
             user_id: Optional user filter for security
-            
+
         Returns:
             True if rescheduled successfully, False if not found
         """
@@ -893,22 +893,22 @@ class DatabaseSchedulerService:
             if user_id:
                 query = query.filter(ScheduledReel.user_id == user_id)
             scheduled_reel = query.first()
-            
+
             if not scheduled_reel:
                 return False
-            
+
             # Only allow rescheduling if not already published
             if scheduled_reel.status == "published":
                 print(f"⚠️ Cannot reschedule published post {schedule_id}")
                 return False
-            
+
             # Update the scheduled time
             scheduled_reel.scheduled_time = new_time
             # Reset to scheduled status if it was failed
             if scheduled_reel.status in ["failed", "partial"]:
                 scheduled_reel.status = "scheduled"
                 scheduled_reel.publish_error = None
-            
+
             db.commit()
             print(f"📅 Rescheduled post {schedule_id} to {new_time.isoformat()}")
             return True
@@ -1038,16 +1038,16 @@ class DatabaseSchedulerService:
                 db.commit()
 
             return retried
-    
+
     def publish_scheduled_now(self, schedule_id: str, user_id: Optional[str] = None) -> bool:
         """
         Set a scheduled post to publish immediately.
         Updates scheduled_time to now so the auto-publisher picks it up.
-        
+
         Args:
             schedule_id: ID of the scheduled post
             user_id: Optional user filter for security
-            
+
         Returns:
             True if updated successfully, False if not found
         """
@@ -1058,26 +1058,26 @@ class DatabaseSchedulerService:
             if user_id:
                 query = query.filter(ScheduledReel.user_id == user_id)
             scheduled_reel = query.first()
-            
+
             if not scheduled_reel:
                 return False
-            
+
             # Only allow if not already published
             if scheduled_reel.status == "published":
                 print(f"⚠️ Post {schedule_id} already published")
                 return False
-            
+
             # Set scheduled time to now (will be picked up on next check)
             scheduled_reel.scheduled_time = datetime.now(timezone.utc)
             # Reset to scheduled status if it was failed
             if scheduled_reel.status in ["failed", "partial"]:
                 scheduled_reel.status = "scheduled"
                 scheduled_reel.publish_error = None
-            
+
             db.commit()
             print(f"🚀 Post {schedule_id} queued for immediate publishing")
             return True
-    
+
     def publish_now(
         self,
         video_url: str,
@@ -1091,7 +1091,7 @@ class DatabaseSchedulerService:
     ) -> Dict[str, Any]:
         """
         Publish a reel immediately using user's credentials or brand credentials.
-        
+
         Args:
             video_url: Supabase public URL for the video
             thumbnail_url: Supabase public URL for the thumbnail
@@ -1101,18 +1101,18 @@ class DatabaseSchedulerService:
             metadata: Optional metadata dict containing yt_title, yt_thumbnail_path, etc.
             brand_config: Brand configuration with specific credentials
             brand_name: Brand name string (e.g., 'gymcollege', 'healthycollege')
-            
+
         Returns:
             Publishing results
         """
         from app.services.publishing.social_publisher import SocialPublisher
         from app.services.brands.resolver import brand_resolver
-        
+
         # Priority: brand_config > brand_name > user_id > default
         publisher = None
         resolved_config = None  # Will hold BrandConfig if available
         _skip_facebook = False  # FB not configured → graceful skip, not a credential error
-        
+
         if brand_config:
             # Use brand-specific credentials
             print(f"🏷️ Using provided brand_config: {brand_config.name}")
@@ -1121,13 +1121,13 @@ class DatabaseSchedulerService:
         elif brand_name:
             # Look up brand config by name
             print(f"🏷️ Looking up brand config for: {brand_name}")
-            
+
             resolved_config = brand_resolver.get_brand_config(brand_name)
             if resolved_config:
                 print(f"   ✅ Found brand config: {resolved_config.name}")
                 print(f"   📸 Instagram Account ID: {resolved_config.instagram_business_account_id}")
                 print(f"   📘 Facebook Page ID: {resolved_config.facebook_page_id}")
-                
+
                 # Validate credentials only for the platforms being published to (avoid error)
                 if "instagram" in platforms and not resolved_config.instagram_business_account_id:
                     error_msg = f"CRITICAL: Brand '{brand_name}' has no Instagram Business Account ID configured! Cannot publish."
@@ -1137,11 +1137,11 @@ class DatabaseSchedulerService:
                         "credential_error": True,
                         "brand": brand_name
                     }
-                
+
                 if "facebook" in platforms and not resolved_config.facebook_page_id:
                     _skip_facebook = True
                     print(f"   ⚠️  Facebook not configured for '{brand_name}' — will skip gracefully (not a credential error)")
-                
+
                 publisher = SocialPublisher(brand_config=resolved_config)
             else:
                 error_msg = f"CRITICAL: Brand '{brand_name}' not found in DB! Cannot publish to unknown brand."
@@ -1158,7 +1158,7 @@ class DatabaseSchedulerService:
                 user = db.query(UserProfile).filter(
                     UserProfile.user_id == user_id
                 ).first()
-                
+
                 if user:
                     # Create temporary brand config from user credentials
                     from app.core.config import BrandConfig
@@ -1179,14 +1179,14 @@ class DatabaseSchedulerService:
                         meta_access_token=user.meta_access_token
                     )
                     publisher = SocialPublisher(brand_config=user_config)
-        
+
         if not publisher:
             # Use default credentials
             publisher = SocialPublisher()
-        
+
         print(f"🎬 Video URL: {video_url}")
         print(f"🖼️  Thumbnail URL: {thumbnail_url}")
-        
+
         # Pre-filter: skip Facebook if page_id not configured (not an error)
         # Pre-filter: skip YouTube if credentials don't exist (not an error)
         # Pre-filter: skip Threads/TikTok if not configured (not an error)
@@ -1217,9 +1217,9 @@ class DatabaseSchedulerService:
             if not (resolved_config and resolved_config.bsky_did and resolved_config.bsky_app_password):
                 effective_platforms.remove("bluesky")
                 print(f"🦋 Bluesky not configured for {brand_name or 'unknown'} — skipping (not an error)")
-        
+
         results = {}
-        
+
         # Add not_connected result for Facebook so UI can show amber ⚠ warning
         if _skip_facebook:
             results["facebook"] = {
@@ -1228,7 +1228,7 @@ class DatabaseSchedulerService:
                 "error": "Facebook not configured for this brand",
                 "platform": "facebook",
             }
-        
+
         if "instagram" in effective_platforms:
             # Proactively refresh the token if stale (>6h since last refresh or expiring soon)
             if brand_name:
@@ -1241,7 +1241,7 @@ class DatabaseSchedulerService:
                 caption=caption,
                 thumbnail_url=thumbnail_url
             )
-        
+
         if "facebook" in effective_platforms:
             print("📘 Publishing to Facebook...")
             results["facebook"] = publisher.publish_facebook_reel(
@@ -1249,17 +1249,17 @@ class DatabaseSchedulerService:
                 caption=caption,
                 thumbnail_url=thumbnail_url
             )
-        
+
         if "youtube" in effective_platforms:
             print("📺 Publishing to YouTube...", flush=True)
-            
+
             # Get yt_title from metadata if available
             yt_title = metadata.get("yt_title") if metadata else None
             # Get yt_thumbnail_path from metadata - clean AI image without text
             yt_thumbnail_url = metadata.get("yt_thumbnail_path") if metadata else None
             if not yt_thumbnail_url:
                 yt_thumbnail_url = thumbnail_url
-            
+
             results["youtube"] = self._publish_to_youtube(
                 video_url=video_url,
                 thumbnail_url=yt_thumbnail_url,
@@ -1291,7 +1291,7 @@ class DatabaseSchedulerService:
             )
 
         return results
-    
+
     def _publish_to_youtube(
         self,
         video_url: str,
@@ -1304,14 +1304,14 @@ class DatabaseSchedulerService:
         Publish a video to YouTube as a Short.
         Downloads video and thumbnail from Supabase URLs to temp files,
         uploads to YouTube, then cleans up.
-        
+
         Args:
             video_url: Supabase public URL for the video
             thumbnail_url: Supabase public URL for the thumbnail
             caption: Caption/description for the video
             brand_name: Brand name for loading credentials
             yt_title: YouTube-optimized title (searchable, clickable)
-            
+
         Returns:
             Publishing result dict
         """
@@ -1320,17 +1320,17 @@ class DatabaseSchedulerService:
         from datetime import datetime
         import tempfile
         import requests as _requests
-        
+
         print(f"\n📺 [YT PUBLISH] _publish_to_youtube() called", flush=True)
         print(f"   📺 [YT PUBLISH] video_url: {video_url}", flush=True)
         print(f"   📺 [YT PUBLISH] thumbnail_url: {thumbnail_url}", flush=True)
         print(f"   📺 [YT PUBLISH] brand_name: {brand_name}", flush=True)
         print(f"   📺 [YT PUBLISH] yt_title: {yt_title}", flush=True)
-        
+
         if not brand_name:
             print(f"   ❌ [YT PUBLISH] No brand_name provided!", flush=True)
             return {"success": False, "error": "Brand name required for YouTube publishing"}
-        
+
         # Download video from Supabase to temp file
         tmp_video = None
         tmp_thumb = None
@@ -1342,7 +1342,7 @@ class DatabaseSchedulerService:
             tmp_video.write(resp.content)
             tmp_video.close()
             print(f"   ✅ [YT PUBLISH] Video downloaded to {tmp_video.name} ({len(resp.content)} bytes)", flush=True)
-            
+
             # Download thumbnail
             print(f"   📺 [YT PUBLISH] Downloading thumbnail from Supabase...", flush=True)
             resp_thumb = _requests.get(thumbnail_url, timeout=60)
@@ -1361,22 +1361,22 @@ class DatabaseSchedulerService:
                     except Exception:
                         pass
             return {"success": False, "error": f"Failed to download media from Supabase: {dl_err}"}
-        
+
         try:
             # Get credentials for this brand from database
             print(f"   📺 [YT PUBLISH] Getting credentials from database for brand: {brand_name}", flush=True)
             with get_db_session() as db:
                 credentials = get_youtube_credentials_for_brand(brand_name, db)
-                
+
                 if not credentials:
                     print(f"   ❌ [YT PUBLISH] No credentials found for {brand_name}!", flush=True)
                     return {"success": False, "error": f"YouTube not configured for {brand_name}. Click 'Connect YouTube' in the app."}
-                
+
                 print(f"   ✅ [YT PUBLISH] Credentials found: channel_id={credentials.channel_id}, channel_name={credentials.channel_name}", flush=True)
                 print(f"   📺 [YT PUBLISH] refresh_token present: {bool(credentials.refresh_token)}", flush=True)
-                
+
                 yt_publisher = YouTubePublisher(credentials=credentials)
-                
+
                 # Use provided yt_title or extract from caption as fallback
                 if yt_title:
                     title = yt_title[:100]
@@ -1385,31 +1385,31 @@ class DatabaseSchedulerService:
                     lines = caption.split('\n')
                     title = lines[0][:100] if lines else "Health & Wellness Tips"
                     print(f"   📺 [YT PUBLISH] Using fallback title from caption: {title}", flush=True)
-                
+
                 print(f"   📺 [YT PUBLISH] Calling upload_youtube_short()...", flush=True)
                 print(f"      video_path={tmp_video.name}", flush=True)
                 print(f"      title={title}", flush=True)
                 print(f"      thumbnail_path={tmp_thumb.name}", flush=True)
-                
+
                 # Save original refresh token so we can detect rotation after upload
                 original_refresh_token = credentials.refresh_token
-                
+
                 result = yt_publisher.upload_youtube_short(
                     video_path=tmp_video.name,
                     title=title,
                     description=caption,
                     thumbnail_path=tmp_thumb.name
                 )
-            
+
                 print(f"   📺 [YT PUBLISH] upload_youtube_short result: {result}", flush=True)
-                
+
                 # Google may have rotated the refresh token during upload — persist it!
                 if credentials.refresh_token != original_refresh_token:
                     yt_channel = db.query(YouTubeChannel).filter(YouTubeChannel.brand == brand_name.lower()).first()
                     if yt_channel:
                         yt_channel.refresh_token = credentials.refresh_token
                         print(f"   🔄 [YT PUBLISH] Refresh token rotated during upload — saved to DB", flush=True)
-                
+
                 # Log thumbnail status specifically
                 if result.get("success"):
                     if result.get("thumbnail_set"):
@@ -1417,7 +1417,7 @@ class DatabaseSchedulerService:
                     else:
                         thumb_err = result.get("thumbnail_error", "unknown")
                         print(f"   ⚠️ [YT PUBLISH] Video uploaded but THUMBNAIL FAILED: {thumb_err}", flush=True)
-                
+
                 # Update channel status in database
                 if result.get("success"):
                     update_youtube_channel_status(
@@ -1455,7 +1455,7 @@ class DatabaseSchedulerService:
                             status="error",
                             last_error=error_msg
                         )
-                
+
                 return result
         finally:
             # Clean up temp files
@@ -1477,7 +1477,7 @@ class DatabaseSchedulerService:
     ) -> Dict[str, Any]:
         """
         Get existing user or create new one.
-        
+
         Args:
             user_id: User identifier
             user_name: Display name
@@ -1485,7 +1485,7 @@ class DatabaseSchedulerService:
             instagram_account_id: Instagram Business Account ID
             facebook_page_id: Facebook Page ID
             meta_access_token: Meta API access token
-            
+
         Returns:
             User profile data
         """
@@ -1493,7 +1493,7 @@ class DatabaseSchedulerService:
             user = db.query(UserProfile).filter(
                 UserProfile.user_id == user_id
             ).first()
-            
+
             if not user:
                 # Check if an orphaned row with this email exists
                 # (happens when a user is deleted from Supabase Auth
@@ -1518,7 +1518,7 @@ class DatabaseSchedulerService:
                 )
                 db.add(user)
                 db.commit()
-            
+
             return user.to_dict()
 
     def get_next_available_slot(
@@ -1531,34 +1531,34 @@ class DatabaseSchedulerService:
     ) -> datetime:
         """
         Get the next available scheduling slot for a brand+variant combo.
-        
+
         MAGIC SCHEDULING RULES:
         ========================
         Each brand posts 6 times daily (every 4 hours), alternating Light → Dark.
         Brands are staggered by 1 hour:
-        
+
         Holistic College:  12AM(L), 4AM(D), 8AM(L), 12PM(D), 4PM(L), 8PM(D)
         Healthy College:   1AM(L), 5AM(D), 9AM(L), 1PM(D), 5PM(L), 9PM(D)
         Vitality College:  2AM(L), 6AM(D), 10AM(L), 2PM(D), 6PM(L), 10PM(D)
         Longevity College: 3AM(L), 7AM(D), 11AM(L), 3PM(D), 7PM(L), 11PM(D)
         Wellbeing College: 4AM(L), 8AM(D), 12PM(L), 4PM(D), 8PM(L), 12AM(D)
-        
+
         Rules:
         1. Start only from January 16, 2026 (everything before is "filled")
         2. If today > Jan 16, start from today's date
         3. Find next slot matching the variant (light/dark)
         4. Skip slots that are already scheduled
-        
+
         Args:
             brand: Brand name ("holisticcollege", "healthycollege", "vitalitycollege", "longevitycollege", "wellbeingcollege")
             variant: "light" or "dark"
             reference_date: Optional reference date (defaults to now)
-            
+
         Returns:
             Next available datetime for scheduling
         """
         from datetime import timedelta
-        
+
         # Base slot pattern (every 4 hours, alternating L/D/L/D/L/D)
         BASE_SLOTS = [
             (0, "light"),   # 12 AM - Light
@@ -1568,7 +1568,7 @@ class DatabaseSchedulerService:
             (16, "light"),  # 4 PM - Light
             (20, "dark"),   # 8 PM - Dark
         ]
-        
+
         # Get brand offset from database
         brand_lower = brand.lower()
         offset = 0
@@ -1577,20 +1577,20 @@ class DatabaseSchedulerService:
             db_brand = db.query(BrandModel).filter(BrandModel.id == brand_lower).first()
             if db_brand:
                 offset = db_brand.schedule_offset or 0
-        
+
         # Build slots for this brand (apply offset, wrap around 24h)
         brand_slots = [((hour + offset) % 24, v) for hour, v in BASE_SLOTS]
-        
+
         # Filter to only slots matching requested variant
         matching_slots = [hour for hour, v in brand_slots if v == variant]
-        
+
         # Starting reference points
         start_date = datetime(2026, 1, 16, tzinfo=timezone.utc)
         now = reference_date or datetime.now(timezone.utc)
-        
+
         # Use the later of start_date or now (Rule 1 & 2)
         base_date = max(start_date, now)
-        
+
         # Get all scheduled posts for this brand
         with get_db_session() as db:
             sched_query = db.query(ScheduledReel).filter(
@@ -1602,7 +1602,7 @@ class DatabaseSchedulerService:
             if user_id:
                 sched_query = sched_query.filter(ScheduledReel.user_id == user_id)
             schedules = sched_query.all()
-            
+
             # Filter by brand and variant - build set of occupied timestamps
             check_variant = slot_variant_label or variant
             occupied_slots = set()
@@ -1610,7 +1610,7 @@ class DatabaseSchedulerService:
                 metadata = schedule.extra_data or {}
                 schedule_brand = metadata.get("brand", "").lower()
                 schedule_variant = metadata.get("variant", "light")
-                
+
                 # Match by brand name
                 if schedule_brand == brand_lower and schedule_variant == check_variant:
                     # Store as timestamp for easy comparison
@@ -1618,27 +1618,27 @@ class DatabaseSchedulerService:
                     if ts.tzinfo is None:
                         ts = ts.replace(tzinfo=timezone.utc)
                     occupied_slots.add(ts.timestamp())
-        
+
         # Find next available slot starting from base_date
         current_day = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        
+
         # Search up to 365 days ahead
         for day_offset in range(365):
             check_date = current_day + timedelta(days=day_offset)
-            
+
             for hour in matching_slots:
                 candidate = check_date.replace(hour=hour, minute=0, second=0, microsecond=0)
-                
+
                 # Skip if in the past
                 if candidate <= now:
                     continue
-                
+
                 # Check if slot is available
                 if candidate.timestamp() not in occupied_slots:
                     label = slot_variant_label or variant
                     print(f"📅 Found next slot for {brand}/{label}: {candidate.isoformat()}")
                     return candidate
-        
+
         # Fallback: just return tomorrow at first matching slot
         tomorrow = now + timedelta(days=1)
         return tomorrow.replace(hour=matching_slots[0], minute=0, second=0, microsecond=0)
@@ -1650,11 +1650,11 @@ class DatabaseSchedulerService:
     ) -> Dict[str, datetime]:
         """
         Get next available slots for all brands in a job.
-        
+
         Args:
             brands: List of brand names
             variant: "light", "dark", or "post"
-            
+
         Returns:
             Dict mapping brand name to next available slot datetime
         """
@@ -1678,13 +1678,13 @@ class DatabaseSchedulerService:
     ) -> list[datetime]:
         """
         Get all scheduled/occupied slots for a brand+variant combo.
-        
+
         Args:
             brand: Brand name
             variant: "light" or "dark"
             start_date: Optional start filter
             end_date: Optional end filter
-            
+
         Returns:
             List of occupied datetime slots
         """
@@ -1692,25 +1692,25 @@ class DatabaseSchedulerService:
             query = db.query(ScheduledReel).filter(
                 ScheduledReel.status.in_(["scheduled", "publishing"])
             )
-            
+
             if start_date:
                 query = query.filter(ScheduledReel.scheduled_time >= start_date)
             if end_date:
                 query = query.filter(ScheduledReel.scheduled_time <= end_date)
-            
+
             schedules = query.all()
-            
+
             occupied = []
             for schedule in schedules:
                 metadata = schedule.extra_data or {}
                 schedule_brand = metadata.get("brand", "").lower()
                 schedule_variant = metadata.get("variant", "light")
-                
+
                 brand_match = self._brands_match(brand, schedule_brand)
-                
+
                 if brand_match and schedule_variant == variant:
                     occupied.append(schedule.scheduled_time)
-            
+
             return sorted(occupied)
     def get_next_available_post_slot(
         self,

@@ -323,7 +323,43 @@ def get_experiments(
         query = query.filter(TobyExperiment.status == status)
 
     experiments = query.order_by(TobyExperiment.started_at.desc()).all()
-    return {"experiments": [e.to_dict() for e in experiments]}
+
+    def _format_experiment(e):
+        options = e.options or []
+        results = e.results or {}
+        opt_a = options[0] if len(options) > 0 else ""
+        opt_b = options[1] if len(options) > 1 else ""
+        res_a = results.get(opt_a, {})
+        res_b = results.get(opt_b, {})
+
+        confidence = 0.0
+        if e.p_value is not None:
+            confidence = max(0.0, 1.0 - e.p_value)
+
+        return {
+            "id": e.id,
+            "user_id": e.user_id,
+            "experiment_type": e.dimension,
+            "variant_a": opt_a,
+            "variant_b": opt_b,
+            "samples_a": res_a.get("count", 0),
+            "samples_b": res_b.get("count", 0),
+            "mean_score_a": res_a.get("avg_score", 0),
+            "mean_score_b": res_b.get("avg_score", 0),
+            "winner": e.winner,
+            "confidence": confidence,
+            "status": e.status,
+            "started_at": e.started_at.isoformat() if e.started_at else None,
+            "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+            "metadata": {
+                "hypothesis": e.hypothesis,
+                "expected_effect_size": e.expected_effect_size,
+                "min_samples": e.min_samples,
+                "content_type": e.content_type,
+            },
+        }
+
+    return {"experiments": [_format_experiment(e) for e in experiments]}
 
 
 @router.get("/insights")

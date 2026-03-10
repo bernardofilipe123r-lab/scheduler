@@ -40,6 +40,7 @@ from app.api.content.format_b_routes import router as format_b_router
 from app.api.content.format_b_design_routes import router as format_b_design_router
 from app.api.system.api_usage_routes import router as api_usage_router
 from app.api.billing.routes import router as billing_router
+from app.api.threads.routes import router as threads_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set_user_id as set_logging_user_id, clear_user_id as clear_logging_user_id
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -64,19 +65,19 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "dist"
 app = FastAPI(
     title="Instagram Reels Automation API",
     description="""
-    Production-ready backend system for automatically generating Instagram Reels 
+    Production-ready backend system for automatically generating Instagram Reels
     from structured text input.
-    
+
     ## Features
-    
+
     * 📸 Generate thumbnail images
     * 🎨 Create branded reel images with automatic text layout
     * 🎬 Produce 7-second MP4 videos with background music
     * ✍️ Build formatted captions with hashtags
     * ⏰ Schedule reels for future publishing
-    
+
     ## Workflow
-    
+
     1. Send a POST request to `/reels/create` with your content
     2. The system generates thumbnail, reel image, and video
     3. Optionally schedule the reel for future publishing
@@ -144,6 +145,7 @@ app.include_router(billing_router, prefix="/api/billing")  # Stripe billing
 app.include_router(format_b_router)  # Format B reel generation
 app.include_router(format_b_design_router)  # Format B design preferences
 app.include_router(api_usage_router)  # API usage monitoring (admin)
+app.include_router(threads_router)  # Threads content generation + publishing
 
 
 @app.get("/health", tags=["system"])
@@ -171,11 +173,11 @@ async def health_check():
 # Serve React frontend (SPA catch-all) — MUST be the LAST route group
 if FRONTEND_DIR.exists():
     print(f"⚛️ React frontend: {FRONTEND_DIR}")
-    
+
     # Mount React assets (hashed filenames → long cache)
     if (FRONTEND_DIR / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="react-assets")
-    
+
     def _serve_index():
         """Serve index.html with no-cache so browsers always get the latest asset references."""
         resp = FileResponse(FRONTEND_DIR / "index.html")
@@ -183,12 +185,12 @@ if FRONTEND_DIR.exists():
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"
         return resp
-    
+
     @app.get("/", tags=["frontend"])
     async def serve_root():
         """Serve React app."""
         return _serve_index()
-    
+
     @app.get("/{full_path:path}", tags=["frontend"])
     async def serve_spa(full_path: str):
         """Catch-all: serve static files first, then React app for SPA client-side routing."""
@@ -202,7 +204,7 @@ if FRONTEND_DIR.exists():
         return _serve_index()
 else:
     print(f"⚠️ React frontend not found at {FRONTEND_DIR}. Run 'npm run build' to build.")
-    
+
     @app.get("/", tags=["frontend"])
     async def serve_root():
         """Placeholder when frontend not built."""
@@ -246,7 +248,7 @@ def _repair_missing_carousel_images():
             brand = ed.get("brand", "unknown")
             title = ed.get("title", "")
             reel_id = post.reel_id or ""
-            
+
             # Use raw_background_url if stored, otherwise fall back to
             # deriving it from job_id + brand (the original AI background).
             raw_bg = ed.get("raw_background_url", "")
@@ -256,7 +258,7 @@ def _repair_missing_carousel_images():
                 if job_id and tp and tp.startswith("https://"):
                     base = tp.rsplit("/", 1)[0]
                     raw_bg = f"{base}/{job_id}_{brand}_background.png"
-            
+
             if not raw_bg or not raw_bg.startswith("https://"):
                 print(f"  ⚠️ [{post.schedule_id}] No background URL for {brand}/{reel_id}", flush=True)
                 continue
@@ -313,11 +315,11 @@ def _repair_missing_carousel_images():
 async def startup_event():
     """Run startup tasks."""
     import sys
-    
+
     # Initialize persistent logging service FIRST (captures everything from here on)
     logging_service = get_logging_service()
     logging_service.log_system_event(
-        'startup', 
+        'startup',
         f'Application starting - Deployment: {DEPLOYMENT_ID}',
         details={
             'python_version': sys.version,
@@ -326,7 +328,7 @@ async def startup_event():
             'database_url': 'set' if os.getenv('DATABASE_URL') else 'NOT SET',
         }
     )
-    
+
     print("🚀 Starting Instagram Reels Automation API...", flush=True)
     print(f"📍 Python: {sys.version}", flush=True)
     print(f"📍 PORT: {os.getenv('PORT', 'not set')}", flush=True)
@@ -334,41 +336,41 @@ async def startup_event():
     print("📝 Documentation available at: /docs", flush=True)
     print("🔍 Health check available at: /health", flush=True)
     print("📋 Logs dashboard available at: /logs", flush=True)
-    
+
     # Initialize database
     print("💾 Initializing database...", flush=True)
     try:
         init_db()
         print("✅ Database initialized", flush=True)
-        
+
         # Seed brands and settings if needed
         print("🌱 Checking for brand/settings seeds...", flush=True)
         from app.db_connection import SessionLocal
         from app.services.brands.manager import seed_brands_if_needed
         from app.api.system.settings_routes import seed_settings_if_needed
-        
+
         db = SessionLocal()
         try:
             default_user_id = os.getenv("DEFAULT_USER_ID")
             brands_seeded = seed_brands_if_needed(db, user_id=default_user_id)
             settings_seeded = seed_settings_if_needed(db)
-            
+
             if brands_seeded > 0:
                 print(f"   🏷️ Seeded {brands_seeded} default brands", flush=True)
             else:
                 print(f"   🏷️ Brands already exist", flush=True)
-            
+
             if settings_seeded > 0:
                 print(f"   ⚙️ Seeded {settings_seeded} default settings", flush=True)
             else:
                 print(f"   ⚙️ Settings already exist", flush=True)
         finally:
             db.close()
-        
+
     except Exception as e:
         print(f"❌ Database init failed: {e}", flush=True)
         # Continue anyway - don't block startup
-    
+
     # Log brand credentials status at startup (CRITICAL for debugging cross-posting)
     print("\n🏷️ Brand Credentials Status:", flush=True)
     from app.services.brands.resolver import brand_resolver
@@ -381,7 +383,7 @@ async def startup_event():
         print(f"      Facebook ID:  {fb_status} ({brand.facebook_page_id or 'None'})", flush=True)
         print(f"      Token:        {token_status}", flush=True)
     print("", flush=True)
-    
+
     # Resume any interrupted "generating" jobs from previous crashes/deploys
     print("🔄 Checking for interrupted generating jobs...", flush=True)
     try:
@@ -464,33 +466,33 @@ async def startup_event():
             print(f"⚠️ Reset {reset_count} stuck post(s) from previous run", flush=True)
     except Exception as e:
         print(f"⚠️ Could not check stuck posts: {e}", flush=True)
-    
+
     # Re-compose carousel images for scheduled posts that are missing them
     print("🔄 Checking for posts with missing carousel images...", flush=True)
     try:
         _repair_missing_carousel_images()
     except Exception as e:
         print(f"⚠️ Carousel repair failed: {e}", flush=True)
-    
+
     # Initialize auto-publishing scheduler
     print("⏰ Starting auto-publishing scheduler...")
     scheduler = BackgroundScheduler()
-    
+
     def check_and_publish():
         """Check for due posts and publish them."""
         try:
             from datetime import datetime
             print(f"\n⏰ Auto-publish check running at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (local time)")
-            
+
             # Get service instance
             scheduler_service = DatabaseSchedulerService()
-            
+
             # Get pending publications
             pending = scheduler_service.get_pending_publications()
-            
+
             if pending:
                 print(f"\n📅 Found {len(pending)} post(s) ready to publish")
-                
+
                 for schedule in pending:
                     try:
                         schedule_id = schedule['schedule_id']
@@ -506,7 +508,7 @@ async def startup_event():
 
                         print(f"\n   📋 [PUBLISH] Processing schedule: {schedule_id}", flush=True)
                         print(f"   📋 [PUBLISH] Metadata keys: {list(metadata.keys())}", flush=True)
-                        
+
                         # --- PLATFORM SELECTION (RETRY-AWARE) ---
                         # retry_platforms is set by retry_failed() and auto_retry_failed_toby_posts()
                         # when a post has "partial" status (some platforms succeeded, others failed).
@@ -514,24 +516,24 @@ async def startup_event():
                         # If not set, this is a fresh publish — use the full platform list.
                         retry_platforms = metadata.get('retry_platforms')
                         succeeded_platforms = metadata.get('succeeded_platforms', [])
-                        
+
                         print(f"   📋 [PUBLISH] retry_platforms from metadata: {retry_platforms}", flush=True)
                         print(f"   📋 [PUBLISH] succeeded_platforms from metadata: {succeeded_platforms}", flush=True)
-                        
+
                         if retry_platforms:
                             platforms = retry_platforms
                             print(f"   🔄 PARTIAL RETRY: Only retrying {platforms} (skipping already successful: {succeeded_platforms})", flush=True)
                         else:
                             platforms = metadata.get('platforms', ['instagram'])
                             print(f"   📋 [PUBLISH] Using platforms from metadata: {platforms}", flush=True)
-                        
+
                         # All paths in metadata are now Supabase URLs
                         video_path_str = metadata.get('video_path')
                         thumbnail_path_str = metadata.get('thumbnail_path')
                         brand = metadata.get('brand', '')
                         variant = metadata.get('variant', 'light')
                         content_type = metadata.get('content_type', '')
-                        
+
                         # ── TEXT-ONLY PLATFORM GUARD ──
                         # Threads (and future X) are text-only — strip them from
                         # any publish that carries media (reels, posts, carousels).
@@ -542,21 +544,21 @@ async def startup_event():
                             if text_only_in_list:
                                 platforms = [p for p in platforms if p not in TEXT_ONLY_PLATFORMS]
                                 print(f"   🧵 Stripped text-only platforms {text_only_in_list} from media publish", flush=True)
-                        
+
                         print(f"      📦 Metadata: video={video_path_str}, thumbnail={thumbnail_path_str}, brand={brand}, variant={variant}")
-                        
+
                         # ── POST (image) vs REEL (video) publishing ──
                         is_post = (variant == 'post')
-                        
+
                         if is_post:
                             # ── IMAGE POST PUBLISHING ──
                             # thumbnail_path_str is a Supabase URL
                             image_url = thumbnail_path_str
                             if not image_url:
                                 raise ValueError(f"No thumbnail/cover URL found in metadata for post {reel_id}")
-                            
+
                             print(f"      🖼️  Image post cover URL: {image_url}")
-                            
+
                             # Check for pre-rendered carousel images (cover + text slides)
                             pre_rendered = metadata.get('carousel_paths') or []
                             post_title = metadata.get('title', '')
@@ -578,7 +580,7 @@ async def startup_event():
                                     tmp_bg = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
                                     tmp_bg.write(resp.content)
                                     tmp_bg.close()
-                                    
+
                                     composed = _render_slides_node(
                                         brand=brand,
                                         title=post_title,
@@ -594,7 +596,7 @@ async def startup_event():
                                         print(f"      ✅ Konva rendered: cover + {len(supabase_slide_urls)} slides")
                                     else:
                                         print(f"      ⚠️ Node renderer returned no result", flush=True)
-                                    
+
                                     # Clean up temp file
                                     try:
                                         os.unlink(tmp_bg.name)
@@ -604,34 +606,34 @@ async def startup_event():
                                     import traceback
                                     print(f"      ⚠️ JIT composition failed: {comp_err}", flush=True)
                                     traceback.print_exc()
-                            
+
                             print(f"      🌐 Cover image URL: {image_url}")
                             print(f"      🏷️ Publishing IMAGE POST with brand: {brand}")
-                            
+
                             # Resolve brand credentials
                             from app.services.publishing.social_publisher import SocialPublisher
                             from app.services.brands.resolver import brand_resolver
-                            
+
                             publisher = None
                             resolved_config = brand_resolver.get_brand_config(brand)
                             if resolved_config:
                                 publisher = SocialPublisher(brand_config=resolved_config)
                             else:
                                 publisher = SocialPublisher()
-                            
+
                             # Check for carousel slides — prefer JIT-composed, fall back to metadata
                             if supabase_slide_urls:
                                 carousel_image_urls = supabase_slide_urls
                             else:
                                 carousel_paths_raw = metadata.get('carousel_paths') or []
                                 carousel_image_urls = [url for url in carousel_paths_raw if url]
-                            
+
                             result = {}
                             if carousel_image_urls:
                                 # ── CAROUSEL PUBLISH (cover + text slides) ──
                                 all_urls = [image_url] + carousel_image_urls
                                 print(f"      📚 Carousel with {len(all_urls)} slides")
-                                
+
                                 if "instagram" in platforms:
                                     print("📸 Publishing carousel to Instagram...")
                                     result["instagram"] = publisher.publish_instagram_carousel(
@@ -701,10 +703,10 @@ async def startup_event():
                                 raise ValueError(f"No video URL found in metadata for reel {reel_id}")
                             if not thumbnail_path_str:
                                 raise ValueError(f"No thumbnail URL found in metadata for reel {reel_id}")
-                            
+
                             print(f"      🎬 Video URL: {video_path_str}")
                             print(f"      🖼️  Thumbnail URL: {thumbnail_path_str}")
-                            
+
                             # Publish now - pass URLs directly
                             print(f"      🏷️ Publishing REEL with brand: {brand}")
                             result = scheduler_service.publish_now(
@@ -715,9 +717,9 @@ async def startup_event():
                                 brand_name=brand,
                                 metadata=metadata
                             )
-                        
+
                         print(f"      📊 Publish result: {result}")
-                        
+
                         # Check for credential errors first
                         if result.get('credential_error'):
                             # Build a specific error message from the platform results
@@ -730,12 +732,12 @@ async def startup_event():
                             scheduler_service.mark_as_failed(schedule_id, error_msg)
                             print(f"   ❌ {error_msg}")
                             continue
-                        
+
                         # Check if publishing actually succeeded
                         failed_platforms = []
                         success_platforms = []
                         not_connected_platforms = []  # Skipped — not an error
-                        
+
                         for platform, platform_result in result.items():
                             # Skip non-platform keys
                             if platform in ('credential_error', 'brand'):
@@ -754,19 +756,19 @@ async def startup_event():
                                 failed_platforms.append(platform)
                                 error = platform_result.get('error', 'Unknown error')
                                 print(f"      ❌ {platform}: {error}")
-                        
+
                         # Only mark as published if at least one platform succeeded
                         if success_platforms:
                             # Collect detailed publish results for storage
                             publish_results = {}
-                            
+
                             # Include previously succeeded platforms from partial retry
                             prev_publish_results = metadata.get('publish_results', {})
                             for platform in succeeded_platforms:
                                 if platform in prev_publish_results:
                                     publish_results[platform] = prev_publish_results[platform]
                                     print(f"      ✅ {platform}: (previously succeeded)")
-                            
+
                             # Add newly succeeded platforms
                             for platform in success_platforms:
                                 platform_data = result[platform]
@@ -777,7 +779,7 @@ async def startup_event():
                                     "url": platform_data.get('url'),
                                     "success": True
                                 }
-                            
+
                             # Also include failed platforms info
                             for platform in failed_platforms:
                                 if platform in result:
@@ -785,7 +787,7 @@ async def startup_event():
                                         "success": False,
                                         "error": result[platform].get('error', 'Unknown error')
                                     }
-                            
+
                             # Include not-connected platforms (shows amber ⚠ warning in UI)
                             for platform in not_connected_platforms:
                                 if platform in result:
@@ -793,16 +795,16 @@ async def startup_event():
                                         "success": False,
                                         "error": result[platform].get('error', 'Platform not connected')
                                     }
-                            
+
                             # Clear retry tracking since we're updating results
                             if 'retry_platforms' in metadata:
                                 del metadata['retry_platforms']
                             if 'succeeded_platforms' in metadata:
                                 del metadata['succeeded_platforms']
-                            
+
                             scheduler_service.mark_as_published(schedule_id, publish_results=publish_results)
                             print(f"   ✅ Successfully published {reel_id} to {', '.join(success_platforms)}")
-                            
+
                             if failed_platforms:
                                 print(f"   ⚠️  Failed on {', '.join(failed_platforms)}")
                         else:
@@ -811,7 +813,7 @@ async def startup_event():
                             error_msg = f"All platforms failed - {error_details}"
                             scheduler_service.mark_as_failed(schedule_id, error_msg)
                             print(f"   ❌ Failed to publish {reel_id}: {error_msg}")
-                        
+
                     except Exception as e:
                         # Mark as failed
                         error_msg = f"Publishing failed: {str(e)}"
@@ -821,36 +823,36 @@ async def startup_event():
                         # Clear user context after each schedule so it doesn't
                         # bleed into the next iteration or unrelated log entries.
                         clear_logging_user_id()
-                        
+
         except Exception as e:
             print(f"❌ Auto-publish check failed: {str(e)}")
-    
+
     def refresh_analytics():
         """Auto-refresh analytics data for all users every 6 hours."""
         try:
             from app.services.analytics.analytics_service import AnalyticsService
             from app.db_connection import get_db_session
-            
+
             print(f"\n📊 Auto-refresh analytics running at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            
+
             with get_db_session() as db:
                 service = AnalyticsService(db)
                 result = service.refresh_all_users()
-                
+
                 if result["success"]:
                     print(f"   ✅ Analytics refreshed: {result['updated_count']} platforms updated across {result.get('users_refreshed', 0)} users")
                 else:
                     print(f"   ⚠️ Analytics refresh had issues: {result.get('errors', [])}")
-                    
+
         except Exception as e:
             print(f"❌ Auto-refresh analytics failed: {str(e)}")
-    
+
     # Run check every 5 minutes (300s is fine for social media publishing)
     scheduler.add_job(check_and_publish, 'interval', seconds=300, id='auto_publish')
-    
+
     # Run analytics refresh every 6 hours
     scheduler.add_job(refresh_analytics, 'interval', hours=6, id='analytics_refresh')
-    
+
     # Also run analytics refresh once on startup (after a short delay)
     scheduler.add_job(refresh_analytics, 'date', run_date=datetime.now(), id='analytics_startup')
 
@@ -997,7 +999,7 @@ async def startup_event():
                 print(f"🧹 Cleaned up {deleted} old log entries", flush=True)
         except Exception as e:
             print(f"⚠️ Log cleanup failed: {e}", flush=True)
-    
+
     # Auto-cleanup published jobs/reels older than 1 day
     def cleanup_published_jobs():
         """Delete jobs and scheduled reels that were published more than 1 day ago."""
@@ -1077,7 +1079,7 @@ async def startup_event():
             print(f"⚠️ Published cleanup failed: {e}", flush=True)
         finally:
             db.close()
-    
+
     scheduler.add_job(cleanup_old_logs, 'interval', hours=24, id='log_cleanup')
     scheduler.add_job(cleanup_published_jobs, 'interval', hours=6, id='published_cleanup')
 
@@ -1294,10 +1296,10 @@ async def startup_event():
     print("✅ Instagram token auto-refresh scheduled (every 6 hours)", flush=True)
     print("✅ YouTube token validation scheduled (every 24 hours)", flush=True)
     print("✅ TikTok trending music scheduled (every 7 days)", flush=True)
-    
+
     # Store scheduler for shutdown
     app.state.scheduler = scheduler
-    
+
     # Register Toby orchestrator (5-minute ticks)
     print("🤖 Initializing Toby autonomous agent...", flush=True)
     try:
@@ -1306,7 +1308,7 @@ async def startup_event():
         print("✅ Toby orchestrator registered (5-minute ticks)", flush=True)
     except Exception as e:
         print(f"⚠️ Toby init failed: {e}", flush=True)
-    
+
     print("🎉 Startup complete! App is ready.", flush=True)
 
 
@@ -1314,7 +1316,7 @@ async def startup_event():
 async def shutdown_event():
     """Run shutdown tasks."""
     print("👋 Shutting down Instagram Reels Automation API...")
-    
+
     # Log shutdown event
     try:
         logging_service = get_logging_service()
@@ -1322,7 +1324,7 @@ async def shutdown_event():
         logging_service.shutdown()
     except Exception:
         pass
-    
+
     # Shutdown scheduler
     if hasattr(app.state, 'scheduler'):
         app.state.scheduler.shutdown()

@@ -20,6 +20,7 @@ const ScheduledPage = lazy(() => import('@/pages/Scheduled').then(m => ({ defaul
 const BrandsPage = lazy(() => import('@/pages/Brands').then(m => ({ default: m.BrandsPage })))
 const CreateBrandPage = lazy(() => import('@/pages/CreateBrand').then(m => ({ default: m.CreateBrandPage })))
 const PostsPage = lazy(() => import('@/pages/Posts').then(m => ({ default: m.PostsPage })))
+const ThreadsPage = lazy(() => import('@/pages/Threads').then(m => ({ default: m.ThreadsPage })))
 const AnalyticsPage = lazy(() => import('@/pages/Analytics').then(m => ({ default: m.AnalyticsPage })))
 const TobyPage = lazy(() => import('@/pages/Toby').then(m => ({ default: m.TobyPage })))
 const BillingPage = lazy(() => import('@/pages/Billing').then(m => ({ default: m.BillingPage })))
@@ -45,13 +46,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function LoginGuard() {
   const { isAuthenticated, isLoading } = useAuth()
-  
+
   if (isLoading) return <AppLoader />
-  
+
   if (isAuthenticated) {
     return <Navigate to="/" replace />
   }
-  
+
   return <LoginPage />
 }
 
@@ -121,6 +122,7 @@ export function AppRoutes() {
         <Route path="brands" element={<BrandsPage />} />
         <Route path="brands/new" element={<CreateBrandPage />} />
         <Route path="posts" element={<PostsPage />} />
+        <Route path="threads" element={<ThreadsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="toby" element={<TobyPage />} />
         <Route path="billing" element={<BillingPage />} />

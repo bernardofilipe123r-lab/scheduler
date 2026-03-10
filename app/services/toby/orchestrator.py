@@ -253,7 +253,11 @@ def _process_user(db: Session, state: TobyState):
                 try:
                     design_experiment(db, user_id, brand.id, "reel")
                 except Exception as exp_err:
-                    print(f"[TOBY] Experiment design failed for {brand.id}: {exp_err}", flush=True)
+                    print(f"[TOBY] Reel experiment design failed for {brand.id}: {exp_err}", flush=True)
+                try:
+                    design_experiment(db, user_id, brand.id, "post")
+                except Exception as exp_err:
+                    print(f"[TOBY] Post experiment design failed for {brand.id}: {exp_err}", flush=True)
             state.last_deliberation_at = now
             state.updated_at = now
             db.commit()

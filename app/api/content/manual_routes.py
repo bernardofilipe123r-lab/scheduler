@@ -114,7 +114,7 @@ def _get_connected_platforms(brand: Brand, db: Optional[Session] = None) -> List
 def _validate_scheduled_time(scheduled_time_str: str) -> datetime:
     """
     Parse and validate scheduled time.
-    
+
     Must be in future (at least 1 minute from now).
     Returns a timezone-aware UTC datetime.
     """
@@ -122,18 +122,18 @@ def _validate_scheduled_time(scheduled_time_str: str) -> datetime:
         scheduled_time = datetime.fromisoformat(
             scheduled_time_str.replace('Z', '+00:00')
         )
-        
+
         # Ensure timezone-aware UTC
         if scheduled_time.tzinfo is not None:
             scheduled_time = scheduled_time.astimezone(timezone.utc)
         else:
             # Naive datetime — assume UTC (frontend should always send UTC)
             scheduled_time = scheduled_time.replace(tzinfo=timezone.utc)
-        
+
         now = datetime.now(timezone.utc)
         if scheduled_time <= now:
             raise ValueError("Must be scheduled for at least 1 minute in the future")
-        
+
         return scheduled_time
     except (ValueError, TypeError) as e:
         raise ValueError(f"Invalid datetime format: {str(e)}")
@@ -142,16 +142,16 @@ def _validate_scheduled_time(scheduled_time_str: str) -> datetime:
 def _detect_content_type(filename: str) -> str:
     """
     Detect if upload is a reel (video) or carousel (images).
-    
+
     Based on file extension:
     - Video formats (.mp4, .mov, .avi, .webm) → "reel"
     - Image formats (.jpg, .png, .webp) → "carousel"
     """
     suffix = Path(filename).suffix.lower()
-    
+
     video_extensions = {'.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv'}
     image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'}
-    
+
     if suffix in video_extensions:
         return "reel"
     elif suffix in image_extensions:
@@ -171,13 +171,13 @@ async def get_connected_platforms(
 ) -> List[GetConnectedPlatformsResponse]:
     """
     Get all connected platforms for all user brands.
-    
+
     Returns which platforms each brand is connected to, so frontend
     can show available options when scheduling.
     """
     try:
         brands = _get_user_brands(db, user["id"])
-        
+
         result = []
         for brand in brands:
             platforms = _get_connected_platforms(brand, db)
@@ -186,7 +186,7 @@ async def get_connected_platforms(
                 display_name=brand.display_name,
                 platforms=platforms
             ))
-        
+
         return result
     except Exception as e:
         raise HTTPException(
@@ -209,12 +209,12 @@ async def upload_and_schedule(
     """
     Upload a reel/carousel image and schedule for publishing, or schedule
     a text-only post (for Threads).
-    
+
     Flow:
     1. If file provided: detect content type, upload to storage, create entry
     2. If no file: create text-only entry (only valid for Threads-only posts)
     3. Return schedule_id for frontend reference
-    
+
     Args:
         brand_id: Brand to publish as
         caption: Caption/description for the post
@@ -224,7 +224,7 @@ async def upload_and_schedule(
         file: The video or image file to upload (optional for text-only Threads)
     """
     import json
-    
+
     try:
         # Validate brand
         brand = db.query(Brand).filter(
@@ -232,13 +232,13 @@ async def upload_and_schedule(
             Brand.user_id == user["id"],
             Brand.active == True
         ).first()
-        
+
         if not brand:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Brand '{brand_id}' not found or not accessible"
             )
-        
+
         # Parse platforms
         try:
             platforms_list = json.loads(platforms)
@@ -249,7 +249,7 @@ async def upload_and_schedule(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid platforms JSON"
             )
-        
+
         # Validate platforms are connected
         connected = {p["name"] for p in _get_connected_platforms(brand)}
         for plat in platforms_list:
@@ -258,7 +258,7 @@ async def upload_and_schedule(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Platform '{plat}' is not connected for brand '{brand_id}'"
                 )
-        
+
         # Validate scheduled time
         try:
             scheduled_dt = _validate_scheduled_time(scheduled_time)
@@ -267,10 +267,10 @@ async def upload_and_schedule(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
             )
-        
+
         # Determine if text-only (Threads-only, no file)
         is_text_only = file is None or (file.filename is None or file.filename == "")
-        
+
         if is_text_only:
             # Text-only posts are only valid for Threads
             non_threads = [p for p in platforms_list if p != "threads"]
@@ -301,7 +301,7 @@ async def upload_and_schedule(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=str(e)
                 )
-            
+
             # Read file content
             file_content = await file.read()
             if not file_content:
@@ -309,7 +309,7 @@ async def upload_and_schedule(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="File is empty"
                 )
-            
+
             # Upload to Supabase storage
             file_ext = Path(file.filename).suffix.lower()
             upload_path = storage_path(
@@ -318,7 +318,7 @@ async def upload_and_schedule(
                 "manual-content",
                 f"{str(uuid.uuid4())}{file_ext}"
             )
-            
+
             mime_type = "video/mp4" if content_type == "reel" else "image/png"
             try:
                 file_url = upload_bytes("media", upload_path, file_content, mime_type)
@@ -327,11 +327,11 @@ async def upload_and_schedule(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to upload file to storage: {str(e)}"
                 )
-        
+
         # Create ScheduledReel entry with created_by="user"
         schedule_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
-        
+
         scheduled_entry = ScheduledReel(
             schedule_id=schedule_id,
             user_id=user["id"],
@@ -354,7 +354,7 @@ async def upload_and_schedule(
                 "variant": "post" if content_type in ("carousel", "text") else "light",
             }
         )
-        
+
         # Save to database
         if content_type == "reel" and file_url:
             scheduled_entry.extra_data["video_path"] = file_url
@@ -362,10 +362,10 @@ async def upload_and_schedule(
             scheduled_entry.extra_data["carousel_paths"] = [file_url]
             scheduled_entry.extra_data["thumbnail_path"] = file_url
         # text-only posts have no file paths
-        
+
         db.add(scheduled_entry)
         db.commit()
-        
+
         return {
             "status": "scheduled",
             "schedule_id": schedule_id,
@@ -376,7 +376,7 @@ async def upload_and_schedule(
             "file_url": file_url,
             "caption": caption,
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -400,13 +400,13 @@ async def get_manual_schedule(
             ScheduledReel.user_id == user["id"],
             ScheduledReel.created_by == "user"
         ).first()
-        
+
         if not scheduled:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Manual schedule '{schedule_id}' not found"
             )
-        
+
         extra = scheduled.extra_data or {}
         return {
             "schedule_id": scheduled.schedule_id,
@@ -439,7 +439,7 @@ async def edit_manual_schedule(
 ):
     """
     Edit a manually scheduled post.
-    
+
     Can update: caption, platforms, scheduled_time, brand_id, social_media
     """
     try:
@@ -448,26 +448,26 @@ async def edit_manual_schedule(
             ScheduledReel.user_id == user["id"],
             ScheduledReel.created_by == "user"
         ).first()
-        
+
         if not scheduled:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Manual schedule '{schedule_id}' not found"
             )
-        
+
         # Can't edit already published content
         if scheduled.status in ["published", "publishing"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot edit schedule with status '{scheduled.status}'"
             )
-        
+
         extra = scheduled.extra_data or {}
-        
+
         # Update caption if provided
         if request.caption is not None:
             scheduled.caption = request.caption
-        
+
         # Update scheduled time if provided
         if request.scheduled_time is not None:
             try:
@@ -478,7 +478,7 @@ async def edit_manual_schedule(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=str(e)
                 )
-        
+
         # Update platforms if provided
         if request.platforms is not None:
             if request.brand_id:
@@ -492,13 +492,13 @@ async def edit_manual_schedule(
                     Brand.id == extra.get("brand"),
                     Brand.user_id == user["id"]
                 ).first()
-            
+
             if not brand:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Brand not found"
                 )
-            
+
             connected = {p["name"] for p in _get_connected_platforms(brand)}
             for plat in request.platforms:
                 if plat not in connected:
@@ -506,9 +506,9 @@ async def edit_manual_schedule(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Platform '{plat}' is not connected for this brand"
                     )
-            
+
             extra["platforms"] = request.platforms
-        
+
         # Update brand if provided
         if request.brand_id is not None:
             # Validate brand exists and belongs to user
@@ -517,22 +517,22 @@ async def edit_manual_schedule(
                 Brand.user_id == user["id"],
                 Brand.active == True
             ).first()
-            
+
             if not brand:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Brand '{request.brand_id}' not found or not accessible"
                 )
-            
+
             extra["brand"] = request.brand_id
-        
+
         # Update social media if provided
         if request.social_media is not None:
             extra["social_media"] = request.social_media
-        
+
         scheduled.extra_data = extra
         db.commit()
-        
+
         return {
             "success": True,
             "schedule_id": schedule_id,
@@ -545,7 +545,7 @@ async def edit_manual_schedule(
                 "social_media": request.social_media is not None,
             }
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -569,21 +569,21 @@ async def delete_manual_schedule(
             ScheduledReel.user_id == user["id"],
             ScheduledReel.created_by == "user"
         ).first()
-        
+
         if not scheduled:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Manual schedule '{schedule_id}' not found"
             )
-        
+
         db.delete(scheduled)
         db.commit()
-        
+
         return {
             "success": True,
             "message": f"Schedule '{schedule_id}' deleted successfully"
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -601,7 +601,7 @@ async def list_manual_schedules(
 ):
     """
     Get all manually scheduled posts (created via calendar upload).
-    
+
     Filters out Toby-generated content (created_by != "user").
     """
     try:
@@ -611,7 +611,7 @@ async def list_manual_schedules(
         ).order_by(
             ScheduledReel.scheduled_time.asc()
         ).all()
-        
+
         result = []
         for sched in schedules:
             extra = sched.extra_data or {}
@@ -628,12 +628,12 @@ async def list_manual_schedules(
                 "published_at": sched.published_at.isoformat() if sched.published_at else None,
                 "file_url": extra.get("file_url"),
             })
-        
+
         return {
             "total": len(result),
             "schedules": result
         }
-    
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

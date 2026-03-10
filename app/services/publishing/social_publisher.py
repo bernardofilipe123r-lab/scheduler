@@ -15,32 +15,32 @@ from app.core.config import BrandConfig
 def create_facebook_caption(full_caption: str, max_length: int = 400) -> str:
     """
     Create a short, punchy Facebook caption from the full Instagram caption.
-    
+
     Facebook works better with shorter captions. This function:
     1. Extracts the opening hook/intro paragraph
     2. Adds a simple CTA
     3. Keeps it under max_length characters
-    
+
     Args:
         full_caption: The full Instagram caption
         max_length: Maximum characters for FB caption (default 400)
-        
+
     Returns:
         A condensed Facebook-optimized caption
     """
     if not full_caption or len(full_caption) <= max_length:
         return full_caption
-    
+
     # Split by double newlines to get paragraphs
     paragraphs = full_caption.split('\n\n')
-    
+
     # Get the first paragraph (usually the hook/intro)
     first_para = paragraphs[0].strip() if paragraphs else ""
-    
+
     # If first paragraph is empty or too short, try to get more content
     if len(first_para) < 50 and len(paragraphs) > 1:
         first_para = paragraphs[0].strip() + "\n\n" + paragraphs[1].strip()
-    
+
     # Remove any emoji-starting lines from the first para (those are usually CTAs)
     lines = first_para.split('\n')
     clean_lines = []
@@ -48,43 +48,43 @@ def create_facebook_caption(full_caption: str, max_length: int = 400) -> str:
         # Skip lines that start with emojis (CTA lines)
         if line and not re.match(r'^[\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]', line.strip()):
             clean_lines.append(line)
-    
+
     intro_text = '\n'.join(clean_lines).strip()
-    
+
     # Simple FB CTA
     fb_cta = "\n\n💡 Follow for more content like this!"
-    
+
     # Calculate available space for intro
     available_space = max_length - len(fb_cta)
-    
+
     # Truncate intro if needed, but at a sentence boundary
     if len(intro_text) > available_space:
         # Try to cut at a sentence boundary
         truncated = intro_text[:available_space]
-        
+
         # Find last sentence ending
         last_period = truncated.rfind('.')
         last_question = truncated.rfind('?')
         last_exclaim = truncated.rfind('!')
-        
+
         cut_point = max(last_period, last_question, last_exclaim)
-        
+
         if cut_point > available_space * 0.5:  # Only use sentence boundary if it's at least half the text
             intro_text = truncated[:cut_point + 1]
         else:
             # Cut at word boundary
             intro_text = truncated[:truncated.rfind(' ')] + "..."
-    
+
     return intro_text + fb_cta
 
 
 class SocialPublisher:
     """Service for publishing Reels to Instagram and Facebook."""
-    
+
     def __init__(self, brand_config: Optional[BrandConfig] = None):
         """
         Initialize the social publisher with Meta credentials.
-        
+
         Args:
             brand_config: Optional brand configuration with specific credentials.
                          If not provided, uses default environment variables.
@@ -126,35 +126,35 @@ class SocialPublisher:
             self.bsky_app_password = None
             self.bsky_access_jwt = None
             self.bsky_refresh_jwt = None
-        
+
         self.api_version = "v21.0"
         # Instagram Business Login tokens must use graph.instagram.com;
         # Facebook page operations keep using graph.facebook.com.
         self.ig_graph_base = "https://graph.instagram.com"
         self.fb_graph_base = "https://graph.facebook.com"
         self._page_access_token_cache = {}  # Cache for page access tokens
-        
+
         # If we already have a dedicated Facebook page token, pre-cache it
         # so _get_page_access_token() skips the network round-trip.
         if brand_config and brand_config.facebook_access_token and brand_config.facebook_page_id:
             self._page_access_token_cache[brand_config.facebook_page_id] = brand_config.facebook_access_token
-        
+
         # Store brand name for debugging
         self.brand_name = brand_config.name if brand_config else "default"
-        
+
         # Debug output to show credential status
         print(f"🏷️ SocialPublisher initialized for: {self.brand_name}")
         print(f"   📸 Instagram Account ID: {self.ig_business_account_id}")
         print(f"   📘 Facebook Page ID: {self.fb_page_id}")
         print(f"   🔑 Token present: {bool(self.ig_access_token)}")
-        
+
         if not self.ig_access_token:
             print("   ⚠️  Warning: Meta access token not found")
         if not self.ig_business_account_id:
             print("   ⚠️  Warning: Instagram Business Account ID not found")
         if not self.fb_page_id:
             print("   ⚠️  Warning: Facebook Page ID not found")
-    
+
     def get_credential_info(self) -> Dict[str, Any]:
         """Get info about credentials being used for debugging."""
         return {
@@ -269,21 +269,21 @@ class SocialPublisher:
         """
         Get a Page Access Token from the System User Token.
         Facebook Reels API requires a Page Access Token, not a User/System User token.
-        
+
         Args:
             page_id: The Facebook Page ID
-            
+
         Returns:
             Page Access Token or None if failed
         """
         # Check cache first
         if page_id in self._page_access_token_cache:
             return self._page_access_token_cache[page_id]
-        
+
         if not self._system_user_token:
             print("⚠️  No system user token available")
             return None
-        
+
         try:
             # Get page access token from the system user token
             # This endpoint returns all pages the token has access to with their page tokens
@@ -292,17 +292,17 @@ class SocialPublisher:
                 "fields": "access_token",
                 "access_token": self._system_user_token
             }
-            
+
             print(f"🔑 Getting Page Access Token for page {page_id}...")
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
-            
+
             if "error" in data:
                 error_msg = data["error"].get("message", "Unknown error")
                 print(f"   ❌ Failed to get page token: {error_msg}")
                 # If this fails, try the /me/accounts approach
                 return self._get_page_token_via_accounts(page_id)
-            
+
             page_token = data.get("access_token")
             if page_token:
                 print(f"   ✅ Got Page Access Token")
@@ -311,11 +311,11 @@ class SocialPublisher:
             else:
                 print(f"   ⚠️ No access_token in response, trying /me/accounts...")
                 return self._get_page_token_via_accounts(page_id)
-                
+
         except Exception as e:
             print(f"   ❌ Exception getting page token: {e}")
             return self._get_page_token_via_accounts(page_id)
-    
+
     def _get_page_token_via_accounts(self, page_id: str) -> Optional[str]:
         """
         Alternative method: Get page token via /me/accounts endpoint.
@@ -325,16 +325,16 @@ class SocialPublisher:
             params = {
                 "access_token": self._system_user_token
             }
-            
+
             print(f"   🔍 Trying /me/accounts endpoint...")
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
-            
+
             if "error" in data:
                 error_msg = data["error"].get("message", "Unknown error")
                 print(f"   ❌ /me/accounts failed: {error_msg}")
                 return None
-            
+
             pages = data.get("data", [])
             for page in pages:
                 if page.get("id") == page_id:
@@ -343,15 +343,15 @@ class SocialPublisher:
                         print(f"   ✅ Found Page Access Token via /me/accounts")
                         self._page_access_token_cache[page_id] = page_token
                         return page_token
-            
+
             print(f"   ❌ Page {page_id} not found in accessible pages")
             print(f"   ℹ️  Available pages: {[p.get('id') for p in pages]}")
             return None
-            
+
         except Exception as e:
             print(f"   ❌ Exception in /me/accounts: {e}")
             return None
-    
+
     def _get_instagram_permalink(self, media_id: str) -> Optional[str]:
         """Fetch the permalink for an Instagram media post via the Graph API."""
         if not media_id or not self.ig_access_token:
@@ -376,16 +376,16 @@ class SocialPublisher:
     ) -> Dict[str, Any]:
         """
         Publish a single image post to Instagram using the Content Publishing API.
-        
+
         Steps:
         1. Create media container with image_url + caption
         2. Wait for processing (STATUS_CODE == FINISHED)
         3. Publish the container
-        
+
         Args:
             image_url: Public URL to the image file (must be accessible)
             caption: Caption text for the post
-            
+
         Returns:
             Dict with publish status and Instagram post ID
         """
@@ -395,27 +395,27 @@ class SocialPublisher:
                 "error": "Instagram credentials not configured",
                 "platform": "instagram"
             }
-        
+
         try:
             # Step 1: Create media container for image post
             container_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media"
-            
+
             print(f"📤 Image URL for Instagram post: {image_url}")
             print(f"   Instagram Account ID: {self.ig_business_account_id}")
             print(f"   Using IMAGE POST method (not Reels)...")
-            
+
             container_payload = {
                 "image_url": image_url,
                 "caption": caption,
                 "access_token": self.ig_access_token
             }
-            
+
             print(f"📸 Creating Instagram image post container...")
             container_response = requests.post(container_url, data=container_payload, timeout=30)
             container_data = container_response.json()
-            
+
             print(f"   Container response: {container_data}")
-            
+
             if "error" in container_data:
                 error_msg = container_data["error"].get("message", "Unknown error")
                 error_code = container_data["error"].get("code", "")
@@ -459,7 +459,7 @@ class SocialPublisher:
                         "error_code": error_code,
                         "error_subcode": error_subcode
                     }
-            
+
             creation_id = container_data.get("id")
             if not creation_id:
                 return {
@@ -467,15 +467,15 @@ class SocialPublisher:
                     "error": "No creation ID returned",
                     "platform": "instagram"
                 }
-            
+
             print(f"✅ Container created: {creation_id}")
-            
+
             # Step 2: Wait for processing
             status_url = f"{self.ig_graph_base}/{self.api_version}/{creation_id}"
             max_wait_seconds = 60
             check_interval = 3
             waited = 0
-            
+
             print(f"⏳ Waiting for Instagram to process image...")
             while waited < max_wait_seconds:
                 status_response = requests.get(
@@ -484,7 +484,7 @@ class SocialPublisher:
                     timeout=10
                 )
                 status_data = status_response.json()
-                
+
                 if "error" in status_data:
                     error_msg = status_data["error"].get("message", "Unknown error")
                     print(f"   ❌ Status check error: {error_msg}")
@@ -494,10 +494,10 @@ class SocialPublisher:
                         "platform": "instagram",
                         "step": "status_check"
                     }
-                
+
                 status_code = status_data.get("status_code")
                 print(f"   📊 Status: {status_code} (waited {waited}s)")
-                
+
                 if status_code == "FINISHED":
                     print(f"✅ Image processing complete!")
                     break
@@ -508,10 +508,10 @@ class SocialPublisher:
                         "platform": "instagram",
                         "step": "processing"
                     }
-                
+
                 time.sleep(check_interval)
                 waited += check_interval
-            
+
             if waited >= max_wait_seconds:
                 return {
                     "success": False,
@@ -520,18 +520,18 @@ class SocialPublisher:
                     "step": "processing_timeout",
                     "creation_id": creation_id
                 }
-            
+
             # Step 3: Publish the container
             publish_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media_publish"
             publish_payload = {
                 "creation_id": creation_id,
                 "access_token": self.ig_access_token
             }
-            
+
             print(f"🚀 Publishing Instagram image post...")
             publish_response = requests.post(publish_url, data=publish_payload, timeout=30)
             publish_data = publish_response.json()
-            
+
             if "error" in publish_data:
                 return {
                     "success": False,
@@ -540,10 +540,10 @@ class SocialPublisher:
                     "step": "publish",
                     "creation_id": creation_id
                 }
-            
+
             instagram_post_id = publish_data.get("id")
             print(f"🎉 Instagram image post published! Post ID: {instagram_post_id}")
-            
+
             permalink = self._get_instagram_permalink(instagram_post_id)
             return {
                 "success": True,
@@ -552,7 +552,7 @@ class SocialPublisher:
                 "creation_id": creation_id,
                 "url": permalink,
             }
-            
+
         except requests.exceptions.Timeout:
             return {
                 "success": False,
@@ -573,31 +573,31 @@ class SocialPublisher:
     ) -> Dict[str, Any]:
         """
         Publish a single image post to a Facebook Page using the Photos API.
-        
+
         Uses: POST /{page_id}/photos with url + message
-        
+
         Args:
             image_url: Public URL to the image file
             caption: Caption text (will be shortened for FB)
-            
+
         Returns:
             Dict with publish status and Facebook post ID
         """
         fb_caption = create_facebook_caption(caption, max_length=400)
         if len(caption) != len(fb_caption):
             print(f"   📝 Facebook caption created: {len(caption)} → {len(fb_caption)} chars")
-        
+
         if not self._system_user_token or not self.fb_page_id:
             return {
                 "success": False,
                 "error": "Facebook credentials not configured",
                 "platform": "facebook"
             }
-        
+
         try:
             # Get Page Access Token (required for posting)
             page_access_token = self._get_page_access_token(self.fb_page_id)
-            
+
             if not page_access_token:
                 return {
                     "success": False,
@@ -605,26 +605,26 @@ class SocialPublisher:
                     "platform": "facebook",
                     "step": "auth"
                 }
-            
+
             # POST /{page_id}/photos with url + message
             photos_url = f"https://graph.facebook.com/{self.api_version}/{self.fb_page_id}/photos"
-            
+
             print(f"📤 Publishing image post to Facebook...")
             print(f"   Page ID: {self.fb_page_id}")
             print(f"   Image URL: {image_url}")
-            
+
             payload = {
                 "url": image_url,
                 "message": fb_caption,
                 "access_token": page_access_token,
                 "published": True,
             }
-            
+
             response = requests.post(photos_url, data=payload, timeout=30)
             data = response.json()
-            
+
             print(f"   Response: {data}")
-            
+
             if "error" in data:
                 error_msg = data["error"].get("message", "Unknown error")
                 error_code = data["error"].get("code", "")
@@ -636,10 +636,10 @@ class SocialPublisher:
                     "step": "publish",
                     "error_code": error_code
                 }
-            
+
             photo_id = data.get("id") or data.get("post_id")
             print(f"🎉 Facebook image post published! Photo ID: {photo_id}")
-            
+
             return {
                 "success": True,
                 "platform": "facebook",
@@ -648,7 +648,7 @@ class SocialPublisher:
                 "brand_used": self.brand_name,
                 "url": f"https://www.facebook.com/{photo_id}" if photo_id else None,
             }
-            
+
         except requests.exceptions.Timeout:
             return {
                 "success": False,
@@ -673,7 +673,7 @@ class SocialPublisher:
         """
         instagram_result = self.publish_instagram_image_post(image_url, caption)
         facebook_result = self.publish_facebook_image_post(image_url, caption)
-        
+
         return {
             "instagram": instagram_result,
             "facebook": facebook_result,
@@ -1108,17 +1108,17 @@ class SocialPublisher:
         """
         Publish a Reel to Instagram using the video_url method.
         Instagram fetches the video from the URL directly — no rupload step.
-        
+
         Steps:
         1. Create media container with video_url
         2. Wait for processing (status_code == FINISHED)
         3. Publish the container
-        
+
         Args:
             video_url: Public URL to the video file (must be accessible)
             caption: Caption text for the reel
             thumbnail_url: Optional thumbnail URL
-            
+
         Returns:
             Dict with publish status and Instagram post ID
         """
@@ -1128,33 +1128,33 @@ class SocialPublisher:
                 "error": "Instagram credentials not configured",
                 "platform": "instagram"
             }
-        
+
         try:
             # Step 1: Create media container (Instagram fetches video from video_url)
             container_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media"
-            
+
             print(f"📤 Video URL for Instagram: {video_url}")
             print(f"   Instagram Account ID: {self.ig_business_account_id}")
             print(f"   Using video_url method (Instagram fetches video directly)...")
-            
+
             container_payload = {
                 "media_type": "REELS",
                 "video_url": video_url,
                 "caption": caption,
                 "access_token": self.ig_access_token
             }
-            
+
             # Add cover/thumbnail URL if provided
             if thumbnail_url:
                 container_payload["cover_url"] = thumbnail_url
                 print(f"   🖼️ Cover URL: {thumbnail_url}")
-            
+
             print(f"📸 Creating Instagram Reel resumable container...")
             container_response = requests.post(container_url, data=container_payload, timeout=30)
             container_data = container_response.json()
-            
+
             print(f"   Container response: {container_data}")
-            
+
             if "error" in container_data:
                 error_msg = container_data["error"].get("message", "Unknown error")
                 error_code = container_data["error"].get("code", "")
@@ -1198,24 +1198,24 @@ class SocialPublisher:
                         "error_code": error_code,
                         "error_subcode": error_subcode
                     }
-            
+
             creation_id = container_data.get("id")
-            
+
             if not creation_id:
                 return {
                     "success": False,
                     "error": "No creation ID returned",
                     "platform": "instagram"
                 }
-            
+
             print(f"✅ Container created: {creation_id}")
-            
+
             # Step 2: Wait for video processing with status checks
             status_url = f"{self.ig_graph_base}/{self.api_version}/{creation_id}"
             max_wait_seconds = 180  # Wait up to 3 minutes for processing
             check_interval = 5  # Check every 5 seconds
             waited = 0
-            
+
             print(f"⏳ Waiting for Instagram to process video...")
             while waited < max_wait_seconds:
                 status_response = requests.get(
@@ -1224,7 +1224,7 @@ class SocialPublisher:
                     timeout=10
                 )
                 status_data = status_response.json()
-                
+
                 # Check for error in response
                 if "error" in status_data:
                     error_msg = status_data["error"].get("message", "Unknown error")
@@ -1235,12 +1235,12 @@ class SocialPublisher:
                         "platform": "instagram",
                         "step": "status_check"
                     }
-                
+
                 status_code = status_data.get("status_code")
                 status_info = status_data.get("status", "")
-                
+
                 print(f"   📊 Status: {status_code} (waited {waited}s) - {status_info}")
-                
+
                 if status_code == "FINISHED":
                     print(f"✅ Video processing complete!")
                     break
@@ -1261,7 +1261,7 @@ class SocialPublisher:
                     print(f"   ⚠️ Unknown status: {status_code}")
                     time.sleep(check_interval)
                     waited += check_interval
-            
+
             if waited >= max_wait_seconds:
                 return {
                     "success": False,
@@ -1270,19 +1270,19 @@ class SocialPublisher:
                     "step": "processing_timeout",
                     "creation_id": creation_id
                 }
-            
+
             # Step 3: Publish the container
             publish_url = f"{self.ig_graph_base}/{self.api_version}/{self.ig_business_account_id}/media_publish"
-            
+
             publish_payload = {
                 "creation_id": creation_id,
                 "access_token": self.ig_access_token
             }
-            
+
             print(f"🚀 Publishing Instagram Reel...")
             publish_response = requests.post(publish_url, data=publish_payload, timeout=30)
             publish_data = publish_response.json()
-            
+
             if "error" in publish_data:
                 return {
                     "success": False,
@@ -1291,11 +1291,11 @@ class SocialPublisher:
                     "step": "publish",
                     "creation_id": creation_id
                 }
-            
+
             instagram_post_id = publish_data.get("id")
-            
+
             print(f"🎉 Instagram Reel published! Post ID: {instagram_post_id}")
-            
+
             permalink = self._get_instagram_permalink(instagram_post_id)
             return {
                 "success": True,
@@ -1304,7 +1304,7 @@ class SocialPublisher:
                 "creation_id": creation_id,
                 "url": permalink,
             }
-            
+
         except requests.exceptions.Timeout:
             return {
                 "success": False,
@@ -1317,7 +1317,7 @@ class SocialPublisher:
                 "error": str(e),
                 "platform": "instagram"
             }
-    
+
     def publish_facebook_reel(
         self,
         video_url: str,
@@ -1327,15 +1327,15 @@ class SocialPublisher:
         """
         Publish a Reel to Facebook Page using the Reels Publishing API.
         This uses the proper 3-step process: Initialize -> Upload -> Publish.
-        
+
         Note: Facebook gets a custom short caption (max 400 chars) optimized for the platform.
         Instagram uses the full caption with all details.
-        
+
         Args:
             video_url: Public URL to the video file
             caption: Full caption text (will be shortened for FB)
             thumbnail_url: Optional thumbnail URL
-            
+
         Returns:
             Dict with publish status and Facebook post ID
         """
@@ -1343,18 +1343,18 @@ class SocialPublisher:
         fb_caption = create_facebook_caption(caption, max_length=400)
         if len(caption) != len(fb_caption):
             print(f"   📝 Facebook caption created: {len(caption)} → {len(fb_caption)} chars")
-        
+
         if not self._system_user_token or not self.fb_page_id:
             return {
                 "success": False,
                 "error": "Facebook credentials not configured",
                 "platform": "facebook"
             }
-        
+
         try:
             # First, get a Page Access Token (required for Facebook Reels API)
             page_access_token = self._get_page_access_token(self.fb_page_id)
-            
+
             if not page_access_token:
                 return {
                     "success": False,
@@ -1362,14 +1362,14 @@ class SocialPublisher:
                     "platform": "facebook",
                     "step": "auth"
                 }
-            
+
             # Step 1: Initialize upload session
             init_url = f"https://graph.facebook.com/{self.api_version}/{self.fb_page_id}/video_reels"
-            
+
             print(f"📤 Initializing Facebook Reel upload...")
             print(f"   Page ID: {self.fb_page_id}")
             print(f"   Video URL: {video_url}")
-            
+
             init_response = requests.post(
                 init_url,
                 json={
@@ -1379,7 +1379,7 @@ class SocialPublisher:
                 timeout=30
             )
             init_data = init_response.json()
-            
+
             if "error" in init_data:
                 error_msg = init_data["error"].get("message", "Unknown error")
                 error_code = init_data["error"].get("code", "")
@@ -1391,10 +1391,10 @@ class SocialPublisher:
                     "step": "init",
                     "error_code": error_code
                 }
-            
+
             video_id = init_data.get("video_id")
             upload_url = init_data.get("upload_url")
-            
+
             if not video_id or not upload_url:
                 print(f"   ❌ Missing video_id or upload_url in response: {init_data}")
                 return {
@@ -1403,14 +1403,14 @@ class SocialPublisher:
                     "platform": "facebook",
                     "step": "init"
                 }
-            
+
             print(f"✅ Upload session initialized: {video_id}")
             print(f"   Upload URL: {upload_url}")
-            
+
             # Step 2: Upload the video using hosted file URL
             # According to FB docs: POST to rupload.facebook.com with file_url header
             print(f"📤 Uploading video to Facebook...")
-            
+
             # Build the correct upload URL format: https://rupload.facebook.com/video-upload/{api_version}/{video_id}
             # Sometimes the returned URL might not include the version, so we construct it
             if "rupload.facebook.com" in upload_url:
@@ -1419,26 +1419,26 @@ class SocialPublisher:
             else:
                 # Construct it manually
                 actual_upload_url = f"https://rupload.facebook.com/video-upload/{self.api_version}/{video_id}"
-            
+
             print(f"   Upload URL: {actual_upload_url}")
-            
+
             # Headers for hosted file upload (exactly as per FB docs)
             upload_headers = {
                 "Authorization": f"OAuth {page_access_token}",
                 "file_url": video_url
             }
-            
+
             print(f"   Headers: Authorization=OAuth [hidden], file_url={video_url}")
-            
+
             upload_response = requests.post(
                 actual_upload_url,
                 headers=upload_headers,
                 timeout=120
             )
-            
+
             print(f"   Response status: {upload_response.status_code}")
             print(f"   Response body: {upload_response.text[:500] if upload_response.text else 'empty'}")
-            
+
             # Check if upload was successful
             try:
                 upload_data = upload_response.json()
@@ -1457,7 +1457,7 @@ class SocialPublisher:
             except Exception as json_err:
                 # Response might not be JSON
                 print(f"   ⚠️ Could not parse response as JSON: {json_err}")
-            
+
             if upload_response.status_code != 200:
                 print(f"   ❌ Upload failed with status {upload_response.status_code}: {upload_response.text}")
                 return {
@@ -1466,16 +1466,16 @@ class SocialPublisher:
                     "platform": "facebook",
                     "step": "upload"
                 }
-            
+
             print(f"✅ Video uploaded successfully")
-            
+
             # Step 2.5: Wait for video processing (but don't wait too long - FB sometimes doesn't update status)
             print(f"⏳ Waiting for Facebook to process video...")
             max_wait = 60  # Reduced wait - FB processing can be slow to report
             waited = 0
             check_interval = 5
             last_status = ""
-            
+
             while waited < max_wait:
                 status_response = requests.get(
                     f"https://graph.facebook.com/{self.api_version}/{video_id}",
@@ -1486,29 +1486,29 @@ class SocialPublisher:
                     timeout=10
                 )
                 status_data = status_response.json()
-                
+
                 if "error" in status_data:
                     print(f"   ⚠️ Status check error, continuing...")
                     time.sleep(check_interval)
                     waited += check_interval
                     continue
-                
+
                 status = status_data.get("status", {})
                 video_status = status.get("video_status", "")
                 uploading_phase = status.get("uploading_phase", {}).get("status", "")
                 processing_phase = status.get("processing_phase", {}).get("status", "")
                 publishing_phase = status.get("publishing_phase", {}).get("status", "")
-                
+
                 current_status = f"{video_status}|{uploading_phase}|{processing_phase}|{publishing_phase}"
                 if current_status != last_status:
                     print(f"   📊 Status: video={video_status}, upload={uploading_phase}, process={processing_phase}, publish={publishing_phase} (waited {waited}s)")
                     last_status = current_status
-                
+
                 # If upload is complete, try to publish regardless of processing status
                 if uploading_phase == "complete" or video_status == "upload_complete":
                     print(f"✅ Upload confirmed complete, proceeding to publish...")
                     break
-                
+
                 if processing_phase == "complete" or video_status == "ready":
                     print(f"✅ Video processing complete!")
                     break
@@ -1522,13 +1522,13 @@ class SocialPublisher:
                         "platform": "facebook",
                         "step": "processing"
                     }
-                
+
                 time.sleep(check_interval)
                 waited += check_interval
-            
+
             # Step 3: Publish the reel
             print(f"🚀 Publishing Facebook Reel...")
-            
+
             publish_response = requests.post(
                 init_url,
                 params={
@@ -1541,7 +1541,7 @@ class SocialPublisher:
                 timeout=30
             )
             publish_data = publish_response.json()
-            
+
             if "error" in publish_data:
                 error_msg = publish_data["error"].get("message", "Unknown error")
                 error_code = publish_data["error"].get("code", "")
@@ -1553,9 +1553,9 @@ class SocialPublisher:
                     "step": "publish",
                     "video_id": video_id
                 }
-            
+
             print(f"🎉 Facebook Reel published! Video ID: {video_id}")
-            
+
             return {
                 "success": True,
                 "platform": "facebook",
@@ -1565,7 +1565,7 @@ class SocialPublisher:
                 "brand_used": self.brand_name,
                 "url": f"https://www.facebook.com/reel/{video_id}" if video_id else None,
             }
-            
+
         except requests.exceptions.Timeout:
             return {
                 "success": False,
@@ -1579,7 +1579,7 @@ class SocialPublisher:
                 "error": str(e),
                 "platform": "facebook"
             }
-    
+
     def publish_to_both(
         self,
         video_url: str,
@@ -1588,18 +1588,18 @@ class SocialPublisher:
     ) -> Dict[str, Any]:
         """
         Publish to both Instagram and Facebook.
-        
+
         Args:
             video_url: Public URL to the video file
             caption: Caption text
             thumbnail_url: Optional thumbnail URL
-            
+
         Returns:
             Dict with results from both platforms
         """
         instagram_result = self.publish_instagram_reel(video_url, caption, thumbnail_url)
         facebook_result = self.publish_facebook_reel(video_url, caption, thumbnail_url)
-        
+
         return {
             "instagram": instagram_result,
             "facebook": facebook_result,
@@ -1894,6 +1894,114 @@ class SocialPublisher:
 
         except Exception as e:
             error_msg = f"Threads carousel publish failed: {e}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "threads"}
+
+    def publish_threads_chain(
+        self,
+        parts: list[str],
+    ) -> Dict[str, Any]:
+        """
+        Publish a multi-post thread chain to Threads.
+
+        Uses reply_to_id chaining: each subsequent post is a reply to the
+        previous one, creating a connected thread.
+
+        Args:
+            parts: List of text strings, each ≤500 chars.
+
+        Returns:
+            Dict with success, post_ids (list), platform
+        """
+        if not self.threads_access_token or not self.threads_user_id:
+            return {
+                "success": False,
+                "error": "Threads credentials not configured",
+                "platform": "threads",
+            }
+
+        if not parts or len(parts) < 2:
+            return {
+                "success": False,
+                "error": f"Thread chains require at least 2 parts, got {len(parts) if parts else 0}",
+                "platform": "threads",
+            }
+
+        self._proactive_refresh_threads_token()
+        threads_api = "https://graph.threads.net/v21.0"
+
+        try:
+            post_ids: list[str] = []
+            reply_to_id: str | None = None
+
+            for i, text in enumerate(parts):
+                print(f"   🧵 Thread chain: Publishing part {i + 1}/{len(parts)}...", flush=True)
+
+                # Step 1: Create container
+                container_data: dict[str, str] = {
+                    "text": text,
+                    "media_type": "TEXT",
+                    "access_token": self.threads_access_token,
+                }
+                if reply_to_id:
+                    container_data["reply_to_id"] = reply_to_id
+
+                resp = requests.post(
+                    f"{threads_api}/{self.threads_user_id}/threads",
+                    data=container_data,
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                creation_id = resp.json().get("id")
+                if not creation_id:
+                    return {
+                        "success": False,
+                        "error": f"Thread chain part {i + 1} container returned no ID: {resp.text}",
+                        "platform": "threads",
+                    }
+
+                # Step 2: Publish container
+                pub_resp = requests.post(
+                    f"{threads_api}/{self.threads_user_id}/threads_publish",
+                    data={
+                        "creation_id": creation_id,
+                        "access_token": self.threads_access_token,
+                    },
+                    timeout=30,
+                )
+                pub_resp.raise_for_status()
+                published_id = pub_resp.json().get("id")
+                if not published_id:
+                    return {
+                        "success": False,
+                        "error": f"Thread chain part {i + 1} publish returned no ID",
+                        "platform": "threads",
+                    }
+
+                post_ids.append(published_id)
+                reply_to_id = published_id  # Next post replies to this one
+
+            print(f"   ✅ Thread chain published: {len(post_ids)} parts", flush=True)
+            return {
+                "success": True,
+                "post_id": post_ids[0],  # Root post ID
+                "post_ids": post_ids,
+                "platform": "threads",
+                "brand_used": self.brand_name,
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_body = ""
+            if e.response is not None:
+                try:
+                    error_body = e.response.json()
+                except Exception:
+                    error_body = e.response.text[:500]
+            error_msg = f"Threads chain API error: {e} — {error_body}"
+            print(f"   ❌ {error_msg}", flush=True)
+            return {"success": False, "error": error_msg, "platform": "threads"}
+        except Exception as e:
+            error_msg = f"Threads chain publish failed: {e}"
             print(f"   ❌ {error_msg}", flush=True)
             return {"success": False, "error": error_msg, "platform": "threads"}
 

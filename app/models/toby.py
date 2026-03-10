@@ -105,6 +105,12 @@ class TobyExperiment(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     min_samples = Column(Integer, default=5)
 
+    # v3 cognitive columns (migration: toby_v3_cognitive.sql)
+    hypothesis = Column(Text, nullable=True)
+    expected_effect_size = Column(Float, nullable=True)
+    achieved_significance = Column(Boolean, nullable=True)
+    p_value = Column(Float, nullable=True)
+
     __table_args__ = (
         Index("ix_toby_exp_user_status", "user_id", "status"),
         {"extend_existing": True},
@@ -123,6 +129,10 @@ class TobyExperiment(Base):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "min_samples": self.min_samples,
+            "hypothesis": self.hypothesis,
+            "expected_effect_size": self.expected_effect_size,
+            "achieved_significance": self.achieved_significance,
+            "p_value": self.p_value,
         }
 
 

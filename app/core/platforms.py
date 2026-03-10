@@ -51,20 +51,22 @@ LEGACY_DEFAULT_PLATFORMS: list[str] = ["instagram", "facebook", "youtube"]
 # Keys used in the enabled_platforms dict on TobyBrandConfig.
 # Internal content_type values ("reel", "post") map to these via
 # CONTENT_TYPE_KEY_MAP.
-SUPPORTED_CONTENT_TYPES: tuple[str, ...] = ("reels", "posts")
+SUPPORTED_CONTENT_TYPES: tuple[str, ...] = ("reels", "posts", "threads")
 
 CONTENT_TYPE_DISPLAY_NAMES: dict[str, str] = {
     "reels": "Reels",
     "posts": "Carousels",
+    "threads": "Threads",
 }
 
 # Maps the *internal* content_type values (used by ContentPlan, variant
 # logic, etc.) to the *user-facing* dict keys stored in enabled_platforms.
-# "reel" → "reels", "post" → "posts"
+# "reel" → "reels", "post" → "posts", "threads_post" → "threads"
 CONTENT_TYPE_KEY_MAP: dict[str, str] = {
     "reel": "reels",
     "post": "posts",
     "format_b_reel": "reels",
+    "threads_post": "threads",
 }
 
 # Platforms that ONLY support text content — no images, videos, or carousels.

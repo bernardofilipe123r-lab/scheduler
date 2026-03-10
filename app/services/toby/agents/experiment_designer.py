@@ -6,11 +6,12 @@ with specific hypotheses, using sequential testing for early stopping.
 """
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 from openai import OpenAI
-from app.models.toby import TobyExperiment, TobyActivityLog, TobyStrategyScore
+from app.models.toby import TobyExperiment, TobyActivityLog, TobyStrategyScore, TobyContentTag
 
 
 EXPERIMENT_DESIGNER_PROMPT = """You are an experiment design specialist for social media content strategy.
@@ -82,13 +83,34 @@ def design_experiment(
         if not design or not design.get("dimension"):
             return None
 
+        # Guard: don't create duplicate experiments for the same dimension
+        existing_active = (
+            db.query(TobyExperiment)
+            .filter(
+                TobyExperiment.user_id == user_id,
+                TobyExperiment.content_type == content_type,
+                TobyExperiment.dimension == design["dimension"],
+                TobyExperiment.status == "active",
+            )
+            .first()
+        )
+        if existing_active:
+            return None
+
+        # J4 guard: single-option experiments can never conclude
+        if len(design.get("options", [])) < 2:
+            return None
+
         # Create the experiment
         experiment = TobyExperiment(
+            id=str(uuid.uuid4()),
             user_id=user_id,
             content_type=content_type,
             dimension=design["dimension"],
             options=design["options"],
+            results={},
             status="active",
+            min_samples=design.get("recommended_samples", 5),
             hypothesis=design.get("hypothesis", ""),
             expected_effect_size=design.get("expected_effect_size"),
         )
@@ -186,6 +208,8 @@ def check_experiment_significance(db: Session, experiment_id: str) -> dict:
     # If significant, mark experiment as complete
     if significant:
         experiment.status = "completed"
+        experiment.winner = result["winner"]
+        experiment.completed_at = datetime.now(timezone.utc)
         experiment.achieved_significance = True
         experiment.p_value = float(p_value)
         db.commit()

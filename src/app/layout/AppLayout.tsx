@@ -5,7 +5,7 @@ import {
   Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
   Bot, Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck, CreditCard,
-  X, AlertTriangle,
+  X, AlertTriangle, MessageCircle,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useJobs } from '@/features/jobs'
@@ -153,6 +153,7 @@ const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/reels', icon: Film, label: 'Videos', end: false },
   { to: '/posts', icon: LayoutGrid, label: 'Posts', end: false },
+  { to: '/threads', icon: MessageCircle, label: 'Threads', end: false },
   { to: '/jobs', icon: Briefcase, label: 'Jobs', end: false },
   { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', end: false },
@@ -164,6 +165,7 @@ const PREFETCH_MAP: Record<string, () => Promise<unknown>> = {
   '/': () => import('@/pages/Home'),
   '/reels': () => import('@/pages/Reels'),
   '/posts': () => import('@/pages/Posts'),
+  '/threads': () => import('@/pages/Threads'),
   '/jobs': () => import('@/pages/History'),
   '/calendar': () => import('@/pages/Calendar'),
   '/analytics': () => import('@/pages/Analytics'),
@@ -208,7 +210,7 @@ export function AppLayout() {
   const activeJobCount = (Array.isArray(jobs) ? jobs : []).filter(
     (j: any) => j.status === 'generating' || j.status === 'pending'
   ).length
-  
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -219,7 +221,7 @@ export function AppLayout() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-  
+
   const handleLogout = async () => {
     await logout()
     navigate('/login')
@@ -235,7 +237,7 @@ export function AppLayout() {
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U'
 
   const sidebarWidth = expanded ? 'w-52' : 'w-16'
-  
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}

@@ -7,6 +7,7 @@ opportunities, and propose experiments.
 """
 import json
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -284,12 +285,19 @@ def _queue_experiment(
     if existing:
         return  # Don't create duplicate experiments
 
+    # J4 guard: single-option experiments can never conclude
+    if len(exp.get("options", [])) < 2:
+        return
+
     experiment = TobyExperiment(
+        id=str(uuid.uuid4()),
         user_id=user_id,
         content_type=content_type,
         dimension=exp.get("dimension", ""),
         options=exp.get("options", []),
+        results={},
         status="active",
+        min_samples=5,
         hypothesis=exp.get("hypothesis", ""),
         expected_effect_size=exp.get("expected_effect_size"),
     )

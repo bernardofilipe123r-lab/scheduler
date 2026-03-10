@@ -26,7 +26,7 @@ from app.models.toby import TobyStrategyScore, TobyExperiment, TobyActivityLog
 EXPERIMENT_TIMEOUT_DAYS = 21
 
 # ── Cold-start threshold (Phase C) ──
-COLD_START_THRESHOLD = 10
+COLD_START_THRESHOLD = 5
 
 
 # Default personality pools per content type
