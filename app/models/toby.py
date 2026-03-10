@@ -34,6 +34,8 @@ class TobyState(Base):
     post_slots_per_day = Column(Integer, default=2)
     reels_enabled = Column(Boolean, nullable=False, default=True)
     posts_enabled = Column(Boolean, nullable=False, default=True)
+    threads_enabled = Column(Boolean, nullable=False, default=True)
+    threads_posts_per_day = Column(Integer, default=6)
 
     # Scheduling state
     last_buffer_check_at = Column(DateTime(timezone=True), nullable=True)
@@ -288,6 +290,7 @@ class TobyBrandConfig(Base):
     enabled = Column(Boolean, nullable=False, default=True)
     reel_slots_per_day = Column(Integer, nullable=False, default=6)
     post_slots_per_day = Column(Integer, nullable=False, default=2)
+    threads_posts_per_day = Column(Integer, nullable=False, default=6)
     # JSON list of enabled platform names, e.g. ["instagram","facebook","youtube","threads","tiktok"]
     # NULL means "all connected platforms" (backwards-compatible default).
     enabled_platforms = Column(JSON, nullable=True)

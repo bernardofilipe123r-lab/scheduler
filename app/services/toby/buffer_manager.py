@@ -97,10 +97,12 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     # Slot definitions — must match frontend (Home.tsx) and scheduler (scheduler.py)
     BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]   # 6 reels/day, 4h apart
     BASE_POST_HOURS = [8, 14]                   # 2 posts/day
+    BASE_THREAD_HOURS = [0, 4, 8, 12, 16, 20]  # 6 threads/day, 4h apart (same as reels)
 
     # Global content-type toggles
     reels_enabled = state.reels_enabled if state.reels_enabled is not None else True
     posts_enabled = state.posts_enabled if state.posts_enabled is not None else True
+    threads_enabled = getattr(state, 'threads_enabled', True) if state else True
 
     # Load per-brand config overrides
     brand_configs = db.query(TobyBrandConfig).filter(
@@ -120,6 +122,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
 
         brand_reel_slots = bc.reel_slots_per_day if bc else (state.reel_slots_per_day or 6)
         brand_post_slots = bc.post_slots_per_day if bc else (state.post_slots_per_day or 2)
+        brand_thread_slots = (bc.threads_posts_per_day if bc and bc.threads_posts_per_day is not None else (getattr(state, 'threads_posts_per_day', 6) or 6))
 
         # Determine reel content_type based on brand's reel_format
         brand_reel_format = (bc.reel_format if bc and bc.reel_format else "format_a")
@@ -130,6 +133,13 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
             brand_reel_slots = 0
         if not posts_enabled:
             brand_post_slots = 0
+        if not threads_enabled:
+            brand_thread_slots = 0
+
+        # Only generate thread slots for brands with Threads connected
+        has_threads = bool(brand.threads_access_token and brand.threads_user_id)
+        if not has_threads:
+            brand_thread_slots = 0
 
         # Generate expected slot times for this brand
         for day_offset in range(state.buffer_days or 2):
@@ -161,6 +171,19 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                     "filled": _slot_is_filled(brand.id, slot_time),
                 })
 
+            # Thread slots: use per-brand count, pick first N from base hours
+            for base_hour in BASE_THREAD_HOURS[:brand_thread_slots]:
+                hour = (base_hour + offset_hours) % 24
+                slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
+                if slot_time <= now:
+                    continue
+                all_slots.append({
+                    "brand_id": brand.id,
+                    "time": slot_time.isoformat(),
+                    "content_type": "threads_post",
+                    "filled": _slot_is_filled(brand.id, slot_time),
+                })
+
     total = len(all_slots)
     filled = sum(1 for s in all_slots if s["filled"])
     empty = total - filled
@@ -185,6 +208,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         brand_total = len(brand_slots)
         brand_reels = sum(1 for s in brand_slots if s["content_type"] in ("reel", "format_b_reel"))
         brand_posts = sum(1 for s in brand_slots if s["content_type"] == "post")
+        brand_threads = sum(1 for s in brand_slots if s["content_type"] == "threads_post")
         brand_breakdown.append({
             "brand_id": brand.id,
             "display_name": brand.display_name or brand.id,
@@ -192,6 +216,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
             "filled": brand_filled,
             "reels": brand_reels,
             "posts": brand_posts,
+            "threads": brand_threads,
         })
 
     return {

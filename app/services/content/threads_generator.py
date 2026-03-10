@@ -82,7 +82,7 @@ class ThreadsGenerator:
             return None
 
         if not format_type or format_type not in THREAD_FORMAT_TYPES:
-            format_type = random.choice([f for f in THREAD_FORMAT_IDS if f != "thread_chain"])
+            format_type = self._pick_weighted_format(ctx, exclude=["thread_chain"])
 
         fmt = THREAD_FORMAT_TYPES[format_type]
 
@@ -224,6 +224,21 @@ Posts should feel authentic, conversational, and scroll-stopping.
 The best Threads content sparks replies and reposts — not just likes.
 
 You generate ONLY valid JSON. No markdown, no explanations, no extra text."""
+
+    def _pick_weighted_format(self, ctx: PromptContext, exclude: list[str] | None = None) -> str:
+        """Pick a thread format using user-configured weights, or uniform random if not set."""
+        exclude = exclude or []
+        candidates = [f for f in THREAD_FORMAT_IDS if f not in exclude]
+
+        weights = getattr(ctx, 'threads_format_weights', None) or {}
+        if weights:
+            # Filter to valid candidates with positive weights
+            weighted = [(f, weights.get(f, 0)) for f in candidates if weights.get(f, 0) > 0]
+            if weighted:
+                formats, w = zip(*weighted)
+                return random.choices(list(formats), weights=list(w), k=1)[0]
+
+        return random.choice(candidates)
 
     def _call_deepseek(self, system_prompt: str, user_prompt: str) -> Optional[Dict]:
         """Call DeepSeek API and parse JSON response."""

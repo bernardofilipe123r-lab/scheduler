@@ -521,18 +521,18 @@ class LoggingService:
         """Shutdown the logging service and flush remaining entries."""
         _log_buffer.stop()
     
-    def cleanup_old_logs(self, retention_days: int = 7):
-        """Delete logs older than retention_days."""
+    def cleanup_old_logs(self, retention_hours: int = 48):
+        """Delete logs older than retention_hours (default 48h)."""
         try:
             from app.db_connection import SessionLocal
             from app.models import LogEntry
-            
-            cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
             db = SessionLocal()
             try:
                 deleted = db.query(LogEntry).filter(LogEntry.timestamp < cutoff).delete()
                 db.commit()
-                self.log_system_event('log_cleanup', f"Deleted {deleted} logs older than {retention_days} days")
+                self.log_system_event('log_cleanup', f"Deleted {deleted} logs older than {retention_hours}h")
                 return deleted
             finally:
                 db.close()

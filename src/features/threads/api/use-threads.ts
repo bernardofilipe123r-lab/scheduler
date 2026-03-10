@@ -44,3 +44,9 @@ export function useScheduleThread() {
     mutationFn: threadsApi.schedule,
   })
 }
+
+export function useAutoScheduleThread() {
+  return useMutation({
+    mutationFn: threadsApi.autoSchedule,
+  })
+}

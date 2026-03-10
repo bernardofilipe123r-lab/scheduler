@@ -10,7 +10,7 @@ are NEVER stored here — they remain hardcoded in prompt_templates.py.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -79,6 +79,9 @@ class PromptContext:
     format_b_story_niches: List[str] = field(default_factory=list)
     format_b_story_tone: str = ""
     format_b_preferred_categories: List[str] = field(default_factory=list)
+
+    # Threads format weights — probability weights for thread type selection
+    threads_format_weights: Dict[str, int] = field(default_factory=dict)
 
     # Toby personality modifier (injected by Toby orchestrator)
     personality_modifier: str = ""

@@ -86,6 +86,10 @@ class NicheConfig(Base):
     format_b_story_tone = Column(Text, default="")
     format_b_preferred_categories = Column(JSONB, default=[])
 
+    # Threads format weights — probability weights for thread type selection
+    # e.g. {"hot_take": 30, "question_hook": 25, "myth_bust": 20, "value_list": 15, "story_micro": 10}
+    threads_format_weights = Column(JSONB, default={})
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -10,7 +10,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Wand2,
-  Send,
   Loader2,
   Plus,
   Trash2,
@@ -19,6 +18,7 @@ import {
   Link2,
   CalendarClock,
   RefreshCw,
+  Clock,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands, useBrandConnections } from '@/features/brands'
@@ -26,9 +26,8 @@ import {
   useGenerateSingle,
   useGenerateChain,
   useGenerateBulk,
-  usePublishSingle,
-  usePublishChain,
   useScheduleThread,
+  useAutoScheduleThread,
   useFormatTypes,
 } from '@/features/threads'
 
@@ -43,9 +42,8 @@ export function ThreadsPage() {
   const generateSingle = useGenerateSingle()
   const generateChain = useGenerateChain()
   const generateBulk = useGenerateBulk()
-  const publishSingle = usePublishSingle()
-  const publishChain = usePublishChain()
   const scheduleThread = useScheduleThread()
+  const autoScheduleThread = useAutoScheduleThread()
 
   // ── State ──────────────────────────────────────────────────────────
   const [mode, setMode] = useState<'auto' | 'manual'>('auto')
@@ -89,11 +87,39 @@ export function ThreadsPage() {
   }, [threadsConnectedBrands, selectedBrand])
 
   const isLoading = generateSingle.isPending || generateChain.isPending || generateBulk.isPending
-  const isPublishing = publishSingle.isPending || publishChain.isPending || scheduleThread.isPending
+  const isPublishing = scheduleThread.isPending || autoScheduleThread.isPending
 
   const selectedBrandInfo = brands.find(b => b.id === selectedBrand)
 
   // ── Handlers ───────────────────────────────────────────────────────
+
+  const handleAutoSchedule = async (options?: { isChain?: boolean; text?: string; chainParts?: string[] }) => {
+    if (!selectedBrand) { toast.error('Select a brand first'); return }
+
+    const isChain = options?.isChain ?? tab === 'chain'
+    const text = options?.text ?? (isChain ? (chainParts[0] || '') : postText)
+    const parts = options?.chainParts ?? (isChain ? chainParts.filter(p => p.trim()) : undefined)
+
+    if (!text.trim()) { toast.error('Write something first'); return }
+
+    try {
+      const result = await autoScheduleThread.mutateAsync({
+        brand_id: selectedBrand,
+        text,
+        is_chain: isChain,
+        chain_parts: parts,
+      })
+      const dt = new Date(result.scheduled_for)
+      toast.success(`Scheduled for ${dt.toLocaleDateString()} at ${dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
+      if (isChain) {
+        setChainParts(['', ''])
+      } else {
+        setPostText('')
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Auto-schedule failed')
+    }
+  }
 
   const handleGenerateSingle = async () => {
     if (!selectedBrand) { toast.error('Select a brand first'); return }
@@ -139,34 +165,6 @@ export function ThreadsPage() {
     }
   }
 
-  const handlePublishSingle = async () => {
-    if (!selectedBrand) { toast.error('Select a brand'); return }
-    if (!postText.trim()) { toast.error('Write something first'); return }
-    if (postText.length > MAX_CHARS) { toast.error(`Post exceeds ${MAX_CHARS} chars`); return }
-    try {
-      await publishSingle.mutateAsync({ brand_id: selectedBrand, text: postText })
-      toast.success('Published to Threads!')
-      setPostText('')
-    } catch (e: any) {
-      toast.error(e?.message || 'Publish failed')
-    }
-  }
-
-  const handlePublishChain = async () => {
-    if (!selectedBrand) { toast.error('Select a brand'); return }
-    const validParts = chainParts.filter(p => p.trim())
-    if (validParts.length < 2) { toast.error('Need at least 2 parts'); return }
-    const tooLong = validParts.findIndex(p => p.length > MAX_CHARS)
-    if (tooLong >= 0) { toast.error(`Part ${tooLong + 1} exceeds ${MAX_CHARS} chars`); return }
-    try {
-      await publishChain.mutateAsync({ brand_id: selectedBrand, parts: validParts })
-      toast.success(`Thread chain published (${validParts.length} posts)!`)
-      setChainParts(['', ''])
-    } catch (e: any) {
-      toast.error(e?.message || 'Chain publish failed')
-    }
-  }
-
   const handleSchedule = async () => {
     if (!selectedBrand) { toast.error('Select a brand'); return }
     if (!scheduleTime) { toast.error('Pick a time'); return }
@@ -191,15 +189,24 @@ export function ThreadsPage() {
     }
   }
 
-  const handlePublishBulkItem = async (text: string, index: number) => {
+  const handleAutoScheduleBulkItem = async (text: string, index: number) => {
     if (!selectedBrand) return
     try {
-      await publishSingle.mutateAsync({ brand_id: selectedBrand, text })
+      const result = await autoScheduleThread.mutateAsync({
+        brand_id: selectedBrand,
+        text,
+        is_chain: false,
+      })
       setBulkPosts(prev => prev.filter((_, i) => i !== index))
-      toast.success('Published!')
-    } catch {
-      toast.error('Publish failed')
+      const dt = new Date(result.scheduled_for)
+      toast.success(`Scheduled for ${dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
+    } catch (e: any) {
+      toast.error(e?.message || 'Auto-schedule failed')
     }
+  }
+
+  const handleDeleteBulkItem = (index: number) => {
+    setBulkPosts(prev => prev.filter((_, i) => i !== index))
   }
 
   // Chain part helpers
@@ -238,11 +245,11 @@ export function ThreadsPage() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+    <div className="max-w-5xl mx-auto px-6 py-5 space-y-4">
       {/* Header */}
-      <div className="text-center mb-2">
+      <div className="mb-2">
         <h1 className="text-xl font-bold text-gray-900 tracking-tight">Threads</h1>
-        <p className="text-sm text-gray-500 mt-1">Create and publish text posts</p>
+        <p className="text-sm text-gray-500 mt-0.5">Create and schedule text posts</p>
       </div>
 
       {/* Controls bar — brand + mode */}
@@ -375,14 +382,14 @@ export function ThreadsPage() {
                       {postText.length}/{MAX_CHARS}
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={handlePublishSingle}
+                      onClick={() => handleAutoSchedule()}
                       disabled={isPublishing || !postText.trim()}
                       className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium transition-colors"
                     >
-                      {publishSingle.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                      Publish
+                      {autoScheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                      Auto-Schedule
                     </button>
                     <button
                       onClick={() => setShowSchedule(!showSchedule)}
@@ -395,8 +402,16 @@ export function ThreadsPage() {
                       onClick={handleGenerateSingle}
                       disabled={isLoading}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs transition-colors"
+                      title="Regenerate"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setPostText('')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-500 hover:text-red-600 text-xs transition-colors ml-auto"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -465,14 +480,23 @@ export function ThreadsPage() {
                             </span>
                             <p className="text-xs text-gray-700 mt-1.5 whitespace-pre-wrap leading-relaxed">{post.text}</p>
                           </div>
-                          <button
-                            onClick={() => handlePublishBulkItem(post.text, i)}
-                            disabled={isPublishing}
-                            className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-[10px] font-medium"
-                          >
-                            <Send className="w-2.5 h-2.5" />
-                            Publish
-                          </button>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleAutoScheduleBulkItem(post.text, i)}
+                              disabled={isPublishing}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-[10px] font-medium"
+                            >
+                              <Clock className="w-2.5 h-2.5" />
+                              Schedule
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBulkItem(i)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-400 hover:text-red-500 text-[10px]"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
                         </div>
                         <span className="text-[9px] text-gray-400 mt-1 block">{post.text.length}/{MAX_CHARS}</span>
                       </div>
@@ -572,14 +596,14 @@ export function ThreadsPage() {
                     </button>
                   )}
 
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={handlePublishChain}
+                      onClick={() => handleAutoSchedule({ isChain: true })}
                       disabled={isPublishing}
                       className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium transition-colors"
                     >
-                      {publishChain.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                      Publish Chain
+                      {autoScheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                      Auto-Schedule
                     </button>
                     <button
                       onClick={() => { setTab('chain'); setShowSchedule(!showSchedule) }}
@@ -592,8 +616,16 @@ export function ThreadsPage() {
                       onClick={handleGenerateChain}
                       disabled={isLoading}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs transition-colors"
+                      title="Regenerate"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setChainParts(['', ''])}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-500 hover:text-red-600 text-xs transition-colors ml-auto"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -670,14 +702,14 @@ export function ThreadsPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={handlePublishSingle}
+                  onClick={() => handleAutoSchedule({ isChain: false, text: postText })}
                   disabled={isPublishing || !postText.trim() || postText.length > MAX_CHARS}
                   className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
                 >
-                  {publishSingle.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  Post to Threads
+                  {autoScheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                  Auto-Schedule
                 </button>
                 <button
                   onClick={() => setShowSchedule(!showSchedule)}
@@ -685,6 +717,14 @@ export function ThreadsPage() {
                 >
                   <CalendarClock className="w-3.5 h-3.5" />
                   Schedule
+                </button>
+                <button
+                  onClick={() => setPostText('')}
+                  disabled={!postText.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-500 hover:text-red-600 disabled:opacity-40 text-xs transition-colors ml-auto"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 
@@ -765,14 +805,14 @@ export function ThreadsPage() {
                 </button>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={handlePublishChain}
+                  onClick={() => handleAutoSchedule({ isChain: true })}
                   disabled={isPublishing || chainParts.filter(p => p.trim()).length < 2}
                   className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
                 >
-                  {publishChain.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  Post Thread
+                  {autoScheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                  Auto-Schedule
                 </button>
                 <button
                   onClick={() => setShowSchedule(!showSchedule)}
@@ -780,6 +820,13 @@ export function ThreadsPage() {
                 >
                   <CalendarClock className="w-3.5 h-3.5" />
                   Schedule
+                </button>
+                <button
+                  onClick={() => setChainParts(['', ''])}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-500 hover:text-red-600 text-xs transition-colors ml-auto"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 

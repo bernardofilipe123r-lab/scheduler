@@ -60,6 +60,13 @@ class ScheduleThreadRequest(BaseModel):
     chain_parts: Optional[List[str]] = None
 
 
+class AutoScheduleRequest(BaseModel):
+    brand_id: str
+    text: str = Field(..., max_length=500)
+    is_chain: bool = False
+    chain_parts: Optional[List[str]] = None
+
+
 # ── Helpers ───────────────────────────────────────────────────────────
 
 def _get_user_brand(db: Session, user_id: str, brand_id: str) -> Brand:
@@ -325,6 +332,114 @@ async def schedule_thread(
         "status": "scheduled",
         "schedule_id": schedule_id,
         "scheduled_for": scheduled_dt.isoformat(),
+    }
+
+
+@router.post("/auto-schedule")
+async def auto_schedule_thread(
+    request: AutoScheduleRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Auto-schedule a Threads post to the next available brand slot.
+
+    Uses the same posting hours as Instagram reels (6/day, 4h apart)
+    offset by the brand's schedule_offset.
+    """
+    from datetime import timedelta
+
+    brand = _get_user_brand(db, user["id"], request.brand_id)
+
+    if not brand.threads_access_token or not brand.threads_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Threads is not connected for this brand.",
+        )
+
+    # Same slot hours as Instagram reels
+    BASE_THREAD_HOURS = [0, 4, 8, 12, 16, 20]
+    SLOT_FUZZY_MINUTES = 15
+    offset_hours = brand.schedule_offset or 0
+    now = datetime.now(timezone.utc)
+
+    # Get already-scheduled threads for this brand in the next 7 days
+    horizon = now + timedelta(days=7)
+    scheduled = (
+        db.query(ScheduledReel)
+        .filter(
+            ScheduledReel.user_id == user["id"],
+            ScheduledReel.scheduled_time >= now,
+            ScheduledReel.scheduled_time <= horizon,
+            ScheduledReel.status.in_(["scheduled", "publishing", "partial", "published"]),
+        )
+        .all()
+    )
+
+    def _slot_is_filled(slot_time: datetime) -> bool:
+        for s in scheduled:
+            ed = s.extra_data or {}
+            if ed.get("brand") != request.brand_id:
+                continue
+            if ed.get("content_type") != "threads_post":
+                continue
+            diff = abs((s.scheduled_time - slot_time).total_seconds())
+            if diff <= SLOT_FUZZY_MINUTES * 60:
+                return True
+        return False
+
+    # Find next empty thread slot
+    next_slot = None
+    for day_offset in range(7):
+        day = now.date() + timedelta(days=day_offset)
+        for base_hour in BASE_THREAD_HOURS:
+            hour = (base_hour + offset_hours) % 24
+            slot_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=timezone.utc)
+            if slot_time <= now:
+                continue
+            if not _slot_is_filled(slot_time):
+                next_slot = slot_time
+                break
+        if next_slot:
+            break
+
+    if not next_slot:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No available thread slots in the next 7 days.",
+        )
+
+    schedule_id = str(uuid.uuid4())
+    extra_data = {
+        "brand": request.brand_id,
+        "content_type": "threads_post",
+        "platforms": ["threads"],
+        "manual": True,
+        "variant": "threads",
+        "is_chain": request.is_chain,
+    }
+    if request.is_chain and request.chain_parts:
+        extra_data["chain_parts"] = request.chain_parts
+
+    entry = ScheduledReel(
+        schedule_id=schedule_id,
+        user_id=user["id"],
+        user_name=user.get("email", "Web User"),
+        reel_id=f"threads_{request.brand_id}_{str(uuid.uuid4())[:8]}",
+        caption=request.text,
+        scheduled_time=next_slot,
+        created_at=now,
+        status="scheduled",
+        created_by="user",
+        extra_data=extra_data,
+    )
+
+    db.add(entry)
+    db.commit()
+
+    return {
+        "status": "scheduled",
+        "schedule_id": schedule_id,
+        "scheduled_for": next_slot.isoformat(),
     }
 
 

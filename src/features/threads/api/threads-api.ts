@@ -75,6 +75,15 @@ export const threadsApi = {
     return post(`${BASE}/schedule`, data)
   },
 
+  autoSchedule: async (data: {
+    brand_id: string
+    text: string
+    is_chain?: boolean
+    chain_parts?: string[]
+  }): Promise<{ status: string; schedule_id: string; scheduled_for: string }> => {
+    return post(`${BASE}/auto-schedule`, data)
+  },
+
   getFormatTypes: async (): Promise<FormatType[]> => {
     const res = await get<{ format_types: FormatType[] }>(`${BASE}/format-types`)
     return res.format_types

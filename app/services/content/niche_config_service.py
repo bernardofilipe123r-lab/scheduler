@@ -115,6 +115,7 @@ class NicheConfigService:
             'format_b_story_niches': 'format_b_story_niches',
             'format_b_story_tone': 'format_b_story_tone',
             'format_b_preferred_categories': 'format_b_preferred_categories',
+            'threads_format_weights': 'threads_format_weights',
         }
 
         for db_field, ctx_field in field_map.items():

@@ -8,16 +8,19 @@ Endpoints:
 - GET  /api/admin/users/{id}/scheduled           Get all scheduled posts for a user
 - GET  /api/admin/users/{id}/logs                Get system logs for a specific user
 - GET  /api/admin/supabase-usage                 Supabase usage metrics (super admin only)
+- GET  /api/admin/error-digest                   Condensed error summary (last 48h)
 """
 
 import asyncio
-from datetime import datetime, timedelta
+import re
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import cast, String, or_
+from sqlalchemy import cast, String, or_, func, and_
 
 from app.db_connection import get_db
 from app.models import LogEntry
@@ -707,3 +710,177 @@ async def aggregate_costs_endpoint(user: dict = Depends(get_current_user)):
     from app.services.monitoring.cost_tracker import aggregate_old_daily_records
     archived = aggregate_old_daily_records()
     return {"archived": archived, "message": f"Aggregated {archived} daily records into monthly summaries"}
+
+
+# ─── Error Digest (condensed errors, last 48h) ──────────────────────────────
+
+def _normalize_error_message(msg: str) -> str:
+    """Strip variable parts (IDs, timestamps, URLs) to group similar errors."""
+    # Replace UUIDs
+    msg = re.sub(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<id>', msg)
+    # Replace long numeric IDs
+    msg = re.sub(r'\b\d{10,}\b', '<id>', msg)
+    # Replace quoted strings that look like dynamic content
+    msg = re.sub(r'"[^"]{60,}"', '"<content>"', msg)
+    # Replace HTTP URLs with just the host+path pattern
+    msg = re.sub(r'https?://[^\s]+', '<url>', msg)
+    # Replace timestamps
+    msg = re.sub(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*', '<timestamp>', msg)
+    return msg.strip()
+
+
+@router.get("/api/admin/error-digest", summary="Condensed error summary for last 48h (super admin only)")
+def get_error_digest(
+    hours: int = Query(48, ge=1, le=168),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Returns errors from the last N hours, grouped by pattern.
+    Each group has:
+    - human_summary: readable description like "Threads failed to post for user X"
+    - error_pattern: normalized error message pattern
+    - count: how many times it occurred
+    - affected_users: list of distinct user IDs affected
+    - first_seen / last_seen: timestamps
+    - sample_error: one full raw error for copy/paste debugging
+    - category: error category (publishing, http_request, etc.)
+    """
+    _require_super_admin(user)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    # Fetch all ERROR/CRITICAL logs in the window
+    error_logs = (
+        db.query(LogEntry)
+        .filter(
+            LogEntry.timestamp >= cutoff,
+            LogEntry.level.in_(["ERROR", "CRITICAL"]),
+        )
+        .order_by(LogEntry.timestamp.desc())
+        .limit(2000)
+        .all()
+    )
+
+    # Group by normalized message pattern + category
+    groups: dict = defaultdict(lambda: {
+        "count": 0,
+        "affected_users": set(),
+        "first_seen": None,
+        "last_seen": None,
+        "sample_error": None,
+        "category": "",
+        "sample_details": None,
+        "http_path": None,
+        "http_status": None,
+    })
+
+    for log in error_logs:
+        pattern_key = _normalize_error_message(log.message or "")
+        cat = log.category or "error"
+        group_key = f"{cat}::{pattern_key}"
+
+        g = groups[group_key]
+        g["count"] += 1
+        g["category"] = cat
+        g["pattern"] = pattern_key
+
+        # Track affected users
+        details = log.details or {}
+        uid = details.get("user_id")
+        if uid:
+            g["affected_users"].add(uid)
+
+        # Track time range
+        ts = log.timestamp
+        if g["first_seen"] is None or ts < g["first_seen"]:
+            g["first_seen"] = ts
+        if g["last_seen"] is None or ts > g["last_seen"]:
+            g["last_seen"] = ts
+
+        # Keep first sample (most recent since ordered desc)
+        if g["sample_error"] is None:
+            g["sample_error"] = log.message
+            g["sample_details"] = details
+            g["http_path"] = log.http_path
+            g["http_status"] = log.http_status
+
+    # Build human-readable summaries and serialize
+    digest = []
+    for group_key, g in groups.items():
+        affected = list(g["affected_users"])
+        count = g["count"]
+        cat = g["category"]
+        pattern = g.get("pattern", "")
+
+        # Build human summary
+        if cat == "publishing":
+            platform = "Unknown platform"
+            for p in ["Threads", "Instagram", "Facebook", "YouTube", "TikTok", "Bluesky"]:
+                if p.lower() in (pattern + (g["sample_error"] or "")).lower():
+                    platform = p
+                    break
+            if len(affected) == 0:
+                human = f"{platform} publishing failed ({count}x)"
+            elif len(affected) == 1:
+                human = f"{platform} publishing failed for 1 user ({count}x)"
+            else:
+                human = f"{platform} publishing failed for {len(affected)} users ({count}x)"
+        elif cat == "http_request":
+            path = g["http_path"] or "unknown endpoint"
+            status = g["http_status"] or "error"
+            if len(affected) == 0:
+                human = f"HTTP {status} on {path} ({count}x)"
+            elif len(affected) == 1:
+                human = f"HTTP {status} on {path} for 1 user ({count}x)"
+            else:
+                human = f"HTTP {status} on {path} for {len(affected)} users ({count}x)"
+        elif cat == "http_outbound":
+            service = ""
+            details_d = g["sample_details"] or {}
+            service = details_d.get("service_name", "external API")
+            human = f"{service} API call failed ({count}x)"
+        elif cat == "ai_generation":
+            human = f"AI generation error ({count}x)"
+        elif cat == "scheduler":
+            human = f"Scheduler error ({count}x)"
+        else:
+            short_msg = (g["sample_error"] or "Unknown error")[:80]
+            human = f"{short_msg} ({count}x)"
+
+        # Build technical error string for copy
+        sample_details = g["sample_details"] or {}
+        technical_parts = [g["sample_error"] or ""]
+        if sample_details.get("exception_type"):
+            technical_parts.append(f"Exception: {sample_details['exception_type']}: {sample_details.get('exception_message', '')}")
+        if sample_details.get("traceback"):
+            tb = sample_details["traceback"]
+            if isinstance(tb, list):
+                tb = "".join(tb)
+            technical_parts.append(f"Traceback:\n{tb}")
+        if sample_details.get("response_body"):
+            technical_parts.append(f"Response: {str(sample_details['response_body'])[:500]}")
+
+        digest.append({
+            "human_summary": human,
+            "error_pattern": pattern,
+            "category": cat,
+            "count": count,
+            "affected_users": affected,
+            "affected_user_count": len(affected),
+            "first_seen": g["first_seen"].isoformat() if g["first_seen"] else None,
+            "last_seen": g["last_seen"].isoformat() if g["last_seen"] else None,
+            "technical_error": "\n---\n".join(technical_parts),
+            "http_path": g["http_path"],
+            "http_status": g["http_status"],
+        })
+
+    # Sort by count descending (most frequent first)
+    digest.sort(key=lambda x: x["count"], reverse=True)
+
+    return {
+        "hours": hours,
+        "total_errors": sum(g["count"] for g in digest),
+        "unique_patterns": len(digest),
+        "digest": digest,
+    }

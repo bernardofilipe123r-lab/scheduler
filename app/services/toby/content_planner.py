@@ -39,7 +39,7 @@ class ContentPlan:
     """A plan for one piece of content that Toby will create."""
     user_id: str
     brand_id: str
-    content_type: str            # "reel" | "format_b_reel" | "post"
+    content_type: str            # "reel" | "format_b_reel" | "post" | "threads_post"
     scheduled_time: str          # ISO datetime
     personality_id: str
     personality_prompt: str      # System prompt modifier

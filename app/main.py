@@ -537,8 +537,8 @@ async def startup_event():
                         # ── TEXT-ONLY PLATFORM GUARD ──
                         # Threads (and future X) are text-only — strip them from
                         # any publish that carries media (reels, posts, carousels).
-                        # Only allow them through for content_type="text".
-                        if content_type != 'text':
+                        # Only allow them through for text-only content types.
+                        if content_type not in ('text', 'threads_post'):
                             from app.core.platforms import TEXT_ONLY_PLATFORMS
                             text_only_in_list = [p for p in platforms if p in TEXT_ONLY_PLATFORMS]
                             if text_only_in_list:
@@ -547,10 +547,42 @@ async def startup_event():
 
                         print(f"      📦 Metadata: video={video_path_str}, thumbnail={thumbnail_path_str}, brand={brand}, variant={variant}")
 
-                        # ── POST (image) vs REEL (video) publishing ──
+                        # ── POST (image) vs REEL (video) vs THREADS (text) publishing ──
                         is_post = (variant == 'post')
+                        is_threads_text = (variant == 'threads' or content_type == 'threads_post')
 
-                        if is_post:
+                        if is_threads_text:
+                            # ── THREADS TEXT-ONLY PUBLISHING ──
+                            print(f"      🧵 Threads text-only publish for {brand}", flush=True)
+
+                            from app.services.publishing.social_publisher import SocialPublisher
+                            from app.services.brands.resolver import brand_resolver
+
+                            resolved_config = brand_resolver.get_brand_config(brand)
+                            if not resolved_config:
+                                raise ValueError(f"No brand config found for '{brand}'")
+
+                            publisher = SocialPublisher(brand_config=resolved_config)
+
+                            is_chain = metadata.get('is_chain', False)
+                            chain_parts = metadata.get('chain_parts') or []
+
+                            result = {}
+                            if is_chain and len(chain_parts) >= 2:
+                                result["threads"] = publisher.publish_threads_chain(parts=chain_parts)
+                            else:
+                                result["threads"] = publisher.publish_threads_post(
+                                    caption=caption,
+                                    media_type="TEXT",
+                                )
+
+                            scheduler_service.mark_as_published(
+                                schedule_id,
+                                publish_results=result,
+                            )
+                            print(f"      ✅ Threads text published: {schedule_id}", flush=True)
+
+                        elif is_post:
                             # ── IMAGE POST PUBLISHING ──
                             # thumbnail_path_str is a Supabase URL
                             image_url = thumbnail_path_str
@@ -989,16 +1021,16 @@ async def startup_event():
     scheduler.add_job(refresh_audience_demographics, 'interval', hours=12, id='audience_refresh')
     scheduler.add_job(refresh_audience_demographics, 'date', run_date=datetime.now() + timedelta(seconds=60), id='audience_startup')
 
-    # Auto-cleanup old logs every 24 hours (keep 7 days of logs)
+    # Auto-cleanup old logs every 6 hours (keep 48 hours of logs)
     def cleanup_old_logs():
-        """Cleanup logs older than 7 days to prevent unbounded DB growth."""
+        """Cleanup logs older than 48 hours to prevent unbounded DB growth."""
         try:
             log_svc = get_logging_service()
-            deleted = log_svc.cleanup_old_logs(retention_days=7)
+            deleted = log_svc.cleanup_old_logs(retention_hours=48)
             if deleted > 0:
-                print(f"🧹 Cleaned up {deleted} old log entries", flush=True)
+                print(f"Cleaned up {deleted} old log entries", flush=True)
         except Exception as e:
-            print(f"⚠️ Log cleanup failed: {e}", flush=True)
+            print(f"Log cleanup failed: {e}", flush=True)
 
     # Auto-cleanup published jobs/reels older than 1 day
     def cleanup_published_jobs():
@@ -1080,7 +1112,7 @@ async def startup_event():
         finally:
             db.close()
 
-    scheduler.add_job(cleanup_old_logs, 'interval', hours=24, id='log_cleanup')
+    scheduler.add_job(cleanup_old_logs, 'interval', hours=6, id='log_cleanup')
     scheduler.add_job(cleanup_published_jobs, 'interval', hours=6, id='published_cleanup')
 
     # Auto-cleanup old processed webhook records (keep 7 days)
@@ -1291,7 +1323,7 @@ async def startup_event():
 
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)
     print("✅ Analytics auto-refresh scheduled (every 6 hours)", flush=True)
-    print("✅ Log cleanup scheduled (every 24 hours, 7-day retention)", flush=True)
+    print("Log cleanup scheduled (every 6 hours, 48-hour retention)", flush=True)
     print("✅ Published content cleanup scheduled (every 6 hours, 1-day retention)", flush=True)
     print("✅ Instagram token auto-refresh scheduled (every 6 hours)", flush=True)
     print("✅ YouTube token validation scheduled (every 24 hours)", flush=True)

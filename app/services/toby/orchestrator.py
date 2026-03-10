@@ -98,7 +98,7 @@ def toby_tick():
 
 def _process_user(db: Session, state: TobyState):
     """Process one user's Toby tick — runs the highest-priority action.
-    
+
     Each step is wrapped in its own try/commit so that a failure in a
     later step (e.g. phase check) does not roll back timestamp updates
     from earlier steps (e.g. buffer check). This prevents the cascade
@@ -363,8 +363,8 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState, brands=None):
         brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
     valid_brands = [
         b for b in brands
-        if (b.meta_access_token or b.instagram_access_token)
-        and b.instagram_business_account_id
+        if (b.meta_access_token or b.instagram_access_token or b.threads_access_token)
+        and (b.instagram_business_account_id or b.threads_user_id)
     ]
     if not valid_brands:
         return  # No brands with credentials — skip buffer fill to avoid wasting resources
@@ -450,6 +450,10 @@ def _execute_content_plan(db: Session, plan):
     v2.0: Creates a real GenerationJob and runs the full JobProcessor pipeline
     so that Toby-created content has real images, video, and Supabase URLs.
     """
+    # ── Threads: text-only path — no media pipeline ──────────
+    if plan.content_type == "threads_post":
+        return _execute_threads_plan(db, plan)
+
     from app.services.content.generator import ContentGeneratorV2
     from app.services.content.job_manager import JobManager
     from app.services.content.job_processor import JobProcessor
@@ -724,6 +728,69 @@ def _execute_content_plan(db: Session, plan):
 
     print(f"[TOBY] Scheduled {reel_id} for {plan.brand_id} at {plan.scheduled_time}", flush=True)
     return {"job_id": job_id, "brand_id": plan.brand_id, "content_type": plan.content_type, "variant": variant}
+
+
+def _execute_threads_plan(db: Session, plan):
+    """Execute a threads-only content plan: generate text + schedule. No media pipeline."""
+    import uuid as _uuid
+    from app.services.content.threads_generator import ThreadsGenerator
+    from app.services.content.niche_config_service import NicheConfigService
+    from app.services.toby.content_planner import record_content_tag
+    from app.models.scheduling import ScheduledReel
+
+    niche_svc = NicheConfigService()
+    ctx = niche_svc.get_context(user_id=plan.user_id, brand_id=plan.brand_id)
+    if not ctx:
+        from app.core.prompt_context import PromptContext
+        ctx = PromptContext()
+
+    if plan.personality_prompt:
+        ctx.personality_modifier = plan.personality_prompt
+
+    generator = ThreadsGenerator()
+    result = generator.generate_single_post(
+        ctx=ctx,
+        topic_hint=plan.topic_bucket,
+    )
+
+    if not result or not result.get("text"):
+        raise ValueError("Threads generation returned empty result")
+
+    text = result["text"]
+    format_type = result.get("format_type", "unknown")
+    schedule_id = str(_uuid.uuid4())
+    reel_id = f"threads_{plan.brand_id}_{str(_uuid.uuid4())[:8]}"
+    now = datetime.now(timezone.utc)
+
+    extra_data = {
+        "brand": plan.brand_id,
+        "content_type": "threads_post",
+        "platforms": ["threads"],
+        "variant": "threads",
+        "format_type": format_type,
+        "is_chain": False,
+    }
+
+    entry = ScheduledReel(
+        schedule_id=schedule_id,
+        user_id=plan.user_id,
+        user_name="Toby",
+        reel_id=reel_id,
+        caption=text,
+        scheduled_time=datetime.fromisoformat(plan.scheduled_time),
+        created_at=now,
+        status="scheduled",
+        created_by="toby",
+        extra_data=extra_data,
+    )
+
+    db.add(entry)
+    db.flush()
+
+    record_content_tag(db, plan.user_id, schedule_id, plan)
+
+    print(f"[TOBY] Scheduled threads post ({format_type}) for {plan.brand_id} at {plan.scheduled_time}", flush=True)
+    return {"job_id": None, "brand_id": plan.brand_id, "content_type": plan.content_type, "variant": "threads"}
 
 
 def _run_metrics_check(db: Session, user_id: str, state: TobyState, brands=None):
