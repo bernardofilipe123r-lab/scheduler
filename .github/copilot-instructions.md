@@ -16,6 +16,7 @@
 | Metrics, analytics, dashboards | `.github/skills/analytics-metrics/SKILL.md` |
 | React components, hooks, routing | `.github/skills/frontend-patterns/SKILL.md` |
 | Documentation sync, drift check | `.github/skills/docs-sync/SKILL.md` |
+| Commit-aware customization audit | `.github/skills/customization-audit/SKILL.md` |
 
 ---
 
@@ -108,6 +109,7 @@ Check the trigger matrix in `self-maintenance.instructions.md`. If code changes 
 | `analytics-metrics` | Metrics collection, Toby Score, dashboards |
 | `frontend-patterns` | React hooks, routing, React Query, brands |
 | `docs-sync` | Self-healing documentation pipeline |
+| `customization-audit` | Commit-aware skills/docs/instructions audit with checkpoint history |
 | `self-maintenance` | Codebase health audit |
 | `skill-builder` | Create or audit skills |
 

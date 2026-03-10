@@ -18,6 +18,7 @@
 | Metrics, analytics, dashboards | `.claude/skills/analytics-metrics/SKILL.md` |
 | React components, hooks, routing | `.claude/skills/frontend-patterns/SKILL.md` |
 | Documentation sync, drift check | `.claude/skills/docs-sync/SKILL.md` |
+| Commit-aware customization audit | `.claude/skills/customization-audit/SKILL.md` |
 
 **If you skip this step and dive straight into code, the `Stop` hook will catch documentation drift and force you to go back.**
 
@@ -178,6 +179,7 @@ Runs automatically when you try to finish your turn. Checks `git diff` for modif
 - `/media-rendering` — Image/video rendering, carousel, caption, fonts
 - `/platform-publishing` — OAuth, multi-platform publishing, token lifecycle
 - `/toby-agent` — Orchestrator tick loop, agents, memory, Thompson Sampling
+- `/customization-audit` — Commit-aware audit for skills/instructions/docs with checkpoint history
 
 ## Available Agents
 
