@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, RefreshCw, CheckCircle2, XCircle, Instagram } from 'lucide-react'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
-import { connectInstagram, fetchFacebookPages, selectFacebookPage, type FacebookPage } from '@/features/brands'
+import { connectInstagram, fetchFacebookPages, selectFacebookPage, bulkConnectFacebook, type FacebookPage, type FacebookPageBrand } from '@/features/brands'
 import { apiClient } from '@/shared/api/client'
 import { ConnectionsSkeleton } from '@/shared/components'
 import { ConnectionSummaryBar } from './ConnectionSummaryBar'
@@ -18,6 +18,8 @@ export function ConnectionsTab() {
   const [newBrandId, setNewBrandId] = useState<string | null>(null)
   const [fbSelectPageBrand, setFbSelectPageBrand] = useState<string | null>(null)
   const [fbPages, setFbPages] = useState<FacebookPage[]>([])
+  const [fbBrands, setFbBrands] = useState<FacebookPageBrand[]>([])
+  const [fbPageMappings, setFbPageMappings] = useState<Record<string, string>>({}) // page_id → brand_id
   const [fbPagesLoading, setFbPagesLoading] = useState(false)
   const [selectingFbPage, setSelectingFbPage] = useState(false)
 
@@ -82,8 +84,10 @@ export function ConnectionsTab() {
       setFbPagesLoading(true)
       searchParams.delete('fb_select_page')
       setSearchParams(searchParams, { replace: true })
-      fetchFacebookPages(fbSelectPage).then((pages) => {
+      fetchFacebookPages(fbSelectPage).then(({ pages, brands }) => {
         setFbPages(pages)
+        setFbBrands(brands)
+        setFbPageMappings({})
       }).catch(() => {
         setFbNotification({ type: 'error', message: 'Failed to load Facebook pages. Please try connecting again.' })
         setFbSelectPageBrand(null)
@@ -197,10 +201,36 @@ export function ConnectionsTab() {
       await selectFacebookPage(fbSelectPageBrand, pageId)
       setFbSelectPageBrand(null)
       setFbPages([])
+      setFbBrands([])
+      setFbPageMappings({})
       setFbNotification({ type: 'success', message: 'Facebook page connected!' })
       refetch()
     } catch {
       setFbNotification({ type: 'error', message: 'Failed to select Facebook page. Please try again.' })
+    } finally {
+      setSelectingFbPage(false)
+    }
+  }
+
+  const handleBulkConnectFb = async () => {
+    if (!fbSelectPageBrand) return
+    const mappings = Object.entries(fbPageMappings)
+      .filter(([, brandId]) => brandId !== '')
+      .map(([pageId, brandId]) => ({ page_id: pageId, brand_id: brandId }))
+    if (mappings.length === 0) return
+
+    setSelectingFbPage(true)
+    try {
+      const result = await bulkConnectFacebook(fbSelectPageBrand, mappings)
+      setFbSelectPageBrand(null)
+      setFbPages([])
+      setFbBrands([])
+      setFbPageMappings({})
+      setFbNotification({ type: 'success', message: `${result.count} Facebook page${result.count > 1 ? 's' : ''} connected!` })
+      refetch()
+    } catch (err) {
+      const detail = (err as { detail?: string })?.detail || 'Failed to connect Facebook pages. Please try again.'
+      setFbNotification({ type: 'error', message: detail })
     } finally {
       setSelectingFbPage(false)
     }
@@ -360,12 +390,12 @@ export function ConnectionsTab() {
         </div>
       )}
 
-      {/* Facebook Page Selector (multi-page flow) */}
+      {/* Facebook Page Selector (multi-page flow with bulk mapping) */}
       {fbSelectPageBrand && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-          <h3 className="font-semibold text-blue-900 mb-2">Select a Facebook Page</h3>
+          <h3 className="font-semibold text-blue-900 mb-2">Connect Facebook Pages</h3>
           <p className="text-sm text-blue-700 mb-4">
-            Choose which Facebook Page to connect for <strong>{fbSelectPageBrand}</strong>:
+            Assign each Facebook Page to a brand. You can connect multiple pages at once.
           </p>
           {fbPagesLoading ? (
             <div className="flex items-center gap-2 py-4 justify-center">
@@ -373,38 +403,81 @@ export function ConnectionsTab() {
               <span className="text-sm text-blue-700">Loading pages...</span>
             </div>
           ) : fbPages.length > 0 ? (
-            <div className="space-y-2">
-              {fbPages.map((page) => (
-                <button
-                  key={page.id}
-                  onClick={() => handleSelectFbPage(page.id)}
-                  disabled={selectingFbPage}
-                  className="w-full flex items-center gap-3 p-3 bg-white rounded-lg border border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 text-left"
-                >
-                  {page.picture && (
-                    <img src={page.picture} alt="" className="w-8 h-8 rounded-full" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{page.name}</p>
-                    {page.category && (
-                      <p className="text-xs text-gray-500">{page.category}</p>
+            <div className="space-y-3">
+              {fbPages.map((page) => {
+                const assignedBrandId = fbPageMappings[page.id] || ''
+                // Brands available: not already connected to FB AND not assigned to another page in this batch
+                const usedBrandIds = new Set(
+                  Object.entries(fbPageMappings)
+                    .filter(([pid, bid]) => pid !== page.id && bid !== '')
+                    .map(([, bid]) => bid)
+                )
+                const availableBrands = fbBrands.filter(
+                  (b) => !b.facebook_page_id || b.id === assignedBrandId || usedBrandIds.has(b.id) === false
+                )
+
+                return (
+                  <div
+                    key={page.id}
+                    className="flex items-center gap-3 p-3 bg-white rounded-lg border border-blue-200"
+                  >
+                    {page.picture && (
+                      <img src={page.picture} alt="" className="w-8 h-8 rounded-full flex-shrink-0" />
                     )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{page.name}</p>
+                      <div className="flex items-center gap-2">
+                        {page.category && (
+                          <span className="text-xs text-gray-500">{page.category}</span>
+                        )}
+                        {page.fan_count != null && (
+                          <span className="text-xs text-gray-400">{page.fan_count.toLocaleString()} followers</span>
+                        )}
+                      </div>
+                    </div>
+                    <select
+                      value={assignedBrandId}
+                      onChange={(e) => setFbPageMappings((prev) => ({ ...prev, [page.id]: e.target.value }))}
+                      className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none min-w-[160px]"
+                    >
+                      <option value="">— Skip —</option>
+                      {availableBrands.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.display_name}{b.facebook_page_name ? ` (has: ${b.facebook_page_name})` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  {page.fan_count != null && (
-                    <span className="text-xs text-gray-400">{page.fan_count.toLocaleString()} followers</span>
+                )
+              })}
+
+              {/* Bulk connect button */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleBulkConnectFb}
+                  disabled={selectingFbPage || Object.values(fbPageMappings).filter((v) => v !== '').length === 0}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {selectingFbPage ? (
+                    <span className="flex items-center gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Connecting...
+                    </span>
+                  ) : (
+                    `Connect ${Object.values(fbPageMappings).filter((v) => v !== '').length} page${Object.values(fbPageMappings).filter((v) => v !== '').length !== 1 ? 's' : ''}`
                   )}
                 </button>
-              ))}
+                <button
+                  onClick={() => { setFbSelectPageBrand(null); setFbPages([]); setFbBrands([]); setFbPageMappings({}) }}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-gray-500 py-2">No pages found.</p>
           )}
-          <button
-            onClick={() => { setFbSelectPageBrand(null); setFbPages([]) }}
-            className="mt-3 text-sm text-gray-500 hover:text-gray-700 underline"
-          >
-            Cancel
-          </button>
         </div>
       )}
 

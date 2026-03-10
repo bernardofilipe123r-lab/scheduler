@@ -6,6 +6,7 @@ Handles the brand-level Facebook OAuth flow:
   GET  /api/auth/facebook/callback                  → handle the OAuth return
   GET  /api/auth/facebook/pages?brand_id=...        → list pages user manages
   POST /api/auth/facebook/select-page               → store chosen page credentials
+  POST /api/auth/facebook/bulk-connect              → map multiple pages to brands at once
   POST /api/auth/facebook/disconnect                → clear credentials
   GET  /api/auth/facebook/status?brand_id=...       → check connection status
 """
@@ -259,6 +260,21 @@ def facebook_list_pages(
     try:
         token_service = FacebookTokenService()
         pages = token_service.get_user_pages(pending["token"])
+
+        # Also return user's brands for the bulk-connect mapping UI
+        user_brands = db.query(Brand).filter(
+            Brand.user_id == user["id"],
+        ).all()
+        brands_list = [
+            {
+                "id": b.id,
+                "display_name": b.display_name or b.id,
+                "facebook_page_id": b.facebook_page_id,
+                "facebook_page_name": b.facebook_page_name,
+            }
+            for b in user_brands
+        ]
+
         return {
             "pages": [
                 {
@@ -269,7 +285,8 @@ def facebook_list_pages(
                     "picture": (p.get("picture", {}).get("data", {}).get("url") if isinstance(p.get("picture"), dict) else None),
                 }
                 for p in pages
-            ]
+            ],
+            "brands": brands_list,
         }
     except Exception as e:
         logger.exception(f"Failed to list Facebook pages: {e}")
@@ -367,6 +384,135 @@ def facebook_select_page(
     except Exception as e:
         logger.exception(f"Failed to select Facebook page: {e}")
         raise HTTPException(status_code=500, detail="Failed to connect Facebook page")
+
+
+# ---------------------------------------------------------------------------
+# Step 2d: Bulk connect — map multiple pages to brands at once
+# ---------------------------------------------------------------------------
+
+class PageBrandMapping(BaseModel):
+    brand_id: str
+    page_id: str
+
+
+class BulkConnectRequest(BaseModel):
+    source_brand_id: str  # The brand_id used to initiate the OAuth flow (for pending token lookup)
+    mappings: list[PageBrandMapping]
+
+
+@router.post("/bulk-connect")
+def facebook_bulk_connect(
+    body: BulkConnectRequest,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Connect multiple Facebook Pages to multiple brands in one request.
+    Uses the pending token from the original OAuth flow.
+    """
+    if not body.mappings:
+        raise HTTPException(status_code=400, detail="No mappings provided")
+
+    # Find the pending token using the source brand_id
+    pending_key = f"{user['id']}:{body.source_brand_id}"
+    pending = _pending_tokens.pop(pending_key, None)
+
+    if not pending:
+        raise HTTPException(
+            status_code=400,
+            detail="No pending Facebook connection. Please start the flow again.",
+        )
+
+    if datetime.now(timezone.utc) - pending["created_at"] > timedelta(minutes=10):
+        raise HTTPException(status_code=400, detail="Session expired. Please reconnect.")
+
+    try:
+        token_service = FacebookTokenService()
+        pages = token_service.get_user_pages(pending["token"])
+        pages_by_id = {p["id"]: p for p in pages}
+
+        # Validate all mappings before applying any
+        errors = []
+        validated = []
+
+        for mapping in body.mappings:
+            page = pages_by_id.get(mapping.page_id)
+            if not page:
+                errors.append(f"Page {mapping.page_id} not found in your Facebook account")
+                continue
+
+            brand = db.query(Brand).filter(
+                Brand.id == mapping.brand_id,
+                Brand.user_id == user["id"],
+            ).first()
+            if not brand:
+                errors.append(f"Brand {mapping.brand_id} not found")
+                continue
+
+            # Check for duplicate page connections (to other brands not in this batch)
+            batch_brand_ids = [m.brand_id for m in body.mappings]
+            fb_existing = db.query(Brand).filter(
+                Brand.facebook_page_id == mapping.page_id,
+                Brand.id != mapping.brand_id,
+                ~Brand.id.in_(batch_brand_ids),
+            ).first()
+            if fb_existing:
+                page_name = page.get("name", mapping.page_id)
+                errors.append(
+                    f'Page "{page_name}" is already connected to {fb_existing.display_name or fb_existing.id}'
+                )
+                continue
+
+            validated.append((brand, page))
+
+        if errors:
+            raise HTTPException(status_code=409, detail="; ".join(errors))
+
+        # Check for duplicate page_ids within the batch
+        page_ids_in_batch = [m.page_id for m in body.mappings]
+        if len(page_ids_in_batch) != len(set(page_ids_in_batch)):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot assign the same Facebook page to multiple brands",
+            )
+
+        # Apply all connections
+        results = []
+        for brand, page in validated:
+            brand.facebook_page_id = page["id"]
+            brand.facebook_access_token = page["access_token"]
+            brand.facebook_page_name = page.get("name", "")
+
+            page_picture = (
+                page.get("picture", {}).get("data", {}).get("url")
+                if isinstance(page.get("picture"), dict) else None
+            )
+            if page_picture and not brand.profile_image_url:
+                brand.profile_image_url = page_picture
+
+            results.append({
+                "brand_id": brand.id,
+                "page_id": page["id"],
+                "page_name": page.get("name", ""),
+            })
+
+        db.commit()
+
+        logger.info(
+            f"Facebook bulk connect: {len(results)} pages connected for user={user['id']}"
+        )
+
+        return {
+            "status": "connected",
+            "connected": results,
+            "count": len(results),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Facebook bulk connect failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to bulk connect Facebook pages")
 
 
 # ---------------------------------------------------------------------------
