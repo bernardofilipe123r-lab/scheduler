@@ -10,23 +10,46 @@ from typing import Optional
 from app.core.prompt_context import PromptContext
 
 
+def _resolve_cta_topic(ctx: Optional[PromptContext]) -> str:
+    """Resolve a best-effort topic label for CTA placeholders."""
+    if ctx:
+        topic = ctx.carousel_cta_topic
+        if not topic and ctx.topic_keywords:
+            topic = ctx.topic_keywords[0]
+        if not topic and ctx.niche_name:
+            topic = ctx.niche_name.split()[0].lower()
+        if topic:
+            return topic
+    return "this topic"
+
+
+def _sanitize_cta_placeholders(text: str, ctx: Optional[PromptContext]) -> str:
+    """Resolve known CTA placeholders to avoid leaking template tokens to users."""
+    resolved = text.replace("{cta_topic}", _resolve_cta_topic(ctx))
+    # Reel CTA generation does not have brand handle context, so use neutral fallback.
+    resolved = resolved.replace("@{brandhandle}", "our page")
+    resolved = resolved.replace("@{{brandhandle}}", "our page")
+    return resolved
+
+
 def get_cta_line(ctx: Optional[PromptContext] = None) -> str:
     """Pick a CTA line using weighted random selection from ctx.cta_options.
-    
+
     Each option is {text: str, weight: number} where weight is a percentage.
     Returns empty string if no options configured.
     """
     if not ctx or not ctx.cta_options:
         return ""
-    
+
     options = [opt for opt in ctx.cta_options if opt.get("text") and opt.get("weight", 0) > 0]
     if not options:
         return ""
-    
+
     texts = [opt["text"] for opt in options]
     weights = [opt["weight"] for opt in options]
-    
-    return random.choices(texts, weights=weights, k=1)[0]
+
+    chosen = random.choices(texts, weights=weights, k=1)[0]
+    return _sanitize_cta_placeholders(chosen, ctx)
 
 
 # Default carousel CTA templates (used when user hasn't configured any)
@@ -55,17 +78,5 @@ def get_carousel_cta_line(ctx: Optional[PromptContext] = None) -> str:
     weights = [opt["weight"] for opt in options]
     chosen = random.choices(texts, weights=weights, k=1)[0]
 
-    # Resolve {cta_topic} placeholder
-    if ctx:
-        topic = ctx.carousel_cta_topic
-        if not topic and ctx.topic_keywords:
-            topic = ctx.topic_keywords[0]
-        if not topic and ctx.niche_name:
-            topic = ctx.niche_name.split()[0].lower()
-        if not topic:
-            topic = "this topic"
-    else:
-        topic = "this topic"
-
-    chosen = chosen.replace("{cta_topic}", topic)
+    chosen = chosen.replace("{cta_topic}", _resolve_cta_topic(ctx))
     return chosen

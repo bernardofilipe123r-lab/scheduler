@@ -1500,6 +1500,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 function ErrorMonitorPanel() {
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('admin-error-monitor-collapsed') === 'true'
+  })
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
 
@@ -1518,6 +1522,17 @@ function ErrorMonitorPanel() {
     navigator.clipboard.writeText(text)
     setCopiedIdx(idx)
     setTimeout(() => setCopiedIdx(null), 2000)
+  }
+
+  function handleToggleCollapsed() {
+    setIsCollapsed(prev => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('admin-error-monitor-collapsed', String(next))
+      }
+      if (next) setExpandedIdx(null)
+      return next
+    })
   }
 
   function relativeTime(iso: string | null): string {
@@ -1546,6 +1561,25 @@ function ErrorMonitorPanel() {
             </span>
           )}
           <button
+            onClick={handleToggleCollapsed}
+            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-500 hover:text-gray-700 rounded border border-gray-200 bg-white"
+            title={isCollapsed ? 'Expand errors panel' : 'Collapse errors panel'}
+            aria-expanded={!isCollapsed}
+            aria-label={isCollapsed ? 'Expand errors panel' : 'Collapse errors panel'}
+          >
+            {isCollapsed ? (
+              <>
+                <ChevronDown className="w-3 h-3" />
+                Expand
+              </>
+            ) : (
+              <>
+                <ChevronUp className="w-3 h-3" />
+                Collapse
+              </>
+            )}
+          </button>
+          <button
             onClick={() => digestQuery.refetch()}
             disabled={digestQuery.isFetching}
             className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-200 bg-white disabled:opacity-50"
@@ -1556,7 +1590,11 @@ function ErrorMonitorPanel() {
         </div>
       </div>
 
-      {digestQuery.isLoading ? (
+      {isCollapsed ? (
+        <div className="text-xs text-gray-500 py-1">
+          Error list hidden. Use Expand to inspect recent patterns.
+        </div>
+      ) : digestQuery.isLoading ? (
         <div className="flex items-center gap-2 text-xs text-gray-400 py-4">
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading error digest...
         </div>
