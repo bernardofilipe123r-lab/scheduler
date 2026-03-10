@@ -43,6 +43,7 @@ import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
 import { StatusBadge, JobDetailSkeleton, Modal } from '@/shared/components'
 import { createFacebookCaption } from '@/shared/lib/captionUtils'
 import { PostJobDetail } from './PostJobDetail'
+import { ThreadsJobDetail } from './ThreadsJobDetail'
 import type { BrandName, BrandOutput } from '@/shared/types'
 
 export function JobDetailPage() {
@@ -458,6 +459,11 @@ export function JobDetailPage() {
   // Delegate to post-specific detail view
   if (job.variant === 'post') {
     return <PostJobDetail job={job} />
+  }
+
+  // Delegate to threads detail view
+  if (job.variant === 'threads') {
+    return <ThreadsJobDetail job={job} />
   }
   
   const completedCount = Object.values(job.brand_outputs || {})

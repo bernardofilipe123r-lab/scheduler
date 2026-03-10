@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutGrid, Sparkles, TrendingUp, TrendingDown } from 'lucide-react'
+import { Sparkles, TrendingUp, TrendingDown } from 'lucide-react'
 import { useAnalytics, useSnapshots, type AnalyticsSnapshot } from '@/features/analytics'
 import { useJobs } from '@/features/jobs'
 import { useScheduledPosts } from '@/features/scheduling'
@@ -282,18 +282,11 @@ export function HomePage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/reels')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold rounded-lg hover:from-violet-700 hover:to-fuchsia-700 transition-all shadow-sm"
+            onClick={() => navigate('/creation')}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold rounded-lg hover:from-violet-700 hover:to-fuchsia-700 transition-all shadow-sm"
           >
             <Sparkles className="w-4 h-4" />
-            New Reel
-          </button>
-          <button
-            onClick={() => navigate('/posts')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-all shadow-sm"
-          >
-            <LayoutGrid className="w-4 h-4" />
-            New Post
+            Create Content
           </button>
         </div>
       </div>

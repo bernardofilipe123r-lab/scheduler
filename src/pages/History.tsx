@@ -41,7 +41,7 @@ export function HistoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [variantFilter, setVariantFilter] = useState<Variant | 'all'>('all')
-  const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'reels' | 'posts'>('all')
+  const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'reels' | 'posts' | 'threads'>('all')
   const [creatorFilter, setCreatorFilter] = useState<'all' | 'user' | 'toby'>('all')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
 
@@ -153,7 +153,8 @@ export function HistoryPage() {
 
       // Content type filter
       if (contentTypeFilter === 'posts' && job.variant !== 'post') return false
-      if (contentTypeFilter === 'reels' && job.variant === 'post') return false
+      if (contentTypeFilter === 'reels' && (job.variant === 'post' || job.variant === 'threads')) return false
+      if (contentTypeFilter === 'threads' && job.variant !== 'threads') return false
 
       // Creator filter
       if (creatorFilter !== 'all') {
@@ -467,6 +468,7 @@ export function HistoryPage() {
               { key: 'all' as const, label: 'All', icon: '📋' },
               { key: 'reels' as const, label: 'Reels', icon: '🎬' },
               { key: 'posts' as const, label: 'Posts', icon: '📄' },
+              { key: 'threads' as const, label: 'Threads', icon: '💬' },
             ].map(opt => (
               <button
                 key={opt.key}
@@ -638,8 +640,9 @@ export function HistoryPage() {
         </div>
       ) : (() => {
         const visibleJobs = filteredJobs.filter(j => !hiddenJobIds.has(j.id.toString()))
-        const reelJobs = visibleJobs.filter(j => j.variant !== 'post')
+        const reelJobs = visibleJobs.filter(j => j.variant !== 'post' && j.variant !== 'threads')
         const postJobs = visibleJobs.filter(j => j.variant === 'post')
+        const threadJobs = visibleJobs.filter(j => j.variant === 'threads')
 
         const renderJobCard = (job: Job) => {
             const progress = getProgress(job)
@@ -811,7 +814,8 @@ export function HistoryPage() {
 
         const showReels = (contentTypeFilter === 'all' || contentTypeFilter === 'reels') && reelJobs.length > 0
         const showPosts = (contentTypeFilter === 'all' || contentTypeFilter === 'posts') && postJobs.length > 0
-        const sideBySide = showReels && showPosts
+        const showThreads = (contentTypeFilter === 'all' || contentTypeFilter === 'threads') && threadJobs.length > 0
+        const visibleSections = [showReels, showPosts, showThreads].filter(Boolean).length
 
         return (
           <div className="space-y-6">
@@ -829,9 +833,13 @@ export function HistoryPage() {
             )}
 
             {/* Show sections — side by side when both visible, full width when filtered */}
-            <div className={clsx(sideBySide ? 'grid grid-cols-2 gap-6 items-start' : '')}>
+            <div className={clsx(
+              visibleSections === 2 && 'grid grid-cols-2 gap-6 items-start',
+              visibleSections >= 3 && 'grid grid-cols-3 gap-6 items-start',
+            )}>
               {showReels && renderSection('Reels', '🎬', reelJobs)}
               {showPosts && renderSection('Posts', '📄', postJobs)}
+              {showThreads && renderSection('Threads', '💬', threadJobs)}
             </div>
 
             {visibleJobs.length === 0 && hiddenJobIds.size > 0 && (

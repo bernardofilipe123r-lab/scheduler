@@ -12,15 +12,13 @@ import { OnboardingPage } from '@/pages/Onboarding'
 
 // ── Lazy-loaded pages (split into separate chunks) ─────────────────────────
 const HomePage = lazy(() => import('@/pages/Home').then(m => ({ default: m.HomePage })))
-const ReelsPage = lazy(() => import('@/pages/Reels').then(m => ({ default: m.ReelsPage })))
+const CreationPage = lazy(() => import('@/pages/Creation').then(m => ({ default: m.CreationPage })))
 const HistoryPage = lazy(() => import('@/pages/History').then(m => ({ default: m.HistoryPage })))
 const JobDetailPage = lazy(() => import('@/pages/JobDetail').then(m => ({ default: m.JobDetailPage })))
 const CalendarPage = lazy(() => import('@/pages/Calendar').then(m => ({ default: m.CalendarPage })))
 const ScheduledPage = lazy(() => import('@/pages/Scheduled').then(m => ({ default: m.ScheduledPage })))
 const BrandsPage = lazy(() => import('@/pages/Brands').then(m => ({ default: m.BrandsPage })))
 const CreateBrandPage = lazy(() => import('@/pages/CreateBrand').then(m => ({ default: m.CreateBrandPage })))
-const PostsPage = lazy(() => import('@/pages/Posts').then(m => ({ default: m.PostsPage })))
-const ThreadsPage = lazy(() => import('@/pages/Threads').then(m => ({ default: m.ThreadsPage })))
 const AnalyticsPage = lazy(() => import('@/pages/Analytics').then(m => ({ default: m.AnalyticsPage })))
 const TobyPage = lazy(() => import('@/pages/Toby').then(m => ({ default: m.TobyPage })))
 const BillingPage = lazy(() => import('@/pages/Billing').then(m => ({ default: m.BillingPage })))
@@ -114,7 +112,10 @@ export function AppRoutes() {
         <Route path="/onboarding" element={<OnboardingPageGuard />} />
         <Route path="/" element={<AuthGuard><OnboardingGuard><AppLayout /></OnboardingGuard></AuthGuard>}>
         <Route index element={<HomePage />} />
-        <Route path="reels" element={<ReelsPage />} />
+        <Route path="creation" element={<CreationPage />} />
+        <Route path="reels" element={<Navigate to="/creation" replace />} />
+        <Route path="posts" element={<Navigate to="/creation" replace />} />
+        <Route path="threads" element={<Navigate to="/creation" replace />} />
         <Route path="jobs" element={<HistoryPage />} />
         <Route path="history" element={<Navigate to="/jobs" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />
@@ -123,8 +124,6 @@ export function AppRoutes() {
         <Route path="connected" element={<Navigate to="/brands" replace />} />
         <Route path="brands" element={<BrandsPage />} />
         <Route path="brands/new" element={<CreateBrandPage />} />
-        <Route path="posts" element={<PostsPage />} />
-        <Route path="threads" element={<ThreadsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="toby" element={<TobyPage />} />
         <Route path="billing" element={<BillingPage />} />

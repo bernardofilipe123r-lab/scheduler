@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, Suspense } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { PageLoader } from '@/shared/components'
 import {
-  Home, Film, Briefcase, Calendar, LayoutGrid, BarChart3,
+  Home, Sparkles, Briefcase, Calendar, BarChart3,
   Bot, Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck, CreditCard,
-  X, AlertTriangle, MessageCircle,
+  X, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useJobs } from '@/features/jobs'
@@ -151,9 +151,7 @@ function SocialHealthBanner() {
 
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
-  { to: '/reels', icon: Film, label: 'Videos', end: false },
-  { to: '/posts', icon: LayoutGrid, label: 'Posts', end: false },
-  { to: '/threads', icon: MessageCircle, label: 'Threads', end: false },
+  { to: '/creation', icon: Sparkles, label: 'Creation', end: false },
   { to: '/jobs', icon: Briefcase, label: 'Jobs', end: false },
   { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', end: false },
@@ -163,9 +161,7 @@ const NAV_ITEMS = [
 // ── Route chunk prefetch map ──────────────────────────────
 const PREFETCH_MAP: Record<string, () => Promise<unknown>> = {
   '/': () => import('@/pages/Home'),
-  '/reels': () => import('@/pages/Reels'),
-  '/posts': () => import('@/pages/Posts'),
-  '/threads': () => import('@/pages/Threads'),
+  '/creation': () => import('@/pages/Creation'),
   '/jobs': () => import('@/pages/History'),
   '/calendar': () => import('@/pages/Calendar'),
   '/analytics': () => import('@/pages/Analytics'),
@@ -274,7 +270,7 @@ export function AppLayout() {
         </NavLink>
 
         {/* Nav Items */}
-        <nav className="flex-1 py-3 px-2 flex flex-col gap-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <nav className="flex-1 py-3 px-2 flex flex-col gap-1.5 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
             <NavLink
               key={to}
@@ -283,7 +279,7 @@ export function AppLayout() {
               onMouseEnter={() => prefetchRoute(to)}
               onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-1.5 rounded-lg font-medium transition-colors relative ${
+                `group flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors relative ${
                   isActive
                     ? 'bg-white/10 text-white'
                     : 'text-stone-400 hover:bg-white/[0.07] hover:text-stone-100'
@@ -291,7 +287,7 @@ export function AppLayout() {
               }
             >
               <div className="relative shrink-0">
-                <Icon className="w-5 h-5" />
+                <Icon className="w-[22px] h-[22px]" />
                 {to === '/jobs' && activeJobCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none px-1">
                     {activeJobCount}
@@ -316,14 +312,14 @@ export function AppLayout() {
               onMouseEnter={() => prefetchRoute(to)}
               onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-1.5 rounded-lg font-medium transition-colors relative ${
+                `group flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors relative ${
                   isActive
                     ? 'bg-white/10 text-white'
                     : 'text-stone-400 hover:bg-white/[0.07] hover:text-stone-100'
                 }`
               }
             >
-              <Icon className="w-5 h-5 shrink-0" />
+              <Icon className="w-[22px] h-[22px] shrink-0" />
               {expanded && <span className="text-sm whitespace-nowrap">{label}</span>}
               {!expanded && (
                 <span className="absolute left-14 bg-stone-700 text-stone-100 text-xs font-medium px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[60]">
