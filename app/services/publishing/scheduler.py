@@ -687,6 +687,36 @@ class DatabaseSchedulerService:
         except Exception as e:
             print(f"⚠️ Failed to sync brand_output status for {job_id}/{brand}: {e}")
 
+    def save_platform_result(self, schedule_id: str, platform: str, result: dict) -> None:
+        """Save a single platform's publish result incrementally.
+
+        Called after each platform API call succeeds during publishing.
+        Prevents duplicate posts on crash recovery by persisting results
+        before all platforms finish.
+        """
+        with get_db_session() as db:
+            reel = db.query(ScheduledReel).filter(
+                ScheduledReel.schedule_id == schedule_id
+            ).first()
+            if not reel:
+                return
+
+            metadata = dict(reel.extra_data or {})
+            publish_results = metadata.get('publish_results', {})
+            publish_results[platform] = result
+            metadata['publish_results'] = publish_results
+
+            if result.get('success') and result.get('post_id'):
+                post_ids = metadata.get('post_ids', {})
+                post_ids[platform] = str(result['post_id'])
+                metadata['post_ids'] = post_ids
+
+            reel.extra_data = metadata
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(reel, 'extra_data')
+            db.commit()
+            print(f"      💾 Saved {platform} result incrementally for {schedule_id}")
+
     def reset_stuck_publishing(self, max_age_minutes: int = 10) -> int:
         """
         Reset any posts stuck in 'publishing' status for too long.
@@ -1087,7 +1117,8 @@ class DatabaseSchedulerService:
         user_id: Optional[str] = None,
         brand_config: Optional['BrandConfig'] = None,
         brand_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        schedule_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Publish a reel immediately using user's credentials or brand credentials.
@@ -1241,6 +1272,8 @@ class DatabaseSchedulerService:
                 caption=caption,
                 thumbnail_url=thumbnail_url
             )
+            if schedule_id:
+                self.save_platform_result(schedule_id, "instagram", results["instagram"])
 
         if "facebook" in effective_platforms:
             print("📘 Publishing to Facebook...")
@@ -1249,6 +1282,8 @@ class DatabaseSchedulerService:
                 caption=caption,
                 thumbnail_url=thumbnail_url
             )
+            if schedule_id:
+                self.save_platform_result(schedule_id, "facebook", results["facebook"])
 
         if "youtube" in effective_platforms:
             print("📺 Publishing to YouTube...", flush=True)
@@ -1267,6 +1302,8 @@ class DatabaseSchedulerService:
                 brand_name=brand_name,
                 yt_title=yt_title
             )
+            if schedule_id:
+                self.save_platform_result(schedule_id, "youtube", results["youtube"])
 
         # Threads is text-only — never publish video/media to Threads.
         # (Defense-in-depth: get_platforms_for_content_type already excludes
@@ -1281,6 +1318,8 @@ class DatabaseSchedulerService:
                 video_url=video_url,
                 caption=caption,
             )
+            if schedule_id:
+                self.save_platform_result(schedule_id, "tiktok", results["tiktok"])
 
         if "bluesky" in effective_platforms:
             print("🦋 Publishing to Bluesky...", flush=True)
@@ -1289,6 +1328,8 @@ class DatabaseSchedulerService:
                 media_url=video_url,
                 media_type="VIDEO",
             )
+            if schedule_id:
+                self.save_platform_result(schedule_id, "bluesky", results["bluesky"])
 
         return results
 

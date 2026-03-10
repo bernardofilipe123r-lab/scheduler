@@ -108,7 +108,6 @@ export function CreationPage() {
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
   const [threadFormatType, setThreadFormatType] = useState<string>('')
   const [threadMode, setThreadMode] = useState<'single' | 'chain'>('single')
-  const [creationMode, setCreationMode] = useState<'auto' | 'manual'>('auto')
 
   // Content count
   const [contentCount, setContentCount] = useState(1)
@@ -210,7 +209,6 @@ export function CreationPage() {
     setImageModel('ZImageTurbo_INT8')
     setThreadFormatType('')
     setThreadMode('single')
-    setCreationMode('auto')
     setContentCount(1)
   }, [])
 
@@ -345,8 +343,51 @@ export function CreationPage() {
     return 0
   })()
 
+  // ── Summary items for sidebar ──
+  const summaryItems: { label: string; value: string }[] = []
+  if (contentType && step !== 'type') {
+    const ct = CONTENT_TYPES.find(c => c.id === contentType)
+    summaryItems.push({ label: 'Type', value: ct?.label || contentType })
+  }
+  if (step !== 'type' && step !== 'brands' && effectiveBrands.length > 0) {
+    summaryItems.push({
+      label: 'Brands',
+      value: allBrands
+        ? `All (${brandIds.length})`
+        : effectiveBrands.map(b => dynamicBrands.find(db => db.id === b)?.label || b).join(', '),
+    })
+  }
+  if (step !== 'type' && step !== 'brands' && step !== 'platforms' && contentType !== 'threads' && selectedPlatforms.length > 0) {
+    summaryItems.push({
+      label: 'Platforms',
+      value: selectedPlatforms.map(p => PLATFORM_DISPLAY.find(pd => pd.id === p)?.label || p).join(', '),
+    })
+  }
+  if (['mode', 'count', 'manual'].includes(step)) {
+    if (contentType === 'reels' && selectedFormat) {
+      summaryItems.push({ label: 'Format', value: selectedFormat === 'format_a' ? 'Format A' : 'Format B' })
+    }
+    if (contentType === 'posts') {
+      const model = IMAGE_MODELS.find(m => m.id === imageModel)
+      summaryItems.push({ label: 'Image Model', value: model?.label || imageModel })
+    }
+    if (contentType === 'threads') {
+      summaryItems.push({ label: 'Thread Mode', value: threadMode === 'chain' ? 'Chain' : 'Single Posts' })
+      if (threadMode === 'single' && threadFormatType) {
+        const ft = THREAD_FORMAT_TYPES.find(f => f.id === threadFormatType)
+        summaryItems.push({ label: 'Format', value: ft?.label || threadFormatType })
+      }
+    }
+  }
+  if (step === 'count') {
+    summaryItems.push({ label: 'Mode', value: 'Automatic' })
+  }
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto">
+      <div className="flex gap-8">
+        {/* Main wizard column */}
+        <div className="flex-1 min-w-0 max-w-2xl">
       {/* Header with back + progress */}
       <div className="flex items-center justify-between mb-8">
         <button onClick={goBack} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
@@ -670,7 +711,7 @@ export function CreationPage() {
             {/* Auto */}
             <div className="space-y-2">
               <button
-                onClick={() => { setCreationMode('auto'); setStep('count') }}
+                onClick={() => setStep('count')}
                 className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-stone-900 text-white font-semibold text-sm shadow-lg hover:bg-stone-800 active:scale-[0.98] transition-all"
               >
                 <Zap className="w-5 h-5 text-amber-400" />
@@ -686,18 +727,18 @@ export function CreationPage() {
             {/* Manual */}
             <div className="space-y-2">
               <button
-                onClick={() => { setCreationMode('manual'); setStep('count') }}
+                onClick={() => { setContentCount(1); setStep('manual') }}
                 className="w-full flex items-center gap-4 px-5 py-5 rounded-xl border-2 border-gray-200 bg-white hover:border-stone-400 hover:bg-stone-50/50 transition-all text-left group"
               >
                 <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center group-hover:bg-stone-200 transition-colors">
                   <Wrench className="w-6 h-6 text-stone-700" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm font-semibold text-gray-900">Manual Control</span>
+                  <span className="text-sm font-semibold text-gray-900">Semi-Manual</span>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {contentType === 'reels' && 'You write the text, pick variant and music'}
-                    {contentType === 'posts' && 'You provide title, image prompt, and text'}
-                    {contentType === 'threads' && 'You write the thread text yourself'}
+                    {contentType === 'reels' && 'You give the idea, AI builds the video'}
+                    {contentType === 'posts' && 'You provide the topic, AI generates the rest'}
+                    {contentType === 'threads' && 'You write the thread text, AI formats it'}
                   </p>
                 </div>
                 <ArrowLeft className="w-4 h-4 text-gray-300 rotate-180 group-hover:text-stone-500 transition-colors" />
@@ -755,7 +796,7 @@ export function CreationPage() {
           </div>
 
           <button
-            onClick={() => creationMode === 'manual' ? setStep('manual') : handleGenerate()}
+            onClick={handleGenerate}
             disabled={isGenerating}
             className="w-full py-3.5 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-sm flex items-center justify-center gap-2"
           >
@@ -765,11 +806,28 @@ export function CreationPage() {
                 Creating job...
               </>
             ) : (
-              creationMode === 'manual' ? 'Continue to Editor' : 'Generate'
+              'Generate'
             )}
           </button>
         </div>
       )}
+        </div>
+
+        {/* Summary sidebar — shows previous choices */}
+        {summaryItems.length > 0 && (
+          <div className="hidden lg:block w-56 flex-shrink-0">
+            <div className="sticky top-6 space-y-1">
+              <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Your choices</h3>
+              {summaryItems.map((item, i) => (
+                <div key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-100 last:border-0">
+                  <span className="text-[11px] text-gray-400 flex-shrink-0">{item.label}</span>
+                  <span className="text-[11px] font-medium text-gray-700 text-right truncate">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,24 +1,36 @@
 /**
  * Welcome / Landing Page — viraltoby.com/welcome
- * Complete redesign — premium SaaS landing page.
+ * Complete redesign v2 — premium SaaS landing page.
  * Font: Plus Jakarta Sans. White theme with blue/violet accents.
  *
  * 3 PILLARS:
  * 1) Create content in seconds — one click or full control
  * 2) Schedule & auto-publish across 6 platforms
  * 3) Toby — AI agent that creates, publishes, and LEARNS
+ *
+ * FIXES v2:
+ * - "On Autopilot" text visibility fixed
+ * - Dashboard mockup matches real app UI (dark sidebar + light content)
+ * - Wider max-width for subtitle
+ * - Dual case study: @thelongevitycollege + @thegymcollege
+ * - Real-looking content in phone mockups
+ * - Toby Loop with visual mockup cards
+ * - Real-looking content type previews with rendered examples
+ * - Better testimonials with avatar gradients + star ratings
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useInView, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import {
   ArrowRight, ChevronDown, Sparkles, X, Menu,
-  Brain, Send, Play,
-  CheckCircle2, Target, Film,
+  Brain, Send, Play, Eye, Heart,
+  CheckCircle2, Film,
   Calendar, TrendingUp, Star,
   Check, Zap, BarChart3, Users,
   Clock, Search, Gauge, Repeat,
   MousePointerClick, Wand2, Palette,
+  Home, Bot, Layers, Settings,
+  Shield,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { PlatformIcon } from '@/shared/components/PlatformIcon'
@@ -26,10 +38,8 @@ import { ShimmerButton } from '@/shared/components/magicui/ShimmerButton'
 import { DotPattern } from '@/shared/components/magicui/DotPattern'
 import { Marquee } from '@/shared/components/magicui/Marquee'
 import { Safari } from '@/shared/components/magicui/Safari'
-import { TextGenerateEffect } from '@/shared/components/magicui/TextGenerateEffect'
 import { SpotlightCard } from '@/shared/components/aceternity/SpotlightCard'
 import { BackgroundBeams } from '@/shared/components/aceternity/BackgroundBeams'
-import { InfiniteMovingCards } from '@/shared/components/aceternity/InfiniteMovingCards'
 import { GradientMesh } from '@/shared/components/aceternity/GradientMesh'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
@@ -78,7 +88,7 @@ function MiniAreaChart({ data, color = '#3B82F6', height = 80 }: { data: number[
   const w = 300
   const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${height - (v / max) * (height - 8)}`).join(' ')
   const area = `0,${height} ${pts} ${w},${height}`
-  const id = `grad-${color.replace('#', '')}`
+  const id = `grad-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 5)}`
   return (
     <svg viewBox={`0 0 ${w} ${height}`} className="w-full" style={{ height }} preserveAspectRatio="none">
       <defs>
@@ -93,6 +103,83 @@ function MiniAreaChart({ data, color = '#3B82F6', height = 80 }: { data: number[
   )
 }
 
+/* ═══ Reel mockup — looks like a real rendered reel ═══ */
+function ReelMockup({ title, subtitle, brandInitials, brandColor, style = 'dark' }: {
+  title: string; subtitle?: string; brandInitials: string; brandColor: string; style?: 'dark' | 'gradient' | 'cinematic'
+}) {
+  const bg = style === 'dark'
+    ? 'from-gray-900 via-gray-800 to-gray-900'
+    : style === 'gradient'
+      ? 'from-violet-900 via-indigo-900 to-blue-900'
+      : 'from-stone-900 via-neutral-800 to-stone-900'
+  return (
+    <div className={`aspect-[9/16] rounded-xl bg-gradient-to-b ${bg} flex flex-col justify-between p-3 relative overflow-hidden shadow-lg`}>
+      {/* Subtle overlay gradient */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+      {/* Brand badge top */}
+      <div className="relative z-10 flex items-center gap-1.5">
+        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: brandColor }}>{brandInitials}</div>
+        <div className="h-[1px] flex-1 bg-white/20" />
+      </div>
+      {/* Title bottom */}
+      <div className="relative z-10">
+        <h4 className="text-[10px] sm:text-[11px] font-extrabold text-white leading-tight whitespace-pre-line">{title}</h4>
+        {subtitle && <p className="text-[7px] text-white/60 mt-1">{subtitle}</p>}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ Carousel slide mockup ═══ */
+function CarouselSlideMockup({ title, body, brandName, isTitle = false, brandColor }: {
+  title: string; body?: string; brandName: string; isTitle?: boolean; brandColor: string
+}) {
+  if (isTitle) {
+    return (
+      <div className="aspect-[4/5] rounded-xl bg-gradient-to-b from-gray-900 to-gray-800 flex flex-col justify-between p-3 relative overflow-hidden shadow-lg">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        <div className="relative z-10 flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: brandColor }}>{brandName[0]}</div>
+          <div className="h-[1px] flex-1 bg-white/20" />
+        </div>
+        <div className="relative z-10">
+          <h4 className="text-[11px] font-extrabold text-white leading-tight">{title}</h4>
+          <p className="text-[7px] text-white/50 mt-1">Swipe to learn more →</p>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="aspect-[4/5] rounded-xl bg-[#f8f5f0] flex flex-col p-3 relative overflow-hidden shadow-lg border border-gray-200">
+      <div className="flex items-center gap-1.5 mb-2">
+        <div className="w-4 h-4 rounded-full flex items-center justify-center text-[6px] font-bold text-white" style={{ background: brandColor }}>{brandName[0]}</div>
+        <span className="text-[7px] font-semibold text-gray-700">{brandName}</span>
+      </div>
+      <div className="flex-1 flex items-center">
+        <p className="text-[8px] text-gray-700 leading-relaxed font-medium">{body || title}</p>
+      </div>
+      <div className="flex justify-between text-[6px] text-gray-400 font-semibold uppercase tracking-wider border-t border-gray-200 pt-1.5">
+        <span>Share</span><span>Swipe</span><span>Save</span>
+      </div>
+    </div>
+  )
+}
+
+/* ═══ Phone frame component ═══ */
+function PhoneFrame({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`relative ${className}`}>
+      <div className="w-[260px] sm:w-[300px] rounded-[2.5rem] border-[6px] border-gray-800 bg-gray-900 shadow-2xl overflow-hidden">
+        {/* Notch */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-800 rounded-b-2xl z-20" />
+        <div className="bg-white overflow-hidden">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ═══ Data ═══ */
 const PLATFORMS = [
   { id: 'instagram', name: 'Instagram', color: 'text-pink-600' },
@@ -104,12 +191,12 @@ const PLATFORMS = [
 ]
 
 const TIMELINE_STEPS = [
-  { icon: Search, title: 'Scout', desc: 'Finds trending topics in your niche using real-time data', color: 'bg-cyan-500', lightBg: 'bg-cyan-50', textColor: 'text-cyan-600' },
-  { icon: Wand2, title: 'Create', desc: 'Generates scroll-stopping reels & carousels in your brand style', color: 'bg-blue-500', lightBg: 'bg-blue-50', textColor: 'text-blue-600' },
-  { icon: Gauge, title: 'Score', desc: 'Quality-checks every piece across 5 dimensions. Only 80+ gets published', color: 'bg-violet-500', lightBg: 'bg-violet-50', textColor: 'text-violet-600' },
-  { icon: Calendar, title: 'Schedule', desc: 'Picks optimal posting times based on your audience behavior', color: 'bg-emerald-500', lightBg: 'bg-emerald-50', textColor: 'text-emerald-600' },
-  { icon: Send, title: 'Publish', desc: 'Posts across all 6 platforms simultaneously', color: 'bg-pink-500', lightBg: 'bg-pink-50', textColor: 'text-pink-600' },
-  { icon: Brain, title: 'Learn', desc: 'Analyzes what worked, updates strategy, gets smarter every cycle', color: 'bg-amber-500', lightBg: 'bg-amber-50', textColor: 'text-amber-600' },
+  { icon: Search, title: 'Scout', desc: 'Finds trending topics in your niche using real-time data', color: 'bg-cyan-500', textColor: 'text-cyan-600' },
+  { icon: Wand2, title: 'Create', desc: 'Generates scroll-stopping reels & carousels in your brand style', color: 'bg-blue-500', textColor: 'text-blue-600' },
+  { icon: Gauge, title: 'Score', desc: 'Quality-checks every piece across 5 dimensions. Only 80+ gets published', color: 'bg-violet-500', textColor: 'text-violet-600' },
+  { icon: Calendar, title: 'Schedule', desc: 'Picks optimal posting times based on your audience behavior', color: 'bg-emerald-500', textColor: 'text-emerald-600' },
+  { icon: Send, title: 'Publish', desc: 'Posts across all 6 platforms simultaneously', color: 'bg-pink-500', textColor: 'text-pink-600' },
+  { icon: Brain, title: 'Learn', desc: 'Analyzes what worked, updates strategy, gets smarter every cycle', color: 'bg-amber-500', textColor: 'text-amber-600' },
 ]
 
 const COMPARISON = [
@@ -123,10 +210,11 @@ const COMPARISON = [
 ]
 
 const TESTIMONIALS = [
-  { quote: 'Toby went from publishing generic content to understanding exactly what my audience wants. My engagement rate tripled in 6 weeks.', name: 'Sarah K.', title: 'Fitness Coach', metric: '3.2x engagement' },
-  { quote: 'I was spending 4 hours a day on content. Now Toby handles everything and the quality is actually better than what I was making manually.', name: 'Marcus D.', title: 'Health Brand Owner', metric: '4hrs/day saved' },
-  { quote: 'The learning engine is insane. After 2 weeks, Toby figured out that curiosity hooks with dark visuals perform 4x better for my niche.', name: 'Elena R.', title: 'Wellness Creator', metric: '4x hook perf' },
-  { quote: 'We connected 3 brands and let Toby run. Within a month, all three were growing faster than when we had a dedicated social media manager.', name: 'James T.', title: 'Agency Owner', metric: '3 brands scaled' },
+  { quote: 'Toby went from publishing generic content to understanding exactly what my audience wants. My engagement rate tripled in 6 weeks.', name: 'Sarah K.', title: 'Fitness Coach', metric: '3.2x engagement', gradient: 'from-pink-400 to-rose-500', rating: 5 },
+  { quote: 'I was spending 4 hours a day on content. Now Toby handles everything and the quality is actually better than what I was making manually.', name: 'Marcus D.', title: 'Health Brand Owner', metric: '4hrs/day saved', gradient: 'from-blue-400 to-indigo-500', rating: 5 },
+  { quote: 'The learning engine is insane. After 2 weeks, Toby figured out that curiosity hooks with dark visuals perform 4x better for my niche.', name: 'Elena R.', title: 'Wellness Creator', metric: '4x hook perf', gradient: 'from-violet-400 to-purple-500', rating: 5 },
+  { quote: 'We connected 3 brands and let Toby run. Within a month, all three were growing faster than when we had a dedicated social media manager.', name: 'James T.', title: 'Agency Owner', metric: '3 brands scaled', gradient: 'from-emerald-400 to-teal-500', rating: 5 },
+  { quote: 'The scheduling alone would cost me $36/month on Buffer for my 6 accounts. ViralToby does that plus creates all the content. No brainer.', name: 'Priya M.', title: 'Multi-Brand Manager', metric: '$216/yr saved', gradient: 'from-amber-400 to-orange-500', rating: 5 },
 ]
 
 const FAQS = [
@@ -141,6 +229,7 @@ const FAQS = [
 ]
 
 const GROWTH_DATA = [120, 145, 138, 190, 220, 195, 280, 310, 290, 380, 420, 395, 510, 580, 620, 590, 700, 780, 820, 860, 920, 980, 1050, 1120, 1200, 1350, 1420, 1580, 1700, 1850]
+
 
 /* ═══════════════════════════════════════ PAGE ═══════════════════════════════ */
 
@@ -225,7 +314,6 @@ export function WelcomePage() {
 
       {/* ══════════ HERO ══════════ */}
       <section ref={heroRef} className="relative pt-28 sm:pt-36 pb-8 sm:pb-12 px-5 sm:px-8 overflow-hidden">
-        {/* Animated gradient mesh background */}
         <GradientMesh />
         <DotPattern className="opacity-40" />
 
@@ -246,16 +334,24 @@ export function WelcomePage() {
               <span className="text-[13px] font-medium text-blue-700">AI-powered social media autopilot</span>
             </motion.div>
 
-            {/* Headline */}
-            <h1 className="text-[38px] sm:text-[52px] md:text-[64px] lg:text-[76px] font-extrabold tracking-[-0.04em] text-gray-900 leading-[1.05]">
-              <TextGenerateEffect words="Your Social Media." className="block" />
-              <span className="block mt-1 sm:mt-2">
-                <TextGenerateEffect
-                  words="On Autopilot."
-                  delay={0.4}
-                  className="bg-gradient-to-r from-blue-600 via-violet-600 to-indigo-600 bg-clip-text text-transparent"
-                />
-              </span>
+            {/* FIX #1: Headline — "On Autopilot" now uses regular motion.div instead of TextGenerateEffect for reliability */}
+            <h1 className="text-[38px] sm:text-[52px] md:text-[64px] lg:text-[76px] font-extrabold tracking-[-0.04em] leading-[1.05]">
+              <motion.span
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="block text-gray-900"
+              >
+                Your Social Media.
+              </motion.span>
+              <motion.span
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.5 }}
+                className="block mt-1 sm:mt-2 bg-gradient-to-r from-blue-600 via-violet-600 to-indigo-600 bg-clip-text text-transparent"
+              >
+                On Autopilot.
+              </motion.span>
             </h1>
 
             {/* Subheadline */}
@@ -313,48 +409,120 @@ export function WelcomePage() {
       </section>
 
 
-      {/* ══════════ HERO MOCKUP — Dashboard in Safari ══════════ */}
+      {/* ══════════ FIX #2: DASHBOARD MOCKUP — Matches real app UI ══════════ */}
       <section className="pb-16 sm:pb-24 px-5 sm:px-8">
         <Reveal>
-          <div className="max-w-[1100px] mx-auto">
-            <Safari url="viraltoby.com/dashboard" className="shadow-[0_25px_100px_-15px_rgba(59,130,246,0.15)]">
-              {/* Dashboard mockup content */}
-              <div className="bg-gradient-to-b from-gray-50/80 to-white p-3 sm:p-5">
-                {/* Agent status */}
-                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-100 mb-3">
-                  <div className="relative"><div className="w-2 h-2 rounded-full bg-emerald-500" /><div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping" /></div>
-                  <span className="text-[12px] text-emerald-700 font-medium">Toby is running</span>
+          <div className="max-w-[1200px] mx-auto">
+            <Safari url="viraltoby.com" className="shadow-[0_25px_100px_-15px_rgba(59,130,246,0.15)]">
+              {/* Real app layout: dark sidebar + light content */}
+              <div className="flex min-h-[420px] sm:min-h-[500px]">
+                {/* Sidebar — matches real app: neutral-950/stone-900 gradient */}
+                <div className="hidden sm:flex w-[180px] bg-gradient-to-b from-neutral-950 via-stone-900 to-stone-800 flex-col p-3 flex-shrink-0">
+                  {/* Logo */}
+                  <div className="flex items-center gap-2 px-2 py-2 mb-4">
+                    <img src={vaLogo} alt="" className="w-6 h-6 rounded-md" />
+                    <span className="text-[11px] font-bold text-stone-100">ViralToby</span>
+                  </div>
+                  {/* Nav items */}
+                  <div className="space-y-0.5">
+                    {[
+                      { icon: Home, label: 'Home', active: true },
+                      { icon: Sparkles, label: 'Creation', active: false },
+                      { icon: Layers, label: 'Jobs', active: false },
+                      { icon: Calendar, label: 'Calendar', active: false },
+                      { icon: BarChart3, label: 'Analytics', active: false },
+                      { icon: Bot, label: 'Toby', active: false },
+                    ].map(n => (
+                      <div key={n.label} className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] ${n.active ? 'bg-white/10 text-white font-medium' : 'text-stone-400 hover:text-stone-200'}`}>
+                        <n.icon className="w-3.5 h-3.5" />
+                        <span>{n.label}</span>
+                        {n.label === 'Jobs' && <span className="ml-auto text-[8px] bg-orange-500 text-white px-1 py-0.5 rounded-full font-bold">3</span>}
+                      </div>
+                    ))}
+                  </div>
                   <div className="flex-1" />
-                  <span className="text-[10px] text-emerald-500 bg-emerald-100 px-2 py-0.5 rounded-full font-medium hidden sm:inline">Phase: Learning</span>
+                  {/* Settings */}
+                  <div className="border-t border-white/10 pt-2 mt-2 space-y-0.5">
+                    <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-stone-400"><Settings className="w-3.5 h-3.5" /> Brands</div>
+                  </div>
+                  {/* User */}
+                  <div className="flex items-center gap-2 px-2 py-2 mt-2">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center text-[8px] font-bold text-white">FP</div>
+                    <span className="text-[10px] text-stone-300">Filipe P.</span>
+                  </div>
                 </div>
 
-                {/* Stats row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-3">
-                  {[
-                    { label: 'Total Views', value: '2.4M', change: '+24%', color: '#3B82F6' },
-                    { label: 'Engagement', value: '6.8%', change: '+1.2%', color: '#10B981' },
-                    { label: 'Published', value: '347', change: '+52', color: '#8B5CF6' },
-                    { label: 'Followers', value: '45.2K', change: '+3.1K', color: '#F59E0B' },
-                  ].map(s => (
-                    <div key={s.label} className="bg-white rounded-xl p-3 border border-gray-100 relative overflow-hidden">
-                      <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: s.color }} />
-                      <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">{s.label}</div>
-                      <div className="text-[18px] sm:text-[22px] font-extrabold leading-none" style={{ color: s.color }}>{s.value}</div>
-                      <div className="flex items-center gap-1 mt-1">
-                        <TrendingUp className="w-2.5 h-2.5 text-emerald-500" />
-                        <span className="text-[10px] font-semibold text-emerald-500">{s.change}</span>
+                {/* Main content — matches real app: gray-50 bg */}
+                <div className="flex-1 bg-gray-50 p-3 sm:p-4 overflow-hidden">
+                  {/* Toby status bar */}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100 mb-3">
+                    <div className="relative"><div className="w-2 h-2 rounded-full bg-emerald-500" /><div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping" /></div>
+                    <span className="text-[11px] text-emerald-700 font-medium">Toby is running</span>
+                    <div className="flex-1" />
+                    <span className="text-[9px] text-emerald-500 bg-emerald-100 px-1.5 py-0.5 rounded-full font-medium hidden sm:inline">Phase: Learning</span>
+                  </div>
+
+                  {/* Greeting */}
+                  <div className="mb-3">
+                    <h2 className="text-[14px] sm:text-[16px] font-bold text-gray-900">Good morning, Filipe</h2>
+                    <p className="text-[10px] text-gray-400">3 brands · 45.2K followers · 12 scheduled</p>
+                  </div>
+
+                  {/* Stats row — matches real app stat cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+                    {[
+                      { label: 'TOTAL FOLLOWERS', value: '45.2K', change: '+3.1K', icon: Users },
+                      { label: 'VIEWS (7D)', value: '2.4M', change: '+24%', icon: Eye },
+                      { label: 'LIKES (7D)', value: '186K', change: '+18%', icon: Heart },
+                      { label: 'JOBS READY', value: '7', sub: '3 in progress', icon: Sparkles },
+                      { label: 'SCHEDULED', value: '12', sub: 'next 48h', icon: Calendar },
+                    ].map(s => (
+                      <div key={s.label} className="bg-white rounded-xl p-2.5 border border-gray-100 shadow-sm">
+                        <div className="flex items-center gap-1 mb-1">
+                          <s.icon className="w-3 h-3 text-gray-300" />
+                          <span className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">{s.label}</span>
+                        </div>
+                        <div className="text-[16px] sm:text-[18px] font-bold text-gray-900 tabular-nums">{s.value}</div>
+                        {s.change && (
+                          <div className="flex items-center gap-0.5 mt-0.5">
+                            <TrendingUp className="w-2.5 h-2.5 text-emerald-500" />
+                            <span className="text-[9px] font-semibold text-emerald-500">{s.change}</span>
+                          </div>
+                        )}
+                        {s.sub && <span className="text-[9px] text-gray-400">{s.sub}</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Growth chart + Brand health grid */}
+                  <div className="grid sm:grid-cols-[1fr_200px] gap-2">
+                    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-semibold text-gray-700">Growth Trend</span>
+                        <span className="text-[9px] text-gray-300">Last 30 days</span>
+                      </div>
+                      <MiniAreaChart data={GROWTH_DATA} color="#8B5CF6" height={70} />
+                    </div>
+                    {/* Brand health */}
+                    <div className="hidden sm:block bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+                      <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Brand Health</span>
+                      <div className="mt-2 space-y-2">
+                        {[
+                          { name: 'The Longevity College', color: '#2e7d32', followers: '100K', views: '1.2M' },
+                          { name: 'The Gym College', color: '#00435c', followers: '450K', views: '3.8M' },
+                          { name: 'Mindset Daily', color: '#6a1b9a', followers: '28K', views: '340K' },
+                        ].map(b => (
+                          <div key={b.name} className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: b.color }}>{b.name[0]}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[9px] font-semibold text-gray-700 truncate">{b.name}</div>
+                              <div className="text-[8px] text-gray-400">{b.followers} · {b.views}</div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Chart */}
-                <div className="bg-white rounded-xl border border-gray-100 p-3 sm:p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[12px] font-semibold text-gray-700">Growth Trend</span>
-                    <span className="text-[10px] text-gray-300">Last 30 days</span>
                   </div>
-                  <MiniAreaChart data={GROWTH_DATA} color="#3B82F6" height={80} />
                 </div>
               </div>
             </Safari>
@@ -386,7 +554,8 @@ export function WelcomePage() {
             <div className="text-center mb-12 sm:mb-16">
               <p className="text-[13px] font-semibold text-blue-600 uppercase tracking-widest mb-3">Everything you need</p>
               <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-gray-900">Three pillars. One platform.</h2>
-              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-500 max-w-2xl mx-auto">Whether you want full control or full autopilot — ViralToby adapts to how you work.</p>
+              {/* FIX #3: Wider max-width */}
+              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-500 max-w-3xl mx-auto">Whether you want full control or full autopilot — ViralToby adapts to how you work.</p>
             </div>
           </Reveal>
 
@@ -401,7 +570,7 @@ export function WelcomePage() {
                   <h3 className="text-[20px] font-bold text-gray-900 mb-2">Create in Seconds</h3>
                   <p className="text-[14px] text-gray-500 leading-relaxed mb-6">One click for autopilot. Or choose your topic, format, and style for full creative control.</p>
 
-                  {/* Mini creation wizard mockup */}
+                  {/* Mini creation wizard */}
                   <div className="bg-gray-50 rounded-xl p-4 space-y-3">
                     {[
                       { step: '1', label: 'Content Type', value: 'Reels & Shorts', active: true },
@@ -425,7 +594,9 @@ export function WelcomePage() {
                       </motion.div>
                     ))}
                     <div className="pt-1">
-                      <div className="w-full py-2 rounded-lg bg-blue-500 text-white text-center text-[12px] font-semibold">Generate Content</div>
+                      <div className="w-full py-2 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-center text-[12px] font-semibold flex items-center justify-center gap-1.5">
+                        <Sparkles className="w-3 h-3" /> Generate Content
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -475,7 +646,7 @@ export function WelcomePage() {
                     </div>
                     <div className="mt-3 flex items-center gap-2 text-[10px] text-gray-400">
                       <Clock className="w-3 h-3" />
-                      <span>Smart timing optimizes for each platform</span>
+                      <span>Smart timing per platform</span>
                     </div>
                   </div>
                 </div>
@@ -528,7 +699,7 @@ export function WelcomePage() {
                     ))}
                     <div className="flex items-center gap-2 bg-violet-50 rounded-lg px-3 py-2 mt-2">
                       <Sparkles className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-                      <span className="text-[10px] text-violet-600 font-medium">Curiosity hooks convert 3.2x better for this brand</span>
+                      <span className="text-[10px] text-violet-600 font-medium">Curiosity hooks convert 3.2x better</span>
                     </div>
                   </div>
                 </div>
@@ -539,275 +710,322 @@ export function WelcomePage() {
       </section>
 
 
-      {/* ══════════ CASE STUDY: @thelongevitycollege ══════════ */}
+      {/* ══════════ FIX #4 & #5: CASE STUDIES — Dual: @thelongevitycollege + @thegymcollege ══════════ */}
       <section className="py-16 sm:py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-900 to-blue-950" />
-        <div className="absolute inset-0 opacity-20">
-          <DotPattern className="fill-white/10" />
-        </div>
+        <div className="absolute inset-0 opacity-20"><DotPattern className="fill-white/10" /></div>
 
         <div className="relative max-w-[1200px] mx-auto px-5 sm:px-8">
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-            {/* Left: Phone mockup */}
-            <Reveal>
-              <div className="flex justify-center">
-                <div className="relative">
-                  {/* Phone frame */}
-                  <div className="w-[280px] sm:w-[320px] rounded-[2.5rem] border-[8px] border-gray-700 bg-gray-800 shadow-2xl overflow-hidden">
-                    <div className="bg-white aspect-[9/16] flex flex-col">
-                      {/* Instagram-like header */}
-                      <div className="p-4 flex items-center gap-3 border-b border-gray-100">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-[14px]">LC</div>
+          <Reveal>
+            <div className="text-center mb-12 sm:mb-16">
+              <p className="text-[13px] font-semibold text-blue-400 uppercase tracking-widest mb-3">Real Results</p>
+              <h2 className="text-[32px] sm:text-[44px] font-extrabold text-white tracking-tight">Creators growing on autopilot.</h2>
+            </div>
+          </Reveal>
+
+          {/* Two case studies side by side */}
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
+
+            {/* Case Study 1: @thelongevitycollege */}
+            <Reveal delay={0.1}>
+              <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row gap-6 items-center">
+                  {/* Phone with real-looking content */}
+                  <PhoneFrame className="flex-shrink-0">
+                    <div className="aspect-[9/16] flex flex-col">
+                      {/* Profile header */}
+                      <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-[14px]">LC</div>
                         <div>
-                          <div className="text-[13px] font-bold text-gray-900">thelongevitycollege</div>
-                          <div className="text-[11px] text-gray-400">100K followers</div>
+                          <div className="text-[12px] font-bold text-gray-900">thelongevitycollege</div>
+                          <div className="text-[10px] text-gray-400">Health & Longevity</div>
                         </div>
                       </div>
                       {/* Stats */}
-                      <div className="grid grid-cols-3 py-4 px-3 border-b border-gray-100 text-center">
-                        <div><div className="text-[16px] font-extrabold text-gray-900">847</div><div className="text-[10px] text-gray-400">Posts</div></div>
-                        <div><div className="text-[16px] font-extrabold text-gray-900">100K</div><div className="text-[10px] text-gray-400">Followers</div></div>
-                        <div><div className="text-[16px] font-extrabold text-gray-900">1.2K</div><div className="text-[10px] text-gray-400">Following</div></div>
+                      <div className="grid grid-cols-3 py-3 px-2 text-center border-b border-gray-100">
+                        <div><div className="text-[14px] font-extrabold text-gray-900">847</div><div className="text-[9px] text-gray-400">Posts</div></div>
+                        <div><div className="text-[14px] font-extrabold text-gray-900">100K</div><div className="text-[9px] text-gray-400">Followers</div></div>
+                        <div><div className="text-[14px] font-extrabold text-gray-900">1.2K</div><div className="text-[9px] text-gray-400">Following</div></div>
                       </div>
-                      {/* Bio */}
-                      <div className="px-4 py-3">
-                        <div className="text-[12px] font-semibold text-gray-900">The Longevity College</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">Science-backed longevity tips. Daily reels by Toby AI.</div>
-                      </div>
-                      {/* Grid of posts */}
-                      <div className="grid grid-cols-3 gap-0.5 flex-1 px-0.5 pb-0.5">
-                        {Array.from({ length: 9 }).map((_, i) => (
-                          <div key={i} className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                            <Film className="w-4 h-4 text-gray-300" />
+                      {/* Grid of reels — real-looking thumbnails */}
+                      <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
+                        {[
+                          { title: '5 morning\nhabits', bg: 'from-emerald-900 to-emerald-700' },
+                          { title: 'Cortisol\nmyth', bg: 'from-gray-900 to-gray-700' },
+                          { title: 'Sleep\nscience', bg: 'from-blue-900 to-blue-700' },
+                          { title: 'Gut health\ntips', bg: 'from-teal-900 to-teal-700' },
+                          { title: 'Cold\nplunge', bg: 'from-cyan-900 to-cyan-700' },
+                          { title: 'Fasting\nguide', bg: 'from-stone-900 to-stone-700' },
+                          { title: 'Zone 2\ncardio', bg: 'from-green-900 to-green-700' },
+                          { title: 'Magnesium\ntypes', bg: 'from-violet-900 to-violet-700' },
+                          { title: 'Sun\nexposure', bg: 'from-amber-900 to-amber-700' },
+                        ].map((r, i) => (
+                          <div key={i} className={`aspect-square bg-gradient-to-b ${r.bg} flex items-end p-1.5`}>
+                            <span className="text-[7px] font-bold text-white leading-tight whitespace-pre-line">{r.title}</span>
                           </div>
                         ))}
                       </div>
                     </div>
-                  </div>
-                  {/* Floating badge */}
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8, x: 20 }}
-                    whileInView={{ opacity: 1, scale: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.5, type: 'spring' }}
-                    className="absolute -right-4 sm:-right-8 top-16 bg-white rounded-xl px-4 py-3 shadow-xl border border-gray-100"
-                  >
-                    <div className="text-[10px] text-gray-400 mb-0.5">Growth</div>
-                    <div className="text-[20px] font-extrabold text-emerald-500">+100K</div>
-                    <div className="text-[10px] text-gray-400">in 2 months</div>
-                  </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8, x: -20 }}
-                    whileInView={{ opacity: 1, scale: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.7, type: 'spring' }}
-                    className="absolute -left-4 sm:-left-8 bottom-24 bg-white rounded-xl px-4 py-3 shadow-xl border border-gray-100"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="text-[11px] font-semibold text-gray-700">Full autopilot</span>
+                  </PhoneFrame>
+
+                  {/* Story */}
+                  <div className="flex-1 text-center sm:text-left">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
+                      <Zap className="w-3 h-3 text-emerald-400" />
+                      <span className="text-[11px] font-semibold text-emerald-400">Full Autopilot</span>
                     </div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">Powered by Toby</div>
-                  </motion.div>
+                    <h3 className="text-[24px] sm:text-[28px] font-extrabold text-white leading-tight">
+                      0 → 100K<br />
+                      <span className="text-emerald-400">in 2 months</span>
+                    </h3>
+                    <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
+                      <strong className="text-white">@thelongevitycollege</strong> connected their brand, set their Content DNA, and let Toby run. Zero manual content creation.
+                    </p>
+                    <div className="mt-5 grid grid-cols-3 gap-3">
+                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">100K</div><div className="text-[9px] text-gray-500">Followers</div></div>
+                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">847</div><div className="text-[9px] text-gray-500">Reels</div></div>
+                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">0hrs</div><div className="text-[9px] text-gray-500">Manual work</div></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Reveal>
 
-            {/* Right: Story */}
+            {/* Case Study 2: @thegymcollege */}
             <Reveal delay={0.2}>
-              <div>
-                <p className="text-[13px] font-semibold text-blue-400 uppercase tracking-widest mb-4">Case Study</p>
-                <h2 className="text-[32px] sm:text-[42px] font-extrabold text-white tracking-tight leading-tight">
-                  0 to 100K followers<br />
-                  <span className="text-blue-400">in 2 months.</span>
-                </h2>
-                <p className="mt-6 text-[16px] sm:text-[18px] text-gray-400 leading-relaxed">
-                  <strong className="text-white">@thelongevitycollege</strong> connected their brand, defined their Content DNA, and let Toby run on full autopilot. Two months later — 100K followers, hundreds of reels published, zero manual content creation.
-                </p>
-                <div className="mt-8 grid grid-cols-3 gap-4">
-                  {[
-                    { value: '100K', label: 'Followers gained' },
-                    { value: '847', label: 'Reels published' },
-                    { value: '0hrs', label: 'Manual work' },
-                  ].map(s => (
-                    <div key={s.label} className="text-center">
-                      <div className="text-[24px] sm:text-[32px] font-extrabold text-white">{s.value}</div>
-                      <div className="text-[11px] sm:text-[12px] text-gray-500 mt-1">{s.label}</div>
+              <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row gap-6 items-center">
+                  <PhoneFrame className="flex-shrink-0">
+                    <div className="aspect-[9/16] flex flex-col">
+                      {/* Profile header */}
+                      <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white font-bold text-[14px]">GC</div>
+                        <div>
+                          <div className="text-[12px] font-bold text-gray-900">thegymcollege</div>
+                          <div className="text-[10px] text-gray-400">Fitness & Training</div>
+                        </div>
+                      </div>
+                      {/* Stats */}
+                      <div className="grid grid-cols-3 py-3 px-2 text-center border-b border-gray-100">
+                        <div><div className="text-[14px] font-extrabold text-gray-900">1.2K</div><div className="text-[9px] text-gray-400">Posts</div></div>
+                        <div><div className="text-[14px] font-extrabold text-gray-900">450K</div><div className="text-[9px] text-gray-400">Followers</div></div>
+                        <div><div className="text-[14px] font-extrabold text-gray-900">986</div><div className="text-[9px] text-gray-400">Following</div></div>
+                      </div>
+                      {/* Grid of reels */}
+                      <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
+                        {[
+                          { title: 'Chest day\nsplits', bg: 'from-blue-900 to-blue-700' },
+                          { title: 'Creatine\nguide', bg: 'from-gray-900 to-gray-700' },
+                          { title: 'Perfect\ndeadlift', bg: 'from-red-900 to-red-700' },
+                          { title: 'Protein\nmyths', bg: 'from-stone-900 to-stone-700' },
+                          { title: 'Pre-workout\ntiming', bg: 'from-orange-900 to-orange-700' },
+                          { title: 'Rest day\nroutine', bg: 'from-cyan-900 to-cyan-700' },
+                          { title: 'Bulk vs\ncut', bg: 'from-indigo-900 to-indigo-700' },
+                          { title: 'Form\ncheck', bg: 'from-emerald-900 to-emerald-700' },
+                          { title: 'Shoulder\nmobility', bg: 'from-violet-900 to-violet-700' },
+                        ].map((r, i) => (
+                          <div key={i} className={`aspect-square bg-gradient-to-b ${r.bg} flex items-end p-1.5`}>
+                            <span className="text-[7px] font-bold text-white leading-tight whitespace-pre-line">{r.title}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-8">
-                  <Link
-                    to={ctaLink}
-                    className="inline-flex items-center gap-2 bg-white text-gray-900 font-semibold text-[15px] px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors"
-                  >
-                    Start your growth story <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  </PhoneFrame>
+
+                  {/* Story */}
+                  <div className="flex-1 text-center sm:text-left">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
+                      <TrendingUp className="w-3 h-3 text-blue-400" />
+                      <span className="text-[11px] font-semibold text-blue-400">Scaling Fast</span>
+                    </div>
+                    <h3 className="text-[24px] sm:text-[28px] font-extrabold text-white leading-tight">
+                      300K → 450K<br />
+                      <span className="text-blue-400">in 3 months</span>
+                    </h3>
+                    <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
+                      <strong className="text-white">@thegymcollege</strong> was already big. Toby scaled them further — 150K new followers with AI-optimized content that kept the brand voice intact.
+                    </p>
+                    <div className="mt-5 grid grid-cols-3 gap-3">
+                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">+150K</div><div className="text-[9px] text-gray-500">Followers</div></div>
+                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">1.2K</div><div className="text-[9px] text-gray-500">Reels</div></div>
+                      <div className="text-center"><div className="text-[20px] font-extrabold text-white">3mo</div><div className="text-[9px] text-gray-500">Timeline</div></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Reveal>
           </div>
+
+          {/* CTA */}
+          <Reveal delay={0.3}>
+            <div className="text-center mt-10">
+              <Link to={ctaLink} className="inline-flex items-center gap-2 bg-white text-gray-900 font-semibold text-[15px] px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors">
+                Start your growth story <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </Reveal>
         </div>
       </section>
 
 
-      {/* ══════════ HOW TOBY WORKS — Timeline ══════════ */}
+      {/* ══════════ FIX #6: HOW TOBY WORKS — With visual mockup cards per step ══════════ */}
       <section id="how-it-works" className="py-16 sm:py-24 px-5 sm:px-8">
-        <div className="max-w-[900px] mx-auto">
+        <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <div className="text-center mb-12 sm:mb-16">
-              <p className="text-[13px] font-semibold text-violet-600 uppercase tracking-widest mb-3">The Toby Loop</p>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-violet-100 bg-violet-50/80 mb-4">
+                <Bot className="w-4 h-4 text-violet-600" />
+                <span className="text-[13px] font-semibold text-violet-700">Meet Toby — Your AI Agent</span>
+              </div>
               <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-gray-900">Six steps. Fully autonomous.</h2>
-              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-500 max-w-xl mx-auto">Toby runs this cycle every 5 minutes — finding, creating, scoring, scheduling, publishing, and learning from results.</p>
+              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-500 max-w-2xl mx-auto">Toby runs this cycle every 5 minutes — finding, creating, scoring, scheduling, publishing, and learning from results.</p>
             </div>
           </Reveal>
 
-          <div className="relative">
-            {/* Vertical line */}
-            <div className="absolute left-6 sm:left-8 top-0 bottom-0 w-[2px] bg-gradient-to-b from-cyan-200 via-blue-200 via-violet-200 via-emerald-200 via-pink-200 to-amber-200" />
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {TIMELINE_STEPS.map((step, i) => (
+              <Reveal key={step.title} delay={i * 0.08}>
+                <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 hover:shadow-xl hover:shadow-black/[0.04] transition-all hover:-translate-y-0.5">
+                  {/* Step number */}
+                  <span className="absolute top-4 right-4 text-[48px] font-extrabold text-gray-100 leading-none select-none">{i + 1}</span>
 
-            <div className="space-y-6 sm:space-y-8">
-              {TIMELINE_STEPS.map((step, i) => (
-                <Reveal key={step.title} delay={i * 0.1}>
-                  <div className="flex gap-4 sm:gap-6 items-start">
-                    {/* Timeline node */}
-                    <div className="relative z-10 flex-shrink-0">
-                      <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl ${step.color} flex items-center justify-center shadow-lg`} style={{ animation: i === 0 ? 'timeline-pulse 2s infinite' : undefined }}>
-                        <step.icon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
-                      </div>
-                    </div>
-                    {/* Content */}
-                    <div className="flex-1 pt-1 sm:pt-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-[11px] font-bold uppercase tracking-wider ${step.textColor}`}>Step {i + 1}</span>
-                      </div>
-                      <h3 className="text-[18px] sm:text-[20px] font-bold text-gray-900">{step.title}</h3>
-                      <p className="text-[14px] text-gray-500 mt-1 leading-relaxed">{step.desc}</p>
-                    </div>
+                  {/* Icon */}
+                  <div className={`w-11 h-11 rounded-xl ${step.color} flex items-center justify-center mb-4 shadow-lg relative z-10`}>
+                    <step.icon className="w-5 h-5 text-white" />
                   </div>
-                </Reveal>
-              ))}
-            </div>
 
-            {/* Loop indicator */}
-            <Reveal delay={0.7}>
-              <div className="flex items-center gap-3 mt-8 ml-6 sm:ml-8 pl-6 sm:pl-8">
-                <Repeat className="w-5 h-5 text-blue-400" />
-                <span className="text-[14px] text-gray-400">Then it loops — getting smarter every cycle</span>
-              </div>
-            </Reveal>
-          </div>
-        </div>
-      </section>
+                  <h3 className="text-[18px] font-bold text-gray-900 mb-1.5 relative z-10">{step.title}</h3>
+                  <p className="text-[13px] text-gray-500 leading-relaxed mb-4 relative z-10">{step.desc}</p>
 
-
-      {/* ══════════ SCHEDULING DEEP DIVE ══════════ */}
-      <section className="py-16 sm:py-24 px-5 sm:px-8 bg-gray-50">
-        <div className="max-w-[1200px] mx-auto">
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-            <Reveal>
-              <div>
-                <p className="text-[13px] font-semibold text-emerald-600 uppercase tracking-widest mb-3">Scheduling & Analytics</p>
-                <h2 className="text-[32px] sm:text-[40px] font-extrabold tracking-tight text-gray-900 leading-tight">
-                  Why pay $6/account<br />for scheduling alone?
-                </h2>
-                <p className="mt-4 text-[16px] text-gray-500 leading-relaxed">
-                  ViralToby includes smart scheduling, multi-platform publishing, and analytics — alongside AI content creation. No extra fees per account.
-                </p>
-                <div className="mt-8 space-y-3">
-                  {[
-                    { icon: Clock, text: 'Smart time optimization per platform' },
-                    { icon: Calendar, text: 'Drag-and-drop content calendar' },
-                    { icon: BarChart3, text: 'Built-in engagement analytics' },
-                    { icon: Target, text: 'Queue management with priority' },
-                    { icon: Zap, text: 'Instant multi-platform publishing' },
-                  ].map(f => (
-                    <div key={f.text} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                        <f.icon className="w-4 h-4 text-emerald-500" />
-                      </div>
-                      <span className="text-[14px] text-gray-700">{f.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Reveal>
-
-            <Reveal delay={0.2}>
-              <Safari url="viraltoby.com/calendar" className="shadow-xl">
-                <div className="bg-white p-4">
-                  {/* Calendar header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[14px] font-bold text-gray-900">Content Calendar</span>
-                    <div className="flex gap-1">
-                      {PLATFORMS.slice(0, 4).map(p => (
-                        <PlatformIcon key={p.id} platform={p.id} className={`w-4 h-4 ${p.color}`} />
+                  {/* Mini visual per step */}
+                  {i === 0 && (
+                    /* Scout: trending topics */
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                      {['Cortisol regulation — +340%', 'Morning sunlight — +280%', 'Gut microbiome — +195%'].map((t, j) => (
+                        <div key={j} className="flex items-center gap-2 text-[10px]">
+                          <TrendingUp className={`w-3 h-3 ${j === 0 ? 'text-emerald-500' : 'text-blue-400'}`} />
+                          <span className="text-gray-600 flex-1">{t}</span>
+                          <span className="text-[9px] text-emerald-500 font-semibold">Rising</span>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                  {/* Calendar grid */}
-                  <div className="grid grid-cols-7 gap-1 mb-4">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                      <div key={d} className="text-[10px] font-medium text-gray-400 text-center pb-1">{d}</div>
-                    ))}
-                    {Array.from({ length: 35 }, (_, i) => {
-                      const day = i - 1
-                      const slots = day >= 0 && day < 31 ? Math.floor(Math.random() * 4) : 0
-                      return (
-                        <div key={i} className={`aspect-square rounded-md flex flex-col items-center justify-center ${day >= 0 && day < 31 ? 'bg-gray-50' : ''}`}>
-                          {day >= 0 && day < 31 && (
-                            <>
-                              <span className="text-[9px] text-gray-400">{day + 1}</span>
-                              {slots > 0 && (
-                                <div className="flex gap-0.5 mt-0.5">
-                                  {Array.from({ length: Math.min(slots, 3) }).map((_, j) => (
-                                    <div key={j} className={`w-1 h-1 rounded-full ${j === 0 ? 'bg-pink-400' : j === 1 ? 'bg-blue-400' : 'bg-emerald-400'}`} />
-                                  ))}
-                                </div>
-                              )}
-                            </>
-                          )}
+                  )}
+                  {i === 1 && (
+                    /* Create: mini reels */
+                    <div className="flex gap-2">
+                      <ReelMockup title={"5 habits\nthat changed\nmy life"} brandInitials="LC" brandColor="#2e7d32" style="dark" />
+                      <ReelMockup title={"The cortisol\nmorning\nroutine"} brandInitials="LC" brandColor="#2e7d32" style="gradient" />
+                      <ReelMockup title={"Why cold\nplunges\nwork"} brandInitials="LC" brandColor="#2e7d32" style="cinematic" />
+                    </div>
+                  )}
+                  {i === 2 && (
+                    /* Score: quality dimensions */
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                      {[
+                        { dim: 'Structure', score: 96 },
+                        { dim: 'Pattern Match', score: 92 },
+                        { dim: 'Novelty', score: 88 },
+                        { dim: 'Emotional Hook', score: 94 },
+                        { dim: 'Plausibility', score: 90 },
+                      ].map(d => (
+                        <div key={d.dim} className="flex items-center gap-2">
+                          <span className="text-[9px] text-gray-500 w-20">{d.dim}</span>
+                          <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-violet-500 rounded-full" style={{ width: `${d.score}%` }} />
+                          </div>
+                          <span className="text-[9px] font-bold text-gray-600 w-5 text-right">{d.score}</span>
                         </div>
-                      )
-                    })}
-                  </div>
-                  {/* Upcoming */}
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Upcoming today</div>
-                    {[
-                      { time: '7:30 AM', title: '5 habits for longevity', platform: 'instagram' },
-                      { time: '12:00 PM', title: 'The gut-brain connection', platform: 'tiktok' },
-                      { time: '5:00 PM', title: 'Sleep science carousel', platform: 'facebook' },
-                    ].map(item => (
-                      <div key={item.time} className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-gray-50">
-                        <span className="text-[10px] text-gray-400 w-14">{item.time}</span>
-                        <PlatformIcon platform={item.platform} className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="text-[11px] text-gray-600 truncate">{item.title}</span>
+                      ))}
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <Shield className="w-3 h-3 text-emerald-500" />
+                        <span className="text-[9px] font-semibold text-emerald-600">Overall: 92/100 — Published</span>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+                  {i === 3 && (
+                    /* Schedule: time slots */
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                      {[
+                        { time: '7:30 AM', platform: 'instagram', title: '5 morning habits', status: 'Optimal' },
+                        { time: '12:00 PM', platform: 'tiktok', title: 'Cortisol routine', status: 'Peak' },
+                        { time: '5:30 PM', platform: 'youtube', title: 'Cold plunge guide', status: 'Good' },
+                      ].map(s => (
+                        <div key={s.time} className="flex items-center gap-2 py-1">
+                          <span className="text-[9px] text-gray-400 w-12">{s.time}</span>
+                          <PlatformIcon platform={s.platform} className="w-3 h-3 text-gray-400" />
+                          <span className="text-[10px] text-gray-600 flex-1 truncate">{s.title}</span>
+                          <span className="text-[8px] font-semibold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded">{s.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {i === 4 && (
+                    /* Publish: platform send */
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                      {[
+                        { platform: 'instagram', status: 'Published', time: '2m ago' },
+                        { platform: 'tiktok', status: 'Published', time: '2m ago' },
+                        { platform: 'youtube', status: 'Published', time: '3m ago' },
+                        { platform: 'facebook', status: 'Queued', time: 'in 5m' },
+                      ].map(p => (
+                        <div key={p.platform} className="flex items-center gap-2">
+                          <PlatformIcon platform={p.platform} className="w-3.5 h-3.5 text-gray-500" />
+                          <span className="text-[10px] text-gray-600 flex-1 capitalize">{p.platform}</span>
+                          <span className={`text-[9px] font-semibold ${p.status === 'Published' ? 'text-emerald-500' : 'text-amber-500'}`}>{p.status}</span>
+                          <span className="text-[8px] text-gray-300">{p.time}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {i === 5 && (
+                    /* Learn: insights */
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                      {[
+                        { signal: 'Curiosity hooks → 94% open rate', type: 'positive' },
+                        { signal: 'Dark visuals → 3.2x engagement', type: 'positive' },
+                        { signal: 'List format underperforms → deprioritized', type: 'negative' },
+                      ].map((s, j) => (
+                        <div key={j} className="flex items-center gap-2 text-[10px]">
+                          <div className={`w-1 h-4 rounded-full ${s.type === 'positive' ? 'bg-emerald-400' : 'bg-red-300'}`} />
+                          <span className="text-gray-600">{s.signal}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-1.5 pt-1 text-[9px] text-amber-600">
+                        <Brain className="w-3 h-3" />
+                        <span className="font-medium">Strategy updated — next cycle improved</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </Safari>
-            </Reveal>
+              </Reveal>
+            ))}
           </div>
+
+          <Reveal delay={0.6}>
+            <div className="flex items-center justify-center gap-3 mt-8 text-gray-400">
+              <Repeat className="w-5 h-5 text-blue-400" />
+              <span className="text-[15px]">Then it loops — getting smarter every cycle</span>
+            </div>
+          </Reveal>
         </div>
       </section>
 
 
-      {/* ══════════ CONTENT TYPES ══════════ */}
-      <section className="py-16 sm:py-24 px-5 sm:px-8">
+      {/* ══════════ FIX #7: CONTENT TYPES — With real rendered examples ══════════ */}
+      <section className="py-16 sm:py-24 px-5 sm:px-8 bg-gray-50">
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <div className="text-center mb-12 sm:mb-16">
               <p className="text-[13px] font-semibold text-pink-600 uppercase tracking-widest mb-3">Content Types</p>
               <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-gray-900">Reels, Carousels, and more.</h2>
+              <p className="mt-4 text-[16px] text-gray-500 max-w-2xl mx-auto">Professional content rendered in seconds — with your brand colors, typography, and voice.</p>
             </div>
           </Reveal>
 
           <div className="grid md:grid-cols-2 gap-6">
             {/* Reels */}
             <Reveal delay={0.1}>
-              <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 group hover:shadow-xl hover:shadow-black/[0.04] transition-all">
+              <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
                     <Film className="w-5 h-5 text-white" />
@@ -817,22 +1035,25 @@ export function WelcomePage() {
                     <p className="text-[12px] text-gray-400">Instagram, TikTok, YouTube, Facebook</p>
                   </div>
                 </div>
-                <p className="text-[14px] text-gray-500 leading-relaxed mb-6">Scroll-stopping vertical videos with custom typography, brand colors, and hook-optimized text overlays. Ready for all 4 short-form platforms.</p>
+                <p className="text-[14px] text-gray-500 leading-relaxed mb-6">Scroll-stopping vertical videos with custom typography, brand colors, and hook-optimized text overlays.</p>
 
-                {/* Reel preview mockup */}
-                <div className="flex gap-3 overflow-hidden">
-                  {[
-                    { title: '5 habits that\nchanged my life', bg: 'from-gray-900 to-gray-800' },
-                    { title: 'Why you should\nwalk after meals', bg: 'from-blue-900 to-blue-800' },
-                    { title: 'The cortisol\nmorning routine', bg: 'from-violet-900 to-violet-800' },
-                  ].map((r, i) => (
-                    <div key={i} className={`w-24 sm:w-28 aspect-[9/16] rounded-xl bg-gradient-to-b ${r.bg} flex items-end p-2 flex-shrink-0`}>
-                      <span className="text-[8px] sm:text-[9px] font-bold text-white leading-tight whitespace-pre-line">{r.title}</span>
-                    </div>
-                  ))}
+                {/* Real-looking reel previews */}
+                <div className="flex gap-3 justify-center">
+                  <div className="w-[90px] sm:w-[100px]">
+                    <ReelMockup title={"5 morning\nhabits that\nchanged my life"} subtitle="@thelongevitycollege" brandInitials="LC" brandColor="#2e7d32" style="dark" />
+                  </div>
+                  <div className="w-[90px] sm:w-[100px]">
+                    <ReelMockup title={"Why you need\nto walk after\nevery meal"} subtitle="@thelongevitycollege" brandInitials="LC" brandColor="#2e7d32" style="gradient" />
+                  </div>
+                  <div className="w-[90px] sm:w-[100px]">
+                    <ReelMockup title={"The cortisol\nmorning\nroutine"} subtitle="@thelongevitycollege" brandInitials="LC" brandColor="#2e7d32" style="cinematic" />
+                  </div>
+                  <div className="hidden sm:block w-[100px]">
+                    <ReelMockup title={"Cold plunges:\nthe science\nexplained"} subtitle="@thegymcollege" brandInitials="GC" brandColor="#00435c" style="dark" />
+                  </div>
                 </div>
 
-                <div className="mt-4 text-[12px] text-gray-400 flex items-center gap-2">
+                <div className="mt-5 text-[12px] text-gray-400 flex items-center gap-2">
                   <Zap className="w-3 h-3 text-pink-500" />
                   <span>Generate a reel in <strong className="text-gray-600">30 seconds</strong></span>
                 </div>
@@ -841,7 +1062,7 @@ export function WelcomePage() {
 
             {/* Carousels */}
             <Reveal delay={0.2}>
-              <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 group hover:shadow-xl hover:shadow-black/[0.04] transition-all">
+              <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
                     <Palette className="w-5 h-5 text-white" />
@@ -851,22 +1072,45 @@ export function WelcomePage() {
                     <p className="text-[12px] text-gray-400">Instagram, Facebook</p>
                   </div>
                 </div>
-                <p className="text-[14px] text-gray-500 leading-relaxed mb-6">Multi-slide educational posts with branded headers, consistent typography, and swipe-optimized layouts. Up to 10 slides per carousel.</p>
+                <p className="text-[14px] text-gray-500 leading-relaxed mb-6">Multi-slide educational posts with branded headers, consistent typography, and swipe-optimized layouts.</p>
 
-                {/* Carousel preview */}
-                <div className="flex gap-2 overflow-hidden">
-                  {[
-                    { slide: 1, title: 'The Science of\nSleep Quality', bg: 'from-emerald-900 to-emerald-800', isTitle: true },
-                    { slide: 2, title: 'Most people sleep\n7 hours but feel\ntired. Here\'s why...', bg: '', isTitle: false },
-                    { slide: 3, title: 'Your circadian\nrhythm needs\nconsistency.', bg: '', isTitle: false },
-                  ].map((s, i) => (
-                    <div key={i} className={`w-28 sm:w-32 aspect-[4/5] rounded-xl flex-shrink-0 flex items-center justify-center p-3 ${s.isTitle ? `bg-gradient-to-b ${s.bg}` : 'bg-[#f8f5f0] border border-gray-200'}`}>
-                      <span className={`text-[8px] sm:text-[9px] font-semibold leading-tight whitespace-pre-line ${s.isTitle ? 'text-white' : 'text-gray-700'}`}>{s.title}</span>
-                    </div>
-                  ))}
+                {/* Real-looking carousel previews */}
+                <div className="flex gap-2 justify-center">
+                  <div className="w-[85px] sm:w-[95px]">
+                    <CarouselSlideMockup
+                      title={"The Science of\nSleep Quality"}
+                      brandName="The Longevity College"
+                      brandColor="#2e7d32"
+                      isTitle
+                    />
+                  </div>
+                  <div className="w-[85px] sm:w-[95px]">
+                    <CarouselSlideMockup
+                      title="Why 7 hours isn't enough"
+                      body="Most people sleep 7 hours but still wake up tired. The problem isn't duration — it's sleep architecture."
+                      brandName="The Longevity College"
+                      brandColor="#2e7d32"
+                    />
+                  </div>
+                  <div className="w-[85px] sm:w-[95px]">
+                    <CarouselSlideMockup
+                      title="Deep sleep matters most"
+                      body="Your body repairs and regenerates during deep sleep. Without enough, you age faster."
+                      brandName="The Longevity College"
+                      brandColor="#2e7d32"
+                    />
+                  </div>
+                  <div className="hidden sm:block w-[95px]">
+                    <CarouselSlideMockup
+                      title="3 tips tonight"
+                      body="1. No screens 1hr before bed. 2. Keep room at 65°F. 3. Consistent wake time."
+                      brandName="The Longevity College"
+                      brandColor="#2e7d32"
+                    />
+                  </div>
                 </div>
 
-                <div className="mt-4 text-[12px] text-gray-400 flex items-center gap-2">
+                <div className="mt-5 text-[12px] text-gray-400 flex items-center gap-2">
                   <Zap className="w-3 h-3 text-blue-500" />
                   <span>10-slide carousel in <strong className="text-gray-600">1 click</strong></span>
                 </div>
@@ -878,7 +1122,7 @@ export function WelcomePage() {
 
 
       {/* ══════════ PRICING ══════════ */}
-      <section id="pricing" className="py-16 sm:py-24 px-5 sm:px-8 bg-gray-50">
+      <section id="pricing" className="py-16 sm:py-24 px-5 sm:px-8">
         <div className="max-w-[900px] mx-auto">
           <Reveal>
             <div className="text-center mb-12 sm:mb-16">
@@ -890,7 +1134,6 @@ export function WelcomePage() {
 
           <Reveal delay={0.1}>
             <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-              {/* Header */}
               <div className="grid grid-cols-3 border-b border-gray-100">
                 <div className="p-4 sm:p-5" />
                 <div className="p-4 sm:p-5 text-center border-l border-gray-100">
@@ -900,7 +1143,6 @@ export function WelcomePage() {
                   <span className="text-[13px] font-bold text-blue-600">ViralToby</span>
                 </div>
               </div>
-              {/* Rows */}
               {COMPARISON.map((row, i) => (
                 <div key={row.label} className={`grid grid-cols-3 ${i < COMPARISON.length - 1 ? 'border-b border-gray-50' : ''}`}>
                   <div className="p-3 sm:p-4 text-[13px] sm:text-[14px] font-medium text-gray-700">{row.label}</div>
@@ -928,23 +1170,80 @@ export function WelcomePage() {
       </section>
 
 
-      {/* ══════════ TESTIMONIALS ══════════ */}
-      <section className="py-16 sm:py-24 overflow-hidden">
+      {/* ══════════ FIX #8: TESTIMONIALS — Cards with avatars, stars, metrics ══════════ */}
+      <section className="py-16 sm:py-24 px-5 sm:px-8 bg-gray-50 overflow-hidden">
         <Reveal>
-          <div className="text-center mb-10 px-5">
+          <div className="text-center mb-10">
             <p className="text-[13px] font-semibold text-violet-600 uppercase tracking-widest mb-3">Testimonials</p>
-            <h2 className="text-[32px] sm:text-[40px] font-extrabold tracking-tight text-gray-900">Loved by creators</h2>
+            <h2 className="text-[32px] sm:text-[40px] font-extrabold tracking-tight text-gray-900">Loved by creators worldwide</h2>
+            <p className="mt-3 text-[16px] text-gray-500">See what creators are saying about ViralToby.</p>
           </div>
         </Reveal>
 
-        <Reveal delay={0.1}>
-          <InfiniteMovingCards items={TESTIMONIALS} speed="slow" />
-        </Reveal>
+        <div className="max-w-[1200px] mx-auto">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {TESTIMONIALS.slice(0, 3).map((t, i) => (
+              <Reveal key={t.name} delay={i * 0.1}>
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-lg transition-shadow h-full flex flex-col">
+                  {/* Stars */}
+                  <div className="flex gap-0.5 mb-4">
+                    {Array.from({ length: t.rating }).map((_, j) => (
+                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                  {/* Quote */}
+                  <p className="text-[14px] text-gray-600 leading-relaxed flex-1">"{t.quote}"</p>
+                  {/* Author */}
+                  <div className="flex items-center justify-between mt-5 pt-5 border-t border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${t.gradient} flex items-center justify-center text-white font-bold text-[14px] shadow-sm`}>
+                        {t.name[0]}
+                      </div>
+                      <div>
+                        <div className="text-[14px] font-semibold text-gray-900">{t.name}</div>
+                        <div className="text-[12px] text-gray-400">{t.title}</div>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">{t.metric}</span>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Second row with 2 cards centered */}
+          <div className="grid sm:grid-cols-2 gap-5 max-w-[800px] mx-auto mt-5">
+            {TESTIMONIALS.slice(3).map((t, i) => (
+              <Reveal key={t.name} delay={0.3 + i * 0.1}>
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-lg transition-shadow h-full flex flex-col">
+                  <div className="flex gap-0.5 mb-4">
+                    {Array.from({ length: t.rating }).map((_, j) => (
+                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                  <p className="text-[14px] text-gray-600 leading-relaxed flex-1">"{t.quote}"</p>
+                  <div className="flex items-center justify-between mt-5 pt-5 border-t border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${t.gradient} flex items-center justify-center text-white font-bold text-[14px] shadow-sm`}>
+                        {t.name[0]}
+                      </div>
+                      <div>
+                        <div className="text-[14px] font-semibold text-gray-900">{t.name}</div>
+                        <div className="text-[12px] text-gray-400">{t.title}</div>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">{t.metric}</span>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
       </section>
 
 
       {/* ══════════ FAQ ══════════ */}
-      <section id="faq" className="py-16 sm:py-24 px-5 sm:px-8 bg-gray-50">
+      <section id="faq" className="py-16 sm:py-24 px-5 sm:px-8">
         <div className="max-w-[700px] mx-auto">
           <Reveal>
             <div className="text-center mb-10 sm:mb-12">

@@ -672,12 +672,14 @@ async def startup_event():
                                         image_urls=all_urls,
                                         caption=caption,
                                     )
+                                    scheduler_service.save_platform_result(schedule_id, "instagram", result["instagram"])
                                 if "facebook" in platforms:
                                     print("📘 Publishing carousel to Facebook...")
                                     result["facebook"] = publisher.publish_facebook_carousel(
                                         image_urls=all_urls,
                                         caption=caption,
                                     )
+                                    scheduler_service.save_platform_result(schedule_id, "facebook", result["facebook"])
                                 # Threads is text-only — never publish media to Threads.
                                 # The TEXT_ONLY_PLATFORMS guard above strips threads from platforms,
                                 # but this comment documents the intentional exclusion.
@@ -697,12 +699,14 @@ async def startup_event():
                                         image_url=image_url,
                                         caption=caption,
                                     )
+                                    scheduler_service.save_platform_result(schedule_id, "instagram", result["instagram"])
                                 if "facebook" in platforms:
                                     print("📘 Publishing image post to Facebook...")
                                     result["facebook"] = publisher.publish_facebook_image_post(
                                         image_url=image_url,
                                         caption=caption,
                                     )
+                                    scheduler_service.save_platform_result(schedule_id, "facebook", result["facebook"])
                                 # Threads is text-only — never publish media to Threads.
                                 if "tiktok" in platforms:
                                     # TikTok doesn't support single image publishing via API — skip gracefully
@@ -731,7 +735,8 @@ async def startup_event():
                                 caption=caption,
                                 platforms=platforms,
                                 brand_name=brand,
-                                metadata=metadata
+                                metadata=metadata,
+                                schedule_id=schedule_id
                             )
 
                         print(f"      📊 Publish result: {result}")
