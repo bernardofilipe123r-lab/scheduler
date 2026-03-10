@@ -30,6 +30,7 @@ const AdminPage = lazy(() => import('@/pages/Admin').then(m => ({ default: m.Adm
 const PrivacyPolicyPage = lazy(() => import('@/pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicyPage })))
 const DataDeletionPage = lazy(() => import('@/pages/DataDeletion').then(m => ({ default: m.DataDeletionPage })))
 const TermsPage = lazy(() => import('@/pages/Terms').then(m => ({ default: m.TermsPage })))
+const NotFoundPage = lazy(() => import('@/pages/NotFound'))
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -133,6 +134,7 @@ export function AppRoutes() {
         <Route path="admin" element={<SuperAdminGuard><AdminPage /></SuperAdminGuard>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
     </Suspense>
     </ErrorBoundary>
