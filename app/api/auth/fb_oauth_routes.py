@@ -221,7 +221,7 @@ def facebook_callback(
 
         redirect_url = (
             f"{frontend_base}/brands"
-            f"&fb_select_page={brand_id}"
+            f"?fb_select_page={brand_id}"
         )
         return RedirectResponse(url=redirect_url)
 
