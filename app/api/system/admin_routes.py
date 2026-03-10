@@ -778,6 +778,8 @@ def _normalize_error_message(msg: str) -> str:
     """Strip variable parts (IDs, timestamps, URLs) to group similar errors."""
     # Replace UUIDs
     msg = re.sub(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<id>', msg)
+    # Replace job IDs like GEN-123456, TOBY-123456
+    msg = re.sub(r'\b(GEN|TOBY|JOB)-\d+\b', r'\1-<id>', msg)
     # Replace long numeric IDs
     msg = re.sub(r'\b\d{10,}\b', '<id>', msg)
     # Replace quoted strings that look like dynamic content
@@ -789,40 +791,138 @@ def _normalize_error_message(msg: str) -> str:
     return msg.strip()
 
 
+def _normalize_http_path(path: str | None) -> str | None:
+    """Normalize HTTP path for grouping (strip dynamic job/resource IDs)."""
+    if not path:
+        return path
+    # /jobs/GEN-123456/next-slots → /jobs/<job>/next-slots
+    path = re.sub(r'/(GEN|TOBY|JOB)-\d+', r'/<job>', path)
+    # /jobs/<uuid>/... → /jobs/<id>/...
+    path = re.sub(r'/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '/<id>', path)
+    return path
+
+
+def _extract_brands_from_context(message: str, details: dict | None) -> list[str]:
+    """Extract brand names mentioned in error message or details."""
+    brands = set()
+    text = (message or "").lower()
+    details = details or {}
+
+    # Check details dict for brand fields
+    for key in ("brand", "brand_name", "brand_id"):
+        val = details.get(key)
+        if val:
+            brands.add(str(val).lower())
+
+    # Extract common brand name patterns from message text
+    # "for thepurecollege:" or "for brand healthycollege"
+    for m in re.finditer(r'for (?:brand )?(\w+college\w*)', text):
+        brands.add(m.group(1))
+    for m in re.finditer(r'/(\w+college\w*)/', text):
+        brands.add(m.group(1))
+
+    return sorted(brands)
+
+
+def _classify_priority(
+    cat: str,
+    count: int,
+    affected_user_count: int,
+    http_status: int | None,
+    message: str,
+) -> str:
+    """Classify error priority: critical / high / medium / low."""
+    msg_lower = (message or "").lower()
+
+    # Critical: affects multiple users OR auth/billing failures
+    if affected_user_count > 1:
+        return "critical"
+    if any(kw in msg_lower for kw in ("billing", "payment", "subscription", "stripe")):
+        return "critical"
+    if cat == "publishing" and count >= 10:
+        return "critical"
+
+    # High: 500 errors, publishing failures, ASGI exceptions
+    if http_status and http_status >= 500 and count >= 5:
+        return "high"
+    if cat == "publishing":
+        return "high"
+    if "exception in asgi" in msg_lower:
+        return "high"
+    if cat == "ai_generation":
+        return "high"
+
+    # Medium: repeated errors, storage issues
+    if count >= 5:
+        return "medium"
+    if "failed to delete" in msg_lower or "storage" in msg_lower:
+        return "medium"
+    if http_status and http_status >= 500:
+        return "medium"
+
+    # Low: isolated/infrequent errors
+    return "low"
+
+
 @router.get("/api/admin/error-digest", summary="Condensed error summary for last 48h (super admin only)")
 def get_error_digest(
     hours: int = Query(48, ge=1, le=168),
+    current_deployment: bool = Query(True, description="Only show errors from the current deployment"),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """
-    Returns errors from the last N hours, grouped by pattern.
-    Each group has:
-    - human_summary: readable description like "Threads failed to post for user X"
-    - error_pattern: normalized error message pattern
-    - count: how many times it occurred
-    - affected_users: list of distinct user IDs affected
-    - first_seen / last_seen: timestamps
-    - sample_error: one full raw error for copy/paste debugging
-    - category: error category (publishing, http_request, etc.)
+    Returns errors grouped by pattern with user info, brand context, and priority.
+    Filters to current deployment by default (reset on redeploy).
     """
     _require_super_admin(user)
 
+    from app.services.logging.service import DEPLOYMENT_ID
+    from app.models.brands import Brand as BrandModel
+
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-    # Fetch all ERROR/CRITICAL logs in the window
-    error_logs = (
+    # Build query
+    query = (
         db.query(LogEntry)
         .filter(
             LogEntry.timestamp >= cutoff,
             LogEntry.level.in_(["ERROR", "CRITICAL"]),
         )
+    )
+
+    # Filter by current deployment if requested
+    if current_deployment:
+        query = query.filter(LogEntry.deployment_id == DEPLOYMENT_ID)
+
+    error_logs = (
+        query
         .order_by(LogEntry.timestamp.desc())
         .limit(2000)
         .all()
     )
 
-    # Group by normalized message pattern + category
+    # Build user ID → display info cache (avoid N+1 queries)
+    all_user_ids = set()
+    for log in error_logs:
+        details = log.details or {}
+        uid = details.get("user_id")
+        if uid:
+            all_user_ids.add(uid)
+
+    user_info_cache: dict[str, dict] = {}
+    if all_user_ids:
+        # Get user names from Supabase — use brands as a proxy for user display info
+        user_brands = (
+            db.query(BrandModel.user_id, func.string_agg(BrandModel.display_name, cast(', ', String)))
+            .filter(BrandModel.user_id.in_(list(all_user_ids)))
+            .group_by(BrandModel.user_id)
+            .all()
+        )
+        for uid, brand_names in user_brands:
+            user_info_cache[uid] = {"brands": brand_names or ""}
+
+    # Group by normalized message pattern + category + normalized http_path
     groups: dict = defaultdict(lambda: {
         "count": 0,
         "affected_users": set(),
@@ -833,12 +933,19 @@ def get_error_digest(
         "sample_details": None,
         "http_path": None,
         "http_status": None,
+        "brands": set(),
     })
 
     for log in error_logs:
         pattern_key = _normalize_error_message(log.message or "")
         cat = log.category or "error"
-        group_key = f"{cat}::{pattern_key}"
+
+        # For HTTP requests, normalize the path for better grouping
+        norm_path = _normalize_http_path(log.http_path) if cat == "http_request" else None
+        if norm_path:
+            group_key = f"{cat}::{log.http_status or ''}::{norm_path}::{pattern_key[:80]}"
+        else:
+            group_key = f"{cat}::{pattern_key}"
 
         g = groups[group_key]
         g["count"] += 1
@@ -850,6 +957,11 @@ def get_error_digest(
         uid = details.get("user_id")
         if uid:
             g["affected_users"].add(uid)
+
+        # Extract brands from context
+        extracted = _extract_brands_from_context(log.message, details)
+        for b in extracted:
+            g["brands"].add(b)
 
         # Track time range
         ts = log.timestamp
@@ -873,7 +985,19 @@ def get_error_digest(
         cat = g["category"]
         pattern = g.get("pattern", "")
 
+        # Build affected user info list
+        affected_user_info = []
+        for uid in affected[:10]:  # Limit to 10 users
+            info = user_info_cache.get(uid, {})
+            affected_user_info.append({
+                "user_id": uid,
+                "brands": info.get("brands", ""),
+            })
+
         # Build human summary
+        brand_list = sorted(g["brands"])
+        brand_ctx = f" ({', '.join(brand_list[:3])})" if brand_list else ""
+
         if cat == "publishing":
             platform = "Unknown platform"
             for p in ["Threads", "Instagram", "Facebook", "YouTube", "TikTok", "Bluesky"]:
@@ -881,13 +1005,13 @@ def get_error_digest(
                     platform = p
                     break
             if len(affected) == 0:
-                human = f"{platform} publishing failed ({count}x)"
+                human = f"{platform} publishing failed{brand_ctx} ({count}x)"
             elif len(affected) == 1:
-                human = f"{platform} publishing failed for 1 user ({count}x)"
+                human = f"{platform} publishing failed for 1 user{brand_ctx} ({count}x)"
             else:
-                human = f"{platform} publishing failed for {len(affected)} users ({count}x)"
+                human = f"{platform} publishing failed for {len(affected)} users{brand_ctx} ({count}x)"
         elif cat == "http_request":
-            path = g["http_path"] or "unknown endpoint"
+            path = _normalize_http_path(g["http_path"]) or "unknown endpoint"
             status = g["http_status"] or "error"
             if len(affected) == 0:
                 human = f"HTTP {status} on {path} ({count}x)"
@@ -896,7 +1020,6 @@ def get_error_digest(
             else:
                 human = f"HTTP {status} on {path} for {len(affected)} users ({count}x)"
         elif cat == "http_outbound":
-            service = ""
             details_d = g["sample_details"] or {}
             service = details_d.get("service_name", "external API")
             human = f"{service} API call failed ({count}x)"
@@ -906,7 +1029,12 @@ def get_error_digest(
             human = f"Scheduler error ({count}x)"
         else:
             short_msg = (g["sample_error"] or "Unknown error")[:80]
-            human = f"{short_msg} ({count}x)"
+            human = f"{short_msg}{brand_ctx} ({count}x)"
+
+        # Classify priority
+        priority = _classify_priority(
+            cat, count, len(affected), g["http_status"], g["sample_error"] or ""
+        )
 
         # Build technical error string for copy
         sample_details = g["sample_details"] or {}
@@ -926,20 +1054,26 @@ def get_error_digest(
             "error_pattern": pattern,
             "category": cat,
             "count": count,
-            "affected_users": affected,
+            "affected_users": [u["user_id"] for u in affected_user_info],
+            "affected_user_info": affected_user_info,
             "affected_user_count": len(affected),
             "first_seen": g["first_seen"].isoformat() if g["first_seen"] else None,
             "last_seen": g["last_seen"].isoformat() if g["last_seen"] else None,
             "technical_error": "\n---\n".join(technical_parts),
             "http_path": g["http_path"],
             "http_status": g["http_status"],
+            "priority": priority,
+            "brands": brand_list,
         })
 
-    # Sort by count descending (most frequent first)
-    digest.sort(key=lambda x: x["count"], reverse=True)
+    # Sort by priority (critical first), then by count descending
+    priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    digest.sort(key=lambda x: (priority_order.get(x["priority"], 9), -x["count"]))
 
     return {
         "hours": hours,
+        "current_deployment": current_deployment,
+        "deployment_id": DEPLOYMENT_ID,
         "total_errors": sum(g["count"] for g in digest),
         "unique_patterns": len(digest),
         "digest": digest,

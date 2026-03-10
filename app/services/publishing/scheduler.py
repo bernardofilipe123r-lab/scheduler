@@ -1584,6 +1584,10 @@ class DatabaseSchedulerService:
         # Filter to only slots matching requested variant
         matching_slots = [hour for hour, v in brand_slots if v == variant]
 
+        # Safety: if variant doesn't match any slot, fall back to all even-indexed (light-like) slots
+        if not matching_slots:
+            matching_slots = [hour for hour, _ in brand_slots[::2]]  # Every other slot
+
         # Starting reference points
         start_date = datetime(2026, 1, 16, tzinfo=timezone.utc)
         now = reference_date or datetime.now(timezone.utc)
@@ -1653,7 +1657,7 @@ class DatabaseSchedulerService:
 
         Args:
             brands: List of brand names
-            variant: "light", "dark", or "post"
+            variant: "light", "dark", "post", "format_b", "text_video", "threads"
 
         Returns:
             Dict mapping brand name to next available slot datetime
@@ -1665,8 +1669,14 @@ class DatabaseSchedulerService:
             elif variant == "format_b":
                 # Format B reels use dark-variant time slots
                 result[brand] = self.get_next_available_slot(brand, "dark", slot_variant_label="format_b")
-            else:
+            elif variant in ("text_video", "threads"):
+                # Text video / Threads jobs use post scheduling slots
+                result[brand] = self.get_next_available_post_slot(brand)
+            elif variant in ("light", "dark"):
                 result[brand] = self.get_next_available_slot(brand, variant)
+            else:
+                # Unknown variant — fall back to light slot timing
+                result[brand] = self.get_next_available_slot(brand, "light", slot_variant_label=variant)
         return result
 
     def get_scheduled_slots_for_brand(

@@ -203,7 +203,7 @@ def upload_from_path(bucket: str, remote_path: str, local_path: str) -> str:
 
 
 def delete_file(bucket: str, path: str) -> bool:
-    """Delete a file from Supabase Storage. Returns True on success."""
+    """Delete a file from Supabase Storage. Returns True on success or if file already gone."""
     url, key = _get_credentials()
     endpoint = f"{url}/storage/v1/object/{bucket}/{path}"
 
@@ -216,12 +216,16 @@ def delete_file(bucket: str, path: str) -> bool:
         resp.raise_for_status()
         return True
     except requests.HTTPError as exc:
-        status = exc.response.status_code if exc.response is not None else "unknown"
+        status_code = exc.response.status_code if exc.response is not None else 0
         body = exc.response.text[:500] if exc.response is not None else "no response"
-        logger.error("Failed to delete %s/%s: HTTP %s — %s", bucket, path, status, body)
+        if status_code in (404, 400):
+            # File already deleted or doesn't exist — not an error
+            logger.debug("File already gone %s/%s: HTTP %s", bucket, path, status_code)
+            return True
+        logger.warning("Failed to delete %s/%s: HTTP %s — %s", bucket, path, status_code, body)
         return False
     except requests.RequestException as exc:
-        logger.exception("Failed to delete %s/%s from Supabase Storage: %s", bucket, path, exc)
+        logger.warning("Failed to delete %s/%s from Supabase Storage: %s", bucket, path, exc)
         return False
 
 

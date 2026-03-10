@@ -157,22 +157,32 @@ interface LogsResponse {
   total_pages: number
 }
 
+interface AffectedUserInfo {
+  user_id: string
+  brands: string
+}
+
 interface ErrorDigestEntry {
   human_summary: string
   error_pattern: string
   category: string
   count: number
   affected_users: string[]
+  affected_user_info: AffectedUserInfo[]
   affected_user_count: number
   first_seen: string | null
   last_seen: string | null
   technical_error: string
   http_path: string | null
   http_status: number | null
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  brands: string[]
 }
 
 interface ErrorDigestResponse {
   hours: number
+  current_deployment: boolean
+  deployment_id: string
   total_errors: number
   unique_patterns: number
   digest: ErrorDigestEntry[]
@@ -1499,6 +1509,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   system_event: 'bg-slate-50 text-slate-700 border-slate-200',
 }
 
+const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
+  critical: { label: 'Critical', color: 'bg-red-100 text-red-800 border-red-300', dot: 'bg-red-500' },
+  high: { label: 'High', color: 'bg-orange-100 text-orange-800 border-orange-300', dot: 'bg-orange-500' },
+  medium: { label: 'Medium', color: 'bg-yellow-100 text-yellow-800 border-yellow-300', dot: 'bg-yellow-500' },
+  low: { label: 'Low', color: 'bg-gray-100 text-gray-600 border-gray-300', dot: 'bg-gray-400' },
+}
+
 function ErrorMonitorPanel() {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -1506,10 +1523,11 @@ function ErrorMonitorPanel() {
   })
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+  const [showAllDeployments, setShowAllDeployments] = useState(false)
 
   const digestQuery = useQuery<ErrorDigestResponse>({
-    queryKey: ['admin-error-digest'],
-    queryFn: () => apiClient.get('/api/admin/error-digest?hours=48'),
+    queryKey: ['admin-error-digest', showAllDeployments],
+    queryFn: () => apiClient.get(`/api/admin/error-digest?hours=48&current_deployment=${!showAllDeployments}`),
     staleTime: 2 * 60_000,
     refetchOnWindowFocus: false,
   })
@@ -1538,12 +1556,22 @@ function ErrorMonitorPanel() {
   function relativeTime(iso: string | null): string {
     if (!iso) return '—'
     const diff = Date.now() - new Date(iso).getTime()
+    const secs = Math.floor(diff / 1000)
+    if (secs < 60) return `${secs}s ago`
     const mins = Math.floor(diff / 60000)
-    if (mins < 1) return 'just now'
     if (mins < 60) return `${mins}m ago`
     const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    return `${Math.floor(hrs / 24)}d ago`
+    if (hrs < 1) return 'just now'
+    if (hrs < 24) {
+      // Check if it's still today
+      const errorDate = new Date(iso)
+      const today = new Date()
+      if (errorDate.toDateString() === today.toDateString()) return `${hrs}h ago (Today)`
+      return `${hrs}h ago`
+    }
+    const days = Math.floor(hrs / 24)
+    if (days === 1) return '1 day ago'
+    return `${days} days ago`
   }
 
   return (
@@ -1552,7 +1580,9 @@ function ErrorMonitorPanel() {
         <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-red-500" />
           Error Monitor
-          <span className="text-[10px] font-normal text-gray-400">Last 48h</span>
+          <span className="text-[10px] font-normal text-gray-400">
+            {showAllDeployments ? 'Last 48h (all deploys)' : 'Current deploy'}
+          </span>
         </h2>
         <div className="flex items-center gap-2">
           {totalErrors > 0 && (
@@ -1560,6 +1590,19 @@ function ErrorMonitorPanel() {
               {totalErrors} errors / {uniquePatterns} patterns
             </span>
           )}
+          <button
+            onClick={() => setShowAllDeployments(prev => !prev)}
+            className={clsx(
+              'inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded border',
+              showAllDeployments
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : 'bg-white text-gray-500 border-gray-200 hover:text-gray-700'
+            )}
+            title={showAllDeployments ? 'Showing all deployments — click to show current only' : 'Showing current deployment — click to show all'}
+          >
+            <Server className="w-3 h-3" />
+            {showAllDeployments ? 'All' : 'Current'}
+          </button>
           <button
             onClick={handleToggleCollapsed}
             className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-500 hover:text-gray-700 rounded border border-gray-200 bg-white"
@@ -1605,23 +1648,29 @@ function ErrorMonitorPanel() {
       ) : digest.length === 0 ? (
         <div className="flex items-center gap-2 text-xs text-emerald-600 py-4">
           <Check className="w-4 h-4" />
-          <span className="font-medium">No errors in the last 48 hours</span>
+          <span className="font-medium">
+            {showAllDeployments ? 'No errors in the last 48 hours' : 'No errors since last deployment'}
+          </span>
         </div>
       ) : (
         <div className="space-y-2">
           {digest.map((entry, idx) => {
             const isExpanded = expandedIdx === idx
             const catColor = CATEGORY_COLORS[entry.category] || CATEGORY_COLORS.error
+            const prio = PRIORITY_CONFIG[entry.priority] || PRIORITY_CONFIG.low
 
             return (
               <div
                 key={idx}
-                className="border border-gray-100 rounded-lg overflow-hidden"
+                className={clsx(
+                  'border rounded-lg overflow-hidden',
+                  entry.priority === 'critical' ? 'border-red-200 bg-red-50/30' : 'border-gray-100'
+                )}
               >
                 {/* Human-readable row */}
                 <button
                   onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
                 >
                   <ChevronRight
                     className={clsx(
@@ -1629,12 +1678,20 @@ function ErrorMonitorPanel() {
                       isExpanded && 'rotate-90'
                     )}
                   />
+                  {/* Priority dot */}
+                  <span className={clsx('w-2 h-2 rounded-full shrink-0', prio.dot)} title={prio.label} />
                   <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0', catColor)}>
                     {CATEGORY_LABELS[entry.category] || entry.category}
                   </span>
                   <span className="text-xs text-gray-800 font-medium flex-1 min-w-0 truncate">
                     {entry.human_summary}
                   </span>
+                  {/* Brand tags */}
+                  {entry.brands?.length > 0 && (
+                    <span className="text-[9px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shrink-0 max-w-[120px] truncate">
+                      {entry.brands.slice(0, 2).join(', ')}{entry.brands.length > 2 ? ` +${entry.brands.length - 2}` : ''}
+                    </span>
+                  )}
                   <span className="text-[10px] text-gray-400 shrink-0 whitespace-nowrap">
                     {relativeTime(entry.last_seen)}
                   </span>
@@ -1643,8 +1700,11 @@ function ErrorMonitorPanel() {
                 {/* Technical details (expandable) */}
                 {isExpanded && (
                   <div className="border-t border-gray-100 bg-gray-50 px-3 py-3 space-y-3">
-                    {/* Meta row */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-500">
+                    {/* Priority + meta row */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] text-gray-500 items-center">
+                      <span className={clsx('px-1.5 py-0.5 rounded border font-semibold', prio.color)}>
+                        {prio.label} Priority
+                      </span>
                       <span>Occurrences: <strong className="text-gray-700">{entry.count}</strong></span>
                       <span>Affected users: <strong className="text-gray-700">{entry.affected_user_count}</strong></span>
                       {entry.http_path && (
@@ -1657,22 +1717,36 @@ function ErrorMonitorPanel() {
                       <span>Last: <strong className="text-gray-700">{relativeTime(entry.last_seen)}</strong></span>
                     </div>
 
-                    {/* Affected user IDs */}
-                    {entry.affected_users.length > 0 && (
+                    {/* Brands affected */}
+                    {entry.brands?.length > 0 && (
                       <div className="text-[10px] text-gray-500">
-                        <span className="font-medium">User IDs: </span>
-                        {entry.affected_users.slice(0, 5).map((uid, i) => (
-                          <button
-                            key={uid}
-                            onClick={() => navigator.clipboard.writeText(uid)}
-                            className="font-mono text-gray-600 hover:text-gray-900 hover:underline"
-                            title="Click to copy"
-                          >
-                            {uid.slice(0, 8)}...{i < Math.min(entry.affected_users.length, 5) - 1 ? ', ' : ''}
-                          </button>
+                        <span className="font-medium">Brands: </span>
+                        <span className="text-blue-700">{entry.brands.join(', ')}</span>
+                      </div>
+                    )}
+
+                    {/* Affected users with brand info */}
+                    {entry.affected_user_info && entry.affected_user_info.length > 0 && (
+                      <div className="text-[10px] text-gray-500 space-y-1">
+                        <span className="font-medium">Affected Users:</span>
+                        {entry.affected_user_info.slice(0, 5).map((u) => (
+                          <div key={u.user_id} className="flex items-center gap-2 pl-2">
+                            <button
+                              onClick={() => navigator.clipboard.writeText(u.user_id)}
+                              className="font-mono text-gray-600 hover:text-gray-900 hover:underline"
+                              title="Click to copy full ID"
+                            >
+                              {u.user_id.slice(0, 8)}...
+                            </button>
+                            {u.brands && (
+                              <span className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded text-[9px]">
+                                {u.brands}
+                              </span>
+                            )}
+                          </div>
                         ))}
-                        {entry.affected_users.length > 5 && (
-                          <span className="text-gray-400"> +{entry.affected_users.length - 5} more</span>
+                        {entry.affected_user_info.length > 5 && (
+                          <span className="text-gray-400 pl-2">+{entry.affected_user_info.length - 5} more users</span>
                         )}
                       </div>
                     )}

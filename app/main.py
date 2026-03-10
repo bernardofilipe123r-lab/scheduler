@@ -678,19 +678,9 @@ async def startup_event():
                                         image_urls=all_urls,
                                         caption=caption,
                                     )
-                                if "threads" in platforms:
-                                    print("🧵 Publishing carousel to Threads...")
-                                    if len(all_urls) >= 2:
-                                        result["threads"] = publisher.publish_threads_carousel(
-                                            caption=caption,
-                                            image_urls=all_urls,
-                                        )
-                                    else:
-                                        result["threads"] = publisher.publish_threads_post(
-                                            caption=caption,
-                                            media_url=all_urls[0],
-                                            media_type="IMAGE",
-                                        )
+                                # Threads is text-only — never publish media to Threads.
+                                # The TEXT_ONLY_PLATFORMS guard above strips threads from platforms,
+                                # but this comment documents the intentional exclusion.
                                 if "tiktok" in platforms:
                                     # TikTok doesn't support image carousels via API — skip gracefully
                                     result["tiktok"] = {
@@ -713,13 +703,7 @@ async def startup_event():
                                         image_url=image_url,
                                         caption=caption,
                                     )
-                                if "threads" in platforms:
-                                    print("🧵 Publishing image post to Threads...")
-                                    result["threads"] = publisher.publish_threads_post(
-                                        caption=caption,
-                                        media_url=image_url,
-                                        media_type="IMAGE",
-                                    )
+                                # Threads is text-only — never publish media to Threads.
                                 if "tiktok" in platforms:
                                     # TikTok doesn't support single image publishing via API — skip gracefully
                                     result["tiktok"] = {
