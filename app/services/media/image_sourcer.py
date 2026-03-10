@@ -1,9 +1,11 @@
 """
-Image Sourcer — generates images for Format B reels.
+Image Sourcer — generates/fetches images for Format B reels.
 
-Primary: Freepik Classic Fast (when API key available and daily usage < 100%).
-Fallback: DeAPI (Flux1schnell model).
-The AI prompts come from DeepSeek via StoryPolisher.
+Image source for video slides is controlled by FORMAT_B_IMAGE_SOURCE env var:
+  - "ai" (default): Freepik primary, DeAPI fallback (AI-generated images)
+  - "web": SearchApi Google Images primary, Freepik/DeAPI fallback (real web images)
+
+Thumbnails always use AI generation (Freepik/DeAPI) regardless of toggle.
 """
 import base64
 import logging
@@ -12,7 +14,6 @@ import random
 import tempfile
 import time
 import threading
-from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -37,8 +38,17 @@ MAX_RETRY_DELAY = 60
 FREEPIK_DAILY_LIMIT = 100
 
 
+def get_image_source_mode() -> str:
+    """Get the configured image source mode for Format B video slides.
+
+    Returns "ai" or "web". Controlled by FORMAT_B_IMAGE_SOURCE env var.
+    Super admin can change this via the admin panel toggle.
+    """
+    return os.environ.get("FORMAT_B_IMAGE_SOURCE", "ai").lower()
+
+
 class ImageSourcer:
-    """Generates images for format-b reels. Freepik primary, DeAPI fallback."""
+    """Sources images for format-b reels. Supports AI-generated and web images."""
 
     def __init__(self, db=None):
         self.db = db
@@ -46,7 +56,7 @@ class ImageSourcer:
         self._deapi_base_url = "https://api.deapi.ai/api/v1/client"
         self._freepik_key = os.environ.get("FREEPIK_API_KEY")
         self._freepik_base_url = "https://api.freepik.com/v1/ai/text-to-image"
-        self.last_service_used: str = "unknown"  # "freepik" or "deapi"
+        self.last_service_used: str = "unknown"  # "freepik", "deapi", or "searchapi"
 
     def _is_freepik_available(self) -> bool:
         """Check if Freepik API key is set and daily usage is under 100%."""
@@ -73,12 +83,58 @@ class ImageSourcer:
 
     def source_image(self, plan: ImagePlan) -> Optional[Path]:
         """
-        Generate a single image from the AI prompt.
+        Source a single image based on the configured mode.
 
-        Tries Freepik first (if available), falls back to DeAPI.
-        The plan.query contains the cinematic AI prompt from DeepSeek.
-        Returns path to processed image (1080x1920) or None.
+        When FORMAT_B_IMAGE_SOURCE=web:
+          1. Try SearchApi Google Images (using plan.search_query)
+          2. Fall back to AI generation (Freepik → DeAPI)
+
+        When FORMAT_B_IMAGE_SOURCE=ai (default):
+          1. Try Freepik (if available)
+          2. Fall back to DeAPI
+
+        Returns path to processed image or None.
         """
+        mode = get_image_source_mode()
+
+        if mode == "web":
+            path = self._source_via_web(plan)
+            if path:
+                return path
+            logger.info("[ImageSourcer] Web image failed, falling back to AI generation")
+
+        # AI generation path (default, or fallback from web)
+        return self._source_via_ai(plan)
+
+    def source_image_ai_only(self, plan: ImagePlan) -> Optional[Path]:
+        """Source an image using AI generation only (for thumbnails)."""
+        return self._source_via_ai(plan)
+
+    def _source_via_web(self, plan: ImagePlan) -> Optional[Path]:
+        """Try to fetch a real web image via SearchApi."""
+        query = plan.search_query or plan.query
+        if not query:
+            return None
+
+        try:
+            from app.services.media.web_image_sourcer import WebImageSourcer
+            web_sourcer = WebImageSourcer(db=self.db)
+
+            if not web_sourcer.is_available():
+                logger.warning("[ImageSourcer] SearchApi not configured, skipping web source")
+                return None
+
+            path = web_sourcer.search_image(query)
+            if path:
+                self.last_service_used = "searchapi"
+                return self._process_image(path)
+            return None
+        except Exception as e:
+            logger.error(f"[ImageSourcer] Web image source error: {e}")
+            return None
+
+    def _source_via_ai(self, plan: ImagePlan) -> Optional[Path]:
+        """Generate an image via AI (Freepik primary, DeAPI fallback)."""
         use_freepik = self._is_freepik_available()
 
         if use_freepik:

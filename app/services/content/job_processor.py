@@ -772,7 +772,8 @@ class JobProcessor:
 
             thumb_image_path = None
             if thumb_plan:
-                thumb_image_path = sourcer.source_image(thumb_plan)
+                # Thumbnails always use AI generation (Freepik/DeAPI), not web images
+                thumb_image_path = sourcer.source_image_ai_only(thumb_plan)
             if not thumb_image_path:
                 thumb_image_path = image_paths[0]
 

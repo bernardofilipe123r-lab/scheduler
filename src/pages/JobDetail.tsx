@@ -962,7 +962,11 @@ export function JobDetailPage() {
                         >
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-mono bg-violet-100 text-violet-600 px-2 py-0.5 rounded-[3px]">AI</span>
-                            <span>DeepSeek & {(job.format_b_data as any)?.image_service === 'freepik' ? 'Freepik' : 'DeAPI'} Prompt Details</span>
+                            <span>DeepSeek & {
+                              (job.format_b_data as any)?.image_service === 'freepik' ? 'Freepik'
+                              : (job.format_b_data as any)?.image_service === 'searchapi' ? 'SearchApi'
+                              : 'DeAPI'
+                            } Prompt Details</span>
                           </div>
                           {showPromptDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
@@ -983,6 +987,8 @@ export function JobDetailPage() {
                                 <p className="text-xs font-medium text-green-600 mb-1.5">
                                   {(job.format_b_data as any)?.image_service === 'freepik'
                                     ? 'Freepik Image Prompts (Classic Fast):'
+                                    : (job.format_b_data as any)?.image_service === 'searchapi'
+                                    ? 'SearchApi Image Queries (Google Images):'
                                     : 'DeAPI Image Prompts (Flux1schnell):'}
                                 </p>
                                 <div className="space-y-2">

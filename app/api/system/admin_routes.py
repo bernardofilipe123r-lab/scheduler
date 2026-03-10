@@ -12,6 +12,7 @@ Endpoints:
 """
 
 import asyncio
+import os
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -535,7 +536,66 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
     else:
         results["freepik"] = {"error": "API key not configured"}
 
+    # ── SearchApi credits (calculated from local usage tracking) ───
+    searchapi_key = os.getenv("SEARCHAPI_API_KEY")
+    if searchapi_key:
+        try:
+            from app.services.monitoring.cost_tracker import SEARCHAPI_COST_PER_SEARCH
+
+            total_credits = int(os.getenv("SEARCHAPI_TOTAL_CREDITS", "100"))
+
+            sa_total_calls = 0
+            try:
+                from app.db_connection import get_db_session
+                with get_db_session() as sadb:
+                    from app.models.api_usage import APIUsageLog as SALog
+                    sa_total_calls = (
+                        sadb.query(func.count(SALog.id))
+                        .filter(SALog.api_name == "searchapi")
+                        .scalar() or 0
+                    )
+            except Exception:
+                pass
+
+            results["searchapi"] = {
+                "configured": True,
+                "total_credits": total_credits,
+                "used_credits": sa_total_calls,
+                "remaining_credits": max(0, total_credits - sa_total_calls),
+                "cost_per_search": SEARCHAPI_COST_PER_SEARCH,
+                "total_cost_usd": round(sa_total_calls * SEARCHAPI_COST_PER_SEARCH, 2),
+            }
+        except Exception as exc:
+            results["searchapi"] = {"configured": True, "error": str(exc)}
+    else:
+        results["searchapi"] = {"error": "API key not configured"}
+
+    # Include current image source mode
+    results["image_source_mode"] = os.getenv("FORMAT_B_IMAGE_SOURCE", "ai")
+
     return results
+
+
+# ─── Image Source Toggle ──────────────────────────────────────────────────────
+
+class ImageSourceToggleRequest(BaseModel):
+    mode: str  # "ai" or "web"
+
+
+@router.put("/api/admin/image-source", summary="Toggle Format B image source (super admin only)")
+async def set_image_source(
+    request: ImageSourceToggleRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Set the image source for Format B video slides. Changes take effect on next job."""
+    _require_super_admin(user)
+
+    if request.mode not in ("ai", "web"):
+        raise HTTPException(status_code=400, detail="Mode must be 'ai' or 'web'")
+
+    os.environ["FORMAT_B_IMAGE_SOURCE"] = request.mode
+
+    return {"mode": request.mode, "message": f"Image source set to '{request.mode}'. Takes effect on next job."}
 
 
 # ─── Supabase Usage Metrics ───────────────────────────────────────────────────

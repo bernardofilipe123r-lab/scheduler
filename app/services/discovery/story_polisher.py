@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ImagePlan:
-    source_type: str  # "ai_generate" (always — all images from DeAPI now)
-    query: str  # The AI PROMPT for DeAPI
+    source_type: str  # "ai_generate" | "web_search"
+    query: str  # The AI PROMPT for image generation
     fallback_query: Optional[str] = None
+    search_query: Optional[str] = None  # Google Images search query (from DeepSeek SEARCH QUERY)
 
 
 @dataclass
@@ -141,7 +142,7 @@ AI PROMPT
 A prompt for generating the image with an AI image generator.
 
 SEARCH QUERY
-A phrase someone could search to find similar images online.
+A precise Google Images search query to find a real photo matching this visual. Be specific to avoid ambiguity — e.g., "U.S. Pentagon building aerial view" not just "pentagon", "Apple iPhone 16 Pro" not just "apple", "Donald Trump speech podium" not just "Trump". Include context keywords (location, brand, object type) so the search returns exactly the right subject.
 
 IMAGE RULES
 
@@ -275,11 +276,18 @@ class StoryPolisher:
             visuals_text = visuals_match.group(1) if visuals_match else ""
 
             ai_prompts = re.findall(r'AI PROMPT:\s*\n?(.+)', visuals_text)
-            images = [
-                ImagePlan(source_type="ai_generate", query=prompt.strip())
-                for prompt in ai_prompts
-                if prompt.strip()
-            ]
+            search_queries = re.findall(r'SEARCH QUERY:\s*\n?(.+)', visuals_text)
+
+            images = []
+            for i, prompt in enumerate(ai_prompts):
+                if not prompt.strip():
+                    continue
+                sq = search_queries[i].strip() if i < len(search_queries) and search_queries[i].strip() else None
+                images.append(ImagePlan(
+                    source_type="ai_generate",
+                    query=prompt.strip(),
+                    search_query=sq,
+                ))
 
             if not reel_text or not images:
                 logger.error(f"[StoryPolisher] Missing required fields. reel_text={bool(reel_text)}, images={len(images)}")

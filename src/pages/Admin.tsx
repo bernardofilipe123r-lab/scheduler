@@ -1359,6 +1359,16 @@ interface CreditsResponse {
     total_calls?: number
     error?: string
   }
+  searchapi?: {
+    configured?: boolean
+    total_credits?: number
+    used_credits?: number
+    remaining_credits?: number
+    cost_per_search?: number
+    total_cost_usd?: number
+    error?: string
+  }
+  image_source_mode?: string
 }
 
 // ─── Supabase Usage Types ──────────────────────────────────────────────────
@@ -2546,6 +2556,97 @@ export function AdminPage() {
                 ) : (
                   <p className="text-xs text-gray-400">—</p>
                 )}
+              </div>
+            </div>
+
+            {/* SearchApi */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-50 border border-orange-100">
+              <Globe className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-orange-700 mb-1">SearchApi (Web Images)</p>
+                {creditsQuery.data?.searchapi?.error ? (
+                  <p className="text-xs text-red-600">{creditsQuery.data.searchapi.error}</p>
+                ) : creditsQuery.data?.searchapi ? (
+                  (() => {
+                    const sa = creditsQuery.data.searchapi!
+                    const usagePct = sa.total_credits
+                      ? Math.round(((sa.used_credits ?? 0) / sa.total_credits) * 100)
+                      : 0
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-lg font-bold text-orange-900">
+                            {sa.remaining_credits ?? 0}
+                          </span>
+                          <span className="text-xs text-orange-600">credits remaining</span>
+                        </div>
+                        <div className="h-1.5 bg-orange-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                            style={{ width: `${Math.min(usagePct, 100)}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-orange-600">
+                          <span>{sa.used_credits ?? 0} used</span>
+                          <span>{sa.total_credits} total</span>
+                        </div>
+                        <div className="text-[10px] text-orange-500">
+                          ${(sa.total_cost_usd ?? 0).toFixed(2)} spent
+                        </div>
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <p className="text-xs text-gray-400">—</p>
+                )}
+              </div>
+            </div>
+
+            {/* Image Source Toggle */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200 col-span-full">
+              <Settings className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-gray-700 mb-1.5">Format B Video Slide Images</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await apiClient.put('/api/admin/image-source', { mode: 'ai' })
+                        creditsQuery.refetch()
+                      } catch {}
+                    }}
+                    className={clsx(
+                      'px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
+                      creditsQuery.data?.image_source_mode !== 'web'
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    )}
+                  >
+                    AI Generated
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await apiClient.put('/api/admin/image-source', { mode: 'web' })
+                        creditsQuery.refetch()
+                      } catch {}
+                    }}
+                    className={clsx(
+                      'px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
+                      creditsQuery.data?.image_source_mode === 'web'
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    )}
+                  >
+                    Web Images (SearchApi)
+                  </button>
+                  <span className="text-[10px] text-gray-400 ml-1">
+                    {creditsQuery.data?.image_source_mode === 'web'
+                      ? 'Using real Google Images for video slides'
+                      : 'Using AI-generated images (Freepik/DeAPI)'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Thumbnails always use AI generation regardless of this setting.</p>
               </div>
             </div>
           </div>
