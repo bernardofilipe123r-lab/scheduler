@@ -33,8 +33,8 @@ MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 5
 MAX_RETRY_DELAY = 60
 
-# Freepik daily limit (Classic Fast plan)
-FREEPIK_DAILY_LIMIT = 10_000
+# Freepik daily limit (Free Trial: 100/day, Pay-per-use: 10,000/day)
+FREEPIK_DAILY_LIMIT = 100
 
 
 class ImageSourcer:

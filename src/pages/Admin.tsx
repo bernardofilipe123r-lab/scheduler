@@ -1330,9 +1330,11 @@ interface CreditsResponse {
   }
   freepik?: {
     configured?: boolean
-    plan?: string
     daily_limit?: number
     total_budget_eur?: number
+    spent_eur?: number
+    remaining_eur?: number
+    total_calls?: number
     error?: string
   }
 }
@@ -2269,19 +2271,35 @@ export function AdminPage() {
                 {creditsQuery.data?.freepik?.error ? (
                   <p className="text-xs text-red-600">{creditsQuery.data.freepik.error}</p>
                 ) : creditsQuery.data?.freepik ? (
-                  <div className="space-y-0.5">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-lg font-bold text-teal-900">
-                        {creditsQuery.data.freepik.daily_limit?.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-teal-600">/ day</span>
-                    </div>
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[10px] text-teal-600 font-medium">
-                        {creditsQuery.data.freepik.plan} · {creditsQuery.data.freepik.total_budget_eur} EUR budget
-                      </span>
-                    </div>
-                  </div>
+                  (() => {
+                    const fp = creditsQuery.data.freepik!
+                    const budgetPct = fp.total_budget_eur
+                      ? Math.round(((fp.spent_eur ?? 0) / fp.total_budget_eur) * 100)
+                      : 0
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-lg font-bold text-teal-900">
+                            {(fp.remaining_eur ?? 0).toFixed(2)}
+                          </span>
+                          <span className="text-xs text-teal-600">EUR remaining</span>
+                        </div>
+                        <div className="h-1.5 bg-teal-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-teal-500 transition-all duration-500"
+                            style={{ width: `${Math.min(budgetPct, 100)}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-teal-600">
+                          <span>{(fp.spent_eur ?? 0).toFixed(2)} EUR spent</span>
+                          <span>{fp.total_budget_eur} EUR budget</span>
+                        </div>
+                        <div className="text-[10px] text-teal-500">
+                          {fp.daily_limit}/day · {fp.total_calls ?? 0} total calls
+                        </div>
+                      </div>
+                    )
+                  })()
                 ) : (
                   <p className="text-xs text-gray-400">—</p>
                 )}

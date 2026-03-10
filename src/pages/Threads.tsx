@@ -14,7 +14,6 @@ import {
   Loader2,
   Plus,
   Trash2,
-  ChevronDown,
   Zap,
   PenLine,
   Link2,
@@ -218,20 +217,20 @@ export function ThreadsPage() {
   if (brandsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
+        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
       </div>
     )
   }
 
   if (threadsConnectedBrands.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto p-8 text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-zinc-800 flex items-center justify-center">
-          <Link2 className="w-8 h-8 text-zinc-500" />
+      <div className="max-w-md mx-auto py-16 text-center">
+        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <Link2 className="w-6 h-6 text-gray-400" />
         </div>
-        <h2 className="text-xl font-semibold text-zinc-100 mb-2">Connect Threads First</h2>
-        <p className="text-zinc-400 mb-6">
-          Go to <span className="text-teal-400 font-medium">Brands</span> and connect your Threads account to start creating content.
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Connect Threads First</h2>
+        <p className="text-sm text-gray-500">
+          Go to <span className="text-stone-800 font-semibold">Brands</span> and connect your Threads account to start creating content.
         </p>
       </div>
     )
@@ -239,64 +238,63 @@ export function ThreadsPage() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100">Threads</h1>
-        <p className="text-sm text-zinc-400 mt-1">Create text-only posts and thread chains for Threads</p>
+      <div className="text-center mb-2">
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Threads</h1>
+        <p className="text-sm text-gray-500 mt-1">Create and publish text posts</p>
       </div>
 
-      {/* Mode toggle + Brand selector row */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Mode toggle */}
-        <div className="inline-flex rounded-lg bg-zinc-800/60 p-1">
-          <button
-            onClick={() => setMode('auto')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              mode === 'auto' ? 'bg-teal-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-            Auto
-          </button>
-          <button
-            onClick={() => setMode('manual')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              mode === 'manual' ? 'bg-teal-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <PenLine className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-            Manual
-          </button>
-        </div>
-
+      {/* Controls bar — brand + mode */}
+      <div className="flex items-center justify-between gap-3 bg-white rounded-xl border border-gray-200 px-3 py-2">
         {/* Brand selector */}
-        <div className="relative">
+        <div className="flex items-center gap-2">
+          {selectedBrandInfo && (
+            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: selectedBrandInfo.color }} />
+          )}
           <select
             value={selectedBrand}
             onChange={e => setSelectedBrand(e.target.value)}
-            className="appearance-none bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 pr-8 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            className="bg-transparent text-sm font-medium text-gray-900 focus:outline-none cursor-pointer pr-1"
           >
             {threadsConnectedBrands.map(b => (
               <option key={b.id} value={b.id}>{b.label}</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
         </div>
 
-        {selectedBrandInfo && (
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: selectedBrandInfo.color }} />
-            <span className="text-xs text-zinc-500">{selectedBrandInfo.label}</span>
-          </div>
-        )}
+        {/* Mode toggle */}
+        <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+          <button
+            onClick={() => setMode('auto')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+              mode === 'auto'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Zap className="w-3 h-3" />
+            Auto
+          </button>
+          <button
+            onClick={() => setMode('manual')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+              mode === 'manual'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <PenLine className="w-3 h-3" />
+            Manual
+          </button>
+        </div>
       </div>
 
       {/* ── AUTO MODE ─────────────────────────────────────────────── */}
       {mode === 'auto' && (
-        <div className="space-y-5">
-          {/* Tab: Single vs Chain vs Bulk */}
-          <div className="flex gap-2">
+        <div className="space-y-4">
+          {/* Tab: Single vs Chain */}
+          <div className="flex gap-1.5">
             {[
               { id: 'single' as const, label: 'Single Post' },
               { id: 'chain' as const, label: 'Thread Chain' },
@@ -304,10 +302,10 @@ export function ThreadsPage() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   tab === t.id
-                    ? 'bg-zinc-700 text-zinc-100'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                    ? 'bg-stone-900 text-white'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                 }`}
               >
                 {t.label}
@@ -316,61 +314,63 @@ export function ThreadsPage() {
           </div>
 
           {tab === 'single' && (
-            <div className="space-y-4">
-              {/* Options row */}
-              <div className="flex flex-wrap gap-3">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-zinc-500 mb-1">Topic (optional)</label>
-                  <input
-                    type="text"
-                    value={topicHint}
-                    onChange={e => setTopicHint(e.target.value)}
-                    placeholder="e.g., morning routines, productivity"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
+            <div className="space-y-3">
+              {/* Options card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-3">
+                <div className="flex flex-wrap gap-2.5">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Topic (optional)</label>
+                    <input
+                      type="text"
+                      value={topicHint}
+                      onChange={e => setTopicHint(e.target.value)}
+                      placeholder="e.g., morning routines, productivity"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="w-40">
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Format</label>
+                    <select
+                      value={formatType}
+                      onChange={e => setFormatType(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                    >
+                      <option value="">Random</option>
+                      {formatTypes?.map(ft => (
+                        <option key={ft.id} value={ft.id}>{ft.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="w-48">
-                  <label className="block text-xs text-zinc-500 mb-1">Format type</label>
-                  <select
-                    value={formatType}
-                    onChange={e => setFormatType(e.target.value)}
-                    className="w-full appearance-none bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  >
-                    <option value="">Random</option>
-                    {formatTypes?.map(ft => (
-                      <option key={ft.id} value={ft.id}>{ft.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
 
-              {/* Generate button */}
-              <button
-                onClick={handleGenerateSingle}
-                disabled={isLoading || !selectedBrand}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-              >
-                {generateSingle.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Wand2 className="w-4 h-4" />
-                )}
-                Generate Post
-              </button>
+                {/* Generate button */}
+                <button
+                  onClick={handleGenerateSingle}
+                  disabled={isLoading || !selectedBrand}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                >
+                  {generateSingle.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="w-4 h-4" />
+                  )}
+                  Generate Post
+                </button>
+              </div>
 
               {/* Generated post */}
               {postText && (
-                <div className="space-y-3">
+                <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-2.5 animate-in fade-in duration-300">
                   <div className="relative">
                     <textarea
                       value={postText}
                       onChange={e => setPostText(e.target.value)}
-                      rows={6}
+                      rows={5}
                       maxLength={MAX_CHARS}
-                      className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                     />
-                    <span className={`absolute bottom-3 right-3 text-xs ${
-                      postText.length > MAX_CHARS ? 'text-red-400' : 'text-zinc-500'
+                    <span className={`absolute bottom-2 right-3 text-[10px] ${
+                      postText.length > MAX_CHARS ? 'text-red-500' : 'text-gray-400'
                     }`}>
                       {postText.length}/{MAX_CHARS}
                     </span>
@@ -379,25 +379,24 @@ export function ThreadsPage() {
                     <button
                       onClick={handlePublishSingle}
                       disabled={isPublishing || !postText.trim()}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium transition-colors"
                     >
-                      {publishSingle.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      Publish Now
+                      {publishSingle.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      Publish
                     </button>
                     <button
                       onClick={() => setShowSchedule(!showSchedule)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-sm font-medium transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium transition-colors"
                     >
-                      <CalendarClock className="w-4 h-4" />
+                      <CalendarClock className="w-3.5 h-3.5" />
                       Schedule
                     </button>
                     <button
                       onClick={handleGenerateSingle}
                       disabled={isLoading}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs transition-colors"
                     >
-                      <RefreshCw className="w-4 h-4" />
-                      Regenerate
+                      <RefreshCw className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -405,37 +404,39 @@ export function ThreadsPage() {
 
               {/* Schedule picker */}
               {showSchedule && (
-                <div className="flex items-end gap-3 p-4 bg-zinc-800/60 rounded-xl border border-zinc-700">
+                <div className="flex items-end gap-2.5 p-3 bg-white rounded-xl border border-gray-200">
                   <div className="flex-1">
-                    <label className="block text-xs text-zinc-500 mb-1">Schedule for</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Schedule for</label>
                     <input
                       type="datetime-local"
                       value={scheduleTime}
                       onChange={e => setScheduleTime(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                     />
                   </div>
                   <button
                     onClick={handleSchedule}
                     disabled={scheduleThread.isPending || !scheduleTime}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium"
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium"
                   >
-                    {scheduleThread.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarClock className="w-4 h-4" />}
+                    {scheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />}
                     Confirm
                   </button>
                 </div>
               )}
 
               {/* Bulk generate section */}
-              <div className="pt-4 border-t border-zinc-800">
-                <h3 className="text-sm font-medium text-zinc-300 mb-3">Bulk Generate</h3>
-                <div className="flex items-end gap-3">
+              <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Bulk Generate</span>
+                </div>
+                <div className="flex items-end gap-2.5">
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Count</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Count</label>
                     <select
                       value={bulkCount}
                       onChange={e => setBulkCount(Number(e.target.value))}
-                      className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                     >
                       {[2, 3, 4, 5, 6, 8, 10].map(n => (
                         <option key={n} value={n}>{n} posts</option>
@@ -445,35 +446,35 @@ export function ThreadsPage() {
                   <button
                     onClick={handleGenerateBulk}
                     disabled={isLoading || !selectedBrand}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-zinc-200 text-sm font-medium transition-colors"
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-60 text-gray-700 text-xs font-medium transition-colors"
                   >
-                    {generateBulk.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    {generateBulk.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
                     Generate Batch
                   </button>
                 </div>
 
                 {/* Bulk results */}
                 {bulkPosts.length > 0 && (
-                  <div className="mt-4 space-y-3">
+                  <div className="space-y-2">
                     {bulkPosts.map((post, i) => (
-                      <div key={i} className="bg-zinc-800/60 border border-zinc-700 rounded-xl p-4">
-                        <div className="flex items-start justify-between gap-3">
+                      <div key={i} className="border border-gray-100 rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-2.5">
                           <div className="flex-1 min-w-0">
-                            <span className="text-[10px] uppercase tracking-wider text-teal-400 font-medium">
+                            <span className="text-[9px] font-medium uppercase tracking-wider text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded-full">
                               {post.format_type}
                             </span>
-                            <p className="text-sm text-zinc-200 mt-1 whitespace-pre-wrap">{post.text}</p>
+                            <p className="text-xs text-gray-700 mt-1.5 whitespace-pre-wrap leading-relaxed">{post.text}</p>
                           </div>
                           <button
                             onClick={() => handlePublishBulkItem(post.text, i)}
                             disabled={isPublishing}
-                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-medium"
+                            className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-[10px] font-medium"
                           >
-                            <Send className="w-3 h-3" />
+                            <Send className="w-2.5 h-2.5" />
                             Publish
                           </button>
                         </div>
-                        <span className="text-[10px] text-zinc-500 mt-2 block">{post.text.length}/{MAX_CHARS} chars</span>
+                        <span className="text-[9px] text-gray-400 mt-1 block">{post.text.length}/{MAX_CHARS}</span>
                       </div>
                     ))}
                   </div>
@@ -483,56 +484,59 @@ export function ThreadsPage() {
           )}
 
           {tab === 'chain' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-3">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-zinc-500 mb-1">Thread topic</label>
-                  <input
-                    type="text"
-                    value={chainTopic}
-                    onChange={e => setChainTopic(e.target.value)}
-                    placeholder="e.g., 7 prompts to replace a mortgage broker"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
+            <div className="space-y-3">
+              {/* Options card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-3">
+                <div className="flex flex-wrap gap-2.5">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Thread topic</label>
+                    <input
+                      type="text"
+                      value={chainTopic}
+                      onChange={e => setChainTopic(e.target.value)}
+                      placeholder="e.g., 7 prompts to replace a mortgage broker"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="w-28">
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Parts</label>
+                    <select
+                      value={chainPartsCount}
+                      onChange={e => setChainPartsCount(Number(e.target.value))}
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                    >
+                      {Array.from({ length: 11 }, (_, i) => i + 2).map(n => (
+                        <option key={n} value={n}>{n} parts</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="w-32">
-                  <label className="block text-xs text-zinc-500 mb-1">Parts</label>
-                  <select
-                    value={chainPartsCount}
-                    onChange={e => setChainPartsCount(Number(e.target.value))}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  >
-                    {Array.from({ length: 11 }, (_, i) => i + 2).map(n => (
-                      <option key={n} value={n}>{n} parts</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
 
-              <button
-                onClick={handleGenerateChain}
-                disabled={isLoading || !selectedBrand}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-              >
-                {generateChain.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                Generate Thread Chain
-              </button>
+                <button
+                  onClick={handleGenerateChain}
+                  disabled={isLoading || !selectedBrand}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                >
+                  {generateChain.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                  Generate Thread Chain
+                </button>
+              </div>
 
               {/* Chain parts editor */}
               {chainParts.some(p => p.trim()) && (
-                <div className="space-y-3">
+                <div className="space-y-2.5 animate-in fade-in duration-300">
                   {chainParts.map((part, i) => (
-                    <div key={i} className="relative group">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs text-teal-400 font-medium">
-                          Part {i + 1}/{chainParts.length}
+                    <div key={i} className="relative group bg-white rounded-xl border border-gray-200 p-2.5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-semibold text-stone-600 tabular-nums">
+                          Part {i + 1} of {chainParts.length}
                         </span>
                         {chainParts.length > 2 && (
                           <button
                             onClick={() => removeChainPart(i)}
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            <Trash2 className="w-3 h-3 text-zinc-500 hover:text-red-400" />
+                            <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-500" />
                           </button>
                         )}
                       </div>
@@ -540,17 +544,17 @@ export function ThreadsPage() {
                         <textarea
                           value={part}
                           onChange={e => updateChainPart(i, e.target.value)}
-                          rows={3}
+                          rows={2}
                           maxLength={MAX_CHARS}
                           placeholder={
                             i === 0 ? 'Hook — grab attention...' :
                             i === chainParts.length - 1 ? 'Summary + CTA...' :
                             'Insight / value...'
                           }
-                          className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                         />
-                        <span className={`absolute bottom-2 right-3 text-xs ${
-                          part.length > MAX_CHARS ? 'text-red-400' : 'text-zinc-500'
+                        <span className={`absolute bottom-1.5 right-2.5 text-[10px] ${
+                          part.length > MAX_CHARS ? 'text-red-500' : 'text-gray-400'
                         }`}>
                           {part.length}/{MAX_CHARS}
                         </span>
@@ -561,56 +565,55 @@ export function ThreadsPage() {
                   {chainParts.length < MAX_CHAIN_PARTS && (
                     <button
                       onClick={addChainPart}
-                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-teal-400 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-stone-800 transition-colors py-1"
                     >
                       <Plus className="w-3 h-3" />
                       Add part
                     </button>
                   )}
 
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2">
                     <button
                       onClick={handlePublishChain}
                       disabled={isPublishing}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium transition-colors"
                     >
-                      {publishChain.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {publishChain.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                       Publish Chain
                     </button>
                     <button
                       onClick={() => { setTab('chain'); setShowSchedule(!showSchedule) }}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-sm font-medium transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium transition-colors"
                     >
-                      <CalendarClock className="w-4 h-4" />
+                      <CalendarClock className="w-3.5 h-3.5" />
                       Schedule
                     </button>
                     <button
                       onClick={handleGenerateChain}
                       disabled={isLoading}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs transition-colors"
                     >
-                      <RefreshCw className="w-4 h-4" />
-                      Regenerate
+                      <RefreshCw className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
                   {showSchedule && (
-                    <div className="flex items-end gap-3 p-4 bg-zinc-800/60 rounded-xl border border-zinc-700">
+                    <div className="flex items-end gap-2.5 p-3 bg-white rounded-xl border border-gray-200">
                       <div className="flex-1">
-                        <label className="block text-xs text-zinc-500 mb-1">Schedule for</label>
+                        <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Schedule for</label>
                         <input
                           type="datetime-local"
                           value={scheduleTime}
                           onChange={e => setScheduleTime(e.target.value)}
-                          className="w-full bg-zinc-900 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                         />
                       </div>
                       <button
                         onClick={handleSchedule}
                         disabled={scheduleThread.isPending || !scheduleTime}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium"
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium"
                       >
-                        {scheduleThread.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarClock className="w-4 h-4" />}
+                        {scheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />}
                         Confirm
                       </button>
                     </div>
@@ -624,9 +627,9 @@ export function ThreadsPage() {
 
       {/* ── MANUAL MODE ───────────────────────────────────────────── */}
       {mode === 'manual' && (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {/* Tab: Single vs Chain */}
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {[
               { id: 'single' as const, label: 'Single Post' },
               { id: 'chain' as const, label: 'Thread Chain' },
@@ -634,10 +637,10 @@ export function ThreadsPage() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   tab === t.id
-                    ? 'bg-zinc-700 text-zinc-100'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                    ? 'bg-stone-900 text-white'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                 }`}
               >
                 {t.label}
@@ -646,23 +649,24 @@ export function ThreadsPage() {
           </div>
 
           {tab === 'single' && (
-            <div className="space-y-4">
-              {/* Clean text input area — Claude web vibe */}
-              <div className="relative">
-                <textarea
-                  value={postText}
-                  onChange={e => setPostText(e.target.value)}
-                  rows={8}
-                  maxLength={MAX_CHARS}
-                  placeholder="Write your Threads post..."
-                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-2xl px-5 py-4 text-[15px] leading-relaxed text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500/50 transition-all"
-                />
-                <div className="absolute bottom-3 right-4 flex items-center gap-3">
-                  <span className={`text-xs ${
-                    postText.length > MAX_CHARS ? 'text-red-400' : postText.length > MAX_CHARS * 0.8 ? 'text-amber-400' : 'text-zinc-500'
-                  }`}>
-                    {postText.length}/{MAX_CHARS}
-                  </span>
+            <div className="space-y-3">
+              <div className="bg-white rounded-xl border border-gray-200 p-3">
+                <div className="relative">
+                  <textarea
+                    value={postText}
+                    onChange={e => setPostText(e.target.value)}
+                    rows={6}
+                    maxLength={MAX_CHARS}
+                    placeholder="Write your Threads post..."
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm leading-relaxed text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+                  />
+                  <div className="absolute bottom-2 right-3 flex items-center gap-3">
+                    <span className={`text-[10px] ${
+                      postText.length > MAX_CHARS ? 'text-red-500' : postText.length > MAX_CHARS * 0.8 ? 'text-amber-500' : 'text-gray-400'
+                    }`}>
+                      {postText.length}/{MAX_CHARS}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -670,37 +674,37 @@ export function ThreadsPage() {
                 <button
                   onClick={handlePublishSingle}
                   disabled={isPublishing || !postText.trim() || postText.length > MAX_CHARS}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
                 >
-                  {publishSingle.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {publishSingle.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   Post to Threads
                 </button>
                 <button
                   onClick={() => setShowSchedule(!showSchedule)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium transition-colors"
                 >
-                  <CalendarClock className="w-4 h-4" />
+                  <CalendarClock className="w-3.5 h-3.5" />
                   Schedule
                 </button>
               </div>
 
               {showSchedule && (
-                <div className="flex items-end gap-3 p-4 bg-zinc-800/60 rounded-xl border border-zinc-700">
+                <div className="flex items-end gap-2.5 p-3 bg-white rounded-xl border border-gray-200">
                   <div className="flex-1">
-                    <label className="block text-xs text-zinc-500 mb-1">Schedule for</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Schedule for</label>
                     <input
                       type="datetime-local"
                       value={scheduleTime}
                       onChange={e => setScheduleTime(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                     />
                   </div>
                   <button
                     onClick={handleSchedule}
                     disabled={scheduleThread.isPending || !scheduleTime}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium"
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium"
                   >
-                    {scheduleThread.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarClock className="w-4 h-4" />}
+                    {scheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />}
                     Confirm
                   </button>
                 </div>
@@ -709,15 +713,15 @@ export function ThreadsPage() {
           )}
 
           {tab === 'chain' && (
-            <div className="space-y-4">
-              <p className="text-xs text-zinc-500">
-                Write each post in the chain below. Posts will be published as connected replies.
+            <div className="space-y-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">
+                Write each post in the chain — published as connected replies
               </p>
 
               {chainParts.map((part, i) => (
-                <div key={i} className="relative group">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs text-teal-400 font-medium tabular-nums">
+                <div key={i} className="relative group bg-white rounded-xl border border-gray-200 p-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-semibold text-stone-600 tabular-nums">
                       {i + 1}/{chainParts.length}
                     </span>
                     {chainParts.length > 2 && (
@@ -725,7 +729,7 @@ export function ThreadsPage() {
                         onClick={() => removeChainPart(i)}
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        <Trash2 className="w-3 h-3 text-zinc-500 hover:text-red-400" />
+                        <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-500" />
                       </button>
                     )}
                   </div>
@@ -733,17 +737,17 @@ export function ThreadsPage() {
                     <textarea
                       value={part}
                       onChange={e => updateChainPart(i, e.target.value)}
-                      rows={4}
+                      rows={3}
                       maxLength={MAX_CHARS}
                       placeholder={
                         i === 0 ? 'Start with a strong hook...' :
                         i === chainParts.length - 1 ? 'End with a CTA or summary...' :
                         'Continue the thread...'
                       }
-                      className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500/50 transition-all"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm leading-relaxed text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                     />
-                    <span className={`absolute bottom-2.5 right-4 text-xs ${
-                      part.length > MAX_CHARS ? 'text-red-400' : 'text-zinc-500'
+                    <span className={`absolute bottom-1.5 right-2.5 text-[10px] ${
+                      part.length > MAX_CHARS ? 'text-red-500' : 'text-gray-400'
                     }`}>
                       {part.length}/{MAX_CHARS}
                     </span>
@@ -754,48 +758,48 @@ export function ThreadsPage() {
               {chainParts.length < MAX_CHAIN_PARTS && (
                 <button
                   onClick={addChainPart}
-                  className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-teal-400 transition-colors py-2"
+                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-stone-800 transition-colors py-1"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
                   Add another post
                 </button>
               )}
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2">
                 <button
                   onClick={handlePublishChain}
                   disabled={isPublishing || chainParts.filter(p => p.trim()).length < 2}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
                 >
-                  {publishChain.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {publishChain.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   Post Thread
                 </button>
                 <button
                   onClick={() => setShowSchedule(!showSchedule)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium transition-colors"
                 >
-                  <CalendarClock className="w-4 h-4" />
+                  <CalendarClock className="w-3.5 h-3.5" />
                   Schedule
                 </button>
               </div>
 
               {showSchedule && (
-                <div className="flex items-end gap-3 p-4 bg-zinc-800/60 rounded-xl border border-zinc-700">
+                <div className="flex items-end gap-2.5 p-3 bg-white rounded-xl border border-gray-200">
                   <div className="flex-1">
-                    <label className="block text-xs text-zinc-500 mb-1">Schedule for</label>
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Schedule for</label>
                     <input
                       type="datetime-local"
                       value={scheduleTime}
                       onChange={e => setScheduleTime(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
                     />
                   </div>
                   <button
                     onClick={handleSchedule}
                     disabled={scheduleThread.isPending || !scheduleTime}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium"
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-xs font-medium"
                   >
-                    {scheduleThread.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarClock className="w-4 h-4" />}
+                    {scheduleThread.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />}
                     Confirm
                   </button>
                 </div>

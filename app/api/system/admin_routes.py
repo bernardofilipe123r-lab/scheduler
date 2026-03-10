@@ -491,15 +491,44 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
     else:
         results["deapi"] = {"error": "API key not configured"}
 
-    # ── Freepik credits (Classic Fast: 10,000/day, 500 EUR total) ─
+    # ── Freepik credits (calculated from local usage tracking) ─────
     freepik_key = os.getenv("FREEPIK_API_KEY")
     if freepik_key:
-        results["freepik"] = {
-            "configured": True,
-            "plan": "Classic Fast",
-            "daily_limit": 10000,
-            "total_budget_eur": 500,
-        }
+        # Calculate remaining budget from local cost tracking
+        try:
+            from app.services.monitoring.cost_tracker import FREEPIK_COST_PER_IMAGE
+            from app.models.api_usage import APIUsageLog
+            from sqlalchemy import func
+
+            total_budget_eur = float(os.getenv("FREEPIK_TOTAL_BUDGET_EUR", "5.0"))
+            daily_limit = int(os.getenv("FREEPIK_DAILY_LIMIT", "100"))
+
+            # Count all-time Freepik calls from api_usage_log
+            total_calls = 0
+            try:
+                from app.db_connection import get_db_session
+                with get_db_session() as fdb:
+                    total_calls = (
+                        fdb.query(func.count(APIUsageLog.id))
+                        .filter(APIUsageLog.api_name == "freepik")
+                        .scalar() or 0
+                    )
+            except Exception:
+                pass
+
+            spent_eur = round(total_calls * FREEPIK_COST_PER_IMAGE, 2)
+            remaining_eur = round(total_budget_eur - spent_eur, 2)
+
+            results["freepik"] = {
+                "configured": True,
+                "daily_limit": daily_limit,
+                "total_budget_eur": total_budget_eur,
+                "spent_eur": spent_eur,
+                "remaining_eur": max(0, remaining_eur),
+                "total_calls": total_calls,
+            }
+        except Exception as exc:
+            results["freepik"] = {"configured": True, "error": str(exc)}
     else:
         results["freepik"] = {"error": "API key not configured"}
 

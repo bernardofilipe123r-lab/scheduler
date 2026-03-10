@@ -40,8 +40,8 @@ DEEPSEEK_OUTPUT_COST_PER_M = 0.28  # $0.28 per 1M output tokens
 # DeAPI pricing per image generation
 DEAPI_COST_PER_IMAGE = 0.02  # ~$0.02 per image (approximate)
 
-# Freepik pricing per image generation (Classic Fast plan: 500 EUR / 10k images)
-FREEPIK_COST_PER_IMAGE = 0.05  # ~€0.05 per image (500 EUR / 10,000 images)
+# Freepik pricing per image generation (~€0.05 per image based on billing data)
+FREEPIK_COST_PER_IMAGE = 0.05  # ~€0.05 per image
 
 
 def _get_or_create_daily(db, user_id: str, target_date: date) -> UserCostDaily:
