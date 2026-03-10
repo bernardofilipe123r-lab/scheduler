@@ -200,9 +200,19 @@ export interface FacebookPage {
   picture: string | null
 }
 
-export async function fetchFacebookPages(brandId: string): Promise<FacebookPage[]> {
-  const data = await get<{ pages: FacebookPage[] }>(`/api/auth/facebook/pages?brand_id=${encodeURIComponent(brandId)}`)
-  return data.pages
+export interface FacebookBrandOption {
+  id: string
+  display_name: string
+  facebook_page_id: string | null
+}
+
+export interface FacebookPagesResponse {
+  pages: FacebookPage[]
+  brands: FacebookBrandOption[]
+}
+
+export async function fetchFacebookPages(brandId: string): Promise<FacebookPagesResponse> {
+  return get<FacebookPagesResponse>(`/api/auth/facebook/pages?brand_id=${encodeURIComponent(brandId)}`)
 }
 
 /**
@@ -210,6 +220,26 @@ export async function fetchFacebookPages(brandId: string): Promise<FacebookPage[
  */
 export async function selectFacebookPage(brandId: string, pageId: string): Promise<{ status: string; page_name: string }> {
   return post<{ status: string; page_name: string }>('/api/auth/facebook/select-page', { brand_id: brandId, page_id: pageId })
+}
+
+/**
+ * Bulk connect multiple Facebook Pages to multiple brands in one request.
+ */
+export interface BulkConnectResult {
+  brand_id: string
+  status: 'connected' | 'error'
+  page_name?: string
+  message?: string
+}
+
+export async function bulkConnectFacebookPages(
+  originBrandId: string,
+  mappings: Array<{ brand_id: string; page_id: string }>
+): Promise<{ results: BulkConnectResult[]; connected_count: number }> {
+  return post<{ results: BulkConnectResult[]; connected_count: number }>(
+    '/api/auth/facebook/bulk-connect',
+    { origin_brand_id: originBrandId, mappings }
+  )
 }
 
 // Connection test types

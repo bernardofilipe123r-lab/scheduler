@@ -284,10 +284,11 @@ class AnalyticsService:
             
             # Facebook
             try:
-                if config.facebook_page_id and config.meta_access_token:
+                fb_token = config.facebook_access_token or config.meta_access_token
+                if config.facebook_page_id and fb_token:
                     fb_data = self._fetch_facebook_analytics(
                         config.facebook_page_id,
-                        config.meta_access_token
+                        fb_token
                     )
                     self._update_analytics(brand_name, "facebook", fb_data, user_id=user_id)
                     updated_count += 1

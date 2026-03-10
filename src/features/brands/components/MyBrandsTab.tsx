@@ -93,8 +93,8 @@ export function MyBrandsTab() {
       setFbPagesLoading(true)
       searchParams.delete('fb_select_page')
       setSearchParams(searchParams, { replace: true })
-      fetchFacebookPages(fbSelectPage).then((pages) => {
-        setFbPages(pages)
+      fetchFacebookPages(fbSelectPage).then((data) => {
+        setFbPages(data.pages)
       }).catch(() => {
         setFbNotification({ type: 'error', message: 'Failed to load Facebook pages. Please try connecting again.' })
         setFbSelectPageBrand(null)

@@ -311,8 +311,8 @@ export function OnboardingPage() {
     // Handle Facebook page selection flow (multiple pages found)
     if (fbSelectPage) {
       setShowFbPageSelector(true)
-      fetchFacebookPages(fbSelectPage).then((pages) => {
-        setFbPages(pages)
+      fetchFacebookPages(fbSelectPage).then((data) => {
+        setFbPages(data.pages)
       }).catch(() => {
         setConnectionError('Failed to load Facebook pages. Please try connecting again.')
         setShowFbPageSelector(false)
