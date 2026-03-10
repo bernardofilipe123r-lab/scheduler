@@ -42,12 +42,12 @@ python scripts/validate_api.py --services
 
 ## What Gets Validated
 
-### 1. Module Import Checks (60+ modules)
+### 1. Module Import Checks (70+ modules)
 Validates all critical modules can be imported without errors:
 - **Core:** prompt_templates, prompt_context, config, constants, cta, viral_patterns, quality_scorer
 - **Models:** niche_config, jobs, scheduling, brands, analytics, auth, billing, toby, toby_cognitive
 - **Services:** content generator, media generators, publishers, token services, toby agents
-- **API Routers:** all 13 router modules
+- **API Routers:** all registered route modules, including `app.api.auth.bsky_auth_routes` and `app.api.threads.routes`
 - **Utilities:** ffmpeg, fonts, text_formatting, text_layout
 
 ### 2. Symbol Checks

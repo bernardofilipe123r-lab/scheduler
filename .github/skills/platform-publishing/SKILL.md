@@ -1,6 +1,6 @@
 ---
 name: platform-publishing
-description: "Multi-platform publishing and OAuth — Instagram, Facebook, Threads, TikTok, YouTube. Token lifecycle, publishing flows, OAuth routes, scheduling, retry logic, legal page updates. Use when: adding new social platform, fixing OAuth flow, debugging publish failures, modifying token refresh, changing scheduling logic, updating legal pages for platform changes, working on retry/recovery."
+description: "Multi-platform publishing and OAuth — Instagram, Facebook, Threads, TikTok, YouTube, Bluesky. Token lifecycle, publishing flows, OAuth routes, scheduling, retry logic, legal page updates. Use when: adding new social platform, fixing OAuth flow, debugging publish failures, modifying token refresh, changing scheduling logic, updating legal pages for platform changes, working on retry/recovery."
 ---
 
 # Platform Publishing & OAuth
@@ -22,10 +22,12 @@ description: "Multi-platform publishing and OAuth — Instagram, Facebook, Threa
 | `app/services/publishing/scheduler.py` | `DatabaseSchedulerService` — scheduling + publish execution |
 | `app/services/publishing/ig_token_service.py` | Instagram token exchange & refresh (60-day) |
 | `app/services/publishing/fb_token_service.py` | Facebook token exchange & page tokens |
+| `app/services/publishing/bsky_token_service.py` | Bluesky token exchange & refresh |
 | `app/services/publishing/threads_token_service.py` | Threads token exchange & refresh (60-day) |
 | `app/services/publishing/tiktok_token_service.py` | TikTok PKCE flow & refresh (24h!) |
 | `app/api/auth/ig_oauth_routes.py` | Instagram OAuth routes |
 | `app/api/auth/fb_oauth_routes.py` | Facebook OAuth routes (multi-page selection) |
+| `app/api/auth/bsky_auth_routes.py` | Bluesky OAuth routes |
 | `app/api/auth/threads_oauth_routes.py` | Threads OAuth routes |
 | `app/api/auth/tiktok_oauth_routes.py` | TikTok OAuth routes (PKCE) |
 | `app/api/youtube/routes.py` | YouTube OAuth & channel management |

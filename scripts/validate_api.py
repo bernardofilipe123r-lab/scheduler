@@ -131,6 +131,7 @@ CRITICAL_MODULES = [
     ("app.services.media.caption_generator", "Caption generator"),
     ("app.services.brands.manager", "Brand manager"),
     ("app.services.analytics.trend_scout", "TrendScout"),
+    ("app.services.publishing.bsky_token_service", "Bluesky token service"),
     ("app.services.publishing.threads_token_service", "Threads token service"),
     ("app.services.publishing.tiktok_token_service", "TikTok token service"),
     # ── API Routes (all 13 routers from main.py) ──
@@ -151,6 +152,7 @@ CRITICAL_MODULES = [
     ("app.api.auth.user_routes", "User routes"),
     ("app.api.auth.ig_oauth_routes", "Instagram OAuth routes"),
     ("app.api.auth.fb_oauth_routes", "Facebook OAuth routes"),
+    ("app.api.auth.bsky_auth_routes", "Bluesky OAuth routes"),
     ("app.api.auth.threads_oauth_routes", "Threads OAuth routes"),
     ("app.api.auth.tiktok_oauth_routes", "TikTok OAuth routes"),
     ("app.api.niche_config_routes", "NicheConfig routes"),
@@ -167,6 +169,7 @@ CRITICAL_MODULES = [
     ("app.api.system.logs_routes", "Logs routes"),
     ("app.api.system.legal_routes", "Legal/data-deletion routes"),
     ("app.api.system.api_usage_routes", "API usage routes"),
+    ("app.api.threads.routes", "Threads page routes"),
     # ── Toby ──
     ("app.api.toby.routes", "Toby routes"),
     ("app.api.toby.schemas", "Toby schemas"),
