@@ -46,6 +46,7 @@ class ImageSourcer:
         self._deapi_base_url = "https://api.deapi.ai/api/v1/client"
         self._freepik_key = os.environ.get("FREEPIK_API_KEY")
         self._freepik_base_url = "https://api.freepik.com/v1/ai/text-to-image"
+        self.last_service_used: str = "unknown"  # "freepik" or "deapi"
 
     def _is_freepik_available(self) -> bool:
         """Check if Freepik API key is set and daily usage is under 100%."""
@@ -85,6 +86,7 @@ class ImageSourcer:
             if not path and plan.fallback_query:
                 path = self._generate_via_freepik(plan.fallback_query)
             if path:
+                self.last_service_used = "freepik"
                 return self._process_image(path)
             logger.warning("[ImageSourcer] Freepik failed, falling back to DeAPI")
 
@@ -98,6 +100,7 @@ class ImageSourcer:
             path = self._generate_via_deapi(plan.fallback_query)
 
         if path:
+            self.last_service_used = "deapi"
             return self._process_image(path)
 
         return None

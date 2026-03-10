@@ -756,6 +756,14 @@ class JobProcessor:
             if not image_paths:
                 raise ValueError("Failed to source any images for format-b reel")
 
+            # Store which image service was used in format_b_data
+            image_service = sourcer.last_service_used
+            if job.format_b_data and isinstance(job.format_b_data, dict):
+                job.format_b_data = {**job.format_b_data, "image_service": image_service}
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(job, "format_b_data")
+                self.db.commit()
+
             # ── Step 2: Compose thumbnail ─────────────────────
             self._manager.update_brand_output(job_id, brand, {
                 "progress_message": "Composing thumbnail...",

@@ -962,7 +962,7 @@ export function JobDetailPage() {
                         >
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-mono bg-violet-100 text-violet-600 px-2 py-0.5 rounded-[3px]">AI</span>
-                            <span>DeepSeek & DeAPI Prompt Details</span>
+                            <span>DeepSeek & {(job.format_b_data as any)?.image_service === 'freepik' ? 'Freepik' : 'DeAPI'} Prompt Details</span>
                           </div>
                           {showPromptDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
@@ -980,7 +980,11 @@ export function JobDetailPage() {
                             {/* Image AI Prompts (sent to DeAPI) */}
                             {((job.format_b_data as any).images || []).length > 0 && (
                               <div>
-                                <p className="text-xs font-medium text-green-600 mb-1.5">DeAPI Image Prompts (Flux1schnell):</p>
+                                <p className="text-xs font-medium text-green-600 mb-1.5">
+                                  {(job.format_b_data as any)?.image_service === 'freepik'
+                                    ? 'Freepik Image Prompts (Classic Fast):'
+                                    : 'DeAPI Image Prompts (Flux1schnell):'}
+                                </p>
                                 <div className="space-y-2">
                                   {((job.format_b_data as any).images as { query: string; source_type: string }[]).map((img, idx) => (
                                     <div key={idx} className="text-xs bg-white rounded-[5px] p-2.5 border-l-[3px] border-green-500 border border-gray-100">
