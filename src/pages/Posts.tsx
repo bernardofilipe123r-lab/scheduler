@@ -3,9 +3,10 @@
  *
  * 5-step wizard:
  *  1. Select brands (multi-select, same pattern as Reels)
- *  2. Pick AI image model (Freepik / ZImageTurbo / Flux Schnell / SearchApi)
- *  3. Choose mode (Auto vs Manual)
- *  4. Manual create form (title, AI prompt, layout settings, preview)
+ *  2. Choose platforms (Instagram, Facebook) — only shown when Facebook is connected
+ *  3. Pick AI image model (Freepik / ZImageTurbo / Flux Schnell / SearchApi)
+ *  4. Choose mode (Auto vs Manual)
+ *  5. Manual create form (title, AI prompt, layout settings, preview)
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -25,7 +26,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useCreateJob } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
-import { useDynamicBrands } from '@/features/brands'
+import { useDynamicBrands, useBrandConnections } from '@/features/brands'
 import { PostsSkeleton } from '@/shared/components'
 import {
   DEFAULT_GENERAL_SETTINGS,
@@ -40,9 +41,17 @@ import type { GeneralSettings, LayoutConfig } from '@/shared/components/PostCanv
 import { useLayoutSettings, useUpdateLayoutSettings } from '@/shared/api/use-layout-settings'
 import type { BrandName } from '@/shared/types'
 import igIcon from '@/assets/icons/instagram.png'
+import fbIcon from '@/assets/icons/facebook.png'
 
 // Preload platform icons
-;[igIcon].forEach(src => { const i = new Image(); i.src = src })
+;[igIcon, fbIcon].forEach(src => { const i = new Image(); i.src = src })
+
+type PostPlatform = 'instagram' | 'facebook'
+
+const POST_PLATFORMS: { id: PostPlatform; label: string; icon: string }[] = [
+  { id: 'instagram', label: 'Instagram', icon: igIcon },
+  { id: 'facebook', label: 'Facebook', icon: fbIcon },
+]
 
 const IMAGE_MODELS = [
   { id: 'freepik', label: 'Super Quality', sub: 'Freepik', badge: 'NEW', badgeColor: 'bg-emerald-500' },
@@ -53,7 +62,7 @@ const IMAGE_MODELS = [
 
 const POSTS_PREVIEW_SCALE = 0.2
 
-type WizardStep = 'brands' | 'model' | 'mode' | 'create'
+type WizardStep = 'brands' | 'platforms' | 'model' | 'mode' | 'create'
 
 export function PostsPage() {
   // ── All hooks BEFORE any early return ──────────────────────────────
@@ -63,6 +72,7 @@ export function PostsPage() {
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: dbSettings, isLoading: settingsLoading } = useLayoutSettings()
   const updateDbSettings = useUpdateLayoutSettings()
+  const { data: connectionsData } = useBrandConnections()
   const brandMap = useMemo(() => {
     const map: Record<string, { name: string; color: string }> = {}
     dynamicBrands.forEach(b => { map[b.id] = { name: b.label, color: b.color } })
@@ -73,6 +83,7 @@ export function PostsPage() {
   const [step, setStep] = useState<WizardStep>('brands')
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [allBrands, setAllBrands] = useState(true)
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>(['instagram'])
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
 
   // Manual create form state
@@ -108,6 +119,15 @@ export function PostsPage() {
   // ── Derived ────────────────────────────────────────────────────────
   const effectiveBrands = allBrands ? brandIds : selectedBrands
 
+  // Show platform step only when at least one selected brand has Facebook connected
+  const hasFacebook = useMemo(() => {
+    if (!connectionsData?.brands) return false
+    return effectiveBrands.some(brandId => {
+      const bc = connectionsData.brands.find((b: any) => b.brand === brandId)
+      return bc?.facebook?.connected === true
+    })
+  }, [connectionsData, effectiveBrands])
+
   // ── Toggle helpers ─────────────────────────────────────────────────
   const toggleBrand = (id: BrandName) => {
     if (allBrands) {
@@ -133,14 +153,24 @@ export function PostsPage() {
   }
 
   // ── Step navigation ─────────────────────────────────────────────────
-  const STEP_LIST: WizardStep[] = ['brands', 'model', 'mode']
+  const STEP_LIST: WizardStep[] = hasFacebook
+    ? ['brands', 'platforms', 'model', 'mode']
+    : ['brands', 'model', 'mode']
   const stepIdx = STEP_LIST.indexOf(step)
 
-  const goToModel = () => setStep('model')
+  const goNext = () => {
+    if (hasFacebook && step === 'brands') {
+      setSelectedPlatforms(['instagram', 'facebook'])
+      setStep('platforms')
+    } else {
+      setStep('model')
+    }
+  }
   const goToMode = () => setStep('mode')
 
   const goBack = () => {
-    if (step === 'model') setStep('brands')
+    if (step === 'platforms') setStep('brands')
+    else if (step === 'model') setStep(hasFacebook ? 'platforms' : 'brands')
     else if (step === 'mode') setStep('model')
     else if (step === 'create') setStep('mode')
   }
@@ -149,6 +179,7 @@ export function PostsPage() {
     setStep('brands')
     setSelectedBrands([])
     setAllBrands(true)
+    setSelectedPlatforms(['instagram'])
     setImageModel('ZImageTurbo_INT8')
     setTitle('')
     setAiPrompt('')
@@ -373,7 +404,7 @@ export function PostsPage() {
           )}
 
           <button
-            onClick={goToModel}
+            onClick={goNext}
             disabled={!allBrands && selectedBrands.length === 0}
             className="w-full py-3.5 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
           >
@@ -383,7 +414,59 @@ export function PostsPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          STEP 2: AI IMAGE MODEL
+          STEP 2: PLATFORMS (only when Facebook is connected)
+          ═══════════════════════════════════════════════════════════════ */}
+      {step === 'platforms' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="text-center space-y-1">
+            <h2 className="text-xl font-bold text-gray-900">Where to publish?</h2>
+            <p className="text-sm text-gray-500">Choose your target platforms</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {POST_PLATFORMS.map(({ id, label, icon }) => {
+              const active = selectedPlatforms.includes(id)
+              return (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setSelectedPlatforms(prev => {
+                      if (prev.includes(id) && prev.length === 1) return prev
+                      return prev.includes(id)
+                        ? prev.filter(p => p !== id)
+                        : [...prev, id]
+                    })
+                  }}
+                  className={`relative flex items-center gap-3 px-4 py-4 rounded-xl border-2 transition-all text-left ${
+                    active
+                      ? 'border-green-400 bg-green-50/50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <img src={icon} alt={label} className="w-7 h-7 object-contain" />
+                  <span className="text-sm font-semibold text-gray-800">{label}</span>
+                  {active && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          <button
+            onClick={() => setStep('model')}
+            disabled={selectedPlatforms.length === 0}
+            className="w-full py-3.5 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
+          >
+            Continue
+          </button>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          STEP 3: AI IMAGE MODEL
           ═══════════════════════════════════════════════════════════════ */}
       {step === 'model' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -437,14 +520,14 @@ export function PostsPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          STEP 3: MODE
+          STEP 4: MODE
           ═══════════════════════════════════════════════════════════════ */}
       {step === 'mode' && (
         <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="text-center space-y-1">
             <h2 className="text-xl font-bold text-gray-900">How do you want to create?</h2>
             <p className="text-sm text-gray-500">
-              {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {IMAGE_MODELS.find(m => m.id === imageModel)?.label}
+              {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} · {IMAGE_MODELS.find(m => m.id === imageModel)?.label}
             </p>
           </div>
 
@@ -495,7 +578,7 @@ export function PostsPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          STEP 4: MANUAL CREATE
+          STEP 5: MANUAL CREATE
           ═══════════════════════════════════════════════════════════════ */}
       {step === 'create' && (
         <div className="space-y-5 animate-in fade-in duration-300">
@@ -508,7 +591,7 @@ export function PostsPage() {
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
             <span className="text-xs text-gray-500">
-              {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {IMAGE_MODELS.find(m => m.id === imageModel)?.label}
+              {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} · {IMAGE_MODELS.find(m => m.id === imageModel)?.label}
             </span>
           </div>
 
