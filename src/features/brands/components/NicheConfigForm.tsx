@@ -90,6 +90,32 @@ function inferGeneralFieldsFromBrief(contentBrief: string): { topicCategories: s
   return { topicCategories, targetAudience }
 }
 
+function resolveReelCtaTopic(values: NicheConfig): string {
+  const explicitTopic = values.carousel_cta_topic?.trim()
+  if (explicitTopic) return explicitTopic
+
+  const keywordTopic = values.topic_keywords?.find((k) => k?.trim())?.trim()
+  if (keywordTopic) return keywordTopic
+
+  const firstNicheWord = values.niche_name?.trim().split(/\s+/)[0]?.toLowerCase()
+  if (firstNicheWord) return firstNicheWord
+
+  return 'this topic'
+}
+
+function buildSanitizedConfigPayload(values: NicheConfig): NicheConfig {
+  const topic = resolveReelCtaTopic(values)
+  const sanitizedCtas = (values.cta_options || []).map((opt) => ({
+    ...opt,
+    text: (opt.text || '').replace(/\{cta_topic\}/g, topic),
+  }))
+
+  return {
+    ...values,
+    cta_options: sanitizedCtas,
+  }
+}
+
 // Preload fonts needed by Konva canvas components via Google Fonts CSS API
 function useFontPreload() {
   const [loaded, setLoaded] = useState(false)
@@ -356,7 +382,9 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
   const handleSave = async () => {
     try {
-      await updateMutation.mutateAsync({ ...values })
+      const payload = buildSanitizedConfigPayload(values)
+      await updateMutation.mutateAsync(payload)
+      setValues(payload)
       toast.success('Content DNA saved')
       setDirty(false)
     } catch {
@@ -367,7 +395,9 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   // Save immediately (used before AI generation and by onboarding saveNow)
   const flushSave = useCallback(async () => {
     if (dirty) {
-      await updateMutation.mutateAsync({ ...valuesRef.current })
+      const payload = buildSanitizedConfigPayload(valuesRef.current)
+      await updateMutation.mutateAsync(payload)
+      setValues(payload)
       setDirty(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -602,6 +632,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             <h4 className="text-sm font-medium text-gray-700 mb-1">💬 Reel CTAs & Captions</h4>
             <p className="text-xs text-gray-400 mb-4">
               These CTAs are used for <strong>reels only</strong>. The AI randomly picks one based on the weights you assign. Carousel post CTAs are configured separately in the Carousel Posts section.
+              Placeholders like <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> are auto-resolved on save based on your niche/topic keywords.
             </p>
             <div className="space-y-4">
               <div>

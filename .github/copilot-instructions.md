@@ -81,11 +81,14 @@ railway logs               # View logs
 
 ## Git Workflow
 
-> **MANDATORY — NO EXCEPTIONS:** After EVERY code change, immediately:
+> **MANDATORY — NO EXCEPTIONS:** After EVERY coding session, commit and push ONLY files changed by that session.
 
-1. `git add -A`
-2. `git commit -m "<descriptive message>"`
-3. `git push`
+1. Stage only session files: `git add <file1> <file2> ...`
+2. Verify staged scope: `git diff --name-only --cached`
+3. Commit: `git commit -m "<descriptive message>"`
+4. Push: `git push`
+
+Never use `git add -A` by default when unrelated changes are present.
 
 ## Self-Healing Documentation Pipeline
 

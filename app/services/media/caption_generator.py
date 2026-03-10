@@ -10,7 +10,7 @@ from app.core.prompt_context import PromptContext
 
 class CaptionGenerator:
     """Service for generating Instagram captions using DeepSeek AI."""
-    
+
     @staticmethod
     def _get_brand_handle(brand_name: str) -> str:
         """Look up a brand's Instagram handle from the database."""
@@ -27,44 +27,44 @@ class CaptionGenerator:
         except Exception:
             pass
         return f"@{brand_name}" if brand_name else "@brand"
-    
+
     # CTA options: empty defaults — configured dynamically via NicheConfig
     CTA_OPTIONS = {}
-    
+
     # Hashtags: empty default — configured dynamically via NicheConfig
     HASHTAGS = ""
-    
+
     def __init__(self):
         """Initialize the caption generator with DeepSeek API."""
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
         self.base_url = "https://api.deepseek.com/v1"
-        
+
         if not self.api_key:
             print("⚠️ Warning: DEEPSEEK_API_KEY not found")
         else:
             print("✅ DeepSeek API key loaded")
-    
+
     def generate_first_paragraph(self, title: str, content_lines: List[str], ctx: PromptContext = None) -> str:
         """
         Generate the first paragraph of the caption using AI.
-        
+
         Args:
             title: The post title
             content_lines: List of content bullet points
             ctx: Optional PromptContext for niche-aware generation
-            
+
         Returns:
             Generated first paragraph text
         """
         if ctx is None:
             ctx = PromptContext()
-        
+
         if not self.api_key:
             return self._fallback_paragraph(title, ctx)
-        
+
         # Build context from content lines
         content_summary = "\n".join([f"- {line}" for line in content_lines[:5]])
-        
+
         # Add randomization to ensure different openings
         import random
         niche_label = ctx.niche_name.lower()
@@ -72,7 +72,7 @@ class CaptionGenerator:
 
         opening_styles = [
             "Start with a surprising statistic or fact",
-            "Begin with a common misconception to debunk", 
+            "Begin with a common misconception to debunk",
             "Open with how this impacts daily life",
             f"Start by describing the core mechanism or process in {niche_label} terms",
             "Begin with why most people overlook this",
@@ -80,7 +80,7 @@ class CaptionGenerator:
         ]
         style_hint = random.choice(opening_styles)
 
-        prompt = f"""You are writing the first paragraph for an Instagram {niche_label} post. 
+        prompt = f"""You are writing the first paragraph for an Instagram {niche_label} post.
 The post is about: {title}
 
 Key points covered:
@@ -122,7 +122,7 @@ Just write the paragraph text, nothing else."""
                 },
                 timeout=30
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 paragraph = result["choices"][0]["message"]["content"].strip()
@@ -132,18 +132,18 @@ Just write the paragraph text, nothing else."""
             else:
                 print(f"⚠️ DeepSeek API error: {response.status_code} - {response.text}")
                 return self._fallback_paragraph(title, ctx)
-                
+
         except Exception as e:
             print(f"⚠️ Caption generation error: {e}")
             return self._fallback_paragraph(title, ctx)
-    
+
     def _fallback_paragraph(self, title: str, ctx: PromptContext = None) -> str:
         """Generate a fallback paragraph if AI fails."""
         if ctx is None:
             ctx = PromptContext()
         niche = ctx.niche_name.lower() if ctx.niche_name else "this topic"
         return f"Understanding {title.lower()} is essential for long-term {niche}. Small, consistent choices can compound over time to create meaningful improvements. By paying attention to these foundational elements, you give yourself the support needed to thrive."
-    
+
     def generate_caption(
         self,
         brand_name: str,
@@ -154,52 +154,52 @@ Just write the paragraph text, nothing else."""
     ) -> str:
         """
         Generate a complete caption for a brand.
-        
+
         Args:
             brand_name: Brand identifier (gymcollege, healthycollege, etc.)
             title: Post title
             content_lines: List of content bullet points
             cta_type: CTA option (sleep_lean, follow_tips, workout_plan)
             ctx: Optional PromptContext for niche-aware generation
-            
+
         Returns:
             Complete formatted caption
         """
         if ctx is None:
             ctx = PromptContext()
-        
+
         # Get brand handle dynamically
         handle = self._get_brand_handle(brand_name)
-        
+
         # Generate AI first paragraph
         first_paragraph = self.generate_first_paragraph(title, content_lines, ctx=ctx)
-        
+
         # Build follow section — only include if configured
         if ctx.follow_section_text:
             follow_section = f"""👉🏼 Follow {handle} for daily, {ctx.follow_section_text}"""
         else:
             follow_section = f"""👉🏼 Follow {handle} for more content like this."""
-        
+
         # Build save section — only include if configured
         if ctx.save_section_text:
             save_section = f"""🩵 This post is designed to be saved and revisited. Share it with friends and family who are actively working on {ctx.save_section_text}."""
         else:
             save_section = f"""🩵 Save this post and share it with someone who needs to see this."""
-        
+
         # Get CTA — if cta_type is explicit text use it; otherwise weighted random from ctx
         if cta_type and cta_type not in ('follow_tips', 'sleep_lean', 'workout_plan', None):
             cta_text = cta_type
         else:
             from app.core.cta import get_cta_line
-            cta_text = get_cta_line(ctx)
+            cta_text = get_cta_line(ctx, brand_handle=handle)
         cta_section = f"💬 {cta_text}" if cta_text else ""
-        
+
         # Disclaimer from PromptContext — only include if configured
         disclaimer = f"🌱 {ctx.disclaimer_text}" if ctx.disclaimer_text else ""
-        
+
         # Hashtags: prefer ctx.hashtag_string, fall back to hardcoded HASHTAGS
         hashtags = ctx.hashtag_string if ctx.hashtags else self.HASHTAGS
-        
+
         # Combine all sections
         caption = f"""{first_paragraph}
 
@@ -212,9 +212,9 @@ Just write the paragraph text, nothing else."""
 {disclaimer}
 
 {hashtags}"""
-        
+
         return caption
-    
+
     def generate_all_brand_captions(
         self,
         title: str,
@@ -224,21 +224,21 @@ Just write the paragraph text, nothing else."""
     ) -> Dict[str, str]:
         """
         Generate unique captions for all brands with different AI-generated first paragraphs.
-        
+
         Args:
             title: Post title
             content_lines: List of content bullet points
             cta_type: CTA option for all brands
             ctx: Optional PromptContext for niche-aware generation
-            
+
         Returns:
             Dictionary of brand_name -> caption
         """
         if ctx is None:
             ctx = PromptContext()
-        
+
         captions = {}
-        
+
         # Load brand list dynamically from DB
         try:
             from app.db_connection import get_db_session
@@ -248,7 +248,7 @@ Just write the paragraph text, nothing else."""
                 brand_names = [b.brand_name for b in brands if b.brand_name]
         except Exception:
             brand_names = []
-        
+
         for brand_name in brand_names:
             captions[brand_name] = self.generate_caption(
                 brand_name=brand_name,
@@ -257,24 +257,24 @@ Just write the paragraph text, nothing else."""
                 cta_type=cta_type,
                 ctx=ctx
             )
-        
+
         return captions
-    
+
     def generate_youtube_title(self, title: str, content_lines: List[str], ctx: PromptContext = None) -> str:
         """
         Generate an attractive, searchable YouTube Shorts title.
-        
+
         YouTube titles should:
         - Be max 100 characters (YouTube truncates at ~70 visible)
         - Be searchable (include relevant keywords)
         - Be clickable (create curiosity)
         - NOT be in ALL CAPS (only the reel overlay is)
-        
+
         Args:
             title: The original reel title (often ALL CAPS)
             content_lines: Content points for context
             ctx: Optional PromptContext for niche-aware generation
-            
+
         Returns:
             YouTube-optimized title string
         """
@@ -282,10 +282,10 @@ Just write the paragraph text, nothing else."""
             ctx = PromptContext()
         if not self.api_key:
             return self._fallback_youtube_title(title)
-        
+
         # Build context from content lines
         content_summary = "\n".join([f"- {line}" for line in content_lines[:3]])
-        
+
         niche_label = ctx.niche_name.lower()
 
         # Build niche-appropriate examples
@@ -351,7 +351,7 @@ Respond with ONLY the title, nothing else."""
                 },
                 timeout=30
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 yt_title = result["choices"][0]["message"]["content"].strip()
@@ -364,11 +364,11 @@ Respond with ONLY the title, nothing else."""
             else:
                 print(f"⚠️ DeepSeek API error: {response.status_code} - {response.text}")
                 return self._fallback_youtube_title(title)
-                
+
         except Exception as e:
             print(f"⚠️ YouTube title generation error: {e}")
             return self._fallback_youtube_title(title)
-    
+
     def _fallback_youtube_title(self, title: str) -> str:
         """Generate a fallback YouTube title from the reel title."""
         # Convert ALL CAPS to Title Case
@@ -382,9 +382,9 @@ Respond with ONLY the title, nothing else."""
             else:
                 result.append(word)
         title_case = ' '.join(result)
-        
+
         # Truncate if needed
         if len(title_case) > 100:
             title_case = title_case[:97] + "..."
-        
+
         return title_case

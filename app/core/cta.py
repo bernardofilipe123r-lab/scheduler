@@ -23,16 +23,24 @@ def _resolve_cta_topic(ctx: Optional[PromptContext]) -> str:
     return "this topic"
 
 
-def _sanitize_cta_placeholders(text: str, ctx: Optional[PromptContext]) -> str:
+def _sanitize_cta_placeholders(
+    text: str,
+    ctx: Optional[PromptContext],
+    brand_handle: Optional[str] = None,
+) -> str:
     """Resolve known CTA placeholders to avoid leaking template tokens to users."""
     resolved = text.replace("{cta_topic}", _resolve_cta_topic(ctx))
-    # Reel CTA generation does not have brand handle context, so use neutral fallback.
-    resolved = resolved.replace("@{brandhandle}", "our page")
-    resolved = resolved.replace("@{{brandhandle}}", "our page")
+    handle = (brand_handle or "").strip()
+    if handle and not handle.startswith("@"):
+        handle = f"@{handle}"
+    if not handle:
+        handle = "our page"
+    resolved = resolved.replace("@{brandhandle}", handle)
+    resolved = resolved.replace("@{{brandhandle}}", handle)
     return resolved
 
 
-def get_cta_line(ctx: Optional[PromptContext] = None) -> str:
+def get_cta_line(ctx: Optional[PromptContext] = None, brand_handle: Optional[str] = None) -> str:
     """Pick a CTA line using weighted random selection from ctx.cta_options.
 
     Each option is {text: str, weight: number} where weight is a percentage.
@@ -49,7 +57,7 @@ def get_cta_line(ctx: Optional[PromptContext] = None) -> str:
     weights = [opt["weight"] for opt in options]
 
     chosen = random.choices(texts, weights=weights, k=1)[0]
-    return _sanitize_cta_placeholders(chosen, ctx)
+    return _sanitize_cta_placeholders(chosen, ctx, brand_handle=brand_handle)
 
 
 # Default carousel CTA templates (used when user hasn't configured any)

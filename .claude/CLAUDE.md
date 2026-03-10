@@ -129,9 +129,12 @@ When adding/removing a social platform, update all three pages:
 
 ## Git Workflow
 
-1. Stage changes: `git add -A`
-2. Commit: `git commit -m "descriptive message"`
-3. Push: `git push`
+1. Stage only files changed in the current session: `git add <file1> <file2> ...`
+2. Verify staged scope: `git diff --name-only --cached`
+3. Commit: `git commit -m "descriptive message"`
+4. Push: `git push`
+
+Do not use `git add -A` by default when unrelated workspace changes exist.
 
 ## Full Autonomy — Execute Everything
 
