@@ -274,7 +274,7 @@ export function AppLayout() {
         </NavLink>
 
         {/* Nav Items */}
-        <nav className="flex-1 py-3 px-2 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">
+        <nav className="flex-1 py-3 px-2 flex flex-col gap-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
             <NavLink
               key={to}
@@ -283,7 +283,7 @@ export function AppLayout() {
               onMouseEnter={() => prefetchRoute(to)}
               onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors relative ${
+                `group flex items-center gap-3 px-3 py-1.5 rounded-lg font-medium transition-colors relative ${
                   isActive
                     ? 'bg-white/10 text-white'
                     : 'text-stone-400 hover:bg-white/[0.07] hover:text-stone-100'
@@ -316,7 +316,7 @@ export function AppLayout() {
               onMouseEnter={() => prefetchRoute(to)}
               onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
-                `group flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors relative ${
+                `group flex items-center gap-3 px-3 py-1.5 rounded-lg font-medium transition-colors relative ${
                   isActive
                     ? 'bg-white/10 text-white'
                     : 'text-stone-400 hover:bg-white/[0.07] hover:text-stone-100'
@@ -338,7 +338,7 @@ export function AppLayout() {
         <div className="p-2 flex flex-col gap-1">
           <button
             onClick={toggleExpanded}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-stone-500 hover:bg-white/[0.07] hover:text-stone-200 transition-colors w-full"
+            className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-stone-500 hover:bg-white/[0.07] hover:text-stone-200 transition-colors w-full"
           >
             {expanded ? <ChevronLeft className="w-5 h-5 shrink-0" /> : <ChevronRight className="w-5 h-5 shrink-0" />}
             {expanded && <span className="text-sm font-medium whitespace-nowrap">Collapse</span>}
@@ -348,7 +348,7 @@ export function AppLayout() {
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full ${
+              className={`flex items-center gap-3 px-3 py-1.5 rounded-lg transition-colors w-full ${
                 userMenuOpen ? 'bg-white/10 text-white' : 'text-stone-400 hover:bg-white/[0.07]'
               }`}
             >
