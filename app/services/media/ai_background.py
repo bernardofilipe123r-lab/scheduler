@@ -45,7 +45,7 @@ MIN_REQUEST_INTERVAL = 0.5  # Minimum seconds between requests
 
 class AIBackgroundGenerator:
     """Service for generating AI backgrounds for dark mode using deAPI."""
-    
+
     def __init__(self):
         """Initialize the AI background generator with deAPI client."""
         api_key = os.getenv("DEAPI_API_KEY")
@@ -54,7 +54,7 @@ class AIBackgroundGenerator:
         self.api_key = api_key
         self.base_url = "https://api.deapi.ai/api/v1/client"
         self.last_deapi_prompt = None  # Stores the actual prompt sent to deAPI
-    
+
     def _acquire_queue_position(self):
         """Acquire the semaphore to make a DEAPI request. Times out after QUEUE_TIMEOUT seconds."""
         acquired = _deapi_semaphore.acquire(timeout=QUEUE_TIMEOUT)
@@ -67,34 +67,34 @@ class AIBackgroundGenerator:
                 pass  # Already released
             _deapi_semaphore.acquire(timeout=10)
         return 0  # Position no longer tracked
-    
+
     def _release_queue_position(self):
         """Release the semaphore so the next request can proceed."""
         try:
             _deapi_semaphore.release()
         except ValueError:
             pass  # Already released — safe to ignore
-    
+
     def _request_with_retry(self, method: str, url: str, headers: dict, **kwargs) -> requests.Response:
         """
         Make an HTTP request with retry logic for 429 errors.
-        
+
         Args:
             method: HTTP method ('get' or 'post')
             url: Request URL
             headers: Request headers
             **kwargs: Additional arguments for requests
-            
+
         Returns:
             Response object
-            
+
         Raises:
             RuntimeError: If all retries exhausted
         """
         global _deapi_request_count, _deapi_last_request_time
-        
+
         retry_delay = INITIAL_RETRY_DELAY
-        
+
         for attempt in range(MAX_RETRIES + 1):
             try:
                 # Rate limiting: ensure minimum interval between requests
@@ -105,33 +105,33 @@ class AIBackgroundGenerator:
                         if elapsed < MIN_REQUEST_INTERVAL:
                             sleep_time = MIN_REQUEST_INTERVAL - elapsed
                             time.sleep(sleep_time)
-                    
+
                     _deapi_request_count += 1
                     _deapi_last_request_time = time.time()
                     request_num = _deapi_request_count
-                
+
                 # Log request details
                 endpoint = url.split("/")[-1] if "/" in url else url
                 print(f"🌐 DEAPI Request #{request_num}: {method.upper()} .../{endpoint}", flush=True)
-                
+
                 if method.lower() == 'get':
                     response = requests.get(url, headers=headers, **kwargs)
                 else:
                     response = requests.post(url, headers=headers, **kwargs)
-                
+
                 print(f"   Response: {response.status_code}", flush=True)
-                
+
                 # Check for rate limit
                 if response.status_code == 429:
                     # Log the full response for debugging
                     print(f"   ❌ 429 Response body: {response.text[:500]}", flush=True)
                     print(f"   ❌ 429 Response headers: {dict(response.headers)}", flush=True)
-                    
+
                     # Check if it's a daily limit (not recoverable by retry)
                     rate_limit_type = response.headers.get('X-RateLimit-Type', '')
                     daily_remaining = response.headers.get('X-RateLimit-Daily-Remaining', '')
                     retry_after = response.headers.get('Retry-After', '')
-                    
+
                     if rate_limit_type == 'daily' or daily_remaining == '0':
                         hours_until_reset = int(retry_after) / 3600 if retry_after.isdigit() else 12
                         print(f"❌ DAILY LIMIT HIT — resets in ~{hours_until_reset:.1f}h", flush=True)
@@ -140,20 +140,20 @@ class AIBackgroundGenerator:
                             f"Resets in ~{hours_until_reset:.1f} hours. "
                             f"Image generation will resume automatically."
                         )
-                    
+
                     if attempt < MAX_RETRIES:
                         # Use exponential backoff, ignore Retry-After header (often unreliable)
                         wait_time = retry_delay
-                        
+
                         print(f"⚠️  Rate limited (429). Waiting {wait_time}s before retry {attempt + 1}/{MAX_RETRIES}...")
                         time.sleep(wait_time)
-                        
+
                         # Exponential backoff for next attempt (5s -> 10s -> 20s -> 40s -> 60s max)
                         retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
                         continue
                     else:
                         raise RuntimeError(f"AI Image Generation is temporarily overloaded. Will retry automatically.")
-                
+
                 # For other errors, log full body and raise
                 if response.status_code >= 400:
                     print(f"❌ HTTP {response.status_code} Error!", flush=True)
@@ -161,7 +161,7 @@ class AIBackgroundGenerator:
                     print(f"❌ Response headers: {dict(response.headers)}", flush=True)
                 response.raise_for_status()
                 return response
-                
+
             except requests.exceptions.HTTPError as e:
                 if e.response is not None:
                     print(f"❌ HTTPError {e.response.status_code}: {e.response.text[:1000]}", flush=True)
@@ -172,7 +172,7 @@ class AIBackgroundGenerator:
                             retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
                             continue
                 raise
-        
+
         raise RuntimeError(f"AI Image Generation request failed after {MAX_RETRIES} retries")
 
     def generate_background(self, brand_name: str, user_prompt: str = None, progress_callback=None, content_context: str = None, model_override: str = None, ctx=None) -> Image.Image:
