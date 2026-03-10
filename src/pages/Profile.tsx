@@ -2,15 +2,13 @@
  * Profile Page — view/edit profile info, change password & email via Supabase.
  */
 import { useState, useEffect } from 'react'
-import { User, Mail, KeyRound, Loader2, ArrowLeft, Pencil, Send, ShieldCheck, Camera } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { User, Mail, KeyRound, Loader2, Pencil, Send, ShieldCheck, Camera } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/features/auth'
 import { buildAppUrl, supabase } from '@/shared/api/supabase'
 
 export function ProfilePage() {
   const { user, refreshUser } = useAuth()
-  const navigate = useNavigate()
 
   // Display name editing
   const [displayName, setDisplayName] = useState('')
@@ -167,12 +165,6 @@ export function ProfilePage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-500" />
-          </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               {avatarUrl ? (
