@@ -25,6 +25,7 @@ interface BackendJob {
   music_track_id?: string | null
   music_source?: string | null
   platforms?: string[]
+  content_count?: number
 }
 
 interface JobsListResponse {
@@ -60,6 +61,7 @@ export interface JobCreateRequest {
   image_model?: string  // 'Flux1schnell' or 'ZImageTurbo_INT8'
   music_track_id?: string | null  // specific track or null for auto
   music_source?: string | null  // 'none', 'trending_random', 'trending_pick'
+  content_count?: number  // 1-3, number of content items per brand
 }
 
 // API functions

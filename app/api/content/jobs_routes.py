@@ -35,6 +35,7 @@ class JobCreateRequest(BaseModel):
     image_model: Optional[str] = None  # AI image model override ("Flux1schnell" or "ZImageTurbo_INT8")
     music_track_id: Optional[str] = None  # Specific music track ID (trending_music.id or user_music.id)
     music_source: Optional[str] = None  # 'none', 'trending_random', 'trending_pick'
+    content_count: int = 1  # Number of content items per brand (1-3)
 
 
 class JobUpdateRequest(BaseModel):
@@ -144,6 +145,7 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
                 image_model=request.image_model,
                 music_track_id=request.music_track_id,
                 music_source=request.music_source,
+                content_count=request.content_count,
             )
             
             job_id = job.job_id
@@ -492,7 +494,12 @@ async def retry_job(
 
             outputs = job.brand_outputs or {}
             brands = job.brands or []
-            incomplete = [b for b in brands if outputs.get(b, {}).get("status") != "completed"]
+            def _brand_complete(b):
+                data = outputs.get(b, {})
+                if isinstance(data, list):
+                    return all(item.get("status") == "completed" for item in data if isinstance(item, dict))
+                return data.get("status") == "completed" if isinstance(data, dict) else False
+            incomplete = [b for b in brands if not _brand_complete(b)]
 
             if not incomplete:
                 manager.update_job_status(job_id, "completed", "All brands already completed", 100)
@@ -538,9 +545,16 @@ async def list_jobs(
             reel_ids = []
             for job in jobs:
                 for output in (job.brand_outputs or {}).values():
-                    rid = output.get("reel_id")
-                    if rid:
-                        reel_ids.append(rid)
+                    # Handle both dict (single) and list (multi-content) formats
+                    if isinstance(output, list):
+                        for item in output:
+                            rid = item.get("reel_id") if isinstance(item, dict) else None
+                            if rid:
+                                reel_ids.append(rid)
+                    elif isinstance(output, dict):
+                        rid = output.get("reel_id")
+                        if rid:
+                            reel_ids.append(rid)
 
             published_map: dict[str, str] = {}  # reel_id -> status
             if reel_ids:
@@ -556,11 +570,21 @@ async def list_jobs(
             for job in jobs:
                 d = job.to_dict()
                 for brand, output in d.get("brand_outputs", {}).items():
-                    rid = output.get("reel_id")
-                    if rid and rid in published_map:
-                        sr_status = published_map[rid]
-                        if sr_status in ("published", "partial"):
-                            output["status"] = "published"
+                    # Handle both dict (single) and list (multi-content) formats
+                    if isinstance(output, list):
+                        for item in output:
+                            if isinstance(item, dict):
+                                rid = item.get("reel_id")
+                                if rid and rid in published_map:
+                                    sr_status = published_map[rid]
+                                    if sr_status in ("published", "partial"):
+                                        item["status"] = "published"
+                    elif isinstance(output, dict):
+                        rid = output.get("reel_id")
+                        if rid and rid in published_map:
+                            sr_status = published_map[rid]
+                            if sr_status in ("published", "partial"):
+                                output["status"] = "published"
                 results.append(d)
 
             return {
@@ -600,9 +624,12 @@ async def delete_jobs_by_status(job_status: str = "completed", user: dict = Depe
             # Delete associated scheduled reels by reel_id
             brand_outputs = job.brand_outputs or {}
             for brand, output in brand_outputs.items():
-                reel_id = output.get("reel_id")
-                if reel_id:
-                    db.query(ScheduledReel).filter(ScheduledReel.reel_id == reel_id).delete()
+                # Handle both dict and list formats
+                items = output if isinstance(output, list) else [output] if isinstance(output, dict) else []
+                for item in items:
+                    reel_id = item.get("reel_id") if isinstance(item, dict) else None
+                    if reel_id:
+                        db.query(ScheduledReel).filter(ScheduledReel.reel_id == reel_id).delete()
             # Also delete any scheduled reels linked via extra_data->job_id
             db.query(ScheduledReel).filter(
                 type_coerce(ScheduledReel.extra_data, JSONB)["job_id"].astext == job.job_id
@@ -649,11 +676,13 @@ async def delete_jobs_by_ids(request: BulkDeleteByIdsRequest, user: dict = Depen
                     # Delete associated scheduled reels by reel_id
                     brand_outputs = job.brand_outputs or {}
                     for brand, output in brand_outputs.items():
-                        reel_id = output.get("reel_id") if isinstance(output, dict) else None
-                        if reel_id:
-                            db.query(ScheduledReel).filter(
-                                ScheduledReel.reel_id == reel_id
-                            ).delete(synchronize_session=False)
+                        items = output if isinstance(output, list) else [output] if isinstance(output, dict) else []
+                        for item in items:
+                            reel_id = item.get("reel_id") if isinstance(item, dict) else None
+                            if reel_id:
+                                db.query(ScheduledReel).filter(
+                                    ScheduledReel.reel_id == reel_id
+                                ).delete(synchronize_session=False)
 
                     # Also delete any scheduled reels linked via extra_data->job_id
                     db.query(ScheduledReel).filter(
@@ -709,11 +738,13 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
             # Delete associated scheduled reels by reel_id
             brand_outputs = job.brand_outputs or {}
             for brand, output in brand_outputs.items():
-                reel_id = output.get("reel_id") if isinstance(output, dict) else None
-                if reel_id:
-                    db.query(ScheduledReel).filter(
-                        ScheduledReel.reel_id == reel_id
-                    ).delete(synchronize_session=False)
+                items = output if isinstance(output, list) else [output] if isinstance(output, dict) else []
+                for item in items:
+                    reel_id = item.get("reel_id") if isinstance(item, dict) else None
+                    if reel_id:
+                        db.query(ScheduledReel).filter(
+                            ScheduledReel.reel_id == reel_id
+                        ).delete(synchronize_session=False)
 
             # Also delete any scheduled reels linked via extra_data->job_id
             db.query(ScheduledReel).filter(
@@ -1071,7 +1102,12 @@ async def change_job_music(
             brands_to_regen = []
             for brand in job.brands:
                 output = (job.brand_outputs or {}).get(brand, {})
-                if output.get("status") in ("completed", "scheduled"):
+                # Check status for both dict and list formats
+                if isinstance(output, list):
+                    has_completed = any(item.get("status") in ("completed", "scheduled") for item in output if isinstance(item, dict))
+                else:
+                    has_completed = output.get("status") in ("completed", "scheduled") if isinstance(output, dict) else False
+                if has_completed:
                     manager.update_brand_output(job_id, brand, {"status": "queued"})
                     brands_to_regen.append(brand)
 

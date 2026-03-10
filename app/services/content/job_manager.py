@@ -50,18 +50,39 @@ class JobManager:
         music_source: Optional[str] = None,
         content_format: Optional[str] = None,
         format_b_data: Optional[dict] = None,
+        content_count: int = 1,
     ) -> GenerationJob:
-        """Create a new generation job."""
+        """Create a new generation job.
+
+        Args:
+            content_count: Number of content items per brand (1-3). When >1,
+                brand_outputs values are arrays of pending dicts.
+        """
         job_id = generate_job_id() if created_by != "toby" else generate_toby_job_id()
-        
+
         # Ensure unique job_id
         while self.db.query(GenerationJob).filter_by(job_id=job_id).first():
             job_id = generate_job_id()
-        
+
         # Default to all platforms if not specified
         if platforms is None:
             platforms = list(LEGACY_DEFAULT_PLATFORMS)
-        
+
+        # Clamp content_count to 1-3
+        content_count = max(1, min(3, content_count))
+
+        # Initialize brand_outputs: array for multi-content, dict for single
+        if content_count > 1:
+            brand_outputs = {
+                brand: [
+                    {"status": "pending", "content_index": i}
+                    for i in range(content_count)
+                ]
+                for brand in brands
+            }
+        else:
+            brand_outputs = {brand: {"status": "pending"} for brand in brands}
+
         job = GenerationJob(
             job_id=job_id,
             user_id=user_id,
@@ -79,14 +100,15 @@ class JobManager:
             music_source=music_source or "none",
             content_format=content_format or "format_a",
             format_b_data=format_b_data,
+            content_count=content_count,
             status="pending",
-            brand_outputs={brand: {"status": "pending"} for brand in brands}
+            brand_outputs=brand_outputs,
         )
-        
+
         self.db.add(job)
         self.db.commit()
         self.db.refresh(job)
-        
+
         return job
     
     def get_job(self, job_id: str, user_id: str | None = None) -> Optional[GenerationJob]:
@@ -152,41 +174,60 @@ class JobManager:
         self,
         job_id: str,
         brand: str,
-        output_data: Dict[str, Any]
+        output_data: Dict[str, Any],
+        content_index: Optional[int] = None,
     ) -> Optional[GenerationJob]:
-        """Update output data for a specific brand."""
+        """Update output data for a specific brand.
+
+        Args:
+            content_index: For multi-content jobs (content_count > 1), the index
+                of the content item to update within the brand's array. When None
+                and brand_outputs[brand] is a list, updates ALL items in the array.
+                For single-content jobs (dict), this parameter is ignored.
+        """
         import sys
         from sqlalchemy.orm.attributes import flag_modified
-        
+
         print(f"\n📝 update_brand_output called:", flush=True)
-        print(f"   job_id: {job_id}", flush=True)
-        print(f"   brand: {brand}", flush=True)
+        print(f"   job_id: {job_id}, brand: {brand}, content_index: {content_index}", flush=True)
         print(f"   output_data: {output_data}", flush=True)
         sys.stdout.flush()
-        
+
         job = self.get_job(job_id)
         if not job:
             print(f"   ❌ Job not found!", flush=True)
             return None
-        
-        print(f"   Current brand_outputs: {job.brand_outputs}", flush=True)
-        
+
         # Create a new dict to ensure SQLAlchemy detects the change
         brand_outputs = dict(job.brand_outputs or {})
-        brand_outputs[brand] = {**brand_outputs.get(brand, {}), **output_data}
+        existing = brand_outputs.get(brand, {})
+
+        if isinstance(existing, list):
+            # Multi-content: brand_outputs[brand] is an array of dicts
+            if content_index is not None:
+                # Update a specific content item
+                if 0 <= content_index < len(existing):
+                    existing[content_index] = {**existing[content_index], **output_data}
+                else:
+                    print(f"   ⚠️ content_index {content_index} out of range (len={len(existing)})", flush=True)
+            else:
+                # No index specified — apply update to ALL items (e.g. status changes)
+                for item in existing:
+                    item.update(output_data)
+            brand_outputs[brand] = existing
+        else:
+            # Single-content: brand_outputs[brand] is a dict (legacy / content_count=1)
+            brand_outputs[brand] = {**existing, **output_data}
+
         job.brand_outputs = brand_outputs
-        
+
         # CRITICAL: Flag the column as modified for SQLAlchemy to commit the change
         flag_modified(job, "brand_outputs")
-        
-        print(f"   Updated brand_outputs: {job.brand_outputs}", flush=True)
-        print(f"   Committing to database (flag_modified applied)...", flush=True)
-        sys.stdout.flush()
-        
+
         self.db.commit()
         self.db.refresh(job)
-        
-        print(f"   ✓ Database committed. brand_outputs after commit: {job.brand_outputs}", flush=True)
+
+        print(f"   ✓ Database committed.", flush=True)
         sys.stdout.flush()
         return job
     
@@ -239,11 +280,8 @@ class JobManager:
                 return None
             return (parts[0], parts[1])
         
-        # Clean up files for each brand
-        for brand, output in (job.brand_outputs or {}).items():
-            if not isinstance(output, dict):
-                continue
-            # Collect all URL fields that might contain Supabase URLs
+        def _cleanup_single_output(output: dict):
+            """Delete Supabase files referenced by a single brand output dict."""
             url_keys = ["video_url", "thumbnail_url", "yt_thumbnail_url",
                         "video_path", "thumbnail_path", "yt_thumbnail_path",
                         "reel_path"]
@@ -256,7 +294,6 @@ class JobManager:
                         delete_file(bucket, path)
                     except Exception:
                         pass
-            # Clean up carousel slide images
             for url in (output.get("carousel_paths") or []):
                 parsed = _parse_supabase_url(url)
                 if parsed:
@@ -265,6 +302,15 @@ class JobManager:
                         delete_file(bucket, path)
                     except Exception:
                         pass
+
+        # Clean up files for each brand (supports both dict and list formats)
+        for brand, output in (job.brand_outputs or {}).items():
+            if isinstance(output, list):
+                for item in output:
+                    if isinstance(item, dict):
+                        _cleanup_single_output(item)
+            elif isinstance(output, dict):
+                _cleanup_single_output(output)
         
         return True
     

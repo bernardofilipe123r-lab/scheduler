@@ -64,6 +64,7 @@ export interface Job {
   music_source?: string | null
   content_format?: 'format_a' | 'format_b'
   format_b_data?: Record<string, unknown>
+  content_count?: number
 }
 
 // Scheduled post entity
