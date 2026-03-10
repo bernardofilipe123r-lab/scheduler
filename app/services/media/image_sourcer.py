@@ -1,9 +1,11 @@
 """
-Image Sourcer — generates images for Format B reels via DeAPI.
+Image Sourcer — generates images for Format B reels.
 
-All images are AI-generated using DeAPI (Flux1schnell model).
+Primary: Freepik Classic Fast (when API key available and daily usage < 100%).
+Fallback: DeAPI (Flux1schnell model).
 The AI prompts come from DeepSeek via StoryPolisher.
 """
+import base64
 import logging
 import os
 import random
@@ -31,29 +33,67 @@ MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 5
 MAX_RETRY_DELAY = 60
 
+# Freepik daily limit (Classic Fast plan)
+FREEPIK_DAILY_LIMIT = 10_000
+
 
 class ImageSourcer:
-    """Generates images via DeAPI for format-b reels."""
+    """Generates images for format-b reels. Freepik primary, DeAPI fallback."""
 
     def __init__(self, db=None):
         self.db = db
-        self._api_key = os.environ.get("DEAPI_API_KEY")
-        self._base_url = "https://api.deapi.ai/api/v1/client"
+        self._deapi_key = os.environ.get("DEAPI_API_KEY")
+        self._deapi_base_url = "https://api.deapi.ai/api/v1/client"
+        self._freepik_key = os.environ.get("FREEPIK_API_KEY")
+        self._freepik_base_url = "https://api.freepik.com/v1/ai/text-to-image"
+
+    def _is_freepik_available(self) -> bool:
+        """Check if Freepik API key is set and daily usage is under 100%."""
+        if not self._freepik_key:
+            return False
+        try:
+            from app.services.monitoring.api_usage_tracker import APIUsageTracker, API_LIMITS
+            if not self.db:
+                return True  # No DB session — optimistically allow
+            tracker = APIUsageTracker(self.db)
+            limit_info = API_LIMITS.get("freepik", {})
+            daily_limit = limit_info.get("daily", FREEPIK_DAILY_LIMIT)
+            from datetime import datetime, timezone
+            since = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
+            count = tracker._count_calls("freepik", since)
+            usage_pct = (count / daily_limit * 100) if daily_limit else 100
+            if usage_pct >= 100:
+                logger.info(f"[ImageSourcer] Freepik daily limit reached ({count}/{daily_limit}), falling back to DeAPI")
+                return False
+            return True
+        except Exception as e:
+            logger.warning(f"[ImageSourcer] Could not check Freepik usage: {e}")
+            return True  # Optimistic — try Freepik anyway
 
     def source_image(self, plan: ImagePlan) -> Optional[Path]:
         """
-        Generate a single image via DeAPI from the AI prompt.
+        Generate a single image from the AI prompt.
 
+        Tries Freepik first (if available), falls back to DeAPI.
         The plan.query contains the cinematic AI prompt from DeepSeek.
         Returns path to processed image (1080x1920) or None.
         """
-        if not self._api_key:
-            logger.error("[ImageSourcer] DEAPI_API_KEY not set")
+        use_freepik = self._is_freepik_available()
+
+        if use_freepik:
+            path = self._generate_via_freepik(plan.query)
+            if not path and plan.fallback_query:
+                path = self._generate_via_freepik(plan.fallback_query)
+            if path:
+                return self._process_image(path)
+            logger.warning("[ImageSourcer] Freepik failed, falling back to DeAPI")
+
+        # Fallback to DeAPI
+        if not self._deapi_key:
+            logger.error("[ImageSourcer] DEAPI_API_KEY not set and Freepik unavailable")
             return None
 
         path = self._generate_via_deapi(plan.query)
-
-        # Try fallback prompt if primary fails
         if not path and plan.fallback_query:
             path = self._generate_via_deapi(plan.fallback_query)
 
@@ -65,6 +105,87 @@ class ImageSourcer:
     def source_images_batch(self, plans: list[ImagePlan]) -> list[Optional[Path]]:
         """Generate multiple images, returning results in order."""
         return [self.source_image(plan) for plan in plans]
+
+    def _generate_via_freepik(self, prompt: str, size: str = "widescreen_16_9") -> Optional[Path]:
+        """Generate an image via Freepik Classic Fast API.
+
+        Args:
+            prompt: Text prompt for image generation.
+            size: Aspect ratio. Use 'widescreen_16_9' for content images (rectangular),
+                  'social_story_9_16' for vertical thumbnails.
+        """
+        try:
+            headers = {
+                "x-freepik-api-key": self._freepik_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+
+            payload = {
+                "prompt": prompt,
+                "num_images": 1,
+                "image": {"size": size},
+                "guidance_scale": 1,
+                "filter_nsfw": True,
+            }
+
+            logger.info(f"[ImageSourcer] Freepik generating image, size={size}")
+
+            response = requests.post(
+                self._freepik_base_url,
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+
+            if response.status_code == 429:
+                logger.warning("[ImageSourcer] Freepik rate limited (429)")
+                return None
+
+            if response.status_code == 401:
+                logger.error("[ImageSourcer] Freepik auth failed (401) — check API key")
+                return None
+
+            response.raise_for_status()
+            data = response.json()
+
+            images = data.get("data", [])
+            if not images:
+                logger.error("[ImageSourcer] Freepik returned no images")
+                return None
+
+            img_data = images[0]
+            if img_data.get("has_nsfw"):
+                logger.warning("[ImageSourcer] Freepik image flagged NSFW, skipping")
+                return None
+
+            # Decode base64 image
+            b64_str = img_data.get("base64")
+            if not b64_str:
+                logger.error("[ImageSourcer] Freepik returned no base64 data")
+                return None
+
+            img_bytes = base64.b64decode(b64_str)
+            path = Path(tempfile.mktemp(suffix=".png"))
+            path.write_bytes(img_bytes)
+
+            # Track usage
+            self._record_api_call("freepik", "text-to-image")
+            try:
+                from app.services.monitoring.cost_tracker import record_freepik_call
+                record_freepik_call()
+            except Exception:
+                pass
+
+            logger.info("[ImageSourcer] Freepik image generated successfully")
+            return path
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"[ImageSourcer] Freepik request error: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"[ImageSourcer] Freepik error: {e}")
+            return None
 
     def _generate_via_deapi(self, prompt: str) -> Optional[Path]:
         """Generate an image via DeAPI using Flux1schnell model in 16:9 format."""
@@ -79,7 +200,7 @@ class ImageSourcer:
 
         try:
             headers = {
-                "Authorization": f"Bearer {self._api_key}",
+                "Authorization": f"Bearer {self._deapi_key}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
@@ -103,7 +224,7 @@ class ImageSourcer:
             logger.info(f"[ImageSourcer] DeAPI generating {width}x{height}, seed={seed}")
 
             # Submit request with retry
-            response = self._request_with_retry("post", f"{self._base_url}/txt2img", headers, json=payload, timeout=120)
+            response = self._request_with_retry("post", f"{self._deapi_base_url}/txt2img", headers, json=payload, timeout=120)
             result = response.json()
             request_id = result.get("request_id") or result.get("data", {}).get("request_id")
 
@@ -120,8 +241,8 @@ class ImageSourcer:
 
                 status_resp = self._request_with_retry(
                     "get",
-                    f"{self._base_url}/request-status/{request_id}",
-                    {"Authorization": f"Bearer {self._api_key}"},
+                    f"{self._deapi_base_url}/request-status/{request_id}",
+                    {"Authorization": f"Bearer {self._deapi_key}"},
                     timeout=30,
                 )
                 data = status_resp.json().get("data", {})

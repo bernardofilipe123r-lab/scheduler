@@ -40,6 +40,9 @@ DEEPSEEK_OUTPUT_COST_PER_M = 0.28  # $0.28 per 1M output tokens
 # DeAPI pricing per image generation
 DEAPI_COST_PER_IMAGE = 0.02  # ~$0.02 per image (approximate)
 
+# Freepik pricing per image generation (Classic Fast plan: 500 EUR / 10k images)
+FREEPIK_COST_PER_IMAGE = 0.05  # ~€0.05 per image (500 EUR / 10,000 images)
+
 
 def _get_or_create_daily(db, user_id: str, target_date: date) -> UserCostDaily:
     """Get or create a daily cost record for a user."""
@@ -107,6 +110,22 @@ def record_deapi_call(user_id: Optional[str] = None) -> None:
             record.updated_at = datetime.now(timezone.utc)
     except Exception as e:
         print(f"⚠️ Cost tracking (deapi) failed: {e}", flush=True)
+
+
+def record_freepik_call(user_id: Optional[str] = None) -> None:
+    """Record a Freepik image generation call."""
+    uid = user_id or get_current_user_id()
+    if not uid:
+        return
+
+    try:
+        with get_db_session() as db:
+            record = _get_or_create_daily(db, uid, date.today())
+            record.freepik_calls = (getattr(record, 'freepik_calls', None) or 0) + 1
+            record.freepik_cost_usd = (getattr(record, 'freepik_cost_usd', None) or 0.0) + FREEPIK_COST_PER_IMAGE
+            record.updated_at = datetime.now(timezone.utc)
+    except Exception as e:
+        print(f"⚠️ Cost tracking (freepik) failed: {e}", flush=True)
 
 
 def record_content_generated(

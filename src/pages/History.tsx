@@ -1,10 +1,10 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { 
-  Search, 
-  Filter, 
-  Trash2, 
-  RefreshCw, 
+import {
+  Search,
+  Filter,
+  Trash2,
+  RefreshCw,
   Calendar,
   Loader2,
   AlertCircle,
@@ -34,9 +34,9 @@ export function HistoryPage() {
   const deleteByIds = useDeleteJobsByIds()
   const autoSchedule = useAutoScheduleReel()
   const updateBrandStatus = useUpdateBrandStatus()
-  
+
   const jobsArray = Array.isArray(jobs) ? jobs : []
-  
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
@@ -44,21 +44,21 @@ export function HistoryPage() {
   const [contentTypeFilter, setContentTypeFilter] = useState<'all' | 'reels' | 'posts'>('all')
   const [creatorFilter, setCreatorFilter] = useState<'all' | 'user' | 'toby'>('all')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
-  
+
   // Visual-only hidden job IDs (not persisted, not DB deletes)
   const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(new Set())
   const [isDeletingSection, setIsDeletingSection] = useState(false)
   const [isSchedulingAll, setIsSchedulingAll] = useState(false)
   const [schedulingJobId, setSchedulingJobId] = useState<string | null>(null)
-  
+
   const resetHidden = useCallback(() => {
     setHiddenJobIds(new Set())
   }, [])
-  
+
   // Delete confirmation
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null)
-  
+
   // Bulk delete confirmation
   const [bulkDeleteModal, setBulkDeleteModal] = useState<{
     label: string
@@ -66,7 +66,7 @@ export function HistoryPage() {
     isFiltered: boolean
     filterName: string
   } | null>(null)
-  
+
   // Categorize jobs based on their scheduling state
   const categorizedJobs = useMemo(() => {
     const toSchedule: Job[] = []    // Completed jobs with brands ready to schedule
@@ -74,18 +74,18 @@ export function HistoryPage() {
     const scheduled: Job[] = []      // Jobs with all brands scheduled (not yet published)
     const inProgress: Job[] = []     // Generating or pending jobs
     const other: Job[] = []          // Failed, cancelled, etc.
-    
+
     jobsArray.forEach(job => {
       const outputs = Object.values(job.brand_outputs || {})
       const totalBrands = job.brands?.length || 0
-      
+
       // Count different states
       const publishedCount = outputs.filter(o => o.status === 'published').length
       const scheduledCount = outputs.filter(o => o.status === 'scheduled').length
       const completedCount = outputs.filter(o => o.status === 'completed').length
       const pendingOrGenerating = outputs.filter(o => o.status === 'pending' || o.status === 'generating').length
       const scheduledOrPublished = scheduledCount + publishedCount
-      
+
       if (job.status === 'failed' || job.status === 'cancelled') {
         other.push(job)
       } else if (job.status === 'generating' || job.status === 'pending' || pendingOrGenerating > 0) {
@@ -103,24 +103,24 @@ export function HistoryPage() {
         other.push(job)
       }
     })
-    
+
     return { toSchedule, published, scheduled, inProgress, other }
   }, [jobsArray])
-  
+
   // Get job scheduling info
   const getSchedulingInfo = (job: Job) => {
     const outputs = Object.entries(job.brand_outputs || {}) as [BrandName, { status: string; scheduled_time?: string }][]
     const published = outputs.filter(([, o]) => o.status === 'published')
     const scheduled = outputs.filter(([, o]) => o.status === 'scheduled')
     const readyToSchedule = outputs.filter(([, o]) => o.status === 'completed')
-    
+
     return { published, scheduled, readyToSchedule, total: job.brands?.length || 0 }
   }
-  
+
   // Filter jobs based on view filter and search
   const filteredJobs = useMemo(() => {
     let baseJobs: Job[]
-    
+
     switch (viewFilter) {
       case 'to-schedule':
         baseJobs = categorizedJobs.toSchedule
@@ -140,7 +140,7 @@ export function HistoryPage() {
       default:
         baseJobs = jobsArray
     }
-    
+
     return baseJobs.filter(job => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
@@ -148,29 +148,29 @@ export function HistoryPage() {
         const idMatch = job.id.toString().includes(query)
         if (!titleMatch && !idMatch) return false
       }
-      
+
       if (variantFilter !== 'all' && job.variant !== variantFilter) return false
-      
+
       // Content type filter
       if (contentTypeFilter === 'posts' && job.variant !== 'post') return false
       if (contentTypeFilter === 'reels' && job.variant === 'post') return false
-      
+
       // Creator filter
       if (creatorFilter !== 'all') {
         const creator = job.created_by || 'user'
         if (creator !== creatorFilter) return false
       }
-      
+
       // Platform filter
       if (platformFilter !== 'all') {
         const jobPlatforms = job.platforms || []
         if (!jobPlatforms.includes(platformFilter)) return false
       }
-      
+
       return true
     })
   }, [jobsArray, categorizedJobs, viewFilter, searchQuery, variantFilter, contentTypeFilter, creatorFilter, platformFilter])
-  
+
   // Calculate job progress
   const getProgress = (job: Job) => {
     // For actively generating jobs, use the backend's real-time progress
@@ -187,7 +187,7 @@ export function HistoryPage() {
   // Handle delete
   const handleDelete = async () => {
     if (!jobToDelete) return
-    
+
     try {
       await deleteJob.mutateAsync(jobToDelete.id)
       toast.success('Job deleted')
@@ -197,7 +197,7 @@ export function HistoryPage() {
       toast.error('Failed to delete job')
     }
   }
-  
+
   // Handle regenerate
   const handleRegenerate = async (job: Job) => {
     try {
@@ -207,24 +207,24 @@ export function HistoryPage() {
       toast.error('Failed to regenerate')
     }
   }
-  
+
   // Handle schedule all ready-to-schedule jobs
   const handleScheduleAllReady = async (jobs: Job[]) => {
     setIsSchedulingAll(true)
     let scheduled = 0
     let failed = 0
-    
+
     for (const job of jobs) {
       const completedBrands = Object.entries(job.brand_outputs || {})
         .filter(([_, output]) => output.status === 'completed')
         .map(([brand]) => brand as BrandName)
-      
+
       for (const brand of completedBrands) {
         const output = job.brand_outputs[brand]
         if (output?.reel_id) {
           try {
             const caption = output.caption || `${job.title}\n\nGenerated content for ${brand}`
-            
+
             await autoSchedule.mutateAsync({
               brand,
               reel_id: output.reel_id,
@@ -249,9 +249,9 @@ export function HistoryPage() {
         }
       }
     }
-    
+
     setIsSchedulingAll(false)
-    
+
     if (scheduled > 0) {
       const message = failed > 0
         ? `✅ ${scheduled} brand(s) scheduled! ${failed} failed.`
@@ -261,23 +261,23 @@ export function HistoryPage() {
       toast.error('Failed to schedule brands')
     }
   }
-  
+
   // Handle auto-schedule for a single job
   const handleScheduleJob = async (job: Job) => {
     setSchedulingJobId(job.id.toString())
     let scheduled = 0
     let failed = 0
-    
+
     const completedBrands = Object.entries(job.brand_outputs || {})
       .filter(([_, output]) => output.status === 'completed')
       .map(([brand]) => brand as BrandName)
-    
+
     for (const brand of completedBrands) {
       const output = job.brand_outputs[brand]
       if (output?.reel_id) {
         try {
           const caption = output.caption || `${job.title}\n\nGenerated content for ${brand}`
-          
+
           await autoSchedule.mutateAsync({
             brand,
             reel_id: output.reel_id,
@@ -301,9 +301,9 @@ export function HistoryPage() {
         }
       }
     }
-    
+
     setSchedulingJobId(null)
-    
+
     if (scheduled > 0) {
       const message = failed > 0
         ? `✅ ${scheduled} brand(s) scheduled! ${failed} failed.`
@@ -313,9 +313,9 @@ export function HistoryPage() {
       toast.error('Failed to schedule brands')
     }
   }
-  
+
   if (isLoading) return <JobsSkeleton />
-  
+
   if (error) {
     return (
       <div className="text-center py-12">
@@ -325,7 +325,7 @@ export function HistoryPage() {
       </div>
     )
   }
-  
+
   const stats = [
     {
       key: 'to-schedule' as ViewFilter,
@@ -383,7 +383,7 @@ export function HistoryPage() {
       description: 'Failed or cancelled'
     },
   ]
-  
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -393,20 +393,20 @@ export function HistoryPage() {
           <p className="text-gray-500">{jobs.length} total jobs</p>
         </div>
       </div>
-      
+
       {/* Status Cards - Visual Workflow */}
       <div className="grid grid-cols-5 gap-4">
         {stats.map(stat => {
           const Icon = stat.icon
           const isActive = viewFilter === stat.key
-          
+
           return (
             <button
               key={stat.key}
               onClick={() => setViewFilter(isActive ? 'all' : stat.key)}
               className={clsx(
                 'relative p-4 rounded-xl border-2 transition-all text-left',
-                isActive 
+                isActive
                   ? `${stat.bgColor} ${stat.borderColor} ring-2 ring-offset-2`
                   : 'bg-white border-gray-100 hover:border-gray-200 hover:shadow-sm'
               )}
@@ -436,7 +436,7 @@ export function HistoryPage() {
                   </p>
                 </div>
               </div>
-              
+
               {isActive && (
                 <div className="absolute top-2 right-2">
                   <CheckCircle2 className={clsx('w-5 h-5', stat.textColor)} />
@@ -446,7 +446,7 @@ export function HistoryPage() {
           )
         })}
       </div>
-      
+
       {/* Filters */}
       <div className="card p-4">
         <div className="flex flex-wrap gap-4 items-center">
@@ -460,7 +460,7 @@ export function HistoryPage() {
               className="input pl-10"
             />
           </div>
-          
+
           {/* Content Type Filter */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             {[
@@ -482,21 +482,30 @@ export function HistoryPage() {
               </button>
             ))}
           </div>
-          
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
-              value={variantFilter}
-              onChange={(e) => setVariantFilter(e.target.value as Variant | 'all')}
-              className="input w-auto bg-white text-gray-700"
-            >
-              <option value="all">All Modes</option>
-              <option value="light">Light Mode</option>
-              <option value="dark">Dark Mode</option>
-              <option value="post">Post</option>
-            </select>
+
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <Filter className="w-4 h-4 text-gray-400 mx-1" />
+            {([
+              { key: 'all' as const, label: 'All' },
+              { key: 'light' as const, label: 'Light' },
+              { key: 'dark' as const, label: 'Dark' },
+              { key: 'post' as const, label: 'Post' },
+            ] as { key: Variant | 'all'; label: string }[]).map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setVariantFilter(opt.key)}
+                className={clsx(
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                  variantFilter === opt.key
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
-          
+
           {/* Creator Filter */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             {[
@@ -518,7 +527,7 @@ export function HistoryPage() {
               </button>
             ))}
           </div>
-          
+
           {/* Platform Filter */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             <button
@@ -548,7 +557,7 @@ export function HistoryPage() {
               </button>
             ))}
           </div>
-          
+
           {viewFilter !== 'all' && (
             <button
               onClick={() => setViewFilter('all')}
@@ -559,7 +568,7 @@ export function HistoryPage() {
           )}
         </div>
       </div>
-      
+
       {/* Section Header */}
       {viewFilter !== 'all' && (
         <div className="flex items-center justify-between">
@@ -612,14 +621,14 @@ export function HistoryPage() {
           )}
         </div>
       )}
-      
+
       {/* Jobs List — Separated into Reels and Posts sections */}
       {filteredJobs.length === 0 ? (
         <div className="card p-12 text-center">
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
           <p className="text-gray-500">
-            {jobs.length === 0 
+            {jobs.length === 0
               ? 'Create your first reel to get started'
               : viewFilter !== 'all'
                 ? `No jobs in "${stats.find(s => s.key === viewFilter)?.label}" category`
@@ -631,16 +640,16 @@ export function HistoryPage() {
         const visibleJobs = filteredJobs.filter(j => !hiddenJobIds.has(j.id.toString()))
         const reelJobs = visibleJobs.filter(j => j.variant !== 'post')
         const postJobs = visibleJobs.filter(j => j.variant === 'post')
-        
+
         const renderJobCard = (job: Job) => {
             const progress = getProgress(job)
             const isGenerating = job.status === 'generating' || job.status === 'pending'
             const schedulingInfo = getSchedulingInfo(job)
-            
+
             const isFullyPublished = schedulingInfo.published.length === schedulingInfo.total && schedulingInfo.total > 0
             const isFullyScheduled = (schedulingInfo.scheduled.length + schedulingInfo.published.length) === schedulingInfo.total && schedulingInfo.total > 0 && !isFullyPublished
             const hasReadyToSchedule = schedulingInfo.readyToSchedule.length > 0
-            
+
             const statusPill = isFullyPublished
               ? { label: 'Published', bg: 'bg-emerald-100', text: 'text-emerald-700', Icon: CheckCircle2 }
               : isFullyScheduled
@@ -648,13 +657,13 @@ export function HistoryPage() {
                 : hasReadyToSchedule
                   ? { label: `${schedulingInfo.readyToSchedule.length} to schedule`, bg: 'bg-amber-100', text: 'text-amber-700', Icon: Clock }
                   : null
-            
+
             const fullTitle = job.title
               ? job.title.split('\n').filter(Boolean).join(' ')
               : 'Untitled'
-            
+
             const isSchedulingThis = schedulingJobId === job.id.toString()
-            
+
             return (
               <div
                 key={job.id}
@@ -673,11 +682,11 @@ export function HistoryPage() {
                 {/* Primary row: ID, status, pill, title, date, actions */}
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-[11px] font-mono text-gray-400 flex-shrink-0">#{job.id}</span>
-                  
+
                   <div className="flex-shrink-0">
                     <StatusBadge status={job.status} />
                   </div>
-                  
+
                   {statusPill && (
                     <span className={clsx(
                       'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full flex-shrink-0',
@@ -688,26 +697,26 @@ export function HistoryPage() {
                       {statusPill.label}
                     </span>
                   )}
-                  
+
                   {isGenerating && (
                     <div className="w-16 flex-shrink-0">
                       <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-blue-500 rounded-full transition-all duration-500"
                           style={{ width: `${progress}%` }}
                         />
                       </div>
                     </div>
                   )}
-                  
+
                   <span className="text-[13px] font-medium text-gray-900 truncate min-w-0 flex-1" title={fullTitle}>
                     {fullTitle}
                   </span>
-                  
+
                   <span className="text-[11px] text-gray-400 flex-shrink-0 hidden sm:block">
                     {format(new Date(job.created_at), 'MMM d, h:mm a')}
                   </span>
-                  
+
                   {/* Actions — visible on hover */}
                   <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                     {hasReadyToSchedule && !isFullyScheduled && !isFullyPublished && (
@@ -746,7 +755,7 @@ export function HistoryPage() {
                     </button>
                   </div>
                 </div>
-                
+
                 {/* Secondary row: Brand badges */}
                 <div className="flex items-center gap-1 mt-0.5">
                   {job.brands?.map(brand => (
@@ -799,11 +808,11 @@ export function HistoryPage() {
             {sectionJobs.map(renderJobCard)}
           </div>
         )
-        
+
         const showReels = (contentTypeFilter === 'all' || contentTypeFilter === 'reels') && reelJobs.length > 0
         const showPosts = (contentTypeFilter === 'all' || contentTypeFilter === 'posts') && postJobs.length > 0
         const sideBySide = showReels && showPosts
-        
+
         return (
           <div className="space-y-6">
             {/* Hidden count banner */}
@@ -818,13 +827,13 @@ export function HistoryPage() {
                 </button>
               </div>
             )}
-            
+
             {/* Show sections — side by side when both visible, full width when filtered */}
             <div className={clsx(sideBySide ? 'grid grid-cols-2 gap-6 items-start' : '')}>
               {showReels && renderSection('Reels', '🎬', reelJobs)}
               {showPosts && renderSection('Posts', '📄', postJobs)}
             </div>
-            
+
             {visibleJobs.length === 0 && hiddenJobIds.size > 0 && (
               <div className="card p-12 text-center">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">All jobs hidden</h3>
@@ -834,7 +843,7 @@ export function HistoryPage() {
           </div>
         )
       })()}
-      
+
       {/* Bulk Delete Confirmation Modal */}
       <Modal
         isOpen={!!bulkDeleteModal}
@@ -868,7 +877,7 @@ export function HistoryPage() {
                 <p className="text-sm text-gray-500 mt-1">This action cannot be undone.</p>
               </div>
             )}
-            
+
             <div className="p-3 bg-gray-50 rounded-lg max-h-32 overflow-y-auto">
               <p className="text-xs font-medium text-gray-500 mb-1">Jobs to delete:</p>
               {bulkDeleteModal.jobs.slice(0, 10).map(j => (
@@ -880,7 +889,7 @@ export function HistoryPage() {
                 <p className="text-xs text-gray-400 mt-1">...and {bulkDeleteModal.jobs.length - 10} more</p>
               )}
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setBulkDeleteModal(null)}

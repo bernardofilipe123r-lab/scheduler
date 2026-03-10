@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 # Known API limits
 API_LIMITS = {
-    "deapi": {"daily": 500, "label": "DeAPI (Image Generation)"},
+    "freepik": {"daily": 10000, "label": "Freepik (Image Generation)"},
+    "deapi": {"daily": 500, "label": "DeAPI (Image Fallback)"},
     "deepseek": {"daily": 1000, "label": "DeepSeek (Content)"},
 }
 
