@@ -3,10 +3,9 @@
  *
  * 5-step wizard:
  *  1. Select brands (multi-select, same pattern as Reels)
- *  2. Choose platforms (Instagram, Threads)
- *  3. Pick AI image model (Freepik / ZImageTurbo / Flux Schnell / SearchApi)
- *  4. Choose mode (Auto / Manual)
- *  5. Manual create form (title, AI prompt, layout settings, preview)
+ *  2. Pick AI image model (Freepik / ZImageTurbo / Flux Schnell / SearchApi)
+ *  3. Choose mode (Auto vs Manual)
+ *  4. Manual create form (title, AI prompt, layout settings, preview)
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -26,8 +25,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useCreateJob } from '@/features/jobs'
 import { useQueryClient } from '@tanstack/react-query'
-import { useDynamicBrands, useBrandConnections } from '@/features/brands'
-import { useTobyBrandConfigs } from '@/features/toby'
+import { useDynamicBrands } from '@/features/brands'
 import { PostsSkeleton } from '@/shared/components'
 import {
   DEFAULT_GENERAL_SETTINGS,
@@ -46,21 +44,6 @@ import igIcon from '@/assets/icons/instagram.png'
 // Preload platform icons
 ;[igIcon].forEach(src => { const i = new Image(); i.src = src })
 
-type PostPlatform = 'instagram' | 'threads'
-
-function ThreadsLogo({ className = 'h-5 w-5' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.29 3.276-.866 1.074-2.063 1.678-3.559 1.795-1.12.088-2.198-.154-3.04-.682-1.003-.63-1.607-1.593-1.7-2.716-.154-1.836 1.201-3.454 3.742-3.652.97-.076 1.867-.034 2.687.097-.065-.666-.217-1.195-.463-1.582-.396-.623-1.078-.948-2.022-.966-1.32.012-2.085.437-2.344.696l-1.386-1.57C7.57 6.573 9.003 5.88 11.068 5.862c1.47.013 2.65.497 3.508 1.44.78.857 1.234 2.017 1.35 3.453.478.18.916.404 1.31.675 1.191.818 2.065 2.03 2.52 3.502.628 2.028.478 4.537-1.36 6.336C16.65 22.97 14.59 23.975 12.186 24zm-1.638-7.283c-.078.003-.155.008-.232.015-1.26.098-1.905.701-1.862 1.22.02.233.156.567.589.838.49.308 1.14.446 1.833.388 1.116-.087 2.472-.633 2.716-3.136-.741-.142-1.544-.2-2.41-.2-.216 0-.43.006-.634.017v-.142z" />
-    </svg>
-  )
-}
-
-const POST_PLATFORMS: { id: PostPlatform; label: string; icon: string | 'threads' }[] = [
-  { id: 'instagram', label: 'Instagram', icon: igIcon },
-  { id: 'threads', label: 'Threads', icon: 'threads' },
-]
-
 const IMAGE_MODELS = [
   { id: 'freepik', label: 'Super Quality', sub: 'Freepik', badge: 'NEW', badgeColor: 'bg-emerald-500' },
   { id: 'ZImageTurbo_INT8', label: '✨ Quality', sub: 'ZImageTurbo', badge: null, badgeColor: '' },
@@ -70,7 +53,7 @@ const IMAGE_MODELS = [
 
 const POSTS_PREVIEW_SCALE = 0.2
 
-type WizardStep = 'brands' | 'platforms' | 'model' | 'mode' | 'create'
+type WizardStep = 'brands' | 'model' | 'mode' | 'create'
 
 export function PostsPage() {
   // ── All hooks BEFORE any early return ──────────────────────────────
@@ -79,9 +62,7 @@ export function PostsPage() {
   const navigate = useNavigate()
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
   const { data: dbSettings, isLoading: settingsLoading } = useLayoutSettings()
-  const { data: connectionsData } = useBrandConnections()
   const updateDbSettings = useUpdateLayoutSettings()
-  const { data: brandConfigsData } = useTobyBrandConfigs()
   const brandMap = useMemo(() => {
     const map: Record<string, { name: string; color: string }> = {}
     dynamicBrands.forEach(b => { map[b.id] = { name: b.label, color: b.color } })
@@ -92,7 +73,6 @@ export function PostsPage() {
   const [step, setStep] = useState<WizardStep>('brands')
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [allBrands, setAllBrands] = useState(true)
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>([])
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
 
   // Manual create form state
@@ -125,39 +105,8 @@ export function PostsPage() {
     }
   }, [dbSettings])
 
-  // Derive which platforms have at least one connected brand
-  const hasThreads = connectionsData?.brands.some(b => b.threads?.connected) ?? true
-  const availablePostPlatforms = POST_PLATFORMS.filter(({ id }) => {
-    if (id === 'threads') return hasThreads
-    return true
-  })
-
-  // Helper: check if a platform is enabled for given brands
-  const isPlatformEnabledForBrands = useCallback((platform: PostPlatform, brands: BrandName[]): boolean => {
-    if (!brandConfigsData?.brands?.length || brands.length === 0) return true
-    return brands.some(brandId => {
-      const cfg = brandConfigsData.brands.find((bc: any) => bc.brand_id === brandId)
-      if (!cfg) return true
-      if (!cfg.enabled_platforms) return true
-      const postsPlatforms = cfg.enabled_platforms['posts']
-      if (!postsPlatforms) return true
-      return postsPlatforms.includes(platform as any)
-    })
-  }, [brandConfigsData])
-
   // ── Derived ────────────────────────────────────────────────────────
   const effectiveBrands = allBrands ? brandIds : selectedBrands
-
-  const getConnectedPlatforms = useCallback((): PostPlatform[] => {
-    if (!connectionsData?.brands) return ['instagram']
-    const platforms = new Set<PostPlatform>()
-    for (const bc of connectionsData.brands) {
-      if (!effectiveBrands.includes(bc.brand)) continue
-      platforms.add('instagram') // always available
-      if (bc.threads?.connected) platforms.add('threads')
-    }
-    return platforms.size > 0 ? Array.from(platforms) : ['instagram']
-  }, [connectionsData, effectiveBrands])
 
   // ── Toggle helpers ─────────────────────────────────────────────────
   const toggleBrand = (id: BrandName) => {
@@ -176,15 +125,6 @@ export function PostsPage() {
     setSelectedBrands([...brandIds])
   }
 
-  const togglePlatform = (platform: PostPlatform) => {
-    setSelectedPlatforms(prev => {
-      if (prev.includes(platform) && prev.length === 1) return prev
-      return prev.includes(platform)
-        ? prev.filter(p => p !== platform)
-        : [...prev, platform]
-    })
-  }
-
   const updateLayout = (updates: Partial<LayoutConfig>) => {
     setSettings((prev) => ({
       ...prev,
@@ -193,22 +133,14 @@ export function PostsPage() {
   }
 
   // ── Step navigation ─────────────────────────────────────────────────
-  const STEP_LIST: WizardStep[] = ['brands', 'platforms', 'model', 'mode']
+  const STEP_LIST: WizardStep[] = ['brands', 'model', 'mode']
   const stepIdx = STEP_LIST.indexOf(step)
-
-  const goToPlatforms = () => {
-    const connected = getConnectedPlatforms()
-    const enabled = connected.filter(p => isPlatformEnabledForBrands(p, effectiveBrands))
-    setSelectedPlatforms(enabled.length > 0 ? enabled : connected)
-    setStep('platforms')
-  }
 
   const goToModel = () => setStep('model')
   const goToMode = () => setStep('mode')
 
   const goBack = () => {
-    if (step === 'platforms') setStep('brands')
-    else if (step === 'model') setStep('platforms')
+    if (step === 'model') setStep('brands')
     else if (step === 'mode') setStep('model')
     else if (step === 'create') setStep('mode')
   }
@@ -217,7 +149,6 @@ export function PostsPage() {
     setStep('brands')
     setSelectedBrands([])
     setAllBrands(true)
-    setSelectedPlatforms([])
     setImageModel('ZImageTurbo_INT8')
     setTitle('')
     setAiPrompt('')
@@ -442,7 +373,7 @@ export function PostsPage() {
           )}
 
           <button
-            onClick={goToPlatforms}
+            onClick={goToModel}
             disabled={!allBrands && selectedBrands.length === 0}
             className="w-full py-3.5 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
           >
@@ -452,67 +383,7 @@ export function PostsPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          STEP 2: PLATFORMS
-          ═══════════════════════════════════════════════════════════════ */}
-      {step === 'platforms' && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="text-center space-y-1">
-            <h2 className="text-xl font-bold text-gray-900">Where to publish?</h2>
-            <p className="text-sm text-gray-500">Choose your target platforms</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {availablePostPlatforms.map(({ id, label, icon }) => {
-              const enabled = isPlatformEnabledForBrands(id, effectiveBrands)
-              const active = selectedPlatforms.includes(id)
-              const available = enabled
-
-              return (
-                <button
-                  key={id}
-                  onClick={() => available && togglePlatform(id)}
-                  disabled={!available}
-                  className={`relative flex items-center gap-3 px-4 py-4 rounded-xl border-2 transition-all text-left ${
-                    !available
-                      ? 'border-gray-100 bg-gray-50/50 opacity-40 cursor-not-allowed'
-                      : active
-                        ? 'border-green-400 bg-green-50/50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  {icon === 'threads' ? (
-                    <ThreadsLogo className="w-7 h-7" />
-                  ) : (
-                    <img src={icon} alt={label} className="w-7 h-7 object-contain" />
-                  )}
-                  <div>
-                    <span className="text-sm font-semibold text-gray-800">{label}</span>
-                    {!available && (
-                      <p className="text-[10px] text-gray-400">Not enabled</p>
-                    )}
-                  </div>
-                  {active && (
-                    <div className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          <button
-            onClick={goToModel}
-            disabled={selectedPlatforms.length === 0}
-            className="w-full py-3.5 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
-          >
-            Continue
-          </button>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════
-          STEP 3: AI IMAGE MODEL
+          STEP 2: AI IMAGE MODEL
           ═══════════════════════════════════════════════════════════════ */}
       {step === 'model' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -566,14 +437,14 @@ export function PostsPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          STEP 4: MODE
+          STEP 3: MODE
           ═══════════════════════════════════════════════════════════════ */}
       {step === 'mode' && (
         <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="text-center space-y-1">
             <h2 className="text-xl font-bold text-gray-900">How do you want to create?</h2>
             <p className="text-sm text-gray-500">
-              {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} · {IMAGE_MODELS.find(m => m.id === imageModel)?.label}
+              {effectiveBrands.length} brand{effectiveBrands.length !== 1 ? 's' : ''} · {IMAGE_MODELS.find(m => m.id === imageModel)?.label}
             </p>
           </div>
 
@@ -624,7 +495,7 @@ export function PostsPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          STEP 5: MANUAL CREATE
+          STEP 4: MANUAL CREATE
           ═══════════════════════════════════════════════════════════════ */}
       {step === 'create' && (
         <div className="space-y-5 animate-in fade-in duration-300">
