@@ -46,6 +46,7 @@ export const threadsApi = {
     brand_id: string
     count?: number
     topic_hints?: string[]
+    format_type?: string
   }): Promise<ThreadPost[]> => {
     const res = await post<{ status: string; posts: ThreadPost[]; count: number }>(`${BASE}/generate-bulk`, data)
     return res.posts

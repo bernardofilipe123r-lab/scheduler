@@ -40,6 +40,7 @@ class BulkGenerateRequest(BaseModel):
     brand_id: str
     count: int = Field(default=4, ge=1, le=10)
     topic_hints: Optional[List[str]] = None
+    format_type: Optional[str] = None
 
 
 class PublishSingleRequest(BaseModel):
@@ -181,6 +182,7 @@ async def generate_bulk(
         ctx=ctx,
         count=request.count,
         topic_hints=request.topic_hints,
+        format_type=request.format_type,
     )
 
     return {"status": "ok", "posts": posts, "count": len(posts)}

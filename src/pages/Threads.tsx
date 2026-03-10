@@ -28,6 +28,7 @@ import {
   useGenerateBulk,
   useScheduleThread,
   useAutoScheduleThread,
+  useFormatTypes,
 } from '@/features/threads'
 
 const MAX_CHARS = 500
@@ -47,6 +48,7 @@ export function ThreadsPage() {
   // ── All hooks BEFORE any early return ──────────────────────────────
   const { brands, isLoading: brandsLoading } = useDynamicBrands()
   const { data: connectionsData } = useBrandConnections()
+  const { data: formatTypes } = useFormatTypes()
   const generateBulk = useGenerateBulk()
   const scheduleThread = useScheduleThread()
   const autoScheduleThread = useAutoScheduleThread()
@@ -57,6 +59,7 @@ export function ThreadsPage() {
   const [allBrands, setAllBrands] = useState(true)
   const [mode, setMode] = useState<'auto' | 'manual'>('auto')
   const [postsPerBrand, setPostsPerBrand] = useState(4)
+  const [formatType, setFormatType] = useState<string | null>(null)
 
   // Auto generation
   const [generatedPosts, setGeneratedPosts] = useState<BrandPosts>({})
@@ -126,6 +129,7 @@ export function ThreadsPage() {
         const result = await generateBulk.mutateAsync({
           brand_id: brand.id,
           count: postsPerBrand,
+          format_type: formatType ?? undefined,
         })
         setGeneratedPosts(prev => ({
           ...prev,
@@ -144,6 +148,7 @@ export function ThreadsPage() {
       const result = await generateBulk.mutateAsync({
         brand_id: brandId,
         count: postsPerBrand,
+        format_type: formatType ?? undefined,
       })
       setGeneratedPosts(prev => ({
         ...prev,
@@ -324,6 +329,7 @@ export function ThreadsPage() {
     setManualText('')
     setChainParts(['', ''])
     setShowSchedule(false)
+    setFormatType(null)
   }
 
   // ── Early returns (after all hooks) ────────────────────────────────
@@ -559,27 +565,63 @@ export function ThreadsPage() {
 
           {/* Posts per brand (auto only) */}
           {mode === 'auto' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-semibold text-gray-900">
-                    Posts per brand
-                  </span>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {totalPosts} total across {effectiveBrands.length} brand(s)
-                  </p>
+            <div className="space-y-3">
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-semibold text-gray-900">
+                      Posts per brand
+                    </span>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {totalPosts} total across {effectiveBrands.length} brand(s)
+                    </p>
+                  </div>
+                  <select
+                    value={postsPerBrand}
+                    onChange={e => setPostsPerBrand(Number(e.target.value))}
+                    className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400"
+                  >
+                    {[2, 3, 4, 5, 6, 8, 10].map(n => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <select
-                  value={postsPerBrand}
-                  onChange={e => setPostsPerBrand(Number(e.target.value))}
-                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400"
-                >
-                  {[2, 3, 4, 5, 6, 8, 10].map(n => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
+              </div>
+
+              {/* Format type picker */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+                <div>
+                  <span className="text-sm font-semibold text-gray-900">Format type</span>
+                  <p className="text-xs text-gray-500 mt-0.5">Choose a style or let Toby mix them</p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setFormatType(null)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      formatType === null
+                        ? 'bg-stone-900 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Mix (All Formats)
+                  </button>
+                  {(formatTypes ?? []).map(ft => (
+                    <button
+                      key={ft.id}
+                      onClick={() => setFormatType(formatType === ft.id ? null : ft.id)}
+                      title={ft.description}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        formatType === ft.id
+                          ? 'bg-stone-900 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {ft.name}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             </div>
           )}

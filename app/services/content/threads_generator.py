@@ -154,20 +154,29 @@ No markdown, no explanations."""
         ctx: PromptContext,
         count: int = 4,
         topic_hints: Optional[List[str]] = None,
+        format_type: Optional[str] = None,
     ) -> List[Dict]:
-        """Generate multiple single posts in one batch call."""
+        """Generate multiple single posts in one batch call.
+
+        Args:
+            format_type: When provided and valid, all posts use this format.
+                         When None, a diverse mix of formats is chosen automatically.
+        """
         if not self.api_key:
             return []
 
         count = max(1, min(count, 10))
 
-        # Pick diverse format types
-        formats = random.sample(
-            [f for f in THREAD_FORMAT_IDS if f != "thread_chain"],
-            min(count, len(THREAD_FORMAT_IDS) - 1),
-        )
-        while len(formats) < count:
-            formats.append(random.choice([f for f in THREAD_FORMAT_IDS if f != "thread_chain"]))
+        # Determine formats to use
+        eligible = [f for f in THREAD_FORMAT_IDS if f != "thread_chain"]
+        if format_type and format_type in THREAD_FORMAT_TYPES and format_type != "thread_chain":
+            formats = [format_type] * count
+            diverse = False
+        else:
+            formats = random.sample(eligible, min(count, len(eligible)))
+            while len(formats) < count:
+                formats.append(random.choice(eligible))
+            diverse = True
 
         topic_list = topic_hints or []
         if not topic_list and ctx.topic_keywords:
@@ -186,14 +195,20 @@ No markdown, no explanations."""
                 + (f", topic: {topic}" if topic else "")
             )
 
-        user_prompt = f"""Generate {count} distinct Threads posts, each with a different format type.
+        style_note = (
+            "Each post must feel different in style and topic."
+            if diverse
+            else f"All posts use the '{THREAD_FORMAT_TYPES[formats[0]]['name']}' format — vary topics and angles while keeping the same style."
+        )
+
+        user_prompt = f"""Generate {count} Threads posts.
 
 {chr(10).join(format_specs)}
 
 RULES:
 - Each post ≤ 500 characters
 - No hashtags, no emojis
-- Each post must feel different in style and topic
+- {style_note}
 - Conversational, scroll-stopping tone
 
 Return ONLY a JSON object: {{"posts": [{{"text": "...", "format_type": "..."}}]}}
