@@ -530,6 +530,18 @@ async def startup_event():
                         thumbnail_path_str = metadata.get('thumbnail_path')
                         brand = metadata.get('brand', '')
                         variant = metadata.get('variant', 'light')
+                        content_type = metadata.get('content_type', '')
+                        
+                        # ── TEXT-ONLY PLATFORM GUARD ──
+                        # Threads (and future X) are text-only — strip them from
+                        # any publish that carries media (reels, posts, carousels).
+                        # Only allow them through for content_type="text".
+                        if content_type != 'text':
+                            from app.core.platforms import TEXT_ONLY_PLATFORMS
+                            text_only_in_list = [p for p in platforms if p in TEXT_ONLY_PLATFORMS]
+                            if text_only_in_list:
+                                platforms = [p for p in platforms if p not in TEXT_ONLY_PLATFORMS]
+                                print(f"   🧵 Stripped text-only platforms {text_only_in_list} from media publish", flush=True)
                         
                         print(f"      📦 Metadata: video={video_path_str}, thumbnail={thumbnail_path_str}, brand={brand}, variant={variant}")
                         

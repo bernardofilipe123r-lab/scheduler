@@ -1328,6 +1328,13 @@ interface CreditsResponse {
     detail?: string
     [key: string]: unknown
   }
+  freepik?: {
+    configured?: boolean
+    plan?: string
+    daily_limit?: number
+    total_budget_eur?: number
+    error?: string
+  }
 }
 
 // ─── Supabase Usage Types ──────────────────────────────────────────────────
@@ -2254,11 +2261,38 @@ export function AdminPage() {
               </div>
             </div>
 
+            {/* Freepik */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-teal-50 border border-teal-100">
+              <Image className="w-5 h-5 text-teal-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-teal-700 mb-1">Freepik (Image Gen)</p>
+                {creditsQuery.data?.freepik?.error ? (
+                  <p className="text-xs text-red-600">{creditsQuery.data.freepik.error}</p>
+                ) : creditsQuery.data?.freepik ? (
+                  <div className="space-y-0.5">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-lg font-bold text-teal-900">
+                        {creditsQuery.data.freepik.daily_limit?.toLocaleString()}
+                      </span>
+                      <span className="text-xs text-teal-600">/ day</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[10px] text-teal-600 font-medium">
+                        {creditsQuery.data.freepik.plan} · {creditsQuery.data.freepik.total_budget_eur} EUR budget
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400">—</p>
+                )}
+              </div>
+            </div>
+
             {/* DeAPI */}
             <div className="flex items-start gap-3 p-3 rounded-lg bg-purple-50 border border-purple-100">
               <Image className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-purple-700 mb-1">DeAPI (Image Gen)</p>
+                <p className="text-xs font-semibold text-purple-700 mb-1">DeAPI (Fallback)</p>
                 {creditsQuery.data?.deapi?.error ? (
                   <p className="text-xs text-red-600">{creditsQuery.data.deapi.error}</p>
                 ) : creditsQuery.data?.deapi ? (

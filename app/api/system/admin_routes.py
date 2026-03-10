@@ -491,6 +491,18 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
     else:
         results["deapi"] = {"error": "API key not configured"}
 
+    # ── Freepik credits (Classic Fast: 10,000/day, 500 EUR total) ─
+    freepik_key = os.getenv("FREEPIK_API_KEY")
+    if freepik_key:
+        results["freepik"] = {
+            "configured": True,
+            "plan": "Classic Fast",
+            "daily_limit": 10000,
+            "total_budget_eur": 500,
+        }
+    else:
+        results["freepik"] = {"error": "API key not configured"}
+
     return results
 
 

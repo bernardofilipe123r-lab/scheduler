@@ -67,6 +67,10 @@ CONTENT_TYPE_KEY_MAP: dict[str, str] = {
     "format_b_reel": "reels",
 }
 
+# Platforms that ONLY support text content — no images, videos, or carousels.
+# These are stripped from *every* media publishing path as a safety net.
+TEXT_ONLY_PLATFORMS: frozenset[str] = frozenset({"threads"})
+
 # Platforms that cannot publish a given content type.
 # Threads is text-only — exclude from reels and carousel/post content.
 # TikTok's API does not support image carousel publishing.

@@ -61,6 +61,8 @@ def _get_or_create_daily(db, user_id: str, target_date: date) -> UserCostDaily:
             deepseek_cost_usd=0.0,
             deapi_calls=0,
             deapi_cost_usd=0.0,
+            freepik_calls=0,
+            freepik_cost_usd=0.0,
             reels_generated=0,
             carousels_generated=0,
         )
@@ -195,10 +197,12 @@ def get_user_costs(user_id: str, period: str = "month") -> dict:
                     "deepseek_cost_usd": round(r.deepseek_cost_usd or 0.0, 6),
                     "deapi_calls": r.deapi_calls or 0,
                     "deapi_cost_usd": round(r.deapi_cost_usd or 0.0, 6),
+                    "freepik_calls": getattr(r, 'freepik_calls', None) or 0,
+                    "freepik_cost_usd": round(getattr(r, 'freepik_cost_usd', None) or 0.0, 6),
                     "reels_generated": r.reels_generated or 0,
                     "carousels_generated": r.carousels_generated or 0,
                     "total_cost_usd": round(
-                        (r.deepseek_cost_usd or 0.0) + (r.deapi_cost_usd or 0.0), 6
+                        (r.deepseek_cost_usd or 0.0) + (r.deapi_cost_usd or 0.0) + (getattr(r, 'freepik_cost_usd', None) or 0.0), 6
                     ),
                 })
 
@@ -213,10 +217,12 @@ def get_user_costs(user_id: str, period: str = "month") -> dict:
                     "deepseek_cost_usd": round(r.deepseek_cost_usd or 0.0, 6),
                     "deapi_calls": r.deapi_calls or 0,
                     "deapi_cost_usd": round(r.deapi_cost_usd or 0.0, 6),
+                    "freepik_calls": getattr(r, 'freepik_calls', None) or 0,
+                    "freepik_cost_usd": round(getattr(r, 'freepik_cost_usd', None) or 0.0, 6),
                     "reels_generated": r.reels_generated or 0,
                     "carousels_generated": r.carousels_generated or 0,
                     "total_cost_usd": round(
-                        (r.deepseek_cost_usd or 0.0) + (r.deapi_cost_usd or 0.0), 6
+                        (r.deepseek_cost_usd or 0.0) + (r.deapi_cost_usd or 0.0) + (getattr(r, 'freepik_cost_usd', None) or 0.0), 6
                     ),
                 })
 
@@ -229,11 +235,13 @@ def get_user_costs(user_id: str, period: str = "month") -> dict:
                 "deepseek_cost_usd": round(sum(r.deepseek_cost_usd or 0.0 for r in all_records), 6),
                 "deapi_calls": sum(r.deapi_calls or 0 for r in all_records),
                 "deapi_cost_usd": round(sum(r.deapi_cost_usd or 0.0 for r in all_records), 6),
+                "freepik_calls": sum(getattr(r, 'freepik_calls', None) or 0 for r in all_records),
+                "freepik_cost_usd": round(sum(getattr(r, 'freepik_cost_usd', None) or 0.0 for r in all_records), 6),
                 "reels_generated": sum(r.reels_generated or 0 for r in all_records),
                 "carousels_generated": sum(r.carousels_generated or 0 for r in all_records),
             }
             totals["total_cost_usd"] = round(
-                totals["deepseek_cost_usd"] + totals["deapi_cost_usd"], 6
+                totals["deepseek_cost_usd"] + totals["deapi_cost_usd"] + totals["freepik_cost_usd"], 6
             )
 
             return {
@@ -252,6 +260,7 @@ def get_user_costs(user_id: str, period: str = "month") -> dict:
                 "deepseek_calls": 0, "deepseek_input_tokens": 0,
                 "deepseek_output_tokens": 0, "deepseek_cost_usd": 0.0,
                 "deapi_calls": 0, "deapi_cost_usd": 0.0,
+                "freepik_calls": 0, "freepik_cost_usd": 0.0,
                 "reels_generated": 0, "carousels_generated": 0,
                 "total_cost_usd": 0.0,
             },
@@ -310,6 +319,8 @@ def aggregate_old_daily_records() -> int:
                         deepseek_cost_usd=0.0,
                         deapi_calls=0,
                         deapi_cost_usd=0.0,
+                        freepik_calls=0,
+                        freepik_cost_usd=0.0,
                         reels_generated=0,
                         carousels_generated=0,
                     )
@@ -324,6 +335,8 @@ def aggregate_old_daily_records() -> int:
                     monthly.deepseek_cost_usd = (monthly.deepseek_cost_usd or 0.0) + (r.deepseek_cost_usd or 0.0)
                     monthly.deapi_calls = (monthly.deapi_calls or 0) + (r.deapi_calls or 0)
                     monthly.deapi_cost_usd = (monthly.deapi_cost_usd or 0.0) + (r.deapi_cost_usd or 0.0)
+                    monthly.freepik_calls = (monthly.freepik_calls or 0) + (getattr(r, 'freepik_calls', None) or 0)
+                    monthly.freepik_cost_usd = (monthly.freepik_cost_usd or 0.0) + (getattr(r, 'freepik_cost_usd', None) or 0.0)
                     monthly.reels_generated = (monthly.reels_generated or 0) + (r.reels_generated or 0)
                     monthly.carousels_generated = (monthly.carousels_generated or 0) + (r.carousels_generated or 0)
                     monthly.updated_at = datetime.now(timezone.utc)

@@ -282,6 +282,17 @@ async def upload_and_schedule(
             content_type = "text"
             file_url = None
         else:
+            # Threads is text-only — strip it when user uploads media
+            from app.core.platforms import TEXT_ONLY_PLATFORMS
+            stripped = [p for p in platforms_list if p in TEXT_ONLY_PLATFORMS]
+            if stripped:
+                platforms_list = [p for p in platforms_list if p not in TEXT_ONLY_PLATFORMS]
+                if not platforms_list:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Threads only supports text posts. Remove the file or select a different platform."
+                    )
+
             # Detect content type
             try:
                 content_type = _detect_content_type(file.filename)

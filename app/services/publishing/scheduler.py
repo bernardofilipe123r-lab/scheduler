@@ -1268,13 +1268,12 @@ class DatabaseSchedulerService:
                 yt_title=yt_title
             )
 
+        # Threads is text-only — never publish video/media to Threads.
+        # (Defense-in-depth: get_platforms_for_content_type already excludes
+        # Threads from reels, but this catches legacy/manual paths.)
         if "threads" in effective_platforms:
-            print("🧵 Publishing to Threads...", flush=True)
-            results["threads"] = publisher.publish_threads_post(
-                caption=caption,
-                media_url=video_url,
-                media_type="VIDEO",
-            )
+            effective_platforms.remove("threads")
+            print(f"🧵 Threads removed from reel publish — text-only platform", flush=True)
 
         if "tiktok" in effective_platforms:
             print("📱 Publishing to TikTok...", flush=True)
