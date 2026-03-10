@@ -1,4 +1,5 @@
 import { FileText, Shield, AlertTriangle, Scale, Ban, RefreshCw, Mail } from 'lucide-react'
+import { LegalLayout } from '@/shared/components/LegalLayout'
 
 const APP_NAME = 'ViralToby'
 const COMPANY_NAME = 'Viral Toby'
@@ -7,21 +8,21 @@ const DOMAIN = 'viraltoby.com'
 
 export function TermsPage() {
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-200">
-      <div className="max-w-3xl mx-auto px-5 py-16">
+    <LegalLayout>
+      <div className="max-w-3xl mx-auto px-5">
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
-          <FileText className="h-7 w-7 text-blue-400" />
-          <h1 className="text-3xl font-bold text-white">Terms of Service</h1>
+          <FileText className="h-7 w-7 text-blue-600" />
+          <h1 className="text-3xl font-bold text-gray-900">Terms of Service</h1>
         </div>
-        <p className="text-sm text-gray-500 mb-10">Last updated: February 27, 2026</p>
+        <p className="text-sm text-gray-400 mb-10">Last updated: February 27, 2026</p>
 
-        <p className="mb-8">
-          Welcome to <strong className="text-white">{APP_NAME}</strong> (
-          <a href={`https://${DOMAIN}`} className="text-blue-400 hover:underline">
+        <p className="mb-8 text-gray-600">
+          Welcome to <strong className="text-gray-900">{APP_NAME}</strong> (
+          <a href={`https://${DOMAIN}`} className="text-blue-600 hover:underline">
             {DOMAIN}
           </a>
-          ), operated by <strong className="text-white">{COMPANY_NAME}</strong> ("we", "us", "our").
+          ), operated by <strong className="text-gray-900">{COMPANY_NAME}</strong> ("we", "us", "our").
           By accessing or using our service, you agree to be bound by these Terms of Service.
         </p>
 
@@ -53,7 +54,7 @@ export function TermsPage() {
 
         {/* 3 */}
         <Section icon={<Scale className="h-5 w-5" />} title="3. Acceptable Use">
-          <p className="mb-3">You agree <strong className="text-white">not</strong> to:</p>
+          <p className="mb-3">You agree <strong className="text-gray-900">not</strong> to:</p>
           <ul className="list-disc pl-6 space-y-1.5">
             <li>Use the service to publish content that violates any applicable law or regulation.</li>
             <li>
@@ -100,7 +101,7 @@ export function TermsPage() {
           <ul className="list-disc pl-6 space-y-1.5">
             <li>
               You authorize us to access and use your account data as described in our{' '}
-              <a href="/privacy" className="text-blue-400 hover:underline">
+              <a href="/privacy" className="text-blue-600 hover:underline">
                 Privacy Policy
               </a>
               .
@@ -118,8 +119,8 @@ export function TermsPage() {
         {/* 6 */}
         <Section icon={<AlertTriangle className="h-5 w-5" />} title="6. Disclaimer of Warranties">
           <p>
-            {APP_NAME} is provided on an <strong className="text-white">"as is"</strong> and{' '}
-            <strong className="text-white">"as available"</strong> basis. We make no warranties,
+            {APP_NAME} is provided on an <strong className="text-gray-900">"as is"</strong> and{' '}
+            <strong className="text-gray-900">"as available"</strong> basis. We make no warranties,
             express or implied, regarding the reliability, availability, or accuracy of the service.
             We do not guarantee that content will be published successfully to any platform, as
             publishing depends on third-party API availability and compliance.
@@ -148,7 +149,7 @@ export function TermsPage() {
             </li>
             <li>
               Upon termination, we will delete your data as described in our{' '}
-              <a href="/privacy" className="text-blue-400 hover:underline">
+              <a href="/privacy" className="text-blue-600 hover:underline">
                 Privacy Policy
               </a>
               .
@@ -169,14 +170,14 @@ export function TermsPage() {
         <Section icon={<Mail className="h-5 w-5" />} title="10. Contact">
           <p>
             For any questions about these terms, contact us at{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-400 hover:underline">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-600 hover:underline">
               {CONTACT_EMAIL}
             </a>
             .
           </p>
         </Section>
       </div>
-    </div>
+    </LegalLayout>
   )
 }
 
@@ -192,10 +193,10 @@ function Section({
   return (
     <section className="mb-8">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-blue-400">{icon}</span>
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <span className="text-blue-600">{icon}</span>
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
       </div>
-      <div className="text-gray-300 leading-relaxed">{children}</div>
+      <div className="text-gray-600 leading-relaxed">{children}</div>
     </section>
   )
 }

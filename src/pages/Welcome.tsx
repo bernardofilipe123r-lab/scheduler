@@ -23,7 +23,7 @@ import { Link } from 'react-router-dom'
 import { motion, useInView, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import {
   ArrowRight, ChevronDown, Sparkles, X, Menu,
-  Brain, Send, Play, Eye, Heart,
+  Brain, Send, Play,
   CheckCircle2, Film,
   Calendar, TrendingUp, Star,
   Check, Zap, BarChart3, Users,
@@ -103,48 +103,14 @@ function MiniAreaChart({ data, color = '#3B82F6', height = 80 }: { data: number[
   )
 }
 
-/* ═══ Carousel slide mockup ═══ */
-function CarouselSlideMockup({ title, body, brandName, isTitle = false, brandColor }: {
-  title: string; body?: string; brandName: string; isTitle?: boolean; brandColor: string
-}) {
-  if (isTitle) {
-    return (
-      <div className="aspect-[4/5] rounded-xl bg-gradient-to-b from-gray-900 to-gray-800 flex flex-col justify-between p-3 relative overflow-hidden shadow-lg">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-        <div className="relative z-10 flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: brandColor }}>{brandName[0]}</div>
-          <div className="h-[1px] flex-1 bg-white/20" />
-        </div>
-        <div className="relative z-10">
-          <h4 className="text-[11px] font-extrabold text-white leading-tight">{title}</h4>
-          <p className="text-[7px] text-white/50 mt-1">Swipe to learn more →</p>
-        </div>
-      </div>
-    )
-  }
-  return (
-    <div className="aspect-[4/5] rounded-xl bg-[#f8f5f0] flex flex-col p-3 relative overflow-hidden shadow-lg border border-gray-200">
-      <div className="flex items-center gap-1.5 mb-2">
-        <div className="w-4 h-4 rounded-full flex items-center justify-center text-[6px] font-bold text-white" style={{ background: brandColor }}>{brandName[0]}</div>
-        <span className="text-[7px] font-semibold text-gray-700">{brandName}</span>
-      </div>
-      <div className="flex-1 flex items-center">
-        <p className="text-[8px] text-gray-700 leading-relaxed font-medium">{body || title}</p>
-      </div>
-      <div className="flex justify-between text-[6px] text-gray-400 font-semibold uppercase tracking-wider border-t border-gray-200 pt-1.5">
-        <span>Share</span><span>Swipe</span><span>Save</span>
-      </div>
-    </div>
-  )
-}
 
 /* ═══ Phone frame component ═══ */
-function PhoneFrame({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function PhoneFrame({ children, className = '', small = false }: { children: React.ReactNode; className?: string; small?: boolean }) {
   return (
     <div className={`relative ${className}`}>
-      <div className="w-[260px] sm:w-[300px] rounded-[2.5rem] border-[6px] border-gray-800 bg-gray-900 shadow-2xl overflow-hidden">
+      <div className={`${small ? 'w-[200px] sm:w-[220px] rounded-[2rem] border-[5px]' : 'w-[260px] sm:w-[300px] rounded-[2.5rem] border-[6px]'} border-gray-800 bg-gray-900 shadow-2xl overflow-hidden`}>
         {/* Notch */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-800 rounded-b-2xl z-20" />
+        <div className={`absolute top-0 left-1/2 -translate-x-1/2 ${small ? 'w-16 h-3.5' : 'w-24 h-5'} bg-gray-800 rounded-b-2xl z-20`} />
         <div className="bg-white overflow-hidden">
           {children}
         </div>
@@ -431,72 +397,140 @@ export function WelcomePage() {
                 {/* Main content — matches real app: gray-50 bg */}
                 <div className="flex-1 bg-gray-50 p-3 sm:p-4 overflow-hidden">
                   {/* Toby status bar */}
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100 mb-3">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-100 mb-2">
                     <div className="relative"><div className="w-2 h-2 rounded-full bg-emerald-500" /><div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping" /></div>
-                    <span className="text-[11px] text-emerald-700 font-medium">Toby is running</span>
+                    <span className="text-[10px] text-emerald-700 font-medium">Toby is running</span>
                     <div className="flex-1" />
-                    <span className="text-[9px] text-emerald-500 bg-emerald-100 px-1.5 py-0.5 rounded-full font-medium hidden sm:inline">Phase: Learning</span>
+                    <span className="text-[8px] text-emerald-500 bg-emerald-100 px-1.5 py-0.5 rounded-full font-medium hidden sm:inline">Phase: Learning</span>
                   </div>
 
                   {/* Greeting */}
-                  <div className="mb-3">
-                    <h2 className="text-[14px] sm:text-[16px] font-bold text-gray-900">Good morning, User</h2>
-                    <p className="text-[10px] text-gray-400">3 brands · 45.2K followers · 12 scheduled</p>
+                  <div className="mb-2">
+                    <h2 className="text-[13px] sm:text-[15px] font-bold text-gray-900">Good morning, User</h2>
+                    <p className="text-[9px] text-gray-400">7 brands · 138K followers · 50 scheduled</p>
                   </div>
 
-                  {/* Stats row — matches real app stat cards */}
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+                  {/* Stats row — REAL DATA from analytics_snapshots */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-2">
                     {[
-                      { label: 'TOTAL FOLLOWERS', value: '45.2K', change: '+3.1K', icon: Users },
-                      { label: 'VIEWS (7D)', value: '2.4M', change: '+24%', icon: Eye },
-                      { label: 'LIKES (7D)', value: '186K', change: '+18%', icon: Heart },
-                      { label: 'JOBS READY', value: '7', sub: '3 in progress', icon: Sparkles },
-                      { label: 'SCHEDULED', value: '12', sub: 'next 48h', icon: Calendar },
+                      { label: 'FOLLOWERS (30D)', value: '+64.5K', change: '138K total' },
+                      { label: 'VIEWS (7D)', value: '2.3M', change: 'all brands' },
+                      { label: 'LIKES (7D)', value: '16.2K', change: 'all brands' },
+                      { label: 'JOBS CREATED', value: '918', change: '+47 this week' },
+                      { label: 'SCHEDULED', value: '50', sub: 'queued' },
+                      { label: 'ENG. RATE', value: '0.56%', sub: 'likes/views' },
                     ].map(s => (
-                      <div key={s.label} className="bg-white rounded-xl p-2.5 border border-gray-100 shadow-sm">
-                        <div className="flex items-center gap-1 mb-1">
-                          <s.icon className="w-3 h-3 text-gray-300" />
-                          <span className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">{s.label}</span>
-                        </div>
-                        <div className="text-[16px] sm:text-[18px] font-bold text-gray-900 tabular-nums">{s.value}</div>
+                      <div key={s.label} className="bg-white rounded-lg p-2 border border-gray-100 shadow-sm">
+                        <span className="text-[7px] font-semibold text-gray-400 uppercase tracking-wider block">{s.label}</span>
+                        <div className="text-[14px] sm:text-[16px] font-bold text-gray-900 tabular-nums leading-tight">{s.value}</div>
                         {s.change && (
-                          <div className="flex items-center gap-0.5 mt-0.5">
-                            <TrendingUp className="w-2.5 h-2.5 text-emerald-500" />
-                            <span className="text-[9px] font-semibold text-emerald-500">{s.change}</span>
+                          <div className="flex items-center gap-0.5">
+                            <TrendingUp className="w-2 h-2 text-emerald-500" />
+                            <span className="text-[8px] font-semibold text-emerald-500">{s.change}</span>
                           </div>
                         )}
-                        {s.sub && <span className="text-[9px] text-gray-400">{s.sub}</span>}
+                        {s.sub && <span className="text-[8px] text-gray-400">{s.sub}</span>}
                       </div>
                     ))}
                   </div>
 
-                  {/* Growth chart + Brand health grid */}
-                  <div className="grid sm:grid-cols-[1fr_200px] gap-2">
-                    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[11px] font-semibold text-gray-700">Growth Trend</span>
-                        <span className="text-[9px] text-gray-300">Last 30 days</span>
+                  {/* Middle row: Growth chart + Platform performance */}
+                  <div className="grid sm:grid-cols-[1fr_1fr] gap-1.5 mb-2">
+                    <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-2.5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-semibold text-gray-700">Growth Trend</span>
+                        <div className="flex gap-2">
+                          {['7D', '30D', '90D'].map(p => (
+                            <span key={p} className={`text-[7px] px-1.5 py-0.5 rounded ${p === '30D' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-400'}`}>{p}</span>
+                          ))}
+                        </div>
                       </div>
-                      <MiniAreaChart data={GROWTH_DATA} color="#8B5CF6" height={70} />
+                      <MiniAreaChart data={GROWTH_DATA} color="#8B5CF6" height={55} />
                     </div>
-                    {/* Brand health */}
-                    <div className="hidden sm:block bg-white rounded-xl border border-gray-100 shadow-sm p-3">
-                      <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Brand Health</span>
-                      <div className="mt-2 space-y-2">
+                    <div className="hidden sm:block bg-white rounded-lg border border-gray-100 shadow-sm p-2.5">
+                      <span className="text-[10px] font-semibold text-gray-700 block mb-1.5">By Platform (7D views)</span>
+                      <div className="space-y-1">
                         {[
-                          { name: 'The Longevity College', color: '#2e7d32', followers: '100K', views: '1.2M', img: '/images/case-study/longevity-college.jpg' },
-                          { name: 'The Gym College', color: '#00435c', followers: '450K', views: '3.8M', img: '/images/case-study/gym-college.jpg' },
-                          { name: 'Mindset Daily', color: '#6a1b9a', followers: '28K', views: '340K', img: '' },
+                          { platform: 'instagram', reach: '2.3M', followers: '136.7K', color: '#E1306C', pct: '100%' },
+                          { platform: 'youtube', reach: '63.2K', followers: '1.3K', color: '#FF0000', pct: '3%' },
+                          { platform: 'facebook', reach: '0', followers: '2', color: '#1877F2', pct: '0%' },
+                        ].map(p => (
+                          <div key={p.platform} className="flex items-center gap-1.5">
+                            <PlatformIcon platform={p.platform} className="w-3 h-3 text-gray-500" />
+                            <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ background: p.color, width: p.pct }} />
+                            </div>
+                            <span className="text-[7px] text-gray-500 w-7 text-right">{p.reach}</span>
+                            <span className="text-[7px] text-gray-400 w-8 text-right">{p.followers}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom row: Brand health + Recent activity + Top content */}
+                  <div className="grid sm:grid-cols-[180px_1fr_160px] gap-1.5">
+                    {/* Brand health — 7 real brands */}
+                    <div className="hidden sm:block bg-white rounded-lg border border-gray-100 shadow-sm p-2.5">
+                      <span className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">Brands (7)</span>
+                      <div className="mt-1.5 space-y-1">
+                        {[
+                          { name: 'Longevity College', color: '#3498DB', followers: '99.9K', views: '799K' },
+                          { name: 'Healthy College', color: '#2ECC71', followers: '21K', views: '313K' },
+                          { name: 'Harmony College', color: '#e99c2f', followers: '632', views: '312K' },
+                          { name: 'Pure College', color: '#00b4cc', followers: '1.9K', views: '311K' },
+                          { name: 'Wellbeing College', color: '#F39C12', followers: '5.7K', views: '200K' },
+                          { name: 'Holistic College', color: '#9B59B6', followers: '3.8K', views: '204K' },
+                          { name: 'Vitality College', color: '#E74C3C', followers: '3.7K', views: '167K' },
                         ].map(b => (
-                          <div key={b.name} className="flex items-center gap-2">
-                            {b.img ? (
-                              <img src={b.img} alt="" className="w-5 h-5 rounded-full object-cover" />
-                            ) : (
-                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: b.color }}>{b.name[0]}</div>
-                            )}
+                          <div key={b.name} className="flex items-center gap-1.5">
+                            <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[5px] font-bold text-white flex-shrink-0" style={{ background: b.color }}>{b.name[0]}</div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-[9px] font-semibold text-gray-700 truncate">{b.name}</div>
-                              <div className="text-[8px] text-gray-400">{b.followers} · {b.views}</div>
+                              <div className="text-[7px] font-semibold text-gray-700 truncate">{b.name}</div>
+                            </div>
+                            <span className="text-[6px] text-gray-400">{b.followers}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Recent Toby activity */}
+                    <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-2.5">
+                      <span className="text-[10px] font-semibold text-gray-700 block mb-1.5">Toby Activity</span>
+                      <div className="space-y-1">
+                        {[
+                          { action: 'Published reel to Instagram', brand: 'Longevity', time: '2m ago', status: 'success' },
+                          { action: 'Scored content: 92/100 — approved', brand: 'Healthy', time: '5m ago', status: 'success' },
+                          { action: 'Generated 3 carousel slides', brand: 'Pure', time: '8m ago', status: 'success' },
+                          { action: 'Found trending: "cold plunge"', brand: 'Holistic', time: '12m ago', status: 'info' },
+                          { action: 'Scheduled 4 posts across platforms', brand: 'Wellbeing', time: '15m ago', status: 'success' },
+                          { action: 'Learning: dark visuals +3.2x eng', brand: 'Vitality', time: '20m ago', status: 'info' },
+                        ].map((a, i) => (
+                          <div key={i} className="flex items-start gap-1.5">
+                            <div className={`w-1 h-1 rounded-full mt-1 flex-shrink-0 ${a.status === 'success' ? 'bg-emerald-400' : 'bg-blue-400'}`} />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[8px] text-gray-600 block truncate">{a.action}</span>
+                              <span className="text-[7px] text-gray-300">{a.brand} · {a.time}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Top performing content */}
+                    <div className="hidden sm:block bg-white rounded-lg border border-gray-100 shadow-sm p-2.5">
+                      <span className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">Top Content</span>
+                      <div className="mt-1.5 space-y-1.5">
+                        {[
+                          { title: '9 Signs Your Body Is...', views: '799K', img: '/images/reels/longevity/DVtUxxoFLH7.jpg' },
+                          { title: 'Habits Destroying...', views: '313K', img: '/images/reels/longevity/DVtiu8cE8so.jpg' },
+                          { title: 'Healthy Secrets...', views: '312K', img: '/images/reels/healthy/DVthlqkEuO6.jpg' },
+                        ].map((c, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <img src={c.img} alt="" className="w-7 h-9 rounded object-cover" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[8px] font-semibold text-gray-700 truncate">{c.title}</div>
+                              <div className="text-[7px] text-gray-400">{c.views} views</div>
                             </div>
                           </div>
                         ))}
@@ -690,140 +724,194 @@ export function WelcomePage() {
       </section>
 
 
-      {/* ══════════ FIX #4 & #5: CASE STUDIES — Dual: @thelongevitycollege + @thegymcollege ══════════ */}
-      <section className="py-16 sm:py-24 relative overflow-hidden">
+      {/* ══════════ CASE STUDIES — Scrollable slider ══════════ */}
+      <section className="py-16 sm:py-24 relative">
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-900 to-blue-950" />
         <div className="absolute inset-0 opacity-20"><DotPattern className="fill-white/10" /></div>
 
-        <div className="relative max-w-[1200px] mx-auto px-5 sm:px-8">
-          <Reveal>
-            <div className="text-center mb-12 sm:mb-16">
-              <p className="text-[13px] font-semibold text-blue-400 uppercase tracking-widest mb-3">Real Results</p>
-              <h2 className="text-[32px] sm:text-[44px] font-extrabold text-white tracking-tight">Creators growing on autopilot.</h2>
-            </div>
-          </Reveal>
-
-          {/* Two case studies side by side */}
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
-
-            {/* Case Study 1: @thelongevitycollege */}
-            <Reveal delay={0.1}>
-              <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
-                <div className="flex flex-col sm:flex-row gap-6 items-center">
-                  {/* Phone with real-looking content */}
-                  <PhoneFrame className="flex-shrink-0">
-                    <div className="aspect-[9/16] flex flex-col">
-                      {/* Profile header */}
-                      <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
-                        <img src="/images/case-study/longevity-college.jpg" alt="The Longevity College" className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
-                        <div>
-                          <div className="text-[12px] font-bold text-gray-900">thelongevitycollege</div>
-                          <div className="text-[10px] text-gray-400">Health & Longevity</div>
-                        </div>
-                      </div>
-                      {/* Stats */}
-                      <div className="grid grid-cols-3 py-3 px-2 text-center border-b border-gray-100">
-                        <div><div className="text-[14px] font-extrabold text-gray-900">847</div><div className="text-[9px] text-gray-400">Posts</div></div>
-                        <div><div className="text-[14px] font-extrabold text-gray-900">100K</div><div className="text-[9px] text-gray-400">Followers</div></div>
-                        <div><div className="text-[14px] font-extrabold text-gray-900">1.2K</div><div className="text-[9px] text-gray-400">Following</div></div>
-                      </div>
-                      {/* Grid of reels — REAL Instagram thumbnails */}
-                      <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
-                        {['DVtiu8cE8so', 'DVtUxxoFLH7', 'DVtHNqnGTbZ', 'DVsrzoykSio', 'DVsQfL0CQB_', 'DVr02IFEw1E', 'DVrZSOFCj3E', 'DVq9sGIjaMr', 'DVqv-tzFCyn'].map((code, i) => (
-                          <div key={i} className="aspect-square overflow-hidden">
-                            <img src={`/images/reels/longevity/${code}.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </PhoneFrame>
-
-                  {/* Story */}
-                  <div className="flex-1 text-center sm:text-left">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
-                      <Zap className="w-3 h-3 text-emerald-400" />
-                      <span className="text-[11px] font-semibold text-emerald-400">Full Autopilot</span>
-                    </div>
-                    <h3 className="text-[24px] sm:text-[28px] font-extrabold text-white leading-tight">
-                      0 → 100K<br />
-                      <span className="text-emerald-400">in 2 months</span>
-                    </h3>
-                    <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
-                      <strong className="text-white">@thelongevitycollege</strong> connected their brand, set their Content DNA, and let Toby run. Zero manual content creation.
-                    </p>
-                    <div className="mt-5 flex items-start gap-5">
-                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">100K</div><div className="text-[10px] text-gray-500">Followers</div></div>
-                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">847</div><div className="text-[10px] text-gray-500">Reels</div></div>
-                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">0hrs</div><div className="text-[10px] text-gray-500">Manual work</div></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-
-            {/* Case Study 2: @thegymcollege */}
-            <Reveal delay={0.2}>
-              <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
-                <div className="flex flex-col sm:flex-row gap-6 items-center">
-                  <PhoneFrame className="flex-shrink-0">
-                    <div className="aspect-[9/16] flex flex-col">
-                      {/* Profile header */}
-                      <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
-                        <img src="/images/case-study/gym-college.jpg" alt="The Gym College" className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
-                        <div>
-                          <div className="text-[12px] font-bold text-gray-900">thegymcollege</div>
-                          <div className="text-[10px] text-gray-400">Fitness & Training</div>
-                        </div>
-                      </div>
-                      {/* Stats */}
-                      <div className="grid grid-cols-3 py-3 px-2 text-center border-b border-gray-100">
-                        <div><div className="text-[14px] font-extrabold text-gray-900">1.2K</div><div className="text-[9px] text-gray-400">Posts</div></div>
-                        <div><div className="text-[14px] font-extrabold text-gray-900">450K</div><div className="text-[9px] text-gray-400">Followers</div></div>
-                        <div><div className="text-[14px] font-extrabold text-gray-900">986</div><div className="text-[9px] text-gray-400">Following</div></div>
-                      </div>
-                      {/* Grid of reels — REAL Instagram thumbnails */}
-                      <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
-                        {['DVtAeyPmbAC', 'DVskyXTCafC', 'DVsJYp1DB_c', 'DVrt8DDDRrr', 'DVrWzhyiPpP', 'DVq2-vtClK0', 'DVqb_rfGUJ7', 'DVp_6RdkkU-', 'DVpkdHbj4Md'].map((code, i) => (
-                          <div key={i} className="aspect-square overflow-hidden">
-                            <img src={`/images/reels/gym/${code}.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </PhoneFrame>
-
-                  {/* Story */}
-                  <div className="flex-1 text-center sm:text-left">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
-                      <TrendingUp className="w-3 h-3 text-blue-400" />
-                      <span className="text-[11px] font-semibold text-blue-400">Scaling Fast</span>
-                    </div>
-                    <h3 className="text-[24px] sm:text-[28px] font-extrabold text-white leading-tight">
-                      300K → 450K<br />
-                      <span className="text-blue-400">in 3 months</span>
-                    </h3>
-                    <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
-                      <strong className="text-white">@thegymcollege</strong> was already big. Toby scaled them further — 150K new followers with AI-optimized content that kept the brand voice intact.
-                    </p>
-                    <div className="mt-5 flex items-start gap-5">
-                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">+150K</div><div className="text-[10px] text-gray-500">Followers</div></div>
-                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">1.2K</div><div className="text-[10px] text-gray-500">Reels</div></div>
-                      <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">3mo</div><div className="text-[10px] text-gray-500">Timeline</div></div>
-                    </div>
-                  </div>
-                </div>
+        <div className="relative">
+          <div className="max-w-[1200px] mx-auto px-5 sm:px-8">
+            <Reveal>
+              <div className="text-center mb-12 sm:mb-16">
+                <p className="text-[13px] font-semibold text-blue-400 uppercase tracking-widest mb-3">Real Results</p>
+                <h2 className="text-[32px] sm:text-[44px] font-extrabold text-white tracking-tight">Creators growing on autopilot.</h2>
               </div>
             </Reveal>
           </div>
 
-          {/* CTA */}
-          <Reveal delay={0.3}>
-            <div className="text-center mt-10">
-              <Link to={ctaLink} className="inline-flex items-center gap-2 bg-white text-gray-900 font-semibold text-[15px] px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors">
-                Start your growth story <ArrowRight className="w-4 h-4" />
-              </Link>
+          {/* Horizontal scrollable case studies — full width for scroll */}
+          <div className="relative">
+            <div className="flex gap-6 overflow-x-auto pb-6 snap-x snap-mandatory px-5 sm:px-8 lg:px-[calc((100vw-1200px)/2+2rem)]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
+
+              {/* Case Study 1: @thelongevitycollege */}
+              <Reveal delay={0.1}>
+                <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8 snap-center w-[90vw] sm:w-[680px] max-w-[720px] flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row gap-6 items-center">
+                    <PhoneFrame className="flex-shrink-0" small>
+                      <div className="aspect-[9/16] flex flex-col">
+                        <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
+                          <img src="/images/case-study/longevity-college.jpg" alt="The Longevity College" className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
+                          <div>
+                            <div className="text-[12px] font-bold text-gray-900">thelongevitycollege</div>
+                            <div className="text-[10px] text-gray-400">Health & Longevity</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 py-3 px-2 text-center border-b border-gray-100">
+                          <div><div className="text-[14px] font-extrabold text-gray-900">847</div><div className="text-[9px] text-gray-400">Posts</div></div>
+                          <div><div className="text-[14px] font-extrabold text-gray-900">100K</div><div className="text-[9px] text-gray-400">Followers</div></div>
+                          <div><div className="text-[14px] font-extrabold text-gray-900">1.2K</div><div className="text-[9px] text-gray-400">Following</div></div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
+                          {['DVtiu8cE8so', 'DVtUxxoFLH7', 'DVtHNqnGTbZ', 'DVsrzoykSio', 'DVsQfL0CQB_', 'DVr02IFEw1E', 'DVrZSOFCj3E', 'DVq9sGIjaMr', 'DVqv-tzFCyn'].map((code, i) => (
+                            <div key={i} className="aspect-square overflow-hidden">
+                              <img src={`/images/reels/longevity/${code}.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PhoneFrame>
+                    <div className="flex-1 text-center sm:text-left">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
+                        <Zap className="w-3 h-3 text-emerald-400" />
+                        <span className="text-[11px] font-semibold text-emerald-400">Full Autopilot</span>
+                      </div>
+                      <h3 className="text-[24px] sm:text-[28px] font-extrabold text-white leading-tight">
+                        0 → 100K<br />
+                        <span className="text-emerald-400">in 2 months</span>
+                      </h3>
+                      <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
+                        <strong className="text-white">@thelongevitycollege</strong> connected their brand, set their Content DNA, and let Toby run. Zero manual content creation.
+                      </p>
+                      <div className="mt-5 flex items-start gap-5">
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">100K</div><div className="text-[10px] text-gray-500">Followers</div></div>
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">847</div><div className="text-[10px] text-gray-500">Reels</div></div>
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">0hrs</div><div className="text-[10px] text-gray-500">Manual work</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+
+              {/* Case Study 2: @thegymcollege */}
+              <Reveal delay={0.2}>
+                <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8 snap-center w-[90vw] sm:w-[680px] max-w-[720px] flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row gap-6 items-center">
+                    <PhoneFrame className="flex-shrink-0" small>
+                      <div className="aspect-[9/16] flex flex-col">
+                        <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
+                          <img src="/images/case-study/gym-college.jpg" alt="The Gym College" className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
+                          <div>
+                            <div className="text-[12px] font-bold text-gray-900">thegymcollege</div>
+                            <div className="text-[10px] text-gray-400">Fitness & Training</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 py-3 px-2 text-center border-b border-gray-100">
+                          <div><div className="text-[14px] font-extrabold text-gray-900">1.2K</div><div className="text-[9px] text-gray-400">Posts</div></div>
+                          <div><div className="text-[14px] font-extrabold text-gray-900">450K</div><div className="text-[9px] text-gray-400">Followers</div></div>
+                          <div><div className="text-[14px] font-extrabold text-gray-900">986</div><div className="text-[9px] text-gray-400">Following</div></div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
+                          {['DVtAeyPmbAC', 'DVskyXTCafC', 'DVsJYp1DB_c', 'DVrt8DDDRrr', 'DVrWzhyiPpP', 'DVq2-vtClK0', 'DVqb_rfGUJ7', 'DVp_6RdkkU-', 'DVpkdHbj4Md'].map((code, i) => (
+                            <div key={i} className="aspect-square overflow-hidden">
+                              <img src={`/images/reels/gym/${code}.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PhoneFrame>
+                    <div className="flex-1 text-center sm:text-left">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
+                        <TrendingUp className="w-3 h-3 text-blue-400" />
+                        <span className="text-[11px] font-semibold text-blue-400">Scaling Fast</span>
+                      </div>
+                      <h3 className="text-[24px] sm:text-[28px] font-extrabold text-white leading-tight">
+                        300K → 450K<br />
+                        <span className="text-blue-400">in 3 months</span>
+                      </h3>
+                      <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
+                        <strong className="text-white">@thegymcollege</strong> was already big. Toby scaled them further — 150K new followers with AI-optimized content that kept the brand voice intact.
+                      </p>
+                      <div className="mt-5 flex items-start gap-5">
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">+150K</div><div className="text-[10px] text-gray-500">Followers</div></div>
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">1.2K</div><div className="text-[10px] text-gray-500">Reels</div></div>
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">3mo</div><div className="text-[10px] text-gray-500">Timeline</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+
+              {/* Case Study 3: @thehealthycollege — NEW */}
+              <Reveal delay={0.3}>
+                <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8 snap-center w-[90vw] sm:w-[680px] max-w-[720px] flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row gap-6 items-center">
+                    <PhoneFrame className="flex-shrink-0" small>
+                      <div className="aspect-[9/16] flex flex-col">
+                        <div className="p-3 flex items-center gap-2.5 border-b border-gray-100 pt-7">
+                          <img src="/images/case-study/healthy-college.jpg" alt="The Healthy College" className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
+                          <div>
+                            <div className="text-[12px] font-bold text-gray-900">thehealthycollege</div>
+                            <div className="text-[10px] text-gray-400">Health & Wellness</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 py-3 px-2 text-center border-b border-gray-100">
+                          <div><div className="text-[14px] font-extrabold text-gray-900">296</div><div className="text-[9px] text-gray-400">Posts</div></div>
+                          <div><div className="text-[14px] font-extrabold text-gray-900">21K</div><div className="text-[9px] text-gray-400">Followers</div></div>
+                          <div><div className="text-[14px] font-extrabold text-gray-900">842</div><div className="text-[9px] text-gray-400">Following</div></div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-[1px] flex-1 bg-gray-100">
+                          {['DVthlqkEuO6', 'DVtbt80iLOm', 'DVtOGg9FD2j', 'DVtAjiQk35m', 'DVsk2sQiX0f', 'DVsJh68lcS4', 'DVrt3LmDdhc', 'DVrW-5-DH_Y', 'DVq2vUXEUZ5'].map((code, i) => (
+                            <div key={i} className="aspect-square overflow-hidden">
+                              <img src={`/images/reels/healthy/${code}.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PhoneFrame>
+                    <div className="flex-1 text-center sm:text-left">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 mb-4">
+                        <Zap className="w-3 h-3 text-amber-400" />
+                        <span className="text-[11px] font-semibold text-amber-400">Just Started</span>
+                      </div>
+                      <h3 className="text-[24px] sm:text-[28px] font-extrabold text-white leading-tight">
+                        0 → 20K<br />
+                        <span className="text-amber-400">in 2 weeks</span>
+                      </h3>
+                      <p className="mt-3 text-[13px] text-gray-400 leading-relaxed">
+                        <strong className="text-white">@thehealthycollege</strong> launched 2 weeks ago. Connected to Toby on day one — already at 20K followers and accelerating.
+                      </p>
+                      <div className="mt-5 flex items-start gap-5">
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">20K</div><div className="text-[10px] text-gray-500">Followers</div></div>
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">296</div><div className="text-[10px] text-gray-500">Reels</div></div>
+                        <div className="text-center sm:text-left"><div className="text-[22px] sm:text-[24px] font-extrabold text-white">2wk</div><div className="text-[10px] text-gray-500">Timeline</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+
             </div>
-          </Reveal>
+            {/* Scroll indicator */}
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <div className="flex gap-1.5">
+                <div className="w-6 h-1.5 rounded-full bg-white/40" />
+                <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+              </div>
+              <span className="text-[11px] text-gray-500 ml-2">Scroll to see more →</span>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div className="max-w-[1200px] mx-auto px-5 sm:px-8">
+            <Reveal delay={0.4}>
+              <div className="text-center mt-10">
+                <Link to={ctaLink} className="inline-flex items-center gap-2 bg-white text-gray-900 font-semibold text-[15px] px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors">
+                  Start your growth story <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
@@ -833,9 +921,9 @@ export function WelcomePage() {
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <div className="text-center mb-12 sm:mb-16">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-violet-100 bg-violet-50/80 mb-4">
-                <Bot className="w-4 h-4 text-violet-600" />
-                <span className="text-[13px] font-semibold text-violet-700">Meet Toby — Your AI Agent</span>
+              <div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-violet-200 bg-violet-50/80 mb-6 shadow-sm">
+                <Bot className="w-6 h-6 text-violet-600" />
+                <span className="text-[18px] sm:text-[22px] font-bold text-violet-700">Meet Toby — Your AI Agent</span>
               </div>
               <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-gray-900">Six steps. Fully autonomous.</h2>
               <p className="mt-4 text-[16px] sm:text-[18px] text-gray-500 max-w-2xl mx-auto">Toby runs this cycle every 5 minutes — finding, creating, scoring, scheduling, publishing, and learning from results.</p>
@@ -973,108 +1061,47 @@ export function WelcomePage() {
       </section>
 
 
-      {/* ══════════ FIX #7: CONTENT TYPES — With real rendered examples ══════════ */}
+      {/* ══════════ YOUR ENTIRE TEAM — REPLACED ══════════ */}
       <section className="py-16 sm:py-24 px-5 sm:px-8 bg-gray-50">
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <div className="text-center mb-12 sm:mb-16">
-              <p className="text-[13px] font-semibold text-pink-600 uppercase tracking-widest mb-3">Content Types</p>
-              <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-gray-900">Reels, Carousels, and more.</h2>
-              <p className="mt-4 text-[16px] text-gray-500 max-w-2xl mx-auto">Professional content rendered in seconds — with your brand colors, typography, and voice.</p>
+              <p className="text-[13px] font-semibold text-pink-600 uppercase tracking-widest mb-3">Why ViralToby</p>
+              <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-gray-900">Your entire content team — in one AI.</h2>
+              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-500 max-w-4xl mx-auto">Professional content rendered in seconds — with your brand colors, typography, and voice. No designers, no copywriters, no scheduling tools.</p>
             </div>
           </Reveal>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Reels */}
-            <Reveal delay={0.1}>
-              <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
-                    <Film className="w-5 h-5 text-white" />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[
+              { role: 'Trend Researcher', desc: 'Finds viral topics in your niche using real-time data', icon: Search, color: 'from-cyan-500 to-blue-600', price: '$800/mo' },
+              { role: 'Copywriter', desc: 'Writes hooks, captions, and scripts in your brand voice', icon: Wand2, color: 'from-violet-500 to-purple-600', price: '$1,200/mo' },
+              { role: 'Designer', desc: 'Creates branded reels, carousels, and thumbnails', icon: Palette, color: 'from-pink-500 to-rose-600', price: '$1,500/mo' },
+              { role: 'Social Media Manager', desc: 'Schedules and publishes across all 6 platforms', icon: Calendar, color: 'from-emerald-500 to-teal-600', price: '$600/mo' },
+              { role: 'Data Analyst', desc: 'Tracks what works and optimizes strategy daily', icon: BarChart3, color: 'from-amber-500 to-orange-600', price: '$900/mo' },
+            ].map((t, i) => (
+              <Reveal key={t.role} delay={i * 0.08}>
+                <div className="group relative rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-xl hover:shadow-black/[0.04] transition-all hover:-translate-y-0.5 h-full">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mb-3 shadow-lg`}>
+                    <t.icon className="w-5 h-5 text-white" />
                   </div>
-                  <div>
-                    <h3 className="text-[18px] font-bold text-gray-900">Reels & Shorts</h3>
-                    <p className="text-[12px] text-gray-400">Instagram, TikTok, YouTube, Facebook</p>
-                  </div>
+                  <h3 className="text-[15px] font-bold text-gray-900 mb-1">{t.role}</h3>
+                  <p className="text-[13px] text-gray-500 leading-relaxed mb-3">{t.desc}</p>
+                  <div className="text-[12px] text-gray-300 line-through">{t.price}</div>
                 </div>
-                <p className="text-[14px] text-gray-500 leading-relaxed mb-6">Scroll-stopping vertical videos with custom typography, brand colors, and hook-optimized text overlays.</p>
-
-                {/* Real reel thumbnails from Instagram */}
-                <div className="flex gap-3 justify-center">
-                  {['DVtiu8cE8so', 'DVsrzoykSio', 'DVr02IFEw1E'].map(code => (
-                    <div key={code} className="w-[90px] sm:w-[100px] aspect-[9/16] rounded-xl overflow-hidden shadow-lg">
-                      <img src={`/images/reels/longevity/${code}.jpg`} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                  <div className="hidden sm:block w-[100px] aspect-[9/16] rounded-xl overflow-hidden shadow-lg">
-                    <img src="/images/reels/gym/DVtAeyPmbAC.jpg" alt="" className="w-full h-full object-cover" />
-                  </div>
-                </div>
-
-                <div className="mt-5 text-[12px] text-gray-400 flex items-center gap-2">
-                  <Zap className="w-3 h-3 text-pink-500" />
-                  <span>Generate a reel in <strong className="text-gray-600">30 seconds</strong></span>
-                </div>
-              </div>
-            </Reveal>
-
-            {/* Carousels */}
-            <Reveal delay={0.2}>
-              <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                    <Palette className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-[18px] font-bold text-gray-900">Carousels</h3>
-                    <p className="text-[12px] text-gray-400">Instagram, Facebook</p>
-                  </div>
-                </div>
-                <p className="text-[14px] text-gray-500 leading-relaxed mb-6">Multi-slide educational posts with branded headers, consistent typography, and swipe-optimized layouts.</p>
-
-                {/* Real-looking carousel previews */}
-                <div className="flex gap-2 justify-center">
-                  <div className="w-[85px] sm:w-[95px]">
-                    <CarouselSlideMockup
-                      title={"The Science of\nSleep Quality"}
-                      brandName="The Longevity College"
-                      brandColor="#2e7d32"
-                      isTitle
-                    />
-                  </div>
-                  <div className="w-[85px] sm:w-[95px]">
-                    <CarouselSlideMockup
-                      title="Why 7 hours isn't enough"
-                      body="Most people sleep 7 hours but still wake up tired. The problem isn't duration — it's sleep architecture."
-                      brandName="The Longevity College"
-                      brandColor="#2e7d32"
-                    />
-                  </div>
-                  <div className="w-[85px] sm:w-[95px]">
-                    <CarouselSlideMockup
-                      title="Deep sleep matters most"
-                      body="Your body repairs and regenerates during deep sleep. Without enough, you age faster."
-                      brandName="The Longevity College"
-                      brandColor="#2e7d32"
-                    />
-                  </div>
-                  <div className="hidden sm:block w-[95px]">
-                    <CarouselSlideMockup
-                      title="3 tips tonight"
-                      body="1. No screens 1hr before bed. 2. Keep room at 65°F. 3. Consistent wake time."
-                      brandName="The Longevity College"
-                      brandColor="#2e7d32"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-5 text-[12px] text-gray-400 flex items-center gap-2">
-                  <Zap className="w-3 h-3 text-blue-500" />
-                  <span>10-slide carousel in <strong className="text-gray-600">1 click</strong></span>
-                </div>
-              </div>
-            </Reveal>
+              </Reveal>
+            ))}
           </div>
+
+          <Reveal delay={0.5}>
+            <div className="text-center mt-8">
+              <div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-gray-200 shadow-sm">
+                <span className="text-[14px] text-gray-400 line-through">$5,000+/mo for a team</span>
+                <ArrowRight className="w-4 h-4 text-gray-300" />
+                <span className="text-[16px] font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">From $29/mo with Toby</span>
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 

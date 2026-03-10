@@ -6,13 +6,8 @@ FROM node:20-slim AS frontend-build
 WORKDIR /app
 
 # Copy package manifests first for npm cache layer
-# Temporarily remove canvas (needs native libs only in runtime stage)
 COPY package*.json ./
-RUN node -e " \
-  const pkg = require('./package.json'); \
-  delete pkg.dependencies['canvas']; \
-  require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));" \
-  && npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 # Copy frontend source + config
 COPY public/ public/
@@ -42,10 +37,11 @@ WORKDIR /app
 # Disable Python output buffering for Railway logs
 ENV PYTHONUNBUFFERED=1
 
-# System deps: image processing libs + ffmpeg + Node for carousel renderer
+# System deps: image processing libs + ffmpeg + node-gyp build tools for canvas
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    make \
     curl \
     libjpeg-dev \
     zlib1g-dev \
@@ -68,9 +64,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy carousel renderer + its deps (needs canvas npm package at runtime)
+# Install runtime Node deps (konva etc.) + canvas separately (needs native build)
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps --omit=dev 2>/dev/null || npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps --omit=dev && npm install canvas@2.11.2
 
 # Copy built frontend from stage 1
 COPY --from=frontend-build /app/dist dist/

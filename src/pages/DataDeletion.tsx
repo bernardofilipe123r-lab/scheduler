@@ -1,20 +1,21 @@
 import { Trash2, Mail, LogOut, Instagram, ShieldX } from 'lucide-react'
+import { LegalLayout } from '@/shared/components/LegalLayout'
 
 const APP_NAME = 'ViralToby'
 const CONTACT_EMAIL = 'viraltobyapp@gmail.com'
 
 export function DataDeletionPage() {
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-200">
-      <div className="max-w-3xl mx-auto px-5 py-16">
+    <LegalLayout>
+      <div className="max-w-3xl mx-auto px-5">
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
-          <Trash2 className="h-7 w-7 text-red-400" />
-          <h1 className="text-3xl font-bold text-white">Data Deletion Request</h1>
+          <Trash2 className="h-7 w-7 text-red-500" />
+          <h1 className="text-3xl font-bold text-gray-900">Data Deletion Request</h1>
         </div>
-        <p className="text-sm text-gray-500 mb-10">{APP_NAME}</p>
+        <p className="text-sm text-gray-400 mb-10">{APP_NAME}</p>
 
-        <p className="mb-10 text-gray-300">
+        <p className="mb-10 text-gray-600">
           We respect your right to control your data. Here's how to delete all data we store about
           you:
         </p>
@@ -28,10 +29,10 @@ export function DataDeletionPage() {
           <ol className="list-decimal pl-6 space-y-2">
             <li>Log in to {APP_NAME}</li>
             <li>
-              Go to <strong className="text-white">Settings → Brand Settings</strong>
+              Go to <strong className="text-gray-900">Settings → Brand Settings</strong>
             </li>
             <li>
-              Click <strong className="text-white">"Disconnect"</strong> next to your Instagram,
+              Click <strong className="text-gray-900">"Disconnect"</strong> next to your Instagram,
               Facebook, Threads, TikTok, Bluesky, or YouTube account
             </li>
             <li>This immediately deletes all stored tokens and account identifiers</li>
@@ -46,17 +47,17 @@ export function DataDeletionPage() {
         >
           <ol className="list-decimal pl-6 space-y-2">
             <li>
-              Open <strong className="text-white">Instagram → Settings → Apps and Websites</strong>
+              Open <strong className="text-gray-900">Instagram → Settings → Apps and Websites</strong>
             </li>
             <li>
-              Find <strong className="text-white">{APP_NAME}</strong> and click{' '}
-              <strong className="text-white">Remove</strong>
+              Find <strong className="text-gray-900">{APP_NAME}</strong> and click{' '}
+              <strong className="text-gray-900">Remove</strong>
             </li>
             <li>
               For YouTube, go to{' '}
               <a
                 href="https://myaccount.google.com/permissions"
-                className="text-blue-400 hover:underline"
+                className="text-blue-600 hover:underline"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -65,13 +66,13 @@ export function DataDeletionPage() {
               and revoke access for {APP_NAME}
             </li>
             <li>
-              For Threads, go to <strong className="text-white">Settings → Apps</strong> and remove {APP_NAME}
+              For Threads, go to <strong className="text-gray-900">Settings → Apps</strong> and remove {APP_NAME}
             </li>
             <li>
-              For TikTok, go to <strong className="text-white">Settings → Manage App Permissions</strong> and revoke access for {APP_NAME}
+              For TikTok, go to <strong className="text-gray-900">Settings → Manage App Permissions</strong> and revoke access for {APP_NAME}
             </li>
             <li>
-              For Bluesky, go to <strong className="text-white">Settings → App Passwords</strong> and revoke the app password used for {APP_NAME}
+              For Bluesky, go to <strong className="text-gray-900">Settings → App Passwords</strong> and revoke the app password used for {APP_NAME}
             </li>
             <li>
               This revokes our access. We will automatically purge your data upon detecting the
@@ -88,22 +89,22 @@ export function DataDeletionPage() {
         >
           <p>
             Send an email to{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-400 hover:underline">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-600 hover:underline">
               {CONTACT_EMAIL}
             </a>{' '}
             with the subject line{' '}
-            <strong className="text-white">"Data Deletion Request"</strong> and include your Instagram
+            <strong className="text-gray-900">"Data Deletion Request"</strong> and include your Instagram
             username or email. We will delete all your data within 48 hours and confirm by email.
           </p>
         </Option>
 
         {/* What gets deleted */}
-        <div className="mt-12 border border-gray-800 rounded-xl p-6 bg-gray-900/50">
+        <div className="mt-12 border border-gray-200 rounded-xl p-6 bg-gray-50">
           <div className="flex items-center gap-2 mb-4">
-            <ShieldX className="h-5 w-5 text-red-400" />
-            <h2 className="text-lg font-semibold text-white">What Gets Deleted</h2>
+            <ShieldX className="h-5 w-5 text-red-500" />
+            <h2 className="text-lg font-semibold text-gray-900">What Gets Deleted</h2>
           </div>
-          <ul className="list-disc pl-6 space-y-1.5 text-gray-300">
+          <ul className="list-disc pl-6 space-y-1.5 text-gray-600">
             <li>Instagram / Facebook access tokens</li>
             <li>Instagram Business Account ID and Facebook Page ID</li>
             <li>Instagram username and Facebook Page name</li>
@@ -118,7 +119,7 @@ export function DataDeletionPage() {
           </p>
         </div>
       </div>
-    </div>
+    </LegalLayout>
   )
 }
 
@@ -134,15 +135,15 @@ function Option({
   children: React.ReactNode
 }) {
   return (
-    <section className="mb-8 border border-gray-800 rounded-xl p-6 bg-gray-900/30">
+    <section className="mb-8 border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
       <div className="flex items-center gap-3 mb-4">
-        <span className="flex items-center justify-center h-7 w-7 rounded-full bg-blue-500/20 text-blue-400 text-sm font-bold">
+        <span className="flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600 text-sm font-bold">
           {number}
         </span>
-        <span className="text-blue-400">{icon}</span>
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <span className="text-blue-600">{icon}</span>
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
       </div>
-      <div className="text-gray-300 leading-relaxed">{children}</div>
+      <div className="text-gray-600 leading-relaxed">{children}</div>
     </section>
   )
 }
