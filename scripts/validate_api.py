@@ -299,7 +299,6 @@ def check_endpoints():
         ("/reels/auto-generate-content", "Auto-generate content"),
         ("/reels/generate-captions", "Generate captions"),
         ("/reels/generate-post-title", "Generate post title"),
-        ("/reels/generate-post-titles-batch", "Batch post titles"),
         ("/reels/generate-post-background", "Post background image"),
         ("/reels/generate-image-prompt", "Image prompt generation"),
         ("/reels/generate-background", "Reel background image"),

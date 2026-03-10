@@ -1,8 +1,8 @@
 /**
  * AuthContext — Supabase-backed authentication state.
  */
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { supabase } from '@/shared/api/supabase'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { buildAppUrl, supabase } from '@/shared/api/supabase'
 import { apiClient } from '@/shared/api/client'
 import type { User } from '@supabase/supabase-js'
 import type { AuthUser } from './api/auth-api'
@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { name, onboarding_completed: false },
-        emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
+        emailRedirectTo: buildAppUrl('/login'),
       },
     })
     if (error) throw new Error(error.message)
@@ -122,10 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     const { data: { user: freshUser } } = await supabase.auth.getUser()
     setUser(mapUser(freshUser ?? null))
-  }
+  }, [])
 
   return (
     <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, register, logout, refreshUser }}>

@@ -6,7 +6,7 @@ import { User, Mail, KeyRound, Loader2, ArrowLeft, Pencil, Send, ShieldCheck, Ca
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/features/auth'
-import { supabase } from '@/shared/api/supabase'
+import { buildAppUrl, supabase } from '@/shared/api/supabase'
 
 export function ProfilePage() {
   const { user, refreshUser } = useAuth()
@@ -28,23 +28,26 @@ export function ProfilePage() {
   const [avatarSaving, setAvatarSaving] = useState(false)
 
   useEffect(() => {
-    refreshUser()
-  }, [])
+    void refreshUser()
+  }, [refreshUser])
 
   useEffect(() => {
     if (user?.name) setDisplayName(user.name)
     setAvatarUrl(user?.avatarUrl || '')
   }, [user?.name, user?.avatarUrl])
 
+  const trimmedDisplayName = displayName.trim()
   const userInitial = (displayName || user?.name || 'U').charAt(0).toUpperCase()
-
-  const nameChanged = displayName !== (user?.name || '')
+  const currentName = (user?.name || '').trim()
+  const currentEmail = user?.email || ''
+  const sanitizedNewEmail = newEmail.trim()
+  const nameChanged = trimmedDisplayName !== currentName
 
   const handleSaveName = async () => {
-    if (!nameChanged) return
+    if (!nameChanged || !trimmedDisplayName) return
     setNameSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({ data: { name: displayName } })
+      const { error } = await supabase.auth.updateUser({ data: { name: trimmedDisplayName } })
       if (error) throw new Error(error.message)
       await refreshUser()
       toast.success('Display name updated')
@@ -62,7 +65,9 @@ export function ProfilePage() {
     }
     setResetSending(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email)
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: buildAppUrl('/reset-password'),
+      })
       if (error) throw new Error(error.message)
       toast.success('Password reset email sent — check your inbox')
     } catch {
@@ -74,10 +79,13 @@ export function ProfilePage() {
 
   const handleChangeEmail = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newEmail) return
+    if (!sanitizedNewEmail) return
     setEmailSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({ email: newEmail })
+      const { error } = await supabase.auth.updateUser(
+        { email: sanitizedNewEmail },
+        { emailRedirectTo: buildAppUrl('/profile') },
+      )
       if (error) throw new Error(error.message)
       toast.success('A confirmation email has been sent to your new email address. The change will take effect once confirmed.')
       setNewEmail('')
@@ -110,7 +118,6 @@ export function ProfilePage() {
             return
           }
 
-          // Center-crop to a square so avatar rendering is consistent everywhere.
           context.drawImage(
             image,
             sourceX,
@@ -157,192 +164,255 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-500" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={displayName || 'User avatar'} className="w-8 h-8 rounded-full object-cover border border-gray-200" />
-            ) : (
-              <User className="w-7 h-7 text-primary-500" />
-            )}
-            Profile
-          </h1>
-          <p className="text-gray-500 mt-1">Manage your account information</p>
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-500" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName || 'User avatar'} className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+              ) : (
+                <User className="w-7 h-7 text-primary-500" />
+              )}
+              Profile
+            </h1>
+            <p className="text-gray-500 mt-1">Manage your account information</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[540px]">
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Display Name</p>
+            <p className="mt-2 truncate text-sm font-semibold text-gray-900">{currentName || 'Not set'}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Email</p>
+            <p className="mt-2 truncate text-sm font-semibold text-gray-900">{currentEmail || 'No email found'}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Security</p>
+            <p className="mt-2 text-sm font-semibold text-gray-900">Email-verified flows</p>
+          </div>
         </div>
       </div>
 
-      {/* Profile Info Card */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-            <User className="w-5 h-5 text-primary-500" />
-            Account Information
-          </h2>
-        </div>
-
-        <div className="p-6 space-y-5">
-          <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 border border-gray-200 rounded-xl">
-            <div className="flex items-center gap-4 min-w-0">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName || 'User avatar'} className="w-16 h-16 rounded-full object-cover border border-gray-200" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-2xl font-bold border border-primary-200">
-                  {userInitial}
+      <div className="grid gap-6 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+        <aside className="self-start space-y-6 xl:sticky xl:top-8">
+          <div className="overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm">
+            <div className="bg-gradient-to-br from-primary-50 via-white to-amber-50 px-6 py-7">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary-600">Account Overview</p>
+                  <h2 className="mt-3 text-xl font-semibold text-gray-900">Keep your profile current</h2>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Profile changes update your Supabase account directly. Email and password changes always require confirmation links.
+                  </p>
                 </div>
-              )}
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900">Profile Image</p>
-                <p className="text-xs text-gray-500 truncate">Upload a square image for the best result.</p>
+                <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
+                  <ShieldCheck className="h-6 w-6 text-primary-500" />
+                </div>
               </div>
             </div>
 
-            <label className="shrink-0">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                className="hidden"
-                disabled={avatarSaving}
-              />
-              <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer text-sm font-medium">
-                {avatarSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                {avatarSaving ? 'Uploading...' : 'Upload Image'}
-              </span>
-            </label>
-          </div>
-
-          {/* Editable Display Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Display Name</label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Pencil className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  style={{ paddingLeft: "42px" }}
-                />
+            <div className="space-y-5 px-6 py-6">
+              <div className="flex flex-col items-center rounded-3xl border border-gray-200 bg-gray-50 px-5 py-6 text-center">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={displayName || 'User avatar'} className="h-24 w-24 rounded-full border border-gray-200 object-cover shadow-sm" />
+                ) : (
+                  <div className="flex h-24 w-24 items-center justify-center rounded-full border border-primary-200 bg-primary-100 text-3xl font-bold text-primary-700 shadow-sm">
+                    {userInitial}
+                  </div>
+                )}
+                <p className="mt-4 text-lg font-semibold text-gray-900">{currentName || 'Unnamed user'}</p>
+                <p className="mt-1 truncate text-sm text-gray-500">{currentEmail || 'No email found'}</p>
               </div>
-              {nameChanged && (
+
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-gray-200 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Current email</p>
+                  <p className="mt-2 break-all text-sm font-medium text-gray-900">{currentEmail || 'No email found'}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Change policy</p>
+                  <p className="mt-2 text-sm text-gray-600">Email changes and password resets only complete after the verification link flow finishes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div className="grid gap-6 2xl:grid-cols-2">
+          <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm 2xl:col-span-2">
+            <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+              <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+                <User className="w-5 h-5 text-primary-500" />
+                Account Information
+              </h2>
+            </div>
+
+            <div className="grid gap-6 p-6 xl:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+              <div className="flex flex-col justify-between rounded-3xl border border-gray-200 bg-gray-50 p-5">
+                <div className="flex items-center gap-4 min-w-0">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={displayName || 'User avatar'} className="w-16 h-16 rounded-full object-cover border border-gray-200" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-primary-200 bg-primary-100 text-2xl font-bold text-primary-700">
+                      {userInitial}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Profile Image</p>
+                    <p className="text-xs leading-5 text-gray-500">Upload a square image for the best result.</p>
+                  </div>
+                </div>
+
+                <label className="mt-6 inline-flex shrink-0 self-start">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                    disabled={avatarSaving}
+                  />
+                  <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100">
+                    {avatarSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                    {avatarSaving ? 'Uploading...' : 'Upload Image'}
+                  </span>
+                </label>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">Display Name</label>
+                  <div className="flex flex-col gap-2 lg:flex-row">
+                    <div className="relative flex-1">
+                      <Pencil className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 py-3 pl-12 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        style={{ paddingLeft: '42px' }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveName}
+                      disabled={!nameChanged || !trimmedDisplayName || nameSaving}
+                      className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary-500 px-5 py-3 font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50 lg:min-w-[132px]"
+                    >
+                      {nameSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-700">
+                    Email Address
+                    <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-normal text-primary-600">
+                      Change email below
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="email"
+                      value={currentEmail}
+                      readOnly
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-12 pr-4 text-gray-600"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+              <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+                <Mail className="w-5 h-5 text-primary-500" />
+                Change Email Address
+              </h2>
+            </div>
+
+            <form onSubmit={handleChangeEmail} className="space-y-4 p-6">
+              <div className="flex items-start gap-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">
+                <ShieldCheck className="mt-0.5 w-5 h-5 flex-shrink-0" />
+                <p>
+                  For security, confirmation links will be sent to both your current and new email addresses.
+                  The change takes effect only after both are confirmed.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">New Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="Enter new email address"
+                    className="w-full rounded-xl border border-gray-200 py-3 pl-12 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    style={{ paddingLeft: '42px' }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={!sanitizedNewEmail || sanitizedNewEmail === currentEmail || emailSaving}
+                  className="flex items-center gap-2 rounded-xl bg-primary-500 px-6 py-2.5 font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {emailSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Change Email
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+              <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+                <KeyRound className="w-5 h-5 text-primary-500" />
+                Change Password
+              </h2>
+            </div>
+
+            <div className="space-y-4 p-6">
+              <div className="flex items-start gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-700">
+                <ShieldCheck className="mt-0.5 w-5 h-5 flex-shrink-0" />
+                <p>
+                  For security, password changes require email verification.
+                  Click the button below and we'll send a password reset link to your email.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-600">
+                The reset link now returns to an in-app password form so the flow can finish correctly after the email is opened.
+              </div>
+
+              <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={handleSaveName}
-                  disabled={nameSaving}
-                  className="flex items-center gap-2 px-5 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors whitespace-nowrap"
+                  onClick={handlePasswordReset}
+                  disabled={resetSending}
+                  className="flex items-center gap-2 rounded-xl bg-primary-500 px-6 py-2.5 font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {nameSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Save
+                  {resetSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Send Password Reset Email
                 </button>
-              )}
+              </div>
             </div>
-          </div>
-
-          {/* Email (read-only with badge) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-2">
-              Email Address
-              <span className="text-xs bg-primary-50 text-primary-600 px-2 py-0.5 rounded-full font-normal">
-                Change email below
-              </span>
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="email"
-                value={user?.email || ''}
-                readOnly
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Change Email Card */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Mail className="w-5 h-5 text-primary-500" />
-            Change Email Address
-          </h2>
-        </div>
-
-        <form onSubmit={handleChangeEmail} className="p-6 space-y-4">
-          <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl text-sm text-blue-700">
-            <ShieldCheck className="w-5 h-5 mt-0.5 flex-shrink-0" />
-            <p>
-              For security, confirmation links will be sent to both your current and new email addresses.
-              The change takes effect only after both are confirmed.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">New Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="email"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="Enter new email address"
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                style={{ paddingLeft: "42px" }}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={!newEmail || emailSaving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {emailSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              Change Email
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Password Reset Card */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-            <KeyRound className="w-5 h-5 text-primary-500" />
-            Change Password
-          </h2>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl text-sm text-amber-700">
-            <ShieldCheck className="w-5 h-5 mt-0.5 flex-shrink-0" />
-            <p>
-              For security, password changes require email verification.
-              Click the button below and we'll send a password reset link to your email.
-            </p>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handlePasswordReset}
-              disabled={resetSending}
-              className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {resetSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              Send Password Reset Email
-            </button>
-          </div>
+          </section>
         </div>
       </div>
     </div>

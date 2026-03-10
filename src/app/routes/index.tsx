@@ -25,6 +25,7 @@ const AnalyticsPage = lazy(() => import('@/pages/Analytics').then(m => ({ defaul
 const TobyPage = lazy(() => import('@/pages/Toby').then(m => ({ default: m.TobyPage })))
 const BillingPage = lazy(() => import('@/pages/Billing').then(m => ({ default: m.BillingPage })))
 const ProfilePage = lazy(() => import('@/pages/Profile').then(m => ({ default: m.ProfilePage })))
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPassword').then(m => ({ default: m.ResetPasswordPage })))
 const AboutPage = lazy(() => import('@/pages/About').then(m => ({ default: m.AboutPage })))
 const LogsPage = lazy(() => import('@/pages/Logs').then(m => ({ default: m.LogsPage })))
 const AdminPage = lazy(() => import('@/pages/Admin').then(m => ({ default: m.AdminPage })))
@@ -109,6 +110,7 @@ export function AppRoutes() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/data-deletion" element={<DataDeletionPage />} />
         <Route path="/login" element={<LoginGuard />} />
+        <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="/onboarding" element={<OnboardingPageGuard />} />
         <Route path="/" element={<AuthGuard><OnboardingGuard><AppLayout /></OnboardingGuard></AuthGuard>}>
         <Route index element={<HomePage />} />

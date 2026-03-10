@@ -37,11 +37,6 @@ class ContentRatingRequest(BaseModel):
     topic_category: str = ""
 
 
-class BatchTitlesRequest(BaseModel):
-    count: int = 5
-    topic_hint: Optional[str] = None
-
-
 class GeneratePostBgRequest(BaseModel):
     brand: str
     prompt: str
@@ -171,31 +166,6 @@ async def generate_post_title(request: AutoContentRequest = None):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate post title: {str(e)}"
-        )
-
-
-@router.post(
-    "/generate-post-titles-batch",
-    summary="Generate N unique post titles + captions + prompts in one AI call",
-)
-async def generate_post_titles_batch(request: BatchTitlesRequest = None):
-    """Generate N unique posts in a single AI call (for God Automation)."""
-    import time as _time
-    try:
-        count = request.count if request else 5
-        topic_hint = request.topic_hint if request else None
-        print(f"\n🔱 [GOD] generate_post_titles_batch: count={count}, topic_hint={topic_hint!r}", flush=True)
-        t0 = _time.time()
-        results = await asyncio.to_thread(content_generator.generate_post_titles_batch, count, topic_hint)
-        elapsed = _time.time() - t0
-        titles = [r.get('title', '?')[:50] for r in results]
-        print(f"🔱 [GOD] titles generated in {elapsed:.1f}s: {titles}", flush=True)
-        return {"posts": results}
-    except Exception as e:
-        print(f"❌ [GOD] generate_post_titles_batch FAILED: {e}", flush=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate batch titles: {str(e)}"
         )
 
 

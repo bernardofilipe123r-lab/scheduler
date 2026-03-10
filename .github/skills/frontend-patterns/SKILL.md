@@ -98,6 +98,7 @@ ReactDOM.render(
 | `/logs` | System Logs | Auth + Admin |
 | `/admin` | Admin Panel | Auth + SuperAdmin |
 | `/login` | Login | LoginGuard (no auth) |
+| `/reset-password` | Password Recovery Completion | Public (email recovery link target) |
 | `/terms`, `/privacy`, `/data-deletion` | Legal pages | Public (no auth) |
 
 ### Redirects

@@ -2,7 +2,7 @@
  * Authentication API — Supabase SDK.
  * All session/token management is handled by Supabase.
  */
-import { supabase } from '@/shared/api/supabase'
+import { buildAppUrl, supabase } from '@/shared/api/supabase'
 
 export interface AuthUser {
   email: string
@@ -64,7 +64,7 @@ export async function registerApi(email: string, password: string, name: string)
     password,
     options: {
       data: { name },
-      emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
+      emailRedirectTo: buildAppUrl('/login'),
     },
   })
   if (error) throw new Error(error.message)
