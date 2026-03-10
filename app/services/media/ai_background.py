@@ -673,7 +673,26 @@ class AIBackgroundGenerator:
         print(f"{'='*80}")
         print(f"🏷️  Brand: {brand_name}")
         print(f"📝 Prompt ({len(prompt)} chars): {prompt[:200]}...")
+        print(f"🔧 Model: {model_override or 'ZImageTurbo_INT8'}")
         print(f"{'='*80}\n")
+
+        # Route to the correct image service based on model_override
+        effective_model = model_override or "ZImageTurbo_INT8"
+
+        if effective_model == "freepik":
+            return self._generate_via_freepik_post(
+                prompt=prompt,
+                progress_callback=progress_callback,
+                start_time=start_time,
+            )
+
+        if effective_model == "searchapi":
+            return self._generate_via_searchapi_post(
+                query=content_context or prompt,
+                prompt_fallback=prompt,
+                progress_callback=progress_callback,
+                start_time=start_time,
+            )
 
         if progress_callback:
             progress_callback("Waiting in queue for deAPI...", 25)
@@ -683,7 +702,128 @@ class AIBackgroundGenerator:
             brand_name=brand_name,
             target_width=POST_WIDTH,
             target_height=POST_HEIGHT,
-            model_override=model_override or "ZImageTurbo_INT8",
+            model_override=effective_model,
             progress_callback=progress_callback,
             start_time=start_time,
         )
+
+    def _generate_via_freepik_post(
+        self,
+        prompt: str,
+        progress_callback=None,
+        start_time: float = None,
+    ) -> Image.Image:
+        """Generate a post background via Freepik Classic Fast API (portrait 4:5)."""
+        import os, base64, tempfile
+        from pathlib import Path as _Path
+
+        if progress_callback:
+            progress_callback("Generating via Freepik...", 30)
+
+        api_key = os.environ.get("FREEPIK_API_KEY")
+        if not api_key:
+            raise RuntimeError("FREEPIK_API_KEY not configured")
+
+        headers = {
+            "x-freepik-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        payload = {
+            "prompt": prompt,
+            "num_images": 1,
+            "image": {"size": "square_1_1"},
+            "guidance_scale": 1,
+            "filter_nsfw": True,
+        }
+
+        print(f"🎨 Freepik POST generating (square_1_1)...", flush=True)
+        response = requests.post(
+            "https://api.freepik.com/v1/ai/text-to-image",
+            headers=headers,
+            json=payload,
+            timeout=60,
+        )
+
+        if response.status_code >= 400:
+            print(f"❌ Freepik HTTP {response.status_code}: {response.text[:500]}", flush=True)
+            response.raise_for_status()
+
+        data = response.json()
+        images = data.get("data", [])
+        if not images:
+            raise RuntimeError("Freepik returned no images")
+
+        b64_str = images[0].get("base64")
+        if not b64_str:
+            raise RuntimeError("Freepik returned no base64 data")
+
+        img = Image.open(BytesIO(base64.b64decode(b64_str)))
+        img = img.resize((POST_WIDTH, POST_HEIGHT), Image.Resampling.LANCZOS)
+
+        # Track cost
+        try:
+            from app.services.monitoring.cost_tracker import record_freepik_call
+            record_freepik_call()
+        except Exception:
+            pass
+
+        elapsed = time.time() - (start_time or time.time())
+        print(f"✅ Freepik post background {POST_WIDTH}x{POST_HEIGHT} in {elapsed:.1f}s", flush=True)
+        if progress_callback:
+            progress_callback(f"Freepik image ready ({elapsed:.1f}s)", 100)
+        return img
+
+    def _generate_via_searchapi_post(
+        self,
+        query: str,
+        prompt_fallback: str,
+        progress_callback=None,
+        start_time: float = None,
+    ) -> Image.Image:
+        """Fetch a web image via SearchApi Google Images, fall back to DeAPI."""
+        if progress_callback:
+            progress_callback("Searching web images...", 30)
+
+        print(f"🌐 SearchApi searching: {query[:80]}...", flush=True)
+
+        try:
+            from app.services.media.web_image_sourcer import WebImageSourcer
+            sourcer = WebImageSourcer()
+            path = sourcer.search_image(query)
+            if path and path.exists():
+                img = Image.open(path)
+                img = img.convert("RGB")
+                img = self._cover_crop(img, POST_WIDTH, POST_HEIGHT)
+                elapsed = time.time() - (start_time or time.time())
+                print(f"✅ SearchApi web image {POST_WIDTH}x{POST_HEIGHT} in {elapsed:.1f}s", flush=True)
+                if progress_callback:
+                    progress_callback(f"Web image ready ({elapsed:.1f}s)", 100)
+                return img
+        except Exception as e:
+            print(f"⚠️ SearchApi failed: {e}, falling back to DeAPI", flush=True)
+
+        # Fallback to DeAPI with Flux1schnell
+        print(f"🔄 Falling back to DeAPI (Flux1schnell)...", flush=True)
+        if progress_callback:
+            progress_callback("Web search failed, generating AI image...", 40)
+        return self._call_deapi(
+            prompt=prompt_fallback,
+            brand_name="",
+            target_width=POST_WIDTH,
+            target_height=POST_HEIGHT,
+            model_override="Flux1schnell",
+            progress_callback=progress_callback,
+            start_time=start_time,
+        )
+
+    @staticmethod
+    def _cover_crop(img: Image.Image, tw: int, th: int) -> Image.Image:
+        """Resize and center-crop an image to exactly tw x th (cover fit)."""
+        iw, ih = img.size
+        scale = max(tw / iw, th / ih)
+        new_w, new_h = int(iw * scale), int(ih * scale)
+        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        left = (new_w - tw) // 2
+        top = (new_h - th) // 2
+        return img.crop((left, top, left + tw, top + th))

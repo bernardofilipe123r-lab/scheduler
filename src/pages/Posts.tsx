@@ -3,7 +3,7 @@
  *
  * 5-step wizard:
  *  1. Select brands (multi-select, same pattern as Reels)
- *  2. Choose platforms (Instagram, Facebook) — only shown when Facebook is connected
+ *  2. Choose platforms (Instagram, Facebook) — only shown when Facebook or Instagram are connected
  *  3. Pick AI image model (Freepik / ZImageTurbo / Flux Schnell / SearchApi)
  *  4. Choose mode (Auto vs Manual)
  *  5. Manual create form (title, AI prompt, layout settings, preview)
