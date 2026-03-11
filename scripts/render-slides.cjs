@@ -64,18 +64,37 @@ function getBrandHandle(brandId, input) {
   return brandId;
 }
 
-// ─── Auto-fit Font Size (exact copy from PostCanvas.tsx) ──────────────────────
+// ─── Measurement canvas for accurate font metrics ────────────────────────────
+// Created lazily after fonts are registered. Used by autoFitFontSize and
+// balanceTitleText so line-breaking matches actual rendered pixel widths.
+let _measureCanvas = null;
+let _measureCtx = null;
+
+function getMeasureCtx() {
+  if (!_measureCtx) {
+    _measureCanvas = createCanvas(1, 1);
+    _measureCtx = _measureCanvas.getContext('2d');
+  }
+  return _measureCtx;
+}
+
+/** Measure the pixel width of `text` at the given font/size using the real font. */
+function measureTextWidth(text, fontFamily, fontSize) {
+  const ctx = getMeasureCtx();
+  ctx.font = `${fontSize}px "${fontFamily}"`;
+  return ctx.measureText(text).width;
+}
+
+// ─── Auto-fit Font Size (pixel-accurate) ──────────────────────────────────────
 
 function countLines(text, maxWidth, fontSize) {
-  const avgCharWidth = fontSize * 0.48;
-  const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
   const upperText = (text || '').toUpperCase().trim();
   const words = upperText.split(/\s+/).filter(Boolean);
   let lineCount = 1;
   let current = '';
   for (const word of words) {
     const test = current ? `${current} ${word}` : word;
-    if (test.length > maxCharsPerLine && current) {
+    if (current && measureTextWidth(test, 'Anton', fontSize) > maxWidth) {
       lineCount++;
       current = word;
     } else {
@@ -107,22 +126,19 @@ function autoFitFontSize(text, maxWidth) {
   return AUTO_FIT_MIN;
 }
 
-// ─── Balance Title Text (exact copy from PostCanvas.tsx) ──────────────────────
+// ─── Balance Title Text (pixel-accurate) ─────────────────────────────────────
 
 function balanceTitleText(title, maxWidth, fontSize) {
   const upperText = (title || '').toUpperCase().trim();
   const words = upperText.split(/\s+/).filter(Boolean);
   if (words.length === 0) return { lines: [''], fontSize };
 
-  const avgCharWidth = fontSize * 0.48;
-  const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
-
-  // Greedy wrap: fill each line as much as possible
+  // Greedy wrap using actual pixel measurements
   const lines = [];
   let current = '';
   for (const word of words) {
     const test = current ? `${current} ${word}` : word;
-    if (test.length > maxCharsPerLine && current) {
+    if (current && measureTextWidth(test, 'Anton', fontSize) > maxWidth) {
       lines.push(current);
       current = word;
     } else {
@@ -302,6 +318,7 @@ async function renderCoverSlide(input) {
       width: titleMaxWidth,
       x: titlePaddingX,
       y: lineY,
+      wrap: 'none',
     });
     layer.add(lineText);
   }

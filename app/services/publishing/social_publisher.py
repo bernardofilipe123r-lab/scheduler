@@ -746,6 +746,7 @@ class SocialPublisher:
                         container_url,
                         data={
                             "image_url": url,
+                            "media_type": "IMAGE",
                             "is_carousel_item": "true",
                             "access_token": self.ig_access_token,
                         },
@@ -774,8 +775,14 @@ class SocialPublisher:
                                 "hint": "Instagram token expired. Please reconnect Instagram in Brands > Connections."
                             }
 
-                    # For transient errors ("unexpected error", server errors), retry with backoff
-                    if attempt < max_retries - 1 and ("unexpected" in last_error_msg.lower() or "retry" in last_error_msg.lower() or error_code in (2, "2")):
+                    # For transient errors, retry with backoff
+                    is_transient = (
+                        "unexpected" in last_error_msg.lower()
+                        or "retry" in last_error_msg.lower()
+                        or "only photo or video" in last_error_msg.lower()
+                        or error_code in (2, "2")
+                    )
+                    if attempt < max_retries - 1 and is_transient:
                         wait_time = (attempt + 1) * 3
                         print(f"   ⏳ Carousel item {idx + 1} attempt {attempt + 1} failed: {last_error_msg}. Retrying in {wait_time}s...")
                         time.sleep(wait_time)
