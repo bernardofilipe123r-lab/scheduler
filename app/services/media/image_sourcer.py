@@ -3,7 +3,7 @@ Image Sourcer — generates/fetches images for Format B reels.
 
 Image source for video slides is controlled by FORMAT_B_IMAGE_SOURCE env var:
   - "ai" (default): Freepik primary, DeAPI fallback (AI-generated images)
-  - "web": SearchApi Google Images primary, Freepik/DeAPI fallback (real web images)
+    - "web": SearchApi Google Images only (real web images, no AI fallback)
 
 Thumbnails always use AI generation (Freepik/DeAPI) regardless of toggle.
 """
@@ -36,6 +36,7 @@ MAX_RETRY_DELAY = 60
 
 # Freepik daily limit (Free Trial: 100/day, Pay-per-use: 10,000/day)
 FREEPIK_DAILY_LIMIT = 100
+GLOBAL_FORMAT_B_SETTINGS_USER_ID = "__global_format_b_settings__"
 
 
 def get_image_source_mode(db=None, user_id: str = None) -> str:
@@ -44,14 +45,23 @@ def get_image_source_mode(db=None, user_id: str = None) -> str:
     Reads from format_b_design table (persistent across deploys).
     Falls back to FORMAT_B_IMAGE_SOURCE env var, then "ai".
     """
-    if db and user_id:
+    if db:
         try:
             from app.models.format_b_design import FormatBDesign
-            design = db.query(FormatBDesign).filter(
-                FormatBDesign.user_id == user_id
+
+            # Admin page toggle is global for all users.
+            global_design = db.query(FormatBDesign).filter(
+                FormatBDesign.user_id == GLOBAL_FORMAT_B_SETTINGS_USER_ID
             ).first()
-            if design and design.image_source_mode:
-                return design.image_source_mode.lower()
+            if global_design and global_design.image_source_mode:
+                return global_design.image_source_mode.lower()
+
+            if user_id:
+                design = db.query(FormatBDesign).filter(
+                    FormatBDesign.user_id == user_id
+                ).first()
+                if design and design.image_source_mode:
+                    return design.image_source_mode.lower()
         except Exception as e:
             logger.warning(f"[ImageSourcer] Could not read image_source_mode from DB: {e}")
     return os.environ.get("FORMAT_B_IMAGE_SOURCE", "ai").lower()
@@ -97,8 +107,8 @@ class ImageSourcer:
         Source a single image based on the configured mode.
 
         When FORMAT_B_IMAGE_SOURCE=web:
-          1. Try SearchApi Google Images (using plan.search_query)
-          2. Fall back to AI generation (Freepik → DeAPI)
+                    1. Try SearchApi Google Images (using plan.search_query)
+                    2. If SearchApi fails, return None (strict mode)
 
         When FORMAT_B_IMAGE_SOURCE=ai (default):
           1. Try Freepik (if available)
@@ -112,9 +122,10 @@ class ImageSourcer:
             path = self._source_via_web(plan)
             if path:
                 return path
-            logger.info("[ImageSourcer] Web image failed, falling back to AI generation")
+            logger.warning("[ImageSourcer] Web mode selected and SearchApi returned no image (strict mode, no AI fallback)")
+            return None
 
-        # AI generation path (default, or fallback from web)
+        # AI generation path (default)
         return self._source_via_ai(plan)
 
     def source_image_ai_only(self, plan: ImagePlan) -> Optional[Path]:

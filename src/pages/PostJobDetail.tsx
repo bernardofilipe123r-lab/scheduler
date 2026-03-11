@@ -57,6 +57,7 @@ import {
 } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import type { Job, BrandName, BrandOutput } from '@/shared/types'
+import { getBrandOutputsList } from '@/shared/types'
 import { apiClient } from '@/shared/api/client'
 
 // ─── Logo storage helpers ────────────────────────────────────────────
@@ -176,51 +177,51 @@ export function PostJobDetail({ job }: Props) {
     return updatedAt < tenMinAgo
   }, [job, isGenerating])
 
-  const allCompleted = job.brands.every(
-    (b) => job.brand_outputs[b]?.status === 'completed' || job.brand_outputs[b]?.status === 'scheduled'
-  )
+  const allCompleted = job.brands.every((b) => {
+    const outputs = getBrandOutputsList(job.brand_outputs, b)
+    return outputs.every((o) => o.status === 'completed' || o.status === 'scheduled')
+  })
 
-  const allScheduled = job.brands.every(
-    (b) => job.brand_outputs[b]?.status === 'scheduled'
-  )
+  const allScheduled = job.brands.every((b) => {
+    const outputs = getBrandOutputsList(job.brand_outputs, b)
+    return outputs.every((o) => o.status === 'scheduled')
+  })
 
-  // ── Per-brand font size ─────────────────────────────────────────────
-  // Compute auto-fit size for a brand (what the canvas actually renders)
-  const getAutoFitSize = (brand: string) => {
+  // ── Per-card font size (keyed by cardKey = `${brand}-${contentIdx}`) ──
+  const getAutoFitSize = (_cardKey: string, brand: string) => {
     const title = getBrandTitle(brand)
     const maxWidth = CANVAS_WIDTH - settings.layout.titlePaddingX * 2
     return autoFitFontSize(title || 'PLACEHOLDER', maxWidth, settings.fontSize, 3)
   }
 
-  // Get the effective font size: manual override or auto-fit
-  const getBrandFontSize = (brand: string) =>
-    brandFontSizes[brand] ?? getAutoFitSize(brand)
+  const getBrandFontSize = (cardKey: string, brand: string) =>
+    brandFontSizes[cardKey] ?? getAutoFitSize(cardKey, brand)
 
-  const adjustBrandFontSize = (brand: string, delta: number) => {
+  const adjustBrandFontSize = (cardKey: string, brand: string, delta: number) => {
     setBrandFontSizes((prev) => {
-      // Initialize from auto-fit value if no manual override yet
-      const current = prev[brand] ?? getAutoFitSize(brand)
+      const current = prev[cardKey] ?? getAutoFitSize(cardKey, brand)
       const next = Math.max(30, Math.min(120, current + delta))
-      return { ...prev, [brand]: next }
+      return { ...prev, [cardKey]: next }
     })
   }
 
   // ── Edit brand modal helpers ────────────────────────────────────────
-  const openEditBrand = useCallback((brand: string) => {
-    const output = job.brand_outputs[brand as BrandName]
+  // editingBrand stores the cardKey (`brand-contentIdx`)
+  const openEditBrand = useCallback((cardKey: string, output: BrandOutput) => {
     setEditTitle(output?.title || job.title || '')
     setEditCaption(output?.caption || '')
     setEditPrompt(output?.ai_prompt || '')
     setEditSlideTexts([...(output?.slide_texts || [])])
-    setEditingBrand(brand)
+    setEditingBrand(cardKey)
   }, [job])
 
   const saveEditBrand = async () => {
     if (!editingBrand) return
+    const brand = editingBrand.split('-')[0]
     try {
       await updateBrandContent.mutateAsync({
         id: job.id,
-        brand: editingBrand as BrandName,
+        brand: brand as BrandName,
         data: {
           title: editTitle,
           caption: editCaption,
@@ -236,10 +237,11 @@ export function PostJobDetail({ job }: Props) {
 
   const handleRegenBrandImage = async (newPrompt?: boolean) => {
     if (!editingBrand) return
+    const brand = editingBrand.split('-')[0]
     try {
       await regenerateBrandImage.mutateAsync({
         id: job.id,
-        brand: editingBrand as BrandName,
+        brand: brand as BrandName,
         aiPrompt: newPrompt ? editPrompt : undefined,
       })
       toast.success('Image regeneration started!')
@@ -297,17 +299,21 @@ export function PostJobDetail({ job }: Props) {
   const downloadAll = () => {
     let count = 0
     job.brands.forEach((brand) => {
-      const stage = stageRefs.current.get(brand)
-      if (!stage) return
-      const uri = stage.toDataURL({
-        pixelRatio: 1 / GRID_PREVIEW_SCALE,
-        mimeType: 'image/png',
+      const outputs = getBrandOutputsList(job.brand_outputs, brand)
+      outputs.forEach((_, contentIdx) => {
+        const cardKey = `${brand}-${contentIdx}`
+        const stage = stageRefs.current.get(cardKey)
+        if (!stage) return
+        const uri = stage.toDataURL({
+          pixelRatio: 1 / GRID_PREVIEW_SCALE,
+          mimeType: 'image/png',
+        })
+        const link = document.createElement('a')
+        link.download = `post-${brand}-${contentIdx}-${Date.now()}.png`
+        link.href = uri
+        link.click()
+        count++
       })
-      const link = document.createElement('a')
-      link.download = `post-${brand}-${Date.now()}.png`
-      link.href = uri
-      link.click()
-      count++
     })
     if (count) toast.success(`${count} image(s) downloaded!`)
   }
@@ -370,110 +376,110 @@ export function PostJobDetail({ job }: Props) {
       }
 
       for (const brand of job.brands) {
-        const output = job.brand_outputs[brand as BrandName]
+        const outputs = getBrandOutputsList(job.brand_outputs, brand)
 
-        // Skip already-scheduled brands
-        if (output?.status === 'scheduled') continue
+        for (let contentIdx = 0; contentIdx < outputs.length; contentIdx++) {
+          const output = outputs[contentIdx]
+          const cardKey = `${brand}-${contentIdx}`
 
-        // Ensure we're on cover slide for primary capture
-        setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
-        await new Promise((r) => setTimeout(r, 300))
+          // Skip already-scheduled items
+          if (output?.status === 'scheduled') continue
 
-        // Retry logic: wait for stage ref to become available
-        let stage = stageRefs.current.get(brand)
-        if (!stage) {
-          // Force a re-render and wait longer
-          setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
-          await new Promise((r) => setTimeout(r, 500))
-          stage = stageRefs.current.get(brand)
-        }
-        if (!stage) {
-          console.error(`Auto-schedule: Canvas ref is null for brand "${brand}". Skipping.`)
-          toast.error(`Failed to capture image for ${getBrandConfig(brand).name}`)
-          failed++
-          continue
-        }
+          // Ensure we're on cover slide for primary capture
+          setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: 0 }))
+          await new Promise((r) => setTimeout(r, 300))
 
-        const imageData = stage.toDataURL({
-          pixelRatio: 1 / GRID_PREVIEW_SCALE,
-          mimeType: 'image/png',
-        })
-
-        // Capture carousel text slides
-        const slideTexts = output?.slide_texts || []
-        const carouselImages: string[] = []
-        for (let s = 0; s < slideTexts.length; s++) {
-          setBrandSlideIndex((prev) => ({ ...prev, [brand]: s + 1 }))
-          await new Promise((r) => setTimeout(r, 400))
-          let textStage = textSlideRefs.current.get(brand)
-          if (!textStage) {
-            // Retry once with extra wait
-            await new Promise((r) => setTimeout(r, 300))
-            textStage = textSlideRefs.current.get(brand)
+          // Retry logic: wait for stage ref to become available
+          let stage = stageRefs.current.get(cardKey)
+          if (!stage) {
+            setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: 0 }))
+            await new Promise((r) => setTimeout(r, 500))
+            stage = stageRefs.current.get(cardKey)
           }
-          if (textStage) {
-            carouselImages.push(
-              textStage.toDataURL({ pixelRatio: 1 / GRID_PREVIEW_SCALE, mimeType: 'image/png' })
-            )
-          } else {
-            console.warn(`Auto-schedule: Text slide ref null for brand "${brand}" slide ${s + 1}`)
+          if (!stage) {
+            console.error(`Auto-schedule: Canvas ref is null for "${cardKey}". Skipping.`)
+            toast.error(`Failed to capture image for ${getBrandConfig(brand).name}`)
+            failed++
+            continue
           }
-        }
-        // Reset back to cover
-        setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
 
-        const offset = POST_BRAND_OFFSETS[brand] || 0
-        const brandTitle = output?.title || job.title
-
-        // 2) Find next free slot: base hours 0 (12AM) and 12 (12PM), with collision avoidance
-        const now = new Date()
-        let scheduleTime: Date | null = null
-
-        // Try slots for the next 30 days to find a free one
-        for (let dayOffset = 0; dayOffset < 30 && !scheduleTime; dayOffset++) {
-          for (const baseHour of [0, 12]) {
-            const slot = new Date(now)
-            slot.setDate(slot.getDate() + dayOffset)
-            slot.setHours(baseHour + offset, 0, 0, 0)
-            if (slot <= now) continue
-            if (isSlotOccupied(brand, slot)) continue
-            scheduleTime = slot
-            break
-          }
-        }
-
-        if (!scheduleTime) {
-          // Fallback: 30 days out at offset hour
-          scheduleTime = new Date(now)
-          scheduleTime.setDate(scheduleTime.getDate() + 30)
-          scheduleTime.setHours(offset, 0, 0, 0)
-        }
-
-        try {
-          await apiClient.post('/reels/schedule-post-image', {
-            brand,
-            title: brandTitle,
-            caption: output?.caption || '',
-            image_data: imageData,
-            carousel_images: carouselImages,
-            slide_texts: slideTexts,
-            schedule_time: scheduleTime.toISOString(),
-            job_id: job.id,
+          const imageData = stage.toDataURL({
+            pixelRatio: 1 / GRID_PREVIEW_SCALE,
+            mimeType: 'image/png',
           })
-          scheduled++
-          scheduledBrands.push(getBrandConfig(brand).name)
-          // Mark this slot as occupied for the rest of this batch
-          markOccupied(brand, scheduleTime)
+
+          // Capture carousel text slides
+          const slideTexts = output?.slide_texts || []
+          const carouselImages: string[] = []
+          for (let s = 0; s < slideTexts.length; s++) {
+            setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: s + 1 }))
+            await new Promise((r) => setTimeout(r, 400))
+            let textStage = textSlideRefs.current.get(cardKey)
+            if (!textStage) {
+              await new Promise((r) => setTimeout(r, 300))
+              textStage = textSlideRefs.current.get(cardKey)
+            }
+            if (textStage) {
+              carouselImages.push(
+                textStage.toDataURL({ pixelRatio: 1 / GRID_PREVIEW_SCALE, mimeType: 'image/png' })
+              )
+            } else {
+              console.warn(`Auto-schedule: Text slide ref null for "${cardKey}" slide ${s + 1}`)
+            }
+          }
+          // Reset back to cover
+          setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: 0 }))
+
+          const offset = POST_BRAND_OFFSETS[brand] || 0
+          const brandTitle = output?.title || job.title
+
+          // 2) Find next free slot: base hours 0 (12AM) and 12 (12PM), with collision avoidance
+          const now = new Date()
+          let scheduleTime: Date | null = null
+
+          for (let dayOffset = 0; dayOffset < 30 && !scheduleTime; dayOffset++) {
+            for (const baseHour of [0, 12]) {
+              const slot = new Date(now)
+              slot.setDate(slot.getDate() + dayOffset)
+              slot.setHours(baseHour + offset, 0, 0, 0)
+              if (slot <= now) continue
+              if (isSlotOccupied(brand, slot)) continue
+              scheduleTime = slot
+              break
+            }
+          }
+
+          if (!scheduleTime) {
+            scheduleTime = new Date(now)
+            scheduleTime.setDate(scheduleTime.getDate() + 30)
+            scheduleTime.setHours(offset, 0, 0, 0)
+          }
+
           try {
-            await updateBrandStatus.mutateAsync({
-              id: job.id,
-              brand: brand as BrandName,
-              status: 'scheduled',
+            await apiClient.post('/reels/schedule-post-image', {
+              brand,
+              title: brandTitle,
+              caption: output?.caption || '',
+              image_data: imageData,
+              carousel_images: carouselImages,
+              slide_texts: slideTexts,
+              schedule_time: scheduleTime.toISOString(),
+              job_id: job.id,
             })
-          } catch { /* ignore status update failure */ }
-        } catch (err) {
-          console.error(`Auto-schedule: Failed for brand "${brand}":`, err)
-          failed++
+            scheduled++
+            scheduledBrands.push(getBrandConfig(brand).name)
+            markOccupied(brand, scheduleTime)
+            try {
+              await updateBrandStatus.mutateAsync({
+                id: job.id,
+                brand: brand as BrandName,
+                status: 'scheduled',
+              })
+            } catch { /* ignore status update failure */ }
+          } catch (err) {
+            console.error(`Auto-schedule: Failed for "${cardKey}":`, err)
+            failed++
+          }
         }
       }
 
@@ -522,15 +528,18 @@ export function PostJobDetail({ job }: Props) {
   }
 
   // ── Schedule single brand ────────────────────────────────────────────
-  const scheduleSingleBrand = async (brand: string, customScheduleTime?: Date) => {
-    const output = job.brand_outputs[brand as BrandName]
+  const scheduleSingleBrand = async (cardKey: string, customScheduleTime?: Date) => {
+    const brand = cardKey.split('-')[0]
+    const contentIdx = parseInt(cardKey.split('-')[1] || '0', 10)
+    const outputs = getBrandOutputsList(job.brand_outputs, brand)
+    const output = outputs[contentIdx]
     if (!output || output.status !== 'completed') {
       toast.error('Brand must be completed before scheduling')
       return
     }
 
-    setSchedulingBrand(brand)
-    toast.loading(`Scheduling ${getBrandConfig(brand).name}...`, { id: `sched-${brand}` })
+    setSchedulingBrand(cardKey)
+    toast.loading(`Scheduling ${getBrandConfig(brand).name}...`, { id: `sched-${cardKey}` })
 
     try {
       // Fetch occupied post slots
@@ -549,17 +558,17 @@ export function PostJobDetail({ job }: Props) {
       }
 
       // Ensure cover slide for capture
-      setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+      setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: 0 }))
       await new Promise((r) => setTimeout(r, 300))
 
-      let stage = stageRefs.current.get(brand)
+      let stage = stageRefs.current.get(cardKey)
       if (!stage) {
-        setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+        setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: 0 }))
         await new Promise((r) => setTimeout(r, 500))
-        stage = stageRefs.current.get(brand)
+        stage = stageRefs.current.get(cardKey)
       }
       if (!stage) {
-        toast.error(`Failed to capture image for ${getBrandConfig(brand).name}`, { id: `sched-${brand}` })
+        toast.error(`Failed to capture image for ${getBrandConfig(brand).name}`, { id: `sched-${cardKey}` })
         return
       }
 
@@ -572,12 +581,12 @@ export function PostJobDetail({ job }: Props) {
       const slideTexts = output?.slide_texts || []
       const carouselImages: string[] = []
       for (let s = 0; s < slideTexts.length; s++) {
-        setBrandSlideIndex((prev) => ({ ...prev, [brand]: s + 1 }))
+        setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: s + 1 }))
         await new Promise((r) => setTimeout(r, 400))
-        let textStage = textSlideRefs.current.get(brand)
+        let textStage = textSlideRefs.current.get(cardKey)
         if (!textStage) {
           await new Promise((r) => setTimeout(r, 300))
-          textStage = textSlideRefs.current.get(brand)
+          textStage = textSlideRefs.current.get(cardKey)
         }
         if (textStage) {
           carouselImages.push(
@@ -585,7 +594,7 @@ export function PostJobDetail({ job }: Props) {
           )
         }
       }
-      setBrandSlideIndex((prev) => ({ ...prev, [brand]: 0 }))
+      setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: 0 }))
 
       const offset = POST_BRAND_OFFSETS[brand] || 0
       const brandTitle = output?.title || job.title
@@ -630,9 +639,9 @@ export function PostJobDetail({ job }: Props) {
         status: 'scheduled',
       })
 
-      toast.success(`${getBrandConfig(brand).name} scheduled!`, { id: `sched-${brand}` })
+      toast.success(`${getBrandConfig(brand).name} scheduled!`, { id: `sched-${cardKey}` })
     } catch {
-      toast.error(`Failed to schedule ${getBrandConfig(brand).name}`, { id: `sched-${brand}` })
+      toast.error(`Failed to schedule ${getBrandConfig(brand).name}`, { id: `sched-${cardKey}` })
     } finally {
       setSchedulingBrand(null)
     }
@@ -653,9 +662,10 @@ export function PostJobDetail({ job }: Props) {
     }
   }
 
-  // Helper: get per-brand title
-  const getBrandTitle = (brand: string): string => {
-    const output = job.brand_outputs[brand as BrandName]
+  // Helper: get per-brand title (supports content index)
+  const getBrandTitle = (brand: string, contentIdx: number = 0): string => {
+    const outputs = getBrandOutputsList(job.brand_outputs, brand)
+    const output = outputs[contentIdx]
     return output?.title || job.title || ''
   }
 
@@ -806,24 +816,28 @@ export function PostJobDetail({ job }: Props) {
           }px)`,
         }}
       >
-        {job.brands.map((brand) => {
-          const output: BrandOutput | undefined = job.brand_outputs[brand as BrandName]
+        {job.brands.flatMap((brand) => {
+          const outputs = getBrandOutputsList(job.brand_outputs, brand)
+          const isMulti = outputs.length > 1
+
+          return outputs.map((output, contentIdx) => {
+          const cardKey = `${brand}-${contentIdx}`
           // Ensure we have a valid URL, not an empty string
           const rawBgUrl = output?.thumbnail_path || null
           const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
           const status = output?.status || 'pending'
-          const brandTitle = getBrandTitle(brand)
+          const brandTitle = getBrandTitle(brand, contentIdx)
           const brandCaption = output?.caption || ''
           const logoUrl = brandLogos[brand] || null
           const slideTexts = output?.slide_texts || []
           const carouselPaths = output?.carousel_paths || []
           const hasPreRendered = carouselPaths.length > 0
           const totalSlides = hasPreRendered ? carouselPaths.length : 1 + slideTexts.length
-          const currentSlide = brandSlideIndex[brand] || 0
+          const currentSlide = brandSlideIndex[cardKey] || 0
 
           return (
             <div
-              key={`${brand}-${fontLoaded}`}
+              key={`${cardKey}-${fontLoaded}`}
               className="bg-white rounded-xl border border-gray-200 p-3"
             >
               {/* Brand header with edit button */}
@@ -837,28 +851,33 @@ export function PostJobDetail({ job }: Props) {
                 <span className="text-sm font-medium text-gray-900 truncate">
                   {getBrandConfig(brand).name}
                 </span>
+                {isMulti && (
+                  <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                    #{contentIdx + 1}
+                  </span>
+                )}
                 <span className="ml-auto flex items-center gap-1">
                   {(status === 'completed' || status === 'scheduled') && (
                     <>
                       <button
-                        onClick={() => adjustBrandFontSize(brand, -2)}
+                        onClick={() => adjustBrandFontSize(cardKey, brand, -2)}
                         className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
                         title="Decrease font size"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
                       <span className="text-[10px] text-gray-400 tabular-nums min-w-[28px] text-center">
-                        {getBrandFontSize(brand)}
+                        {getBrandFontSize(cardKey, brand)}
                       </span>
                       <button
-                        onClick={() => adjustBrandFontSize(brand, 2)}
+                        onClick={() => adjustBrandFontSize(cardKey, brand, 2)}
                         className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
                         title="Increase font size"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
                       <button
-                        onClick={() => openEditBrand(brand)}
+                        onClick={() => openEditBrand(cardKey, output)}
                         className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
                         title="Edit brand"
                       >
@@ -900,7 +919,7 @@ export function PostJobDetail({ job }: Props) {
 
               {/* Canvas with carousel navigation */}
               <div className="rounded-lg overflow-hidden border border-gray-100 relative">
-                {(schedulingBrand === brand || isScheduling) && (status === 'completed' || status === 'scheduled') && (
+                {(schedulingBrand === cardKey || isScheduling) && (status === 'completed' || status === 'scheduled') && (
                   <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
@@ -926,13 +945,13 @@ export function PostJobDetail({ job }: Props) {
                       backgroundImage={bgUrl}
                       settings={{
                         ...settings,
-                        fontSize: getBrandFontSize(brand),
+                        fontSize: getBrandFontSize(cardKey, brand),
                       }}
                       scale={GRID_PREVIEW_SCALE}
                       logoUrl={logoUrl}
-                      autoFitMaxLines={brandFontSizes[brand] !== undefined ? 0 : 3}
+                      autoFitMaxLines={brandFontSizes[cardKey] !== undefined ? 0 : 3}
                       stageRef={(node) => {
-                        if (node) stageRefs.current.set(brand, node)
+                        if (node) stageRefs.current.set(cardKey, node)
                       }}
                     />
                   ) : (
@@ -948,7 +967,7 @@ export function PostJobDetail({ job }: Props) {
                       brandDisplayName={dynamicBrands.find(b => b.id === brand)?.label}
                       brandColor={dynamicBrands.find(b => b.id === brand)?.color}
                       stageRef={(node) => {
-                        if (node) textSlideRefs.current.set(brand, node)
+                        if (node) textSlideRefs.current.set(cardKey, node)
                       }}
                     />
                   )
@@ -975,7 +994,7 @@ export function PostJobDetail({ job }: Props) {
               {(status === 'completed' || status === 'scheduled') && totalSlides > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <button
-                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: Math.max(0, currentSlide - 1) }))}
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: Math.max(0, currentSlide - 1) }))}
                     disabled={currentSlide === 0}
                     className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                   >
@@ -985,7 +1004,7 @@ export function PostJobDetail({ job }: Props) {
                     {Array.from({ length: totalSlides }).map((_, i) => (
                       <button
                         key={i}
-                        onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: i }))}
+                        onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: i }))}
                         className={`w-1.5 h-1.5 rounded-full transition-all ${
                           i === currentSlide
                             ? 'bg-blue-500 scale-125'
@@ -995,7 +1014,7 @@ export function PostJobDetail({ job }: Props) {
                     ))}
                   </div>
                   <button
-                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [brand]: Math.min(totalSlides - 1, currentSlide + 1) }))}
+                    onClick={() => setBrandSlideIndex((prev) => ({ ...prev, [cardKey]: Math.min(totalSlides - 1, currentSlide + 1) }))}
                     disabled={currentSlide >= totalSlides - 1}
                     className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                   >
@@ -1005,7 +1024,7 @@ export function PostJobDetail({ job }: Props) {
                     {currentSlide === 0 ? 'Cover' : `Slide ${currentSlide} of ${totalSlides - 1}`}
                   </span>
                   <button
-                    onClick={() => setExpandedBrand(brand)}
+                    onClick={() => setExpandedBrand(cardKey)}
                     className="p-1 rounded-full hover:bg-gray-100 transition-colors ml-auto"
                     title="Full quality preview"
                   >
@@ -1017,11 +1036,11 @@ export function PostJobDetail({ job }: Props) {
               {/* Per-brand schedule button */}
               {status === 'completed' && (
                 <button
-                  onClick={() => openScheduleModal(brand)}
-                  disabled={schedulingBrand === brand || isScheduling}
+                  onClick={() => openScheduleModal(cardKey)}
+                  disabled={schedulingBrand === cardKey || isScheduling}
                   className="w-full flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 bg-primary-500 text-white text-xs rounded-lg hover:bg-primary-600 disabled:opacity-50"
                 >
-                  {schedulingBrand === brand ? (
+                  {schedulingBrand === cardKey ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
                   ) : (
                     <Calendar className="w-3 h-3" />
@@ -1035,7 +1054,7 @@ export function PostJobDetail({ job }: Props) {
                 <div className="mt-2">
                   <p
                     className={`text-[10px] text-gray-400 leading-relaxed whitespace-pre-line ${
-                      expandedCaptions.has(brand) ? '' : 'line-clamp-2'
+                      expandedCaptions.has(cardKey) ? '' : 'line-clamp-2'
                     }`}
                   >
                     {brandCaption}
@@ -1044,14 +1063,14 @@ export function PostJobDetail({ job }: Props) {
                     onClick={() =>
                       setExpandedCaptions((prev) => {
                         const next = new Set(prev)
-                        if (next.has(brand)) next.delete(brand)
-                        else next.add(brand)
+                        if (next.has(cardKey)) next.delete(cardKey)
+                        else next.add(cardKey)
                         return next
                       })
                     }
                     className="flex items-center gap-0.5 text-[10px] text-blue-500 hover:text-blue-700 mt-1 transition-colors"
                   >
-                    {expandedCaptions.has(brand) ? (
+                    {expandedCaptions.has(cardKey) ? (
                       <>
                         <ChevronUp className="w-3 h-3" /> Show less
                       </>
@@ -1072,15 +1091,18 @@ export function PostJobDetail({ job }: Props) {
               )}
             </div>
           )
+        })
         })}
       </div>
 
       {/* Edit Brand Modal */}
-      {editingBrand && (
+      {editingBrand && (() => {
+        const editBrand = editingBrand.split('-')[0]
+        return (
         <Modal
           isOpen={!!editingBrand}
           onClose={() => setEditingBrand(null)}
-          title={`Edit — ${editingBrand ? getBrandConfig(editingBrand).name : ''}`}
+          title={`Edit — ${editBrand ? getBrandConfig(editBrand).name : ''}`}
         >
           <div className="space-y-4">
             {/* Title */}
@@ -1150,7 +1172,7 @@ export function PostJobDetail({ job }: Props) {
 
             {/* Refresh slides with latest brand settings */}
             <button
-              onClick={() => editingBrand && refreshBrandSlides(editingBrand)}
+              onClick={() => editingBrand && refreshBrandSlides(editingBrand.split('-')[0])}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600"
             >
               <RefreshCw className="w-4 h-4" />
@@ -1162,15 +1184,15 @@ export function PostJobDetail({ job }: Props) {
             {/* Logo */}
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-2">Brand Logo</label>
-              {brandLogos[editingBrand] ? (
+              {brandLogos[editingBrand.split('-')[0]] ? (
                 <div className="flex items-center gap-3">
                   <img
-                    src={brandLogos[editingBrand]}
+                    src={brandLogos[editingBrand.split('-')[0]]}
                     alt="Logo"
                     className="w-12 h-12 object-contain rounded border border-gray-200"
                   />
                   <button
-                    onClick={() => handleRemoveLogo(editingBrand)}
+                    onClick={() => handleRemoveLogo(editingBrand.split('-')[0])}
                     className="flex items-center gap-1 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
                   >
                     <X className="w-3 h-3" />
@@ -1183,7 +1205,7 @@ export function PostJobDetail({ job }: Props) {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => handleLogoUpload(editingBrand, e)}
+                      onChange={(e) => handleLogoUpload(editingBrand.split('-')[0], e)}
                     />
                   </label>
                 </div>
@@ -1195,7 +1217,7 @@ export function PostJobDetail({ job }: Props) {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => handleLogoUpload(editingBrand, e)}
+                    onChange={(e) => handleLogoUpload(editingBrand.split('-')[0], e)}
                   />
                 </label>
               )}
@@ -1240,14 +1262,15 @@ export function PostJobDetail({ job }: Props) {
 
           </div>
         </Modal>
-      )}
+        )
+      })()}
 
       {/* Schedule Options Modal */}
       {scheduleModalBrand && (
         <Modal
           isOpen={!!scheduleModalBrand}
           onClose={() => setScheduleModalBrand(null)}
-          title={`Schedule — ${scheduleModalBrand ? getBrandConfig(scheduleModalBrand).name : ''}`}
+          title={`Schedule — ${scheduleModalBrand ? getBrandConfig(scheduleModalBrand.split('-')[0]).name : ''}`}
         >
           <div className="space-y-4">
             {/* Mode selection */}
@@ -1362,15 +1385,18 @@ export function PostJobDetail({ job }: Props) {
       </Modal>
       {/* Full-quality preview modal */}
       {expandedBrand && (() => {
-        const output = job.brand_outputs[expandedBrand as BrandName]
+        const expBrand = expandedBrand.split('-')[0]
+        const expIdx = parseInt(expandedBrand.split('-')[1] || '0', 10)
+        const outputs = getBrandOutputsList(job.brand_outputs, expBrand)
+        const output = outputs[expIdx]
         // Ensure we have a valid URL, not an empty string
         const rawBgUrl = output?.thumbnail_path || null
         const bgUrl = (rawBgUrl && rawBgUrl.trim() !== '') ? rawBgUrl : null
         const slideTexts = output?.slide_texts || []
         const expandedCarouselPaths = output?.carousel_paths || []
         const expandedHasPreRendered = expandedCarouselPaths.length > 0
-        const brandTitle = getBrandTitle(expandedBrand)
-        const logoUrl = brandLogos[expandedBrand] || null
+        const brandTitle = getBrandTitle(expBrand, expIdx)
+        const logoUrl = brandLogos[expBrand] || null
         const currentSlide = brandSlideIndex[expandedBrand] || 0
         const totalSlides = expandedHasPreRendered ? expandedCarouselPaths.length : 1 + slideTexts.length
         const FULL_SCALE = 0.45
@@ -1406,12 +1432,12 @@ export function PostJobDetail({ job }: Props) {
                   />
                 ) : currentSlide === 0 ? (
                   <PostCanvas
-                    brand={expandedBrand}
+                    brand={expBrand}
                     title={brandTitle}
                     backgroundImage={bgUrl}
                     settings={{
                       ...settings,
-                      fontSize: getBrandFontSize(expandedBrand),
+                      fontSize: getBrandFontSize(expandedBrand, expBrand),
                     }}
                     scale={FULL_SCALE}
                     logoUrl={logoUrl}
@@ -1419,16 +1445,16 @@ export function PostJobDetail({ job }: Props) {
                   />
                 ) : (
                   <CarouselTextSlide
-                    brand={expandedBrand}
+                    brand={expBrand}
                     text={slideTexts[currentSlide - 1] || ''}
                     allSlideTexts={slideTexts}
                     isLastSlide={currentSlide === slideTexts.length}
                     scale={FULL_SCALE}
                     logoUrl={logoUrl}
                     fontFamily={settings.slideFontFamily}
-                    brandHandle={dynamicBrands.find(b => b.id === expandedBrand)?.instagram_handle}
-                    brandDisplayName={dynamicBrands.find(b => b.id === expandedBrand)?.label}
-                    brandColor={dynamicBrands.find(b => b.id === expandedBrand)?.color}
+                    brandHandle={dynamicBrands.find(b => b.id === expBrand)?.instagram_handle}
+                    brandDisplayName={dynamicBrands.find(b => b.id === expBrand)?.label}
+                    brandColor={dynamicBrands.find(b => b.id === expBrand)?.color}
                   />
                 )}
               </div>
@@ -1470,7 +1496,7 @@ export function PostJobDetail({ job }: Props) {
               )}
 
               <p className="text-xs text-white/40">
-                {getBrandConfig(expandedBrand).name} — Full Quality Preview
+                {getBrandConfig(expBrand).name} — Full Quality Preview
               </p>
             </div>
           </div>

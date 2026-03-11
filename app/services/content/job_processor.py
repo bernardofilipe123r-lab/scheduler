@@ -680,7 +680,7 @@ class JobProcessor:
         })
 
         try:
-            from app.services.media.image_sourcer import ImageSourcer
+            from app.services.media.image_sourcer import ImageSourcer, get_image_source_mode
             from app.services.media.thumbnail_compositor import ThumbnailCompositor
             from app.services.media.slideshow_compositor import SlideshowCompositor
             from app.services.discovery.story_polisher import ImagePlan
@@ -759,7 +759,7 @@ class JobProcessor:
                     print(f"   ⚠️ Content logo download failed: {e}", flush=True)
 
             # ── Step 1: Source images ──────────────────────────
-            image_source_mode = getattr(design, 'image_source_mode', None) if design else None
+            image_source_mode = get_image_source_mode(db=self.db, user_id=user_id)
             sourcer = ImageSourcer(db=self.db, image_source_mode=image_source_mode)
             image_plans = [
                 ImagePlan(**ip) for ip in tv_data.get("images", [])
@@ -788,7 +788,20 @@ class JobProcessor:
             # Store which image service was used in format_b_data
             image_service = sourcer.last_service_used
             if job.format_b_data and isinstance(job.format_b_data, dict):
-                job.format_b_data = {**job.format_b_data, "image_service": image_service}
+                updated_format_b_data = dict(job.format_b_data)
+                if content_index is not None and isinstance(updated_format_b_data.get("content_items"), list):
+                    items = list(updated_format_b_data["content_items"])
+                    if 0 <= content_index < len(items) and isinstance(items[content_index], dict):
+                        item = dict(items[content_index])
+                        item["image_service"] = image_service
+                        item["image_source_mode"] = image_source_mode
+                        items[content_index] = item
+                        updated_format_b_data["content_items"] = items
+                else:
+                    updated_format_b_data["image_service"] = image_service
+                    updated_format_b_data["image_source_mode"] = image_source_mode
+
+                job.format_b_data = updated_format_b_data
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(job, "format_b_data")
                 self.db.commit()

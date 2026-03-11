@@ -571,13 +571,14 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
     else:
         results["searchapi"] = {"error": "API key not configured"}
 
-    # Include current image source mode (from DB, persistent across deploys)
+    # Include current global image source mode (from DB, persistent across deploys)
     try:
         from app.db_connection import get_db_session as _get_db_session
         from app.models.format_b_design import FormatBDesign
+        from app.services.media.image_sourcer import GLOBAL_FORMAT_B_SETTINGS_USER_ID
         with _get_db_session() as _isdb:
             design = _isdb.query(FormatBDesign).filter(
-                FormatBDesign.user_id == user["id"]
+                FormatBDesign.user_id == GLOBAL_FORMAT_B_SETTINGS_USER_ID
             ).first()
             results["image_source_mode"] = (design.image_source_mode if design and design.image_source_mode else "ai")
     except Exception:
@@ -604,15 +605,16 @@ async def set_image_source(
     if request.mode not in ("ai", "web"):
         raise HTTPException(status_code=400, detail="Mode must be 'ai' or 'web'")
 
-    # Persist to database (survives deploys)
+    # Persist globally to database (survives deploys and applies to all users)
     from app.models.format_b_design import FormatBDesign
+    from app.services.media.image_sourcer import GLOBAL_FORMAT_B_SETTINGS_USER_ID
     design = db.query(FormatBDesign).filter(
-        FormatBDesign.user_id == user["id"]
+        FormatBDesign.user_id == GLOBAL_FORMAT_B_SETTINGS_USER_ID
     ).first()
     if design:
         design.image_source_mode = request.mode
     else:
-        design = FormatBDesign(user_id=user["id"], image_source_mode=request.mode)
+        design = FormatBDesign(user_id=GLOBAL_FORMAT_B_SETTINGS_USER_ID, image_source_mode=request.mode)
         db.add(design)
     db.commit()
 

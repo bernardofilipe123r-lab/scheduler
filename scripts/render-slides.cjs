@@ -14,10 +14,7 @@ const CANVAS_HEIGHT = 1350;
 const DEFAULT_READ_CAPTION_BOTTOM = 45;
 const DEFAULT_TITLE_GAP = 40;
 const DEFAULT_LOGO_GAP = 36;
-const DEFAULT_TITLE_PADDING_X = 45;
-
-const AUTO_FIT_MIN = 75;   // Minimum preferred font size
-const AUTO_FIT_MAX = 98;   // Maximum font size
+const COVER_SIDE_PADDING = 55;  // Same as Format B thumbnail
 
 // ─── Constants: Text Slide ────────────────────────────────────────────────────
 const BG_COLOR = '#f8f5f0';
@@ -65,8 +62,8 @@ function getBrandHandle(brandId, input) {
 }
 
 // ─── Measurement canvas for accurate font metrics ────────────────────────────
-// Created lazily after fonts are registered. Used by autoFitFontSize and
-// balanceTitleText so line-breaking matches actual rendered pixel widths.
+// Created lazily after fonts are registered. Used by autoFitTitle so
+// line-breaking matches actual rendered pixel widths.
 let _measureCanvas = null;
 let _measureCtx = null;
 
@@ -85,60 +82,19 @@ function measureTextWidth(text, fontFamily, fontSize) {
   return ctx.measureText(text).width;
 }
 
-// ─── Auto-fit Font Size (pixel-accurate) ──────────────────────────────────────
+// ─── Auto-fit Title (mirrors Format B useAutoTitleLines) ─────────────────────
+// Try 2 lines first at the largest possible font, then fall back to 3 lines.
+// After finding the best fit, shave 2px for rendering safety margin.
 
-function countLines(text, maxWidth, fontSize) {
-  const upperText = (text || '').toUpperCase().trim();
-  const words = upperText.split(/\s+/).filter(Boolean);
-  let lineCount = 1;
-  let current = '';
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word;
-    if (current && measureTextWidth(test, 'Anton', fontSize) > maxWidth) {
-      lineCount++;
-      current = word;
-    } else {
-      current = test;
-    }
-  }
-  return lineCount;
-}
-
-function autoFitFontSize(text, maxWidth) {
-  // Short text: fits in ≤2 lines at max
-  if (countLines(text, maxWidth, AUTO_FIT_MAX) <= 2) return AUTO_FIT_MAX;
-
-  // Find largest font in 75-98 that gives exactly 3 lines (preferred)
-  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs--) {
-    if (countLines(text, maxWidth, fs) === 3) return fs;
-  }
-
-  // Can't get 3 lines at >=75 — find largest font in 75-98 that gives 4 lines
-  for (let fs = AUTO_FIT_MAX; fs >= AUTO_FIT_MIN; fs--) {
-    if (countLines(text, maxWidth, fs) === 4) return fs;
-  }
-
-  // Even 75px gives 5+ lines — go below until 4 lines
-  for (let fs = AUTO_FIT_MIN - 1; fs >= 40; fs--) {
-    if (countLines(text, maxWidth, fs) <= 4) return fs;
-  }
-
-  return AUTO_FIT_MIN;
-}
-
-// ─── Balance Title Text (pixel-accurate) ─────────────────────────────────────
-
-function balanceTitleText(title, maxWidth, fontSize) {
-  const upperText = (title || '').toUpperCase().trim();
-  const words = upperText.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return { lines: [''], fontSize };
-
-  // Greedy wrap using actual pixel measurements
+function greedySplit(text, fontFamily, fontSize, maxWidth) {
+  const words = (text || '').toUpperCase().trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [''];
+  const safeWidth = maxWidth * 0.98; // 98% safety margin (same as Format B)
   const lines = [];
   let current = '';
   for (const word of words) {
     const test = current ? `${current} ${word}` : word;
-    if (current && measureTextWidth(test, 'Anton', fontSize) > maxWidth) {
+    if (current && measureTextWidth(test, fontFamily, fontSize) > safeWidth) {
       lines.push(current);
       current = word;
     } else {
@@ -146,15 +102,33 @@ function balanceTitleText(title, maxWidth, fontSize) {
     }
   }
   if (current) lines.push(current);
+  return lines;
+}
 
-  // Clamp to max 4 lines
-  if (lines.length > 4) {
-    const clamped = lines.slice(0, 3);
-    clamped.push(lines.slice(3).join(' '));
-    return { lines: clamped, fontSize };
+function autoFitTitle(title, maxWidth) {
+  const words = (title || '').trim().split(/\s+/);
+  if (words.length <= 1) return { lines: [title.toUpperCase().trim()], fontSize: 300 };
+
+  // First pass: find largest font that fits in ≤2 lines, then shave 2px
+  for (let size = 300; size >= 20; size--) {
+    const lines = greedySplit(title, 'Anton', size, maxWidth);
+    if (lines.length <= 2) {
+      const final = Math.max(20, size - 2);
+      return { lines: greedySplit(title, 'Anton', final, maxWidth), fontSize: final };
+    }
   }
 
-  return { lines, fontSize };
+  // Second pass: text too long for 2 lines, try 3
+  for (let size = 300; size >= 20; size--) {
+    const lines = greedySplit(title, 'Anton', size, maxWidth);
+    if (lines.length <= 3) {
+      const final = Math.max(20, size - 2);
+      return { lines: greedySplit(title, 'Anton', final, maxWidth), fontSize: final };
+    }
+  }
+
+  // Fallback
+  return { lines: [title.toUpperCase().trim()], fontSize: 20 };
 }
 
 // ─── Text Slide helpers ───────────────────────────────────────────────────────
@@ -218,17 +192,15 @@ async function renderCoverSlide(input) {
     coverOutput,
   } = input;
 
-  const brandColor = getBrandColor(brand, input);
   const brandAbbr = getBrandAbbr(brand, input);
   const readCaptionBottom = DEFAULT_READ_CAPTION_BOTTOM;
   const titleGap = DEFAULT_TITLE_GAP;
   const logoGap = DEFAULT_LOGO_GAP;
-  const titlePaddingX = DEFAULT_TITLE_PADDING_X;
-  const titleMaxWidth = CANVAS_WIDTH - titlePaddingX * 2;
+  const titlePaddingX = COVER_SIDE_PADDING;
+  const titleMaxWidth = CANVAS_WIDTH - titlePaddingX * 2; // 970px
 
-  // Auto-fit title
-  const fontSize = autoFitFontSize(title, titleMaxWidth);
-  const { lines } = balanceTitleText(title, titleMaxWidth, fontSize);
+  // Auto-fit title (Format B algorithm: try 2 lines → 3 lines → -2px shave)
+  const { lines, fontSize } = autoFitTitle(title, titleMaxWidth);
   const lineH = fontSize * 1.1;
   const titleHeight = (lines.length - 1) * lineH + fontSize;
 
