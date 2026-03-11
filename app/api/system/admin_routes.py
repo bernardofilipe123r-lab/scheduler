@@ -570,8 +570,17 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
     else:
         results["searchapi"] = {"error": "API key not configured"}
 
-    # Include current image source mode
-    results["image_source_mode"] = os.getenv("FORMAT_B_IMAGE_SOURCE", "ai")
+    # Include current image source mode (from DB, persistent across deploys)
+    try:
+        from app.db_connection import get_db_session as _get_db_session
+        from app.models.format_b_design import FormatBDesign
+        with _get_db_session() as _isdb:
+            design = _isdb.query(FormatBDesign).filter(
+                FormatBDesign.user_id == user["id"]
+            ).first()
+            results["image_source_mode"] = (design.image_source_mode if design and design.image_source_mode else "ai")
+    except Exception:
+        results["image_source_mode"] = os.getenv("FORMAT_B_IMAGE_SOURCE", "ai")
 
     return results
 
@@ -586,6 +595,7 @@ class ImageSourceToggleRequest(BaseModel):
 async def set_image_source(
     request: ImageSourceToggleRequest,
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Set the image source for Format B video slides. Changes take effect on next job."""
     _require_super_admin(user)
@@ -593,6 +603,19 @@ async def set_image_source(
     if request.mode not in ("ai", "web"):
         raise HTTPException(status_code=400, detail="Mode must be 'ai' or 'web'")
 
+    # Persist to database (survives deploys)
+    from app.models.format_b_design import FormatBDesign
+    design = db.query(FormatBDesign).filter(
+        FormatBDesign.user_id == user["id"]
+    ).first()
+    if design:
+        design.image_source_mode = request.mode
+    else:
+        design = FormatBDesign(user_id=user["id"], image_source_mode=request.mode)
+        db.add(design)
+    db.commit()
+
+    # Also set env var for backward compatibility within this process
     os.environ["FORMAT_B_IMAGE_SOURCE"] = request.mode
 
     return {"mode": request.mode, "message": f"Image source set to '{request.mode}'. Takes effect on next job."}

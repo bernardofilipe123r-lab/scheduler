@@ -45,6 +45,7 @@ import { createFacebookCaption } from '@/shared/lib/captionUtils'
 import { PostJobDetail } from './PostJobDetail'
 import { ThreadsJobDetail } from './ThreadsJobDetail'
 import type { BrandName, BrandOutput } from '@/shared/types'
+import { getBrandOutputsList } from '@/shared/types'
 
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -89,6 +90,8 @@ export function JobDetailPage() {
   const [brandCustomDate, setBrandCustomDate] = useState('')
   const [brandCustomTime, setBrandCustomTime] = useState('')
   const [showPromptDetails, setShowPromptDetails] = useState(false)
+  // Multi-content: track which content tab is active per brand
+  const [activeContentTab, setActiveContentTab] = useState<Record<string, number>>({})
   
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
   const isFormatB = job?.variant === 'format_b'
@@ -133,8 +136,9 @@ export function JobDetailPage() {
   }
   
   const allScheduled = job ? Object.entries(job.brand_outputs || {})
-    .filter(([_, output]) => output.status === 'completed' || output.status === 'scheduled')
-    .every(([_, output]) => output.status === 'scheduled') : false
+    .flatMap(([, output]) => Array.isArray(output) ? output : [output])
+    .filter(output => output.status === 'completed' || output.status === 'scheduled')
+    .every(output => output.status === 'scheduled') : false
   
   // Dismiss a brand — mark it so it's excluded from Schedule All
   const handleDismissBrand = async (brand: BrandName) => {
@@ -466,12 +470,15 @@ export function JobDetailPage() {
     return <ThreadsJobDetail job={job} />
   }
   
-  const completedCount = Object.values(job.brand_outputs || {})
-    .filter(o => o.status === 'completed').length
-  const dismissedCount = Object.values(job.brand_outputs || {})
-    .filter(o => o.status === 'dismissed').length
-  const scheduledCount = Object.values(job.brand_outputs || {})
-    .filter(o => o.status === 'scheduled').length
+  const completedCount = job ? Object.entries(job.brand_outputs || {})
+    .flatMap(([, o]) => Array.isArray(o) ? o : [o])
+    .filter(o => o.status === 'completed').length : 0
+  const dismissedCount = job ? Object.entries(job.brand_outputs || {})
+    .flatMap(([, o]) => Array.isArray(o) ? o : [o])
+    .filter(o => o.status === 'dismissed').length : 0
+  const scheduledCount = job ? Object.entries(job.brand_outputs || {})
+    .flatMap(([, o]) => Array.isArray(o) ? o : [o])
+    .filter(o => o.status === 'scheduled').length : 0
   const scheduleButtonLabel = completedCount === 1 ? 'Schedule Reel' : scheduledCount > 0 ? `Schedule ${completedCount} Remaining` : `Schedule All (${completedCount})`
   
   return (
@@ -695,7 +702,10 @@ export function JobDetailPage() {
       {/* Brand Sections */}
       <div className="grid gap-6">
         {job.brands?.map(brand => {
-          const output = job.brand_outputs?.[brand] || { status: 'pending' }
+          const outputs = getBrandOutputsList(job.brand_outputs, brand)
+          const isMulti = outputs.length > 1
+          const currentTab = activeContentTab[brand] ?? 0
+          const output = outputs[currentTab] || outputs[0] || { status: 'pending' as const }
           const isCompleted = output.status === 'completed'
           const isScheduled = output.status === 'scheduled'
           const isFailed = output.status === 'failed'
@@ -746,6 +756,36 @@ export function JobDetailPage() {
                 </div>
               </div>
               
+              {/* Multi-content tabs */}
+              {isMulti && !isDismissed && (
+                <div className="px-4 pt-3 flex items-center gap-1.5 border-b border-gray-100 pb-3">
+                  <span className="text-xs text-gray-400 mr-1">Reel:</span>
+                  {outputs.map((o, idx) => {
+                    const active = currentTab === idx
+                    const done = o.status === 'completed' || o.status === 'scheduled'
+                    const failed = o.status === 'failed'
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveContentTab(prev => ({ ...prev, [brand]: idx }))}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                          active
+                            ? 'bg-stone-800 text-white shadow-sm'
+                            : done
+                              ? 'bg-teal-50 text-teal-700 hover:bg-teal-100'
+                              : failed
+                                ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                      >
+                        #{idx + 1}
+                        {done && !active && <Check className="w-3 h-3 ml-1 inline" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
               {/* Content */}
               <div className="p-4">
                 {isDismissed ? (
@@ -754,26 +794,7 @@ export function JobDetailPage() {
                     <p className="text-sm">Brand dismissed — won't be included in Schedule All</p>
                   </div>
                 ) : isBrandGenerating ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="w-10 h-10 text-teal-600 animate-spin mb-4" />
-                    <p className="text-gray-600 font-medium mb-2">
-                      {output.progress_message || `Generating ${getBrandLabel(brand)}...`}
-                    </p>
-                    {typeof output.progress_percent === 'number' && (
-                      <div className="w-full max-w-xs">
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
-                          <span>Progress</span>
-                          <span>{output.progress_percent}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-teal-500 transition-all duration-500 ease-out"
-                            style={{ width: `${output.progress_percent}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <FormatBProgress message={output.progress_message} percent={output.progress_percent} brand={getBrandLabel(brand)} />
                 ) : isFailed ? (
                   <div className="text-center py-8">
                     <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
@@ -1454,6 +1475,105 @@ export function JobDetailPage() {
           </div>
         </div>
       </Modal>
+    </div>
+  )
+}
+
+// ── Step-based progress component for Format B generation ──────────────
+
+const FORMAT_B_STEPS = [
+  { id: 'content', label: 'Content', icon: '📝' },
+  { id: 'images', label: 'Images', icon: '🖼️' },
+  { id: 'thumbnail', label: 'Thumbnail', icon: '🎨' },
+  { id: 'video', label: 'Video', icon: '🎬' },
+  { id: 'upload', label: 'Upload', icon: '☁️' },
+] as const
+
+function getActiveStep(message?: string, percent?: number): number {
+  if (!message && !percent) return 0
+  const msg = (message || '').toLowerCase()
+  if (msg.includes('upload')) return 4
+  if (msg.includes('composing video') || msg.includes('slideshow')) return 3
+  if (msg.includes('composing thumbnail') || msg.includes('thumbnail')) return 2
+  if (msg.includes('generating image') || msg.includes('generating images') || msg.includes('sourcing')) return 1
+  if (msg.includes('generating content') || msg.includes('starting') || msg.includes('discover')) return 0
+  // Fall back to percent-based guess
+  if (typeof percent === 'number') {
+    if (percent >= 80) return 4
+    if (percent >= 55) return 3
+    if (percent >= 40) return 2
+    if (percent >= 5) return 1
+  }
+  return 0
+}
+
+function FormatBProgress({ message, percent, brand }: { message?: string; percent?: number; brand: string }) {
+  const activeStep = getActiveStep(message, percent)
+
+  return (
+    <div className="py-8 px-2">
+      {/* Step circles with connecting lines */}
+      <div className="flex items-center justify-between mb-6 relative">
+        {FORMAT_B_STEPS.map((step, idx) => {
+          const isDone = idx < activeStep
+          const isActive = idx === activeStep
+          return (
+            <div key={step.id} className="flex flex-col items-center relative z-10 flex-1">
+              {/* Connector line to next step */}
+              {idx < FORMAT_B_STEPS.length - 1 && (
+                <div
+                  className={`absolute top-5 left-[calc(50%+16px)] right-[calc(-50%+16px)] h-[2px] transition-all duration-700 ease-out ${
+                    isDone ? 'bg-teal-400' : 'bg-gray-200'
+                  }`}
+                />
+              )}
+              {/* Circle */}
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all duration-500 ${
+                  isDone
+                    ? 'bg-teal-100 ring-2 ring-teal-400 scale-100'
+                    : isActive
+                      ? 'bg-stone-800 ring-4 ring-stone-300 scale-110 shadow-lg animate-pulse'
+                      : 'bg-gray-100 ring-1 ring-gray-200 scale-90 opacity-50'
+                }`}
+              >
+                {isDone ? (
+                  <Check className="w-4 h-4 text-teal-600" />
+                ) : isActive ? (
+                  <span className="text-sm">{step.icon}</span>
+                ) : (
+                  <span className="text-sm grayscale">{step.icon}</span>
+                )}
+              </div>
+              {/* Label */}
+              <span
+                className={`text-[10px] mt-2 font-medium transition-colors ${
+                  isDone ? 'text-teal-600' : isActive ? 'text-stone-800' : 'text-gray-400'
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Current action */}
+      <div className="text-center">
+        <p className="text-sm font-medium text-gray-700">
+          {message || `Generating ${brand}...`}
+        </p>
+        {typeof percent === 'number' && (
+          <div className="mt-3 mx-auto max-w-xs">
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-teal-400 to-teal-600 transition-all duration-700 ease-out rounded-full"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

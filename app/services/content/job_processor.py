@@ -753,7 +753,8 @@ class JobProcessor:
                     print(f"   ⚠️ Content logo download failed: {e}", flush=True)
 
             # ── Step 1: Source images ──────────────────────────
-            sourcer = ImageSourcer(db=self.db)
+            image_source_mode = getattr(design, 'image_source_mode', None) if design else None
+            sourcer = ImageSourcer(db=self.db, image_source_mode=image_source_mode)
             image_plans = [
                 ImagePlan(**ip) for ip in tv_data.get("images", [])
             ]

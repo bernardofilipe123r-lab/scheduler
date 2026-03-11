@@ -38,20 +38,31 @@ MAX_RETRY_DELAY = 60
 FREEPIK_DAILY_LIMIT = 100
 
 
-def get_image_source_mode() -> str:
+def get_image_source_mode(db=None, user_id: str = None) -> str:
     """Get the configured image source mode for Format B video slides.
 
-    Returns "ai" or "web". Controlled by FORMAT_B_IMAGE_SOURCE env var.
-    Super admin can change this via the admin panel toggle.
+    Reads from format_b_design table (persistent across deploys).
+    Falls back to FORMAT_B_IMAGE_SOURCE env var, then "ai".
     """
+    if db and user_id:
+        try:
+            from app.models.format_b_design import FormatBDesign
+            design = db.query(FormatBDesign).filter(
+                FormatBDesign.user_id == user_id
+            ).first()
+            if design and design.image_source_mode:
+                return design.image_source_mode.lower()
+        except Exception as e:
+            logger.warning(f"[ImageSourcer] Could not read image_source_mode from DB: {e}")
     return os.environ.get("FORMAT_B_IMAGE_SOURCE", "ai").lower()
 
 
 class ImageSourcer:
     """Sources images for format-b reels. Supports AI-generated and web images."""
 
-    def __init__(self, db=None):
+    def __init__(self, db=None, image_source_mode: str = None):
         self.db = db
+        self._image_source_mode = image_source_mode  # Override from caller
         self._deapi_key = os.environ.get("DEAPI_API_KEY")
         self._deapi_base_url = "https://api.deapi.ai/api/v1/client"
         self._freepik_key = os.environ.get("FREEPIK_API_KEY")
@@ -95,7 +106,7 @@ class ImageSourcer:
 
         Returns path to processed image or None.
         """
-        mode = get_image_source_mode()
+        mode = self._image_source_mode or get_image_source_mode(db=self.db)
 
         if mode == "web":
             path = self._source_via_web(plan)

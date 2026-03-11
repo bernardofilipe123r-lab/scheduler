@@ -36,6 +36,17 @@ export interface BrandOutput {
   content_format?: string   // 'format_a' | 'format_b'
 }
 
+/** Normalize brand_outputs entry: always returns an array of BrandOutput. */
+export function getBrandOutputsList(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  brandOutputs: Record<string, any>, brand: string
+): BrandOutput[] {
+  const raw = brandOutputs?.[brand]
+  if (!raw) return [{ status: 'pending' as BrandStatus }]
+  if (Array.isArray(raw)) return raw as BrandOutput[]
+  return [raw as BrandOutput]
+}
+
 // Job entity
 export interface Job {
   id: string

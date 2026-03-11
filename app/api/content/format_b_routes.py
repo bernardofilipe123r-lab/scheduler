@@ -151,7 +151,7 @@ async def source_images(
 ):
     """Source images based on search queries or AI generation prompts."""
     from app.services.discovery.story_polisher import ImagePlan
-    from app.services.media.image_sourcer import ImageSourcer
+    from app.services.media.image_sourcer import ImageSourcer, get_image_source_mode
 
     plans = [
         ImagePlan(
@@ -162,7 +162,8 @@ async def source_images(
         for img in request.images
     ]
 
-    sourcer = ImageSourcer(db=db)
+    mode = get_image_source_mode(db=db, user_id=user.get("id"))
+    sourcer = ImageSourcer(db=db, image_source_mode=mode)
     paths = sourcer.source_images_batch(plans)
 
     results = []
