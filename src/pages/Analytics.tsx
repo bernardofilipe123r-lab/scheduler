@@ -99,7 +99,7 @@ function FilterBar({
   ]
 
   return (
-    <div className="flex items-center gap-3 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap shrink-0">
       <div className="flex items-center gap-1.5 text-gray-400">
         <Filter className="w-4 h-4" />
       </div>
@@ -107,37 +107,37 @@ function FilterBar({
         <select
           value={selectedBrand}
           onChange={(e) => setSelectedBrand(e.target.value)}
-          className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          className="appearance-none bg-white border border-gray-200 rounded-lg px-2 py-1.5 pr-7 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer xl:px-3 xl:text-sm xl:pr-8"
         >
           {brands.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none xl:right-2.5" />
       </div>
       <div className="relative">
         <select
           value={selectedPlatform}
           onChange={(e) => setSelectedPlatform(e.target.value)}
-          className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          className="appearance-none bg-white border border-gray-200 rounded-lg px-2 py-1.5 pr-7 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer xl:px-3 xl:text-sm xl:pr-8"
         >
           {platforms.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none xl:right-2.5" />
       </div>
       <div className="relative">
         <select
           value={timeRange.toString()}
           onChange={(e) => setTimeRange(parseInt(e.target.value))}
-          className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          className="appearance-none bg-white border border-gray-200 rounded-lg px-2 py-1.5 pr-7 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer xl:px-3 xl:text-sm xl:pr-8"
         >
           {times.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none xl:right-2.5" />
       </div>
     </div>
   )
@@ -1553,13 +1553,13 @@ export function AnalyticsPage() {
       </div>
 
       {/* Tab navigation */}
-      <div className="flex items-center justify-between border-b border-gray-200">
-        <div className="flex gap-0">
+      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-gray-200">
+        <div className="flex gap-0 shrink-0">
           {TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap xl:px-5 xl:gap-2 ${
                 activeTab === key
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

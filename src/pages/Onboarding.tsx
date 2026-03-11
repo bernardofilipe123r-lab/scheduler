@@ -650,7 +650,7 @@ export function OnboardingPage() {
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-1 rounded-lg bg-gray-100 border border-gray-200">
-              <img src={vaLogo} alt="Viral App" className="w-7 h-7" />
+              <img src={vaLogo} alt="Viral Toby" className="w-7 h-7" />
             </div>
             <div>
               <p className="text-[14px] font-semibold text-gray-900 tracking-tight">Let's get you set up</p>

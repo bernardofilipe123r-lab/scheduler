@@ -283,9 +283,9 @@ export function LoginPage() {
           <div className="relative z-10">
             <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2, duration: 0.5 }} className="inline-flex items-center gap-3">
               <div className="p-1.5 rounded-xl bg-white/[0.06] border border-white/[0.08]">
-                <img src={vaLogo} alt="Viral App logo" className="w-9 h-9" />
+                <img src={vaLogo} alt="Viral Toby logo" className="w-9 h-9" />
               </div>
-              <span className="text-[15px] font-semibold tracking-tight text-white/90">Viral App</span>
+              <span className="text-[15px] font-semibold tracking-tight text-white/90">Viral Toby</span>
             </motion.div>
 
             <motion.h2 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }} className="mt-12 text-[28px] xl:text-[32px] font-bold leading-[1.2] tracking-tight text-white">
@@ -324,10 +324,10 @@ export function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
             <div className="p-1.5 rounded-xl bg-gray-100 border border-gray-200">
-              <img src={vaLogo} alt="Viral App logo" className="w-9 h-9" />
+              <img src={vaLogo} alt="Viral Toby logo" className="w-9 h-9" />
             </div>
             <div>
-              <p className="text-[15px] font-semibold text-gray-900 tracking-tight">Viral App</p>
+              <p className="text-[15px] font-semibold text-gray-900 tracking-tight">Viral Toby</p>
               <p className="text-[11px] text-gray-400">Content operations platform</p>
             </div>
           </div>

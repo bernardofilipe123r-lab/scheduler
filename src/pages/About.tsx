@@ -44,7 +44,7 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Viral App — Platform Overview</title>
+  <title>Viral Toby — Platform Overview</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
@@ -246,20 +246,20 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     
     <!-- Cover -->
     <div class="cover">
-      <div class="cover-brand">Viral App</div>
+      <div class="cover-brand">Viral Toby</div>
       <div class="cover-sub">Social Media Content Operations Platform</div>
       <div class="cover-tagline">
-        Viral App centralizes short-form content operations — content setup, media rendering,
+        Viral Toby centralizes short-form content operations — content setup, media rendering,
         scheduling, and multi-platform publishing across Instagram, Facebook, and YouTube.
       </div>
       <div class="cover-date">Platform Overview — ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-      <div class="cover-badge">Proprietary Technology by Viral App</div>
+      <div class="cover-badge">Proprietary Technology by Viral Toby</div>
     </div>
 
     <!-- Executive Summary -->
     <h2>Executive Summary</h2>
     <p>
-      Viral App is a full-stack social media content operations platform built to manage multiple brands
+      Viral Toby is a full-stack social media content operations platform built to manage multiple brands
       from one dashboard. The system covers the full lifecycle: content configuration, image and video
       generation, scheduling, and multi-platform publishing for Instagram Reels, Facebook Reels, and
       YouTube Shorts.
@@ -338,7 +338,7 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
     <!-- Operations Workflow -->
     <h2>Operations Workflow</h2>
     <p>
-      Viral App is designed for repeatable operations: prepare content inputs, generate media,
+      Viral Toby is designed for repeatable operations: prepare content inputs, generate media,
       queue publishing, and monitor results from one place.
     </p>
     <h3>Four Core Modes</h3>
@@ -481,7 +481,7 @@ function generatePDF(dynamicBrands: { id: string; label: string; instagram_handl
 
     <!-- Footer -->
     <div class="footer">
-      <p><span class="footer-brand">Viral App</span> — Social Media Content Operations Platform</p>
+      <p><span class="footer-brand">Viral Toby</span> — Social Media Content Operations Platform</p>
       <p style="margin-top: 4px;">Proprietary &amp; Confidential &bull; ${new Date().getFullYear()}</p>
       <p style="margin-top: 4px;">Generated on ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
     </div>
@@ -610,13 +610,13 @@ export function AboutPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold text-gray-900">About Viral App</h1>
+            <h1 className="text-2xl font-bold text-gray-900">About Viral Toby</h1>
             <span className="px-2.5 py-0.5 text-xs font-semibold bg-primary-50 text-primary-700 rounded-full">
               v1.0
             </span>
           </div>
           <p className="text-gray-500 text-sm">
-            Social Media Content Operations Platform — Proprietary technology by Viral App
+            Social Media Content Operations Platform — Proprietary technology by Viral Toby
           </p>
         </div>
         <button
@@ -645,7 +645,7 @@ export function AboutPage() {
             The Complete Content Automation Engine
           </h2>
           <p className="text-primary-100 text-lg max-w-3xl leading-relaxed">
-            Viral App manages the full lifecycle of short-form video content — from content setup and media
+            Viral Toby manages the full lifecycle of short-form video content — from content setup and media
             rendering to scheduling and multi-platform publishing across Instagram, Facebook, and YouTube.
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
@@ -671,7 +671,7 @@ export function AboutPage() {
       {/* Executive Summary */}
       <Section icon={Info} title="Executive Summary">
         <p className="text-gray-600 leading-relaxed mb-3">
-          Viral App is a full-stack social media content operations platform designed to run multiple brands
+          Viral Toby is a full-stack social media content operations platform designed to run multiple brands
           from one dashboard. The platform manages the content lifecycle from configuration to media generation,
           scheduled publishing, and delivery to Instagram Reels, Facebook Reels, and YouTube Shorts.
         </p>
@@ -758,7 +758,7 @@ export function AboutPage() {
       {/* Operations Workflow */}
       <Section icon={Bot} title="Operations Workflow">
         <p className="text-gray-600 leading-relaxed mb-4">
-          Viral App is built for repeatable operations: create content, schedule publication,
+          Viral Toby is built for repeatable operations: create content, schedule publication,
           publish to connected platforms, and review outcomes in one dashboard.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1051,7 +1051,7 @@ export function AboutPage() {
 
       {/* Footer */}
       <div className="text-center py-8 border-t border-gray-200">
-        <p className="text-sm font-bold text-primary-600">Viral App</p>
+        <p className="text-sm font-bold text-primary-600">Viral Toby</p>
         <p className="text-xs text-gray-400 mt-1">
           Social Media Content Operations Platform &bull; Proprietary &amp; Confidential &bull; {new Date().getFullYear()}
         </p>

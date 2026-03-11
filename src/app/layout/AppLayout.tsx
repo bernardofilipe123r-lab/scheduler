@@ -12,6 +12,7 @@ import { useJobs } from '@/features/jobs'
 import { useBillingStatus } from '@/features/billing/useBillingStatus'
 import { LockedBanner } from '@/features/billing/LockedBanner'
 import { TobyMascot } from '@/shared/components/TobyMascot'
+import vtLogo from '@/assets/icons/vt-logo.png'
 
 /* ── Railway Status Banner ─────────────────────────────── */
 function RailwayStatusBanner() {
@@ -238,22 +239,31 @@ export function AppLayout() {
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <aside
-        className={`${sidebarWidth} fixed top-0 left-0 bottom-0 z-50 flex flex-col transition-all duration-200 ease-in-out bg-gradient-to-b from-neutral-950 via-stone-900 to-stone-800`}
+        className={`${sidebarWidth} fixed top-0 left-0 bottom-0 z-50 flex flex-col transition-all duration-200 ease-in-out bg-gradient-to-b from-neutral-950 via-stone-900 to-stone-800 overflow-visible`}
       >
-        {/* Logo + Toby Mascot */}
-        <NavLink
-          to="/"
-          className="toby-sidebar-logo flex items-center gap-2 h-16 px-2 shrink-0 transition-colors group"
-        >
-          <div className="w-10 h-10 shrink-0 flex items-center justify-center">
-            <TobyMascot size={38} />
+        {/* Logo + Peeping Toby */}
+        <div className="relative shrink-0">
+          <NavLink
+            to="/"
+            className="toby-sidebar-logo flex items-center gap-2 h-16 px-2 shrink-0 transition-colors group"
+          >
+            <div className="w-10 h-10 shrink-0 flex items-center justify-center">
+              <img src={vtLogo} alt="Viral Toby" className="w-9 h-9 rounded-lg" />
+            </div>
+            {expanded && (
+              <span className="font-extrabold text-base text-stone-100 whitespace-nowrap tracking-tight">
+                Viral Toby
+              </span>
+            )}
+          </NavLink>
+          {/* Toby peeping from behind the sidebar edge */}
+          <div
+            className="absolute top-2 -right-5 transition-all duration-300 hover:translate-x-1 group/toby pointer-events-auto"
+            style={{ zIndex: 60 }}
+          >
+            <TobyMascot size={28} />
           </div>
-          {expanded && (
-            <span className="font-extrabold text-base text-stone-100 whitespace-nowrap tracking-tight">
-              Viral Toby
-            </span>
-          )}
-        </NavLink>
+        </div>
 
         {/* Nav Items */}
         <nav className="flex-1 py-3 px-2 flex flex-col gap-1.5 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
