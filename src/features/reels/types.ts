@@ -109,6 +109,7 @@ export interface FormatBGenerateRequest {
   brands: string[]
   platforms: string[]
   music_source?: string
+  content_count?: number
   // full_auto
   niche?: string
   count?: number

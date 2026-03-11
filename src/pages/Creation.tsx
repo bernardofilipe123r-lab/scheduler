@@ -239,6 +239,7 @@ export function CreationPage() {
             brands,
             platforms: selectedPlatforms,
             niche,
+            content_count: contentCount,
           })
         }
       } else if (contentType === 'posts') {

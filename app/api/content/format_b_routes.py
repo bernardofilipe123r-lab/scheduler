@@ -55,6 +55,7 @@ class FormatBGenerateRequest(BaseModel):
     platforms: List[str] = Field(default_factory=list)
     niche: Optional[str] = None
     category: Optional[str] = None
+    content_count: int = Field(default=1, ge=1, le=3)
     # Manual mode fields
     reel_text: Optional[str] = None
     thumbnail_title: Optional[str] = None
@@ -209,6 +210,7 @@ async def generate_format_b_reel(
             music_source=request.music_source,
             content_format="format_b",
             format_b_data={},
+            content_count=request.content_count,
         )
 
         job_id = job.job_id
@@ -271,6 +273,7 @@ async def generate_format_b_reel(
         music_source=request.music_source,
         content_format="format_b",
         format_b_data=polished_data,
+        content_count=request.content_count,
     )
 
     job_id = job.job_id
