@@ -11,7 +11,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 THREADS_API_BASE = "https://graph.threads.net"
-API_VERSION = "v21.0"
+API_VERSION = "v1.0"
 
 
 class ThreadsTokenService:

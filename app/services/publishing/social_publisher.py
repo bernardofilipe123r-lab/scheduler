@@ -1699,7 +1699,7 @@ class SocialPublisher:
         # Proactively refresh if stale
         self._proactive_refresh_threads_token()
 
-        threads_api = "https://graph.threads.net/v21.0"
+        threads_api = "https://graph.threads.net/v1.0"
 
         try:
             # Step 1: Create media container
@@ -1829,7 +1829,7 @@ class SocialPublisher:
             }
 
         self._proactive_refresh_threads_token()
-        threads_api = "https://graph.threads.net/v21.0"
+        threads_api = "https://graph.threads.net/v1.0"
 
         try:
             # Step 1: Create child containers
@@ -1928,7 +1928,7 @@ class SocialPublisher:
             }
 
         self._proactive_refresh_threads_token()
-        threads_api = "https://graph.threads.net/v21.0"
+        threads_api = "https://graph.threads.net/v1.0"
 
         try:
             post_ids: list[str] = []
