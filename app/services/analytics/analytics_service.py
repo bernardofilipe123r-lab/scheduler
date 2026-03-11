@@ -619,9 +619,22 @@ class AnalyticsService:
             "fields": "followers_count,fan_count,name",
             "access_token": access_token
         }
-        
+
         response = requests.get(page_url, params=params)
-        response.raise_for_status()
+        if response.status_code == 400:
+            # Some pages/tokens reject followers_count on the page node.
+            # Retry with fan_count only to avoid noisy hard failures.
+            fallback_params = {
+                "fields": "fan_count,name",
+                "access_token": access_token
+            }
+            fallback_response = requests.get(page_url, params=fallback_params)
+            if fallback_response.status_code == 200:
+                response = fallback_response
+            else:
+                response.raise_for_status()
+        else:
+            response.raise_for_status()
         page_data = response.json()
         
         followers = page_data.get("followers_count", page_data.get("fan_count", 0))

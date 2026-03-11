@@ -43,16 +43,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 scripts/claude_drift_check.py"
-          }
-        ]
-      }
     ]
   }
 }

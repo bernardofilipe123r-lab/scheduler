@@ -824,6 +824,16 @@ def _extract_brands_from_context(message: str, details: dict | None) -> list[str
     return sorted(brands)
 
 
+def _is_ignored_error_digest_log(message: str) -> bool:
+    """Ignore known low-signal legacy errors from digest output."""
+    msg = (message or "").lower()
+    return (
+        "failed to fetch facebook analytics for" in msg
+        and "400 client error: bad request" in msg
+        and "graph.facebook.com" in msg
+    )
+
+
 def _classify_priority(
     cat: str,
     count: int,
@@ -937,6 +947,9 @@ def get_error_digest(
     })
 
     for log in error_logs:
+        if _is_ignored_error_digest_log(log.message or ""):
+            continue
+
         pattern_key = _normalize_error_message(log.message or "")
         cat = log.category or "error"
 

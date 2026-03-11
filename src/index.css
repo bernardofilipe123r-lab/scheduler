@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 /* ── Skeleton shimmer ── */
-@keyframes shimmer {
+@keyframes skeleton-shimmer {
   0%   { background-position: -600px 0 }
   100% { background-position: 600px 0 }
 }
 .skeleton {
   background: linear-gradient(90deg, #f3f4f6 25%, #e9eaec 50%, #f3f4f6 75%);
   background-size: 600px 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 
 /* ── SVG spinner stroke-dash animation ── */
@@ -40,7 +40,7 @@ html {
   --primary: #00435c;
   --primary-light: #006d8f;
   --primary-dark: #002d3f;
-  
+
   /* Semantic colors */
   --success: #10b981;
   --success-light: #d1fae5;
@@ -54,7 +54,7 @@ html {
   --info: #3b82f6;
   --info-light: #dbeafe;
   --info-dark: #1e40af;
-  
+
   /* Neutral colors */
   --gray-50: #f9fafb;
   --gray-100: #f3f4f6;
@@ -66,20 +66,20 @@ html {
   --gray-700: #374151;
   --gray-800: #1f2937;
   --gray-900: #111827;
-  
+
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
   --shadow: 0 2px 8px rgba(0,0,0,0.08);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.15);
-  
+
   /* Border radius */
   --radius-sm: 4px;
   --radius: 8px;
   --radius-md: 10px;
   --radius-lg: 12px;
   --radius-full: 9999px;
-  
+
   /* Transitions */
   --transition-fast: 150ms ease;
   --transition: 200ms ease;
@@ -347,7 +347,7 @@ body {
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  
+
   .btn-primary {
     @apply bg-[#00435c] text-white hover:bg-[#002d3f] active:bg-[#002030];
   }
@@ -355,23 +355,23 @@ body {
   .btn-secondary {
     @apply bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300;
   }
-  
+
   .btn-success {
     @apply bg-green-600 text-white hover:bg-green-700 active:bg-green-800;
   }
-  
+
   .btn-danger {
     @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
   }
-  
+
   .input {
     @apply w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200;
   }
-  
+
   .card {
     @apply bg-white rounded-xl shadow-sm border border-gray-100;
   }
-  
+
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
@@ -444,7 +444,7 @@ input[type="checkbox"].checkbox-green:focus {
 }
 
 /* Loading animation */
-@keyframes shimmer {
+@keyframes skeleton-shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
@@ -452,7 +452,7 @@ input[type="checkbox"].checkbox-green:focus {
 .skeleton {
   background: linear-gradient(90deg, var(--gray-200), var(--gray-100), var(--gray-200));
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  animation: skeleton-shimmer 1.5s infinite;
 }
 
 /* ── Welcome page animations ── */
@@ -500,6 +500,33 @@ input[type="checkbox"].checkbox-green:focus {
 @keyframes float-up {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
+}
+
+/* Phone feed auto-scroll — simulates video feed */
+@keyframes phone-scroll-slow {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+@keyframes phone-scroll-med {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+@keyframes phone-scroll-fast {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+/* Animated gradient text shift */
+@keyframes gradient-shift {
+  0% { background-position: 0% center; }
+  50% { background-position: 200% center; }
+  100% { background-position: 0% center; }
+}
+
+/* Border beam spinning animation */
+@keyframes border-beam-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 /* Reduced motion */
