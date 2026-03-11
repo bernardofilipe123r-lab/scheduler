@@ -256,13 +256,13 @@ export function AppLayout() {
               </span>
             )}
           </NavLink>
-          {/* Toby peeking/spying from behind the sidebar edge — fingers grip the top */}
+          {/* Toby peeking from behind the sidebar right edge — hands grip the wall */}
           <div
-            className="absolute -top-1 -right-6 pointer-events-auto cursor-pointer"
-            style={{ zIndex: 60 }}
+            className="absolute top-3 pointer-events-auto cursor-pointer"
+            style={{ zIndex: 60, right: '-30px' }}
             title="👀 Toby is watching..."
           >
-            <TobyMascot size={38} />
+            <TobyMascot size={80} />
           </div>
         </div>
 
