@@ -16,6 +16,7 @@ import concurrent.futures
 import threading
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy import Text
 from app.models.toby import TobyState, TobyContentTag, TobyActivityLog
 
 
@@ -443,6 +444,31 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState, brands=None):
         print(f"[TOBY] Auto-retry check error: {e}", flush=True)
 
 
+def _get_next_variant(db: Session, brand_id: str) -> str:
+    """Determine the next reel variant by strict alternation.
+
+    Queries the most recent Format A reel job for this brand
+    and returns the opposite variant. Defaults to 'light' if no
+    previous reel exists.
+    """
+    from app.models.jobs import GenerationJob
+    last_job = (
+        db.query(GenerationJob.variant)
+        .filter(
+            GenerationJob.brands.cast(Text).contains(brand_id),
+            GenerationJob.variant.in_(["light", "dark"]),
+            GenerationJob.content_format == "format_a",
+        )
+        .order_by(GenerationJob.created_at.desc())
+        .first()
+    )
+    if last_job and last_job.variant == "light":
+        return "dark"
+    if last_job and last_job.variant == "dark":
+        return "light"
+    return "light"  # Default: first reel is always light
+
+
 def _execute_content_plan(db: Session, plan):
     """
     Execute a ContentPlan: generate content, create media, and schedule.
@@ -528,13 +554,11 @@ def _execute_content_plan(db: Session, plan):
     if any(forbidden in title_lower for forbidden in FORBIDDEN_TITLES):
         raise ValueError(f"Content generation returned forbidden fallback title: {result['title']}")
 
-    # ── Step 3: Determine variant from slot pattern ──────────
+    # ── Step 3: Determine variant by strict alternation ─────
     if plan.content_type == "format_b_reel":
         variant = "format_b"
     elif plan.content_type == "reel":
-        sched_time = datetime.fromisoformat(plan.scheduled_time)
-        slot_index = sched_time.hour // 4  # 0-5 across 24h
-        variant = "light" if slot_index % 2 == 0 else "dark"
+        variant = _get_next_variant(db, plan.brand_id)
     else:
         variant = "post"
 

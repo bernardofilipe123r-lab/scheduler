@@ -9,6 +9,7 @@ Endpoints:
 - GET  /api/admin/users/{id}/logs                Get system logs for a specific user
 - GET  /api/admin/supabase-usage                 Supabase usage metrics (super admin only)
 - GET  /api/admin/error-digest                   Condensed error summary (last 48h)
+- GET  /api/admin/format-violations              Proactive format pattern violation check
 """
 
 import asyncio
@@ -1113,4 +1114,121 @@ def get_error_digest(
         "total_errors": sum(g["count"] for g in digest),
         "unique_patterns": len(digest),
         "digest": digest,
+    }
+
+
+# ─── Format Integrity Monitor ───────────────────────────────────────────────
+
+@router.get("/api/admin/format-violations", summary="Check reel format pattern violations across all users (super admin only)")
+def get_format_violations(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """
+    Proactively detects reel format violations (e.g., consecutive same-variant
+    reels that break Light→Dark alternation for Format A).
+
+    Scans all users and brands. Returns violations grouped by user + brand.
+    """
+    _require_super_admin(user)
+
+    from app.models.brands import Brand as BrandModel
+    from app.models.jobs import GenerationJob
+    from app.models.scheduling import ScheduledReel
+
+    # Get all brands
+    brands = db.query(BrandModel).all()
+    brand_map = {}
+    for b in brands:
+        brand_map.setdefault(b.user_id, []).append(b)
+
+    violations = []
+
+    for uid, user_brands in brand_map.items():
+        for brand in user_brands:
+            # Get Format A reel jobs for this brand, ordered by scheduled time
+            brand_reels = (
+                db.query(
+                    ScheduledReel.reel_id,
+                    ScheduledReel.scheduled_time,
+                    ScheduledReel.status,
+                )
+                .filter(
+                    ScheduledReel.user_id == uid,
+                    ScheduledReel.reel_id.contains(brand.id),
+                )
+                .order_by(ScheduledReel.scheduled_time.asc())
+                .all()
+            )
+
+            if not brand_reels:
+                continue
+
+            # Look up variants from generation_jobs
+            job_ids = set()
+            for reel in brand_reels:
+                # reel_id format: "TOBY-123456_brandname" or "GEN-123456_brandname"
+                parts = reel.reel_id.split("_", 1)
+                if parts:
+                    job_ids.add(parts[0])
+
+            if not job_ids:
+                continue
+
+            variant_map = {}
+            job_rows = (
+                db.query(GenerationJob.job_id, GenerationJob.variant, GenerationJob.content_format)
+                .filter(GenerationJob.job_id.in_(list(job_ids)))
+                .all()
+            )
+            for jr in job_rows:
+                variant_map[jr.job_id] = (jr.variant, jr.content_format)
+
+            # Check alternation pattern
+            prev_variant = None
+            prev_reel_id = None
+            prev_sched = None
+            for reel in brand_reels:
+                parts = reel.reel_id.split("_", 1)
+                job_id = parts[0] if parts else None
+                info = variant_map.get(job_id)
+                if not info:
+                    continue
+                variant, content_format = info
+
+                # Only check Format A reels
+                if content_format != "format_a" or variant not in ("light", "dark"):
+                    continue
+
+                if prev_variant is not None and prev_variant == variant:
+                    violations.append({
+                        "type": "consecutive_variant",
+                        "format": "format_a",
+                        "user_id": uid,
+                        "brand_id": brand.id,
+                        "brand_name": brand.display_name,
+                        "detail": f"Consecutive '{variant}' reels: {prev_reel_id} ({prev_sched}) → {reel.reel_id} ({reel.scheduled_time})",
+                        "reel_id": reel.reel_id,
+                        "prev_reel_id": prev_reel_id,
+                        "variant": variant,
+                        "scheduled_time": reel.scheduled_time.isoformat() if reel.scheduled_time else None,
+                        "prev_scheduled_time": prev_sched.isoformat() if prev_sched else None,
+                    })
+
+                prev_variant = variant
+                prev_reel_id = reel.reel_id
+                prev_sched = reel.scheduled_time
+
+    # Group by user+brand for summary
+    affected_brands = set()
+    affected_users = set()
+    for v in violations:
+        affected_brands.add(v["brand_id"])
+        affected_users.add(v["user_id"])
+
+    return {
+        "total_violations": len(violations),
+        "affected_brands": len(affected_brands),
+        "affected_users": len(affected_users),
+        "violations": violations,
     }
