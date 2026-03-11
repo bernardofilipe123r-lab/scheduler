@@ -1,14 +1,12 @@
 """
-Render carousel slides using Node.js Konva (pixel-perfect match to frontend).
+Render carousel slides using pure Python/Pillow.
 
 Extracted from app/main.py so it can be reused by:
 - Toby orchestrator (pre-render at job creation)
 - Publish flow (JIT fallback)
 - Repair scripts
 """
-import json
 import os
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -23,7 +21,7 @@ def render_carousel_images(
     user_id: str = "system",
 ) -> Optional[dict]:
     """
-    Render cover + text slides as PNG images via Node.js Konva.
+    Render cover + text slides as PNG images via Pillow.
 
     Args:
         brand: Brand ID
@@ -81,62 +79,20 @@ def render_carousel_images(
     except Exception:
         pass
 
-    # Resolve script + font paths (works both locally and in Docker)
-    # __file__ = app/services/media/carousel_renderer.py → .parent x4 = project root
-    project_root = Path(__file__).resolve().parent.parent.parent.parent
-    script_dir = project_root / "scripts"
-    assets_dir = project_root / "assets"
-    render_script = str(script_dir / "render-slides.cjs")
-    # Docker paths take priority if they exist
-    if Path("/app/scripts/render-slides.cjs").exists():
-        render_script = "/app/scripts/render-slides.cjs"
-
-    font_anton = str(assets_dir / "fonts" / "Anton-Regular.ttf")
-    font_inter = str(assets_dir / "fonts" / "InterVariable.ttf")
-    if Path("/app/assets/fonts/Anton-Regular.ttf").exists():
-        font_anton = "/app/assets/fonts/Anton-Regular.ttf"
-        font_inter = "/app/assets/fonts/InterVariable.ttf"
-
-    share_icon = str(assets_dir / "icons" / "share.png")
-    save_icon = str(assets_dir / "icons" / "save.png")
-    if Path("/app/assets/icons/share.png").exists():
-        share_icon = "/app/assets/icons/share.png"
-        save_icon = "/app/assets/icons/save.png"
-
-    input_data = {
-        "brand": brand,
-        "brandConfig": brand_config_data,
-        "title": title,
-        "backgroundImage": background_image,
-        "slideTexts": slide_texts,
-        "coverOutput": cover_out,
-        "slideOutputs": slide_outputs,
-        "logoPath": logo_local_path,
-        "shareIconPath": share_icon,
-        "saveIconPath": save_icon,
-        "fontPaths": {
-            "anton": font_anton,
-            "inter": font_inter,
-        },
-    }
-
-    json_path = None
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(input_data, f)
-            json_path = f.name
+        from app.services.media.carousel_slide_renderer import CarouselSlideRenderer
 
-        result = subprocess.run(
-            ["node", render_script, json_path],
-            capture_output=True,
-            text=True,
-            timeout=60,
+        renderer = CarouselSlideRenderer()
+        output = renderer.render_all(
+            brand_config=brand_config_data,
+            title=title,
+            background_image=background_image,
+            slide_texts=slide_texts,
+            cover_output=cover_out,
+            slide_outputs=slide_outputs,
+            logo_path=logo_local_path,
         )
-        if result.returncode != 0:
-            print(f"[RENDER] stderr: {result.stderr}", flush=True)
-            return None
 
-        output = json.loads(result.stdout.strip())
         if not output.get("success"):
             print(f"[RENDER] Error: {output.get('error')}", flush=True)
             return None
@@ -152,7 +108,6 @@ def render_carousel_images(
                 jpg_path = png_path.rsplit(".", 1)[0] + ".jpg"
                 img = _PILImage.open(png_path)
                 if img.mode == "RGBA":
-                    # Flatten alpha onto white background
                     bg = _PILImage.new("RGB", img.size, (255, 255, 255))
                     bg.paste(img, mask=img.split()[3])
                     img = bg
@@ -181,18 +136,10 @@ def render_carousel_images(
 
         return output
 
-    except subprocess.TimeoutExpired:
-        print("[RENDER] Timeout after 60s", flush=True)
-        return None
     except Exception as e:
         print(f"[RENDER] Exception: {e}", flush=True)
         return None
     finally:
-        if json_path:
-            try:
-                os.unlink(json_path)
-            except Exception:
-                pass
         import shutil as _shutil
         try:
             _shutil.rmtree(tmp_dir, ignore_errors=True)
