@@ -241,7 +241,7 @@ export function AppLayout() {
       <aside
         className={`${sidebarWidth} fixed top-0 left-0 bottom-0 z-50 flex flex-col transition-all duration-200 ease-in-out bg-gradient-to-b from-neutral-950 via-stone-900 to-stone-800 overflow-visible`}
       >
-        {/* Logo + Peeping Toby */}
+        {/* Logo */}
         <div className="relative shrink-0">
           <NavLink
             to="/"
@@ -256,14 +256,6 @@ export function AppLayout() {
               </span>
             )}
           </NavLink>
-          {/* Toby peeking from behind the sidebar right edge — hands grip the wall */}
-          <div
-            className="absolute top-3 pointer-events-auto cursor-pointer"
-            style={{ zIndex: 60, right: '-30px' }}
-            title="👀 Toby is watching..."
-          >
-            <TobyMascot size={80} />
-          </div>
         </div>
 
         {/* Nav Items */}
@@ -392,6 +384,18 @@ export function AppLayout() {
           </div>
         </div>
       </aside>
+
+      {/* Toby peeking from BEHIND the sidebar — z-index lower than sidebar so it's clipped */}
+      <div
+        className="fixed top-3 pointer-events-none transition-all duration-200 ease-in-out"
+        style={{
+          zIndex: 49, // behind sidebar (z-50)
+          left: expanded ? '196px' : '52px', // sidebar edge minus some overlap
+        }}
+        title="👀 Toby is watching..."
+      >
+        <TobyMascot size={56} />
+      </div>
 
       {/* Main area */}
       <div className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-200 ease-in-out ${expanded ? 'ml-52' : 'ml-16'}`}>
