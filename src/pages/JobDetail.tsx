@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { 
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   Play,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   Check,
   Clock,
   CalendarClock,
@@ -92,9 +93,29 @@ export function JobDetailPage() {
   const [showPromptDetails, setShowPromptDetails] = useState(false)
   // Multi-content: track which content tab is active per brand
   const [activeContentTab, setActiveContentTab] = useState<Record<string, number>>({})
+  // Dismiss-all confirmation modal
+  const [dismissAllModalOpen, setDismissAllModalOpen] = useState(false)
+  const [pendingDismissBrand, setPendingDismissBrand] = useState<BrandName | null>(null)
   
   const isGenerating = job?.status === 'generating' || job?.status === 'pending'
   const isFormatB = job?.variant === 'format_b'
+
+  // Detect stuck job: generating for >10 minutes without updated_at change
+  const isStuck = useMemo(() => {
+    if (!job || !isGenerating || !job.updated_at) return false
+    const updatedAt = new Date(job.updated_at).getTime()
+    const tenMinAgo = Date.now() - 10 * 60 * 1000
+    return updatedAt < tenMinAgo
+  }, [job, isGenerating])
+
+  // Count how many non-dismissed content items remain (across all brands)
+  const totalContentItems = useMemo(() => {
+    if (!job) return { total: 0, dismissed: 0, active: 0 }
+    const allOutputs = Object.entries(job.brand_outputs || {})
+      .flatMap(([, o]) => Array.isArray(o) ? o : [o])
+    const dismissed = allOutputs.filter(o => o.status === 'dismissed').length
+    return { total: allOutputs.length, dismissed, active: allOutputs.length - dismissed }
+  }, [job])
 
   // Clean title for display: collapse ALL-CAPS multiline titles to single-line Title Case
   const formatDisplayTitle = (raw: string) => {
@@ -140,14 +161,35 @@ export function JobDetailPage() {
     .filter(output => output.status === 'completed' || output.status === 'scheduled')
     .every(output => output.status === 'scheduled') : false
   
-  // Dismiss a brand — mark it so it's excluded from Schedule All
+  // Dismiss a brand — if it's the last active one, confirm deletion instead
   const handleDismissBrand = async (brand: BrandName) => {
     if (!job) return
+    // If this is the last active content, show delete confirmation
+    if (totalContentItems.active <= 1) {
+      setPendingDismissBrand(brand)
+      setDismissAllModalOpen(true)
+      return
+    }
     try {
       await updateBrandStatus.mutateAsync({ id, brand, status: 'dismissed' })
       toast.success(`${getBrandLabel(brand)} removed from scheduling`)
     } catch {
       toast.error('Failed to dismiss brand')
+    }
+  }
+
+  // Confirm dismiss-all: dismiss the brand then delete the job
+  const handleConfirmDismissAll = async () => {
+    if (!pendingDismissBrand) return
+    try {
+      await deleteJob.mutateAsync(id)
+      toast.success('All content dismissed — job deleted')
+      navigate('/history')
+    } catch {
+      toast.error('Failed to delete job')
+    } finally {
+      setDismissAllModalOpen(false)
+      setPendingDismissBrand(null)
     }
   }
 
@@ -601,6 +643,32 @@ export function JobDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Stuck Job Banner */}
+      {isStuck && (
+        <div className="bg-amber-50 rounded-[10px] border border-amber-200 p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">Generation appears stuck</p>
+              <p className="text-xs text-amber-600">No progress for over 10 minutes. The server may have restarted — click Retry to resume.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              retryJob.mutate(id, {
+                onSuccess: () => toast.success('Retrying generation...'),
+                onError: (err: any) => toast.error(err?.message || 'Failed to retry'),
+              })
+            }}
+            disabled={retryJob.isPending}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold text-white bg-amber-600 rounded-[7px] hover:brightness-110 transition disabled:opacity-50 flex-shrink-0"
+          >
+            {retryJob.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Retry
+          </button>
+        </div>
+      )}
       
       {/* Quick Schedule */}
       {completedCount > 0 && (
@@ -710,7 +778,7 @@ export function JobDetailPage() {
           const isScheduled = output.status === 'scheduled'
           const isFailed = output.status === 'failed'
           const isDismissed = output.status === 'dismissed'
-          const isBrandGenerating = output.status === 'generating' || output.status === 'pending'
+          const isBrandGenerating = !output.status || output.status === 'generating' || output.status === 'pending'
           const slot = nextSlots?.[brand]
           
           return (
@@ -1218,6 +1286,42 @@ export function JobDetailPage() {
           )
         })}
       </div>
+
+      {/* Dismiss All — Delete Confirmation */}
+      <Modal
+        isOpen={dismissAllModalOpen}
+        onClose={() => { setDismissAllModalOpen(false); setPendingDismissBrand(null) }}
+        title="Delete Job?"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-500">
+            This is the last remaining content. Dismissing it will <span className="font-semibold text-gray-700">delete the entire job</span> and all generated media.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setDismissAllModalOpen(false); setPendingDismissBrand(null) }}
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-200 rounded-[7px] hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmDismissAll}
+              disabled={deleteJob.isPending}
+              className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-rose-600 rounded-[7px] hover:brightness-110 shadow-sm transition disabled:opacity-50"
+            >
+              {deleteJob.isPending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Deleting...
+                </span>
+              ) : (
+                'Delete Job'
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
       
       {/* Delete Modal */}
       <Modal

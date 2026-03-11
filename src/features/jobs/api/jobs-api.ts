@@ -20,6 +20,7 @@ interface BackendJob {
   created_at: string
   started_at?: string
   completed_at?: string
+  updated_at?: string
   error_message?: string
   created_by?: string
   music_track_id?: string | null
@@ -70,22 +71,22 @@ export const jobsApi = {
     const response = await get<JobsListResponse>('/jobs/')
     return response.jobs.map(transformJob)
   },
-  
+
   get: async (id: string): Promise<Job> => {
     const job = await get<BackendJob>(`/jobs/${id}`)
     return transformJob(job)
   },
-  
+
   create: async (data: JobCreateRequest): Promise<Job> => {
     const response = await post<JobCreateResponse>('/jobs/create', data)
     return transformJob(response.job)
   },
-  
+
   update: async (id: string, data: Partial<Job>): Promise<Job> => {
     const job = await put<BackendJob>(`/jobs/${id}`, data)
     return transformJob(job)
   },
-  
+
   delete: (id: string) => del<{ success: boolean }>(`/jobs/${id}`),
 
   deleteByStatus: (jobStatus: string) =>
@@ -96,29 +97,29 @@ export const jobsApi = {
       '/jobs/bulk/delete-by-ids',
       { job_ids: jobIds }
     ),
-  
+
   cancel: async (id: string): Promise<Job> => {
     const job = await post<BackendJob>(`/jobs/${id}/cancel`)
     return transformJob(job)
   },
-  
+
   regenerate: async (id: string): Promise<Job> => {
     const job = await post<BackendJob>(`/jobs/${id}/regenerate`)
     return transformJob(job)
   },
-  
+
   regenerateBrand: async (id: string, brand: BrandName): Promise<Job> => {
     const job = await post<BackendJob>(`/jobs/${id}/regenerate/${brand}`)
     return transformJob(job)
   },
-  
-  getNextSlots: (id: string) => 
+
+  getNextSlots: (id: string) =>
     get<Record<BrandName, { next_slot: string; formatted: string }>>(`/jobs/${id}/next-slots`),
-  
+
   updateBrandStatus: async (id: string, brand: BrandName, status: string, scheduledTime?: string): Promise<Job> => {
-    const job = await post<BackendJob>(`/jobs/${id}/brand/${brand}/status`, { 
-      status, 
-      scheduled_time: scheduledTime 
+    const job = await post<BackendJob>(`/jobs/${id}/brand/${brand}/status`, {
+      status,
+      scheduled_time: scheduledTime
     })
     return transformJob(job)
   },

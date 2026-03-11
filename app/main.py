@@ -1308,6 +1308,82 @@ async def startup_event():
     scheduler.add_job(fetch_trending_music_job, 'interval', hours=168, id='trending_music_fetch')
     scheduler.add_job(fetch_trending_music_job, 'date', run_date=datetime.now() + timedelta(seconds=30), id='trending_music_startup')
 
+    # ── Stuck job auto-recovery (every 5 minutes) ────────────────────────
+    def recover_stuck_jobs():
+        """Detect and recover jobs stuck in 'generating' for >10 minutes."""
+        try:
+            from app.db_connection import get_db_session
+            from app.models import GenerationJob
+            from app.services.content.job_manager import JobManager
+            from app.services.content.job_processor import JobProcessor
+
+            threshold = datetime.utcnow() - timedelta(minutes=10)
+
+            with get_db_session() as db:
+                stuck = db.query(GenerationJob).filter(
+                    GenerationJob.status == "generating",
+                    GenerationJob.updated_at < threshold,
+                ).all()
+
+                if not stuck:
+                    return
+
+                print(f"\n🔧 [StuckRecovery] Found {len(stuck)} stuck job(s)", flush=True)
+                manager = JobManager(db)
+
+                for job in stuck:
+                    try:
+                        outputs = job.brand_outputs or {}
+                        brands = job.brands or []
+
+                        # Check for multi-content (list) vs single (dict)
+                        def _brand_done(b):
+                            data = outputs.get(b, {})
+                            if isinstance(data, list):
+                                return all(
+                                    item.get("status") in ("completed", "scheduled")
+                                    for item in data if isinstance(item, dict)
+                                )
+                            return data.get("status") in ("completed", "scheduled") if isinstance(data, dict) else False
+
+                        incomplete = [b for b in brands if not _brand_done(b)]
+
+                        if not incomplete:
+                            job.status = "completed"
+                            job.current_step = "Auto-recovered — all brands done"
+                            job.progress_percent = 100
+                            job.completed_at = datetime.utcnow()
+                            db.commit()
+                            print(f"   ✅ {job.job_id}: all brands done, marked completed", flush=True)
+                        else:
+                            # Mark incomplete brands as failed so user sees retry option
+                            for b in incomplete:
+                                data = outputs.get(b, {})
+                                if isinstance(data, list):
+                                    for item in data:
+                                        if isinstance(item, dict) and item.get("status") not in ("completed", "scheduled"):
+                                            item["status"] = "failed"
+                                            item["error"] = "Generation interrupted — click Retry"
+                                elif isinstance(data, dict) and data.get("status") not in ("completed", "scheduled"):
+                                    data["status"] = "failed"
+                                    data["error"] = "Generation interrupted — click Retry"
+
+                            from sqlalchemy.orm.attributes import flag_modified
+                            job.brand_outputs = outputs
+                            flag_modified(job, "brand_outputs")
+                            job.status = "completed" if any(_brand_done(b) for b in brands) else "failed"
+                            job.current_step = f"Auto-recovered — {len(incomplete)} brand(s) need retry"
+                            job.error_message = f"{len(incomplete)} brand(s) failed during generation"
+                            db.commit()
+                            print(f"   🔄 {job.job_id}: {len(incomplete)} brand(s) marked failed for retry", flush=True)
+                    except Exception as e:
+                        print(f"   ❌ {job.job_id}: recovery error: {e}", flush=True)
+
+        except Exception as e:
+            print(f"⚠️ [StuckRecovery] Error: {e}", flush=True)
+
+    scheduler.add_job(recover_stuck_jobs, 'interval', minutes=5, id='stuck_job_recovery')
+
     scheduler.start()
 
     print("✅ Auto-publishing scheduler started (checks every 60 seconds)", flush=True)

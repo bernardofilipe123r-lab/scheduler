@@ -64,6 +64,7 @@ class GenerationJob(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, server_default="now()")
 
     # Creator tracking
     created_by = Column(String(20), default="user", nullable=True)
@@ -127,6 +128,7 @@ class GenerationJob(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "updated_at": self.updated_at.isoformat() if getattr(self, 'updated_at', None) else None,
             "error_message": self.error_message,
             "created_by": getattr(self, 'created_by', None) or "user",
             "music_track_id": getattr(self, 'music_track_id', None),

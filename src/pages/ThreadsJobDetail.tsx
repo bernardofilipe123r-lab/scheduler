@@ -2,11 +2,11 @@
  * Thread Job Detail — displays text-only thread content per brand.
  * Supports single posts and thread chains stored in brand_outputs.
  */
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Trash2, RefreshCw, Calendar, Loader2,
-  Check, Clock, MessageSquare,
+  Check, Clock, MessageSquare, AlertTriangle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -14,6 +14,7 @@ import {
   useDeleteJob,
   useRegenerateJob,
   useUpdateBrandStatus,
+  useRetryJob,
 } from '@/features/jobs'
 import { useAutoScheduleReel } from '@/features/scheduling'
 import { BrandBadge, getBrandLabel, getBrandColor } from '@/features/brands'
@@ -31,10 +32,18 @@ export function ThreadsJobDetail({ job }: Props) {
   const updateBrandStatus = useUpdateBrandStatus()
   const autoSchedule = useAutoScheduleReel()
 
+  const retryJob = useRetryJob()
+
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [schedulingBrand, setSchedulingBrand] = useState<string | null>(null)
 
   const isGenerating = job.status === 'generating' || job.status === 'pending'
+
+  const isStuck = useMemo(() => {
+    if (!isGenerating || !job.updated_at) return false
+    const updatedAt = new Date(job.updated_at).getTime()
+    return Date.now() - updatedAt > 10 * 60 * 1000
+  }, [isGenerating, job.updated_at])
 
   const handleDelete = async () => {
     try {
@@ -144,7 +153,7 @@ export function ThreadsJobDetail({ job }: Props) {
         </p>
 
         {/* Progress */}
-        {isGenerating && (
+        {isGenerating && !isStuck && (
           <div className="mt-4">
             <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
               <Loader2 className="w-4 h-4 animate-spin text-stone-600" />
@@ -159,6 +168,27 @@ export function ThreadsJobDetail({ job }: Props) {
           </div>
         )}
       </div>
+
+      {/* Stuck banner */}
+      {isGenerating && isStuck && (
+        <div className="bg-amber-50 border border-amber-200 rounded-[10px] px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Generation appears stuck</p>
+              <p className="text-xs text-amber-700 mt-0.5">No progress for over 10 minutes. You can retry to restart generation.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => retryJob.mutate(job.job_id)}
+            disabled={retryJob.isPending}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-amber-800 bg-amber-200/60 rounded-lg hover:bg-amber-200 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${retryJob.isPending ? 'animate-spin' : ''}`} />
+            {retryJob.isPending ? 'Retrying...' : 'Retry'}
+          </button>
+        </div>
+      )}
 
       {/* Brand outputs */}
       <div className="space-y-3">

@@ -55,8 +55,12 @@ export function useJobs() {
   return useQuery({
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
-    // Realtime subscription handles instant updates; poll as safety fallback
-    refetchInterval: 120_000,
+    // Fast poll while any job is generating; slow fallback otherwise
+    refetchInterval: (query) => {
+      const jobs = query.state.data
+      const hasActive = jobs?.some((j: Job) => j.status === 'pending' || j.status === 'generating')
+      return hasActive ? 5_000 : 120_000
+    },
     refetchOnMount: 'always',
     staleTime: 10_000,
     refetchOnWindowFocus: false,
@@ -68,8 +72,11 @@ export function useJob(id: string) {
     queryKey: jobKeys.detail(id),
     queryFn: () => jobsApi.get(id),
     enabled: !!id,
-    // Realtime subscription handles instant updates; poll as safety fallback
-    refetchInterval: 120_000,
+    // Fast poll while job is generating; slow fallback otherwise
+    refetchInterval: (query) => {
+      const job = query.state.data
+      return (job?.status === 'pending' || job?.status === 'generating') ? 5_000 : 120_000
+    },
     refetchOnWindowFocus: false,
   })
 }

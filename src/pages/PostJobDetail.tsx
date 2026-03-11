@@ -5,7 +5,7 @@
  * Shows per-brand background previews with unique titles,
  * pencil edit per brand, layout controls, auto-schedule.
  */
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import Konva from 'konva'
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   Calendar,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   Check,
   Clock,
   ChevronDown,
@@ -40,6 +41,7 @@ import {
   useUpdateBrandStatus,
   useUpdateBrandContent,
   useRegenerateBrandImage,
+  useRetryJob,
 } from '@/features/jobs'
 import { StatusBadge, Modal } from '@/shared/components'
 import { useDynamicBrands } from '@/features/brands'
@@ -91,6 +93,7 @@ export function PostJobDetail({ job }: Props) {
   const updateBrandStatus = useUpdateBrandStatus()
   const updateBrandContent = useUpdateBrandContent()
   const regenerateBrandImage = useRegenerateBrandImage()
+  const retryJob = useRetryJob()
   const { brands: dynamicBrands } = useDynamicBrands()
 
   // Font loading
@@ -164,6 +167,14 @@ export function PostJobDetail({ job }: Props) {
   const textSlideRefs = useRef<Map<string, Konva.Stage>>(new Map())
 
   const isGenerating = job.status === 'generating' || job.status === 'pending'
+
+  // Detect stuck job: generating for >10 minutes without progress
+  const isStuck = useMemo(() => {
+    if (!isGenerating || !job.updated_at) return false
+    const updatedAt = new Date(job.updated_at).getTime()
+    const tenMinAgo = Date.now() - 10 * 60 * 1000
+    return updatedAt < tenMinAgo
+  }, [job, isGenerating])
 
   const allCompleted = job.brands.every(
     (b) => job.brand_outputs[b]?.status === 'completed' || job.brand_outputs[b]?.status === 'scheduled'
@@ -700,7 +711,31 @@ export function PostJobDetail({ job }: Props) {
       </div>
 
       {/* Progress bar when generating */}
-      {isGenerating && (
+      {isGenerating && isStuck && (
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">Generation appears stuck</p>
+              <p className="text-xs text-amber-600">No progress for over 10 minutes. Click Retry to resume.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              retryJob.mutate(job.id, {
+                onSuccess: () => toast.success('Retrying generation...'),
+                onError: (err: any) => toast.error(err?.message || 'Failed to retry'),
+              })
+            }}
+            disabled={retryJob.isPending}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold text-white bg-amber-600 rounded-[7px] hover:brightness-110 transition disabled:opacity-50 flex-shrink-0"
+          >
+            {retryJob.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Retry
+          </button>
+        </div>
+      )}
+      {isGenerating && !isStuck && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <div className="flex items-center gap-3 mb-2">
             <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
