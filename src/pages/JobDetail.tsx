@@ -23,6 +23,12 @@ import {
   Shuffle,
   ChevronDown,
   ChevronUp,
+  FileText,
+  Image,
+  Palette,
+  Film,
+  UploadCloud,
+  type LucideIcon,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -1361,13 +1367,13 @@ function CaptionCard({ platform, color, subtitle, content, onCopy }: {
 
 /** Step-based progress for generating states */
 
-const FORMAT_B_STEPS = [
-  { id: 'content', label: 'Content', icon: '📝' },
-  { id: 'images', label: 'Images', icon: '🖼️' },
-  { id: 'thumbnail', label: 'Thumbnail', icon: '🎨' },
-  { id: 'video', label: 'Video', icon: '🎬' },
-  { id: 'upload', label: 'Upload', icon: '☁️' },
-] as const
+const FORMAT_B_STEPS: { id: string; label: string; Icon: LucideIcon }[] = [
+  { id: 'content', label: 'Content', Icon: FileText },
+  { id: 'images', label: 'Images', Icon: Image },
+  { id: 'thumbnail', label: 'Thumbnail', Icon: Palette },
+  { id: 'video', label: 'Video', Icon: Film },
+  { id: 'upload', label: 'Upload', Icon: UploadCloud },
+]
 
 function getActiveStep(message?: string, percent?: number): number {
   if (!message && !percent) return 0
@@ -1390,25 +1396,50 @@ function FormatBProgress({ message, percent, brand }: { message?: string; percen
   const activeStep = getActiveStep(message, percent)
 
   return (
-    <div className="py-8 px-2">
-      {/* Step circles with connecting lines */}
-      <div className="flex items-center justify-between mb-6 relative">
+    <div className="py-10 px-4">
+      {/* Step pipeline */}
+      <div className="flex items-start justify-between mb-8 relative">
+        {/* Background connector line */}
+        <div className="absolute top-5 left-[10%] right-[10%] h-[2px] bg-gray-100 rounded-full" />
+        {/* Progress fill */}
+        <div
+          className="absolute top-5 left-[10%] h-[2px] bg-gradient-to-r from-teal-400 to-teal-500 rounded-full transition-all duration-1000 ease-out"
+          style={{ width: `${Math.max(0, (activeStep / (FORMAT_B_STEPS.length - 1)) * 80)}%` }}
+        />
+
         {FORMAT_B_STEPS.map((step, idx) => {
           const isDone = idx < activeStep
           const isActive = idx === activeStep
+          const StepIcon = step.Icon
+
           return (
             <div key={step.id} className="flex flex-col items-center relative z-10 flex-1">
-              {idx < FORMAT_B_STEPS.length - 1 && (
-                <div className={`absolute top-5 left-[calc(50%+16px)] right-[calc(-50%+16px)] h-[2px] transition-all duration-700 ease-out ${isDone ? 'bg-teal-400' : 'bg-gray-200'}`} />
-              )}
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all duration-500 ${
-                isDone ? 'bg-teal-100 ring-2 ring-teal-400 scale-100'
-                  : isActive ? 'bg-stone-800 ring-4 ring-stone-300 scale-110 shadow-lg animate-pulse'
-                  : 'bg-gray-100 ring-1 ring-gray-200 scale-90 opacity-50'
-              }`}>
-                {isDone ? <Check className="w-4 h-4 text-teal-600" /> : <span className={`text-sm ${isActive ? '' : 'grayscale'}`}>{step.icon}</span>}
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ease-out ${
+                  isDone
+                    ? 'bg-teal-50 ring-2 ring-teal-400 text-teal-600'
+                    : isActive
+                      ? 'bg-stone-800 ring-[3px] ring-stone-300/60 text-white shadow-lg shadow-stone-300/30 scale-110'
+                      : 'bg-gray-50 ring-1 ring-gray-200 text-gray-300 scale-95'
+                }`}
+              >
+                {isDone ? (
+                  <Check className="w-4 h-4" strokeWidth={2.5} />
+                ) : isActive ? (
+                  <div className="relative">
+                    <StepIcon className="w-4 h-4" />
+                    {/* Pulsing ring */}
+                    <span className="absolute -inset-3 rounded-full border-2 border-stone-400/30 animate-ping" style={{ animationDuration: '2s' }} />
+                  </div>
+                ) : (
+                  <StepIcon className="w-4 h-4" />
+                )}
               </div>
-              <span className={`text-[10px] mt-2 font-medium transition-colors ${isDone ? 'text-teal-600' : isActive ? 'text-stone-800' : 'text-gray-400'}`}>
+              <span
+                className={`text-[10px] mt-2.5 font-semibold tracking-wide uppercase transition-colors duration-300 ${
+                  isDone ? 'text-teal-600' : isActive ? 'text-stone-700' : 'text-gray-300'
+                }`}
+              >
                 {step.label}
               </span>
             </div>
@@ -1416,13 +1447,23 @@ function FormatBProgress({ message, percent, brand }: { message?: string; percen
         })}
       </div>
 
-      <div className="text-center">
-        <p className="text-sm font-medium text-gray-700">{message || `Generating ${brand}...`}</p>
+      {/* Status text + progress bar */}
+      <div className="text-center space-y-3">
+        <p className="text-sm font-medium text-gray-600">
+          {message || `Generating ${brand}...`}
+        </p>
         {typeof percent === 'number' && (
-          <div className="mt-3 mx-auto max-w-xs">
+          <div className="mx-auto max-w-xs">
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-teal-400 to-teal-600 transition-all duration-700 ease-out rounded-full" style={{ width: `${percent}%` }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-teal-400 via-teal-500 to-emerald-500 transition-all duration-1000 ease-out relative"
+                style={{ width: `${percent}%` }}
+              >
+                {/* Moving shimmer */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+              </div>
             </div>
+            <p className="text-[10px] text-gray-400 mt-1.5 tabular-nums">{percent}%</p>
           </div>
         )}
       </div>

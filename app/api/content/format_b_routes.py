@@ -351,9 +351,11 @@ def _process_full_auto_format_b_async(job_id: str, niche: str, category: str):
                 job.title = clean_title
                 job.content_lines = primary.get("reel_lines", [])
                 # Store all content items when multi-content
+                # NOTE: Build a NEW dict to avoid circular reference (primary IS polished_items[0])
                 if content_count > 1:
-                    primary["content_items"] = polished_items
-                job.format_b_data = primary
+                    job.format_b_data = {**primary, "content_items": polished_items}
+                else:
+                    job.format_b_data = primary
                 job.fixed_title = True
                 db.commit()
 
