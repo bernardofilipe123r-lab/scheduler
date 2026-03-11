@@ -7,44 +7,78 @@ function formatType(type: string) {
   return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+function formatVariant(value: string) {
+  return value.replace(/_/g, ' ')
+}
+
+function getConfidenceTone(confidence: number) {
+  if (confidence >= 0.9) return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (confidence >= 0.6) return 'bg-amber-50 text-amber-700 border-amber-200'
+  return 'bg-gray-50 text-gray-600 border-gray-200'
+}
+
+function MetaBadge({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'success' | 'info' }) {
+  const toneClass =
+    tone === 'success'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : tone === 'info'
+        ? 'bg-blue-50 text-blue-700 border-blue-200'
+        : 'bg-gray-50 text-gray-600 border-gray-200'
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${toneClass}`}>
+      {children}
+    </span>
+  )
+}
+
 function ExperimentRow({ exp, isExpanded, onToggle }: { exp: TobyExperiment; isExpanded: boolean; onToggle: () => void }) {
   const totalSamples = exp.samples_a + exp.samples_b
   const hasData = totalSamples > 0
   const leading = exp.mean_score_a >= exp.mean_score_b ? 'a' : 'b'
 
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+        className="w-full px-4 py-4 text-left transition-colors hover:bg-gray-50/80 sm:px-5"
       >
-        {isExpanded
-          ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-        }
-        <span className="text-sm font-medium text-gray-900 flex-1 min-w-0 truncate">
-          {formatType(exp.experiment_type)}
-        </span>
-        <div className="flex items-center gap-3 shrink-0">
-          {exp.winner && (
-            <Trophy className="w-3.5 h-3.5 text-amber-500" />
-          )}
-          <span className="text-xs text-gray-400 tabular-nums w-16 text-right">
-            {totalSamples} sample{totalSamples !== 1 ? 's' : ''}
-          </span>
-          {exp.confidence > 0 && (
-            <span className={`text-xs font-medium tabular-nums w-10 text-right ${
-              exp.confidence >= 0.9 ? 'text-emerald-600' : 'text-gray-400'
-            }`}>
-              {(exp.confidence * 100).toFixed(0)}%
-            </span>
-          )}
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-400">
+            {isExpanded
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />
+            }
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-wrap items-start gap-2">
+              <h4 className="min-w-0 flex-1 text-sm font-semibold leading-6 text-gray-900 [overflow-wrap:anywhere]">
+                {formatType(exp.experiment_type)}
+              </h4>
+
+              {exp.winner && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                  <Trophy className="h-3.5 w-3.5" />
+                  Winner selected
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <MetaBadge tone="info">{exp.status}</MetaBadge>
+              <MetaBadge>{totalSamples} total sample{totalSamples !== 1 ? 's' : ''}</MetaBadge>
+              <MetaBadge tone={exp.confidence >= 0.9 ? 'success' : 'neutral'}>
+                {exp.confidence > 0 ? `${(exp.confidence * 100).toFixed(0)}% confidence` : 'No confidence yet'}
+              </MetaBadge>
+            </div>
+          </div>
         </div>
       </button>
 
       {isExpanded && (
-        <div className="px-4 pb-3 pl-11">
-          <div className="flex gap-2">
+        <div className="border-t border-gray-100 px-4 pb-4 pt-4 sm:px-5">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <VariantPill
               label="A"
               value={exp.variant_a}
@@ -72,19 +106,42 @@ function VariantPill({ label, value, samples, score, isWinner, isLeading }: {
   label: string; value: string; samples: number; score: number; isWinner: boolean; isLeading: boolean
 }) {
   return (
-    <div className={`flex-1 rounded-lg px-3 py-2 border ${
+    <div className={`min-w-0 rounded-2xl border px-4 py-4 ${
       isWinner ? 'border-emerald-200 bg-emerald-50' :
-      isLeading ? 'border-blue-100 bg-blue-50/50' :
-      'border-gray-100 bg-gray-50'
+      isLeading ? 'border-blue-200 bg-blue-50/60' :
+      'border-gray-200 bg-gray-50/80'
     }`}>
-      <div className="flex items-center gap-1.5 mb-0.5">
-        {isWinner && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-        <span className="text-[11px] font-medium text-gray-400 uppercase">{label}</span>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+          Variant {label}
+        </span>
+        {isWinner && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Winner
+          </span>
+        )}
+        {!isWinner && isLeading && (
+          <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-medium text-blue-700">
+            Leading
+          </span>
+        )}
       </div>
-      <p className="text-xs font-semibold text-gray-900 truncate" title={value}>{value}</p>
-      <div className="flex items-center gap-2 mt-1">
-        <span className="text-[11px] text-gray-400">{samples}×</span>
-        {samples > 0 && <span className="text-[11px] font-medium text-gray-600">{score.toFixed(1)}</span>}
+
+      <p
+        className="text-sm font-semibold leading-6 text-gray-900 [overflow-wrap:anywhere]"
+        title={value}
+      >
+        {formatVariant(value)}
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600">
+          {samples} sample{samples !== 1 ? 's' : ''}
+        </span>
+        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${getConfidenceTone(samples > 0 ? 0.9 : 0)}`}>
+          {samples > 0 ? `${score.toFixed(1)} avg` : '0.0 avg'}
+        </span>
       </div>
     </div>
   )
@@ -132,24 +189,35 @@ export function TobyExperiments() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-900">Experiments</h3>
-          {active.length > 0 && (
-            <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">
-              {active.length} running
-            </span>
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-5 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-gray-900">Experiments</h3>
+              {active.length > 0 && (
+                <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                  {active.length} running
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <MetaBadge>{experiments.length} total</MetaBadge>
+              <MetaBadge tone="info">{active.length} active</MetaBadge>
+              <MetaBadge tone="success">{completed.length} completed</MetaBadge>
+            </div>
+          </div>
+
+          {experiments.length > 0 && (
+            <button
+              onClick={expandAll}
+              className="text-left text-xs font-medium text-gray-500 transition-colors hover:text-gray-700 sm:text-right"
+            >
+              {expandedIds.size === experiments.length ? 'Collapse all' : 'Expand all'}
+            </button>
           )}
         </div>
-        {experiments.length > 0 && (
-          <button
-            onClick={expandAll}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            {expandedIds.size === experiments.length ? 'Collapse all' : 'Expand all'}
-          </button>
-        )}
       </div>
 
       {experiments.length === 0 ? (
@@ -161,35 +229,39 @@ export function TobyExperiments() {
           <p className="text-xs text-gray-400">Toby will automatically create A/B tests during the learning phase to find your best strategies.</p>
         </div>
       ) : (
-        <div>
+        <div className="space-y-5 p-4 sm:p-5">
           {active.length > 0 && (
-            <div>
-              <div className="px-4 pt-3 pb-1">
+            <div className="space-y-3">
+              <div className="px-1">
                 <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Active</p>
               </div>
-              {active.map(e => (
+              <div className="space-y-3">
+                {active.map(e => (
                 <ExperimentRow
                   key={e.id}
                   exp={e}
                   isExpanded={expandedIds.has(e.id)}
                   onToggle={() => toggle(e.id)}
                 />
-              ))}
+                ))}
+              </div>
             </div>
           )}
           {completed.length > 0 && (
-            <div>
-              <div className="px-4 pt-3 pb-1 border-t border-gray-100">
+            <div className="space-y-3">
+              <div className="px-1 pt-2">
                 <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Completed</p>
               </div>
-              {completed.map(e => (
+              <div className="space-y-3">
+                {completed.map(e => (
                 <ExperimentRow
                   key={e.id}
                   exp={e}
                   isExpanded={expandedIds.has(e.id)}
                   onToggle={() => toggle(e.id)}
                 />
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
