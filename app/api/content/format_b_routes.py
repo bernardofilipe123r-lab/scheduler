@@ -319,24 +319,45 @@ def _process_full_auto_format_b_async(job_id: str, niche: str, category: str):
             from app.services.discovery.story_polisher import StoryPolisher
 
             polisher = StoryPolisher()
-            polished = polisher.generate_content(niche=niche)
-            if not polished:
+            job = manager.get_job(job_id)
+            content_count = getattr(job, 'content_count', 1) or 1
+
+            # Generate unique content for each content item
+            polished_items = []
+            for ci in range(content_count):
+                print(f"   🧠 Generating Format B content {ci+1}/{content_count}...", flush=True)
+                polished = polisher.generate_content(niche=niche)
+                if polished:
+                    polished_items.append(polished.to_dict())
+                else:
+                    print(f"   ⚠️ Content generation {ci+1} failed, retrying...", flush=True)
+                    polished = polisher.generate_content(niche=niche)
+                    if polished:
+                        polished_items.append(polished.to_dict())
+
+            if not polished_items:
                 manager.update_job_status(job_id, "failed", error_message="Failed to generate content")
                 return
 
-            polished_data = polished.to_dict()
+            # Use first item as the primary, store all in format_b_data
+            primary = polished_items[0]
 
             # Step 2: Update job with real data (title, content, format_b_data)
             job = manager.get_job(job_id)
             if job:
                 # Clean title for display (single line, title case)
-                raw_title = polished_data.get("thumbnail_title", "Format B Reel")
+                raw_title = primary.get("thumbnail_title", "Format B Reel")
                 clean_title = " ".join(raw_title.replace("\n", " ").split()).title()
                 job.title = clean_title
-                job.content_lines = polished_data.get("reel_lines", [])
-                job.format_b_data = polished_data
+                job.content_lines = primary.get("reel_lines", [])
+                # Store all content items when multi-content
+                if content_count > 1:
+                    primary["content_items"] = polished_items
+                job.format_b_data = primary
                 job.fixed_title = True
                 db.commit()
+
+            print(f"   ✓ Generated {len(polished_items)} unique Format B content items", flush=True)
 
             # Step 3: Process (generate images via DeAPI, compose video, upload)
             processor = JobProcessor(db)

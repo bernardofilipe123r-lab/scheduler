@@ -662,6 +662,12 @@ class JobProcessor:
             self._manager.update_brand_output(job_id, brand, data, content_index=content_index)
 
         tv_data = job.format_b_data or {}
+        # For multi-content jobs, each content_index has its own polished data
+        if content_index is not None and "content_items" in tv_data:
+            items = tv_data["content_items"]
+            if 0 <= content_index < len(items):
+                tv_data = items[content_index]
+                print(f"   📄 Using content_items[{content_index}] — title: {tv_data.get('thumbnail_title', '?')[:50]}", flush=True)
         brand_data = job.get_brand_output(brand, content_index or 0)
         ci_suffix = f"_{content_index}" if content_index is not None else ""
         reel_id = f"{job_id}_{brand}{ci_suffix}"
@@ -907,6 +913,10 @@ class JobProcessor:
             cache_bust = int(_time.time())
 
             caption = tv_data.get("caption", "")
+            # Store per-content title from the polished data (different per content_index)
+            content_title = " ".join(
+                tv_data.get("thumbnail_title", job.title or "").replace("\n", " ").split()
+            ).title()
             _update_output({
                 "status": "completed",
                 "reel_id": reel_id,
@@ -914,6 +924,7 @@ class JobProcessor:
                 "thumbnail_url": f"{thumb_url}?t={cache_bust}" if thumb_url else "",
                 "video_path": video_url,
                 "caption": caption,
+                "title": content_title,
                 "content_format": "format_b",
                 "content_lines": reel_lines,
                 "regenerated_at": datetime.utcnow().isoformat(),
