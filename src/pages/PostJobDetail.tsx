@@ -1285,9 +1285,9 @@ export function PostJobDetail({ job }: Props) {
               >
                 <Calendar className={`w-5 h-5 ${scheduleMode === 'auto' ? 'text-primary-600' : 'text-gray-400'}`} />
                 <span className={`text-sm font-medium ${scheduleMode === 'auto' ? 'text-primary-700' : 'text-gray-600'}`}>
-                  Schedule Now
+                  Automatic
                 </span>
-                <span className="text-[10px] text-gray-400 text-center">Next available time</span>
+                <span className="text-[10px] text-gray-400 text-center">Next available slot</span>
               </button>
               <button
                 onClick={() => setScheduleMode('custom')}
@@ -1299,7 +1299,7 @@ export function PostJobDetail({ job }: Props) {
               >
                 <Clock className={`w-5 h-5 ${scheduleMode === 'custom' ? 'text-primary-600' : 'text-gray-400'}`} />
                 <span className={`text-sm font-medium ${scheduleMode === 'custom' ? 'text-primary-700' : 'text-gray-600'}`}>
-                  Custom Time
+                  Custom
                 </span>
                 <span className="text-[10px] text-gray-400 text-center">Pick date & time</span>
               </button>
@@ -1344,7 +1344,7 @@ export function PostJobDetail({ job }: Props) {
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 disabled:opacity-50"
               >
                 <Calendar className="w-4 h-4" />
-                {scheduleMode === 'auto' ? 'Schedule Now' : 'Schedule'}
+                {scheduleMode === 'auto' ? 'Auto Schedule' : 'Schedule'}
               </button>
             </div>
           </div>

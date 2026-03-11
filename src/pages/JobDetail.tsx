@@ -1229,15 +1229,15 @@ export function JobDetailPage() {
                 className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition ${brandScheduleMode === 'auto' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}
               >
                 <Calendar className={`w-5 h-5 ${brandScheduleMode === 'auto' ? 'text-teal-600' : 'text-gray-400'}`} />
-                <span className={`text-sm font-medium ${brandScheduleMode === 'auto' ? 'text-teal-700' : 'text-gray-500'}`}>Schedule Now</span>
-                <span className="text-[10px] text-gray-400">Next available time</span>
+                <span className={`text-sm font-medium ${brandScheduleMode === 'auto' ? 'text-teal-700' : 'text-gray-500'}`}>Automatic</span>
+                <span className="text-[10px] text-gray-400">Next available slot</span>
               </button>
               <button
                 onClick={() => setBrandScheduleMode('custom')}
                 className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition ${brandScheduleMode === 'custom' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}
               >
                 <Clock className={`w-5 h-5 ${brandScheduleMode === 'custom' ? 'text-teal-600' : 'text-gray-400'}`} />
-                <span className={`text-sm font-medium ${brandScheduleMode === 'custom' ? 'text-teal-700' : 'text-gray-500'}`}>Custom Time</span>
+                <span className={`text-sm font-medium ${brandScheduleMode === 'custom' ? 'text-teal-700' : 'text-gray-500'}`}>Custom</span>
                 <span className="text-[10px] text-gray-400">Pick date & time</span>
               </button>
             </div>
@@ -1261,7 +1261,7 @@ export function JobDetailPage() {
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 rounded-lg hover:brightness-110 transition disabled:opacity-50"
               >
                 <Calendar className="w-4 h-4" />
-                {brandScheduleMode === 'auto' ? 'Schedule Now' : 'Schedule'}
+                {brandScheduleMode === 'auto' ? 'Auto Schedule' : 'Schedule'}
               </button>
             </div>
           </div>
