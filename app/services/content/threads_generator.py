@@ -58,6 +58,18 @@ THREAD_FORMAT_TYPES = {
 
 THREAD_FORMAT_IDS = list(THREAD_FORMAT_TYPES.keys())
 
+# Fixed rotation order for sequential format cycling.
+# After a random first pick, Toby cycles through this sequence.
+THREAD_FORMAT_SEQUENCE = [
+    "value_list",
+    "controversial",
+    "myth_bust",
+    "thread_chain",
+    "question_hook",
+    "hot_take",
+    "story_micro",
+]
+
 
 class ThreadsGenerator:
     """Generates text-only content for Threads platform via DeepSeek."""
@@ -71,6 +83,7 @@ class ThreadsGenerator:
         ctx: PromptContext,
         format_type: Optional[str] = None,
         topic_hint: Optional[str] = None,
+        brand_id: Optional[str] = None,
     ) -> Optional[Dict]:
         """
         Generate a single Threads text post (≤500 chars).
@@ -82,7 +95,7 @@ class ThreadsGenerator:
             return None
 
         if not format_type or format_type not in THREAD_FORMAT_TYPES:
-            format_type = self._pick_weighted_format(ctx, exclude=["thread_chain"])
+            format_type = self._pick_next_format(brand_id or "", exclude=["thread_chain"])
 
         fmt = THREAD_FORMAT_TYPES[format_type]
 
@@ -240,20 +253,51 @@ The best Threads content sparks replies and reposts — not just likes.
 
 You generate ONLY valid JSON. No markdown, no explanations, no extra text."""
 
-    def _pick_weighted_format(self, ctx: PromptContext, exclude: list[str] | None = None) -> str:
-        """Pick a thread format using user-configured weights, or uniform random if not set."""
+    def _pick_next_format(self, brand_id: str, exclude: list[str] | None = None) -> str:
+        """Pick the next thread format in sequence for a brand.
+
+        Looks up the last format used by this brand from scheduled_reels.
+        First call for a brand picks randomly; after that it cycles through
+        THREAD_FORMAT_SEQUENCE.
+        """
         exclude = exclude or []
-        candidates = [f for f in THREAD_FORMAT_IDS if f not in exclude]
+        seq = [f for f in THREAD_FORMAT_SEQUENCE if f not in exclude]
+        if not seq:
+            seq = [f for f in THREAD_FORMAT_SEQUENCE]  # ignore exclude if it empties the list
 
-        weights = getattr(ctx, 'threads_format_weights', None) or {}
-        if weights:
-            # Filter to valid candidates with positive weights
-            weighted = [(f, weights.get(f, 0)) for f in candidates if weights.get(f, 0) > 0]
-            if weighted:
-                formats, w = zip(*weighted)
-                return random.choices(list(formats), weights=list(w), k=1)[0]
+        last_format = self._get_last_threads_format(brand_id)
 
-        return random.choice(candidates)
+        if last_format and last_format in seq:
+            idx = seq.index(last_format)
+            return seq[(idx + 1) % len(seq)]
+
+        # First time or unknown last format — random start
+        return random.choice(seq)
+
+    @staticmethod
+    def _get_last_threads_format(brand_id: str) -> Optional[str]:
+        """Get the format_type of the most recent threads post for a brand."""
+        try:
+            from app.db_connection import SessionLocal
+            from app.models.scheduling import ScheduledReel
+            db = SessionLocal()
+            try:
+                row = (
+                    db.query(ScheduledReel)
+                    .filter(
+                        ScheduledReel.extra_data["brand"].astext == brand_id,
+                        ScheduledReel.extra_data["content_type"].astext == "threads_post",
+                    )
+                    .order_by(ScheduledReel.created_at.desc())
+                    .first()
+                )
+                if row and row.extra_data:
+                    return row.extra_data.get("format_type")
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"⚠️ Threads format lookup failed: {e}", flush=True)
+        return None
 
     def _call_deepseek(self, system_prompt: str, user_prompt: str) -> Optional[Dict]:
         """Call DeepSeek API and parse JSON response."""

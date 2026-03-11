@@ -775,6 +775,7 @@ def _execute_threads_plan(db: Session, plan):
     result = generator.generate_single_post(
         ctx=ctx,
         topic_hint=plan.topic_bucket,
+        brand_id=plan.brand_id,
     )
 
     if not result or not result.get("text"):
