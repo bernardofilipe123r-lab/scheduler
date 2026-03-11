@@ -20,5 +20,5 @@ export {
   BrandThemeSkeleton,
 } from './Skeleton'
 export { PlatformIcon } from './PlatformIcon'
-export { TobyMascot } from './TobyMascot'
+export { TobyMascot, TobyHands } from './TobyMascot'
 

@@ -11,7 +11,7 @@ import { useAuth } from '@/features/auth'
 import { useJobs } from '@/features/jobs'
 import { useBillingStatus } from '@/features/billing/useBillingStatus'
 import { LockedBanner } from '@/features/billing/LockedBanner'
-import { TobyMascot } from '@/shared/components/TobyMascot'
+import { TobyMascot, TobyHands } from '@/shared/components/TobyMascot'
 import vtLogo from '@/assets/icons/vt-logo.png'
 
 /* ── Railway Status Banner ─────────────────────────────── */
@@ -385,16 +385,20 @@ export function AppLayout() {
         </div>
       </aside>
 
-      {/* Toby peeking from BEHIND the sidebar — z-index lower than sidebar so it's clipped */}
+      {/* Toby's hands — ON the sidebar surface (z-51 > sidebar z-50) */}
       <div
-        className="fixed top-3 pointer-events-none transition-all duration-200 ease-in-out"
-        style={{
-          zIndex: 49, // behind sidebar (z-50)
-          left: expanded ? '196px' : '52px', // sidebar edge minus some overlap
-        }}
-        title="👀 Toby is watching..."
+        className="fixed pointer-events-none transition-all duration-200 ease-in-out"
+        style={{ zIndex: 51, top: '10px', left: expanded ? '203px' : '59px' }}
       >
-        <TobyMascot size={56} />
+        <TobyHands />
+      </div>
+
+      {/* Toby's body — BEHIND the sidebar (z-49 < sidebar z-50), pulls through */}
+      <div
+        className="fixed pointer-events-none transition-all duration-200 ease-in-out"
+        style={{ zIndex: 49, top: '4px', left: expanded ? '200px' : '56px' }}
+      >
+        <TobyMascot size={44} />
       </div>
 
       {/* Main area */}
