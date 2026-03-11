@@ -27,6 +27,7 @@ const ResetPasswordPage = lazy(() => import('@/pages/ResetPassword').then(m => (
 const AboutPage = lazy(() => import('@/pages/About').then(m => ({ default: m.AboutPage })))
 const LogsPage = lazy(() => import('@/pages/Logs').then(m => ({ default: m.LogsPage })))
 const AdminPage = lazy(() => import('@/pages/Admin').then(m => ({ default: m.AdminPage })))
+const PipelinePage = lazy(() => import('@/pages/Pipeline').then(m => ({ default: m.PipelinePage })))
 const PrivacyPolicyPage = lazy(() => import('@/pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicyPage })))
 const DataDeletionPage = lazy(() => import('@/pages/DataDeletion').then(m => ({ default: m.DataDeletionPage })))
 const TermsPage = lazy(() => import('@/pages/Terms').then(m => ({ default: m.TermsPage })))
@@ -117,6 +118,7 @@ export function AppRoutes() {
         <Route path="reels" element={<Navigate to="/creation" replace />} />
         <Route path="posts" element={<Navigate to="/creation" replace />} />
         <Route path="threads" element={<Navigate to="/creation" replace />} />
+        <Route path="pipeline" element={<PipelinePage />} />
         <Route path="jobs" element={<HistoryPage />} />
         <Route path="history" element={<Navigate to="/jobs" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />

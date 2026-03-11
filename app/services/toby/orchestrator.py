@@ -409,7 +409,9 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState, brands=None):
     # so concurrent dedup checks couldn't see each other's uncommitted inserts,
     # resulting in identical content being scheduled 4-6x per brand.
     # See: https://github.com/... (duplicate-content-incident)
-    generated, job_details = _execute_plans_sequential(db, eligible_plans, user_id, state)
+    import uuid as _uuid
+    batch_id = str(_uuid.uuid4())[:8]
+    generated, job_details = _execute_plans_sequential(db, eligible_plans, user_id, state, batch_id=batch_id)
 
     if generated > 0:
         db.add(TobyActivityLog(
@@ -469,12 +471,13 @@ def _get_next_variant(db: Session, brand_id: str) -> str:
     return "light"  # Default: first reel is always light
 
 
-def _execute_content_plan(db: Session, plan):
+def _execute_content_plan(db: Session, plan, batch_id: str = None):
     """
-    Execute a ContentPlan: generate content, create media, and schedule.
+    Execute a ContentPlan: generate content, create media, and queue for pipeline approval.
 
-    v2.0: Creates a real GenerationJob and runs the full JobProcessor pipeline
-    so that Toby-created content has real images, video, and Supabase URLs.
+    v3.0: Creates a GenerationJob and runs the media pipeline, then sets
+    pipeline_status="pending" instead of auto-scheduling. Users must approve
+    content in the Pipeline before it enters the publish queue.
     """
     # ── Threads: text-only path — no media pipeline ──────────
     if plan.content_type == "threads_post":
@@ -699,58 +702,20 @@ def _execute_content_plan(db: Session, plan):
         except Exception as render_err:
             print(f"[TOBY] Pre-render warning (non-fatal): {render_err}", flush=True)
 
-    # ── Step 7: Auto-schedule with real media URLs ───────────
-    scheduler = DatabaseSchedulerService()
-    reel_id = brand_data.get("reel_id", f"{job_id}_{plan.brand_id}")
+    # ── Step 7: Queue for pipeline approval ────────────────
+    # Instead of auto-scheduling, set pipeline_status="pending" so the user
+    # must approve content in the Pipeline before it enters the publish queue.
+    from app.services.content.job_manager import JobManager as _JM2
+    _jm2 = _JM2(db)
+    _job_obj = _jm2.get_job(job_id)
+    if _job_obj:
+        _job_obj.pipeline_status = "pending"
+        _job_obj.caption = brand_data.get("caption", result.get("caption", ""))
+        _job_obj.quality_score = result.get("quality_score") or result.get("critic_score")
+        if batch_id:
+            _job_obj.pipeline_batch_id = batch_id
 
-    sched_result = scheduler.schedule_reel(
-        user_id=plan.user_id,
-        reel_id=reel_id,
-        scheduled_time=datetime.fromisoformat(plan.scheduled_time),
-        caption=brand_data.get("caption", result.get("caption", "")),
-        yt_title=brand_data.get("yt_title"),
-        platforms=_toby_platforms,
-        video_path=brand_data.get("video_path"),
-        thumbnail_path=brand_data.get("thumbnail_path"),
-        yt_thumbnail_path=brand_data.get("yt_thumbnail_path"),
-        brand=plan.brand_id,
-        variant=variant,
-        post_title=result["title"],
-        slide_texts=slide_texts,
-        carousel_paths=carousel_paths or None,
-        job_id=job_id,
-    )
-
-    # Deduplication: if scheduler detected a duplicate, skip remaining steps
-    if sched_result.get("deduplicated"):
-        print(f"[TOBY] Skipping duplicate slot for {plan.brand_id} at {plan.scheduled_time}", flush=True)
-        return None
-
-    # Fallback content guard: never schedule fallback/error content
-    if sched_result.get("rejected_fallback"):
-        print(f"[TOBY] Rejected fallback content for {plan.brand_id} — not scheduling", flush=True)
-        return None
-
-    # ── Step 8: Mark brand as scheduled + Toby-created + record tags ──
-    # Update the job's brand_output status so Jobs page shows "scheduled"
-    job_manager.update_brand_output(job_id, plan.brand_id, {
-        "status": "scheduled",
-        "scheduled_time": plan.scheduled_time,
-    })
-
-    schedule_id = sched_result.get("schedule_id", "")
-    if schedule_id:
-        from app.models.scheduling import ScheduledReel
-        sched = db.query(ScheduledReel).filter(
-            ScheduledReel.schedule_id == schedule_id
-        ).first()
-        if sched and hasattr(sched, 'created_by'):
-            sched.created_by = "toby"
-
-        # Record content tags for learning
-        record_content_tag(db, plan.user_id, schedule_id, plan)
-
-    print(f"[TOBY] Scheduled {reel_id} for {plan.brand_id} at {plan.scheduled_time}", flush=True)
+    print(f"[TOBY] Job {job_id} queued for pipeline approval (pending)", flush=True)
     return {"job_id": job_id, "brand_id": plan.brand_id, "content_type": plan.content_type, "variant": variant}
 
 
@@ -1055,13 +1020,13 @@ def _sanitize_error(msg: str) -> str:
     return msg
 
 
-def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: TobyState) -> tuple:
+def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: TobyState, batch_id: str = None) -> tuple:
     """Execute content plans one at a time (steady-state mode). Returns (count, job_details)."""
     generated = 0
     job_details: list[dict] = []
     for plan in plans:
         try:
-            result = _execute_content_plan(db, plan)
+            result = _execute_content_plan(db, plan, batch_id=batch_id)
             generated += 1
             _record_generation(user_id, plan.brand_id)
             _increment_budget(state)

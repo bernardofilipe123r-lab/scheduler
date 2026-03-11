@@ -7,7 +7,7 @@ from app.core.platforms import SUPPORTED_PLATFORMS_SET
 
 class TobyConfigUpdate(BaseModel):
     """Request to update Toby configuration."""
-    buffer_days: Optional[int] = Field(None, ge=1, le=7)
+    buffer_days: Optional[int] = Field(None, ge=1, le=10)
     explore_ratio: Optional[float] = Field(None, ge=0.0, le=1.0)
     reel_slots_per_day: Optional[int] = Field(None, ge=0, le=24)
     post_slots_per_day: Optional[int] = Field(None, ge=0, le=24)

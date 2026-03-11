@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/shared/api/supabase'
 import { jobKeys } from '@/features/jobs/hooks/use-jobs'
 import { schedulingKeys } from '@/features/scheduling/hooks/use-scheduling'
+import { pipelineKeys } from '@/features/pipeline/api/pipeline-api'
 
 /**
  * Subscribe to Supabase Realtime changes on generation_jobs and scheduled_reels.
@@ -22,6 +23,7 @@ export function useRealtimeSync() {
         { event: '*', schema: 'public', table: 'generation_jobs' },
         () => {
           queryClient.invalidateQueries({ queryKey: jobKeys.all })
+          queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
         },
       )
       .on(

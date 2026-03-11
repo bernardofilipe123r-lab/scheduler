@@ -48,6 +48,10 @@ class TobyState(Base):
     spent_today_cents = Column(Integer, default=0)
     budget_reset_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Pipeline notification tracking
+    last_pipeline_notification_at = Column(DateTime(timezone=True), nullable=True)
+    pipeline_notification_interval_hours = Column(Integer, default=24)
+
     # v3 cognitive loop timestamps
     last_deliberation_at = Column(DateTime(timezone=True), nullable=True)
     last_meta_cognition_at = Column(DateTime(timezone=True), nullable=True)

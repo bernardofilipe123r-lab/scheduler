@@ -69,6 +69,14 @@ class GenerationJob(Base):
     # Creator tracking
     created_by = Column(String(20), default="user", nullable=True)
 
+    # Pipeline approval (human-in-the-loop gate)
+    pipeline_status = Column(String(20), nullable=True, index=True)
+    # Values: NULL (legacy), 'pending', 'approved', 'rejected'
+    pipeline_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    caption = Column(Text, nullable=True)
+    pipeline_batch_id = Column(String(36), nullable=True, index=True)
+    quality_score = Column(Integer, nullable=True)
+
     # Error tracking
     error_message = Column(Text, nullable=True)
 

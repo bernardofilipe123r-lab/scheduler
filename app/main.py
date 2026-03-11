@@ -41,6 +41,7 @@ from app.api.content.format_b_design_routes import router as format_b_design_rou
 from app.api.system.api_usage_routes import router as api_usage_router
 from app.api.billing.routes import router as billing_router
 from app.api.threads.routes import router as threads_router
+from app.api.pipeline.routes import router as pipeline_router
 from app.services.publishing.scheduler import DatabaseSchedulerService
 from app.services.logging.service import get_logging_service, DEPLOYMENT_ID, set_user_id as set_logging_user_id, clear_user_id as clear_logging_user_id
 from app.services.logging.middleware import RequestLoggingMiddleware
@@ -146,6 +147,7 @@ app.include_router(format_b_router)  # Format B reel generation
 app.include_router(format_b_design_router)  # Format B design preferences
 app.include_router(api_usage_router)  # API usage monitoring (admin)
 app.include_router(threads_router)  # Threads content generation + publishing
+app.include_router(pipeline_router)  # Pipeline approval gate
 
 
 @app.get("/health", tags=["system"])

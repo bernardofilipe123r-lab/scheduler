@@ -186,7 +186,23 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
 
     total = len(all_slots)
     filled = sum(1 for s in all_slots if s["filled"])
-    empty = total - filled
+
+    # Pipeline: count pending/approved GenerationJobs as "virtually filling" slots.
+    # These items haven't been scheduled yet but DO represent content that will fill
+    # slots once approved. Without this, Toby would keep generating duplicates.
+    from app.models.jobs import GenerationJob
+    pipeline_pending_count = (
+        db.query(GenerationJob)
+        .filter(
+            GenerationJob.user_id == user_id,
+            GenerationJob.pipeline_status.in_(["pending", "approved"]),
+        )
+        .count()
+    )
+
+    # Effective filled = actually scheduled + pending in pipeline
+    effective_filled = filled + pipeline_pending_count
+    empty = max(0, total - effective_filled)
 
     # Determine health
     if empty == 0:
@@ -222,9 +238,9 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     return {
         "health": health,
         "total_slots": total,
-        "filled_slots": filled,
+        "filled_slots": effective_filled,
         "empty_slots": empty,
-        "percent": round(filled / total * 100, 1) if total > 0 else 100.0,
+        "percent": round(effective_filled / total * 100, 1) if total > 0 else 100.0,
         "next_empty_slot": next_empty,
         "slots": all_slots,
         "brand_breakdown": brand_breakdown,

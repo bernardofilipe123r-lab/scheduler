@@ -407,7 +407,8 @@ class SocialPublisher:
             container_payload = {
                 "image_url": image_url,
                 "caption": caption,
-                "access_token": self.ig_access_token
+                "access_token": self.ig_access_token,
+                "is_ai_generated": True,
             }
 
             print(f"📸 Creating Instagram image post container...")
@@ -860,6 +861,7 @@ class SocialPublisher:
                     "children": ",".join(children_ids),
                     "caption": caption,
                     "access_token": self.ig_access_token,
+                    "is_ai_generated": True,
                 },
                 timeout=30,
             )
@@ -1148,7 +1150,8 @@ class SocialPublisher:
                 "media_type": "REELS",
                 "video_url": video_url,
                 "caption": caption,
-                "access_token": self.ig_access_token
+                "access_token": self.ig_access_token,
+                "is_ai_generated": True,
             }
 
             # Add cover/thumbnail URL if provided

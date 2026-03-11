@@ -5,10 +5,11 @@ import {
   Home, Sparkles, Briefcase, Calendar, BarChart3,
   Bot, Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck, CreditCard,
-  X, AlertTriangle,
+  X, AlertTriangle, GitPullRequestDraft,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useJobs } from '@/features/jobs'
+import { usePipelineStats } from '@/features/pipeline'
 import { useBillingStatus } from '@/features/billing/useBillingStatus'
 import { LockedBanner } from '@/features/billing/LockedBanner'
 import vtLogo from '@/assets/icons/vt-logo.png'
@@ -152,6 +153,7 @@ function SocialHealthBanner() {
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/creation', icon: Sparkles, label: 'Creation', end: false },
+  { to: '/pipeline', icon: GitPullRequestDraft, label: 'Pipeline', end: false },
   { to: '/jobs', icon: Briefcase, label: 'Jobs', end: false },
   { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', end: false },
@@ -162,6 +164,7 @@ const NAV_ITEMS = [
 const PREFETCH_MAP: Record<string, () => Promise<unknown>> = {
   '/': () => import('@/pages/Home'),
   '/creation': () => import('@/pages/Creation'),
+  '/pipeline': () => import('@/pages/Pipeline'),
   '/jobs': () => import('@/pages/History'),
   '/calendar': () => import('@/pages/Calendar'),
   '/analytics': () => import('@/pages/Analytics'),
@@ -201,8 +204,10 @@ export function AppLayout() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { data: jobs = [] } = useJobs()
+  const { data: pipelineStats } = usePipelineStats()
   const { data: billingData } = useBillingStatus()
   const isLocked = billingData?.billing_status === 'locked'
+  const pendingPipelineCount = pipelineStats?.pending ?? 0
   const activeJobCount = (Array.isArray(jobs) ? jobs : []).filter(
     (j: any) => j.status === 'generating' || j.status === 'pending'
   ).length
@@ -276,6 +281,11 @@ export function AppLayout() {
             >
               <div className="relative shrink-0">
                 <Icon className="w-[22px] h-[22px]" />
+                {to === '/pipeline' && pendingPipelineCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none px-1">
+                    {pendingPipelineCount}
+                  </span>
+                )}
                 {to === '/jobs' && activeJobCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none px-1">
                     {activeJobCount}

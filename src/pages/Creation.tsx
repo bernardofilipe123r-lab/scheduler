@@ -266,7 +266,7 @@ export function CreationPage() {
       }
       resetWizard()
       toast.success('Job created — generating in the background', { icon: '🚀' })
-      navigate('/jobs')
+      navigate('/pipeline')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Generation failed')
     }
@@ -307,10 +307,10 @@ export function CreationPage() {
         </div>
 
         {contentType === 'reels' && selectedFormat === 'format_a' && (
-          <ManualTextBased brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); navigate('/jobs') }} />
+          <ManualTextBased brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); navigate('/pipeline') }} />
         )}
         {contentType === 'reels' && selectedFormat === 'format_b' && (
-          <ManualFormatB brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); navigate('/jobs') }} />
+          <ManualFormatB brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); navigate('/pipeline') }} />
         )}
         {contentType === 'posts' && (
           <PostsManualForm
@@ -318,7 +318,7 @@ export function CreationPage() {
             platforms={selectedPlatforms}
             imageModel={imageModel}
             contentCount={contentCount}
-            onComplete={() => { resetWizard(); navigate('/jobs') }}
+            onComplete={() => { resetWizard(); navigate('/pipeline') }}
           />
         )}
         {contentType === 'threads' && (
@@ -326,7 +326,7 @@ export function CreationPage() {
             brands={effectiveBrands}
             threadMode={threadMode}
             contentCount={contentCount}
-            onComplete={() => { resetWizard(); navigate('/jobs') }}
+            onComplete={() => { resetWizard(); navigate('/pipeline') }}
           />
         )}
       </div>
