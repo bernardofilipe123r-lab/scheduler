@@ -981,7 +981,7 @@ class JobProcessor:
             from app.core.prompt_context import PromptContext
             from app.services.content.threads_generator import ThreadsGenerator
             from app.models import NicheConfig, Brand
-            from app.database import SessionLocal
+            from app.db_connection import SessionLocal
 
             tg = ThreadsGenerator()
 
