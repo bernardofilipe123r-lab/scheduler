@@ -30,7 +30,7 @@ export function BulkActionModal({ isOpen, action, count, onConfirm, onCancel }: 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative z-10 bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-6"
+            className="relative z-10 bg-white rounded-2xl shadow-xl max-w-xl w-full mx-4 p-6"
           >
             <div className="flex flex-col items-center text-center">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${isApprove ? 'bg-amber-50' : 'bg-red-50'}`}>
