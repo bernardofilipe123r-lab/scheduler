@@ -183,7 +183,6 @@ export function PipelinePage() {
             onReject={handleReject}
             onEdit={handleEdit}
             onClose={() => setReviewModalIndex(null)}
-            totalPending={pendingItems.length}
           />
         )}
       </AnimatePresence>

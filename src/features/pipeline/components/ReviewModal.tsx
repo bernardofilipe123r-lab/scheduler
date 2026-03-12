@@ -11,7 +11,6 @@ interface Props {
   onReject: (id: string) => void
   onEdit: (item: PipelineItem) => void
   onClose: () => void
-  totalPending: number
 }
 
 function getVideoUrl(item: PipelineItem): string | null {
@@ -33,7 +32,7 @@ function variantLabel(item: PipelineItem): string {
   return item.variant
 }
 
-export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, onClose, totalPending: _totalPending }: Props) {
+export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, onClose }: Props) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
   const [direction, setDirection] = useState<'left' | 'right' | null>(null)
   const [muted, setMuted] = useState(false)
