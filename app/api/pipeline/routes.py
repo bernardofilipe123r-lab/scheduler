@@ -72,7 +72,7 @@ def _serialize_pipeline_item(job: GenerationJob) -> dict:
     """Serialize a GenerationJob for the pipeline API response."""
     return {
         "job_id": job.job_id,
-        "id": job.id,
+        "id": job.job_id,
         "title": job.title,
         "caption": job.caption,
         "variant": job.variant,
