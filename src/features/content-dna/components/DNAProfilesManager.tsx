@@ -144,9 +144,16 @@ export function DNAProfilesManager() {
                 isEditing={isEditing}
                 isPicking={pickerDnaId === dna.id}
                 isConfirmingDelete={confirmDelete === dna.id}
+                isOnlyProfile={profiles.length === 1}
                 onToggleEdit={() => setEditingDnaId(isEditing ? null : dna.id)}
                 onTogglePicker={() => setPickerDnaId(pickerDnaId === dna.id ? null : dna.id)}
-                onConfirmDelete={() => setConfirmDelete(dna.id)}
+                onConfirmDelete={() => {
+                  if (profiles.length === 1) {
+                    toast('You need at least one DNA profile. Create a new one first before deleting this one.', { icon: '⚠️' })
+                    return
+                  }
+                  setConfirmDelete(dna.id)
+                }}
                 onCancelDelete={() => setConfirmDelete(null)}
                 onDelete={() => handleDelete(dna.id)}
                 onAssign={(brandId) => handleAssign(dna.id, brandId)}
@@ -301,6 +308,7 @@ function DNAProfileCard({
   isEditing,
   isPicking,
   isConfirmingDelete,
+  isOnlyProfile,
   onToggleEdit,
   onTogglePicker,
   onConfirmDelete,
@@ -316,6 +324,7 @@ function DNAProfileCard({
   isEditing: boolean
   isPicking: boolean
   isConfirmingDelete: boolean
+  isOnlyProfile: boolean
   onToggleEdit: () => void
   onTogglePicker: () => void
   onConfirmDelete: () => void
@@ -380,7 +389,7 @@ function DNAProfileCard({
             >
               {isEditing ? <X className="w-4 h-4" /> : <Settings2 className="w-4 h-4" />}
             </button>
-            {isConfirmingDelete ? (
+            {isConfirmingDelete && !isOnlyProfile ? (
               <div className="flex items-center gap-1 ml-1">
                 <button
                   onClick={onDelete}
@@ -398,8 +407,12 @@ function DNAProfileCard({
             ) : (
               <button
                 onClick={onConfirmDelete}
-                className="p-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-                title="Delete DNA profile"
+                className={`p-2 rounded-lg transition-colors ${
+                  isOnlyProfile
+                    ? 'text-gray-200 cursor-not-allowed'
+                    : 'text-gray-300 hover:text-red-500 hover:bg-red-50'
+                }`}
+                title={isOnlyProfile ? 'Create another DNA profile first' : 'Delete DNA profile'}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
