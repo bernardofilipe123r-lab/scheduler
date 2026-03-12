@@ -166,7 +166,10 @@ export function PipelinePage() {
       )}
 
       {!itemsError && showAllReviewedBanner && (
-        <PostReviewBanner />
+        <PostReviewBanner
+          contentBreakdown={statsData?.content_breakdown}
+          scheduledUntil={statsData?.scheduled_until}
+        />
       )}
 
       {/* Review modal (Tinder-style video review) */}

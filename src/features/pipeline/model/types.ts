@@ -55,6 +55,8 @@ export interface PipelineStats {
   failed: number
   rate: number
   total: number
+  content_breakdown?: { reels: number; carousels: number; threads: number }
+  scheduled_until?: string | null
 }
 
 export interface PipelineFilters {

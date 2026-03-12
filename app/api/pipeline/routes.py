@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db_connection import get_db
 from app.api.auth.middleware import get_current_user
 from app.models.jobs import GenerationJob
+from app.models.scheduling import ScheduledReel
 from app.api.pipeline.schemas import (
     ApproveRequest,
     RejectRequest,
@@ -158,10 +159,32 @@ async def get_pipeline_stats(
     )
 
     counts = {"pending_review": 0, "generating": 0, "scheduled": 0, "published": 0, "rejected": 0, "failed": 0}
+    content_breakdown = {"reels": 0, "carousels": 0, "threads": 0}
     for job in all_jobs:
         lifecycle = _compute_lifecycle(job)
         if lifecycle in counts:
             counts[lifecycle] += 1
+        # Count scheduled + pending_review by content type
+        if lifecycle in ("scheduled", "pending_review"):
+            v = job.variant or ""
+            if v in ("light", "dark", "format_b"):
+                content_breakdown["reels"] += 1
+            elif v == "post":
+                content_breakdown["carousels"] += 1
+            elif v == "threads":
+                content_breakdown["threads"] += 1
+
+    # Get the latest scheduled_time for this user
+    latest_scheduled = (
+        db.query(ScheduledReel.scheduled_time)
+        .filter(
+            ScheduledReel.user_id == user["id"],
+            ScheduledReel.status == "scheduled",
+        )
+        .order_by(ScheduledReel.scheduled_time.desc())
+        .first()
+    )
+    scheduled_until = latest_scheduled[0].isoformat() if latest_scheduled else None
 
     reviewed = counts["published"] + counts["scheduled"] + counts["rejected"]
     approved = counts["published"] + counts["scheduled"]
@@ -171,6 +194,8 @@ async def get_pipeline_stats(
         **counts,
         "rate": rate,
         "total": sum(counts.values()),
+        "content_breakdown": content_breakdown,
+        "scheduled_until": scheduled_until,
     }
 
 
