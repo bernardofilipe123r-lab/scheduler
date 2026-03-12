@@ -1,5 +1,6 @@
 /**
  * Content DNA React Query hooks — list, CRUD, brand assignment.
+ * Assign/unassign use optimistic updates so UI moves instantly.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -15,6 +16,12 @@ import type { ContentDNACreate, ContentDNAUpdate } from '../types'
 
 export const CONTENT_DNA_KEY = ['content-dna'] as const
 const BRANDS_KEY = ['brands'] as const
+
+interface BrandCacheItem {
+  id: string
+  content_dna_id?: string | null
+  [key: string]: unknown
+}
 
 /** List all DNA profiles for the current user. */
 export function useContentDNAProfiles() {
@@ -69,26 +76,52 @@ export function useDeleteContentDNA() {
   })
 }
 
-/** Assign a brand to a DNA profile. Invalidates both DNA and brands queries. */
+/** Assign a brand to a DNA profile — optimistic: brand moves instantly in the UI. */
 export function useAssignBrandToDNA() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ dnaId, brandId }: { dnaId: string; brandId: string }) =>
       assignBrandToDNA(dnaId, brandId),
-    onSuccess: () => {
+    onMutate: async ({ dnaId, brandId }) => {
+      await queryClient.cancelQueries({ queryKey: BRANDS_KEY })
+      const prev = queryClient.getQueryData<BrandCacheItem[]>(BRANDS_KEY)
+      if (prev) {
+        queryClient.setQueryData<BrandCacheItem[]>(BRANDS_KEY, prev.map(b =>
+          b.id === brandId ? { ...b, content_dna_id: dnaId } : b
+        ))
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(BRANDS_KEY, ctx.prev)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: CONTENT_DNA_KEY })
       queryClient.invalidateQueries({ queryKey: BRANDS_KEY })
     },
   })
 }
 
-/** Unassign a brand from a DNA profile (sets content_dna_id to null). */
+/** Unassign a brand from a DNA profile — optimistic: brand disappears instantly. */
 export function useUnassignBrandFromDNA() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ dnaId, brandId }: { dnaId: string; brandId: string }) =>
       unassignBrandFromDNA(dnaId, brandId),
-    onSuccess: () => {
+    onMutate: async ({ brandId }) => {
+      await queryClient.cancelQueries({ queryKey: BRANDS_KEY })
+      const prev = queryClient.getQueryData<BrandCacheItem[]>(BRANDS_KEY)
+      if (prev) {
+        queryClient.setQueryData<BrandCacheItem[]>(BRANDS_KEY, prev.map(b =>
+          b.id === brandId ? { ...b, content_dna_id: null } : b
+        ))
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(BRANDS_KEY, ctx.prev)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: CONTENT_DNA_KEY })
       queryClient.invalidateQueries({ queryKey: BRANDS_KEY })
     },

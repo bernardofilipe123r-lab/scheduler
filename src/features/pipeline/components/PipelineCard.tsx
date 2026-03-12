@@ -1,4 +1,4 @@
-import { CheckCircle2, X, Trash2, RefreshCw, Star, Loader2 } from 'lucide-react'
+import { CheckCircle2, X, Pencil, RefreshCw, Star, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { ContentPreview } from './ContentPreview'
@@ -8,8 +8,8 @@ interface Props {
   item: PipelineItem
   onApprove: (id: string) => void
   onReject: (id: string) => void
-  onNavigate: (item: PipelineItem) => void
-  onDelete: (id: string) => void
+  onEdit: (item: PipelineItem) => void
+  onOpenReview: (item: PipelineItem) => void
   onRegenerate: (id: string) => void
   selected: boolean
   onToggleSelect: (id: string) => void
@@ -42,7 +42,7 @@ function variantLabel(item: PipelineItem): string {
   return item.variant
 }
 
-export function PipelineCard({ item, onApprove, onReject, onNavigate, onDelete, onRegenerate, selected, onToggleSelect }: Props) {
+export function PipelineCard({ item, onApprove, onReject, onEdit, onOpenReview, onRegenerate, selected, onToggleSelect }: Props) {
   const lifecycle = item.lifecycle
   const isPending = lifecycle === 'pending_review'
   const isGenerating = lifecycle === 'generating'
@@ -76,8 +76,8 @@ export function PipelineCard({ item, onApprove, onReject, onNavigate, onDelete, 
         </span>
       </div>
 
-      {/* Preview — click navigates to detail */}
-      <div className="p-2 cursor-pointer" onClick={() => onNavigate(item)}>
+      {/* Preview — click opens review modal with video */}
+      <div className="p-2 cursor-pointer" onClick={() => onOpenReview(item)}>
         {isGenerating ? (
           <div className="aspect-[9/16] max-h-40 rounded-lg bg-gray-100 flex flex-col items-center justify-center">
             <Loader2 className="w-6 h-6 text-blue-400 animate-spin mb-2" />
@@ -89,7 +89,7 @@ export function PipelineCard({ item, onApprove, onReject, onNavigate, onDelete, 
       </div>
 
       {/* Meta */}
-      <div className="px-3 pb-2 space-y-1 cursor-pointer" onClick={() => onNavigate(item)}>
+      <div className="px-3 pb-2 space-y-1 cursor-pointer" onClick={() => onOpenReview(item)}>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
             {variantLabel(item)}
@@ -123,7 +123,6 @@ export function PipelineCard({ item, onApprove, onReject, onNavigate, onDelete, 
 
       {/* Actions */}
       <div className="flex border-t border-gray-100">
-        {/* Approve + Reject for pending */}
         {isPending && (
           <>
             <button
@@ -131,7 +130,7 @@ export function PipelineCard({ item, onApprove, onReject, onNavigate, onDelete, 
               className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors rounded-bl-xl"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Approve
+              Accept
             </button>
             <div className="w-px bg-gray-100" />
             <button
@@ -139,34 +138,38 @@ export function PipelineCard({ item, onApprove, onReject, onNavigate, onDelete, 
               className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
-              Reject
+              Decline
             </button>
             <div className="w-px bg-gray-100" />
-          </>
-        )}
-
-        {/* Regenerate for non-scheduled/published */}
-        {!isPending && canRegenerate && (
-          <>
             <button
-              onClick={() => onRegenerate(item.job_id)}
-              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors rounded-bl-xl"
+              onClick={() => onEdit(item)}
+              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors rounded-br-xl"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Regenerate
+              <Pencil className="w-3.5 h-3.5" />
+              Edit
             </button>
-            <div className="w-px bg-gray-100" />
           </>
         )}
 
-        {/* Delete always */}
-        <button
-          onClick={() => onDelete(item.job_id)}
-          className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-br-xl"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          Delete
-        </button>
+        {!isPending && canRegenerate && (
+          <button
+            onClick={() => onRegenerate(item.job_id)}
+            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors rounded-b-xl"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Regenerate
+          </button>
+        )}
+
+        {!isPending && !canRegenerate && (
+          <button
+            onClick={() => onEdit(item)}
+            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors rounded-b-xl"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            View Details
+          </button>
+        )}
       </div>
     </div>
   )

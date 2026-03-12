@@ -2,13 +2,15 @@ import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { GitPullRequestDraft } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { AnimatePresence } from 'framer-motion'
 import {
   PipelineStats,
   PipelineToolbar,
   PipelineGrid,
   PostReviewBanner,
   EmptyState,
+  ReviewModal,
+  BulkActionModal,
   usePipelineItems,
   usePipelineStats,
   useApprovePipelineItem,
@@ -20,7 +22,6 @@ import {
   pipelineKeys,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
-import { useDeleteJob } from '@/features/jobs/hooks/use-jobs'
 import { PipelineSkeleton } from '@/shared/components/Skeleton'
 
 export function PipelinePage() {
@@ -34,9 +35,10 @@ export function PipelinePage() {
   const bulkApprove = useBulkApprovePipeline()
   const bulkReject = useBulkRejectPipeline()
   const regenerate = useRegeneratePipeline()
-  const deleteJob = useDeleteJob()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [reviewModalIndex, setReviewModalIndex] = useState<number | null>(null)
+  const [bulkAction, setBulkAction] = useState<{ action: 'approve' | 'reject'; count: number } | null>(null)
 
   const items = pipelineData?.items ?? []
   const pendingItems = useMemo(() => items.filter(i => i.lifecycle === 'pending_review'), [items])
@@ -68,47 +70,46 @@ export function PipelinePage() {
     setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
   }, [reject])
 
-  const handleBulkApprove = useCallback(() => {
-    const ids = Array.from(selectedIds)
-    if (ids.length === 0) return
-    bulkApprove.mutate(ids)
-    setSelectedIds(new Set())
-  }, [selectedIds, bulkApprove])
+  // Bulk actions now go through confirmation modal
+  const handleBulkApproveRequest = useCallback(() => {
+    if (selectedIds.size === 0) return
+    setBulkAction({ action: 'approve', count: selectedIds.size })
+  }, [selectedIds.size])
 
-  const handleBulkReject = useCallback(() => {
-    const ids = Array.from(selectedIds)
-    if (ids.length === 0) return
-    bulkReject.mutate(ids)
-    setSelectedIds(new Set())
-  }, [selectedIds, bulkReject])
+  const handleBulkRejectRequest = useCallback(() => {
+    if (selectedIds.size === 0) return
+    setBulkAction({ action: 'reject', count: selectedIds.size })
+  }, [selectedIds.size])
 
-  const handleNavigate = useCallback((item: PipelineItem) => {
+  const handleBulkConfirm = useCallback(() => {
+    if (!bulkAction) return
+    const ids = Array.from(selectedIds)
+    if (bulkAction.action === 'approve') {
+      bulkApprove.mutate(ids)
+    } else {
+      bulkReject.mutate(ids)
+    }
+    setSelectedIds(new Set())
+    setBulkAction(null)
+  }, [bulkAction, selectedIds, bulkApprove, bulkReject])
+
+  const handleEdit = useCallback((item: PipelineItem) => {
     navigate(`/job/${item.job_id}`)
   }, [navigate])
 
-  const handleDelete = useCallback((id: string) => {
-    deleteJob.mutate(id, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
-        toast.success('Content deleted')
-      },
-    })
-    setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
-  }, [deleteJob, queryClient])
+  const handleOpenReview = useCallback((item: PipelineItem) => {
+    const idx = items.findIndex(i => i.job_id === item.job_id)
+    if (idx >= 0) setReviewModalIndex(idx)
+  }, [items])
 
   const handleRegenerate = useCallback(() => {
     regenerate.mutate(3)
   }, [regenerate])
 
-  const handleRegenerateItem = useCallback((id: string) => {
-    // For single item regenerate, we delete + trigger Toby
-    deleteJob.mutate(id, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
-        regenerate.mutate(1)
-      },
-    })
-  }, [deleteJob, queryClient, regenerate])
+  const handleRegenerateItem = useCallback((_id: string) => {
+    queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+    regenerate.mutate(1)
+  }, [queryClient, regenerate])
 
   const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
 
@@ -134,8 +135,8 @@ export function PipelinePage() {
         onContentTypeChange={setContentType}
         onReset={resetFilters}
         selectedCount={selectedIds.size}
-        onBulkApprove={handleBulkApprove}
-        onBulkReject={handleBulkReject}
+        onBulkApprove={handleBulkApproveRequest}
+        onBulkReject={handleBulkRejectRequest}
         onSelectAll={handleSelectAll}
         totalPending={pendingItems.length}
       />
@@ -149,8 +150,8 @@ export function PipelinePage() {
           items={items}
           onApprove={handleApprove}
           onReject={handleReject}
-          onNavigate={handleNavigate}
-          onDelete={handleDelete}
+          onEdit={handleEdit}
+          onOpenReview={handleOpenReview}
           onRegenerate={handleRegenerateItem}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
@@ -171,6 +172,30 @@ export function PipelinePage() {
       {!itemsError && showAllReviewedBanner && (
         <PostReviewBanner onRegenerate={handleRegenerate} isRegenerating={regenerate.isPending} />
       )}
+
+      {/* Review modal (Tinder-style video review) */}
+      <AnimatePresence>
+        {reviewModalIndex !== null && items.length > 0 && (
+          <ReviewModal
+            items={items}
+            initialIndex={reviewModalIndex}
+            onApprove={(id) => handleApprove(id)}
+            onReject={handleReject}
+            onEdit={handleEdit}
+            onClose={() => setReviewModalIndex(null)}
+            totalPending={pendingItems.length}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Bulk action confirmation modal */}
+      <BulkActionModal
+        isOpen={bulkAction !== null}
+        action={bulkAction?.action ?? 'approve'}
+        count={bulkAction?.count ?? 0}
+        onConfirm={handleBulkConfirm}
+        onCancel={() => setBulkAction(null)}
+      />
     </div>
   )
 }

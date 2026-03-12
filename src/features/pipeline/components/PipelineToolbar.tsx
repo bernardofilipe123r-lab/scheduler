@@ -107,34 +107,42 @@ export function PipelineToolbar({
       </div>
 
       {/* Bulk actions bar */}
-      {filters.status === 'pending_review' && (
-        <div className="flex items-center gap-3 text-xs">
-          <button
-            onClick={onSelectAll}
-            className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
-          >
-            {selectedCount === totalPending && totalPending > 0 ? 'Deselect all' : 'Select all'}
-          </button>
+      {filters.status === 'pending_review' && totalPending > 0 && (
+        <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2.5">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={selectedCount === totalPending && totalPending > 0}
+              onChange={onSelectAll}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-xs font-medium text-gray-700">
+              {selectedCount === totalPending && totalPending > 0 ? 'All selected' : 'Select all'}
+            </span>
+          </label>
 
           {selectedCount > 0 && (
             <>
-              <span className="text-gray-400">
-                {selectedCount} selected
+              <div className="w-px h-4 bg-gray-200" />
+              <span className="text-xs text-gray-500 tabular-nums">
+                {selectedCount} of {totalPending}
               </span>
-              <button
-                onClick={onBulkApprove}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 transition-colors"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Approve selected
-              </button>
-              <button
-                onClick={onBulkReject}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 font-medium hover:bg-red-100 transition-colors"
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                Reject selected
-              </button>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={onBulkApprove}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-medium hover:bg-emerald-600 transition-colors shadow-sm"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Accept {selectedCount}
+                </button>
+                <button
+                  onClick={onBulkReject}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors shadow-sm"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  Decline {selectedCount}
+                </button>
+              </div>
             </>
           )}
         </div>

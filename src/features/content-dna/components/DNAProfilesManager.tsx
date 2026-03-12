@@ -1,8 +1,14 @@
 /**
  * DNAProfilesManager — list, create, edit, delete Content DNA profiles + brand assignment.
+ *
+ * Design goals:
+ * - Clean, polished layout with clear visual hierarchy
+ * - Brand assign/unassign is instant (optimistic UI)
+ * - Brand picker shows ALL brands (not just unassigned) with clear status
+ * - DNA editor opens inline without page jump
  */
-import { useState } from 'react'
-import { Plus, Trash2, Edit3, Users, ChevronRight, FolderHeart, Loader2, X } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Plus, Trash2, Settings2, ChevronDown, FolderHeart, Loader2, X, UserPlus, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
   useContentDNAProfiles,
@@ -14,7 +20,7 @@ import {
 } from '@/features/content-dna'
 import type { ContentDNAProfile } from '@/features/content-dna'
 import { useBrands, type Brand } from '@/features/brands/api/use-brands'
-import { getStrengthColor, getStrengthBarColor, getStrengthPercent } from '@/features/brands/types/niche-config'
+import { getStrengthBarColor, getStrengthPercent } from '@/features/brands/types/niche-config'
 import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 
 export function DNAProfilesManager() {
@@ -26,10 +32,13 @@ export function DNAProfilesManager() {
   const unassignMutation = useUnassignBrandFromDNA()
 
   const [newName, setNewName] = useState('')
-  const [assigningDna, setAssigningDna] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [pickerDnaId, setPickerDnaId] = useState<string | null>(null)
   const [editingDnaId, setEditingDnaId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const profiles = dnaData?.profiles ?? []
+  const allBrands = brands ?? []
 
   const handleCreate = async () => {
     const name = newName.trim()
@@ -40,6 +49,7 @@ export function DNAProfilesManager() {
     try {
       await createMutation.mutateAsync({ name })
       setNewName('')
+      setShowCreate(false)
       toast.success('DNA profile created')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to create DNA profile')
@@ -49,17 +59,18 @@ export function DNAProfilesManager() {
   const handleDelete = async (dnaId: string) => {
     try {
       await deleteMutation.mutateAsync(dnaId)
+      setConfirmDelete(null)
+      if (editingDnaId === dnaId) setEditingDnaId(null)
       toast.success('DNA profile deleted')
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to delete — reassign brands first')
+      toast.error(e instanceof Error ? e.message : 'Failed to delete — remove all brands first')
     }
   }
 
   const handleAssign = async (dnaId: string, brandId: string) => {
     try {
       await assignMutation.mutateAsync({ dnaId, brandId })
-      setAssigningDna(null)
-      toast.success('Brand assigned to DNA profile')
+      toast.success('Brand moved')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to assign brand')
     }
@@ -68,16 +79,13 @@ export function DNAProfilesManager() {
   const handleUnassign = async (dnaId: string, brandId: string) => {
     try {
       await unassignMutation.mutateAsync({ dnaId, brandId })
-      toast.success('Brand removed from DNA profile')
+      toast.success('Brand removed')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to remove brand')
     }
   }
 
-  // Brands not yet assigned to any DNA
-  const unassignedBrands = (brands ?? []).filter(
-    (b: Brand) => !b.content_dna_id
-  )
+  const unassignedBrands = allBrands.filter((b: Brand) => !b.content_dna_id)
 
   if (isLoading) {
     return (
@@ -88,207 +96,373 @@ export function DNAProfilesManager() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Create new DNA profile */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Create a new Content DNA profile</h3>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Health & Wellness, Tech Reviews..."
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-          />
-          <button
-            onClick={handleCreate}
-            disabled={createMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm disabled:opacity-50"
-          >
-            {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Create
-          </button>
-        </div>
-      </div>
-
-      {/* Unassigned brands warning */}
+    <div className="space-y-5">
+      {/* Unassigned brands banner */}
       {unassignedBrands.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <p className="text-sm text-amber-700 font-medium">
-            {unassignedBrands.length} brand{unassignedBrands.length > 1 ? 's' : ''} not assigned to any DNA profile:
-          </p>
-          <ul className="mt-1 text-sm text-amber-600">
-            {unassignedBrands.map((b: Brand) => (
-              <li key={b.id}>• {b.display_name}</li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-amber-500">
-            Assign them to a DNA profile below so Toby can learn and generate content for them.
-          </p>
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <span className="text-amber-600 text-sm font-bold">{unassignedBrands.length}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-800">
+              {unassignedBrands.length === 1 ? '1 brand' : `${unassignedBrands.length} brands`} not assigned to any DNA
+            </p>
+            <p className="text-xs text-amber-600 truncate">
+              {unassignedBrands.map(b => b.display_name).join(', ')}
+            </p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-amber-400 flex-shrink-0" />
+          <p className="text-xs text-amber-600 flex-shrink-0">Use <strong>+ Add Brand</strong> below</p>
         </div>
       )}
 
-      {/* DNA profiles list */}
+      {/* DNA Profile Cards */}
       {profiles.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-xl">
-          <FolderHeart className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500 text-sm">No Content DNA profiles yet. Create one above.</p>
-          <p className="text-gray-400 text-xs mt-1">
-            A DNA profile defines your editorial identity — niche, tone, topics, examples.
+        <div className="text-center py-16 bg-white border border-gray-200 rounded-2xl">
+          <FolderHeart className="w-14 h-14 mx-auto text-gray-200 mb-4" />
+          <p className="text-gray-600 font-medium">No Content DNA profiles yet</p>
+          <p className="text-gray-400 text-sm mt-1 max-w-sm mx-auto">
+            A Content DNA defines your editorial identity — the niche, tone, and style that shapes every piece of content Toby creates.
           </p>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Create Your First DNA
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
-          {profiles.map((dna) => (
-            <DNAProfileCard
-              key={dna.id}
-              dna={dna}
-              brands={brands ?? []}
-              onDelete={handleDelete}
-              onAssign={handleAssign}
-              onUnassign={handleUnassign}
-              assigningDna={assigningDna}
-              setAssigningDna={setAssigningDna}
-              editingDnaId={editingDnaId}
-              setEditingDnaId={setEditingDnaId}
+          {profiles.map((dna) => {
+            const isEditing = editingDnaId === dna.id
+            return (
+              <DNAProfileCard
+                key={dna.id}
+                dna={dna}
+                allBrands={allBrands}
+                isEditing={isEditing}
+                isPicking={pickerDnaId === dna.id}
+                isConfirmingDelete={confirmDelete === dna.id}
+                onToggleEdit={() => setEditingDnaId(isEditing ? null : dna.id)}
+                onTogglePicker={() => setPickerDnaId(pickerDnaId === dna.id ? null : dna.id)}
+                onConfirmDelete={() => setConfirmDelete(dna.id)}
+                onCancelDelete={() => setConfirmDelete(null)}
+                onDelete={() => handleDelete(dna.id)}
+                onAssign={(brandId) => handleAssign(dna.id, brandId)}
+                onUnassign={(brandId) => handleUnassign(dna.id, brandId)}
+                assignPending={assignMutation.isPending}
+                unassignPending={unassignMutation.isPending}
+              />
+            )
+          })}
+        </div>
+      )}
+
+      {/* Create new DNA — collapsible */}
+      {profiles.length > 0 && !showCreate && (
+        <button
+          onClick={() => setShowCreate(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 hover:border-primary-300 hover:text-primary-500 transition-colors text-sm font-medium"
+        >
+          <Plus className="w-4 h-4" />
+          Create Another DNA Profile
+        </button>
+      )}
+
+      {showCreate && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700">New Content DNA Profile</h3>
+            <button onClick={() => { setShowCreate(false); setNewName('') }} className="text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Health & Wellness, Tech Reviews..."
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              autoFocus
             />
-          ))}
+            <button
+              onClick={handleCreate}
+              disabled={createMutation.isPending || !newName.trim()}
+              className="flex items-center gap-2 px-5 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Create
+            </button>
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function DNAProfileCard({
-  dna,
-  brands,
-  onDelete,
-  onAssign,
-  onUnassign,
-  assigningDna,
-  setAssigningDna,
-  editingDnaId,
-  setEditingDnaId,
-}: {
-  dna: ContentDNAProfile
-  brands: Brand[]
-  onDelete: (id: string) => void
-  onAssign: (dnaId: string, brandId: string) => void
-  onUnassign: (dnaId: string, brandId: string) => void
-  assigningDna: string | null
-  setAssigningDna: (id: string | null) => void
-  editingDnaId: string | null
-  setEditingDnaId: (id: string | null) => void
-}) {
-  const strength = getDNAStrength(dna)
-  const strengthPct = getStrengthPercent(strength)
-  const strengthColor = getStrengthBarColor(strength)
-  const strengthTextColor = getStrengthColor(strength)
+/* ── Brand Picker Dropdown ─────────────────────────────────────────── */
 
-  const assignedBrands = brands.filter((b) => b.content_dna_id === dna.id)
-  const unassignedBrands = brands.filter((b) => !b.content_dna_id)
-  const isEditing = editingDnaId === dna.id
+function BrandPicker({
+  dnaId,
+  allBrands,
+  onAssign,
+  onClose,
+  isPending,
+}: {
+  dnaId: string
+  allBrands: Brand[]
+  onAssign: (brandId: string) => void
+  onClose: () => void
+  isPending: boolean
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  const unassigned = allBrands.filter(b => !b.content_dna_id)
+  const otherDna = allBrands.filter(b => b.content_dna_id && b.content_dna_id !== dnaId)
+  const alreadyHere = allBrands.filter(b => b.content_dna_id === dnaId)
+
+  if (unassigned.length === 0 && otherDna.length === 0) {
+    return (
+      <div ref={ref} className="absolute right-0 top-full mt-2 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-4">
+        <p className="text-sm text-gray-500 text-center">All brands already assigned here</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-sm transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3">
-            <h3 className="text-base font-semibold text-gray-900 truncate">{dna.niche_name || dna.name}</h3>
-            <span className={`text-xs font-medium ${strengthTextColor}`}>
-              {strength}
-            </span>
-          </div>
-          {dna.niche_name && dna.name !== dna.niche_name && (
-            <p className="text-sm text-gray-500 mt-0.5">{dna.name}</p>
-          )}
-
-          {/* Strength bar */}
-          <div className="mt-2 w-40 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full ${strengthColor} rounded-full transition-all`} style={{ width: `${strengthPct}%` }} />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-          <button
-            onClick={() => setEditingDnaId(isEditing ? null : dna.id)}
-            className={`p-2 rounded-lg transition-colors ${
-              isEditing
-                ? 'text-primary-600 bg-primary-50 hover:bg-primary-100'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-            }`}
-            title={isEditing ? 'Close editor' : 'Edit DNA settings'}
-          >
-            {isEditing ? <X className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={() => onDelete(dna.id)}
-            className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-            title="Delete DNA profile"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+    <div ref={ref} className="absolute right-0 top-full mt-2 z-50 w-72 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+      <div className="px-3 py-2.5 bg-gray-50 border-b border-gray-100">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add Brand to this DNA</p>
       </div>
-
-      {/* Assigned brands */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <Users className="w-3.5 h-3.5" />
-            {assignedBrands.length} brand{assignedBrands.length !== 1 ? 's' : ''} assigned
-          </div>
-          {unassignedBrands.length > 0 && (
-            <button
-              onClick={() => setAssigningDna(assigningDna === dna.id ? null : dna.id)}
-              className="text-xs text-primary-500 hover:text-primary-600 font-medium"
-            >
-              {assigningDna === dna.id ? 'Cancel' : '+ Assign Brand'}
-            </button>
-          )}
-        </div>
-
-        {assignedBrands.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {assignedBrands.map((b) => (
-              <span
-                key={b.id}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium group"
-              >
-                {b.display_name}
-                <button
-                  onClick={() => onUnassign(dna.id, b.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-primary-400 hover:text-red-500"
-                  title={`Remove ${b.display_name} from this DNA`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Brand assignment picker */}
-        {assigningDna === dna.id && unassignedBrands.length > 0 && (
-          <div className="mt-3 border border-gray-200 rounded-lg divide-y divide-gray-100">
-            {unassignedBrands.map((b) => (
+      <div className="max-h-60 overflow-y-auto">
+        {unassigned.length > 0 && (
+          <div>
+            <div className="px-3 py-1.5 bg-gray-50/50">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Unassigned</p>
+            </div>
+            {unassigned.map(b => (
               <button
                 key={b.id}
-                onClick={() => onAssign(dna.id, b.id)}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                onClick={() => onAssign(b.id)}
+                disabled={isPending}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-primary-50 hover:text-primary-700 transition-colors disabled:opacity-50"
               >
-                {b.display_name}
-                <ChevronRight className="w-4 h-4 text-gray-400" />
+                <span className="font-medium">{b.display_name}</span>
+                <Plus className="w-3.5 h-3.5 text-gray-300" />
               </button>
             ))}
           </div>
         )}
+        {otherDna.length > 0 && (
+          <div>
+            <div className="px-3 py-1.5 bg-gray-50/50 border-t border-gray-100">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Move from another DNA</p>
+            </div>
+            {otherDna.map(b => (
+              <button
+                key={b.id}
+                onClick={() => onAssign(b.id)}
+                disabled={isPending}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-600 hover:bg-amber-50 hover:text-amber-700 transition-colors disabled:opacity-50"
+              >
+                <span>{b.display_name}</span>
+                <span className="text-[10px] text-gray-400">move here →</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {alreadyHere.length > 0 && unassigned.length === 0 && otherDna.length === 0 && (
+          <div className="px-3 py-3 text-center text-sm text-gray-400">
+            All brands already assigned here
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── DNA Profile Card ──────────────────────────────────────────────── */
+
+function DNAProfileCard({
+  dna,
+  allBrands,
+  isEditing,
+  isPicking,
+  isConfirmingDelete,
+  onToggleEdit,
+  onTogglePicker,
+  onConfirmDelete,
+  onCancelDelete,
+  onDelete,
+  onAssign,
+  onUnassign,
+  assignPending,
+  unassignPending,
+}: {
+  dna: ContentDNAProfile
+  allBrands: Brand[]
+  isEditing: boolean
+  isPicking: boolean
+  isConfirmingDelete: boolean
+  onToggleEdit: () => void
+  onTogglePicker: () => void
+  onConfirmDelete: () => void
+  onCancelDelete: () => void
+  onDelete: () => void
+  onAssign: (brandId: string) => void
+  onUnassign: (brandId: string) => void
+  assignPending: boolean
+  unassignPending: boolean
+}) {
+  const strength = getDNAStrength(dna)
+  const strengthPct = getStrengthPercent(strength)
+  const strengthColor = getStrengthBarColor(strength)
+
+  const assignedBrands = allBrands.filter((b) => b.content_dna_id === dna.id)
+  const displayName = dna.niche_name || dna.name
+
+  const stableOnClose = useCallback(() => {
+    // Only call onTogglePicker if the picker is currently open
+    if (isPicking) onTogglePicker()
+  }, [isPicking, onTogglePicker])
+
+  return (
+    <div className={`bg-white border rounded-2xl transition-all ${
+      isEditing ? 'border-primary-200 shadow-md ring-1 ring-primary-100' : 'border-gray-200 hover:shadow-sm'
+    }`}>
+      {/* Card header */}
+      <div className="px-5 pt-5 pb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            {/* Title + strength badge */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h3 className="text-lg font-semibold text-gray-900 truncate">{displayName}</h3>
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                strength === 'basic' ? 'bg-red-100 text-red-600' :
+                strength === 'good' ? 'bg-amber-100 text-amber-600' :
+                'bg-emerald-100 text-emerald-600'
+              }`}>
+                {strength}
+              </span>
+            </div>
+
+            {/* Strength bar */}
+            <div className="mt-2.5 flex items-center gap-2">
+              <div className="w-32 h-1 bg-gray-100 rounded-full overflow-hidden">
+                <div className={`h-full ${strengthColor} rounded-full transition-all duration-500`} style={{ width: `${strengthPct}%` }} />
+              </div>
+              <span className="text-[10px] text-gray-400">{strengthPct}%</span>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={onToggleEdit}
+              className={`p-2 rounded-lg transition-colors text-sm ${
+                isEditing
+                  ? 'text-primary-600 bg-primary-50 hover:bg-primary-100'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+              title={isEditing ? 'Close editor' : 'Edit Content DNA'}
+            >
+              {isEditing ? <X className="w-4 h-4" /> : <Settings2 className="w-4 h-4" />}
+            </button>
+            {isConfirmingDelete ? (
+              <div className="flex items-center gap-1 ml-1">
+                <button
+                  onClick={onDelete}
+                  className="px-2.5 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={onCancelDelete}
+                  className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onConfirmDelete}
+                className="p-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                title="Delete DNA profile"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Brand chips section */}
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {assignedBrands.map((b) => (
+              <span
+                key={b.id}
+                className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium group hover:bg-gray-200 transition-colors"
+              >
+                {b.display_name}
+                <button
+                  onClick={() => onUnassign(b.id)}
+                  disabled={unassignPending}
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-100 transition-colors disabled:opacity-50"
+                  title={`Remove ${b.display_name}`}
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            ))}
+
+            {/* Add brand button */}
+            <div className="relative">
+              <button
+                onClick={onTogglePicker}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                  isPicking
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-white border border-dashed border-gray-300 text-gray-400 hover:border-primary-300 hover:text-primary-500'
+                }`}
+              >
+                <UserPlus className="w-3 h-3" />
+                Add Brand
+                <ChevronDown className={`w-3 h-3 transition-transform ${isPicking ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isPicking && (
+                <BrandPicker
+                  dnaId={dna.id}
+                  allBrands={allBrands}
+                  onAssign={onAssign}
+                  onClose={stableOnClose}
+                  isPending={assignPending}
+                />
+              )}
+            </div>
+
+            {assignedBrands.length === 0 && (
+              <span className="text-xs text-gray-400 italic ml-1">No brands assigned</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Inline DNA editor */}
       {isEditing && (
-        <div className="mt-5 pt-5 border-t border-gray-200">
+        <div className="border-t border-gray-100 px-5 pb-5 pt-4">
           <NicheConfigForm dnaId={dna.id} />
         </div>
       )}
